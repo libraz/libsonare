@@ -274,6 +274,27 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine*
 #endif
 }
 
+SonareError sonare_engine_set_bus_strip_eq_band_json(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                     int band_index, const char* band_json) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0 || band_index < 0 || !band_json) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)band_index;
+  (void)band_json;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_eq_band(bus_id, static_cast<size_t>(band_index),
+                                        sonare::c_api::parse_eq_band_json(band_json))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* engine,
                                                         uint32_t bus_id, unsigned int insert_index,
                                                         int bypassed, int reset_on_bypass) {
@@ -495,6 +516,73 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine,
 #else
   SONARE_C_TRY
   return engine->engine.set_track_dual_pan(track_id, left_pan, right_pan)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_bus_strip_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                            float pan) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)pan;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_pan(bus_id, pan) ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_bus_strip_pan_law(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                int pan_law) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)pan_law;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_pan_law(bus_id, sonare_c_mixing_detail::to_pan_law(pan_law))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_bus_strip_pan_mode(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                 int pan_mode) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)pan_mode;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_pan_mode(bus_id, sonare_c_mixing_detail::to_pan_mode(pan_mode))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_bus_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                 float left_pan, float right_pan) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)left_pan;
+  (void)right_pan;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_dual_pan(bus_id, left_pan, right_pan)
              ? SONARE_OK
              : SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_CATCH

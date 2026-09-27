@@ -928,6 +928,251 @@ TEST_CASE("sonare_engine_set_master_strip_eq_band_json updates embedded master E
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_set_bus_strip_eq_band_json updates embedded bus EQ", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  SonareEngineTrackLane lane[] = {{10, send, 1, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_set_bus_strip_eq_band_json(
+              engine, 0, 0, R"({"type":"Peak","enabled":true})") == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_eq_band_json(engine, 99, 0,
+                                                   R"({"type":"Peak","enabled":true})") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_eq_band_json(engine, 1, -1,
+                                                   R"({"type":"Peak","enabled":true})") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> flat_out{};
+  float* io[] = {flat_out.data()};
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_bus_strip_eq_band_json(
+          engine, 1, 0, R"({"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true})") ==
+      SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, kBlock> eq_out{};
+  io[0] = eq_out.data();
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
+#else
+  REQUIRE(sonare_engine_set_bus_strip_eq_band_json(engine, 1, 0, "{}") ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE(
+    "sonare_engine_set_master_strip_json keeps EQ across an identical resend and drops it "
+    "without eq",
+    "[c_api][engine]") {
+  // Scene EQ is authoritative: a resent strip JSON carries whatever "eq" it
+  // names, in place of whatever the engine held before -- an identical
+  // resend keeps the filter (and its running state) exactly, a resend
+  // missing "eq" flattens.
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  const char* equalized_json =
+      R"({"version":1,"strips":[{"id":"master","eq":{"bands":)"
+      R"([{"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}]}}],)"
+      R"("buses":[],"connections":[]})";
+  const char* flat_json = R"({"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, equalized_json) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> eq_out{};
+  float* io[] = {eq_out.data()};
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  const double eq_level = rms(eq_out);
+
+  // An identical resend is an in-place update: the filter keeps running
+  // rather than resetting, so the very next block matches an engine that
+  // never resent at all.
+  REQUIRE(sonare_engine_set_master_strip_json(engine, equalized_json) == SONARE_OK);
+  std::array<float, kBlock> resent_out{};
+  io[0] = resent_out.data();
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+
+  SonareRealtimeEngine* reference = nullptr;
+  REQUIRE(sonare_engine_create(&reference) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(reference, 48000.0, kBlock, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_set_clips(reference, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_master_strip_json(reference, equalized_json) == SONARE_OK);
+  REQUIRE(sonare_engine_play(reference, -1) == SONARE_OK);
+  std::array<float, kBlock> reference_out{};
+  float* ref_io[] = {reference_out.data()};
+  for (int block = 0; block < 7; ++block) {
+    reference_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(reference, ref_io, 1, kBlock) == SONARE_OK);
+  }
+  for (int i = 0; i < kBlock; ++i) {
+    REQUIRE(resent_out[static_cast<size_t>(i)] ==
+            Catch::Approx(reference_out[static_cast<size_t>(i)]).margin(1e-6f));
+  }
+  sonare_engine_destroy(reference);
+
+  // A resend without "eq" drops the filter.
+  REQUIRE(sonare_engine_set_master_strip_json(engine, flat_json) == SONARE_OK);
+  std::array<float, kBlock> flat_after{};
+  io[0] = flat_after.data();
+  for (int block = 0; block < 6; ++block) {
+    flat_after.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(rms(flat_after) < eq_level * 0.7);
+#else
+  REQUIRE(sonare_engine_set_master_strip_json(engine, "{}") == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE(
+    "sonare_engine_set_bus_strip_json keeps EQ across an identical resend and drops it without "
+    "eq",
+    "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  SonareEngineTrackLane lane[] = {{10, send, 1, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+
+  const char* equalized_json =
+      R"({"version":1,"strips":[],"buses":[{"id":"1","eq":{"bands":)"
+      R"([{"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}]}}],)"
+      R"("connections":[]})";
+  const char* flat_json = R"({"version":1,"strips":[],"buses":[{"id":"1"}],"connections":[]})";
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, equalized_json) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> eq_out{};
+  float* io[] = {eq_out.data()};
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  const double eq_level = rms(eq_out);
+
+  // An identical resend is an in-place update on the bus too.
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, equalized_json) == SONARE_OK);
+  std::array<float, kBlock> resent_out{};
+  io[0] = resent_out.data();
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+
+  SonareRealtimeEngine* reference = nullptr;
+  REQUIRE(sonare_engine_create(&reference) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(reference, 48000.0, kBlock, 64, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_set_clips(reference, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_buses(reference, buses, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_lanes(reference, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_json(reference, 1, equalized_json) == SONARE_OK);
+  REQUIRE(sonare_engine_play(reference, -1) == SONARE_OK);
+  std::array<float, kBlock> reference_out{};
+  float* ref_io[] = {reference_out.data()};
+  for (int block = 0; block < 7; ++block) {
+    reference_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(reference, ref_io, 1, kBlock) == SONARE_OK);
+  }
+  for (int i = 0; i < kBlock; ++i) {
+    REQUIRE(resent_out[static_cast<size_t>(i)] ==
+            Catch::Approx(reference_out[static_cast<size_t>(i)]).margin(1e-6f));
+  }
+  sonare_engine_destroy(reference);
+
+  // A resend without "eq" drops the filter on the bus.
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, flat_json) == SONARE_OK);
+  std::array<float, kBlock> flat_after{};
+  io[0] = flat_after.data();
+  for (int block = 0; block < 6; ++block) {
+    flat_after.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(rms(flat_after) < eq_level * 0.7);
+#else
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{}") == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors",
           "[c_api][mastering]") {
@@ -1097,6 +1342,114 @@ TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][
   REQUIRE(sonare_engine_set_track_strip_channel_delay_samples(engine, 10, 32) == SONARE_OK);
 #else
   REQUIRE(sonare_engine_set_track_strip_pan(engine, 10, -1.0f) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine bus strip pan setters reflect in realtime", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 8;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  // output_bus_id routes the lane's whole output to the bus (rather than the
+  // master directly), so the bus panner is the only thing shaping the signal
+  // the assertions below observe.
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 1, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+
+  // Null engine / unknown bus / out-of-range enum / non-finite values are
+  // rejected, not silently ignored.
+  REQUIRE(sonare_engine_set_bus_strip_pan(nullptr, 1, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 0, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 99, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, std::numeric_limits<float>::quiet_NaN()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan_law(engine, 99, SONARE_PAN_LAW_CONST_6DB) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan_law(engine, 1, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan_mode(engine, 99, SONARE_PAN_MODE_STEREO_PAN) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan_mode(engine, 1, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_dual_pan(engine, 99, -1.0f, 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_dual_pan(engine, 1, std::numeric_limits<float>::infinity(),
+                                               1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // Valid granular updates all succeed on the known bus.
+  REQUIRE(sonare_engine_set_bus_strip_pan_law(engine, 1, SONARE_PAN_LAW_CONST_6DB) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_pan_mode(engine, 1, SONARE_PAN_MODE_STEREO_PAN) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, -1.0f) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  for (int block = 0; block < 4; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 2, kBlock) == SONARE_OK);
+  }
+  // Hard-left pan on the bus: the left channel carries the signal, the right
+  // is ~silent.
+  REQUIRE(rms(left) > 0.5);
+  REQUIRE(rms(right) < rms(left) * 0.05);
+
+  // Dual-pan setter accepts valid input on the same bus.
+  REQUIRE(sonare_engine_set_bus_strip_pan_mode(engine, 1, SONARE_PAN_MODE_DUAL_PAN) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_dual_pan(engine, 1, -1.0f, 1.0f) == SONARE_OK);
+#else
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, -1.0f) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine bus strip pan setters refuse a surround bus",
+          "[c_api][engine][surround]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineBus surround_bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1}};
+  REQUIRE(sonare_engine_set_track_buses(engine, surround_bus, 1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan_law(engine, 1, SONARE_PAN_LAW_CONST_6DB) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_pan_mode(engine, 1, SONARE_PAN_MODE_STEREO_PAN) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_dual_pan(engine, 1, -1.0f, 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // EQ is not restricted to stereo buses -- only the pan family is.
+  REQUIRE(
+      sonare_engine_set_bus_strip_eq_band_json(
+          engine, 1, 0, R"({"type":"Peak","frequencyHz":1000,"gainDb":6,"q":1,"enabled":true})") ==
+      SONARE_OK);
+#else
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, -1.0f) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
 
   sonare_engine_destroy(engine);

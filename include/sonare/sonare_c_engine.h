@@ -278,6 +278,12 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* en
 SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine* engine,
                                                            unsigned int insert_index, int bypassed,
                                                            int reset_on_bypass);
+/// @brief Sets one embedded EQ band on an engine-owned bus strip.
+/// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
+///   @p bus_id must already exist via sonare_engine_set_track_buses. Control-thread
+///   mutation; do not call concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_set_bus_strip_eq_band_json(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                     int band_index, const char* band_json);
 /// @brief Toggles bypass for a bus strip insert by insert index.
 /// @details @p bus_id must already exist via sonare_engine_set_track_buses and
 ///   carry a strip configured by sonare_engine_set_bus_strip_json. Control-thread
@@ -378,6 +384,34 @@ SonareError sonare_engine_set_track_strip_pan_mode(SonareRealtimeEngine* engine,
 ///   if the track has no bound lane strip or a position is not finite.
 SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t track_id,
                                                    float left_pan, float right_pan);
+/// @brief Realtime change of a bus strip's pan position.
+/// @details Control-thread mutation; glitch-free (atomic). Returns
+///   SONARE_ERROR_INVALID_PARAMETER if @p bus_id is unknown, the bus carries
+///   more than two channels, or @p pan is not finite. The pan mode is
+///   unchanged; use @ref sonare_engine_set_bus_strip_pan_mode to switch modes.
+SonareError sonare_engine_set_bus_strip_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                            float pan);
+/// @brief Realtime change of a bus strip's pan law.
+/// @details @p pan_law uses SonarePanLaw (0=-3 dB, 1=-4.5 dB, 2=-6 dB, 3=linear).
+///   Control-thread mutation; glitch-free. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if @p bus_id is unknown, the bus carries more than two channels, or
+///   @p pan_law is unknown.
+SonareError sonare_engine_set_bus_strip_pan_law(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                int pan_law);
+/// @brief Realtime change of a bus strip's pan mode.
+/// @details @p pan_mode uses SonarePanMode (0=balance, 1=stereo pan, 2=dual pan).
+///   Control-thread mutation; glitch-free. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if @p bus_id is unknown, the bus carries more than two channels, or
+///   @p pan_mode is unknown.
+SonareError sonare_engine_set_bus_strip_pan_mode(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                 int pan_mode);
+/// @brief Realtime change of a bus strip's dual-pan left/right positions.
+/// @details Both positions are in [-1, 1]. Takes effect under pan mode dual pan.
+///   Control-thread mutation; glitch-free. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if @p bus_id is unknown, the bus carries more than two channels, or a
+///   position is not finite.
+SonareError sonare_engine_set_bus_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                 float left_pan, float right_pan);
 /// @brief Realtime change of a track lane strip's inter-channel alignment delay.
 /// @details @p delay_samples is a non-negative whole-sample delay. This adjusts
 ///   strip latency, so PDC and the reported graph latency are refreshed; treat it
