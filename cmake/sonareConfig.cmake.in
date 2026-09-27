@@ -37,6 +37,19 @@ find_dependency(Threads)
 
 if(SONARE_WITH_FFMPEG)
   find_dependency(PkgConfig)
+  # pkg_check_modules caches versioned prefixes (Homebrew's Cellar/<ver>) and
+  # never re-queries, so an FFmpeg upgrade strands the build tree; re-query.
+  foreach(_sonare_ffmpeg_path IN LISTS FFMPEG_INCLUDE_DIRS FFMPEG_LINK_LIBRARIES)
+    if(NOT EXISTS "${_sonare_ffmpeg_path}")
+      unset(__pkg_config_checked_FFMPEG CACHE)
+      get_cmake_property(_sonare_cache_vars CACHE_VARIABLES)
+      list(FILTER _sonare_cache_vars INCLUDE REGEX "^pkgcfg_lib_FFMPEG_")
+      foreach(_sonare_cache_var IN LISTS _sonare_cache_vars)
+        unset(${_sonare_cache_var} CACHE)
+      endforeach()
+      break()
+    endif()
+  endforeach()
   pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libavformat
     libavcodec
