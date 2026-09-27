@@ -7,6 +7,7 @@
 #include "sample_bank_internal.h"
 #include "sonare_c_internal.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 /// Total sample points one bank may hold, matching the SoundFont loader's cap
@@ -16,15 +17,20 @@ constexpr size_t kMaxBankSamplePoints = 67108864u;
 constexpr uint32_t kMaxKeymapSets = 4096u;
 
 }  // namespace
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 extern "C" {
 
 SonareSampleBank* sonare_sample_bank_create(void) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   try {
     return new SonareSampleBank();
   } catch (...) {
     return nullptr;
   }
+#else
+  return nullptr;
+#endif
 }
 
 void sonare_sample_bank_destroy(SonareSampleBank* bank) { delete bank; }
@@ -32,6 +38,7 @@ void sonare_sample_bank_destroy(SonareSampleBank* bank) { delete bank; }
 SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* data,
                                           size_t n_frames, const SonareSampleDesc* desc,
                                           uint32_t* out_index) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   if (bank == nullptr || data == nullptr || n_frames == 0 || desc == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -56,10 +63,14 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
   }
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(bank, data, n_frames, desc, out_index);
+#endif
 }
 
 SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_index,
                                         const SonareSampleZoneDesc* zone) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   if (bank == nullptr || zone == nullptr || set_index >= kMaxKeymapSets) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -83,18 +94,31 @@ SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_ind
   if (!bank->bank->add_zone(set_index, cpp)) return SONARE_ERROR_INVALID_PARAMETER;
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(bank, set_index, zone);
+#endif
 }
 
 SonareError sonare_sample_bank_sample_count(const SonareSampleBank* bank, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = bank->bank->sample_count();
   return SONARE_OK;
+#else
+  if (out_count) *out_count = {};
+  SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
+#endif
 }
 
 SonareError sonare_sample_bank_set_count(const SonareSampleBank* bank, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
   if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = bank->bank->set_count();
   return SONARE_OK;
+#else
+  if (out_count) *out_count = {};
+  SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
+#endif
 }
 
 }  // extern "C"
