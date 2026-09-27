@@ -97,7 +97,7 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   const double kV = 1.0 / (r_lw * r_lh);
   const double kS = 1.0 / r_lw + 1.0 / r_lh + 1.0 / (r_lw * r_lh);
 
-  // The inverse Sabine/Eyring problem fixes only V * alpha, so anchor the volume
+  // The inverse Sabine/Eyring problem fixes only V / A (L / alpha_eff here), so anchor the volume
   // scale with the absorption prior. Use the same statistical model the forward
   // synthesis path uses (Eyring by default) so the round-trip is consistent.
   // Clamped silently; the interval's width is a budget. See RoomEstimateConfig.

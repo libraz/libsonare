@@ -31,11 +31,9 @@ constexpr float kLogRmsWindowMs = 50.0f;
 constexpr float kPdrNormalizationDb = 24.0f;
 
 // Fraction of the theoretical full makeup gain applied by the auto-makeup
-// heuristic. The full static makeup that exactly restores the pre-compression
-// level of a signal sitting at the threshold is
-// (-threshold_db) * (1 - 1/ratio); applying all of it tends to overshoot on
-// real program material because the average level is well below threshold, so
-// we apply half of it as a conservative perceptual compromise.
+// heuristic. The full makeup, (-threshold_db) * (1 - 1/ratio), is the hard-knee
+// static reduction of a 0 dBFS detector level; real program sits well below
+// that, so applying all of it overshoots and we apply half.
 constexpr float kAutoMakeupFraction = 0.5f;
 
 DetectorMode detector_mode_from_param(float value) {

@@ -11,11 +11,12 @@
 /// geometry -> RIR synthesis path and feeds the analysis<->synthesis
 /// round-trip (estimate -> material assignment -> re-synthesis).
 ///
-/// Identifiability: the per-band reverberation time RT60(f) together with a
-/// fixed room shape determines the *product* volume x absorption, but not how
-/// that product splits between a large lightly-absorptive room and a small
-/// heavily-absorptive one -- the inverse Sabine/Eyring problem is rank
-/// deficient by exactly one degree of freedom. We close it with a configurable
+/// Identifiability: RT60 fixes the *ratio* V / A (volume over absorption
+/// area, A = S * alpha_eff, with alpha_eff the Sabine mean absorption or the
+/// Eyring -ln(1 - alpha)), so at a fixed room shape RT60 ~ L / alpha_eff. It
+/// cannot tell a large highly-absorptive room from a small lightly-absorptive
+/// one -- the inverse Sabine/Eyring problem is rank deficient by exactly one
+/// degree of freedom. We close it with a configurable
 /// mean-absorption prior (`reference_absorption`) that anchors the volume
 /// scale, plus a room-shape prior (`aspect_hint_*`). The returned `confidence`
 /// reports how well the data actually support the estimate -- excitation
