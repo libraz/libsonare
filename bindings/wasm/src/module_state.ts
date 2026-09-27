@@ -101,6 +101,12 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer || value instanceof Promise) {
       return value;
     }
+    // Plain result data carries no native methods, and a Proxy cannot be
+    // structured-cloned, so wrapping it would block postMessage to a worker.
+    const proto = Object.getPrototypeOf(value);
+    if (Array.isArray(value) || proto === Object.prototype || proto === null) {
+      return value;
+    }
     const objectValue = value as object;
     const cached = objectCache.get(objectValue);
     if (cached) {

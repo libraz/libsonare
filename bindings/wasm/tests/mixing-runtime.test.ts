@@ -192,6 +192,12 @@ describe('Mixer runtime controls (WASM)', () => {
           expect(Number.isFinite(point.left)).toBe(true);
           expect(Number.isFinite(point.right)).toBe(true);
         }
+        // Readings go straight to a worker: postMessage structured-clones them,
+        // which a Proxy around the result would refuse.
+        expect(structuredClone(goniometer)).toEqual(goniometer);
+        expect(structuredClone(mixer.stripMeter(vocal, 'postFader'))).toEqual(
+          mixer.stripMeter(vocal, 'postFader'),
+        );
 
         // maxPoints is a request, not an allocation size. Sizing the working
         // vector from it directly meant a metering UI deriving the count from a
