@@ -239,6 +239,10 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   error != nullptr ? error : "invalid synth patch");
   }
+  // `useGmPrograms` is a binding convenience beside the patch fields. Keep
+  // its strict boolean contract here, where realtime and offline synth
+  // bindings meet, and leave the NativeSynth default disabled when omitted.
+  cfg.use_gm_programs = typedBoolProperty(patch, "useGmPrograms", false);
   SonareSampleBank* bank = SampleBankWasm::fromDescriptor(patch);
   auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
   if (bank != nullptr) {
