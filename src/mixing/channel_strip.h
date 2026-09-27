@@ -24,6 +24,10 @@
 #include "mixing/surround_panner.h"
 #include "rt/processor_base.h"
 
+namespace sonare::mixing::api {
+struct StripEq;
+}  // namespace sonare::mixing::api
+
 namespace sonare::mixing {
 
 /// @brief Insertion point of the parametric EQ stage relative to the fader.
@@ -224,10 +228,13 @@ class ChannelStrip : public rt::ProcessorBase {
   void clear_eq_band(size_t index) { eq_.clear_band(index); }
   void set_eq_position(EqPosition p) noexcept { eq_position_.store(p, std::memory_order_relaxed); }
   EqPosition eq_position() const noexcept { return eq_position_.load(std::memory_order_relaxed); }
+  // Bypasses the whole EQ stage without discarding its bands. Audio-thread safe.
+  void set_eq_enabled(bool enabled) noexcept {
+    eq_enabled_.store(enabled, std::memory_order_relaxed);
+  }
+  bool eq_enabled() const noexcept { return eq_enabled_.load(std::memory_order_relaxed); }
   sonare::mastering::eq::ParametricEq& eq() noexcept { return eq_; }
-  // Const accessor for read-only introspection of the embedded EQ stage. The EQ
-  // is currently reachable only from C++ (no scene/binding field exposes it); a
-  // const overload keeps the accessor pair consistent for read-only callers.
+  // Read-only view of the embedded EQ stage.
   const sonare::mastering::eq::ParametricEq& eq() const noexcept { return eq_; }
 
   // Embedded meters. The no-arg overload is kept as the post-chain/output meter.
@@ -358,6 +365,10 @@ class ChannelStrip : public rt::ProcessorBase {
   size_t post_inserts_capacity() const noexcept { return post_inserts_.capacity(); }
 #endif
 
+  // Drives eq_enabled_ through the same apply_eq() the engine's bus/master paths use.
+  friend void apply_strip_eq(ChannelStrip& strip, const api::StripEq& next,
+                             const api::StripEq* previous);
+
  private:
   static constexpr int kPreparedChannels = 2;
   static constexpr int kMaxStackChannels = 8;
@@ -479,6 +490,7 @@ class ChannelStrip : public rt::ProcessorBase {
   std::atomic<bool> solo_safe_{false};
   std::atomic<bool> implied_mute_{false};
   std::atomic<EqPosition> eq_position_{EqPosition::PreFader};
+  std::atomic<bool> eq_enabled_{true};
 
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

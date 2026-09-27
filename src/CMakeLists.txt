@@ -529,6 +529,7 @@ if(BUILD_MIXING)
     mixing/automation_lane.cpp
     mixing/bus.cpp
     mixing/channel_strip.cpp
+    mixing/channel_strip_eq.cpp
     mixing/fx_bus.cpp
     mixing/gain.cpp
     mixing/meter.cpp

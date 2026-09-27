@@ -53,6 +53,14 @@ class PannerProcessor : public rt::ProcessorBase {
   float dual_pan_left() const noexcept { return dual_pan_left_.load(std::memory_order_relaxed); }
   float dual_pan_right() const noexcept { return dual_pan_right_.load(std::memory_order_relaxed); }
 
+  /// @brief True when Balance mode, pan target 0, and the gain smoothers have
+  ///        already settled -- a no-op the caller can skip.
+  /// @details Skipping here is exact where running the panner is not: Const3dB's
+  ///          NearUnity gain at dead centre is 0.99999994f, not 1.0f (see
+  ///          pan_law.h), so this checks configuration and settle state rather
+  ///          than the computed gain.
+  bool at_rest_identity() const noexcept;
+
  private:
   double sample_rate_ = 48000.0;
   float smoothing_ms_ = 5.0f;

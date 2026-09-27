@@ -2,10 +2,13 @@
 /// @brief Mixing channel strip tests.
 
 #include <algorithm>
+#include <atomic>
 #include <limits>
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/dynamics/compressor.h"
+#include "mixing/api/scene.h"
+#include "mixing/channel_strip_eq.h"
 #include "mixing_test_helpers.h"
 #include "rt/delay_line.h"
 #include "util/exception.h"
@@ -1301,4 +1304,185 @@ TEST_CASE("ChannelStrip accepts mastering SidechainRouter insert with external k
 
   REQUIRE(rms_tail(left, 4096) < 0.0025f);
   REQUIRE(router_ptr->last_gain_reduction_db() < -10.0f);
+}
+
+TEST_CASE("ChannelStrip set_eq_enabled bypasses both EQ stage positions", "[mixing][eq]") {
+  static constexpr int kN = 4096;
+  auto make_input = [] {
+    std::vector<float> out(kN);
+    for (int i = 0; i < kN; ++i) {
+      out[static_cast<size_t>(i)] =
+          0.5f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
+    }
+    return out;
+  };
+  auto make_band = [] {
+    sonare::mastering::eq::EqBand band;
+    band.type = sonare::mastering::eq::EqBandType::Peak;
+    band.frequency_hz = 1000.0f;
+    band.gain_db = 12.0f;
+    band.q = sonare::constants::kButterworthQ;
+    band.enabled = true;
+    return band;
+  };
+
+  for (const sonare::mixing::EqPosition position :
+       {sonare::mixing::EqPosition::PreFader, sonare::mixing::EqPosition::PostFader}) {
+    // Linear0dB at centre pan is exact unity, so the only thing that can move a
+    // sample here is the EQ stage itself.
+    sonare::mixing::ChannelStripConfig config{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f,
+                                              position};
+    sonare::mixing::ChannelStrip strip(config);
+    strip.set_eq_band(0, make_band());
+    strip.prepare(48000.0, kN);
+
+    std::vector<float> dry_l = make_input();
+    std::vector<float> dry_r = dry_l;
+
+    strip.set_eq_enabled(false);
+    std::vector<float> bypassed_l = make_input();
+    std::vector<float> bypassed_r = bypassed_l;
+    float* bypassed[] = {bypassed_l.data(), bypassed_r.data()};
+    strip.process(bypassed, 2, kN);
+    for (int i = 0; i < kN; ++i) {
+      REQUIRE_THAT(bypassed_l[static_cast<size_t>(i)],
+                   WithinAbs(dry_l[static_cast<size_t>(i)], 0.0001f));
+    }
+
+    strip.set_eq_enabled(true);
+    std::vector<float> active_l = make_input();
+    std::vector<float> active_r = active_l;
+    float* active[] = {active_l.data(), active_r.data()};
+    strip.process(active, 2, kN);
+    REQUIRE(rms_tail(active_l, 512) > rms_tail(dry_l, 512) * 1.5f);
+  }
+}
+
+TEST_CASE("apply_eq touches only changed slots and clears dropped ones", "[mixing][eq]") {
+  sonare::mastering::eq::EqBand ringing;
+  ringing.type = sonare::mastering::eq::EqBandType::Peak;
+  ringing.frequency_hz = 2000.0f;
+  ringing.gain_db = 18.0f;
+  ringing.q = 12.0f;
+  ringing.enabled = true;
+
+  // Disabled so it never touches the cascade's audible output either present
+  // or cleared: bands run in series, so an *active* band1 would legitimately
+  // change the tail once dropped, confounding the check that band0's own ring
+  // survives untouched.
+  sonare::mastering::eq::EqBand dropped;
+  dropped.type = sonare::mastering::eq::EqBandType::Peak;
+  dropped.frequency_hz = 500.0f;
+  dropped.gain_db = -6.0f;
+  dropped.q = 2.0f;
+  dropped.enabled = false;
+
+  sonare::mixing::api::StripEq initial;
+  initial.enabled = true;
+  initial.bands = {ringing, dropped};
+
+  sonare::mastering::eq::ParametricEq eq;
+  eq.prepare(48000.0, 64);
+  std::atomic<bool> enabled{false};
+  sonare::mixing::apply_eq(eq, enabled, initial, nullptr);
+  REQUIRE(eq.band(0) == ringing);
+  REQUIRE(eq.band(1) == dropped);
+  REQUIRE(enabled.load());
+
+  // A reference EQ that never sees a second apply_eq call, ringing band0 on the
+  // same impulse then reading the same tail of silence.
+  sonare::mastering::eq::ParametricEq reference;
+  reference.prepare(48000.0, 64);
+  std::atomic<bool> reference_enabled{false};
+  sonare::mixing::apply_eq(reference, reference_enabled, initial, nullptr);
+  std::vector<float> reference_impulse_l(32, 0.0f);
+  std::vector<float> reference_impulse_r(32, 0.0f);
+  reference_impulse_l[0] = 1.0f;
+  reference_impulse_r[0] = 1.0f;
+  float* reference_impulse[] = {reference_impulse_l.data(), reference_impulse_r.data()};
+  reference.process(reference_impulse, 2, static_cast<int>(reference_impulse_l.size()));
+  std::vector<float> reference_tail_l(16, 0.0f);
+  std::vector<float> reference_tail_r(16, 0.0f);
+  float* reference_tail[] = {reference_tail_l.data(), reference_tail_r.data()};
+  reference.process(reference_tail, 2, static_cast<int>(reference_tail_l.size()));
+
+  // The test EQ rings the same impulse on band0.
+  std::vector<float> impulse_l(32, 0.0f);
+  std::vector<float> impulse_r(32, 0.0f);
+  impulse_l[0] = 1.0f;
+  impulse_r[0] = 1.0f;
+  float* impulse[] = {impulse_l.data(), impulse_r.data()};
+  eq.process(impulse, 2, static_cast<int>(impulse_l.size()));
+
+  // next drops band1 and disables the stage, but leaves band0's value untouched.
+  sonare::mixing::api::StripEq next;
+  next.enabled = false;
+  next.bands = {ringing};
+  sonare::mixing::apply_eq(eq, enabled, next, &initial);
+
+  REQUIRE(eq.band(0) == ringing);
+  REQUIRE(eq.band(1) == sonare::mastering::eq::EqBand{});
+  REQUIRE_FALSE(enabled.load());
+
+  // Band0's decay picks up exactly where it left off: a naive reapply that
+  // cleared the whole stage before reinstalling band0 would zero its ring and
+  // diverge from the reference here.
+  std::vector<float> tail_l(16, 0.0f);
+  std::vector<float> tail_r(16, 0.0f);
+  float* tail[] = {tail_l.data(), tail_r.data()};
+  eq.process(tail, 2, static_cast<int>(tail_l.size()));
+  for (size_t i = 0; i < tail_l.size(); ++i) {
+    REQUIRE_THAT(tail_l[i], WithinAbs(reference_tail_l[i], 0.0001f));
+  }
+}
+
+TEST_CASE("apply_strip_eq writes ChannelStrip's own EQ stage and bypass flag", "[mixing][eq]") {
+  sonare::mixing::ChannelStrip strip;
+  strip.prepare(48000.0, 64);
+
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.gain_db = 6.0f;
+  band.q = sonare::constants::kButterworthQ;
+  band.enabled = true;
+
+  sonare::mixing::api::StripEq initial;
+  initial.enabled = false;
+  initial.bands = {band};
+  sonare::mixing::apply_strip_eq(strip, initial, nullptr);
+
+  REQUIRE(strip.eq().band(0) == band);
+  REQUIRE_FALSE(strip.eq_enabled());
+
+  sonare::mixing::api::StripEq enabled_next = initial;
+  enabled_next.enabled = true;
+  sonare::mixing::apply_strip_eq(strip, enabled_next, &initial);
+  REQUIRE(strip.eq_enabled());
+  REQUIRE(strip.eq().band(0) == band);
+}
+
+TEST_CASE("validate_eq rejects too many bands and Tilt band types", "[mixing][eq]") {
+  sonare::mixing::api::StripEq too_many;
+  too_many.bands.resize(sonare::mastering::eq::ParametricEq::kMaxBands + 1);
+  REQUIRE_THROWS_AS(sonare::mixing::validate_eq(too_many), sonare::SonareException);
+
+  sonare::mixing::api::StripEq tilt;
+  sonare::mastering::eq::EqBand tilt_band;
+  tilt_band.type = sonare::mastering::eq::EqBandType::TiltShelf;
+  tilt.bands = {tilt_band};
+  REQUIRE_THROWS_AS(sonare::mixing::validate_eq(tilt), sonare::SonareException);
+
+  sonare::mixing::api::StripEq flat_tilt;
+  sonare::mastering::eq::EqBand flat_tilt_band;
+  flat_tilt_band.type = sonare::mastering::eq::EqBandType::FlatTilt;
+  flat_tilt.bands = {flat_tilt_band};
+  REQUIRE_THROWS_AS(sonare::mixing::validate_eq(flat_tilt), sonare::SonareException);
+
+  sonare::mixing::api::StripEq ok;
+  sonare::mastering::eq::EqBand peak;
+  peak.type = sonare::mastering::eq::EqBandType::Peak;
+  peak.enabled = true;
+  ok.bands = {peak};
+  REQUIRE_NOTHROW(sonare::mixing::validate_eq(ok));
 }

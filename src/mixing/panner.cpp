@@ -151,4 +151,10 @@ void PannerProcessor::set_dual_pan(float left_pan, float right_pan) noexcept {
   dual_pan_right_.store(clamp_pan(right_pan), std::memory_order_relaxed);
 }
 
+bool PannerProcessor::at_rest_identity() const noexcept {
+  return pan_mode_.load(std::memory_order_relaxed) == PanMode::Balance &&
+         pan_.load(std::memory_order_relaxed) == 0.0f && left_.current() == left_.target() &&
+         right_.current() == right_.target();
+}
+
 }  // namespace sonare::mixing

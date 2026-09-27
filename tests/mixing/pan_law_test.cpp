@@ -187,3 +187,43 @@ TEST_CASE("panner tolerates an unbound plane in every mode", "[mixing][pan]") {
     REQUIRE(sample > 0.0f);
   }
 }
+
+TEST_CASE("panner at-rest identity reflects mode, pan target, and settle state", "[mixing][pan]") {
+  // Fresh construction settles at pan 0 in Balance mode, for every law.
+  for (const PanLaw law : kAllLaws) {
+    PannerProcessor panner(PannerConfig{0.0f, law, 5.0f});
+    panner.prepare(48000.0, 64);
+    REQUIRE(panner.at_rest_identity());
+  }
+
+  // A non-Balance mode is never the identity, even centred.
+  PannerProcessor stereo_pan(PannerConfig{0.0f, PanLaw::Const3dB, 5.0f, PanMode::StereoPan});
+  stereo_pan.prepare(48000.0, 64);
+  REQUIRE_FALSE(stereo_pan.at_rest_identity());
+
+  PannerProcessor dual_pan(PannerConfig{0.0f, PanLaw::Const3dB, 5.0f, PanMode::DualPan});
+  dual_pan.prepare(48000.0, 64);
+  REQUIRE_FALSE(dual_pan.at_rest_identity());
+
+  // A non-zero pan target is never the identity.
+  PannerProcessor panned(PannerConfig{0.3f, PanLaw::Const3dB, 5.0f});
+  panned.prepare(48000.0, 64);
+  REQUIRE_FALSE(panned.at_rest_identity());
+
+  // Sending the target back to 0 without letting the smoother catch up leaves
+  // the panner still gliding from the earlier pan, so a caller reading the
+  // target alone would wrongly call this the identity and freeze mid-glide.
+  PannerProcessor gliding(PannerConfig{0.0f, PanLaw::Const3dB, 5.0f});
+  gliding.prepare(48000.0, 64);
+  gliding.set_pan(0.3f);
+  std::array<float, 1> one_left{1.0f};
+  std::array<float, 1> one_right{1.0f};
+  float* one_sample[] = {one_left.data(), one_right.data()};
+  gliding.process(one_sample, 2, 1);
+  gliding.set_pan(0.0f);
+  REQUIRE_FALSE(gliding.at_rest_identity());
+
+  // Settling the smoothers (as ChannelStrip::settle() does) restores it.
+  gliding.reset();
+  REQUIRE(gliding.at_rest_identity());
+}

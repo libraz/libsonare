@@ -437,7 +437,8 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
 
   alignment_delay_.process(channels, num_channels, num_samples);
 
-  if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
+  const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
+  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
     eq_.process(channels, num_channels, num_samples);
   }
   process_insert_chain(pre_inserts_, pre_insert_spo_, channels, num_channels, num_samples, 0, 0);
@@ -453,7 +454,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   fader_.process(channels, num_channels, num_samples);
   panner_.process(channels, num_channels, num_samples);
 
-  if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
+  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(channels, num_channels, num_samples);
   }
   process_insert_chain(post_inserts_, post_insert_spo_, channels, num_channels, num_samples,
@@ -501,7 +502,8 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
 
   alignment_delay_.process(segment, num_channels, num_samples);
 
-  if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
+  const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
+  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
     eq_.process(segment, num_channels, num_samples);
   }
   process_insert_chain(pre_inserts_, pre_insert_spo_, segment, num_channels, num_samples, 0, start);
@@ -510,7 +512,7 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   fader_.process(segment, num_channels, num_samples);
   panner_.process(segment, num_channels, num_samples);
 
-  if (eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
+  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(segment, num_channels, num_samples);
   }
   process_insert_chain(post_inserts_, post_insert_spo_, segment, num_channels, num_samples,
