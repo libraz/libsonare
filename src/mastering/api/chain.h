@@ -284,12 +284,11 @@ class MasteringChain {
   const MasteringChainConfig& config() const noexcept { return config_; }
 
  private:
-  template <bool CheckCancel>
   std::optional<MonoChainResult> process_mono_impl(const float* samples, std::size_t length,
-                                                   int sample_rate);
-  template <bool CheckCancel>
+                                                   int sample_rate, bool check_cancel);
   std::optional<StereoChainResult> process_stereo_impl(const float* left, const float* right,
-                                                       std::size_t length, int sample_rate);
+                                                       std::size_t length, int sample_rate,
+                                                       bool check_cancel);
 
   MasteringChainConfig config_;
   ProgressCallback progress_callback_;
