@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "core/fade_curve.h"
 #include "engine/warp_stretch.h"
 #include "rt/overflow_counter.h"
 #include "rt/pan_law.h"
@@ -20,19 +21,9 @@
 
 namespace sonare::engine {
 
-/// Fade-curve law applied to clip fade-in / fade-out regions.
-enum class FadeCurve {
-  /// Linear-amplitude ramp (default; preserves existing golden output and
-  /// dips ~-3 dB at the midpoint of equal-gain crossfades).
-  Linear,
-  /// Equal-power (constant-energy) ramp using a sine/cosine law; holds a
-  /// constant -3 dB sum across symmetric crossfades.
-  EqualPower,
-  /// Slow start, fast finish (x^2).
-  Exponential,
-  /// Fast start, slow finish (sqrt(x)).
-  Logarithmic,
-};
+/// Fade-curve law applied to clip fade-in / fade-out regions. Shared with the
+/// MIDI clip envelope via sonare::FadeCurve / sonare::clip_fade_gain.
+using FadeCurve = sonare::FadeCurve;
 
 struct ClipAudioBuffer {
   /// Non-owning deinterleaved channel pointers. Every channel MUST contain at

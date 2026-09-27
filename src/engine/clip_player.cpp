@@ -276,45 +276,16 @@ size_t ClipPlayer::clip_count() const noexcept {
   return clip_count_.load(std::memory_order_relaxed);
 }
 
-float curve_gain(float fraction, FadeCurve curve) noexcept {
-  fraction = std::clamp(fraction, 0.0f, 1.0f);
-  switch (curve) {
-    case FadeCurve::EqualPower:
-      return std::sin(kHalfPi * fraction);
-    case FadeCurve::Exponential:
-      return fraction * fraction;
-    case FadeCurve::Logarithmic:
-      return std::sqrt(fraction);
-    case FadeCurve::Linear:
-    default:
-      return fraction;
-  }
-}
-
 float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position) noexcept {
-  float gain = 1.0f;
   const int64_t fade_position = position + std::max<int64_t>(0, clip.fade_reference_offset_samples);
   const int64_t fade_length = clip.fade_reference_length_samples > 0
                                   ? clip.fade_reference_length_samples
                                   : clip.length_samples;
-  // Clamp each fade to the clip's own length. An oversized fade-out would
-  // otherwise drive the fade-out start (fade_length - fade_out_samples) negative,
-  // so every sample falls inside the fade ramp and the whole clip attenuates.
-  const int64_t fade_in_samples = std::min(std::max<int64_t>(0, clip.fade_in_samples), fade_length);
-  const int64_t fade_out_samples =
-      std::min(std::max<int64_t>(0, clip.fade_out_samples), fade_length);
-  if (fade_in_samples > 0 && fade_position < fade_in_samples) {
-    const float fraction = static_cast<float>(fade_position) / static_cast<float>(fade_in_samples);
-    gain *= curve_gain(fraction, clip.fade_in_curve);
-  }
-  if (fade_out_samples > 0) {
-    const int64_t fade_start = fade_length - fade_out_samples;
-    if (fade_position >= fade_start) {
-      const float fraction = static_cast<float>(std::max<int64_t>(0, fade_length - fade_position)) /
-                             static_cast<float>(fade_out_samples);
-      gain *= curve_gain(fraction, clip.fade_out_curve);
-    }
-  }
+  // fade_length is always > 0 here (the caller skips clips with
+  // length_samples <= 0), so this always takes clip_fade_gain's bounded path.
+  float gain =
+      sonare::clip_fade_gain(fade_position, fade_length, clip.fade_in_samples,
+                             clip.fade_out_samples, clip.fade_in_curve, clip.fade_out_curve);
   // Comp-seam crossfade. It rides on top of the clip-level envelope above and
   // is measured against this fragment's own span, so `position` is used raw
   // where the clip fades used the reference-shifted one. Equal-power rather

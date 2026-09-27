@@ -1097,6 +1097,22 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           0, tempo_map.ppq_to_sample(clip.start_ppq + effective_loop_length_ppq(clip)) -
                  sched.start_sample);
     }
+    // Gain / fade envelope, converted the same way as an audio clip's (ppq ->
+    // samples at the clip's own start tempo, clamped to the clip's own
+    // duration): the arrangement compiler always gives a MIDI clip a positive
+    // length, so this schedule is never the open-ended case.
+    sched.gain = clip.gain;
+    {
+      const double fade_in_ppq = std::clamp(clip.fade_in.length_ppq, 0.0, clip.length_ppq);
+      const double fade_out_ppq = std::clamp(clip.fade_out.length_ppq, 0.0, clip.length_ppq);
+      sched.fade_in_samples = std::max<int64_t>(
+          0, tempo_map.ppq_to_sample(clip.start_ppq + fade_in_ppq) - sched.start_sample);
+      sched.fade_out_samples =
+          std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) -
+                                   tempo_map.ppq_to_sample(clip.end_ppq() - fade_out_ppq));
+    }
+    sched.fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
+    sched.fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
     append_midi_render_events(midi_clip, clip, tempo_map, &sched.events);
     first_midi_clip_id = timeline.midi_clips.empty() ? sched.id : first_midi_clip_id;
     timeline.midi_clips.push_back(std::move(sched));

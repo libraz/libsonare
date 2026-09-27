@@ -96,6 +96,12 @@ class MidiSequencer {
   /// start before process_block. RT-safe, no alloc.
   void acquire_midi_clips() noexcept { clips_.acquire(); }
 
+  /// AUDIO thread: the clip set most recently adopted by acquire_midi_clips(),
+  /// or nullptr before any set has been published. Lets a caller (the
+  /// per-destination gain/fade envelope, midi_clip_envelope.h) read the same
+  /// snapshot process_block() scans without re-deriving or copying it.
+  const std::vector<MidiClipSchedule>* current_clips() const noexcept { return clips_.current(); }
+
   /// AUDIO thread: dispatch every event whose render frame falls in
   /// [block_start_frame, block_start_frame + num_frames). RT-safe, no alloc.
   void process_block(int64_t block_start_frame, int num_frames) noexcept;
