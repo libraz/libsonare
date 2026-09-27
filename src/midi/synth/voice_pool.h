@@ -45,16 +45,10 @@ class VoicePool {
 
  public:
   /// CONTROL thread: size the pool. The only allocating call.
-  void prepare(int polyphony) {
-    voices_.assign(static_cast<size_t>(polyphony > 0 ? polyphony : 1), Voice{});
-    next_age_ = 1;
-  }
+  void prepare(int polyphony) { refill(static_cast<size_t>(polyphony > 0 ? polyphony : 1)); }
 
   /// AUDIO thread: reset all slots to silence (keeps the allocation).
-  void reset() noexcept {
-    for (auto& v : voices_) v = Voice{};
-    next_age_ = 1;
-  }
+  void reset() noexcept { refill(voices_.size()); }
 
   /// AUDIO thread: claim a voice for (channel, note) using the deterministic
   /// steal policy. Returns nullptr only when the pool was never prepared.
@@ -114,6 +108,13 @@ class VoicePool {
   }
 
  private:
+  // The one site that builds a blank voice. At the current size assign reuses
+  // the allocation, so reset() stays allocation-free on the audio thread.
+  void refill(size_t count) {
+    voices_.assign(count, Voice{});
+    next_age_ = 1;
+  }
+
   std::vector<Voice> voices_;
   uint64_t next_age_ = 1;
 };
