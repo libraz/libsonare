@@ -72,49 +72,6 @@ mastering::repair::DereverbClassicalConfig readDereverbConfig(
   return config;
 }
 
-// Reads a JS array of Float32Array channels for the linked entry points,
-// running loadValidatedAudio over EVERY channel. The core guards channels[0]
-// alone and scans no channel at all for a non-finite sample, so this loop is
-// the whole non-finite guard on the set; a wrapper that validated only the
-// first channel would pass a NaN straight into the mask. `entry` names the
-// caller in each message.
-std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
-                                           const char* entry) {
-  const std::string subject(entry);
-  if (channels.isUndefined() || channels.isNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  subject + ": channels must be an array of Float32Array");
-  }
-  const std::size_t count = wasmArrayLikeLength(channels, "channels");
-  if (count == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  subject + ": channels must hold at least one channel");
-  }
-  const std::string budget = subject + " input";
-  std::vector<Audio> loaded;
-  loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
-  std::size_t cumulative = 0;
-  std::size_t length = 0;
-  for (std::size_t index = 0; index < count; ++index) {
-    const val channel = channels[index];
-    if (channel.isUndefined() || channel.isNull()) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          subject + ": channels[" + std::to_string(index) + "] must be a Float32Array");
-    }
-    const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
-    if (index == 0) {
-      length = frames;
-    } else if (frames != length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    subject + ": channel lengths must match");
-    }
-    loaded.push_back(loadValidatedAudio(channel, sample_rate));
-  }
-  return loaded;
-}
-
 // Pointers are taken only once every channel is in place, so no later growth
 // can invalidate one.
 std::vector<const Audio*> channelSetPointers(const std::vector<Audio>& channels) {

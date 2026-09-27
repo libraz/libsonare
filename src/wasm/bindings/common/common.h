@@ -210,6 +210,12 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
 /// so the WASM surface rejects the same inputs even though it bypasses the
 /// C-ABI translation unit. @throws SonareException(InvalidParameter).
 Audio loadValidatedAudio(val samples, int sample_rate);
+/// @brief Loads a JS array of equal-length Float32Array channels, running
+/// loadValidatedAudio over EVERY channel. A linked core entry guards channels[0]
+/// alone and takes one shared length, so this is the whole non-finite and length
+/// guard on the set. @p entry names the caller in each message.
+/// @throws SonareException(InvalidParameter).
+std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate, const char* entry);
 /// @brief loadValidatedAudio for an entry point that reads one window of the
 /// buffer. The null/empty, sampleRate and buffer-size rules still cover the
 /// whole buffer; only the non-finite scan narrows, to

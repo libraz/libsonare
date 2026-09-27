@@ -412,6 +412,11 @@ class RealtimeEngineWasm {
   std::vector<std::vector<const float*>> clip_ptrs_;
   std::vector<uint32_t> clip_ids_;
   std::vector<uint8_t> clip_tempo_baked_;
+  // Sizes @p storage to @p num_channels zeroed planes of @p num_frames and points
+  // @p ptrs at them; shared by the capture, prepared and monitor planes.
+  static void allocatePlanes(std::vector<std::vector<float>>& storage, std::vector<float*>& ptrs,
+                             int num_channels, int num_frames);
+
   std::vector<std::vector<float>> capture_storage_;
   std::vector<float*> capture_ptrs_;
   // Persistent per-channel scratch for the zero-copy prepared process() path.

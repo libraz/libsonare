@@ -188,6 +188,42 @@ Audio loadValidatedAudio(val samples, int sample_rate) {
   return Audio::from_buffer(data.data(), data.size(), sample_rate);
 }
 
+std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
+                                           const char* entry) {
+  const std::string subject(entry);
+  if (channels.isUndefined() || channels.isNull()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          subject + ": channels must be an array of Float32Array");
+  }
+  const std::size_t count = wasmArrayLikeLength(channels, "channels");
+  if (count == 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          subject + ": channels must hold at least one channel");
+  }
+  const std::string budget = subject + " input";
+  std::vector<Audio> loaded;
+  loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  std::size_t cumulative = 0;
+  std::size_t length = 0;
+  for (std::size_t index = 0; index < count; ++index) {
+    const val channel = channels[index];
+    if (channel.isUndefined() || channel.isNull()) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          subject + ": channels[" + std::to_string(index) + "] must be a Float32Array");
+    }
+    const std::size_t frames =
+        accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
+    if (index == 0) {
+      length = frames;
+    } else if (frames != length) {
+      throw SonareException(ErrorCode::InvalidParameter, subject + ": channel lengths must match");
+    }
+    loaded.push_back(loadValidatedAudio(channel, sample_rate));
+  }
+  return loaded;
+}
+
 std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::size_t count) {
   std::vector<float> result(count);
   if (count == 0) return result;
@@ -313,13 +349,24 @@ float floatProperty(val object, const char* key, float default_value) {
   return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
 }
 
-float typedFloatProperty(val object, const char* key, float default_value) {
+namespace {
+
+// The typed readers' shared half: undefined or null reads as absent (returned
+// as undefined), and any JS type other than @p type is refused by name.
+val typedPropertyValue(const val& object, const char* key, const char* type) {
   val value = objectProperty(object, key);
-  if (value.isUndefined() || value.isNull()) return default_value;
-  if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+  if (value.isUndefined() || value.isNull()) return val::undefined();
+  if (value.typeOf().as<std::string>() != type) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a " + type);
   }
-  return checkedFloatFromVal(value, key);
+  return value;
+}
+
+}  // namespace
+
+float typedFloatProperty(val object, const char* key, float default_value) {
+  val value = typedPropertyValue(object, key, "number");
+  return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
 }
 
 float floatOption(val object, const char* key, float default_value) {
@@ -399,12 +446,8 @@ int intProperty(val object, const char* key, int default_value) {
 }
 
 int typedIntProperty(val object, const char* key, int default_value) {
-  val value = objectProperty(object, key);
-  if (value.isUndefined() || value.isNull()) return default_value;
-  if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
-  }
-  return checkedIntFromVal(value, key);
+  val value = typedPropertyValue(object, key, "number");
+  return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
 
 uint32_t checkedUintFromVal(const val& value, const char* key) {
@@ -499,12 +542,8 @@ double doubleProperty(val object, const char* key, double default_value) {
 }
 
 double typedDoubleProperty(val object, const char* key, double default_value) {
-  val value = objectProperty(object, key);
-  if (value.isUndefined() || value.isNull()) return default_value;
-  if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
-  }
-  return checkedDoubleFromVal(value, key);
+  val value = typedPropertyValue(object, key, "number");
+  return value.isUndefined() ? default_value : checkedDoubleFromVal(value, key);
 }
 
 int builtinWaveformFromVal(const val& value) {
@@ -544,12 +583,8 @@ bool boolProperty(val object, const char* key, bool default_value) {
 }
 
 bool typedBoolProperty(val object, const char* key, bool default_value) {
-  val value = objectProperty(object, key);
-  if (value.isUndefined() || value.isNull()) return default_value;
-  if (value.typeOf().as<std::string>() != "boolean") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a boolean");
-  }
-  return value.as<bool>();
+  val value = typedPropertyValue(object, key, "boolean");
+  return value.isUndefined() ? default_value : value.as<bool>();
 }
 
 std::string stringProperty(val object, const char* key, const std::string& default_value) {

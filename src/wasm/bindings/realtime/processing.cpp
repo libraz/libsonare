@@ -198,6 +198,16 @@ val RealtimeEngineWasm::process(val channels_val) {
   return channelsToJs(block);
 }
 
+void RealtimeEngineWasm::allocatePlanes(std::vector<std::vector<float>>& storage,
+                                        std::vector<float*>& ptrs, int num_channels,
+                                        int num_frames) {
+  storage.assign(static_cast<size_t>(num_channels),
+                 std::vector<float>(static_cast<size_t>(num_frames), 0.0f));
+  ptrs.clear();
+  ptrs.reserve(storage.size());
+  for (auto& channel : storage) ptrs.push_back(channel.data());
+}
+
 // ---- Zero-copy "prepared" realtime path ------------------------------
 // The AudioWorklet render thread fills the per-channel input views (returned
 // as typed_memory_views onto persistent WASM-heap storage), calls
@@ -217,13 +227,7 @@ void RealtimeEngineWasm::prepareChannels(const val& num_channels_val, const val&
   }
   prepared_channels_ = num_channels;
   prepared_capacity_ = max_frames;
-  prepared_storage_.assign(static_cast<size_t>(num_channels),
-                           std::vector<float>(static_cast<size_t>(max_frames), 0.0f));
-  prepared_ptrs_.clear();
-  prepared_ptrs_.reserve(prepared_storage_.size());
-  for (auto& channel : prepared_storage_) {
-    prepared_ptrs_.push_back(channel.data());
-  }
+  allocatePlanes(prepared_storage_, prepared_ptrs_, num_channels, max_frames);
 }
 
 val RealtimeEngineWasm::getChannelBuffer(const val& channel_val, const val& num_frames_val) {
@@ -275,13 +279,7 @@ void RealtimeEngineWasm::prepareMonitorChannels(const val& num_channels_val,
   }
   monitor_channels_ = num_channels;
   monitor_capacity_ = max_frames;
-  monitor_storage_.assign(static_cast<size_t>(num_channels),
-                          std::vector<float>(static_cast<size_t>(max_frames), 0.0f));
-  monitor_ptrs_.clear();
-  monitor_ptrs_.reserve(monitor_storage_.size());
-  for (auto& channel : monitor_storage_) {
-    monitor_ptrs_.push_back(channel.data());
-  }
+  allocatePlanes(monitor_storage_, monitor_ptrs_, num_channels, max_frames);
 }
 
 val RealtimeEngineWasm::getMonitorChannelBuffer(const val& channel_val, const val& num_frames_val) {

@@ -48,49 +48,6 @@ DecomposeStemsConfig readDecomposeStemsConfig(const char* fn_name, val options) 
   return config;
 }
 
-// Reads a JS array of Float32Array channels for decomposeStemsLinked, running
-// loadValidatedAudio over EVERY channel and requiring equal lengths --
-// decompose_stems_linked takes one shared `n` for the whole set, so a length
-// mismatch here would otherwise read the wrong number of samples from a
-// shorter buffer rather than being refused. Mirrors repair.cpp's
-// loadValidatedChannelSet, kept file-local like that one: the core validates
-// channel_count against kMaxDecomposeStemsLinkedChannels itself.
-std::vector<Audio> loadDecomposeChannelSet(const val& channels, int sample_rate) {
-  const char* subject = "decomposeStemsLinked";
-  if (channels.isUndefined() || channels.isNull()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + ": channels must be an array of Float32Array");
-  }
-  const std::size_t count = wasmArrayLikeLength(channels, "channels");
-  if (count == 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + ": channels must hold at least one channel");
-  }
-  const std::string budget = std::string(subject) + " input";
-  std::vector<Audio> loaded;
-  loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
-  std::size_t cumulative = 0;
-  std::size_t length = 0;
-  for (std::size_t index = 0; index < count; ++index) {
-    const val channel = channels[index];
-    if (channel.isUndefined() || channel.isNull()) {
-      throw SonareException(ErrorCode::InvalidParameter, std::string(subject) + ": channels[" +
-                                                             std::to_string(index) +
-                                                             "] must be a Float32Array");
-    }
-    const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
-    if (index == 0) {
-      length = frames;
-    } else if (frames != length) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(subject) + ": channel lengths must match");
-    }
-    loaded.push_back(loadValidatedAudio(channel, sample_rate));
-  }
-  return loaded;
-}
-
 }  // namespace
 
 // NMF decomposition of a non-negative spectrogram. Mirrors the C ABI
@@ -195,7 +152,8 @@ val js_decompose_stems(val samples, const val& sample_rate_val, val options) {
 // component k's signal on channel c.
 val js_decompose_stems_linked(val channels, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const std::vector<Audio> loaded = loadDecomposeChannelSet(channels, sample_rate);
+  const std::vector<Audio> loaded =
+      loadValidatedChannelSet(channels, sample_rate, "decomposeStemsLinked");
   const DecomposeStemsConfig config = readDecomposeStemsConfig("decomposeStemsLinked", options);
 
   std::vector<const float*> pointers;

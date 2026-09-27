@@ -41,13 +41,7 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "capture buffer dimensions must be positive");
   }
-  capture_storage_.assign(static_cast<size_t>(num_channels),
-                          std::vector<float>(static_cast<size_t>(capacity_frames), 0.0f));
-  capture_ptrs_.clear();
-  capture_ptrs_.reserve(capture_storage_.size());
-  for (auto& channel : capture_storage_) {
-    capture_ptrs_.push_back(channel.data());
-  }
+  allocatePlanes(capture_storage_, capture_ptrs_, num_channels, capacity_frames);
   engine_.set_capture_segment(
       {capture_ptrs_.data(), num_channels, static_cast<int64_t>(capacity_frames)});
 }
