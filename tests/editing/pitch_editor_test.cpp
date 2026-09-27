@@ -688,17 +688,44 @@ TEST_CASE("NoteEditor stretches note region to requested length ratio", "[pitch_
 
   const int stretched_len =
       static_cast<int>(std::ceil(static_cast<float>(original_region_length) * stretch_ratio));
-  // Each of the two splices (head|stretched and stretched|tail) is an
-  // equal-power overlap-add cross-fade, so the regions overlap by one `fade` per
-  // splice and the result is 2*fade samples shorter than a plain concatenation.
-  // fade = round(fade_ms * sr / 1000), clamped to half the stretched length.
-  const int fade =
-      std::min(static_cast<int>(std::round(2.0f * 0.001f * sample_rate)), stretched_len / 2);
-  const int expected_size =
-      static_cast<int>(audio.size()) - original_region_length + stretched_len - 2 * fade;
+  // Only the region's length changes; the seams cross-fade against the note's
+  // own samples, not by overlapping the neighbours.
+  const int expected_size = static_cast<int>(audio.size()) - original_region_length + stretched_len;
   REQUIRE_THAT(static_cast<float>(stretched.size()),
                WithinAbs(static_cast<float>(expected_size), 2.0f));
   REQUIRE(stretched.sample_rate() == audio.sample_rate());
+}
+
+TEST_CASE("NoteEditor stretch shifts later audio by exactly the region's length change",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  auto samples = sine(440.0f, sample_rate, sample_rate / 2);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+  NoteRegion region;
+  region.onset_sample = 1000;
+  region.offset_sample = 5000;
+  const int region_length = region.offset_sample - region.onset_sample;
+  NoteEditor editor({2.0f, sonare::StretchBackend::NativeSpectral});
+
+  // 1.0 is time-neutral: same length, and everything outside the region is the
+  // input sample for sample.
+  for (const float ratio : {1.0f, 1.1f, 0.8f}) {
+    CAPTURE(ratio);
+    const sonare::Audio out = editor.stretch_note(audio, region, ratio);
+    const int shift = static_cast<int>(out.size()) - static_cast<int>(audio.size());
+    const int stretched_len = region_length + shift;
+    REQUIRE(std::abs(static_cast<float>(stretched_len) - region_length * ratio) <= 2.0f);
+    if (ratio == 1.0f) REQUIRE(shift == 0);
+    int mismatches = 0;
+    for (size_t i = 0; i < static_cast<size_t>(region.onset_sample); ++i) {
+      mismatches += out[i] != audio[i] ? 1 : 0;
+    }
+    for (size_t i = static_cast<size_t>(region.offset_sample); i < audio.size(); ++i) {
+      mismatches += out[i + static_cast<size_t>(shift)] != audio[i] ? 1 : 0;
+    }
+    REQUIRE(mismatches == 0);
+  }
 }
 
 TEST_CASE("ScaleQuantizer boundary MIDI values quantize without crash", "[pitch_editor]") {

@@ -21,19 +21,15 @@ class NoteEditor {
   explicit NoteEditor(NoteEditorConfig config = {});
 
   Audio move_note(const Audio& audio, const NoteRegion& region, int target_onset_sample) const;
+  /// Replaces the region with its time-stretched copy. Only the region's own
+  /// length changes: the result is `audio.size() - region + stretched` samples
+  /// and the audio after the region is shifted by exactly `stretched - region`,
+  /// so a ratio of 1.0 keeps every later onset where it was.
   Audio stretch_note(const Audio& audio, const NoteRegion& region, float stretch_ratio) const;
 
  private:
   int fade_samples(int sample_rate, int region_length) const noexcept;
   static void apply_edge_fades(std::vector<float>& samples, int fade_samples);
-  /// Appends @p src to @p dst with an equal-power overlap-add cross-fade over
-  /// @p fade samples: the left region's tail (the last @p fade samples of @p
-  /// dst) ramps down while the right region's head (the first @p fade samples of
-  /// @p src) ramps up, with temporal direction preserved. Overlapping the two
-  /// regions shortens the result by @p fade and keeps the seam continuous
-  /// without the level dip a fade-to-zero introduces.
-  static void append_with_crossfade(std::vector<float>& dst, const std::vector<float>& src,
-                                    int fade);
   static NoteRegion clamp_region(const Audio& audio, const NoteRegion& region);
 
   NoteEditorConfig config_{};

@@ -67,27 +67,37 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
 
   std::vector<float> stretched_samples(stretched.begin(), stretched.end());
 
-  const std::vector<float> head(audio.begin(), audio.begin() + clipped.onset_sample);
-  const std::vector<float> tail(audio.begin() + clipped.offset_sample, audio.end());
-
-  // Equal-power overlap-add cross-fade at each splice instead of fading the
-  // stretched region to zero at both ends. Fading to silence left a level
-  // dip/gap because the unmodified head and tail meet the splice at full level;
-  // overlapping the regions ramps the left signal down while the right ramps up
-  // over the same time positions, keeping the seam continuous without dropping
-  // the level. `fade` is clamped to half the stretched length (fade_samples), so
-  // the two overlaps never consume the same samples. Splices at the buffer edges
-  // (head or tail empty) have no neighbour to blend with and are left untouched.
-  const int fade = fade_samples(audio.sample_rate(), static_cast<int>(stretched_samples.size()));
+  // Each seam cross-fades the stretched region against the source samples that
+  // are continuous with the untouched neighbour -- the note's own start at the
+  // head seam, its own end at the tail seam -- with the equal-power weights
+  // note_model::overlay splices with. Nothing overlaps the neighbour itself, so
+  // the result is only the region's length change away from the input. A seam at
+  // a buffer edge has no neighbour and is left uncrossed.
   const int stretched_len = static_cast<int>(stretched_samples.size());
-  const int head_fade = std::min({fade, static_cast<int>(head.size()), stretched_len});
-  const int tail_fade = std::min({fade, stretched_len, static_cast<int>(tail.size())});
+  const int fade = std::min(fade_samples(audio.sample_rate(), stretched_len), length);
+  const int head_fade = clipped.onset_sample > 0 ? fade : 0;
+  const int tail_fade = clipped.offset_sample < static_cast<int>(audio.size()) ? fade : 0;
 
   std::vector<float> output;
   output.reserve(audio.size() - static_cast<size_t>(length) + stretched_samples.size());
-  output.insert(output.end(), head.begin(), head.end());
-  append_with_crossfade(output, stretched_samples, head_fade);
-  append_with_crossfade(output, tail, tail_fade);
+  output.insert(output.end(), audio.begin(), audio.begin() + clipped.onset_sample);
+  const size_t region_start = output.size();
+  output.insert(output.end(), stretched_samples.begin(), stretched_samples.end());
+  for (int k = 0; k < head_fade; ++k) {
+    const float phase = (static_cast<float>(k) + 0.5f) / static_cast<float>(head_fade);
+    float& sample = output[region_start + static_cast<size_t>(k)];
+    sample = std::sin(0.5f * kPi * phase) * sample +
+             std::cos(0.5f * kPi * phase) * audio[static_cast<size_t>(clipped.onset_sample + k)];
+  }
+  const size_t tail_start = region_start + static_cast<size_t>(stretched_len - tail_fade);
+  const int source_tail = clipped.offset_sample - tail_fade;
+  for (int k = 0; k < tail_fade; ++k) {
+    const float phase = (static_cast<float>(k) + 0.5f) / static_cast<float>(tail_fade);
+    float& sample = output[tail_start + static_cast<size_t>(k)];
+    sample = std::cos(0.5f * kPi * phase) * sample +
+             std::sin(0.5f * kPi * phase) * audio[static_cast<size_t>(source_tail + k)];
+  }
+  output.insert(output.end(), audio.begin() + clipped.offset_sample, audio.end());
 
   return Audio::from_vector(std::move(output), audio.sample_rate());
 }
@@ -96,31 +106,6 @@ int NoteEditor::fade_samples(int sample_rate, int region_length) const noexcept 
   const int requested =
       static_cast<int>(std::round(config_.fade_ms * 0.001f * static_cast<float>(sample_rate)));
   return std::clamp(requested, 0, std::max(0, region_length / 2));
-}
-
-void NoteEditor::append_with_crossfade(std::vector<float>& dst, const std::vector<float>& src,
-                                       int fade) {
-  // Equal-power overlap-add splice: the last `fade` samples of dst (the left
-  // region's tail) are blended with the first `fade` samples of src (the right
-  // region's head) over a single fade-length zone, so the left signal ramps down
-  // while the right ramps up with temporal direction preserved (a true
-  // cross-fade, not a self-mirror). Equal-power (cos/sin) weights keep the summed
-  // energy of two decorrelated regions ~constant, avoiding the seam level dip.
-  if (fade <= 0 || dst.size() < static_cast<size_t>(fade) ||
-      src.size() < static_cast<size_t>(fade)) {
-    dst.insert(dst.end(), src.begin(), src.end());
-    return;
-  }
-  const size_t base = dst.size() - static_cast<size_t>(fade);
-  for (int k = 0; k < fade; ++k) {
-    // phase in (0, 1): left_gain ~1 at the start, right_gain ~1 at the end.
-    const float phase = (static_cast<float>(k) + 0.5f) / static_cast<float>(fade);
-    const float left_gain = std::cos(0.5f * kPi * phase);
-    const float right_gain = std::sin(0.5f * kPi * phase);
-    dst[base + static_cast<size_t>(k)] =
-        left_gain * dst[base + static_cast<size_t>(k)] + right_gain * src[static_cast<size_t>(k)];
-  }
-  dst.insert(dst.end(), src.begin() + fade, src.end());
 }
 
 void NoteEditor::apply_edge_fades(std::vector<float>& samples, int fade_samples) {
