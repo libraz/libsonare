@@ -140,6 +140,32 @@ class _EngineMixingMixin:
             )
         )
 
+    def set_bus_strip_eq_band(
+        self, bus_id: int, band_index: int, band: Mapping[str, object] | str
+    ) -> None:
+        """Realtime change of one bus-strip EQ band.
+
+        Bus-strip counterpart of :meth:`set_track_strip_eq_band`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_eq_band_json(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_int(band_index, "band_index"),
+                _band_json_arg(band),
+            )
+        )
+
+    def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_eq_band_json(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_int(band_index, "band_index"),
+                band_json.encode("utf-8"),
+            )
+        )
+
     def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
         _check(
             _get_lib().sonare_engine_set_track_strip_json(
@@ -335,6 +361,60 @@ class _EngineMixingMixin:
                 _to_c_uint(insert_index, "insert_index"),
                 1 if bypassed else 0,
                 1 if reset_on_bypass else 0,
+            )
+        )
+
+    def set_bus_strip_pan(self, bus_id: int, pan: float) -> None:
+        """Set a bus strip's pan position (-1.0 hard left .. 1.0 hard right).
+
+        Bus-strip counterpart of :meth:`set_track_strip_pan`; rejected on a
+        surround bus.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_pan(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_float(pan, "pan"),
+            )
+        )
+
+    def set_bus_strip_pan_law(self, bus_id: int, pan_law: PanLawInput) -> None:
+        """Set a bus strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
+
+        Bus-strip counterpart of :meth:`set_track_strip_pan_law`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_pan_law(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _pan_law_value(pan_law),
+            )
+        )
+
+    def set_bus_strip_pan_mode(self, bus_id: int, pan_mode: str | int) -> None:
+        """Set a bus strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2).
+
+        Bus-strip counterpart of :meth:`set_track_strip_pan_mode`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_pan_mode(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _pan_mode_value(pan_mode),
+            )
+        )
+
+    def set_bus_strip_dual_pan(self, bus_id: int, left_pan: float, right_pan: float) -> None:
+        """Set a bus strip's dual-pan positions for the left and right channels.
+
+        Bus-strip counterpart of :meth:`set_track_strip_dual_pan`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_dual_pan(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_float(left_pan, "left_pan"),
+                _to_c_float(right_pan, "right_pan"),
             )
         )
 

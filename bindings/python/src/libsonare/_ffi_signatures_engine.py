@@ -201,6 +201,14 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
             ctypes.c_char_p,
         ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_eq_band_json"):
+        lib.sonare_engine_set_bus_strip_eq_band_json.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_eq_band_json.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+            ctypes.c_char_p,
+        ]
     if hasattr(lib, "sonare_engine_set_track_strip_json"):
         lib.sonare_engine_set_track_strip_json.restype = ctypes.c_int32
         lib.sonare_engine_set_track_strip_json.argtypes = [
@@ -316,6 +324,35 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint,
             ctypes.c_int,
             ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_pan"):
+        lib.sonare_engine_set_bus_strip_pan.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+        ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_pan_law"):
+        lib.sonare_engine_set_bus_strip_pan_law.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_pan_law.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_pan_mode"):
+        lib.sonare_engine_set_bus_strip_pan_mode.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_pan_mode.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_dual_pan"):
+        lib.sonare_engine_set_bus_strip_dual_pan.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_dual_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_float,
         ]
     if hasattr(lib, "sonare_engine_resolve_track_insert_automation_id"):
         lib.sonare_engine_resolve_track_insert_automation_id.restype = ctypes.c_int32

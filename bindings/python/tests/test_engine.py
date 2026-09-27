@@ -1648,6 +1648,141 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
         assert energy(left_routed[1]) < 1e-6
 
 
+def test_engine_bus_strip_pan_and_send_setters() -> None:
+    frames = 256 * 4
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames, [1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        # A bus strip must exist before its pan can be set.
+        engine.set_bus_strip_json(
+            1,
+            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+        )
+
+        # An unknown / zero bus id is rejected by every setter.
+        with pytest.raises(SonareError) as bad_pan_error:
+            engine.set_bus_strip_pan(0, -1.0)
+        assert bad_pan_error.value.code == 4
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_pan_law(0, "linear")
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_pan_mode(0, "balance")
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_dual_pan(0, -1.0, 1.0)
+        with pytest.raises(SonareError) as unknown_bus_error:
+            engine.set_bus_strip_pan(99, 0.0)
+        assert unknown_bus_error.value.code == 4
+
+        # Non-finite pan is refused outright rather than clamped.
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_pan(1, math.nan)
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_pan(1, math.inf)
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_dual_pan(1, math.nan, 0.0)
+
+        # Pan law / mode accept enum names and ints; the helpers coerce them.
+        engine.set_bus_strip_pan_law(1, "linear")
+        for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
+            engine.set_bus_strip_pan_law(1, case["value"])
+        for ordinal in _PAN_LAW_CORPUS["numeric"]:
+            engine.set_bus_strip_pan_law(1, ordinal)
+        for value in _PAN_LAW_CORPUS["rejected"]:
+            with pytest.raises(ValueError):
+                engine.set_bus_strip_pan_law(1, value)
+        engine.set_bus_strip_pan_mode(1, "stereo-pan")
+        engine.set_bus_strip_dual_pan(1, 0.0, 0.0)
+
+        # Hard-left pan should leave the left channel louder than the right.
+        engine.set_bus_strip_pan(1, -1.0)
+        engine.play()
+        left, right = engine.process([[0.0] * 256, [0.0] * 256])
+        left_rms = math.sqrt(sum(s * s for s in left) / len(left))
+        right_rms = math.sqrt(sum(s * s for s in right) / len(right))
+        assert left_rms > right_rms
+
+
+def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        # A 5.1 bus rejects every pan setter outright (unknown and surround
+        # buses share one generic failure), but keeps its EQ available.
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        engine.set_bus_strip_json(
+            1,
+            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+        )
+        with pytest.raises(SonareError) as surround_pan_error:
+            engine.set_bus_strip_pan(1, 0.0)
+        assert surround_pan_error.value.code == 4
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_pan_law(1, "linear")
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_pan_mode(1, "balance")
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_dual_pan(1, -1.0, 1.0)
+        engine.set_bus_strip_eq_band(1, 0, {"type": "Peak", "enabled": True})
+
+
+def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
+    frames = 256 * 16
+    source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[source],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_buses(
+            [{"bus_id": 1, "gain_db": 0.0, "channel_layout": ChannelLayout.MONO}]
+        )
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        engine.set_bus_strip_json(
+            1,
+            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+        )
+        with pytest.raises(SonareError) as bad_index_error:
+            engine.set_bus_strip_eq_band(1, 99, {"type": "Peak", "enabled": True})
+        assert bad_index_error.value.code == 4
+
+        engine.play()
+        flat_out = engine.process([[0.0] * 256])[0]
+        engine.set_bus_strip_eq_band(
+            1,
+            0,
+            {
+                "type": "Peak",
+                "frequencyHz": 1000,
+                "gainDb": 12,
+                "q": 1,
+                "enabled": True,
+            },
+        )
+        engine.seek_sample(0)
+        eq_out = [0.0] * 256
+        for _ in range(6):
+            eq_out = engine.process([[0.0] * 256])[0]
+        assert math.sqrt(sum(sample * sample for sample in eq_out) / len(eq_out)) > (
+            math.sqrt(sum(sample * sample for sample in flat_out) / len(flat_out)) * 1.5
+        )
+
+
 def test_engine_track_lane_accepts_send_timing_aliases() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
