@@ -933,6 +933,7 @@ export interface ChordDetectionOptions {
   /** Final-template correlation threshold in [0, 1]; below it emits `unknown` / N.C. */
   threshold?: number;
   useTriadsOnly?: boolean;
+  /** STFT chroma window in samples at 22050 Hz, rescaled to the input rate so its duration is the same at every rate. */
   nFft?: number;
   hopLength?: number;
   useBeatSync?: boolean;

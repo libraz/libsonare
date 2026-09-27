@@ -69,7 +69,8 @@ def detect_chords(
     rejected intervals use quality ``"unknown"`` and ``Chord.name == "N.C."``.
     ``tuning`` is the recording's tuning offset in fractions of a semitone, the
     unit :func:`estimate_tuning` returns; it must be in ``[-0.5, 0.5)`` and 0 is
-    concert A440.
+    concert A440. ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
+    rescaled to the input rate so its duration is the same at every rate.
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
     if chroma_method_value is None:

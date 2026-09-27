@@ -11,6 +11,7 @@
 #include "feature/nnls_chroma.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -129,8 +130,15 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
     nnls_config.tuning = config.tuning;
     chroma_ = nnls_chroma(audio, nnls_config);
   } else {
+    // n_fft names the window at the 22050 Hz analysis rate: a fixed sample count would narrow
+    // the window, and widen the bin spacing, as the rate rises, smearing low chord tones.
+    const double window_wide = static_cast<double>(config.n_fft) * audio.sample_rate() /
+                               static_cast<double>(constants::kDefaultSampleRate);
+    SONARE_CHECK(config.n_fft > 0 && window_wide <= static_cast<double>(1 << 30),
+                 ErrorCode::InvalidParameter);
     ChromaConfig chroma_config;
-    chroma_config.n_fft = config.n_fft;
+    chroma_config.win_length = std::max(1, static_cast<int>(std::lround(window_wide)));
+    chroma_config.n_fft = next_power_of_2(chroma_config.win_length);
     chroma_config.hop_length = config.hop_length;
     chroma_config.tuning = config.tuning;
     chroma_ = Chroma::compute(audio, chroma_config);

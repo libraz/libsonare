@@ -340,7 +340,7 @@ typedef struct {
   float smoothing_window;
   float threshold; /* final-template correlation threshold [0, 1]; below => UNKNOWN / N.C. */
   int use_triads_only;
-  int n_fft;
+  int n_fft; /* STFT chroma window in samples at 22050 Hz, rescaled to the input rate */
   int hop_length;
   int use_beat_sync;
   int use_hmm;

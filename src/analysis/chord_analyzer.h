@@ -82,10 +82,13 @@ struct ChordConfig {
       chord_constants::kSmoothingWindowSec;                  ///< Smoothing window (2.0s default)
   float threshold = chord_constants::kCorrelationThreshold;  ///< Minimum correlation [0, 1]
   bool use_triads_only = false;                              ///< Use only triads (no 7th chords)
-  int n_fft = 2048;                                          ///< FFT size for STFT
-  int hop_length = 512;                                      ///< Hop length for STFT
-  ChromaMethod chroma_method = ChromaMethod::STFT;           ///< Chroma extraction method
-  bool use_beat_sync = true;     ///< Use beat-synchronized chord detection
+  /// @brief STFT window length in samples at 22050 Hz, rescaled to the input rate.
+  /// @details The audio constructor's STFT chroma keeps the window's duration (and so its
+  /// frequency resolution) fixed across sample rates, zero-padding to a power-of-two FFT.
+  int n_fft = 2048;
+  int hop_length = 512;                             ///< Hop length for STFT
+  ChromaMethod chroma_method = ChromaMethod::STFT;  ///< Chroma extraction method
+  bool use_beat_sync = true;                        ///< Use beat-synchronized chord detection
   bool use_hmm = false;          ///< Use Viterbi HMM smoothing over chord candidates
   int hmm_beam_width = 24;       ///< Candidate beam width for HMM smoothing
   bool use_key_context = false;  ///< Bias HMM transitions by key context

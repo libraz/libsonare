@@ -3,11 +3,14 @@
 
 #include "analysis/chord_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <string>
 #include <vector>
 
+#include "core/resample.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -660,5 +663,70 @@ TEST_CASE("ChordAnalyzer borrowed chord Roman numerals", "[chord_analyzer]") {
 
     REQUIRE(!roman.empty());
     REQUIRE(roman[0] == "bVII");
+  }
+}
+
+namespace {
+
+/// @brief C-Am-F-G sine triads at 120 BPM, each held three beats then one beat of rest.
+/// @details The last chord holds its whole bar. Attack/decay/release follow a plain ADSR so
+///          the rests carry a short release tail, as a rendered clip would.
+Audio create_triad_turnaround(int sr) {
+  const std::vector<std::vector<float>> voicings = {
+      {60.0f, 64.0f, 67.0f}, {57.0f, 60.0f, 64.0f}, {53.0f, 57.0f, 60.0f}, {55.0f, 59.0f, 62.0f}};
+  const double bar_sec = 2.0;
+  const double beat_sec = 0.5;
+  const double attack = 0.008, decay = 0.025, sustain = 0.78, release = 0.020;
+  const size_t n = static_cast<size_t>(sr * bar_sec * voicings.size());
+  std::vector<float> samples(n, 0.0f);
+  for (size_t bar = 0; bar < voicings.size(); ++bar) {
+    const double on = static_cast<double>(bar) * bar_sec;
+    const double len = bar + 1 == voicings.size() ? bar_sec : bar_sec - beat_sec;
+    for (float midi : voicings[bar]) {
+      const double freq =
+          sonare::constants::kA4Hz * std::pow(2.0, (midi - sonare::constants::kMidiA4) /
+                                                       sonare::constants::kSemitonesPerOctave);
+      const size_t first = static_cast<size_t>(on * sr);
+      const size_t last = std::min(n, static_cast<size_t>((on + len + release) * sr));
+      for (size_t i = first; i < last; ++i) {
+        const double t = static_cast<double>(i) / sr - on;
+        double env = t < attack           ? t / attack
+                     : t < attack + decay ? 1.0 - (1.0 - sustain) * (t - attack) / decay
+                                          : sustain;
+        if (t > len) env *= std::max(0.0, 1.0 - (t - len) / release);
+        samples[i] +=
+            static_cast<float>(0.25 * env * std::sin(sonare::constants::kTwoPiD * freq * t));
+      }
+    }
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+}  // namespace
+
+TEST_CASE("ChordAnalyzer STFT chroma keeps a triad turnaround across sample rates",
+          "[chord_analyzer]") {
+  const Audio source = create_triad_turnaround(32000);
+  const std::vector<std::string> expected = {"C", "Am", "F", "G"};
+  const std::vector<float> starts = {0.0f, 2.0f, 4.0f, 6.0f};
+  // A 2 s smoothing window straddles each 0.5 s rest, so a boundary may land inside it.
+  const float boundary_tolerance = 0.4f;
+
+  for (int sr : {32000, 44100, 48000}) {
+    CAPTURE(sr);
+    const Audio audio = sr == source.sample_rate() ? source : resample(source, sr);
+    ChordConfig config;
+    config.use_triads_only = true;
+    config.min_duration = 0.3f;
+    const auto chords = detect_chords(audio, config);
+
+    std::vector<std::string> names;
+    for (const auto& chord : chords) names.push_back(chord.to_string());
+    CAPTURE(names);
+    REQUIRE(names == expected);
+    for (size_t i = 0; i < chords.size(); ++i) {
+      CAPTURE(i, chords[i].start);
+      CHECK(std::abs(chords[i].start - starts[i]) <= boundary_tolerance);
+    }
   }
 }
