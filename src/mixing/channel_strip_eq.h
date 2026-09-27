@@ -24,8 +24,8 @@ class ChannelStrip;
 ///          diff. Callers validate @p next first (see validate_eq); an
 ///          unvalidated band (e.g. TiltShelf/FlatTilt) throws from the
 ///          underlying ParametricEq::set_band.
-void apply_eq(mastering::eq::ParametricEq& eq, std::atomic<bool>& enabled,
-             const api::StripEq& next, const api::StripEq* previous);
+void apply_eq(mastering::eq::ParametricEq& eq, std::atomic<bool>& enabled, const api::StripEq& next,
+              const api::StripEq* previous);
 
 /// @brief apply_eq() onto @p strip's own EQ stage and bypass flag.
 void apply_strip_eq(ChannelStrip& strip, const api::StripEq& next, const api::StripEq* previous);

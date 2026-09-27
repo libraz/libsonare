@@ -21,7 +21,7 @@ EqBand slot_value(const api::StripEq& spec, size_t index) {
 }  // namespace
 
 void apply_eq(ParametricEq& eq, std::atomic<bool>& enabled, const api::StripEq& next,
-             const api::StripEq* previous) {
+              const api::StripEq* previous) {
   for (size_t index = 0; index < ParametricEq::kMaxBands; ++index) {
     if (previous != nullptr && slot_value(next, index) == slot_value(*previous, index)) {
       continue;
