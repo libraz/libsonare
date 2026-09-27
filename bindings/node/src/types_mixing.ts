@@ -7,7 +7,7 @@
  * second step through {@link Mixer.fromSceneJson}.
  */
 
-import type { EqBandInput } from './types_features';
+import type { EqBandInput } from './types_features.js';
 
 export type PanMode =
   | 'balance'
