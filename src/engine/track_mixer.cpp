@@ -9,6 +9,7 @@
 #include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mixing/channel_strip_eq.h"
 #include "mixing/pan_law.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -33,6 +34,7 @@ std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing:
   strip->set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
                                   spec.surround_pan.divergence, spec.surround_pan.lfe,
                                   spec.surround_pan.distance});
+  mixing::apply_strip_eq(*strip, spec.eq, nullptr);
   for (const auto& insert : spec.inserts) {
     auto processor =
         mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
@@ -66,44 +68,67 @@ const std::string* strip_insert_processor_name_at(const mixing::api::Strip& spec
   return nullptr;
 }
 
-namespace {
-
-// True when two strip specs carry the same insert chain (count + each slot,
-// processor name, and params). Only then can a strip be updated in place; any
-// insert-topology or param change must rebuild the processor chain.
-bool strip_inserts_equal(const mixing::api::Strip& a, const mixing::api::Strip& b) {
-  if (a.inserts.size() != b.inserts.size()) return false;
-  for (size_t i = 0; i < a.inserts.size(); ++i) {
-    if (a.inserts[i].slot != b.inserts[i].slot ||
-        a.inserts[i].processor_name != b.inserts[i].processor_name ||
-        a.inserts[i].params_json != b.inserts[i].params_json) {
+bool strip_inserts_equal(const std::vector<mixing::api::Insert>& a,
+                         const std::vector<mixing::api::Insert>& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); ++i) {
+    if (a[i].slot != b[i].slot || a[i].processor_name != b[i].processor_name ||
+        a[i].params_json != b[i].params_json || a[i].sidechain_key != b[i].sidechain_key) {
       return false;
     }
   }
   return true;
 }
 
-// Apply every smoothable / scalar strip parameter to an already-constructed
-// strip via its setters (mirrors make_channel_strip_from_spec minus the insert
-// chain). The fader/pan/trim setters retarget the strip's existing smoothers, so
-// the change ramps from the current value instead of snapping.
-void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& spec) {
-  strip.set_fader_db(spec.fader_db);
-  strip.set_pan(spec.pan);
-  strip.set_pan_law(mixing::pan_law_from_index(spec.pan_law));
-  strip.set_input_trim_db(spec.input_trim_db);
-  strip.set_vca_offset_db(spec.vca_offset_db);
-  strip.set_width(spec.width);
-  strip.set_muted(spec.muted);
-  strip.set_soloed(spec.soloed);
-  strip.set_solo_safe(spec.solo_safe);
-  strip.set_pan_mode(to_pan_mode(spec.pan_mode));
-  strip.set_dual_pan(spec.dual_pan_left, spec.dual_pan_right);
-  strip.set_polarity_invert(spec.polarity_invert_left, spec.polarity_invert_right);
-  strip.set_channel_delay_samples(spec.channel_delay_samples);
-  strip.set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
-                                 spec.surround_pan.divergence, spec.surround_pan.lfe,
-                                 spec.surround_pan.distance});
+void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& next,
+                         const mixing::api::Strip& previous) {
+  strip.set_fader_db(next.fader_db);
+  strip.set_pan(next.pan);
+  strip.set_pan_law(mixing::pan_law_from_index(next.pan_law));
+  strip.set_input_trim_db(next.input_trim_db);
+  strip.set_vca_offset_db(next.vca_offset_db);
+  strip.set_width(next.width);
+  strip.set_muted(next.muted);
+  strip.set_soloed(next.soloed);
+  strip.set_solo_safe(next.solo_safe);
+  strip.set_pan_mode(to_pan_mode(next.pan_mode));
+  strip.set_dual_pan(next.dual_pan_left, next.dual_pan_right);
+  strip.set_polarity_invert(next.polarity_invert_left, next.polarity_invert_right);
+  strip.set_channel_delay_samples(next.channel_delay_samples);
+  strip.set_surround_pan_params({next.surround_pan.azimuth, next.surround_pan.elevation,
+                                 next.surround_pan.divergence, next.surround_pan.lfe,
+                                 next.surround_pan.distance});
+  mixing::apply_strip_eq(strip, next.eq, &previous.eq);
+}
+
+bool strip_eq_acceptable(const mixing::api::StripEq& eq, double sample_rate) noexcept {
+  try {
+    mixing::validate_eq(eq);
+    for (const mastering::eq::EqBand& band : eq.bands) {
+      (void)mastering::eq::design_eq_biquad(band, sample_rate);
+    }
+  } catch (...) {
+    return false;
+  }
+  return true;
+}
+
+void store_eq_band(mixing::api::StripEq& eq, size_t band_index, const mastering::eq::EqBand& band) {
+  if (eq.bands.size() <= band_index) eq.bands.resize(band_index + 1);
+  eq.bands[band_index] = band;
+}
+
+namespace {
+
+bool bus_pan_is_default(const mixing::api::Bus& bus) noexcept {
+  const mixing::api::Bus defaults;
+  return bus.pan == defaults.pan && bus.pan_mode == defaults.pan_mode &&
+         bus.pan_law == defaults.pan_law && bus.dual_pan_left == defaults.dual_pan_left &&
+         bus.dual_pan_right == defaults.dual_pan_right;
+}
+
+bool layout_wider_than_stereo(ChannelLayout layout) noexcept {
+  return channel_count(layout) > TrackMixerRuntime::kMaxLaneChannels;
 }
 
 }  // namespace
@@ -126,36 +151,65 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 
 bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   if (!bus_config_valid(buses)) return false;
+  // Bus state follows the bus id, not the slot: source[i] is the slot new bus i
+  // held before, or -1 for a bus declared now.
+  std::array<int, kMaxBusLanes> source{};
+  source.fill(-1);
+  std::array<bool, kMaxBusLanes> kept{};
+  std::array<bool, kMaxBusLanes> moved_out{};
+  bool any_move = false;
+  for (size_t index = 0; index < buses.size(); ++index) {
+    const int previous = configured_bus_index(buses[index].bus_id);
+    if (previous < 0) continue;
+    // Pan is refused on a wider bus rather than silently reset.
+    if (layout_wider_than_stereo(buses[index].layout) &&
+        !bus_pan_is_default(bus_states_[static_cast<size_t>(previous)].spec)) {
+      return false;
+    }
+    source[index] = previous;
+    if (previous == static_cast<int>(index)) {
+      kept[index] = true;
+    } else {
+      moved_out[static_cast<size_t>(previous)] = true;
+      any_move = true;
+    }
+  }
+  std::unique_ptr<std::array<BusState, kMaxBusLanes>> staging;
+  if (any_move) staging = std::make_unique<std::array<BusState, kMaxBusLanes>>();
+  for (size_t index = 0; index < bus_states_.size(); ++index) {
+    if (kept[index]) continue;
+    if (moved_out[index]) {
+      (*staging)[index].eq.prepare(sample_rate_, max_block_size_);
+      transfer_bus_state(bus_states_[index], (*staging)[index]);
+    }
+    retire_bus_state(bus_states_[index]);
+  }
   bus_configs_ = std::move(buses);
   clear_bus_insert_automations();
-  for (size_t index = 0; index < bus_states_.size(); ++index) {
+  for (size_t index = 0; index < bus_configs_.size(); ++index) {
     BusState& state = bus_states_[index];
-    if (index < bus_configs_.size()) {
-      state.bus_id = bus_configs_[index].bus_id;
-      state.gain.prepare(sample_rate_, 5.0f);
-      state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
-      // Re-prepare the trim/width smoothers for the current rate without
-      // disturbing any value a prior set_bus_strip already applied.
-      state.input_trim_gain.prepare(sample_rate_, 5.0f);
-      if (max_block_size_ > 0) {
-        state.width.prepare(sample_rate_, max_block_size_);
+    if (!kept[index]) {
+      if (source[index] >= 0) {
+        transfer_bus_state((*staging)[static_cast<size_t>(source[index])], state);
       }
-      if (!state.bus) {
-        state.bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
-      }
-      state.bus->set_channel_layout(bus_configs_[index].layout);
-      if (max_block_size_ > 0) {
-        state.bus->prepare(sample_rate_, max_block_size_);
-      }
-    } else {
-      state.bus_id = 0;
-      state.gain.reset(1.0f);
-      state.input_trim_gain.reset(1.0f);
-      state.width.set_width(1.0f);
-      state.polarity_left.store(1.0f, std::memory_order_relaxed);
-      state.polarity_right.store(1.0f, std::memory_order_relaxed);
-      state.bus.reset();
-      state.spec = mixing::api::Bus{};
+      // The delay line held another bus's history; recompute_lane_pdc re-derives its length.
+      bus_pdc_delays_[index].reset();
+    }
+    state.bus_id = bus_configs_[index].bus_id;
+    state.gain.prepare(sample_rate_, 5.0f);
+    state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
+    // Re-prepare the trim/width smoothers for the current rate without
+    // disturbing any value a prior set_bus_strip already applied.
+    state.input_trim_gain.prepare(sample_rate_, 5.0f);
+    if (max_block_size_ > 0) {
+      state.width.prepare(sample_rate_, max_block_size_);
+    }
+    if (!state.bus) {
+      state.bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
+    }
+    state.bus->set_channel_layout(bus_configs_[index].layout);
+    if (max_block_size_ > 0) {
+      state.bus->prepare(sample_rate_, max_block_size_);
     }
   }
   // Control-side snapshot: this is a control-thread structural change, and
@@ -171,6 +225,64 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     if (!recompute_lane_pdc(*lanes)) return false;
   }
   return true;
+}
+
+void TrackMixerRuntime::transfer_bus_state(BusState& from, BusState& to) {
+  to.bus_id = from.bus_id;
+  to.gain = from.gain;
+  to.input_trim_gain = from.input_trim_gain;
+  to.width.set_width(from.width.width());
+  to.width.reset();
+  to.polarity_left.store(from.polarity_left.load(std::memory_order_relaxed),
+                         std::memory_order_relaxed);
+  to.polarity_right.store(from.polarity_right.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+  to.panner.set_pan_mode(from.panner.pan_mode());
+  to.panner.set_pan_law(from.panner.pan_law());
+  to.panner.set_pan(from.panner.pan());
+  to.panner.set_dual_pan(from.panner.dual_pan_left(), from.panner.dual_pan_right());
+  to.panner.reset();
+  for (size_t band = 0; band < mastering::eq::ParametricEq::kMaxBands; ++band) {
+    to.eq.set_band(band, from.eq.band(band));
+  }
+  to.eq.reset();
+  to.eq_enabled.store(from.eq_enabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  to.eq_active.store(from.eq_active.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  to.bus = std::move(from.bus);
+  to.spec = std::move(from.spec);
+}
+
+void TrackMixerRuntime::retire_bus_state(BusState& state) {
+  state.bus_id = 0;
+  state.gain.reset(1.0f);
+  state.input_trim_gain.reset(1.0f);
+  state.width.set_width(1.0f);
+  state.width.reset();
+  state.polarity_left.store(1.0f, std::memory_order_relaxed);
+  state.polarity_right.store(1.0f, std::memory_order_relaxed);
+  state.spec = mixing::api::Bus{};
+  apply_bus_pan(state, state.spec);
+  state.panner.reset();
+  state.eq.clear();
+  state.eq.reset();
+  state.eq_enabled.store(true, std::memory_order_relaxed);
+  state.eq_active.store(false, std::memory_order_relaxed);
+  state.bus.reset();
+}
+
+void TrackMixerRuntime::apply_bus_pan(BusState& state, const mixing::api::Bus& bus) noexcept {
+  state.panner.set_pan_mode(to_pan_mode(bus.pan_mode));
+  state.panner.set_pan_law(mixing::pan_law_from_index(bus.pan_law));
+  state.panner.set_pan(bus.pan);
+  state.panner.set_dual_pan(bus.dual_pan_left, bus.dual_pan_right);
+}
+
+void TrackMixerRuntime::refresh_bus_eq_active(BusState& state) noexcept {
+  bool active = false;
+  for (size_t band = 0; band < mastering::eq::ParametricEq::kMaxBands; ++band) {
+    active = active || state.eq.band(band).enabled;
+  }
+  state.eq_active.store(active, std::memory_order_relaxed);
 }
 
 bool TrackMixerRuntime::active() const noexcept {
@@ -249,7 +361,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
 }
 
 bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec) {
-  if (track_id == 0) return false;
+  if (track_id == 0 || !strip_eq_acceptable(spec.eq, sample_rate_)) return false;
 
   // In-place fast path: when a strip already exists for this track and only its
   // smoothable scalars changed (identical insert topology), retarget the existing
@@ -259,8 +371,9 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   // the smoother state so the change ramps. PDC is recomputed in case the channel
   // delay changed; the strip pointer is unchanged so the lane binding stays valid.
   for (OwnedStrip& owned : owned_strips_) {
-    if (owned.track_id == track_id && owned.strip && strip_inserts_equal(owned.spec, spec)) {
-      apply_strip_scalars(*owned.strip, spec);
+    if (owned.track_id == track_id && owned.strip &&
+        strip_inserts_equal(owned.spec.inserts, spec.inserts)) {
+      apply_strip_scalars(*owned.strip, spec, owned.spec);
       owned.spec = spec;
       if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
         if (!recompute_lane_pdc(*lanes)) return false;
@@ -301,31 +414,48 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
 }
 
 bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus) {
-  BusState* state = bus_state_for(bus_id);
-  if (!state) return false;
-  const size_t bus_index = static_cast<size_t>(state - bus_states_.data());
-  auto fx = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
-  fx->set_channel_layout(bus_configs_[bus_index].layout);
-  try {
-    for (const auto& insert : bus.inserts) {
-      auto processor =
-          mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
-      if (!processor) return false;
-      const bool spo = mastering::api::channel_policy(insert.processor_name) ==
-                       mastering::api::ChannelPolicy::StereoPairOnly;
-      fx->add_insert(std::move(processor), spo);
-    }
-  } catch (...) {
+  const int found = configured_bus_index(bus_id);
+  if (found < 0) return false;
+  const size_t bus_index = static_cast<size_t>(found);
+  BusState* state = &bus_states_[bus_index];
+  // Validate everything before applying anything. The width check reads the
+  // engine's own layout, not the spec's, which may be omitted.
+  if (!std::isfinite(bus.pan) || !std::isfinite(bus.dual_pan_left) ||
+      !std::isfinite(bus.dual_pan_right) ||
+      (layout_wider_than_stereo(bus_configs_[bus_index].layout) && !bus_pan_is_default(bus)) ||
+      !strip_eq_acceptable(bus.eq, sample_rate_)) {
     return false;
   }
-  if (max_block_size_ > 0) {
-    fx->prepare(sample_rate_, max_block_size_);
+  std::unique_ptr<mixing::FxBus> fx;
+  const bool rebuild = !strip_inserts_equal(state->spec.inserts, bus.inserts);
+  if (rebuild) {
+    fx = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
+    fx->set_channel_layout(bus_configs_[bus_index].layout);
+    try {
+      for (const auto& insert : bus.inserts) {
+        auto processor =
+            mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
+        if (!processor) return false;
+        const bool spo = mastering::api::channel_policy(insert.processor_name) ==
+                         mastering::api::ChannelPolicy::StereoPairOnly;
+        fx->add_insert(std::move(processor), spo);
+      }
+    } catch (...) {
+      return false;
+    }
+    if (max_block_size_ > 0) {
+      fx->prepare(sample_rate_, max_block_size_);
+    }
   }
   state->input_trim_gain.set_target(db_to_linear(bus.input_trim_db));
   state->width.set_width(bus.width);
   state->polarity_left.store(bus.polarity_invert_left ? -1.0f : 1.0f, std::memory_order_relaxed);
   state->polarity_right.store(bus.polarity_invert_right ? -1.0f : 1.0f, std::memory_order_relaxed);
+  apply_bus_pan(*state, bus);
+  mixing::apply_eq(state->eq, state->eq_enabled, bus.eq, &state->spec.eq);
+  refresh_bus_eq_active(*state);
   state->spec = bus;
+  if (!rebuild) return true;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (slot.assigned && slot.is_bus && slot.index == bus_index) {
       slot.active = false;
@@ -382,6 +512,11 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     bus.gain.prepare(sample_rate_, 5.0f);
     bus.input_trim_gain.prepare(sample_rate_, 5.0f);
     bus.width.prepare(sample_rate_, max_block_size_);
+    // Every slot, configured or not, so the render never meets an unprepared
+    // stage and a surround bus finds state for all of its planes.
+    bus.panner.prepare(sample_rate_, max_block_size_);
+    bus.eq.prepare(sample_rate_, max_block_size_);
+    bus.eq.prepare_channels(kMaxBusChannels);
     if (bus.bus) {
       bus.bus->prepare(sample_rate_, max_block_size_);
     }
@@ -464,6 +599,7 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     // target, so without this an offline pre-roll glides width from 1.0 over the
     // first audible block instead of opening at the configured width.
     bus.width.reset();
+    bus.panner.reset();
   }
   // Snap each automated insert parameter to its target and push it once, so an
   // offline pre-roll opens at the steady-state value (same determinism as the
@@ -641,6 +777,22 @@ const TrackMixerRuntime::BusState* TrackMixerRuntime::bus_state_for(
     if (state.bus_id == bus_id) return &state;
   }
   return nullptr;
+}
+
+int TrackMixerRuntime::configured_bus_index(uint32_t bus_id) const noexcept {
+  if (bus_id == 0) return -1;
+  for (size_t index = 0; index < bus_configs_.size(); ++index) {
+    if (bus_configs_[index].bus_id == bus_id) return static_cast<int>(index);
+  }
+  return -1;
+}
+
+TrackMixerRuntime::BusState* TrackMixerRuntime::pannable_bus_state_for(uint32_t bus_id) noexcept {
+  const int index = configured_bus_index(bus_id);
+  if (index < 0 || layout_wider_than_stereo(bus_configs_[static_cast<size_t>(index)].layout)) {
+    return nullptr;
+  }
+  return &bus_states_[static_cast<size_t>(index)];
 }
 
 void TrackMixerRuntime::prepare_lanes_from_snapshot(

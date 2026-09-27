@@ -12,9 +12,11 @@
 #include <vector>
 
 #include "engine/clip_player.h"
+#include "mastering/eq/parametric.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"
+#include "mixing/panner.h"
 #include "mixing/stereo_width.h"
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
@@ -26,6 +28,25 @@ class MeterTelemetryTap;
 class ScopeTelemetryTap;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec);
+
+/// True when two insert chains match entry by entry (slot, processor, params,
+/// sidechain key), so a strip or bus can be updated in place instead of rebuilt.
+bool strip_inserts_equal(const std::vector<mixing::api::Insert>& a,
+                         const std::vector<mixing::api::Insert>& b);
+
+/// Applies every scalar of @p next to an existing strip through its setters
+/// (smoothed values ramp rather than snap), and its EQ as a diff against
+/// @p previous so unchanged bands keep their filter state.
+void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& next,
+                         const mixing::api::Strip& previous);
+
+/// True when every band of @p eq can be installed at @p sample_rate, so a
+/// caller can refuse a spec before applying any part of it.
+bool strip_eq_acceptable(const mixing::api::StripEq& eq, double sample_rate) noexcept;
+
+/// Records @p band at @p band_index in a retained spec, padding any gap with
+/// default bands.
+void store_eq_band(mixing::api::StripEq& eq, size_t band_index, const mastering::eq::EqBand& band);
 
 /// The registered processor name at @p insert_index in @p spec's combined
 /// insert order (PreFader entries in spec order, then PostFader entries in
@@ -219,7 +240,24 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
   bool set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept;
   bool set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept;
+  // Applies a bus spec. Everything is validated before anything is applied. An
+  // unchanged insert chain is kept (with its tails and insert automation);
+  // otherwise it is rebuilt. Pan and EQ live outside the chain either way, and
+  // EQ is applied as a diff against the retained spec. False for an unknown
+  // bus, a non-default pan on a bus wider than two channels, or an EQ band the
+  // bus cannot host.
   bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);
+  // Granular bus output pan, mirroring the track pan setters: atomic writes,
+  // safe concurrently with process(), also recorded in the retained spec.
+  // False for an unknown bus or one wider than two channels.
+  bool set_bus_pan(uint32_t bus_id, float pan) noexcept;
+  bool set_bus_pan_law(uint32_t bus_id, mixing::PanLaw law) noexcept;
+  bool set_bus_pan_mode(uint32_t bus_id, mixing::PanMode mode) noexcept;
+  bool set_bus_dual_pan(uint32_t bus_id, float left_pan, float right_pan) noexcept;
+  // One band of a bus's dedicated EQ, also recorded in the retained spec.
+  // Control-thread contract as set_track_eq_band (not concurrent with process()).
+  bool set_bus_eq_band(uint32_t bus_id, size_t band_index,
+                       const sonare::mastering::eq::EqBand& band) noexcept;
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -367,10 +405,18 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     mixing::StereoWidthProcessor width{1.0f, 5.0f};
     std::atomic<float> polarity_left{1.0f};
     std::atomic<float> polarity_right{1.0f};
+    // Output pan (after the inserts) and dedicated EQ (before them), kept outside
+    // the FxBus so an insert rebuild does not lose them. Each is skipped at rest,
+    // so a bus that never engages them stays bit-identical.
+    mixing::PannerProcessor panner{mixing::PannerConfig{}};
+    mastering::eq::ParametricEq eq;
+    std::atomic<bool> eq_enabled{true};
+    // Whether any EQ band is enabled; refreshed on the control thread after each EQ edit.
+    std::atomic<bool> eq_active{false};
     std::unique_ptr<mixing::FxBus> bus;
-    // Last spec applied via set_bus_strip(). Retained for parameterInfo's
-    // insert-name resolution (see bus_insert_processor_name); default (no
-    // inserts) until the first set_bus_strip() call.
+    // Last spec applied via set_bus_strip() and the bus setters. Read for
+    // parameterInfo's insert-name resolution, for the in-place and EQ-diff
+    // decisions, and for the surround pan check in set_buses.
     mixing::api::Bus spec;
   };
 
@@ -438,6 +484,17 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void record_track_strip_binding(uint32_t track_id, mixing::ChannelStrip* strip);
   BusState* bus_state_for(uint32_t bus_id) noexcept;
   const BusState* bus_state_for(uint32_t bus_id) const noexcept;
+  // Index of @p bus_id in the current bus config, or -1.
+  int configured_bus_index(uint32_t bus_id) const noexcept;
+  // The configured bus @p bus_id when its layout is at most two channels wide.
+  BusState* pannable_bus_state_for(uint32_t bus_id) noexcept;
+  // Moves one bus's contents into another slot (set_buses keys buses by id).
+  // The destination's panner and EQ are rebuilt from the moved settings and reset.
+  static void transfer_bus_state(BusState& from, BusState& to);
+  // Returns a slot to the state of a bus that was never configured.
+  static void retire_bus_state(BusState& state);
+  static void apply_bus_pan(BusState& state, const mixing::api::Bus& bus) noexcept;
+  static void refresh_bus_eq_active(BusState& state) noexcept;
   float* lane_channel(size_t lane_index, int channel) noexcept;
   float* bus_channel(size_t bus_index, int channel) noexcept;
   // Render width of a configured bus. A surround group bus (5.1/7.1 layout)

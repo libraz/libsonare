@@ -289,6 +289,13 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
   if (strip == nullptr) return false;
   try {
     strip->set_eq_band(band_index, band);
+    // An externally bound strip has no retained spec; only an owned one records the band.
+    for (OwnedStrip& owned : owned_strips_) {
+      if (owned.track_id == track_id && owned.strip.get() == strip) {
+        store_eq_band(owned.spec.eq, band_index, band);
+        break;
+      }
+    }
   } catch (...) {
     return false;
   }
@@ -366,6 +373,64 @@ bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     if (!recompute_lane_pdc(*lanes)) return false;
   }
+  return true;
+}
+
+bool TrackMixerRuntime::set_bus_pan(uint32_t bus_id, float pan) noexcept {
+  if (!std::isfinite(pan)) return false;
+  BusState* state = pannable_bus_state_for(bus_id);
+  if (!state) return false;
+  const float clamped = mixing::clamp_pan(pan);
+  state->panner.set_pan(clamped);
+  state->spec.pan = clamped;
+  return true;
+}
+
+bool TrackMixerRuntime::set_bus_pan_law(uint32_t bus_id, mixing::PanLaw law) noexcept {
+  BusState* state = pannable_bus_state_for(bus_id);
+  if (!state) return false;
+  state->panner.set_pan_law(law);
+  state->spec.pan_law = static_cast<int>(law);
+  return true;
+}
+
+bool TrackMixerRuntime::set_bus_pan_mode(uint32_t bus_id, mixing::PanMode mode) noexcept {
+  BusState* state = pannable_bus_state_for(bus_id);
+  if (!state) return false;
+  state->panner.set_pan_mode(mode);
+  state->spec.pan_mode = static_cast<int>(mode);
+  return true;
+}
+
+bool TrackMixerRuntime::set_bus_dual_pan(uint32_t bus_id, float left_pan,
+                                         float right_pan) noexcept {
+  if (!std::isfinite(left_pan) || !std::isfinite(right_pan)) return false;
+  BusState* state = pannable_bus_state_for(bus_id);
+  if (!state) return false;
+  const float left = mixing::clamp_pan(left_pan);
+  const float right = mixing::clamp_pan(right_pan);
+  state->panner.set_dual_pan(left, right);
+  state->spec.dual_pan_left = left;
+  state->spec.dual_pan_right = right;
+  return true;
+}
+
+bool TrackMixerRuntime::set_bus_eq_band(uint32_t bus_id, size_t band_index,
+                                        const sonare::mastering::eq::EqBand& band) noexcept {
+  const int index = configured_bus_index(bus_id);
+  if (index < 0 || band_index >= mastering::eq::ParametricEq::kMaxBands) return false;
+  BusState& state = bus_states_[static_cast<size_t>(index)];
+  try {
+    // Checked first so a refused band leaves both the stage and the spec untouched.
+    if (!strip_eq_acceptable(mixing::api::StripEq{true, {band}}, state.eq.sample_rate())) {
+      return false;
+    }
+    state.eq.set_band(band_index, band);
+    store_eq_band(state.spec.eq, band_index, band);
+  } catch (...) {
+    return false;
+  }
+  refresh_bus_eq_active(state);
   return true;
 }
 

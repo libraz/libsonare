@@ -105,6 +105,17 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
 }
 
 bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
+  if (!strip_eq_acceptable(strip_spec.eq, sample_rate_)) return false;
+  // In-place: an unchanged insert chain keeps the bound strip, and with it the
+  // insert state (tails, envelopes), the insert automation and the EQ filter
+  // state of every band the new spec leaves alone.
+  if (owned_master_strip_ != nullptr && mixing_runtime_.strip() == owned_master_strip_.get() &&
+      strip_inserts_equal(master_strip_spec_.inserts, strip_spec.inserts)) {
+    apply_strip_scalars(*owned_master_strip_, strip_spec, master_strip_spec_);
+    master_strip_spec_ = strip_spec;
+    set_mixing_enabled(true);
+    return true;
+  }
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
     strip = make_channel_strip_from_spec(strip_spec);
@@ -353,6 +364,31 @@ bool RealtimeEngine::set_track_dual_pan(uint32_t track_id, float left_pan,
   return track_mixer_runtime_.set_track_dual_pan(track_id, left_pan, right_pan);
 }
 
+bool RealtimeEngine::set_bus_pan(uint32_t bus_id, float pan) noexcept {
+  return track_mixer_runtime_.set_bus_pan(bus_id, pan);
+}
+
+bool RealtimeEngine::set_bus_pan_law(uint32_t bus_id, mixing::PanLaw law) noexcept {
+  return track_mixer_runtime_.set_bus_pan_law(bus_id, law);
+}
+
+bool RealtimeEngine::set_bus_pan_mode(uint32_t bus_id, mixing::PanMode mode) noexcept {
+  return track_mixer_runtime_.set_bus_pan_mode(bus_id, mode);
+}
+
+bool RealtimeEngine::set_bus_dual_pan(uint32_t bus_id, float left_pan, float right_pan) noexcept {
+  return track_mixer_runtime_.set_bus_dual_pan(bus_id, left_pan, right_pan);
+}
+
+bool RealtimeEngine::set_bus_eq_band(uint32_t bus_id, size_t band_index,
+                                     const mastering::eq::EqBand& band) noexcept {
+  const bool ok = track_mixer_runtime_.set_bus_eq_band(bus_id, band_index, band);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
 bool RealtimeEngine::set_track_channel_delay_samples(uint32_t track_id,
                                                      int delay_samples) noexcept {
   const bool ok = track_mixer_runtime_.set_track_channel_delay_samples(track_id, delay_samples);
@@ -367,6 +403,7 @@ bool RealtimeEngine::set_master_eq_band(size_t band_index,
   if (owned_master_strip_ == nullptr) return false;
   try {
     owned_master_strip_->set_eq_band(band_index, band);
+    store_eq_band(master_strip_spec_.eq, band_index, band);
     update_reported_graph_latency();
     return true;
   } catch (...) {

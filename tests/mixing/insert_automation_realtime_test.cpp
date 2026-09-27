@@ -548,13 +548,17 @@ TEST_CASE("Master insert automation slot is cleared when the master strip is rep
 
   // Replacing the master strip must drop the old smoothed insert target. If the
   // slot survives, the next render keeps forcing the fresh compressor threshold
-  // down to -48 dB even though no automation lane or command is active.
-  REQUIRE(engine.set_master_strip(compressor_strip("master")));
+  // down to -48 dB even though no automation lane or command is active. The
+  // replacement differs from the original: an identical resend keeps its inserts.
+  auto replacement = compressor_strip("master");
+  replacement.inserts[0].params_json =
+      "{\"thresholdDb\":-3.0,\"ratio\":6.0,\"attackMs\":1.0,\"releaseMs\":20.0}";
+  REQUIRE(engine.set_master_strip(replacement));
   const double after_replace = run_engine_energy(engine, kBlock, 8);
 
   sonare::engine::RealtimeEngine fresh;
   fresh.prepare(kSr, kBlock);
-  REQUIRE(fresh.set_master_strip(compressor_strip("master")));
+  REQUIRE(fresh.set_master_strip(replacement));
   REQUIRE(fresh.push_command(play));
   const double fresh_energy = run_engine_energy(fresh, kBlock, 8);
 

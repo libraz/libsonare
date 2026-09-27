@@ -10,10 +10,14 @@
 #include <vector>
 
 #include "engine/meter_telemetry.h"
+#include "engine/realtime_engine.h"
 #include "mastering/eq/eq_band.h"
+#include "mastering/eq/parametric.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "mixing/pan_law.h"
+#include "mixing/panner.h"
+#include "rt/command.h"
 #include "rt/processor_base.h"
 
 namespace {
@@ -359,11 +363,12 @@ TEST_CASE("TrackMixerRuntime clears bus insert automation slots when bus strip c
   REQUIRE(bus_index == 0);
   REQUIRE(mixer.route_bus_insert_param_smoothed(bus_index, 0, param_id, 12.0f));
 
+  // A changed chain; an identical resend keeps the chain and its automation.
   sonare::mixing::api::Bus second_bus;
   second_bus.id = "1";
   second_bus.inserts.push_back(
       {sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
-       R"({"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1})"});
+       R"({"band0.type":1,"band0.frequencyHz":2000,"band0.gainDb":0,"band0.enabled":1})"});
   REQUIRE(mixer.set_bus_strip(1, second_bus));
 
   sonare::engine::TrackMixerRuntime flat;
@@ -1940,4 +1945,541 @@ TEST_CASE("TrackMixerRuntime re-snaps a lane's scatter gains after a stereo inte
                                              fresh[static_cast<size_t>(c)].back();
   }
   CHECK(azimuths_differ);
+}
+
+namespace {
+
+using sonare::engine::TrackLaneConfig;
+using sonare::engine::TrackMixerRuntime;
+using sonare::mastering::eq::EqBand;
+using sonare::mastering::eq::EqBandType;
+using sonare::mixing::api::Bus;
+using sonare::mixing::api::InsertSlot;
+using sonare::mixing::api::Strip;
+
+constexpr int kBusBlock = 64;
+
+EqBand boost_band() { return EqBand{EqBandType::Peak, 1000.0f, 12.0f, 1.0f, true}; }
+
+// Deterministic per-track, per-channel tone.
+float lane_tone(uint32_t track_id, int channel, int64_t frame) {
+  const float step =
+      0.011f * static_cast<float>(track_id % 7 + 1) + 0.017f * static_cast<float>(channel);
+  return 0.4f * std::sin(step * static_cast<float>(frame));
+}
+
+struct StereoRender {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+bool renders_equal(const StereoRender& a, const StereoRender& b) {
+  return a.left == b.left && a.right == b.right;
+}
+
+float max_abs_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  REQUIRE(a.size() == b.size());
+  float worst = 0.0f;
+  for (size_t i = 0; i < a.size(); ++i) worst = std::max(worst, std::abs(a[i] - b[i]));
+  return worst;
+}
+
+// Streams @p blocks blocks of every track's tone, starting at @p first_frame,
+// and appends the stereo master to @p out.
+void render_tones(TrackMixerRuntime& mixer, const std::vector<uint32_t>& tracks, int blocks,
+                  int64_t first_frame, StereoRender& out) {
+  std::array<float, kBusBlock> src_l{};
+  std::array<float, kBusBlock> src_r{};
+  std::array<float, kBusBlock> out_l{};
+  std::array<float, kBusBlock> out_r{};
+  float* source[] = {src_l.data(), src_r.data()};
+  float* master[] = {out_l.data(), out_r.data()};
+  for (int block = 0; block < blocks; ++block) {
+    const int64_t base = first_frame + static_cast<int64_t>(block) * kBusBlock;
+    out_l.fill(0.0f);
+    out_r.fill(0.0f);
+    REQUIRE(mixer.begin_source_mix(2, kBusBlock));
+    for (uint32_t track : tracks) {
+      for (int i = 0; i < kBusBlock; ++i) {
+        src_l[static_cast<size_t>(i)] = lane_tone(track, 0, base + i);
+        src_r[static_cast<size_t>(i)] = lane_tone(track, 1, base + i);
+      }
+      bool routed = false;
+      REQUIRE(mixer.mix_source_into_lane(track, source, master, 2, kBusBlock, routed));
+    }
+    mixer.finish_source_mix(master, 2, kBusBlock);
+    out.left.insert(out.left.end(), out_l.begin(), out_l.end());
+    out.right.insert(out.right.end(), out_r.begin(), out_r.end());
+  }
+}
+
+// The plain sum of lanes 10 and 20 over [first_frame, first_frame + frames).
+StereoRender tone_sum(int64_t first_frame, int frames) {
+  StereoRender sum;
+  for (int64_t n = first_frame; n < first_frame + frames; ++n) {
+    sum.left.push_back(lane_tone(10, 0, n) + lane_tone(20, 0, n));
+    sum.right.push_back(lane_tone(10, 1, n) + lane_tone(20, 1, n));
+  }
+  return sum;
+}
+
+// One stereo bus (id 1) fed by lanes 10 and 20, configured from @p bus.
+void configure_bus_rig(TrackMixerRuntime& mixer, const Bus& bus) {
+  mixer.prepare(48000.0, kBusBlock);
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+  TrackLaneConfig a{10};
+  a.output_bus_id = 1;
+  TrackLaneConfig b{20};
+  b.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({a, b}));
+  REQUIRE(mixer.set_bus_strip(1, bus));
+  mixer.settle_smoothers();
+}
+
+StereoRender render_bus_rig(const Bus& bus, int blocks) {
+  TrackMixerRuntime mixer;
+  configure_bus_rig(mixer, bus);
+  StereoRender out;
+  render_tones(mixer, {10, 20}, blocks, 0, out);
+  return out;
+}
+
+Bus plain_bus(const char* id) {
+  Bus bus;
+  bus.id = id;
+  return bus;
+}
+
+}  // namespace
+
+TEST_CASE("TrackMixerRuntime default bus output equals the plain sum of its lanes",
+          "[engine][track_mixer]") {
+  constexpr int kBlocks = 8;
+  const Bus bus = plain_bus("1");
+  const StereoRender sum = tone_sum(0, kBlocks * kBusBlock);
+  const StereoRender rendered = render_bus_rig(bus, kBlocks);
+  REQUIRE(rendered.left == sum.left);
+  REQUIRE(rendered.right == sum.right);
+
+  // Sensitivity twins: every new bus stage moves the same comparison.
+  Bus panned = bus;
+  panned.pan = 0.3f;
+  CHECK_FALSE(renders_equal(render_bus_rig(panned, kBlocks), sum));
+  Bus equalized = bus;
+  equalized.eq.bands.push_back(boost_band());
+  CHECK_FALSE(renders_equal(render_bus_rig(equalized, kBlocks), sum));
+
+  // The pan-stage skip is load-bearing: the default panner run at centre is not
+  // an identity, so a bus that always ran it would fail the equality above.
+  sonare::mixing::PannerProcessor centred;
+  centred.prepare(48000.0, kBusBlock);
+  StereoRender through_panner = sum;
+  for (int block = 0; block < kBlocks; ++block) {
+    const size_t offset = static_cast<size_t>(block) * kBusBlock;
+    float* planes[] = {through_panner.left.data() + offset, through_panner.right.data() + offset};
+    centred.process(planes, 2, kBusBlock);
+  }
+  CHECK_FALSE(renders_equal(through_panner, sum));
+}
+
+TEST_CASE("TrackMixerRuntime bus strip EQ follows each resent spec", "[engine][track_mixer]") {
+  constexpr int kBlocks = 6;
+  const Bus flat = plain_bus("1");
+  Bus equalized = flat;
+  equalized.eq.bands.push_back(boost_band());
+
+  TrackMixerRuntime control;
+  TrackMixerRuntime resent;
+  configure_bus_rig(control, equalized);
+  configure_bus_rig(resent, equalized);
+  StereoRender control_out;
+  StereoRender resent_out;
+  render_tones(control, {10, 20}, kBlocks, 0, control_out);
+  render_tones(resent, {10, 20}, kBlocks, 0, resent_out);
+  // An identical resend keeps the EQ and its filter state.
+  REQUIRE(resent.set_bus_strip(1, equalized));
+  render_tones(control, {10, 20}, kBlocks, kBlocks * kBusBlock, control_out);
+  render_tones(resent, {10, 20}, kBlocks, kBlocks * kBusBlock, resent_out);
+  REQUIRE(renders_equal(resent_out, control_out));
+  CHECK_FALSE(renders_equal(control_out, tone_sum(0, 2 * kBlocks * kBusBlock)));
+
+  // A resend without "eq" is flat.
+  REQUIRE(resent.set_bus_strip(1, flat));
+  StereoRender after_flat;
+  render_tones(resent, {10, 20}, kBlocks, 2 * kBlocks * kBusBlock, after_flat);
+  REQUIRE(renders_equal(after_flat, tone_sum(2 * kBlocks * kBusBlock, kBlocks * kBusBlock)));
+
+  // A band set through the setter lands in the retained spec, so the next
+  // resend without it is a change that clears it.
+  TrackMixerRuntime setter;
+  configure_bus_rig(setter, flat);
+  REQUIRE(setter.set_bus_eq_band(1, 0, boost_band()));
+  StereoRender with_band;
+  render_tones(setter, {10, 20}, kBlocks, 0, with_band);
+  CHECK_FALSE(renders_equal(with_band, tone_sum(0, kBlocks * kBusBlock)));
+  REQUIRE(setter.set_bus_strip(1, flat));
+  StereoRender cleared;
+  render_tones(setter, {10, 20}, kBlocks, kBlocks * kBusBlock, cleared);
+  REQUIRE(renders_equal(cleared, tone_sum(kBlocks * kBusBlock, kBlocks * kBusBlock)));
+
+  REQUIRE_FALSE(setter.set_bus_eq_band(99, 0, boost_band()));
+  REQUIRE_FALSE(
+      setter.set_bus_eq_band(1, sonare::mastering::eq::ParametricEq::kMaxBands, boost_band()));
+  REQUIRE_FALSE(setter.set_bus_eq_band(
+      1, 0, EqBand{EqBandType::Peak, 30000.0f, 6.0f, 1.0f, true}));  // above Nyquist
+}
+
+TEST_CASE("TrackMixerRuntime track strip EQ follows its spec across resends and rebuilds",
+          "[engine][track_mixer]") {
+  constexpr int kBlocks = 6;
+  Strip flat;
+  flat.id = "track-10";
+  Strip equalized = flat;
+  equalized.eq.bands.push_back(boost_band());
+
+  const auto rig = [](TrackMixerRuntime& mixer, const Strip& spec) {
+    mixer.prepare(48000.0, kBusBlock);
+    REQUIRE(mixer.set_track_lanes({{10}}));
+    REQUIRE(mixer.set_track_strip(10, spec));
+    mixer.settle_smoothers();
+  };
+
+  TrackMixerRuntime control;
+  TrackMixerRuntime resent;
+  TrackMixerRuntime plain;
+  rig(control, equalized);
+  rig(resent, equalized);
+  rig(plain, flat);
+  StereoRender control_out;
+  StereoRender resent_out;
+  StereoRender plain_out;
+  render_tones(control, {10}, kBlocks, 0, control_out);
+  render_tones(resent, {10}, kBlocks, 0, resent_out);
+  render_tones(plain, {10}, kBlocks, 0, plain_out);
+  REQUIRE(resent.set_track_strip(10, equalized));
+  render_tones(control, {10}, kBlocks, kBlocks * kBusBlock, control_out);
+  render_tones(resent, {10}, kBlocks, kBlocks * kBusBlock, resent_out);
+  render_tones(plain, {10}, kBlocks, kBlocks * kBusBlock, plain_out);
+  REQUIRE(renders_equal(resent_out, control_out));
+  CHECK_FALSE(renders_equal(control_out, plain_out));
+
+  // A band set through the setter is cleared by a resend that lacks it.
+  REQUIRE(plain.set_track_eq_band(10, 0, boost_band()));
+  REQUIRE(plain.set_track_strip(10, flat));
+  TrackMixerRuntime reference;
+  rig(reference, flat);
+  StereoRender plain_after;
+  StereoRender reference_out;
+  render_tones(plain, {10}, kBlocks, 0, plain_after);
+  render_tones(reference, {10}, kBlocks, 0, reference_out);
+  CHECK(max_abs_difference(plain_after.left, reference_out.left) < 1.0e-6f);
+
+  // An insert-topology change rebuilds the strip, and the rebuild carries the
+  // spec's EQ rather than dropping it.
+  Strip equalized_with_insert = equalized;
+  equalized_with_insert.inserts.push_back({InsertSlot::PreFader, "utility.gain", "{}"});
+  Strip flat_with_insert = flat;
+  flat_with_insert.inserts.push_back({InsertSlot::PreFader, "utility.gain", "{}"});
+  REQUIRE(control.set_track_strip(10, equalized_with_insert));
+  TrackMixerRuntime fresh;
+  TrackMixerRuntime fresh_flat;
+  rig(fresh, equalized_with_insert);
+  rig(fresh_flat, flat_with_insert);
+  StereoRender rebuilt;
+  StereoRender fresh_out;
+  StereoRender fresh_flat_out;
+  render_tones(control, {10}, kBlocks, 0, rebuilt);
+  render_tones(fresh, {10}, kBlocks, 0, fresh_out);
+  render_tones(fresh_flat, {10}, kBlocks, 0, fresh_flat_out);
+  CHECK(max_abs_difference(rebuilt.left, fresh_out.left) < 1.0e-6f);
+  CHECK(max_abs_difference(rebuilt.left, fresh_flat_out.left) > 1.0e-2f);
+}
+
+TEST_CASE("TrackMixerRuntime keeps a bus insert chain across an identical resend",
+          "[engine][track_mixer]") {
+  constexpr int kBlocks = 8;
+  Bus verb = plain_bus("1");
+  verb.inserts.push_back(
+      {InsertSlot::PreFader, "effects.reverb.fdn", R"({"decaySec":2,"dryWet":0.5})"});
+
+  TrackMixerRuntime control;
+  configure_bus_rig(control, verb);
+  StereoRender control_out;
+  render_tones(control, {10, 20}, kBlocks, 0, control_out);
+  render_tones(control, {10, 20}, kBlocks, kBlocks * kBusBlock, control_out);
+
+  const auto resent_render = [&](const Bus& resend) {
+    TrackMixerRuntime mixer;
+    configure_bus_rig(mixer, verb);
+    StereoRender out;
+    render_tones(mixer, {10, 20}, kBlocks, 0, out);
+    REQUIRE(mixer.set_bus_strip(1, resend));
+    render_tones(mixer, {10, 20}, kBlocks, kBlocks * kBusBlock, out);
+    return out;
+  };
+
+  // Identical resend: no rebuild, so the reverb tail is untouched.
+  REQUIRE(renders_equal(resent_render(verb), control_out));
+
+  // A pan-only resend keeps the chain too: the unattenuated side is unchanged.
+  Bus verb_panned = verb;
+  verb_panned.pan = 0.5f;
+  verb_panned.pan_law = 3;  // Linear0dB: the near side stays at exactly unity.
+  const StereoRender panned = resent_render(verb_panned);
+  CHECK(max_abs_difference(panned.right, control_out.right) < 1.0e-6f);
+  CHECK(max_abs_difference(panned.left, control_out.left) > 1.0e-3f);
+
+  // Changed insert params rebuild the chain.
+  Bus verb_changed = verb;
+  verb_changed.inserts[0].params_json = R"({"decaySec":2,"dryWet":0.6})";
+  CHECK_FALSE(renders_equal(resent_render(verb_changed), control_out));
+}
+
+TEST_CASE("TrackMixerRuntime refuses non-default pan on a surround bus", "[engine][track_mixer]") {
+  constexpr int kBlocks = 4;
+  Bus panned = plain_bus("1");
+  panned.pan = 0.5f;
+
+  TrackMixerRuntime control;
+  TrackMixerRuntime mixer;
+  configure_bus_rig(control, panned);
+  configure_bus_rig(mixer, panned);
+  StereoRender control_out;
+  StereoRender mixer_out;
+  render_tones(control, {10, 20}, kBlocks, 0, control_out);
+  render_tones(mixer, {10, 20}, kBlocks, 0, mixer_out);
+  // Widening a bus that carries non-default pan fails and changes nothing.
+  REQUIRE_FALSE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  render_tones(control, {10, 20}, kBlocks, kBlocks * kBusBlock, control_out);
+  render_tones(mixer, {10, 20}, kBlocks, kBlocks * kBusBlock, mixer_out);
+  REQUIRE(renders_equal(mixer_out, control_out));
+
+  // Pan set through the setter is retained too; returning it to default
+  // unblocks the widening.
+  TrackMixerRuntime setter;
+  configure_bus_rig(setter, plain_bus("1"));
+  REQUIRE(setter.set_bus_pan(1, 0.3f));
+  REQUIRE_FALSE(setter.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  REQUIRE(setter.set_bus_pan(1, 0.0f));
+  REQUIRE(setter.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+
+  // On a surround bus every pan entry point refuses; EQ is still allowed.
+  REQUIRE_FALSE(setter.set_bus_pan(1, 0.2f));
+  REQUIRE_FALSE(setter.set_bus_pan_law(1, sonare::mixing::PanLaw::Linear0dB));
+  REQUIRE_FALSE(setter.set_bus_pan_mode(1, sonare::mixing::PanMode::StereoPan));
+  REQUIRE_FALSE(setter.set_bus_dual_pan(1, -0.5f, 0.5f));
+  REQUIRE_FALSE(setter.set_bus_strip(1, panned));
+  REQUIRE(setter.set_bus_strip(1, plain_bus("1")));
+  REQUIRE(setter.set_bus_eq_band(1, 0, boost_band()));
+
+  // Unknown buses and non-finite values are refused.
+  REQUIRE_FALSE(control.set_bus_pan(99, 0.1f));
+  REQUIRE_FALSE(control.set_bus_pan(0, 0.1f));
+  REQUIRE_FALSE(control.set_bus_pan(1, std::nanf("")));
+  REQUIRE_FALSE(control.set_bus_dual_pan(1, -1.0f, std::nanf("")));
+}
+
+TEST_CASE("TrackMixerRuntime bus pan setters move the bus output", "[engine][track_mixer]") {
+  constexpr int kBlocks = 8;
+  TrackMixerRuntime mixer;
+  configure_bus_rig(mixer, plain_bus("1"));
+  REQUIRE(mixer.set_bus_pan_law(1, sonare::mixing::PanLaw::Linear0dB));
+  REQUIRE(mixer.set_bus_pan(1, -1.0f));
+  mixer.settle_smoothers();
+  StereoRender hard_left;
+  render_tones(mixer, {10, 20}, kBlocks, 0, hard_left);
+  const StereoRender sum = tone_sum(0, kBlocks * kBusBlock);
+  CHECK(max_abs_difference(hard_left.left, sum.left) < 1.0e-6f);
+  for (float sample : hard_left.right) REQUIRE(sample == 0.0f);
+
+  // Dual pan swaps the channels outright.
+  REQUIRE(mixer.set_bus_pan_mode(1, sonare::mixing::PanMode::DualPan));
+  REQUIRE(mixer.set_bus_dual_pan(1, 1.0f, -1.0f));
+  mixer.settle_smoothers();
+  StereoRender swapped;
+  render_tones(mixer, {10, 20}, kBlocks, 0, swapped);
+  CHECK(max_abs_difference(swapped.left, sum.right) < 1.0e-6f);
+  CHECK(max_abs_difference(swapped.right, sum.left) < 1.0e-6f);
+}
+
+TEST_CASE("TrackMixerRuntime keys bus state by id across set_buses", "[engine][track_mixer]") {
+  constexpr int kBlocks = 8;
+  // Bus 1: hard left, boosted, and latent (a limiter far above the signal is a
+  // pure lookahead delay), so its PDC share differs from bus 2's.
+  Bus a = plain_bus("1");
+  a.pan = -1.0f;
+  a.pan_law = 3;
+  a.eq.bands.push_back(boost_band());
+  a.inserts.push_back({InsertSlot::PreFader, "dynamics.limiter",
+                       R"({"thresholdDb":24,"lookaheadMs":1,"releaseMs":50})"});
+  Bus b = plain_bus("2");
+  b.pan = 1.0f;
+  b.pan_law = 3;
+
+  TrackLaneConfig lane10{10};
+  lane10.output_bus_id = 1;
+  TrackLaneConfig lane20{20};
+  lane20.output_bus_id = 2;
+
+  const auto rig = [&](TrackMixerRuntime& mixer, std::vector<sonare::engine::TrackBusConfig> buses,
+                       const std::vector<TrackLaneConfig>& lanes) {
+    mixer.prepare(48000.0, kBusBlock);
+    REQUIRE(mixer.set_buses(std::move(buses)));
+    REQUIRE(mixer.set_track_lanes(lanes));
+    for (const Bus* bus : {&a, &b}) {
+      const uint32_t id = bus == &a ? 1u : 2u;
+      bool declared = false;
+      for (const TrackLaneConfig& lane : lanes) declared = declared || lane.output_bus_id == id;
+      if (declared) REQUIRE(mixer.set_bus_strip(id, *bus));
+    }
+    mixer.settle_smoothers();
+  };
+
+  TrackMixerRuntime ordered;
+  rig(ordered, {{1, 0.0f}, {2, 0.0f}}, {lane10, lane20});
+  TrackMixerRuntime reordered;
+  rig(reordered, {{1, 0.0f}, {2, 0.0f}}, {lane10, lane20});
+  REQUIRE(reordered.set_buses({{2, 0.0f}, {1, 0.0f}}));
+  CHECK(reordered.latency_samples() == ordered.latency_samples());
+
+  StereoRender ordered_out;
+  StereoRender reordered_out;
+  render_tones(ordered, {10, 20}, kBlocks, 0, ordered_out);
+  render_tones(reordered, {10, 20}, kBlocks, 0, reordered_out);
+  CHECK(max_abs_difference(reordered_out.left, ordered_out.left) < 1.0e-6f);
+  CHECK(max_abs_difference(reordered_out.right, ordered_out.right) < 1.0e-6f);
+  // Non-vacuity: bus 1 is hard left and bus 2 hard right.
+  CHECK(max_abs_difference(ordered_out.left, ordered_out.right) > 1.0e-2f);
+
+  // Removing bus 1 leaves bus 2 with its own state and nothing of bus 1's.
+  TrackMixerRuntime removed;
+  rig(removed, {{1, 0.0f}, {2, 0.0f}}, {lane10, lane20});
+  REQUIRE(removed.set_track_lanes({lane20}));
+  REQUIRE(removed.set_buses({{2, 0.0f}}));
+  TrackMixerRuntime only_b;
+  rig(only_b, {{2, 0.0f}}, {lane20});
+  StereoRender removed_out;
+  StereoRender only_b_out;
+  render_tones(removed, {20}, kBlocks, 0, removed_out);
+  render_tones(only_b, {20}, kBlocks, 0, only_b_out);
+  CHECK(max_abs_difference(removed_out.left, only_b_out.left) < 1.0e-6f);
+  CHECK(max_abs_difference(removed_out.right, only_b_out.right) < 1.0e-6f);
+
+  // Re-declaring bus 1 gives it a fresh default state.
+  REQUIRE(removed.set_buses({{2, 0.0f}, {1, 0.0f}}));
+  REQUIRE(removed.set_track_lanes({lane10, lane20}));
+  TrackMixerRuntime fresh;
+  fresh.prepare(48000.0, kBusBlock);
+  REQUIRE(fresh.set_buses({{2, 0.0f}, {1, 0.0f}}));
+  REQUIRE(fresh.set_track_lanes({lane10, lane20}));
+  REQUIRE(fresh.set_bus_strip(2, b));
+  fresh.settle_smoothers();
+  removed.settle_smoothers();
+  StereoRender readded_out;
+  StereoRender fresh_out;
+  render_tones(removed, {10, 20}, kBlocks, 0, readded_out);
+  render_tones(fresh, {10, 20}, kBlocks, 0, fresh_out);
+  CHECK(max_abs_difference(readded_out.left, fresh_out.left) < 1.0e-6f);
+  CHECK(max_abs_difference(readded_out.right, fresh_out.right) < 1.0e-6f);
+}
+
+namespace {
+
+constexpr int kEngineBlock = 256;
+constexpr int kEngineFrames = kEngineBlock * 32;
+
+// The clip keeps a pointer to `planes`, so a tone outlives every engine using it.
+struct EngineTone {
+  std::vector<float> left = std::vector<float>(kEngineFrames);
+  std::vector<float> right = std::vector<float>(kEngineFrames);
+  std::array<const float*, 2> planes{};
+  EngineTone() {
+    for (int n = 0; n < kEngineFrames; ++n) {
+      left[static_cast<size_t>(n)] = lane_tone(10, 0, n);
+      right[static_cast<size_t>(n)] = lane_tone(10, 1, n);
+    }
+    planes = {left.data(), right.data()};
+  }
+};
+
+void start_master_engine(sonare::engine::RealtimeEngine& engine, const EngineTone& tone,
+                         const Strip& master) {
+  engine.prepare(48000.0, kEngineBlock);
+  sonare::engine::ClipSchedule clip{
+      1, {tone.planes.data(), 2, kEngineFrames}, 0.0, 0, 0, kEngineFrames, false, 1.0f, 0, 0};
+  engine.set_clips({clip});
+  REQUIRE(engine.set_master_strip(master));
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+}
+
+void render_engine(sonare::engine::RealtimeEngine& engine, int blocks, StereoRender& out) {
+  std::array<float, kEngineBlock> left{};
+  std::array<float, kEngineBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  for (int block = 0; block < blocks; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    engine.process(io, 2, kEngineBlock);
+    out.left.insert(out.left.end(), left.begin(), left.end());
+    out.right.insert(out.right.end(), right.begin(), right.end());
+  }
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeEngine master strip resend keeps its inserts and follows its EQ",
+          "[engine][track_mixer]") {
+  constexpr int kBlocks = 6;
+  const EngineTone tone;
+  Strip verb;
+  verb.id = "master";
+  verb.inserts.push_back(
+      {InsertSlot::PreFader, "effects.reverb.fdn", R"({"decaySec":2,"dryWet":0.5})"});
+  Strip verb_eq = verb;
+  verb_eq.eq.bands.push_back(boost_band());
+
+  sonare::engine::RealtimeEngine control;
+  start_master_engine(control, tone, verb_eq);
+  StereoRender control_out;
+  render_engine(control, 2 * kBlocks, control_out);
+
+  // An identical resend neither rebuilds the reverb nor disturbs the EQ.
+  sonare::engine::RealtimeEngine resent;
+  start_master_engine(resent, tone, verb_eq);
+  StereoRender resent_out;
+  render_engine(resent, kBlocks, resent_out);
+  REQUIRE(resent.set_master_strip(verb_eq));
+  render_engine(resent, kBlocks, resent_out);
+  REQUIRE(renders_equal(resent_out, control_out));
+
+  // Non-vacuity: the EQ is audible on the master.
+  sonare::engine::RealtimeEngine plain;
+  start_master_engine(plain, tone, verb);
+  StereoRender plain_out;
+  render_engine(plain, 2 * kBlocks, plain_out);
+  CHECK_FALSE(renders_equal(plain_out, control_out));
+
+  // A resend without "eq" is flat, including a band the setter added.
+  sonare::engine::RealtimeEngine cleared;
+  start_master_engine(cleared, tone, verb);
+  StereoRender cleared_out;
+  render_engine(cleared, kBlocks, cleared_out);
+  REQUIRE(cleared.set_master_eq_band(0, boost_band()));
+  REQUIRE(cleared.set_master_strip(verb));
+  render_engine(cleared, kBlocks, cleared_out);
+  REQUIRE(renders_equal(cleared_out, plain_out));
+
+  // Changed insert params still rebuild the chain.
+  sonare::engine::RealtimeEngine rebuilt;
+  start_master_engine(rebuilt, tone, verb);
+  StereoRender rebuilt_out;
+  render_engine(rebuilt, kBlocks, rebuilt_out);
+  Strip verb_changed = verb;
+  verb_changed.inserts[0].params_json = R"({"decaySec":2,"dryWet":0.6})";
+  REQUIRE(rebuilt.set_master_strip(verb_changed));
+  render_engine(rebuilt, kBlocks, rebuilt_out);
+  CHECK_FALSE(renders_equal(rebuilt_out, plain_out));
 }

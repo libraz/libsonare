@@ -478,3 +478,100 @@ TEST_CASE("TrackMixerRuntime monitor taps perform no heap allocation after prepa
     REQUIRE(guard.count() == 0);
   }
 }
+
+namespace {
+
+// Streams a DC stereo source through bus 1 and returns the last block's master
+// front-left sample. The first render warms the chain; the guarded one follows.
+float render_bus_block(sonare::engine::TrackMixerRuntime& mixer, int master_channels, int block,
+                       size_t* allocations) {
+  std::vector<float> source_l(static_cast<size_t>(block), 0.25f);
+  std::vector<float> source_r(static_cast<size_t>(block), -0.125f);
+  float* source[] = {source_l.data(), source_r.data()};
+  std::vector<std::vector<float>> planes(static_cast<size_t>(master_channels),
+                                         std::vector<float>(static_cast<size_t>(block)));
+  std::vector<float*> out;
+  for (auto& plane : planes) out.push_back(plane.data());
+  REQUIRE(mixer.mix_source(10, source, out.data(), master_channels, block));
+  for (auto& plane : planes) std::fill(plane.begin(), plane.end(), 0.0f);
+  {
+    AllocationGuard guard;
+    const bool ok = mixer.mix_source(10, source, out.data(), master_channels, block);
+    *allocations = guard.count();
+    REQUIRE(ok);
+  }
+  return planes[0].back();
+}
+
+sonare::mixing::api::Bus boosted_bus() {
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.eq.bands.push_back(
+      {sonare::mastering::eq::EqBandType::LowShelf, 200.0f, 12.0f, 0.707f, true});
+  return bus;
+}
+
+}  // namespace
+
+TEST_CASE("TrackMixerRuntime bus pan and EQ render performs no heap allocation",
+          "[engine][track_mixer][rt]") {
+  constexpr int kBlock = 128;
+  const auto front_left = [](const sonare::mixing::api::Bus& bus, size_t* allocations) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    REQUIRE(mixer.set_bus_strip(1, bus));
+    return render_bus_block(mixer, 2, kBlock, allocations);
+  };
+  sonare::mixing::api::Bus bus = boosted_bus();
+  bus.pan = 0.4f;
+  size_t allocations = 99;
+  const float shaped = front_left(bus, &allocations);
+  REQUIRE(allocations == 0);
+  sonare::mixing::api::Bus flat;
+  flat.id = "1";
+  const float plain = front_left(flat, &allocations);
+  // Both stages actually ran.
+  REQUIRE(shaped != plain);
+}
+
+TEST_CASE("TrackMixerRuntime surround bus EQ renders all eight planes without throwing",
+          "[engine][track_mixer][rt][surround]") {
+  constexpr int kBlock = 128;
+  const auto front_left = [](const sonare::mixing::api::Bus& bus, size_t* allocations) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::SevenPointOne}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    REQUIRE(mixer.set_bus_strip(1, bus));
+    return render_bus_block(mixer, 8, kBlock, allocations);
+  };
+  size_t allocations = 99;
+  const float shaped = front_left(boosted_bus(), &allocations);
+  REQUIRE(allocations == 0);
+  sonare::mixing::api::Bus flat;
+  flat.id = "1";
+  REQUIRE(front_left(flat, &allocations) != shaped);
+}
+
+TEST_CASE("TrackMixerRuntime bus EQ configured before prepare renders after it",
+          "[engine][track_mixer][rt]") {
+  constexpr int kBlock = 128;
+  sonare::engine::TrackMixerRuntime mixer;
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+  REQUIRE(mixer.set_bus_strip(1, boosted_bus()));
+  mixer.prepare(48000.0, kBlock);
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({lane}));
+  size_t allocations = 99;
+  const float shaped = render_bus_block(mixer, 2, kBlock, &allocations);
+  REQUIRE(allocations == 0);
+  // The band survived prepare: a flat bus passes the DC source unchanged.
+  REQUIRE(shaped != 0.25f);
+}

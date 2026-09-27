@@ -457,7 +457,18 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
         for (int i = 0; i < num_samples; ++i) plane[i] *= polarity_r;
       }
     }
+    // Dedicated EQ (pre-insert), every plane alike. Skipped with no enabled band,
+    // and before prepare(), which is what sizes its state for every plane.
+    if (bus.eq_enabled.load(std::memory_order_relaxed) &&
+        bus.eq_active.load(std::memory_order_relaxed) && max_block_size_ > 0) {
+      bus.eq.process(lane_channel_ptrs_.data(), bus_channels, num_samples);
+    }
     bus.bus->process(lane_channel_ptrs_.data(), bus_channels, num_samples);
+    // Output pan (post-insert, pre-width), stereo buses only. Skipped at rest:
+    // the centred panner is not an exact identity under every law.
+    if (bus_channels == 2 && !bus.panner.at_rest_identity()) {
+      bus.panner.process(lane_channel_ptrs_.data(), 2, num_samples);
+    }
     // Stereo width on the front pair (post-insert), mirroring a strip. Skipped
     // only while both the target and the in-flight smoothed width rest at 1: the
     // mid/side round-trip is not guaranteed bit-exact, so a never-widened bus

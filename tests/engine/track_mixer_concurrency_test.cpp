@@ -9,6 +9,7 @@
 #include "engine/clip_player.h"
 #include "engine/track_mixer.h"
 #include "mixing/channel_strip.h"
+#include "mixing/panner.h"
 #include "rt/processor_base.h"
 
 namespace {
@@ -120,6 +121,67 @@ TEST_CASE("TrackMixerRuntime pan and insert-param resolution run concurrently wi
     unsigned int param_id = 99;
     if (!mixer.resolve_track_insert_param(10, 0, "gain", &lane_index, &param_id) ||
         lane_index != 0 || param_id != 0) {
+      control_failed.store(true, std::memory_order_relaxed);
+      break;
+    }
+  }
+  control_done.store(true, std::memory_order_release);
+  audio.join();
+
+  REQUIRE_FALSE(bad_output.load());
+  REQUIRE_FALSE(control_failed.load());
+}
+
+// The bus pan setters write panner atomics (and the control-side retained spec,
+// which the render never reads), so they are safe while a bus renders.
+TEST_CASE("TrackMixerRuntime bus pan setters run concurrently with rendering",
+          "[engine][track_mixer][concurrency]") {
+  constexpr int kBlock = 128;
+  constexpr int kControlIterations = 4000;
+  constexpr int kMaxBlocks = 400000;
+
+  std::array<float, kBlock> source{};
+  source.fill(0.5f);
+  const float* clip_channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, clip_channels, 1, kBlock)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({lane}));
+
+  std::atomic<bool> control_done{false};
+  std::atomic<bool> bad_output{false};
+  std::atomic<bool> control_failed{false};
+
+  std::thread audio([&] {
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    int blocks = 0;
+    while (!control_done.load(std::memory_order_acquire) && blocks < kMaxBlocks) {
+      out_l.fill(0.0f);
+      out_r.fill(0.0f);
+      if (!mixer.render_clips(player, out, 2, kBlock, 0) || !all_finite(out_l.data(), kBlock) ||
+          !all_finite(out_r.data(), kBlock)) {
+        bad_output.store(true, std::memory_order_relaxed);
+        break;
+      }
+      ++blocks;
+    }
+  });
+
+  for (int i = 0; i < kControlIterations; ++i) {
+    const float pan = (i % 2 == 0) ? -0.5f : 0.5f;
+    const auto mode =
+        (i % 3 == 0) ? sonare::mixing::PanMode::DualPan : sonare::mixing::PanMode::Balance;
+    if (!mixer.set_bus_pan(1, pan) || !mixer.set_bus_pan_law(1, sonare::mixing::PanLaw::Const3dB) ||
+        !mixer.set_bus_pan_mode(1, mode) || !mixer.set_bus_dual_pan(1, -0.25f, 0.25f)) {
       control_failed.store(true, std::memory_order_relaxed);
       break;
     }
