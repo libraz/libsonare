@@ -787,4 +787,343 @@ TEST_CASE("recompiling for a strip edit keeps bus insert state", "[mixing][routi
   REQUIRE_THAT(after_recompile, WithinAbs(undisturbed, undisturbed * 0.01));
 }
 
+TEST_CASE("C-API scene mixer applies strip EQ and round-trips it through scene JSON",
+          "[mixing][capi][eq]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.gain_db = 18.0f;
+  band.q = 1.0f;
+  band.enabled = true;
+
+  auto make_scene = [&](bool with_eq) {
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Strip strip;
+    strip.id = "source";
+    strip.pan_law = 3;  // Linear0dB so the settled unity pan does not itself
+                        // change the level (see routing_capi_test's other
+                        // Linear0dB cases).
+    if (with_eq) {
+      strip.eq.bands.push_back(band);
+    }
+    scene.strips.push_back(strip);
+    scene.buses.push_back({"master", "master"});
+    scene.connections.push_back({"source", "master"});
+    return scene;
+  };
+
+  std::vector<float> input(kBlock);
+  for (int i = 0; i < kBlock; ++i) {
+    input[static_cast<size_t>(i)] = std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                             static_cast<float>(i) / static_cast<float>(kSr));
+  }
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+
+  auto settled_peak = [&](bool with_eq) {
+    const std::string json = sonare::mixing::api::scene_to_json(make_scene(with_eq));
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+    std::vector<float> out_l(kBlock, 0.0f);
+    std::vector<float> out_r(kBlock, 0.0f);
+    REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+            SONARE_OK);
+    sonare_mixer_destroy(mixer);
+    float peak = 0.0f;
+    for (int i = kBlock / 2; i < kBlock; ++i) {
+      peak = std::max(peak, std::abs(out_l[static_cast<size_t>(i)]));
+    }
+    return peak;
+  };
+
+  // The strip's own EQ audibly boosts a 1 kHz tone at the strip's own 1 kHz peak.
+  const float flat_peak = settled_peak(false);
+  const float boosted_peak = settled_peak(true);
+  REQUIRE(boosted_peak > flat_peak * 1.5f);
+
+  // Round-trip: the strip's eq spec survives sonare_mixer_to_scene_json unchanged.
+  const std::string json = sonare::mixing::api::scene_to_json(make_scene(true));
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  char* round_trip = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &round_trip) == SONARE_OK);
+  REQUIRE(round_trip != nullptr);
+  const std::string round_trip_json(round_trip);
+  sonare_free_string(round_trip);
+  sonare_mixer_destroy(mixer);
+
+  const auto restored = sonare::mixing::api::scene_from_json(round_trip_json);
+  REQUIRE(restored.strips.size() == 1);
+  REQUIRE(restored.strips[0].eq.enabled);
+  REQUIRE(restored.strips[0].eq.bands.size() == 1);
+  REQUIRE(restored.strips[0].eq.bands[0] == band);
+}
+
+TEST_CASE(
+    "C-API scene bus (including the role-master bus) applies pan in balance, stereo, and "
+    "dual pan modes",
+    "[mixing][capi][pan]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+
+  // Distinct L/R levels so the three modes are separable: Balance leaves the
+  // image alone and only attenuates the far channel, StereoPan collapses the
+  // pair to mono before panning, and DualPan routes each side independently.
+  const float in_l_level = 1.0f;
+  const float in_r_level = 0.5f;
+
+  auto render = [&](sonare::mixing::api::Bus master) {
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Strip strip;
+    strip.id = "source";
+    strip.pan_law = 3;  // Linear0dB
+    scene.strips.push_back(strip);
+    master.id = "master";
+    master.role = "master";
+    master.pan_law = 3;  // Linear0dB: exact gains at the hard sides.
+    scene.buses.push_back(master);
+    scene.connections.push_back({"source", "master"});
+
+    const std::string json = sonare::mixing::api::scene_to_json(scene);
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+    std::vector<float> in_l(kBlock, in_l_level);
+    std::vector<float> in_r(kBlock, in_r_level);
+    const float* inputs_l[] = {in_l.data()};
+    const float* inputs_r[] = {in_r.data()};
+    std::vector<float> out_l(kBlock, 0.0f);
+    std::vector<float> out_r(kBlock, 0.0f);
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                        kBlock) == SONARE_OK);
+    sonare_mixer_destroy(mixer);
+    return std::pair<float, float>{out_l[kBlock - 1], out_r[kBlock - 1]};
+  };
+
+  SECTION("balance mode pans hard left, attenuating only the right channel") {
+    sonare::mixing::api::Bus master;
+    master.pan = -1.0f;
+    master.pan_mode = SONARE_PAN_MODE_BALANCE;
+    const auto [l, r] = render(master);
+    REQUIRE_THAT(l, WithinAbs(in_l_level, 1e-4f));
+    REQUIRE_THAT(r, WithinAbs(0.0f, 1e-4f));
+  }
+
+  SECTION("stereo pan mode collapses the pair to mono before panning") {
+    sonare::mixing::api::Bus master;
+    master.pan = -1.0f;
+    master.pan_mode = SONARE_PAN_MODE_STEREO_PAN;
+    const auto [l, r] = render(master);
+    const float mono = 0.5f * (in_l_level + in_r_level);
+    REQUIRE_THAT(l, WithinAbs(mono, 1e-4f));
+    REQUIRE_THAT(r, WithinAbs(0.0f, 1e-4f));
+  }
+
+  SECTION("dual pan mode routes each input side independently") {
+    sonare::mixing::api::Bus master;
+    master.pan_mode = SONARE_PAN_MODE_DUAL_PAN;
+    master.dual_pan_left = 1.0f;    // input left routed hard right
+    master.dual_pan_right = -1.0f;  // input right routed hard left
+    const auto [l, r] = render(master);
+    REQUIRE_THAT(l, WithinAbs(in_r_level, 1e-4f));
+    REQUIRE_THAT(r, WithinAbs(in_l_level, 1e-4f));
+  }
+}
+
+TEST_CASE("C-API role-master scene bus pan settles immediately with no glide at render start",
+          "[mixing][capi][pan]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 64;  // shorter than the panner's 5 ms smoothing window
+
+  // The strip is left at its construction defaults (Balance, pan 0, Const3dB),
+  // so it carries no pan transient of its own; only the bus's settle behavior
+  // is under test here.
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "source";
+  scene.strips.push_back(strip);
+  sonare::mixing::api::Bus master{"master", "master"};
+  master.pan = -1.0f;
+  master.pan_law = 3;  // Linear0dB: exact gains, {left=1, right=0} at pan -1.
+  scene.buses.push_back(master);
+  scene.connections.push_back({"source", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+
+  std::vector<float> input(kBlock, 1.0f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  sonare_mixer_destroy(mixer);
+
+  // Had the bus pan glided in from center instead of settling at scene load,
+  // sample 0 of this very first block would still carry most of the right
+  // channel; multiplying by the settled hard-left gain (0 on the right, exact
+  // for Linear0dB) is exactly zero regardless of the strip's own settle state.
+  REQUIRE(out_r[0] == 0.0f);
+  REQUIRE(out_l[0] > 0.5f);
+}
+
+TEST_CASE("C-API scene bus applies its own EQ to the summed signal", "[mixing][capi][eq]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+
+  auto make_scene = [](bool with_eq) {
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Strip strip;
+    strip.id = "source";
+    strip.pan_law = 3;  // Linear0dB
+    scene.strips.push_back(strip);
+    sonare::mixing::api::Bus master{"master", "master"};
+    master.pan_law = 3;
+    if (with_eq) {
+      sonare::mastering::eq::EqBand band;
+      band.type = sonare::mastering::eq::EqBandType::Peak;
+      band.frequency_hz = 1000.0f;
+      band.gain_db = 18.0f;
+      band.q = 1.0f;
+      band.enabled = true;
+      master.eq.bands.push_back(band);
+    }
+    scene.buses.push_back(master);
+    scene.connections.push_back({"source", "master"});
+    return scene;
+  };
+
+  std::vector<float> input(kBlock);
+  for (int i = 0; i < kBlock; ++i) {
+    input[static_cast<size_t>(i)] = std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                             static_cast<float>(i) / static_cast<float>(kSr));
+  }
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+
+  auto settled_peak = [&](bool with_eq) {
+    const std::string json = sonare::mixing::api::scene_to_json(make_scene(with_eq));
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+    std::vector<float> out_l(kBlock, 0.0f);
+    std::vector<float> out_r(kBlock, 0.0f);
+    REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+            SONARE_OK);
+    sonare_mixer_destroy(mixer);
+    float peak = 0.0f;
+    for (int i = kBlock / 2; i < kBlock; ++i) {
+      peak = std::max(peak, std::abs(out_l[static_cast<size_t>(i)]));
+    }
+    return peak;
+  };
+
+  const float flat_peak = settled_peak(false);
+  const float boosted_peak = settled_peak(true);
+  REQUIRE(boosted_peak > flat_peak * 1.5f);
+}
+
+TEST_CASE("C-API default bus output is bit-identical to the summed strip inputs",
+          "[mixing][capi]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+
+  // A default Bus{} must add nothing of its own to the signal it sums (see
+  // BusNode's at_rest_identity()/eq-has-no-band/width==1 skip rules): the
+  // master's output for two strips must equal the exact per-lane sum, where
+  // each lane's own contribution is measured by running that strip alone
+  // through an identical default bus (its own default pan/width stages carry
+  // whatever floating-point behavior they already have; the point here is
+  // that the bus adds no further deviation on top of what its lanes hand it).
+  auto make_scene = [](const std::vector<std::string>& ids) {
+    sonare::mixing::api::Scene scene;
+    for (const auto& id : ids) {
+      sonare::mixing::api::Strip strip;
+      strip.id = id;
+      scene.strips.push_back(strip);
+      scene.connections.push_back({id, "master"});
+    }
+    scene.buses.push_back({"master", "master"});
+    return scene;
+  };
+
+  std::vector<float> a_in(kBlock);
+  std::vector<float> b_in(kBlock);
+  for (int i = 0; i < kBlock; ++i) {
+    a_in[static_cast<size_t>(i)] =
+        std::sin(0.3f * static_cast<float>(i)) - std::cos(0.05f * static_cast<float>(i));
+    b_in[static_cast<size_t>(i)] = 0.5f * std::cos(0.7f * static_cast<float>(i));
+  }
+  const float* a_l[] = {a_in.data()};
+  const float* a_r[] = {a_in.data()};
+  const float* b_l[] = {b_in.data()};
+  const float* b_r[] = {b_in.data()};
+
+  auto render_lane = [&](const char* id, const float* const* in_l, const float* const* in_r) {
+    const std::string json = sonare::mixing::api::scene_to_json(make_scene({id}));
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+    std::vector<float> out_l(kBlock, 0.0f);
+    std::vector<float> out_r(kBlock, 0.0f);
+    REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+            SONARE_OK);
+    sonare_mixer_destroy(mixer);
+    return out_l;  // L and R inputs are identical, so only L is needed.
+  };
+
+  const std::vector<float> a_lane = render_lane("a", a_l, a_r);
+  const std::vector<float> b_lane = render_lane("b", b_l, b_r);
+
+  const std::string combined_json = sonare::mixing::api::scene_to_json(make_scene({"a", "b"}));
+  SonareMixer* mixer = sonare_mixer_from_scene_json(combined_json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  const float* in_l[] = {a_in.data(), b_in.data()};
+  const float* in_r[] = {a_in.data(), b_in.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 2, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  sonare_mixer_destroy(mixer);
+
+  for (int i = 0; i < kBlock; ++i) {
+    const float expected = a_lane[static_cast<size_t>(i)] + b_lane[static_cast<size_t>(i)];
+    REQUIRE(out_l[static_cast<size_t>(i)] == expected);
+    REQUIRE(out_r[static_cast<size_t>(i)] == expected);
+  }
+
+  // Sensitivity twin: an active bus EQ band processes the two lanes' sum
+  // through one stateful filter, which is not the same floating-point result
+  // as the unfiltered per-lane sum above -- proving the `==` comparison is not
+  // vacuously true (e.g. from a mixer that silently skips summing altogether).
+  sonare::mixing::api::Scene eq_scene = make_scene({"a", "b"});
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.gain_db = 18.0f;
+  band.q = 1.0f;
+  band.enabled = true;
+  eq_scene.buses[0].eq.bands.push_back(band);
+  const std::string eq_json = sonare::mixing::api::scene_to_json(eq_scene);
+  SonareMixer* eq_mixer = sonare_mixer_from_scene_json(eq_json.c_str(), kSr, kBlock);
+  REQUIRE(eq_mixer != nullptr);
+  std::vector<float> eq_out_l(kBlock, 0.0f);
+  std::vector<float> eq_out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(eq_mixer, in_l, in_r, 2, eq_out_l.data(), eq_out_r.data(),
+                                      kBlock) == SONARE_OK);
+  sonare_mixer_destroy(eq_mixer);
+
+  bool any_differs = false;
+  for (int i = 0; i < kBlock; ++i) {
+    const float expected = a_lane[static_cast<size_t>(i)] + b_lane[static_cast<size_t>(i)];
+    if (eq_out_l[static_cast<size_t>(i)] != expected) {
+      any_differs = true;
+      break;
+    }
+  }
+  REQUIRE(any_differs);
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

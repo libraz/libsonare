@@ -8,6 +8,17 @@
 
 namespace sonare_c_mixing_detail {
 
+// True if at least one of the EQ's 24 slots is enabled. A BusNode skips the EQ
+// stage otherwise, keeping the default (no bands) bus bit-identical to input.
+bool eq_has_active_band(const sonare::mastering::eq::ParametricEq& eq) {
+  for (size_t index = 0; index < sonare::mastering::eq::ParametricEq::kMaxBands; ++index) {
+    if (eq.band(index).enabled) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Graph wrapper that exposes a ChannelStrip's main path and its aux send taps
 // as separate output ports. Ports 0,1 carry the processed main L/R signal;
 // ports (2 + 2*s, 3 + 2*s) carry send index s's L/R tap. The strip is owned and
@@ -76,25 +87,30 @@ class BusNode final : public sonare::rt::ProcessorBase {
     int right_port = 0;
   };
 
-  // @p bus is borrowed, not owned: it lives in SonareMixer::bus_dsp and outlives
-  // every graph rebuild, exactly as StripNode borrows its ChannelStrip. The
-  // trim/width/polarity members below are per-compile like StripNode's own, and
-  // carry no state the invariant covers.
-  BusNode(sonare::mixing::FxBus* bus, float input_trim_db, float width, bool polarity_invert_left,
-          bool polarity_invert_right, std::vector<SidechainInput> sidechain_inputs = {})
+  // @p bus, @p panner and @p eq are borrowed, not owned: they live in
+  // SonareMixer::bus_dsp and outlive every graph rebuild, exactly as StripNode
+  // borrows its ChannelStrip. The trim/width/polarity members below are
+  // per-compile like StripNode's own, and carry no state the invariant covers.
+  BusNode(sonare::mixing::FxBus* bus, sonare::mixing::PannerProcessor* panner,
+          sonare::mastering::eq::ParametricEq* eq, std::atomic<bool>* eq_enabled,
+          float input_trim_db, float width, bool polarity_invert_left, bool polarity_invert_right,
+          std::vector<SidechainInput> sidechain_inputs = {})
       : bus_(bus),
+        panner_(panner),
+        eq_(eq),
+        eq_enabled_(eq_enabled),
         input_trim_({input_trim_db, 5.0f}),
         width_(width, 5.0f),
         polarity_left_(polarity_invert_left ? -1.0f : 1.0f),
         polarity_right_(polarity_invert_right ? -1.0f : 1.0f),
         sidechain_inputs_(std::move(sidechain_inputs)) {}
 
-  // The borrowed FxBus is deliberately NOT prepared here, mirroring
-  // StripNode::prepare: BusProcessor::prepare re-prepares every insert, which
-  // clears the delay lines and filter state this node exists to preserve. The
-  // bus is prepared once where its record is created, before its inserts are
-  // added, exactly as a strip is prepared in sonare_mixer_add_strip_ex. Only the
-  // per-compile members below are prepared.
+  // The borrowed FxBus, panner and EQ are deliberately NOT prepared here,
+  // mirroring StripNode::prepare: BusProcessor::prepare re-prepares every
+  // insert, which clears the delay lines and filter state this node exists to
+  // preserve. They are prepared once where their record is created, before the
+  // bus's inserts are added, exactly as a strip is prepared in
+  // sonare_mixer_add_strip_ex. Only the per-compile members below are prepared.
   void prepare(double sample_rate, int max_block_size) override {
     input_trim_.prepare(sample_rate, max_block_size);
     width_.prepare(sample_rate, max_block_size);
@@ -102,7 +118,8 @@ class BusNode final : public sonare::rt::ProcessorBase {
 
   void process(float* const* channels, int, int num_samples) override {
     // Match TrackMixerRuntime's scene-bus signal order exactly:
-    // trim -> front-pair polarity -> inserts -> front-pair stereo width.
+    // trim -> front-pair polarity -> EQ -> inserts -> pan -> front-pair stereo
+    // width.
     input_trim_.process(channels, 2, num_samples);
     if (channels[0] != nullptr && polarity_left_ < 0.0f) {
       for (int i = 0; i < num_samples; ++i) channels[0][i] *= polarity_left_;
@@ -110,12 +127,18 @@ class BusNode final : public sonare::rt::ProcessorBase {
     if (channels[1] != nullptr && polarity_right_ < 0.0f) {
       for (int i = 0; i < num_samples; ++i) channels[1][i] *= polarity_right_;
     }
+    if (eq_enabled_->load(std::memory_order_relaxed) && eq_has_active_band(*eq_)) {
+      eq_->process(channels, 2, num_samples);
+    }
     bus_->clear_insert_sidechains();
     for (const auto& input : sidechain_inputs_) {
       const float* key[2] = {channels[input.left_port], channels[input.right_port]};
       bus_->set_insert_sidechain(input.insert_index, key, 2, num_samples);
     }
     bus_->process(channels, 2, num_samples);
+    if (!panner_->at_rest_identity()) {
+      panner_->process(channels, 2, num_samples);
+    }
     if (width_.width() != 1.0f || width_.current_width() != 1.0f) {
       width_.process(channels, 2, num_samples);
     }
@@ -124,6 +147,8 @@ class BusNode final : public sonare::rt::ProcessorBase {
   void reset() override {
     input_trim_.reset();
     bus_->reset();
+    panner_->reset();
+    eq_->reset();
     width_.reset();
   }
   int latency_samples() const noexcept override { return bus_->latency_samples(); }
@@ -134,7 +159,10 @@ class BusNode final : public sonare::rt::ProcessorBase {
   }
 
  private:
-  sonare::mixing::FxBus* bus_;  // borrowed; owned by SonareMixer::bus_dsp
+  sonare::mixing::FxBus* bus_;               // borrowed; owned by SonareMixer::bus_dsp
+  sonare::mixing::PannerProcessor* panner_;  // borrowed; owned by SonareMixer::bus_dsp
+  sonare::mastering::eq::ParametricEq* eq_;  // borrowed; owned by SonareMixer::bus_dsp
+  std::atomic<bool>* eq_enabled_;            // borrowed; owned by SonareMixer::bus_dsp
   sonare::mixing::GainProcessor input_trim_;
   sonare::mixing::StereoWidthProcessor width_;
   float polarity_left_;
@@ -188,21 +216,25 @@ void apply_solo_mutes(SonareMixer* mixer) {
   }
 }
 
-// The persistent DSP for @p bus_id, created empty on first use. A declared bus
-// already has its record with its inserts built; this creates one for the
-// implicit master and for an aux bus a send destination names, neither of which
-// can carry inserts.
-sonare::mixing::FxBus& bus_dsp_for(SonareMixer* mixer, const std::string& bus_id) {
+// The persistent DSP for @p bus_id, created empty (default pan, no EQ bands) on
+// first use. A declared bus already has its record with its inserts, pan and EQ
+// built by sonare_mixer_from_scene_json; this creates one for the implicit
+// master and for an aux bus a send destination names, neither of which can
+// carry a scene spec.
+SonareBusDsp& bus_dsp_for(SonareMixer* mixer, const std::string& bus_id) {
   for (const auto& entry : mixer->bus_dsp) {
-    if (entry->id == bus_id) return entry->fx;
+    if (entry->id == bus_id) return *entry;
   }
   auto entry = std::make_unique<SonareBusDsp>();
   entry->id = bus_id;
-  // Prepared once, here, because BusNode::prepare deliberately leaves it alone.
+  // Prepared once, here, because BusNode::prepare deliberately leaves them alone.
   entry->fx.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
-  sonare::mixing::FxBus& fx = entry->fx;
+  entry->panner.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+  entry->eq.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+  entry->eq.prepare_channels(2);
+  SonareBusDsp& dsp = *entry;
   mixer->bus_dsp.push_back(std::move(entry));
-  return fx;
+  return dsp;
 }
 
 // Rebuilds the routing graph from the mixer's stored strips/buses/connections,
@@ -281,7 +313,8 @@ void build_and_compile(SonareMixer* mixer) {
     // synthesized master, or an aux a send destination created -- gets an empty
     // record here. Constructing it in this loop is what used to throw away every
     // bus insert's state on an unrelated strip edit.
-    sonare::mixing::FxBus& fx_bus = bus_dsp_for(mixer, bus.id);
+    SonareBusDsp& dsp = bus_dsp_for(mixer, bus.id);
+    sonare::mixing::FxBus& fx_bus = dsp.fx;
     int next_sidechain_port = 2;
     std::vector<BusNode::SidechainInput> sidechain_inputs;
     std::vector<std::string> sidechain_keys;
@@ -297,9 +330,9 @@ void build_and_compile(SonareMixer* mixer) {
     }
     bus_sidechain_inputs_by_id[bus.id] = sidechain_inputs;
     bus_sidechain_keys_by_id[bus.id] = sidechain_keys;
-    auto node =
-        std::make_unique<BusNode>(&fx_bus, bus.input_trim_db, bus.width, bus.polarity_invert_left,
-                                  bus.polarity_invert_right, std::move(sidechain_inputs));
+    auto node = std::make_unique<BusNode>(&fx_bus, &dsp.panner, &dsp.eq, &dsp.eq_enabled,
+                                          bus.input_trim_db, bus.width, bus.polarity_invert_left,
+                                          bus.polarity_invert_right, std::move(sidechain_inputs));
     if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
       throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
     }

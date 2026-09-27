@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -16,10 +17,12 @@
 #include "graph/connection.h"
 #include "graph/graph.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/eq/parametric.h"
 #include "mixing/api/presets.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"
+#include "mixing/panner.h"
 #include "mixing/send.h"
 #include "rt/processor_base.h"
 #include "sonare_c_internal.h"
@@ -55,6 +58,13 @@ struct SonareStrip {
 struct SonareBusDsp {
   std::string id;
   sonare::mixing::FxBus fx;
+  // Pan and EQ, persistent across a graph rebuild for the same reason fx is:
+  // a BusNode's pan/EQ stages must survive an unrelated strip edit that marks
+  // the graph dirty. Applied from scene at sonare_mixer_from_scene_json, never
+  // by a standalone-mixer setter (there is none).
+  sonare::mixing::PannerProcessor panner;
+  sonare::mastering::eq::ParametricEq eq;
+  std::atomic<bool> eq_enabled{true};
 };
 
 struct SonareMixer {

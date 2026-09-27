@@ -2,6 +2,7 @@
 
 #include "c_api/mixing_internal.h"
 #include "mastering/api/named_processor.h"
+#include "mixing/channel_strip_eq.h"
 
 using namespace sonare_c_mixing_detail;
 
@@ -348,6 +349,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       strip->strip.set_polarity_invert(scene_strip.polarity_invert_left,
                                        scene_strip.polarity_invert_right);
       strip->strip.set_channel_delay_samples(scene_strip.channel_delay_samples);
+      sonare::mixing::apply_strip_eq(strip->strip, scene_strip.eq, nullptr);
       for (const auto& insert : scene_strip.inserts) {
         std::vector<std::string> unknown_keys;
         auto processor = sonare::mastering::api::make_insert(insert.processor_name,
@@ -415,6 +417,17 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       // container itself knows its block size, and BusNode::prepare will not
       // prepare this bus again on a later compile.
       dsp->fx.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+      dsp->panner.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+      dsp->panner.set_pan(bus.pan);
+      dsp->panner.set_pan_mode(to_pan_mode(bus.pan_mode));
+      dsp->panner.set_pan_law(to_pan_law(bus.pan_law));
+      dsp->panner.set_dual_pan(bus.dual_pan_left, bus.dual_pan_right);
+      // Settle immediately: an offline graph must not glide in from center on
+      // the first rendered block (mirrors ChannelStrip::settle).
+      dsp->panner.reset();
+      dsp->eq.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+      dsp->eq.prepare_channels(2);
+      sonare::mixing::apply_eq(dsp->eq, dsp->eq_enabled, bus.eq, nullptr);
       for (const auto& insert : bus.inserts) {
         std::vector<std::string> unknown_keys;
         auto processor = sonare::mastering::api::make_insert(insert.processor_name,
