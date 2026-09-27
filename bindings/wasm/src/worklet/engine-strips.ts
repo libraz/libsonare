@@ -130,6 +130,9 @@ export function setTrackStripPan(
 ): void {
   const trackId = trackIdFor(ctx, target);
   ctx.offlineEngine.setTrackStripPan(trackId, pan);
+  mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
+    entry.pan = pan;
+  });
   ctx.postSync({ type: 'syncTrackStripPan', trackId, pan });
 }
 
@@ -141,6 +144,9 @@ export function setTrackStripPanLaw(
   const trackId = trackIdFor(ctx, target);
   const code = panLawCode(panLaw);
   ctx.offlineEngine.setTrackStripPanLaw(trackId, code);
+  mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
+    entry.panLaw = code;
+  });
   ctx.postSync({ type: 'syncTrackStripPanLaw', trackId, panLaw: code });
 }
 
@@ -152,6 +158,9 @@ export function setTrackStripPanMode(
   const trackId = trackIdFor(ctx, target);
   const code = panModeCode(panMode);
   ctx.offlineEngine.setTrackStripPanMode(trackId, code);
+  mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
+    entry.panMode = code;
+  });
   ctx.postSync({ type: 'syncTrackStripPanMode', trackId, panMode: code });
 }
 
@@ -163,6 +172,10 @@ export function setTrackStripDualPan(
 ): void {
   const trackId = trackIdFor(ctx, target);
   ctx.offlineEngine.setTrackStripDualPan(trackId, leftPan, rightPan);
+  mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
+    entry.dualPanLeft = leftPan;
+    entry.dualPanRight = rightPan;
+  });
   ctx.postSync({ type: 'syncTrackStripDualPan', trackId, leftPan, rightPan });
 }
 
@@ -173,7 +186,24 @@ export function setTrackStripChannelDelaySamples(
 ): void {
   const trackId = trackIdFor(ctx, target);
   ctx.offlineEngine.setTrackStripChannelDelaySamples(trackId, delaySamples);
+  mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
+    entry.channelDelaySamples = delaySamples;
+  });
   ctx.postSync({ type: 'syncTrackStripChannelDelaySamples', trackId, delaySamples });
+}
+
+/**
+ * Records a master fader or pan value the parameter path applied, so a master
+ * strip re-post does not reset it; a track lane keeps these outside its strip.
+ */
+export function cacheMasterStripScalar(
+  ctx: EngineStripContext,
+  field: 'faderDb' | 'pan',
+  value: number,
+): void {
+  mergeStripJson(ctx, { kind: 'master' }, (entry) => {
+    entry[field] = value;
+  });
 }
 
 export function setMasterStripEqBand(

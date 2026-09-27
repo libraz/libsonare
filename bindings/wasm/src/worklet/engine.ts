@@ -411,11 +411,19 @@ export class SonareEngine {
   }
 
   setStripGain(target: string | number, db: number): boolean {
-    return this.sendSmoothedParam(this.stripParamId(target, ENGINE_MIXER_PARAM_FADER_DB), db);
+    const sent = this.sendSmoothedParam(this.stripParamId(target, ENGINE_MIXER_PARAM_FADER_DB), db);
+    if (sent && target === 'master') {
+      strips.cacheMasterStripScalar(this.stripContext, 'faderDb', db);
+    }
+    return sent;
   }
 
   setStripPan(target: string | number, pan: number): boolean {
-    return this.sendSmoothedParam(this.stripParamId(target, ENGINE_MIXER_PARAM_PAN), pan);
+    const sent = this.sendSmoothedParam(this.stripParamId(target, ENGINE_MIXER_PARAM_PAN), pan);
+    if (sent && target === 'master') {
+      strips.cacheMasterStripScalar(this.stripContext, 'pan', pan);
+    }
+    return sent;
   }
 
   /**

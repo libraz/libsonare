@@ -1260,6 +1260,119 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('keeps track and master strip scalar setters across a syncMixer re-post', async () => {
+      // The in-place strip path re-applies every scalar in the re-posted JSON
+      // (pan, pan law/mode, dual pan, channel delay, and the master fader/pan),
+      // so a setter the cache did not absorb is reverted on the worklet only.
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        blockSize,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const livePosted: unknown[] = [];
+      const live = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { postMessage: (message) => livePosted.push(message) },
+      );
+      try {
+        engine.setTrackLanes([7, 8]);
+        engine.setTrackStripJson(
+          7,
+          '{"version":1,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}',
+        );
+        engine.setTrackStripJson(
+          8,
+          '{"version":1,"strips":[{"id":"track-8"}],"buses":[],"connections":[]}',
+        );
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        );
+        engine.setTrackStripPanMode(7, 'stereoPan');
+        engine.setTrackStripPan(7, -0.5);
+        engine.setTrackStripPanLaw(7, 'const6dB');
+        engine.setTrackStripPanMode(8, 'dualPan');
+        engine.setTrackStripDualPan(8, 0.2, 0.9);
+        engine.setTrackStripChannelDelaySamples(8, 16);
+        expect(engine.setStripGain('master', -4)).toBe(true);
+        expect(engine.setStripPan('master', 0.3)).toBe(true);
+        const replay = (messages: unknown[]): void => {
+          for (const message of messages) {
+            const type = (message as { type?: unknown }).type;
+            if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+              live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+            } else if (typeof type === 'number') {
+              live.receiveCommand(message as Parameters<typeof live.receiveCommand>[0]);
+            }
+          }
+        };
+        replay(posted);
+        // A running worklet drains the queued parameter commands before any
+        // later re-post arrives, so render a (stopped) block on both first.
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+        const beforeRepost = posted.length;
+        // Any routing change re-posts every cached strip.
+        engine.setSends(7, []);
+        replay(posted.slice(beforeRepost));
+        expect(
+          livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
+        ).toEqual([]);
+        const frames = blockSize * 48;
+        const left = new Float32Array(frames);
+        const right = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) {
+          left[i] = 0.3 * Math.sin((2 * Math.PI * 700 * i) / 48000);
+          right[i] = 0.2 * Math.sin((2 * Math.PI * 2100 * i) / 48000);
+        }
+        const clips = [
+          { id: 1, trackId: 7, channels: [left, right], startPpq: 0, lengthSamples: frames },
+          { id: 2, trackId: 8, channels: [right, left], startPpq: 0, lengthSamples: frames },
+        ];
+        offline.setClips(clips);
+        live.receiveSync({ type: 'syncClips', clips });
+        offline.play();
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        let maxDiff = 0;
+        let maxAbs = 0;
+        for (let block = 0; block < 40; block += 1) {
+          const expected = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          const liveOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          expect(live.process([[]], [liveOut])).toBe(true);
+          // Past the parameter glides, which the two engines start a block apart.
+          if (block < 20) {
+            continue;
+          }
+          for (let channel = 0; channel < 2; channel += 1) {
+            for (let i = 0; i < blockSize; i += 1) {
+              maxAbs = Math.max(maxAbs, Math.abs(expected[channel][i]));
+              maxDiff = Math.max(maxDiff, Math.abs(expected[channel][i] - liveOut[channel][i]));
+            }
+          }
+        }
+        expect(maxAbs).toBeGreaterThan(0.05);
+        expect(maxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
+      } finally {
+        live.destroy();
+        engine.destroy();
+      }
+    });
+
     it('requests capture status, audio, and reset over the worklet port', async () => {
       const posted: unknown[] = [];
       const port = {
