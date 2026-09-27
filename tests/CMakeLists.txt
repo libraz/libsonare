@@ -579,6 +579,7 @@ if(BUILD_ARRANGEMENT)
     engine/realtime_engine_midi_test.cpp
     engine/instrument_clock_domain_test.cpp
     engine/instrument_automation_test.cpp
+    engine/bus_strip_agreement_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
     bindings/project_bounce_overflow_test.cpp
