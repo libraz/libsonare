@@ -456,8 +456,10 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   std::array<float, kBlock> out{};
   float* io[] = {out.data()};
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
-  REQUIRE(out.back() > 2.82f);
-  REQUIRE(out.back() < 2.84f);
+  // Direct lane x plus the 0 dB send into the 5.1 bus's front-left plane, which
+  // folds to the mono output at 0.5x (stereo fold, then average): 1.5x.
+  REQUIRE(out.back() > 2.11f);
+  REQUIRE(out.back() < 2.13f);
   // max_records == 0 is documented as a safe no-op, NOT a way to probe the
   // pending backlog without draining: it must report 0 here even though the
   // real drain immediately below finds records.
@@ -487,8 +489,9 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   out.fill(0.0f);
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
-  REQUIRE(out.back() > 2.11f);
-  REQUIRE(out.back() < 2.13f);
+  // The -6 dB send halves the folded 0.5x contribution: x + 0.25x.
+  REQUIRE(out.back() > 1.76f);
+  REQUIRE(out.back() < 1.78f);
 
   send[0].enabled = 0;
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
@@ -508,8 +511,9 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
     out.fill(0.0f);
     REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
   }
-  REQUIRE(out.back() > 2.11f);
-  REQUIRE(out.back() < 2.13f);
+  // A -6 dB bus gain halves the folded contribution the same way: x + 0.25x.
+  REQUIRE(out.back() > 1.76f);
+  REQUIRE(out.back() < 1.78f);
 
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   const char* bus_strip_json =

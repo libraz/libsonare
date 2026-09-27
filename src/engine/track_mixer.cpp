@@ -127,6 +127,11 @@ bool bus_pan_is_default(const mixing::api::Bus& bus) noexcept {
          bus.dual_pan_right == defaults.dual_pan_right;
 }
 
+// Pan and width are stereo-image operations, refused on a bus wider than two channels.
+bool bus_stereo_image_is_default(const mixing::api::Bus& bus) noexcept {
+  return bus_pan_is_default(bus) && bus.width == mixing::api::Bus{}.width;
+}
+
 bool layout_wider_than_stereo(ChannelLayout layout) noexcept {
   return channel_count(layout) > TrackMixerRuntime::kMaxLaneChannels;
 }
@@ -161,9 +166,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   for (size_t index = 0; index < buses.size(); ++index) {
     const int previous = configured_bus_index(buses[index].bus_id);
     if (previous < 0) continue;
-    // Pan is refused on a wider bus rather than silently reset.
+    // Pan and width are refused on a wider bus rather than silently reset.
     if (layout_wider_than_stereo(buses[index].layout) &&
-        !bus_pan_is_default(bus_states_[static_cast<size_t>(previous)].spec)) {
+        !bus_stereo_image_is_default(bus_states_[static_cast<size_t>(previous)].spec)) {
       return false;
     }
     source[index] = previous;
@@ -173,6 +178,77 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       moved_out[static_cast<size_t>(previous)] = true;
       any_move = true;
     }
+  }
+  // Bus and master keys whose bus (source or target) is not in the new list, or
+  // whose insert the target no longer has, are dropped; the rest stay edges of
+  // the graph the new list has to keep acyclic.
+  const auto declared = [&buses](uint32_t bus_id) {
+    return std::any_of(buses.begin(), buses.end(),
+                       [bus_id](const TrackBusConfig& bus) { return bus.bus_id == bus_id; });
+  };
+  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  std::array<bool, kMaxSidechainBindings> drop{};
+  std::array<KeyEdge, kMaxSidechainBindings> key_edges{};
+  size_t key_edge_count = 0;
+  for (size_t i = 0; i < binding_count; ++i) {
+    const SidechainBinding& binding = sidechain_bindings_[i];
+    const auto target_kind =
+        static_cast<SidechainTargetKind>(binding.target_kind.load(std::memory_order_relaxed));
+    if (target_kind == SidechainTargetKind::Lane) continue;
+    const uint32_t target_id = binding.target_id.load(std::memory_order_relaxed);
+    const uint32_t source_id = binding.source_id.load(std::memory_order_relaxed);
+    const bool bus_source = binding.source_kind.load(std::memory_order_relaxed) ==
+                            static_cast<uint8_t>(SidechainSourceKind::Bus);
+    if (bus_source && !declared(source_id)) drop[i] = true;
+    if (target_kind == SidechainTargetKind::Bus) {
+      const int previous = configured_bus_index(target_id);
+      const mixing::FxBus* fx =
+          previous >= 0 ? bus_states_[static_cast<size_t>(previous)].bus.get() : nullptr;
+      if (!declared(target_id) || fx == nullptr ||
+          binding.insert_index.load(std::memory_order_relaxed) >= fx->num_inserts()) {
+        drop[i] = true;
+      }
+      if (!drop[i] && bus_source) key_edges[key_edge_count++] = KeyEdge{source_id, target_id};
+    }
+  }
+  std::array<size_t, kMaxBusLanes> order{};
+  if (!validate_bus_graph(buses, key_edges.data(), key_edge_count, &order)) return false;
+  // Every lane output and lane send has to land on a bus the new list keeps.
+  static const std::vector<TrackLaneConfig> kNoLanes;
+  const std::vector<TrackLaneConfig>* current_lanes = lanes_.control_current().get();
+  const std::vector<TrackLaneConfig>& lanes = current_lanes ? *current_lanes : kNoLanes;
+  for (const TrackLaneConfig& lane : lanes) {
+    if (lane.output_bus_id != 0 && !declared(lane.output_bus_id)) return false;
+    for (const TrackLaneConfig::Send& send : lane.sends) {
+      if (!declared(send.bus_id)) return false;
+    }
+  }
+  // The alignment the new graph needs has to fit the delay lines.
+  BusGraphView view;
+  view.buses = &buses;
+  view.order = order;
+  view.skip_binding = drop;
+  build_routes(buses, drop, &view.routes);
+  for (size_t index = 0; index < buses.size(); ++index) {
+    const mixing::FxBus* fx =
+        source[index] >= 0 ? bus_states_[static_cast<size_t>(source[index])].bus.get() : nullptr;
+    view.latency_q8[index] = fx != nullptr ? fx->latency_samples_q8() : 0;
+  }
+  PdcPlan plan;
+  if (!plan_pdc(lanes, view, &plan)) return false;
+  decltype(bus_sends_) sends{};
+  try {
+    for (size_t index = 0; index < buses.size(); ++index) {
+      for (size_t send_index = 0; send_index < buses[index].sends.size(); ++send_index) {
+        const TrackLaneConfig::Send& send = buses[index].sends[send_index];
+        auto processor = std::make_unique<mixing::SendProcessor>(
+            mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f});
+        if (max_block_size_ > 0) processor->prepare(sample_rate_, max_block_size_);
+        sends[index][send_index] = std::move(processor);
+      }
+    }
+  } catch (...) {
+    return false;
   }
   std::unique_ptr<std::array<BusState, kMaxBusLanes>> staging;
   if (any_move) staging = std::make_unique<std::array<BusState, kMaxBusLanes>>();
@@ -185,6 +261,10 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     retire_bus_state(bus_states_[index]);
   }
   bus_configs_ = std::move(buses);
+  bus_sends_ = std::move(sends);
+  for (size_t i = binding_count; i > 0; --i) {
+    if (drop[i - 1]) remove_sidechain_binding(i - 1);
+  }
   clear_bus_insert_automations();
   for (size_t index = 0; index < bus_configs_.size(); ++index) {
     BusState& state = bus_states_[index];
@@ -194,6 +274,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       }
       // The delay line held another bus's history; recompute_lane_pdc re-derives its length.
       bus_pdc_delays_[index].reset();
+      for (size_t edge = 0; edge < kBusEdgesPerBus; ++edge) {
+        bus_edge_delays_[index * kBusEdgesPerBus + edge].reset();
+      }
     }
     state.bus_id = bus_configs_[index].bus_id;
     state.gain.prepare(sample_rate_, 5.0f);
@@ -212,6 +295,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       state.bus->prepare(sample_rate_, max_block_size_);
     }
   }
+  refresh_bus_graph();
   // Control-side snapshot: this is a control-thread structural change, and
   // current() is the audio thread's view (see set_track_channel_delay_samples).
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
@@ -422,7 +506,8 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   // engine's own layout, not the spec's, which may be omitted.
   if (!std::isfinite(bus.pan) || !std::isfinite(bus.dual_pan_left) ||
       !std::isfinite(bus.dual_pan_right) ||
-      (layout_wider_than_stereo(bus_configs_[bus_index].layout) && !bus_pan_is_default(bus)) ||
+      (layout_wider_than_stereo(bus_configs_[bus_index].layout) &&
+       !bus_stereo_image_is_default(bus)) ||
       !strip_eq_acceptable(bus.eq, sample_rate_)) {
     return false;
   }
@@ -463,6 +548,18 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     }
   }
   state->bus = std::move(fx);
+  // Keys stay on (bus, insert index); an index the new chain lacks is dropped.
+  const size_t insert_count = state->bus->num_inserts();
+  for (size_t i = sidechain_binding_count_.load(std::memory_order_relaxed); i > 0; --i) {
+    const SidechainBinding& binding = sidechain_bindings_[i - 1];
+    if (binding.target_kind.load(std::memory_order_relaxed) ==
+            static_cast<uint8_t>(SidechainTargetKind::Bus) &&
+        binding.target_id.load(std::memory_order_relaxed) == bus_id &&
+        binding.insert_index.load(std::memory_order_relaxed) >= insert_count) {
+      remove_sidechain_binding(i - 1);
+    }
+  }
+  refresh_bus_graph();
   // A bus insert chain's latency joins the mixer's end-to-end PDC, so
   // installing one has to re-derive the alignment banks. Without this call
   // FxBus::latency_samples_q8() has no reader in the engine at all and a
@@ -488,6 +585,14 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   // rather than silence.
   lane_gain_scratch_.assign(kMaxTrackLanes * static_cast<size_t>(max_block_size_), 1.0f);
   send_source_scratch_.assign(2u * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
+  // Edge scratch, pre-fader tap and downmix fold for the bus stage.
+  bus_edge_scratch_.assign(3u * kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);
+  bus_key_scratch_.assign(kMaxBusLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
+                          0.0f);
+  bus_key_frames_.fill(0);
+  keyed_input_scratch_.assign(
+      kMaxSidechainBindings * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
+  master_key_frames_.fill(0);
   for (LaneState& lane : lane_states_) {
     lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
@@ -537,6 +642,19 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   }
   master_pdc_delay_.set_prepared_channels(kMaxBusChannels);
   master_pdc_delay_.prepare(sample_rate_, max_block_size_);
+  for (mixing::AlignmentDelay& delay : bus_edge_delays_) {
+    delay.set_prepared_channels(kMaxBusChannels);
+    delay.prepare(sample_rate_, max_block_size_);
+  }
+  for (mixing::AlignmentDelay& delay : key_edge_delays_) {
+    delay.set_prepared_channels(kMaxLaneChannels);
+    delay.prepare(sample_rate_, max_block_size_);
+  }
+  for (auto& sends : bus_sends_) {
+    for (auto& send : sends) {
+      if (send) send->prepare(sample_rate_, max_block_size_);
+    }
+  }
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     slot.smoother.prepare(sample_rate_, 5.0f);
     slot.smoother.reset(0.0f);
@@ -601,6 +719,11 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     bus.width.reset();
     bus.panner.reset();
   }
+  for (auto& sends : bus_sends_) {
+    for (auto& send : sends) {
+      if (send) send->reset();
+    }
+  }
   // Snap each automated insert parameter to its target and push it once, so an
   // offline pre-roll opens at the steady-state value (same determinism as the
   // fader/pan settle above).
@@ -627,6 +750,12 @@ void TrackMixerRuntime::flush_pdc_delays() noexcept {
   for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {
     delay.reset();
   }
+  for (mixing::AlignmentDelay& delay : bus_edge_delays_) {
+    delay.reset();
+  }
+  for (mixing::AlignmentDelay& delay : key_edge_delays_) {
+    delay.reset();
+  }
   master_pdc_delay_.reset();
 }
 
@@ -639,6 +768,12 @@ uint64_t TrackMixerRuntime::pdc_storage_generation() const noexcept {
     total += delay.storage_generation();
   }
   for (const mixing::AlignmentDelay& delay : bus_pdc_delays_) {
+    total += delay.storage_generation();
+  }
+  for (const mixing::AlignmentDelay& delay : bus_edge_delays_) {
+    total += delay.storage_generation();
+  }
+  for (const mixing::AlignmentDelay& delay : key_edge_delays_) {
     total += delay.storage_generation();
   }
   return total;
@@ -680,8 +815,130 @@ bool TrackMixerRuntime::bus_config_valid(const std::vector<TrackBusConfig>& buse
     for (size_t j = i + 1; j < buses.size(); ++j) {
       if (buses[i].bus_id == buses[j].bus_id) return false;
     }
+    // Same value rules as a lane send; targets are checked by validate_bus_graph.
+    const std::vector<TrackLaneConfig::Send>& sends = buses[i].sends;
+    if (sends.size() > mixing::ChannelStrip::kMaxSends) return false;
+    for (size_t send_index = 0; send_index < sends.size(); ++send_index) {
+      const TrackLaneConfig::Send& send = sends[send_index];
+      if (send.bus_id == 0 || !std::isfinite(send.level_db) || send.level_db < kFloorDb ||
+          send.level_db > kMaxGainDb) {
+        return false;
+      }
+      for (size_t other = send_index + 1; other < sends.size(); ++other) {
+        if (send.bus_id == sends[other].bus_id) return false;
+      }
+    }
   }
   return true;
+}
+
+bool TrackMixerRuntime::validate_bus_graph(const std::vector<TrackBusConfig>& buses,
+                                           const KeyEdge* key_edges, size_t key_edge_count,
+                                           std::array<size_t, kMaxBusLanes>* order) noexcept {
+  const size_t count = buses.size();
+  if (count > kMaxBusLanes || order == nullptr) return false;
+  const auto index_of = [&buses](uint32_t bus_id) -> int {
+    for (size_t i = 0; i < buses.size(); ++i) {
+      if (buses[i].bus_id == bus_id) return static_cast<int>(i);
+    }
+    return -1;
+  };
+  std::array<std::array<int, kMaxBusLanes>, kMaxBusLanes> edges{};
+  std::array<int, kMaxBusLanes> indegree{};
+  const auto add_edge = [&](int from, int to) {
+    if (from < 0 || to < 0 || from == to) return false;
+    ++edges[static_cast<size_t>(from)][static_cast<size_t>(to)];
+    ++indegree[static_cast<size_t>(to)];
+    return true;
+  };
+  for (size_t i = 0; i < count; ++i) {
+    const int from = static_cast<int>(i);
+    if (buses[i].output_bus_id != 0 && !add_edge(from, index_of(buses[i].output_bus_id))) {
+      return false;
+    }
+    for (const TrackLaneConfig::Send& send : buses[i].sends) {
+      if (!add_edge(from, index_of(send.bus_id))) return false;
+    }
+  }
+  for (size_t i = 0; i < key_edge_count; ++i) {
+    if (!add_edge(index_of(key_edges[i].source_bus), index_of(key_edges[i].target_bus))) {
+      return false;
+    }
+  }
+  std::array<bool, kMaxBusLanes> placed{};
+  for (size_t position = 0; position < count; ++position) {
+    size_t next = count;
+    for (size_t i = 0; i < count && next == count; ++i) {
+      if (!placed[i] && indegree[i] == 0) next = i;
+    }
+    if (next == count) return false;
+    placed[next] = true;
+    (*order)[position] = next;
+    for (size_t j = 0; j < count; ++j) indegree[j] -= edges[next][j];
+  }
+  return true;
+}
+
+size_t TrackMixerRuntime::collect_key_edges(std::array<KeyEdge, kMaxSidechainBindings>& out,
+                                            size_t skip) const noexcept {
+  size_t edges = 0;
+  const size_t count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < count; ++i) {
+    const SidechainBinding& binding = sidechain_bindings_[i];
+    if (i == skip ||
+        binding.target_kind.load(std::memory_order_relaxed) !=
+            static_cast<uint8_t>(SidechainTargetKind::Bus) ||
+        binding.source_kind.load(std::memory_order_relaxed) !=
+            static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+      continue;
+    }
+    out[edges++] = KeyEdge{binding.source_id.load(std::memory_order_relaxed),
+                           binding.target_id.load(std::memory_order_relaxed)};
+  }
+  return edges;
+}
+
+void TrackMixerRuntime::build_routes(const std::vector<TrackBusConfig>& buses,
+                                     const std::array<bool, kMaxSidechainBindings>& skip,
+                                     std::array<BusRoute, kMaxBusLanes>* routes) const noexcept {
+  const auto index_of = [&buses](uint32_t bus_id) -> int {
+    if (bus_id == 0) return -1;
+    for (size_t i = 0; i < buses.size(); ++i) {
+      if (buses[i].bus_id == bus_id) return static_cast<int>(i);
+    }
+    return -1;
+  };
+  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  *routes = {};
+  for (size_t bus_index = 0; bus_index < buses.size(); ++bus_index) {
+    const TrackBusConfig& config = buses[bus_index];
+    BusRoute& route = (*routes)[bus_index];
+    route.output_index = index_of(config.output_bus_id);
+    route.send_count = config.sends.size();
+    for (size_t send_index = 0; send_index < route.send_count; ++send_index) {
+      route.send_index[send_index] = index_of(config.sends[send_index].bus_id);
+      route.any_pre_send =
+          route.any_pre_send || config.sends[send_index].timing == mixing::SendTiming::PreFader;
+    }
+    for (size_t i = 0; i < binding_count; ++i) {
+      const SidechainBinding& binding = sidechain_bindings_[i];
+      route.key_source =
+          route.key_source || (!skip[i] &&
+                               binding.source_kind.load(std::memory_order_relaxed) ==
+                                   static_cast<uint8_t>(SidechainSourceKind::Bus) &&
+                               binding.source_id.load(std::memory_order_relaxed) == config.bus_id);
+    }
+  }
+}
+
+void TrackMixerRuntime::refresh_bus_graph() noexcept {
+  std::array<KeyEdge, kMaxSidechainBindings> edges{};
+  const size_t edge_count = collect_key_edges(edges, kMaxSidechainBindings);
+  std::array<size_t, kMaxBusLanes> order{};
+  // Every writer validated this state first, so the order always resolves.
+  if (!validate_bus_graph(bus_configs_, edges.data(), edge_count, &order)) return;
+  bus_order_ = order;
+  build_routes(bus_configs_, {}, &bus_routes_);
 }
 
 mixing::ChannelStrip* TrackMixerRuntime::owned_strip_for(uint32_t track_id) noexcept {
@@ -850,6 +1107,25 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
 }
 
 bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {
+  PdcPlan plan;
+  if (!plan_pdc(lanes, current_bus_graph_view(), &plan)) return false;
+  return apply_pdc(plan);
+}
+
+TrackMixerRuntime::BusGraphView TrackMixerRuntime::current_bus_graph_view() const noexcept {
+  BusGraphView view;
+  view.buses = &bus_configs_;
+  view.order = bus_order_;
+  view.routes = bus_routes_;
+  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+    const mixing::FxBus* bus = bus_states_[bus_index].bus.get();
+    view.latency_q8[bus_index] = bus != nullptr ? bus->latency_samples_q8() : 0;
+  }
+  return view;
+}
+
+bool TrackMixerRuntime::plan_pdc(const std::vector<TrackLaneConfig>& lanes,
+                                 const BusGraphView& view, PdcPlan* plan) const noexcept {
   // Lane stage: the widest strip latency. Every lane leaves process_lane_strip
   // at this offset, and every path the lane's audio then takes is tapped from
   // there -- the direct master sum, the output-bus routing and the post-fader
@@ -863,59 +1139,135 @@ bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& l
       max_strip_q8 = std::max(max_strip_q8, strip->latency_samples_q8());
     }
   }
-
-  // Bus stage: the widest bus insert-chain latency. A bus insert with lookahead
-  // (a limiter, a multiband compressor) otherwise puts the whole parallel path
-  // that many samples behind the dry lanes it is summed with.
-  int max_bus_q8 = 0;
-  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    const mixing::FxBus* bus = bus_states_[bus_index].bus.get();
-    if (bus != nullptr) {
-      max_bus_q8 = std::max(max_bus_q8, bus->latency_samples_q8());
-    }
+  *plan = PdcPlan{};
+  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+    const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
+    plan->lane_q8[lane_index] = max_strip_q8 - (strip != nullptr ? strip->latency_samples_q8() : 0);
+    // Pre-fader send stage: the same target offset, measured from the earlier
+    // tap. A strip's pre-fader latency is what it has accrued by the time the
+    // pre tap is taken (channel delay + pre inserts), so this bank carries the
+    // rest of the widest strip latency -- including the strip's own
+    // post-insert chain, which the lane's output passes through and the pre
+    // tap does not.
+    plan->lane_pre_q8[lane_index] =
+        max_strip_q8 - (strip != nullptr ? strip->pre_fader_latency_samples_q8() : 0);
   }
 
+  // Bus stage along the order: in(b) is the latest arrival over the lane stage
+  // and every incoming edge (output, send, bus-sourced key), out(b) adds the
+  // bus's own chain latency, and every edge carries the difference.
+  const std::vector<TrackBusConfig>& buses = *view.buses;
+  const auto index_of = [&buses](uint32_t bus_id) -> int {
+    for (size_t i = 0; i < buses.size(); ++i) {
+      if (buses[i].bus_id == bus_id) return static_cast<int>(i);
+    }
+    return -1;
+  };
+  const size_t bus_count = buses.size();
+  std::array<int, kMaxBusLanes> bus_in{};
+  std::array<int, kMaxBusLanes> bus_out{};
+  bus_in.fill(max_strip_q8);
+  int master_in = max_strip_q8;
+  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  const auto live_bus_key = [&](size_t i, uint32_t source_bus) {
+    const SidechainBinding& binding = sidechain_bindings_[i];
+    return !view.skip_binding[i] &&
+           binding.source_kind.load(std::memory_order_relaxed) ==
+               static_cast<uint8_t>(SidechainSourceKind::Bus) &&
+           binding.source_id.load(std::memory_order_relaxed) == source_bus;
+  };
+  for (size_t order_index = 0; order_index < bus_count; ++order_index) {
+    const size_t bus_index = view.order[order_index];
+    bus_out[bus_index] = bus_in[bus_index] + view.latency_q8[bus_index];
+    const int out = bus_out[bus_index];
+    const BusRoute& route = view.routes[bus_index];
+    int& output_in =
+        route.output_index < 0 ? master_in : bus_in[static_cast<size_t>(route.output_index)];
+    output_in = std::max(output_in, out);
+    for (size_t send_index = 0; send_index < route.send_count; ++send_index) {
+      if (route.send_index[send_index] < 0) continue;
+      int& in = bus_in[static_cast<size_t>(route.send_index[send_index])];
+      in = std::max(in, out);
+    }
+    for (size_t i = 0; i < binding_count; ++i) {
+      if (!live_bus_key(i, buses[bus_index].bus_id)) continue;
+      const SidechainBinding& binding = sidechain_bindings_[i];
+      const auto target_kind = binding.target_kind.load(std::memory_order_relaxed);
+      if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Master)) {
+        master_in = std::max(master_in, out);
+      } else if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
+        const int target = index_of(binding.target_id.load(std::memory_order_relaxed));
+        if (target >= 0) {
+          int& in = bus_in[static_cast<size_t>(target)];
+          in = std::max(in, out);
+        }
+      }
+    }
+  }
+  const auto input_of = [&](int index) {
+    return index < 0 ? master_in : bus_in[static_cast<size_t>(index)];
+  };
+  for (size_t bus_index = 0; bus_index < bus_count; ++bus_index) {
+    plan->bus_in_q8[bus_index] = bus_in[bus_index] - max_strip_q8;
+    const BusRoute& route = view.routes[bus_index];
+    plan->edge_q8[bus_index * kBusEdgesPerBus] = input_of(route.output_index) - bus_out[bus_index];
+    for (size_t send_index = 0; send_index < route.send_count; ++send_index) {
+      if (route.send_index[send_index] < 0) continue;
+      plan->edge_q8[bus_index * kBusEdgesPerBus + 1 + send_index] =
+          input_of(route.send_index[send_index]) - bus_out[bus_index];
+    }
+  }
+  plan->master_q8 = master_in - max_strip_q8;
+  // Key edges: in(target) - L from a track, in(target) - out(source) from a bus.
+  for (size_t i = 0; i < binding_count; ++i) {
+    if (view.skip_binding[i]) continue;
+    const SidechainBinding& binding = sidechain_bindings_[i];
+    const auto target_kind = binding.target_kind.load(std::memory_order_relaxed);
+    if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Lane)) continue;
+    int target = -1;
+    if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
+      target = index_of(binding.target_id.load(std::memory_order_relaxed));
+      if (target < 0) continue;
+    }
+    int source_out = max_strip_q8;
+    if (binding.source_kind.load(std::memory_order_relaxed) ==
+        static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+      const int source = index_of(binding.source_id.load(std::memory_order_relaxed));
+      if (source < 0) continue;
+      source_out = bus_out[static_cast<size_t>(source)];
+    }
+    plan->key_q8[binding.key_slot.load(std::memory_order_relaxed)] = input_of(target) - source_out;
+  }
+  // What the engine advertises to the host: the master input's arrival.
+  plan->latency_q8 = master_in;
+
+  // A delay line past its ceiling would clamp silently and misalign the mix,
+  // so such a configuration is refused instead.
+  constexpr int kCapQ8 = mixing::kMaxAlignmentDelaySamples << 8;
+  const auto within = [](const auto& values) {
+    return std::all_of(values.begin(), values.end(), [](int v) { return v <= kCapQ8; });
+  };
+  return within(plan->lane_q8) && within(plan->lane_pre_q8) && within(plan->bus_in_q8) &&
+         within(plan->edge_q8) && within(plan->key_q8) && plan->master_q8 <= kCapQ8;
+}
+
+bool TrackMixerRuntime::apply_pdc(const PdcPlan& plan) noexcept {
   bool ok = true;
-  for (size_t lane_index = 0; lane_index < lane_pdc_delays_.size(); ++lane_index) {
-    int delay_q8 = 0;
-    if (lane_index < lanes.size()) {
-      const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
-      const int lane_latency_q8 = strip != nullptr ? strip->latency_samples_q8() : 0;
-      delay_q8 = max_strip_q8 - lane_latency_q8;
-    }
-    ok = lane_pdc_delays_[lane_index].try_set_delay_samples_q8(delay_q8) && ok;
+  for (size_t i = 0; i < lane_pdc_delays_.size(); ++i) {
+    ok = lane_pdc_delays_[i].try_set_delay_samples_q8(plan.lane_q8[i]) && ok;
+    ok = lane_pre_send_pdc_delays_[i].try_set_delay_samples_q8(plan.lane_pre_q8[i]) && ok;
   }
-
-  // Pre-fader send stage: the same target offset, measured from the earlier tap.
-  // A strip's pre-fader latency is what it has accrued by the time the pre tap
-  // is taken (channel delay + pre inserts), so this bank carries the rest of the
-  // widest strip latency -- including the strip's own post-insert chain, which
-  // the lane's output passes through and the pre tap does not.
-  for (size_t lane_index = 0; lane_index < lane_pre_send_pdc_delays_.size(); ++lane_index) {
-    int delay_q8 = 0;
-    if (lane_index < lanes.size()) {
-      const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
-      const int tap_latency_q8 = strip != nullptr ? strip->pre_fader_latency_samples_q8() : 0;
-      delay_q8 = max_strip_q8 - tap_latency_q8;
-    }
-    ok = lane_pre_send_pdc_delays_[lane_index].try_set_delay_samples_q8(delay_q8) && ok;
+  for (size_t i = 0; i < bus_pdc_delays_.size(); ++i) {
+    ok = bus_pdc_delays_[i].try_set_delay_samples_q8(plan.bus_in_q8[i]) && ok;
   }
-
-  for (size_t bus_index = 0; bus_index < bus_pdc_delays_.size(); ++bus_index) {
-    int delay_q8 = 0;
-    if (bus_index < bus_configs_.size()) {
-      const mixing::FxBus* bus = bus_states_[bus_index].bus.get();
-      const int bus_latency_q8 = bus != nullptr ? bus->latency_samples_q8() : 0;
-      delay_q8 = max_bus_q8 - bus_latency_q8;
-    }
-    ok = bus_pdc_delays_[bus_index].try_set_delay_samples_q8(delay_q8) && ok;
+  for (size_t i = 0; i < bus_edge_delays_.size(); ++i) {
+    ok = bus_edge_delays_[i].try_set_delay_samples_q8(plan.edge_q8[i]) && ok;
   }
-  ok = master_pdc_delay_.try_set_delay_samples_q8(max_bus_q8) && ok;
-
-  // The end-to-end maximum, which is what the engine advertises to the host:
-  // a lane's strip and, for every path that reaches the master through a bus,
-  // that bus's chain on top of it.
-  latency_samples_q8_ = max_strip_q8 + max_bus_q8;
+  for (size_t i = 0; i < key_edge_delays_.size(); ++i) {
+    ok = key_edge_delays_[i].try_set_delay_samples_q8(plan.key_q8[i]) && ok;
+  }
+  ok = master_pdc_delay_.try_set_delay_samples_q8(plan.master_q8) && ok;
+  latency_samples_q8_ = plan.latency_q8;
   return ok;
 }
 

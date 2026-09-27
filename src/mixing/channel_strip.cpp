@@ -452,7 +452,8 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   }
 
   fader_.process(channels, num_channels, num_samples);
-  panner_.process(channels, num_channels, num_samples);
+  // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
+  if (num_channels <= 2) panner_.process(channels, num_channels, num_samples);
 
   if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(channels, num_channels, num_samples);
@@ -462,7 +463,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   const float post_gain_reduction_db =
       std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
-  width_.process(channels, num_channels, num_samples);
+  if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
 
   if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) {
@@ -510,14 +511,15 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   copy_to_taps(segment, pre_tap_, num_channels, num_samples, tap_offset);
 
   fader_.process(segment, num_channels, num_samples);
-  panner_.process(segment, num_channels, num_samples);
+  // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
+  if (num_channels <= 2) panner_.process(segment, num_channels, num_samples);
 
   if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
     eq_.process(segment, num_channels, num_samples);
   }
   process_insert_chain(post_inserts_, post_insert_spo_, segment, num_channels, num_samples,
                        pre_inserts_.size(), start);
-  width_.process(segment, num_channels, num_samples);
+  if (num_channels <= 2) width_.process(segment, num_channels, num_samples);
 
   if (num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) {

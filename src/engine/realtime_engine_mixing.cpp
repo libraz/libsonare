@@ -93,6 +93,10 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
     return false;
   }
   const bool bound = mixing_runtime_.bind(strip);
+  // Master keys address the owned strip's inserts; another strip has none of them.
+  if (bound && strip != owned_master_strip_.get()) {
+    track_mixer_runtime_.set_master_insert_count(0);
+  }
   if (bound && max_block_size_ > 0) {
     // Re-prepare so the freshly bound strip sees the engine's sample rate and
     // block size. bind() runs on the control thread, so allocation is allowed.
@@ -133,6 +137,8 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   master_strip_spec_ = strip_spec;
   const bool bound = bind_mixing_strip(owned_master_strip_.get());
   if (bound) {
+    // Keys stay on their insert index; an index the new chain lacks is dropped.
+    track_mixer_runtime_.set_master_insert_count(master_strip_spec_.inserts.size());
     set_mixing_enabled(true);
   }
   return bound;
@@ -148,6 +154,24 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 
 bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
   const bool ok = track_mixer_runtime_.set_buses(std::move(buses));
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
+                                       SidechainSourceKind kind, uint32_t source_id) {
+  const bool ok = track_mixer_runtime_.set_bus_sidechain(bus_id, insert_index, kind, source_id);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
+                                          uint32_t source_id) {
+  const bool ok = track_mixer_runtime_.set_master_sidechain(insert_index, kind, source_id);
   if (ok) {
     update_reported_graph_latency();
   }

@@ -567,6 +567,17 @@ class RealtimeEngine : private ClipPageRequestSink {
                           uint32_t source_track_id) noexcept {
     return track_mixer_runtime_.set_lane_sidechain(track_id, insert_index, source_track_id);
   }
+  /// Keys insert @p insert_index of bus @p bus_id (its scene `inserts` order) from
+  /// a track or another bus (see TrackMixerRuntime::set_bus_sidechain).
+  /// source_id 0 clears. CONTROL thread only, not concurrent with process():
+  /// a bus source reorders the bus graph and re-derives its delays.
+  bool set_bus_sidechain(uint32_t bus_id, unsigned int insert_index, SidechainSourceKind kind,
+                         uint32_t source_id);
+  /// Keys insert @p insert_index of the owned master strip (the combined
+  /// pre-then-post order the other master insert setters address) from a track
+  /// or a bus. source_id 0 clears. CONTROL thread only, like set_bus_sidechain.
+  bool set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
+                            uint32_t source_id);
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);

@@ -17,6 +17,7 @@
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"
 #include "mixing/panner.h"
+#include "mixing/send.h"
 #include "mixing/stereo_width.h"
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
@@ -94,10 +95,25 @@ struct TrackBusConfig {
   uint32_t bus_id = 0;
   float gain_db = 0.0f;
   /// Channel layout of this bus. A surround layout (5.1/7.1) makes this a
-  /// surround group bus: lanes routed to it are surround-panned, its insert
+  /// surround group bus: lanes routed to it are surround-panned and its insert
   /// chain runs at the bus width (StereoPairOnly inserts see only the front
-  /// pair), and it sums into the master plane-by-plane.
+  /// pair). Its output, sends and key follow the width rule: a destination of
+  /// equal width takes it plane by plane, a wider one on the same-index planes,
+  /// a narrower one (the master included) through mixing::downmix.
   ChannelLayout layout = ChannelLayout::Stereo;
+  /// Bus this bus's post-gain output sums into instead of the master mix; 0
+  /// keeps it on the master. Must reference another declared bus.
+  uint32_t output_bus_id = 0;
+  /// Sends to other buses. A pre-fader send taps the bus before gain_db, a
+  /// post-fader one after it. Same shape and semantics as a lane send.
+  std::vector<TrackLaneConfig::Send> sends{};
+};
+
+/// Where a sidechain key is taken from: a track lane's post-strip signal, or a
+/// bus's signal after its width stage and before its gain_db.
+enum class SidechainSourceKind : uint8_t {
+  Track = 0,
+  Bus = 1,
 };
 
 class TrackMixerRuntime final : public rt::ProcessorBase {
@@ -153,6 +169,27 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// lane republishes. Returns false when the binding table is full.
   bool set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                           uint32_t source_track_id) noexcept;
+  /// Keys insert @p insert_index of bus @p bus_id (its scene `inserts` order)
+  /// from a track lane or another bus. source_id 0 removes the binding. Refuses
+  /// an unknown bus / source, an out-of-range insert, a self key, a key that
+  /// closes a cycle with the bus outputs and sends, and a full table; a refusal
+  /// changes nothing. CONTROL thread only, not concurrent with process(): a bus
+  /// source reorders the buses and re-derives the edge delays.
+  bool set_bus_sidechain(uint32_t bus_id, unsigned int insert_index, SidechainSourceKind kind,
+                         uint32_t source_id) noexcept;
+  /// Keys insert @p insert_index of the master strip. Same contract as
+  /// set_bus_sidechain; the master is processed after every bus, so any
+  /// declared source is acyclic. The index must be below the count published
+  /// by set_master_insert_count().
+  bool set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
+                            uint32_t source_id) noexcept;
+  /// CONTROL thread: records how many inserts the master strip has, dropping
+  /// master bindings that fall outside it. 0 when no owned master strip is bound.
+  void set_master_insert_count(size_t count) noexcept;
+  /// AUDIO thread: hands this block's master keys (aligned to the master input)
+  /// to @p strip's inserts. A key the mixer did not compute this block is left
+  /// unassigned; a shorter computed key is zero-padded.
+  void deliver_master_sidechains(mixing::ChannelStrip* strip, int num_samples) noexcept;
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
@@ -435,12 +472,35 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     mixing::ChannelStrip* strip = nullptr;
   };
 
+  enum class SidechainTargetKind : uint8_t { Lane = 0, Bus = 1, Master = 2 };
+  // One table for every keyed insert. target_id is the lane's track id or the
+  // bus id (0 for the master); source_id a track id or a bus id per
+  // source_kind. key_slot indexes the per-binding key delay line and buffer
+  // (bus and master targets only) and travels with the binding when the table
+  // is compacted.
   struct SidechainBinding {
-    std::atomic<uint32_t> track_id{0};
+    std::atomic<uint32_t> target_id{0};
     std::atomic<unsigned int> insert_index{0};
-    std::atomic<uint32_t> source_track_id{0};
+    std::atomic<uint32_t> source_id{0};
+    std::atomic<uint8_t> target_kind{0};
+    std::atomic<uint8_t> source_kind{0};
+    std::atomic<uint8_t> key_slot{0};
   };
-  static constexpr size_t kMaxSidechainBindings = 16;
+  static constexpr size_t kMaxSidechainBindings = 32;
+  // One bus edge towards another bus: its output (slot 0) or a send (1 + index).
+  static constexpr size_t kBusEdgesPerBus = 1 + mixing::ChannelStrip::kMaxSends;
+  // Resolved routing of one configured bus, rebuilt on the control thread.
+  struct BusRoute {
+    int output_index = -1;  // -1 = master
+    std::array<int, mixing::ChannelStrip::kMaxSends> send_index{};
+    size_t send_count = 0;
+    bool any_pre_send = false;
+    bool key_source = false;
+  };
+  struct KeyEdge {
+    uint32_t source_bus = 0;
+    uint32_t target_bus = 0;
+  };
 
   // One automated lane/bus insert parameter. A target id is decoded by the engine
   // router into a (selector, insert, param) triple; the slot's one-pole smoother
@@ -473,6 +533,81 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   bool lane_config_valid(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   bool bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept;
+  // Topologically orders @p buses over their output, send and bus-to-bus key
+  // edges (Kahn, lowest declared index first, so an edge-free list keeps its
+  // declaration order). False on an undeclared or self-referencing target or a
+  // cycle.
+  static bool validate_bus_graph(const std::vector<TrackBusConfig>& buses, const KeyEdge* key_edges,
+                                 size_t key_edge_count,
+                                 std::array<size_t, kMaxBusLanes>* order) noexcept;
+  // Bus-sourced edges between two buses in the current binding table, skipping
+  // entry @p skip.
+  size_t collect_key_edges(std::array<KeyEdge, kMaxSidechainBindings>& out,
+                           size_t skip) const noexcept;
+  // Re-derives bus_order_ and bus_routes_ from bus_configs_ and the binding
+  // table. Control thread; the current state is always valid here.
+  void refresh_bus_graph() noexcept;
+  // Routes of @p buses against the binding table, skipping flagged bindings.
+  void build_routes(const std::vector<TrackBusConfig>& buses,
+                    const std::array<bool, kMaxSidechainBindings>& skip,
+                    std::array<BusRoute, kMaxBusLanes>* routes) const noexcept;
+  // A bus graph PDC can be planned against: the live one, or a candidate a
+  // setter checks before committing.
+  struct BusGraphView {
+    const std::vector<TrackBusConfig>* buses = nullptr;
+    std::array<size_t, kMaxBusLanes> order{};
+    std::array<BusRoute, kMaxBusLanes> routes{};
+    std::array<int, kMaxBusLanes> latency_q8{};
+    std::array<bool, kMaxSidechainBindings> skip_binding{};
+  };
+  // Every alignment delay (Q8) the mixer applies, indexed like the banks.
+  struct PdcPlan {
+    std::array<int, kMaxTrackLanes> lane_q8{};
+    std::array<int, kMaxTrackLanes> lane_pre_q8{};
+    std::array<int, kMaxBusLanes> bus_in_q8{};
+    std::array<int, kMaxBusLanes * kBusEdgesPerBus> edge_q8{};
+    std::array<int, kMaxSidechainBindings> key_q8{};
+    int master_q8 = 0;
+    int latency_q8 = 0;
+  };
+  BusGraphView current_bus_graph_view() const noexcept;
+  // Pure: derives every delay for @p view. False when one exceeds
+  // mixing::kMaxAlignmentDelaySamples, which the caller refuses.
+  bool plan_pdc(const std::vector<TrackLaneConfig>& lanes, const BusGraphView& view,
+                PdcPlan* plan) const noexcept;
+  bool apply_pdc(const PdcPlan& plan) noexcept;
+  // Removes binding @p index (swap with the last entry). Control thread.
+  void remove_sidechain_binding(size_t index) noexcept;
+  // Adds or replaces the bus/master binding (kind, target, insert).
+  bool store_keyed_binding(SidechainTargetKind target_kind, uint32_t target_id,
+                           unsigned int insert_index, SidechainSourceKind kind,
+                           uint32_t source_id) noexcept;
+  // store_keyed_binding plus the graph and PDC refresh; restores the previous
+  // binding when the resulting alignment is refused.
+  bool commit_keyed_binding(SidechainTargetKind target_kind, uint32_t target_id,
+                            unsigned int insert_index, SidechainSourceKind kind,
+                            uint32_t source_id) noexcept;
+  bool sidechain_source_declared(SidechainSourceKind kind, uint32_t source_id) const noexcept;
+  // Fills @p planes with the aligned key of binding @p binding_index for a
+  // bus/master target; returns its channel count, or 0 when there is none.
+  // @p into_slot forces the key into the binding's own buffer even when it
+  // needs no delay, so it outlives the block (master keys).
+  int build_keyed_input(size_t binding_index, int lane_channels, int num_samples,
+                        std::array<const float*, kMaxLaneChannels>& planes,
+                        bool into_slot) noexcept;
+  int find_sidechain_binding(SidechainTargetKind target_kind, uint32_t target_id,
+                             unsigned int insert_index) const noexcept;
+  void deliver_bus_sidechains(size_t bus_index, int lane_channels, int num_samples) noexcept;
+  // Adds @p source (from_channels wide) into @p dest (to_channels wide) by the
+  // width rule: plane by plane when equal, same-index planes when the
+  // destination is wider, mixing::downmix when it is narrower.
+  void add_with_width_rule(const float* const* source, int from_channels, float* const* dest,
+                           int to_channels, int num_samples) noexcept;
+  float* bus_edge_channel(int channel) noexcept;
+  float* bus_pre_tap_channel(int channel) noexcept;
+  float* bus_fold_channel(int channel) noexcept;
+  float* bus_key_channel(size_t bus_index, int channel) noexcept;
+  float* keyed_input_channel(size_t slot, int channel) noexcept;
   mixing::ChannelStrip* owned_strip_for(uint32_t track_id) noexcept;
   mixing::ChannelStrip* ensure_owned_strip_for(uint32_t track_id);
   // Looks a track's strip up in the control-thread binding table. Returns the
@@ -510,8 +645,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool any_lane_solo(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   void prepare_lanes_from_snapshot(const std::vector<TrackLaneConfig>& lanes) noexcept;
   /// Re-derives every PDC alignment bank (lane stage and bus stage) and the
-  /// runtime's advertised latency. Returns false when a bank could not grow its
-  /// storage, which is the only failure mode; `noexcept` so the `noexcept bool`
+  /// runtime's advertised latency. Returns false, changing nothing, when a
+  /// delay would exceed mixing::kMaxAlignmentDelaySamples, and false when a
+  /// bank could not grow its storage; `noexcept` so the `noexcept bool`
   /// control-thread setters that call it can report that instead of letting an
   /// allocation failure escape and terminate the process.
   bool recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept;
@@ -545,10 +681,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void advance_lane_gain(size_t lane_index, int num_samples, bool any_solo) noexcept;
   void mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
                       int64_t timeline_sample) noexcept;
-  // Processes every configured bus at its own declared width (FxBus insert
-  // chain, gain, meter/scope) and sums it into the master mix, plane-by-plane,
-  // up to min(bus_width, master_channels). A surround group bus thus widens the
-  // master; a stereo bus into a surround master reaches only the front pair.
+  // Processes every configured bus at its own declared width in bus_order_
+  // (keys, FxBus insert chain, gain, meter/scope), then feeds its output (the
+  // master or another bus) and its sends along aligned edges by the width
+  // rule: a wider destination takes the same-index planes, a narrower one a
+  // mixing::downmix fold. Finally prepares the master keys.
   void process_buses(float* const* channels, int master_channels, int num_samples,
                      MeterTelemetryTap* meter_tap, int64_t render_frame,
                      ScopeTelemetryTap* scope_tap) noexcept;
@@ -606,8 +743,33 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // bus latency. Both rest at zero and short-circuit whenever no bus insert
   // chain reports latency, so a project without a latent bus insert is
   // untouched.
+  // Bus input stage: in(b) - L, applied before the bus renders, where L is the
+  // lane-stage alignment and in(b) the latest arrival over the bus's incoming
+  // edges (outputs, sends and bus-sourced keys). Rests at zero on a flat bus list.
   std::array<mixing::AlignmentDelay, kMaxBusLanes> bus_pdc_delays_;
+  // Per-edge alignment, in(destination) - out(source), one bank per bus edge
+  // (output and each send). An edge re-times only its own path, so one bus
+  // feeding destinations of different depth stays aligned at each.
+  std::array<mixing::AlignmentDelay, kMaxBusLanes * kBusEdgesPerBus> bus_edge_delays_;
+  // Per-binding key alignment for bus and master targets, indexed by key_slot.
+  std::array<mixing::AlignmentDelay, kMaxSidechainBindings> key_edge_delays_;
   mixing::AlignmentDelay master_pdc_delay_;
+  // Topological bus processing order and resolved routes (control-written).
+  std::array<size_t, kMaxBusLanes> bus_order_{};
+  std::array<BusRoute, kMaxBusLanes> bus_routes_{};
+  std::array<std::array<std::unique_ptr<mixing::SendProcessor>, mixing::ChannelStrip::kMaxSends>,
+             kMaxBusLanes>
+      bus_sends_{};
+  // Edge scratch, pre-fader tap and downmix fold, each kMaxBusChannels planes.
+  std::vector<float> bus_edge_scratch_;
+  // Bus key snapshots (2 planes per bus) and per-binding key buffers (2 planes per slot).
+  std::vector<float> bus_key_scratch_;
+  std::array<int, kMaxBusLanes> bus_key_frames_{};
+  std::array<int, kMaxBusLanes> bus_key_channels_{};
+  std::vector<float> keyed_input_scratch_;
+  std::array<int, kMaxSidechainBindings> master_key_frames_{};
+  std::array<int, kMaxSidechainBindings> master_key_channels_{};
+  size_t master_insert_count_ = 0;
   std::array<bool, kMaxTrackLanes> source_mix_lane_active_{};
   std::array<BusState, kMaxBusLanes> bus_states_{};
   float* const* monitor_bus_ = nullptr;

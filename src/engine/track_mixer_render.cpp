@@ -5,6 +5,7 @@
 #include "engine/scope_telemetry.h"
 #include "engine/track_mixer.h"
 #include "engine/track_mixer_internal.h"
+#include "mixing/downmix.h"
 
 namespace sonare::engine {
 
@@ -410,11 +411,10 @@ void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int 
 void TrackMixerRuntime::process_buses(float* const* channels, int master_channels, int num_samples,
                                       MeterTelemetryTap* meter_tap, int64_t render_frame,
                                       ScopeTelemetryTap* scope_tap) noexcept {
-  // Bus-stage PDC, first half: everything already summed into the master mix
-  // (lane dry paths, and clips on tracks with no lane) reached it without
-  // passing through any bus insert chain, so it is delayed by the widest bus
-  // latency. The bank rests at zero -- and process() short-circuits -- whenever
-  // no bus carries latency, which leaves a project without a latent bus insert
+  // Master input stage: everything already summed into the master mix (lane dry
+  // paths, and clips on tracks with no lane) is delayed by in(master) - L. The
+  // bank rests at zero -- and process() short-circuits -- whenever no bus path
+  // carries latency, which leaves a project without a latent bus insert
   // byte-identical.
   if (master_pdc_delay_.delay_samples_q8() != 0) {
     for (int ch = 0; ch < master_channels; ++ch) {
@@ -422,7 +422,22 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
     }
     master_pdc_delay_.process(lane_channel_ptrs_.data(), master_channels, num_samples);
   }
-  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+  const int lane_channels = std::min(master_channels, kMaxLaneChannels);
+  const size_t bus_count = bus_configs_.size();
+  bus_key_frames_.fill(0);
+  // First phase: re-time every bus input the lanes filled to in(b) - L, before
+  // any bus adds into another.
+  for (size_t bus_index = 0; bus_index < bus_count; ++bus_index) {
+    if (bus_pdc_delays_[bus_index].delay_samples_q8() == 0) continue;
+    std::array<float*, kMaxBusChannels> planes{};
+    const int width = bus_render_channels(bus_index, master_channels);
+    for (int ch = 0; ch < width; ++ch) planes[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
+    bus_pdc_delays_[bus_index].process(planes.data(), width, num_samples);
+  }
+  // Second phase, in topological order: each bus renders, then feeds its
+  // output and sends along their own aligned edges.
+  for (size_t order_index = 0; order_index < bus_count; ++order_index) {
+    const size_t bus_index = bus_order_[order_index];
     BusState& bus = bus_states_[bus_index];
     if (bus.bus == nullptr) continue;
     // Each bus runs its insert chain and gain at its own declared width; a
@@ -432,6 +447,7 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
     for (int ch = 0; ch < bus_channels; ++ch) {
       lane_channel_ptrs_[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
     }
+    deliver_bus_sidechains(bus_index, lane_channels, num_samples);
     // Input trim (pre-insert), mirroring a strip. The smoother holds a linear
     // gain (like the strip's GainProcessor), so it rests at unity (1.0) and is
     // skipped there, leaving a never-trimmed bus bit-identical.
@@ -478,6 +494,38 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
         lane_channel_ptrs_[0] && lane_channel_ptrs_[1]) {
       bus.width.process(lane_channel_ptrs_.data(), 2, num_samples);
     }
+    const BusRoute& route = bus_routes_[bus_index];
+    std::array<const float*, kMaxBusChannels> post{};
+    for (int ch = 0; ch < bus_channels; ++ch)
+      post[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
+    // Pre-gain taps: pre-fader sends and this bus's sidechain key.
+    std::array<const float*, kMaxBusChannels> pre{};
+    if (route.any_pre_send) {
+      for (int ch = 0; ch < bus_channels; ++ch) {
+        float* dst = bus_pre_tap_channel(ch);
+        std::copy(post[static_cast<size_t>(ch)], post[static_cast<size_t>(ch)] + num_samples, dst);
+        pre[static_cast<size_t>(ch)] = dst;
+      }
+    }
+    if (route.key_source) {
+      std::array<float*, kMaxLaneChannels> key{};
+      for (int ch = 0; ch < kMaxLaneChannels; ++ch) {
+        key[static_cast<size_t>(ch)] = bus_key_channel(bus_index, ch);
+      }
+      int key_channels = std::min(bus_channels, kMaxLaneChannels);
+      if (is_surround_channel_count(bus_channels)) {
+        mixing::downmix(layout_from_channel_count(bus_channels), ChannelLayout::Stereo, post.data(),
+                        key.data(), static_cast<size_t>(num_samples));
+        key_channels = kMaxLaneChannels;
+      } else {
+        for (int ch = 0; ch < key_channels; ++ch) {
+          std::copy(post[static_cast<size_t>(ch)], post[static_cast<size_t>(ch)] + num_samples,
+                    key[static_cast<size_t>(ch)]);
+        }
+      }
+      bus_key_frames_[bus_index] = num_samples;
+      bus_key_channels_[bus_index] = key_channels;
+    }
     for (int i = 0; i < num_samples; ++i) {
       const float gain = bus.gain.process();
       for (int ch = 0; ch < bus_channels; ++ch) {
@@ -496,23 +544,110 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
       scope_tap->process(lane_channel_ptrs_.data(), std::min(bus_channels, kMaxLaneChannels),
                          num_samples, render_frame, bus_meter_target(bus_index));
     }
-    // Bus-stage PDC, second half: this bus carries (widest bus latency - its
-    // own), so its output lands on the master sum at the same instant as the
-    // delayed dry mix and as every other bus. Applied after metering so the bus
-    // meters keep reporting the bus's own output, and skipped entirely when the
-    // bank rests at zero.
-    bus_pdc_delays_[bus_index].process(lane_channel_ptrs_.data(), bus_channels, num_samples);
-    // Sum the bus into the master plane-by-plane, up to the planes both share.
-    const int sum_channels = std::min(bus_channels, master_channels);
-    for (int ch = 0; ch < sum_channels; ++ch) {
-      float* dst = channels[static_cast<size_t>(ch)];
-      const float* src = bus_channel(bus_index, ch);
-      if (!dst || !src) continue;
-      for (int i = 0; i < num_samples; ++i) {
-        dst[i] += src[i];
+    // Each edge re-times its own copy by in(destination) - out(this bus), then
+    // lands on the destination by the width rule. Applied after metering so the
+    // bus meters keep reporting the bus's own output.
+    const auto feed_edge = [&](size_t edge, const float* const* source, int destination,
+                               mixing::SendProcessor* send) noexcept {
+      float* const* dest = channels;
+      int dest_channels = master_channels;
+      std::array<float*, kMaxBusChannels> dest_planes{};
+      if (destination >= 0) {
+        const size_t dest_index = static_cast<size_t>(destination);
+        dest_channels = bus_render_channels(dest_index, master_channels);
+        for (int ch = 0; ch < dest_channels; ++ch) {
+          dest_planes[static_cast<size_t>(ch)] = bus_channel(dest_index, ch);
+        }
+        dest = dest_planes.data();
       }
+      mixing::AlignmentDelay& delay = bus_edge_delays_[bus_index * kBusEdgesPerBus + edge];
+      if (delay.delay_samples_q8() == 0 && send == nullptr) {
+        add_with_width_rule(source, bus_channels, dest, dest_channels, num_samples);
+        return;
+      }
+      std::array<float*, kMaxBusChannels> scratch{};
+      std::array<const float*, kMaxBusChannels> feed{};
+      for (int ch = 0; ch < bus_channels; ++ch) {
+        scratch[static_cast<size_t>(ch)] = bus_edge_channel(ch);
+        feed[static_cast<size_t>(ch)] = scratch[static_cast<size_t>(ch)];
+        std::copy(source[ch], source[ch] + num_samples, scratch[static_cast<size_t>(ch)]);
+      }
+      delay.process(scratch.data(), bus_channels, num_samples);
+      if (send != nullptr) send->process(scratch.data(), bus_channels, num_samples);
+      add_with_width_rule(feed.data(), bus_channels, dest, dest_channels, num_samples);
+    };
+    feed_edge(0, post.data(), route.output_index, nullptr);
+    const TrackBusConfig& config = bus_configs_[bus_index];
+    for (size_t send_index = 0; send_index < route.send_count; ++send_index) {
+      mixing::SendProcessor* send = bus_sends_[bus_index][send_index].get();
+      const int destination = route.send_index[send_index];
+      if (send == nullptr || destination < 0) continue;
+      const bool pre_fader = config.sends[send_index].timing == mixing::SendTiming::PreFader;
+      feed_edge(1 + send_index, pre_fader ? pre.data() : post.data(), destination, send);
     }
   }
+  // Master keys, aligned to the master input, for deliver_master_sidechains().
+  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_acquire);
+  for (size_t i = 0; i < binding_count; ++i) {
+    const SidechainBinding& binding = sidechain_bindings_[i];
+    if (binding.target_kind.load(std::memory_order_acquire) !=
+        static_cast<uint8_t>(SidechainTargetKind::Master)) {
+      continue;
+    }
+    const size_t slot = binding.key_slot.load(std::memory_order_acquire);
+    std::array<const float*, kMaxLaneChannels> planes{};
+    const int key_channels = build_keyed_input(i, lane_channels, num_samples, planes, true);
+    master_key_frames_[slot] = key_channels > 0 ? num_samples : 0;
+    master_key_channels_[slot] = key_channels;
+  }
+}
+
+void TrackMixerRuntime::add_with_width_rule(const float* const* source, int from_channels,
+                                            float* const* dest, int to_channels,
+                                            int num_samples) noexcept {
+  const auto standard = [](int count) {
+    return count == 1 || count == 2 || is_surround_channel_count(count);
+  };
+  if (from_channels > to_channels && standard(from_channels) && standard(to_channels)) {
+    std::array<float*, kMaxBusChannels> fold{};
+    for (int ch = 0; ch < to_channels; ++ch) fold[static_cast<size_t>(ch)] = bus_fold_channel(ch);
+    mixing::downmix(layout_from_channel_count(from_channels),
+                    layout_from_channel_count(to_channels), source, fold.data(),
+                    static_cast<size_t>(num_samples));
+    source = fold.data();
+  }
+  const int planes = std::min(from_channels, to_channels);
+  for (int ch = 0; ch < planes; ++ch) {
+    float* dst = dest[static_cast<size_t>(ch)];
+    const float* src = source[static_cast<size_t>(ch)];
+    if (!dst || !src) continue;
+    for (int i = 0; i < num_samples; ++i) {
+      dst[i] += src[i];
+    }
+  }
+}
+
+float* TrackMixerRuntime::bus_edge_channel(int channel) noexcept {
+  return bus_edge_scratch_.data() +
+         static_cast<size_t>(channel) * static_cast<size_t>(max_block_size_);
+}
+
+float* TrackMixerRuntime::bus_pre_tap_channel(int channel) noexcept {
+  return bus_edge_channel(kMaxBusChannels + channel);
+}
+
+float* TrackMixerRuntime::bus_fold_channel(int channel) noexcept {
+  return bus_edge_channel(2 * kMaxBusChannels + channel);
+}
+
+float* TrackMixerRuntime::bus_key_channel(size_t bus_index, int channel) noexcept {
+  return bus_key_scratch_.data() + (bus_index * kMaxLaneChannels + static_cast<size_t>(channel)) *
+                                       static_cast<size_t>(max_block_size_);
+}
+
+float* TrackMixerRuntime::keyed_input_channel(size_t slot, int channel) noexcept {
+  return keyed_input_scratch_.data() + (slot * kMaxLaneChannels + static_cast<size_t>(channel)) *
+                                           static_cast<size_t>(max_block_size_);
 }
 
 void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* channels,
