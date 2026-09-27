@@ -1054,6 +1054,19 @@ export class RealtimeEngine {
     this.native.setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass);
   }
 
+  /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
+  setBusStripEqBand(busId: number, bandIndex: number, band: EqBand | string): void {
+    this.native.setBusStripEqBandJson(
+      busId,
+      bandIndex,
+      typeof band === 'string' ? band : JSON.stringify(band),
+    );
+  }
+
+  setBusStripEqBandJson(busId: number, bandIndex: number, bandJson: string): void {
+    this.native.setBusStripEqBandJson(busId, bandIndex, bandJson);
+  }
+
   setMasterStripJson(sceneJson: string): void {
     try {
       JSON.parse(sceneJson);
@@ -1208,6 +1221,29 @@ export class RealtimeEngine {
   /** Sets a track lane strip's dual-pan left/right positions in realtime. */
   setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
     this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a bus strip's output pan position in realtime (glitch-free). Throws
+   * for an unknown bus or one wider than stereo.
+   */
+  setBusStripPan(busId: number, pan: number): void {
+    this.native.setBusStripPan(busId, pan);
+  }
+
+  /** Sets a bus strip's pan law in realtime. */
+  setBusStripPanLaw(busId: number, panLaw: PanLawInput): void {
+    this.native.setBusStripPanLaw(busId, panLawCode(panLaw));
+  }
+
+  /** Sets a bus strip's pan mode in realtime. */
+  setBusStripPanMode(busId: number, panMode: PanMode | number): void {
+    this.native.setBusStripPanMode(busId, panModeCode(panMode));
+  }
+
+  /** Sets a bus strip's dual-pan left/right positions in realtime. */
+  setBusStripDualPan(busId: number, leftPan: number, rightPan: number): void {
+    this.native.setBusStripDualPan(busId, leftPan, rightPan);
   }
 
   /**

@@ -428,6 +428,13 @@ export interface SonareEngineSyncMasterStripEqBandMessage {
   bandJson: string;
 }
 
+export interface SonareEngineSyncBusStripEqBandMessage {
+  type: 'syncBusStripEqBand';
+  busId: number;
+  bandIndex: number;
+  bandJson: string;
+}
+
 export interface SonareEngineSyncTrackStripInsertBypassedMessage {
   type: 'syncTrackStripInsertBypassed';
   trackId: number;
@@ -495,6 +502,31 @@ export interface SonareEngineSyncTrackStripPanModeMessage {
 export interface SonareEngineSyncTrackStripDualPanMessage {
   type: 'syncTrackStripDualPan';
   trackId: number;
+  leftPan: number;
+  rightPan: number;
+}
+
+export interface SonareEngineSyncBusStripPanMessage {
+  type: 'syncBusStripPan';
+  busId: number;
+  pan: number;
+}
+
+export interface SonareEngineSyncBusStripPanLawMessage {
+  type: 'syncBusStripPanLaw';
+  busId: number;
+  panLaw: number;
+}
+
+export interface SonareEngineSyncBusStripPanModeMessage {
+  type: 'syncBusStripPanMode';
+  busId: number;
+  panMode: number;
+}
+
+export interface SonareEngineSyncBusStripDualPanMessage {
+  type: 'syncBusStripDualPan';
+  busId: number;
   leftPan: number;
   rightPan: number;
 }
@@ -668,6 +700,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncCaptureMessage
   | SonareEngineSyncTrackStripEqBandMessage
   | SonareEngineSyncMasterStripEqBandMessage
+  | SonareEngineSyncBusStripEqBandMessage
   | SonareEngineSyncTrackStripInsertBypassedMessage
   | SonareEngineSyncMasterStripInsertBypassedMessage
   | SonareEngineSyncTrackStripInsertParamByNameMessage
@@ -678,6 +711,10 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncTrackStripPanLawMessage
   | SonareEngineSyncTrackStripPanModeMessage
   | SonareEngineSyncTrackStripDualPanMessage
+  | SonareEngineSyncBusStripPanMessage
+  | SonareEngineSyncBusStripPanLawMessage
+  | SonareEngineSyncBusStripPanModeMessage
+  | SonareEngineSyncBusStripDualPanMessage
   | SonareEngineSyncTrackStripChannelDelaySamplesMessage
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage

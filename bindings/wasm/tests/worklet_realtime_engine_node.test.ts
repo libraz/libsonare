@@ -1,3 +1,4 @@
+import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
 import {
   describe,
   expect,
@@ -9,6 +10,7 @@ import {
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
   SonareRealtimeEngineNode,
+  SonareRealtimeEngineWorkletProcessor,
   setupWorklet,
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
@@ -1075,6 +1077,185 @@ describe('SonareRealtimeEngineNode', () => {
           expect(typeof (engine as unknown as Record<string, unknown>)[method]).toBe('function');
         }
       } finally {
+        engine.destroy();
+      }
+    });
+
+    it('keeps bus, master and track strip setters across a syncMixer re-post', async () => {
+      // syncMixer re-posts every cached strip scene JSON to the worklet. A
+      // setter the cache did not absorb is reverted there while the offline
+      // mirror keeps it, so the live output and an offline render disagree.
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        blockSize,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const livePosted: unknown[] = [];
+      const live = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { postMessage: (message) => livePosted.push(message) },
+      );
+      try {
+        engine.setTrackBuses([
+          { busId: 100, gainDb: 0 },
+          { busId: 200, gainDb: 0 },
+        ]);
+        engine.setTrackOutputBus(7, 100);
+        engine.setSends(7, [{ busId: 200, levelDb: -3, enabled: true }]);
+        const busStripJson = '{"version":1,"strips":[],"buses":[{"id":"100"}],"connections":[]}';
+        engine.setBusStripJson(100, busStripJson);
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        );
+        engine.setTrackStripJson(
+          7,
+          '{"version":1,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}',
+        );
+        engine.setBusStripPanMode(100, 'stereoPan');
+        engine.setBusStripPan(100, 0.6);
+        engine.setBusStripPanLaw(100, 'const6dB');
+        engine.setBusStripEqBand(100, 2, {
+          type: 'Peak',
+          frequencyHz: 800,
+          gainDb: 9,
+          q: 1,
+          enabled: true,
+        });
+        engine.setMasterStripEqBand(1, {
+          type: 'Peak',
+          frequencyHz: 3000,
+          gainDb: -6,
+          q: 2,
+          enabled: true,
+        });
+        engine.setTrackStripEqBand(
+          7,
+          0,
+          '{"type":"Peak","frequencyHz":1500,"gainDb":6,"enabled":true}',
+        );
+        // Bus 200 never received scene JSON, so its cache entry is synthesized.
+        engine.setBusStripDualPan(200, -0.7, -0.2);
+        engine.setBusStripPanMode(200, 'dualPan');
+        // Any routing change re-posts every cached strip.
+        engine.setSends(7, [{ busId: 200, levelDb: -6, enabled: true }]);
+
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'syncBusStripPan', busId: 100, pan: 0.6 }),
+            expect.objectContaining({ type: 'syncBusStripPanLaw', busId: 100, panLaw: 2 }),
+            expect.objectContaining({ type: 'syncBusStripPanMode', busId: 100, panMode: 1 }),
+            expect.objectContaining({
+              type: 'syncBusStripDualPan',
+              busId: 200,
+              leftPan: -0.7,
+              rightPan: -0.2,
+            }),
+            expect.objectContaining({
+              type: 'syncBusStripEqBand',
+              busId: 100,
+              bandIndex: 2,
+              bandJson: expect.stringContaining('"frequencyHz":800'),
+            }),
+          ]),
+        );
+        // Replay the producer's sync stream into a real worklet processor and
+        // render it beside the offline mirror.
+        for (const message of posted) {
+          const type = (message as { type?: unknown }).type;
+          if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+          }
+        }
+        expect(
+          livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
+        ).toEqual([]);
+        const frames = blockSize * 48;
+        const left = new Float32Array(frames);
+        const right = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) {
+          left[i] = 0.3 * Math.sin((2 * Math.PI * 800 * i) / 48000);
+          right[i] = 0.2 * Math.sin((2 * Math.PI * 3000 * i) / 48000);
+        }
+        const clips = [
+          { id: 1, trackId: 7, channels: [left, right], startPpq: 0, lengthSamples: frames },
+        ];
+        offline.setClips(clips);
+        live.receiveSync({ type: 'syncClips', clips });
+        offline.play();
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        let maxDiff = 0;
+        let maxAbs = 0;
+        let imbalance = 0;
+        for (let block = 0; block < 40; block += 1) {
+          const expected = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          const liveOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          expect(live.process([[]], [liveOut])).toBe(true);
+          for (let channel = 0; channel < 2; channel += 1) {
+            for (let i = 0; i < blockSize; i += 1) {
+              maxAbs = Math.max(maxAbs, Math.abs(expected[channel][i]));
+              maxDiff = Math.max(maxDiff, Math.abs(expected[channel][i] - liveOut[channel][i]));
+            }
+          }
+          for (let i = 0; i < blockSize; i += 1) {
+            imbalance = Math.max(imbalance, Math.abs(expected[0][i] - expected[1][i]));
+          }
+        }
+        expect(maxAbs).toBeGreaterThan(0.05);
+        expect(imbalance).toBeGreaterThan(0.01);
+        expect(maxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
+        // The cache itself is the state a later re-post replays.
+        const mixerSyncs = posted.filter(
+          (message) => (message as { type?: unknown }).type === 'syncMixer',
+        );
+        const lastSync = mixerSyncs[mixerSyncs.length - 1] as {
+          busStrips: Array<{ busId: number; sceneJson: string }>;
+          trackStrips: Array<{ trackId: number; sceneJson: string }>;
+          masterStripJson: string;
+        };
+        const busScene = (busId: number) =>
+          JSON.parse(lastSync.busStrips.find((strip) => strip.busId === busId)?.sceneJson ?? '{}');
+        expect(busScene(100).buses[0]).toEqual(
+          expect.objectContaining({
+            id: '100',
+            pan: 0.6,
+            panLaw: 2,
+            panMode: 1,
+            eq: { enabled: true, bands: [{}, {}, expect.objectContaining({ frequencyHz: 800 })] },
+          }),
+        );
+        expect(busScene(200)).toEqual({
+          version: 1,
+          strips: [],
+          buses: [{ id: 'bus-200', dualPanLeft: -0.7, dualPanRight: -0.2, panMode: 2 }],
+          connections: [],
+        });
+        expect(JSON.parse(lastSync.masterStripJson).strips[0].eq).toEqual({
+          enabled: true,
+          bands: [{}, expect.objectContaining({ frequencyHz: 3000, gainDb: -6 })],
+        });
+        const trackScene = JSON.parse(
+          lastSync.trackStrips.find((strip) => strip.trackId === 7)?.sceneJson ?? '{}',
+        );
+        expect(trackScene.strips[0].eq).toEqual({
+          enabled: true,
+          bands: [expect.objectContaining({ frequencyHz: 1500, gainDb: 6 })],
+        });
+      } finally {
+        live.destroy();
         engine.destroy();
       }
     });

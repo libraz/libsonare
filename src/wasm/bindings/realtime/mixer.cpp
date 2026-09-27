@@ -183,6 +183,26 @@ void RealtimeEngineWasm::setTrackStripEqBandJson(const val& track_id_val, const 
 #endif
 }
 
+void RealtimeEngineWasm::setBusStripEqBandJson(const val& bus_id_val, const val& band_index_val,
+                                               const std::string& band_json) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
+#if defined(SONARE_WITH_MIXING)
+  if (bus_id == 0 || band_index < 0 ||
+      !engine_.set_bus_eq_band(bus_id, static_cast<size_t>(band_index),
+                               sonare::c_api::parse_eq_band_json(band_json.c_str()))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip EQ band target");
+  }
+#else
+  (void)bus_id;
+  (void)band_index;
+  (void)band_json;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
                                                      const val& insert_index_val, bool bypassed,
                                                      bool reset_on_bypass) {
@@ -478,6 +498,79 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
 #endif
 }
 
+void RealtimeEngineWasm::setBusStripPan(const val& bus_id_val, const val& pan_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const float pan = checkedFloatFromVal(pan_val, "pan");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.set_bus_pan(bus_id, pan)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip pan target");
+  }
+#else
+  (void)bus_id;
+  (void)pan;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::setBusStripPanLaw(const val& bus_id_val, const val& pan_law_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const int pan_law = checkedIntFromVal(pan_law_val, "panLaw");
+#if defined(SONARE_WITH_MIXING)
+  if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
+  }
+  if (!engine_.set_bus_pan_law(bus_id, static_cast<sonare::mixing::PanLaw>(pan_law))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip pan-law target");
+  }
+#else
+  (void)bus_id;
+  (void)pan_law;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::setBusStripPanMode(const val& bus_id_val, const val& pan_mode_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
+#if defined(SONARE_WITH_MIXING)
+  if (pan_mode < 0 || pan_mode > 2) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+  }
+  if (!engine_.set_bus_pan_mode(bus_id, static_cast<sonare::mixing::PanMode>(pan_mode))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip pan-mode target");
+  }
+#else
+  (void)bus_id;
+  (void)pan_mode;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::setBusStripDualPan(const val& bus_id_val, const val& left_pan_val,
+                                            const val& right_pan_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
+  const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.set_bus_dual_pan(bus_id, left_pan, right_pan)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip dual-pan target");
+  }
+#else
+  (void)bus_id;
+  (void)left_pan;
+  (void)right_pan;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void RealtimeEngineWasm::setTrackStripChannelDelaySamples(const val& track_id_val,
                                                           const val& delay_samples_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
@@ -502,6 +595,7 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("setBusStripJson", &RealtimeEngineWasm::setBusStripJson)
       .function("setTrackStripJson", &RealtimeEngineWasm::setTrackStripJson)
       .function("setTrackStripEqBandJson", &RealtimeEngineWasm::setTrackStripEqBandJson)
+      .function("setBusStripEqBandJson", &RealtimeEngineWasm::setBusStripEqBandJson)
       .function("setTrackStripInsertBypassed", &RealtimeEngineWasm::setTrackStripInsertBypassed)
       .function("setMasterStripJson", &RealtimeEngineWasm::setMasterStripJson)
       .function("setMasterStripEqBandJson", &RealtimeEngineWasm::setMasterStripEqBandJson)
@@ -521,6 +615,10 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("setTrackStripPanLaw", &RealtimeEngineWasm::setTrackStripPanLaw)
       .function("setTrackStripPanMode", &RealtimeEngineWasm::setTrackStripPanMode)
       .function("setTrackStripDualPan", &RealtimeEngineWasm::setTrackStripDualPan)
+      .function("setBusStripPan", &RealtimeEngineWasm::setBusStripPan)
+      .function("setBusStripPanLaw", &RealtimeEngineWasm::setBusStripPanLaw)
+      .function("setBusStripPanMode", &RealtimeEngineWasm::setBusStripPanMode)
+      .function("setBusStripDualPan", &RealtimeEngineWasm::setBusStripDualPan)
       .function("setTrackStripChannelDelaySamples",
                 &RealtimeEngineWasm::setTrackStripChannelDelaySamples);
 }

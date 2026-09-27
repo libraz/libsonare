@@ -1178,6 +1178,64 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('applies bus strip pan and EQ band sync messages', () => {
+      const blockSize = 128;
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { postMessage: () => undefined },
+      );
+      const rms = (data: Float32Array): number =>
+        Math.sqrt(data.reduce((sum, value) => sum + value * value, 0) / data.length);
+      try {
+        const frames = blockSize * 64;
+        const source = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) {
+          source[i] = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / 48000);
+        }
+        processor.receiveSync({
+          type: 'syncMixer',
+          buses: [{ busId: 200, gainDb: 0 }],
+          lanes: [{ trackId: 10, outputBusId: 200 }],
+        });
+        processor.receiveSync({ type: 'syncBusStripPanMode', busId: 200, panMode: 0 });
+        processor.receiveSync({ type: 'syncBusStripPanLaw', busId: 200, panLaw: 2 });
+        processor.receiveSync({ type: 'syncBusStripPan', busId: 200, pan: 1 });
+        processor.receiveSync({
+          type: 'syncBusStripEqBand',
+          busId: 200,
+          bandIndex: 0,
+          bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}',
+        });
+        processor.receiveSync({
+          type: 'syncClips',
+          clips: [{ id: 1, trackId: 10, channels: [source, source], startPpq: 0 }],
+        });
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
+        for (let block = 0; block < 12; block += 1) {
+          expect(processor.process([[]], [out])).toBe(true);
+        }
+        // Panned hard right, and boosted well above the ~0.177 dry RMS.
+        expect(rms(out[0])).toBeLessThan(rms(out[1]) * 0.01);
+        expect(rms(out[1])).toBeGreaterThan(0.4);
+
+        processor.receiveSync({
+          type: 'syncBusStripDualPan',
+          busId: 200,
+          leftPan: -1,
+          rightPan: -1,
+        });
+        processor.receiveSync({ type: 'syncBusStripPanMode', busId: 200, panMode: 2 });
+        for (let block = 0; block < 12; block += 1) {
+          expect(processor.process([[]], [out])).toBe(true);
+        }
+        expect(rms(out[1])).toBeLessThan(rms(out[0]) * 0.01);
+        expect(rms(out[0])).toBeGreaterThan(0.4);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('applies capture sync to the live embind engine', () => {
       const blockSize = 128;
       const meters: unknown[] = [];
@@ -1477,6 +1535,18 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         destinationId: 4,
         config: { gain: 0.5 },
       },
+      syncBusStripDualPan: {
+        type: 'syncBusStripDualPan',
+        busId: 200,
+        leftPan: -1,
+        rightPan: 1,
+      },
+      syncBusStripEqBand: {
+        type: 'syncBusStripEqBand',
+        busId: 200,
+        bandIndex: 0,
+        bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+      },
       syncBusStripInsertBypassed: {
         type: 'syncBusStripInsertBypassed',
         busId: 200,
@@ -1491,6 +1561,9 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         paramName: 'band0.gainDb',
         value: 3,
       },
+      syncBusStripPan: { type: 'syncBusStripPan', busId: 200, pan: 0 },
+      syncBusStripPanLaw: { type: 'syncBusStripPanLaw', busId: 200, panLaw: 0 },
+      syncBusStripPanMode: { type: 'syncBusStripPanMode', busId: 200, panMode: 0 },
       syncCapture: {
         type: 'syncCapture',
         bufferFrames: 128,

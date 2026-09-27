@@ -611,6 +611,33 @@ export class SonareEngine {
     );
   }
 
+  /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
+  setBusStripEqBand(busId: number, bandIndex: number, band: EqBand | string): void {
+    this.ensureBus(busId);
+    strips.setBusStripEqBand(this.stripContext, busId, bandIndex, band);
+  }
+
+  /** Bus-strip counterpart of {@link setTrackStripPan}; refused on a surround bus. */
+  setBusStripPan(busId: number, pan: number): void {
+    this.ensureBus(busId);
+    strips.setBusStripPan(this.stripContext, busId, pan);
+  }
+
+  setBusStripPanLaw(busId: number, panLaw: PanLaw | number): void {
+    this.ensureBus(busId);
+    strips.setBusStripPanLaw(this.stripContext, busId, panLaw);
+  }
+
+  setBusStripPanMode(busId: number, panMode: PanMode | number): void {
+    this.ensureBus(busId);
+    strips.setBusStripPanMode(this.stripContext, busId, panMode);
+  }
+
+  setBusStripDualPan(busId: number, leftPan: number, rightPan: number): void {
+    this.ensureBus(busId);
+    strips.setBusStripDualPan(this.stripContext, busId, leftPan, rightPan);
+  }
+
   setStripInsertParamByName(
     target: string | number,
     insertIndex: number,
@@ -1369,6 +1396,9 @@ export class SonareEngine {
       syncMixer: () => this.syncMixer(),
       sendSmoothedParam: (paramId, value) => this.sendSmoothedParam(paramId, value),
       getMasterStripJson: () => this.masterStripJson,
+      cacheMasterStripJson: (sceneJson) => {
+        this.masterStripJson = sceneJson;
+      },
     };
   }
 
@@ -1383,6 +1413,9 @@ export class SonareEngine {
       postInstrumentSync: (message) => this.postInstrumentSync(message),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
+      readStripJson: (target) => mixer.cachedStripJson(this.mixerContext, target),
+      writeStripJson: (target, sceneJson) =>
+        mixer.cacheStripJson(this.mixerContext, target, sceneJson),
     };
   }
 

@@ -26,6 +26,7 @@ export type {
   SonareEngineClipPageRequestMessage,
   SonareEngineSyncAutomationMessage,
   SonareEngineSyncBuiltinInstrumentMessage,
+  SonareEngineSyncBusStripEqBandMessage,
   SonareEngineSyncCaptureMessage,
   SonareEngineSyncClipsDeltaMessage,
   SonareEngineSyncClipsMessage,

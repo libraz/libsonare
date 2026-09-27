@@ -397,6 +397,98 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('updates bus strip pan and EQ band', () => {
+      // Four whole 1 kHz periods per block, so a block's RMS is phase-independent.
+      const blockSize = 192;
+      const engine = new RealtimeEngine(48000, blockSize);
+      const frames = blockSize * 128;
+      const source = new Float32Array(frames);
+      for (let i = 0; i < frames; i += 1) {
+        source[i] = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / 48000);
+      }
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [source, source],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+      engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+      const settle = (): Float32Array[] => {
+        let out: Float32Array[] = [];
+        for (let block = 0; block < 16; block += 1) {
+          out = engine.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        }
+        return out;
+      };
+      const expectInvalidParameter = (call: () => void): void => {
+        let caught: unknown;
+        try {
+          call();
+        } catch (error) {
+          caught = error;
+        }
+        expect(isSonareError(caught)).toBe(true);
+        if (!isSonareError(caught)) {
+          throw new Error('expected SonareError');
+        }
+        expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      };
+      engine.play();
+      const [flatLeft, flatRight] = settle();
+      expect(rms(flatLeft)).toBeGreaterThan(0.05);
+      expect(rms(flatRight)).toBeCloseTo(rms(flatLeft), 5);
+
+      engine.setBusStripPan(1, 1);
+      const [pannedLeft, pannedRight] = settle();
+      expect(rms(pannedLeft)).toBeLessThan(rms(flatLeft) * 0.01);
+      expect(rms(pannedRight)).toBeGreaterThan(rms(flatRight) * 0.9);
+
+      engine.setBusStripPanMode(1, 'dualPan');
+      engine.setBusStripDualPan(1, -1, -1);
+      const [dualLeft, dualRight] = settle();
+      expect(rms(dualRight)).toBeLessThan(rms(flatRight) * 0.01);
+      expect(rms(dualLeft)).toBeGreaterThan(rms(flatLeft) * 0.9);
+      engine.setBusStripPanLaw(1, 'const6dB');
+      engine.setBusStripPanMode(1, 'balance');
+      engine.setBusStripPan(1, 0);
+      const [centredLeft] = settle();
+      expect(rms(centredLeft)).toBeCloseTo(rms(flatLeft), 3);
+
+      engine.setBusStripEqBand(1, 0, {
+        type: 'Peak',
+        frequencyHz: 1000,
+        gainDb: 12,
+        q: 1,
+        enabled: true,
+      });
+      const [boostedLeft] = settle();
+      expect(rms(boostedLeft)).toBeGreaterThan(rms(flatLeft) * 1.5);
+      engine.setBusStripEqBandJson(1, 0, '{"type":"Peak","frequencyHz":1000,"gainDb":0}');
+      const [restoredLeft] = settle();
+      expect(rms(restoredLeft)).toBeCloseTo(rms(flatLeft), 3);
+
+      expectInvalidParameter(() => engine.setBusStripPan(99, 0.5));
+      expectInvalidParameter(() => engine.setBusStripPanLaw(99, 'const3dB'));
+      expectInvalidParameter(() => engine.setBusStripPanMode(99, 'balance'));
+      expectInvalidParameter(() => engine.setBusStripDualPan(99, -1, 1));
+      expectInvalidParameter(() => engine.setBusStripEqBand(99, 0, { type: 'Peak' }));
+      expectInvalidParameter(() => engine.setBusStripEqBand(1, 99, { type: 'Peak' }));
+      expectInvalidParameter(() => engine.setBusStripEqBandJson(1, -1, '{"type":"Peak"}'));
+      // A surround bus has no stereo image to pan; its EQ is still addressable.
+      engine.setTrackBuses([
+        { busId: 1, gainDb: 0 },
+        { busId: 2, gainDb: 0, channelLayout: 2 },
+      ]);
+      expectInvalidParameter(() => engine.setBusStripPan(2, 0.5));
+      expectInvalidParameter(() => engine.setBusStripDualPan(2, -1, 0));
+      engine.setBusStripEqBand(2, 0, { type: 'Peak', frequencyHz: 500, gainDb: 3 });
+      engine.destroy();
+    });
+
     it('processWithMonitor returns output and monitor buses', () => {
       const engine = new RealtimeEngine(48000, 16);
       const result = engine.processWithMonitor([

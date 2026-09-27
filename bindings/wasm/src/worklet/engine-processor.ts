@@ -481,6 +481,9 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncMasterStripEqBand':
         this.engine.setMasterStripEqBandJson(message.bandIndex, message.bandJson);
         break;
+      case 'syncBusStripEqBand':
+        this.engine.setBusStripEqBandJson(message.busId, message.bandIndex, message.bandJson);
+        break;
       case 'syncTrackStripInsertBypassed':
         this.engine.setTrackStripInsertBypassed(
           message.trackId,
@@ -538,6 +541,18 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       case 'syncTrackStripDualPan':
         this.engine.setTrackStripDualPan(message.trackId, message.leftPan, message.rightPan);
+        break;
+      case 'syncBusStripPan':
+        this.engine.setBusStripPan(message.busId, message.pan);
+        break;
+      case 'syncBusStripPanLaw':
+        this.engine.setBusStripPanLaw(message.busId, message.panLaw);
+        break;
+      case 'syncBusStripPanMode':
+        this.engine.setBusStripPanMode(message.busId, message.panMode);
+        break;
+      case 'syncBusStripDualPan':
+        this.engine.setBusStripDualPan(message.busId, message.leftPan, message.rightPan);
         break;
       case 'syncTrackStripChannelDelaySamples':
         this.engine.setTrackStripChannelDelaySamples(message.trackId, message.delaySamples);

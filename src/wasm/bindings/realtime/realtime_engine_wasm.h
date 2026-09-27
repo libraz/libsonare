@@ -210,6 +210,8 @@ class RealtimeEngineWasm {
   void setTrackStripJson(const emscripten::val& track_id_val, const std::string& scene_json);
   void setTrackStripEqBandJson(const emscripten::val& track_id_val,
                                const emscripten::val& band_index_val, const std::string& band_json);
+  void setBusStripEqBandJson(const emscripten::val& bus_id_val,
+                             const emscripten::val& band_index_val, const std::string& band_json);
   void setTrackStripInsertBypassed(const emscripten::val& track_id_val,
                                    const emscripten::val& insert_index_val, bool bypassed,
                                    bool reset_on_bypass);
@@ -247,6 +249,11 @@ class RealtimeEngineWasm {
   void setTrackStripDualPan(const emscripten::val& track_id_val,
                             const emscripten::val& left_pan_val,
                             const emscripten::val& right_pan_val);
+  void setBusStripPan(const emscripten::val& bus_id_val, const emscripten::val& pan_val);
+  void setBusStripPanLaw(const emscripten::val& bus_id_val, const emscripten::val& pan_law_val);
+  void setBusStripPanMode(const emscripten::val& bus_id_val, const emscripten::val& pan_mode_val);
+  void setBusStripDualPan(const emscripten::val& bus_id_val, const emscripten::val& left_pan_val,
+                          const emscripten::val& right_pan_val);
   void setTrackStripChannelDelaySamples(const emscripten::val& track_id_val,
                                         const emscripten::val& delay_samples_val);
 

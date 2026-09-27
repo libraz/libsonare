@@ -1,5 +1,6 @@
 import { panLawCode, panModeCode } from '../codes';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine } from '../index';
+import type { StripJsonTarget } from './engine-mixer-facade';
 import type { SonareEngineInstrumentSyncMessage, SonareEngineSyncMessage } from './messages';
 
 /**
@@ -14,10 +15,59 @@ export interface EngineStripContext {
   postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void;
   ensureTrackLane(target: string | number): number;
   resolveTargetId(target: string | number): number;
+  readStripJson(target: StripJsonTarget): string | undefined;
+  writeStripJson(target: StripJsonTarget, sceneJson: string): void;
 }
 
 function trackIdFor(ctx: EngineStripContext, target: string | number): number {
   return ctx.trackLaneIds[ctx.ensureTrackLane(target)];
+}
+
+type SceneEntry = Record<string, unknown>;
+
+function synthesizedStripJson(target: StripJsonTarget): string {
+  switch (target.kind) {
+    case 'track':
+      return `{"version":1,"strips":[{"id":"track-${target.trackId}"}],"buses":[],"connections":[]}`;
+    case 'bus':
+      return `{"version":1,"strips":[],"buses":[{"id":"bus-${target.busId}"}],"connections":[]}`;
+    case 'master':
+      return '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}';
+  }
+}
+
+/**
+ * Folds a setter's change into the strip's cached scene JSON, so the next
+ * syncMixer re-post replays it instead of reverting it on the worklet.
+ */
+function mergeStripJson(
+  ctx: EngineStripContext,
+  target: StripJsonTarget,
+  update: (entry: SceneEntry) => void,
+): void {
+  const scene = JSON.parse(ctx.readStripJson(target) ?? synthesizedStripJson(target)) as {
+    strips: SceneEntry[];
+    buses: SceneEntry[];
+  };
+  update(target.kind === 'bus' ? scene.buses[0] : scene.strips[0]);
+  ctx.writeStripJson(target, JSON.stringify(scene));
+}
+
+function mergeEqBand(
+  ctx: EngineStripContext,
+  target: StripJsonTarget,
+  bandIndex: number,
+  bandJson: string,
+): void {
+  mergeStripJson(ctx, target, (entry) => {
+    const eq = (entry.eq ?? { enabled: true, bands: [] }) as { bands?: unknown[] };
+    const bands = eq.bands ?? [];
+    while (bands.length < bandIndex) {
+      bands.push({});
+    }
+    bands[bandIndex] = JSON.parse(bandJson);
+    entry.eq = { ...eq, bands };
+  });
 }
 
 export function setTrackStripJson(
@@ -39,6 +89,7 @@ export function setTrackStripEqBand(
   const trackId = trackIdFor(ctx, target);
   const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
   ctx.offlineEngine.setTrackStripEqBandJson(trackId, bandIndex, bandJson);
+  mergeEqBand(ctx, { kind: 'track', trackId }, bandIndex, bandJson);
   ctx.postSync({ type: 'syncTrackStripEqBand', trackId, bandIndex, bandJson });
 }
 
@@ -132,6 +183,7 @@ export function setMasterStripEqBand(
 ): void {
   const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
   ctx.offlineEngine.setMasterStripEqBandJson(bandIndex, bandJson);
+  mergeEqBand(ctx, { kind: 'master' }, bandIndex, bandJson);
   ctx.postSync({ type: 'syncMasterStripEqBand', bandIndex, bandJson });
 }
 
@@ -175,6 +227,66 @@ export function setBusStripInsertBypassed(
 ): void {
   ctx.offlineEngine.setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass);
   ctx.postSync({ type: 'syncBusStripInsertBypassed', busId, insertIndex, bypassed, resetOnBypass });
+}
+
+export function setBusStripEqBand(
+  ctx: EngineStripContext,
+  busId: number,
+  bandIndex: number,
+  band: EqBand | string,
+): void {
+  const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
+  ctx.offlineEngine.setBusStripEqBandJson(busId, bandIndex, bandJson);
+  mergeEqBand(ctx, { kind: 'bus', busId }, bandIndex, bandJson);
+  ctx.postSync({ type: 'syncBusStripEqBand', busId, bandIndex, bandJson });
+}
+
+export function setBusStripPan(ctx: EngineStripContext, busId: number, pan: number): void {
+  ctx.offlineEngine.setBusStripPan(busId, pan);
+  mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
+    entry.pan = pan;
+  });
+  ctx.postSync({ type: 'syncBusStripPan', busId, pan });
+}
+
+export function setBusStripPanLaw(
+  ctx: EngineStripContext,
+  busId: number,
+  panLaw: PanLawInput,
+): void {
+  const code = panLawCode(panLaw);
+  ctx.offlineEngine.setBusStripPanLaw(busId, code);
+  mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
+    entry.panLaw = code;
+  });
+  ctx.postSync({ type: 'syncBusStripPanLaw', busId, panLaw: code });
+}
+
+export function setBusStripPanMode(
+  ctx: EngineStripContext,
+  busId: number,
+  panMode: PanMode | number,
+): void {
+  const code = panModeCode(panMode);
+  ctx.offlineEngine.setBusStripPanMode(busId, code);
+  mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
+    entry.panMode = code;
+  });
+  ctx.postSync({ type: 'syncBusStripPanMode', busId, panMode: code });
+}
+
+export function setBusStripDualPan(
+  ctx: EngineStripContext,
+  busId: number,
+  leftPan: number,
+  rightPan: number,
+): void {
+  ctx.offlineEngine.setBusStripDualPan(busId, leftPan, rightPan);
+  mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
+    entry.dualPanLeft = leftPan;
+    entry.dualPanRight = rightPan;
+  });
+  ctx.postSync({ type: 'syncBusStripDualPan', busId, leftPan, rightPan });
 }
 
 export function pushMidiNoteOn(

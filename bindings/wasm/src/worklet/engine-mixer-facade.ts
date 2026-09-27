@@ -29,6 +29,47 @@ export interface EngineMixerContext {
   syncMixer(): void;
   sendSmoothedParam(paramId: number, value: number): boolean;
   getMasterStripJson(): string | undefined;
+  cacheMasterStripJson(sceneJson: string): void;
+}
+
+/** Addresses one strip's cached scene JSON, the state a syncMixer re-post replays. */
+export type StripJsonTarget =
+  | { kind: 'track'; trackId: number }
+  | { kind: 'bus'; busId: number }
+  | { kind: 'master' };
+
+/** Reads a strip's cached scene JSON; undefined when none was ever set. */
+export function cachedStripJson(
+  ctx: EngineMixerContext,
+  target: StripJsonTarget,
+): string | undefined {
+  switch (target.kind) {
+    case 'track':
+      return ctx.trackStripJson.get(target.trackId);
+    case 'bus':
+      return ctx.busStripJson.get(target.busId);
+    case 'master':
+      return ctx.getMasterStripJson();
+  }
+}
+
+/** Replaces a strip's cached scene JSON without syncing it. */
+export function cacheStripJson(
+  ctx: EngineMixerContext,
+  target: StripJsonTarget,
+  sceneJson: string,
+): void {
+  switch (target.kind) {
+    case 'track':
+      ctx.trackStripJson.set(target.trackId, sceneJson);
+      return;
+    case 'bus':
+      ctx.busStripJson.set(target.busId, sceneJson);
+      return;
+    case 'master':
+      ctx.cacheMasterStripJson(sceneJson);
+      return;
+  }
 }
 
 /** Builds the engine's track-lane descriptors from the current routing stores. */
