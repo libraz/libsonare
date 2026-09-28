@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libsonare.local/schemas/playback-renderer-config.schema.json",
+  "title": "libsonare Playback Renderer Configuration",
+  "description": "Configuration of the playback renderer (sonare_playback_renderer_create_json). Every key is either a prepare key, fixed when the renderer is created, or a realtime key, adopted at the next block boundary; set_config_json takes a complete document and refuses a changed prepare key. Omitted keys take the defaults below. Numbers are stored as 32-bit floats and a value outside that range is refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "speaker": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0.1,
+          "maximum": 30,
+          "default": null,
+          "description": "Listener distance in metres. Prepare key. null disables distance compensation for this speaker."
+        },
+        "trim_db": {
+          "type": "number",
+          "minimum": -20,
+          "maximum": 20,
+          "default": 0,
+          "description": "Level trim in dB. Realtime key."
+        },
+        "size": {
+          "enum": [
+            "large",
+            "small"
+          ],
+          "default": "large",
+          "description": "Prepare key. A small speaker is high-passed at the crossover when bass management is enabled."
+        }
+      }
+    },
+    "role": {
+      "enum": [
+        "L",
+        "R",
+        "C",
+        "LFE",
+        "Ls",
+        "Rs",
+        "Lss",
+        "Rss"
+      ]
+    }
+  },
+  "properties": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "layout": {
+          "enum": [
+            "auto",
+            "mono",
+            "stereo",
+            "5.1",
+            "7.1"
+          ],
+          "default": "auto",
+          "description": "Prepare key. auto follows the channel count of each process call (1, 2, 6 or 8)."
+        },
+        "channel_map": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/role"
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "default": null,
+          "description": "Prepare key. Role of each input channel, covering the layout's roles exactly once. null means canonical order. Requires a fixed layout."
+        }
+      },
+      "if": {
+        "required": [
+          "layout"
+        ],
+        "properties": {
+          "layout": {
+            "enum": [
+              "mono",
+              "stereo",
+              "5.1",
+              "7.1"
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "channel_map": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "headphones",
+            "speakers"
+          ],
+          "default": "headphones",
+          "description": "Prepare key."
+        },
+        "layout": {
+          "enum": [
+            "stereo",
+            "5.1",
+            "7.1"
+          ],
+          "description": "Prepare key. Required for speakers, forbidden for headphones."
+        },
+        "speakers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/speaker"
+          },
+          "propertyNames": {
+            "enum": [
+              "L",
+              "R",
+              "C",
+              "Ls",
+              "Rs",
+              "Lss",
+              "Rss"
+            ]
+          },
+          "description": "Per-speaker calibration keyed by role. Only non-LFE roles of the output layout."
+        },
+        "bass_management": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Prepare key."
+            },
+            "crossover_hz": {
+              "type": "number",
+              "minimum": 40,
+              "maximum": 200,
+              "default": 80,
+              "description": "Prepare key. LR4 crossover frequency."
+            },
+            "subwoofer": {
+              "type": "boolean",
+              "default": true,
+              "description": "Prepare key. false folds the low band and LFE into the large L/R pair; L and R must then be large."
+            },
+            "lfe_gain_db": {
+              "type": "number",
+              "minimum": -10,
+              "maximum": 15,
+              "default": 10,
+              "description": "Realtime key. LFE gain when feeding the subwoofer."
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "speakers"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "layout"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "layout"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "layout"
+            ],
+            "properties": {
+              "layout": {
+                "const": "stereo"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "speakers": {
+                "propertyNames": {
+                  "enum": [
+                    "L",
+                    "R"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "layout"
+            ],
+            "properties": {
+              "layout": {
+                "const": "5.1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "speakers": {
+                "propertyNames": {
+                  "enum": [
+                    "L",
+                    "R",
+                    "C",
+                    "Ls",
+                    "Rs"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lfe_mix_db": {
+      "type": "number",
+      "minimum": -60,
+      "maximum": 10,
+      "default": 0,
+      "description": "Realtime key. LFE level folded into L/R when the output has no LFE plane or no subwoofer."
+    },
+    "upmix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Realtime key. Stereo input only; the latency does not change."
+        },
+        "center_width": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 1,
+          "default": 0.2,
+          "description": "Realtime key. Width of the centre window on the panning index."
+        },
+        "front_ambience": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5,
+          "description": "Realtime key. Power share of the ambience kept in the front pair."
+        },
+        "lfe_from_upmix": {
+          "type": "boolean",
+          "default": false,
+          "description": "Realtime key. Derive LFE from the low-passed L/R sum."
+        }
+      }
+    },
+    "dialogue_level_db": {
+      "type": "number",
+      "minimum": -12,
+      "maximum": 12,
+      "default": 0,
+      "description": "Realtime key. Static gain on the discrete centre of 5.1 / 7.1 input."
+    },
+    "loudness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "program_lufs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -70,
+          "maximum": 0,
+          "default": null,
+          "description": "Realtime key. Measured program loudness; null means no alignment gain."
+        },
+        "target_lufs": {
+          "type": "number",
+          "minimum": -40,
+          "maximum": -5,
+          "default": -24,
+          "description": "Realtime key."
+        }
+      }
+    },
+    "night_mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0,
+          "description": "Realtime key. 0 disables the dynamic range control."
+        }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preset": {
+          "enum": [
+            "none",
+            "living_room",
+            "home_theater",
+            "screening_room"
+          ],
+          "default": "living_room",
+          "description": "Prepare key. Headphones only."
+        },
+        "mix_db": {
+          "type": "number",
+          "minimum": -30,
+          "maximum": 6,
+          "default": -6,
+          "description": "Realtime key. Level of the early reflections and the late reverberation."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Realtime key."
+        }
+      }
+    },
+    "head_tracking": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Realtime key. false treats the head pose as zero."
+        }
+      }
+    },
+    "output_limiter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Realtime key. The latency does not change."
+        },
+        "ceiling_db": {
+          "type": "number",
+          "minimum": -12,
+          "maximum": 0,
+          "default": -1,
+          "description": "Realtime key."
+        }
+      }
+    }
+  }
+}

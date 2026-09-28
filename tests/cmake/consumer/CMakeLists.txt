@@ -42,7 +42,7 @@ endif()
 
 set(SONARE_COMPONENTS
   core rt automation acoustic fx mastering mixing mixing_assistant graph
-  pitch_editor voice_changer midi engine arrangement mir serialize assist
+  pitch_editor voice_changer midi engine arrangement mir serialize assist playback
 )
 
 foreach(component IN LISTS SONARE_COMPONENTS)

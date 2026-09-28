@@ -225,8 +225,8 @@ format:
 # defect this tree already shipped once (a waveguide loop filter's brightness
 # mapping with no `sr` term at all, correct only at 48 kHz). No test can
 # enforce it (a coefficient and the physical quantity it came from both
-# compile and both run), so this is a grep over src/effects/** and
-# src/mastering/**: no `*Config` struct field named for a coefficient shape
+# compile and both run), so this is a grep over src/effects/**,
+# src/mastering/** and src/playback/**: no `*Config` struct field named for a coefficient shape
 # (coeff/b1/a1/alpha). (A second rule that flagged `std::exp(` combined with
 # `sample_rate` was tried and dropped -- that combination is the CORRECT
 # pattern, not the defective one, so the rule could only ever fire on code
@@ -238,7 +238,7 @@ format:
 define GS_EFX_SR_COEFFICIENT_LINT_PY
 import pathlib, re, sys
 
-ROOTS = [pathlib.Path("src/effects"), pathlib.Path("src/mastering")]
+ROOTS = [pathlib.Path("src/effects"), pathlib.Path("src/mastering"), pathlib.Path("src/playback")]
 FILES = sorted(p for r in ROOTS for p in r.rglob("*") if p.suffix in (".h", ".hpp", ".cpp"))
 
 FIELD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(coeff|Coeff|b1|a1|alpha|Alpha)[A-Za-z0-9_]*\s*[;=]")
@@ -283,8 +283,8 @@ for path in FILES:
                         "(coeff/b1/a1/alpha) inside a *Config struct"))
 
 if scanned == 0:
-    sys.exit("sample-rate coefficient rule: found no files under src/effects or "
-             "src/mastering -- the glob is broken, this is not a clean result")
+    sys.exit("sample-rate coefficient rule: found no files under src/effects, "
+             "src/mastering or src/playback -- the glob is broken, this is not a clean result")
 
 if violations:
     for path, lineno, code, why in violations:
@@ -583,7 +583,7 @@ test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test
 # happens, so one kind of failure can never hide the report of another.
 FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_MIXING_ASSISTANT BUILD_GRAPH \
        BUILD_FX BUILD_ACOUSTIC_SIM BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT \
-       BUILD_ASSIST
+       BUILD_ASSIST BUILD_PLAYBACK
 FEATURE_MATRIX_ALL_OFF := $(foreach opt,$(FEATURE_MATRIX_OPTIONS),-D$(opt)=OFF)
 
 build-feature-matrix:

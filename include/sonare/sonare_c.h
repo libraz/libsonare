@@ -18,6 +18,7 @@ extern "C" {
 #include "sonare_c_mastering.h"
 #include "sonare_c_metering.h"
 #include "sonare_c_mixing.h"
+#include "sonare_c_playback.h"
 #include "sonare_c_polyphony.h"
 #include "sonare_c_project.h"
 #include "sonare_c_sample_bank.h"

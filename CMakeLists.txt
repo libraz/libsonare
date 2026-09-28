@@ -47,6 +47,7 @@ option(BUILD_FX "Build creative realtime FX processors" ON)
 option(BUILD_ACOUSTIC_SIM "Build geometric room-acoustics simulation (5th reverb engine)" ON)
 option(BUILD_PITCH_EDITOR "Build monophonic pitch editor primitives" ON)
 option(BUILD_VOICE_CHANGER "Build realtime voice changer primitives" ON)
+option(BUILD_PLAYBACK "Build the playback renderer (upmix, binaural, speaker output)" ON)
 option(BUILD_ARRANGEMENT "Build headless arrangement / DAW project subsystem" ON)
 option(BUILD_ASSIST "Build composition-assist injection seam (control/offline only)" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
@@ -161,6 +162,13 @@ if(BUILD_VOICE_CHANGER AND NOT BUILD_PITCH_EDITOR)
   message(STATUS "libsonare: BUILD_VOICE_CHANGER requires BUILD_PITCH_EDITOR; disabling BUILD_VOICE_CHANGER")
   set(BUILD_VOICE_CHANGER OFF CACHE BOOL "Build realtime voice changer primitives" FORCE)
 endif()
+
+if(BUILD_PLAYBACK AND (NOT BUILD_MIXING OR NOT BUILD_MASTERING OR NOT BUILD_ACOUSTIC_SIM))
+  message(STATUS "libsonare: BUILD_PLAYBACK requires BUILD_MIXING, BUILD_MASTERING and "
+                 "BUILD_ACOUSTIC_SIM; disabling BUILD_PLAYBACK")
+  set(BUILD_PLAYBACK OFF CACHE BOOL
+      "Build the playback renderer (upmix, binaural, speaker output)" FORCE)
+endif()
 # The capability descriptor reports which subsystems this build contains, so its
 # flags have to mean the same thing in every translation unit that can compile
 # it -- sonare_c_memory.cpp alone is pulled into the core objects, the CLI and
@@ -178,6 +186,7 @@ add_compile_definitions(
   SONARE_BUILD_ACOUSTIC_SIM=$<IF:$<BOOL:${BUILD_ACOUSTIC_SIM}>,1,0>
   SONARE_BUILD_PITCH_EDITOR=$<IF:$<BOOL:${BUILD_PITCH_EDITOR}>,1,0>
   SONARE_BUILD_VOICE_CHANGER=$<IF:$<BOOL:${BUILD_VOICE_CHANGER}>,1,0>
+  SONARE_BUILD_PLAYBACK=$<IF:$<BOOL:${BUILD_PLAYBACK}>,1,0>
 )
 
 set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING

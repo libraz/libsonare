@@ -473,6 +473,34 @@ if(BUILD_VOICE_CHANGER)
   )
 endif()
 
+# The playback C ABI source is compiled into the test binary unconditionally,
+# like sonare_shared, so a BUILD_PLAYBACK=OFF build runs its stubs.
+target_sources(sonare_tests PRIVATE
+  api/sonare_c_playback_test.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_playback.cpp
+)
+
+if(BUILD_PLAYBACK)
+  target_sources(sonare_tests PRIVATE
+    playback/binaural_test.cpp
+    playback/default_hrtf_test.cpp
+    playback/hrtf_set_test.cpp
+    playback/layout_convert_test.cpp
+    playback/loudness_meter_test.cpp
+    playback/night_mode_test.cpp
+    playback/no_alloc_playback_test.cpp
+    playback/renderer_config_test.cpp
+    playback/renderer_latency_test.cpp
+    playback/renderer_layout_switch_test.cpp
+    playback/renderer_matrix_test.cpp
+    playback/sample_rate_test.cpp
+    playback/speaker_stage_test.cpp
+    playback/upmix_test.cpp
+  )
+  target_link_libraries(sonare_tests PRIVATE sonare_playback)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_PLAYBACK=1)
+endif()
+
 # The headless-project C ABI sources are compiled into the test binary so the
 # parity test drives the real C surface. Like sonare_shared, they compile even
 # with BUILD_ARRANGEMENT off, where each entry point returns its stub.

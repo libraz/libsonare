@@ -117,6 +117,14 @@ constexpr bool capability_acoustic_sim_enabled() {
 #endif
 }
 
+constexpr bool capability_playback_enabled() {
+#if defined(SONARE_BUILD_PLAYBACK) && SONARE_BUILD_PLAYBACK
+  return true;
+#else
+  return false;
+#endif
+}
+
 constexpr bool capability_pitch_editor_enabled() {
 #if defined(SONARE_BUILD_PITCH_EDITOR) && SONARE_BUILD_PITCH_EDITOR
   return true;
@@ -240,6 +248,7 @@ const char* sonare_capabilities_json(void) {
                  json_bool(capability_instrument_param_automation_enabled()) +
                  ",\"arrangement\":" + json_bool(capability_arrangement_enabled()) +
                  ",\"acousticSim\":" + json_bool(capability_acoustic_sim_enabled()) +
+                 ",\"playback\":" + json_bool(capability_playback_enabled()) +
                  ",\"pitchEditor\":" + json_bool(capability_pitch_editor_enabled()) +
                  ",\"voiceChanger\":" + json_bool(capability_voice_changer_enabled()) +
                  "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";

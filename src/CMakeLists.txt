@@ -771,6 +771,48 @@ if(BUILD_VOICE_CHANGER)
   set_target_properties(sonare_voice_changer PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
+if(BUILD_PLAYBACK)
+  # Playback renderer: decoded movie audio rendered to headphones (binaural) or
+  # to stereo / 5.1 / 7.1 speakers. Depends one-way on mixing (downmix, meter),
+  # mastering (crossover, limiter) and acoustic (room model, RIR synthesis).
+  add_library(sonare_playback STATIC
+    playback/binaural.cpp
+    playback/config.cpp
+    playback/front_end.cpp
+    playback/hrtf_set.cpp
+    playback/layout_convert.cpp
+    playback/loudness_meter.cpp
+    playback/night_mode_drc.cpp
+    playback/renderer.cpp
+    playback/room_presets.cpp
+    playback/shrf_format.cpp
+    playback/speaker_stage.cpp
+    playback/upmix.cpp
+  )
+  # The built-in HRTF set is embedded in native builds only; the WASM package
+  # ships it as an asset the application loads and passes in as bytes.
+  if(NOT BUILD_WASM)
+    set(_sonare_default_hrtf_src ${CMAKE_CURRENT_SOURCE_DIR}/playback/default.shrf)
+    set(_sonare_default_hrtf_cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/default_hrtf_data.cpp)
+    add_custom_command(
+      OUTPUT ${_sonare_default_hrtf_cpp}
+      COMMAND ${CMAKE_COMMAND}
+              -DINPUT=${_sonare_default_hrtf_src}
+              -DOUTPUT=${_sonare_default_hrtf_cpp}
+              -P ${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake
+      DEPENDS ${_sonare_default_hrtf_src} ${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake
+      COMMENT "Embedding the default HRTF set"
+      VERBATIM
+    )
+    target_sources(sonare_playback PRIVATE ${_sonare_default_hrtf_cpp})
+  endif()
+  target_include_directories(sonare_playback PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_playback SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
+  target_link_libraries(sonare_playback PUBLIC sonare_mixing sonare_mastering sonare_acoustic)
+  target_compile_options(sonare_playback PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_playback PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
 if(BUILD_ARRANGEMENT)
   # Headless arrangement / DAW project model (control-thread-only, value data).
   # Depends one-way on transport/ + automation/ (via sonare_automation, which
@@ -1013,6 +1055,9 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_capture.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_render.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_voice_changer.cpp)
+  # Always compiled so the playback symbols exist in feature-off shared builds,
+  # where every entry point returns NOT_SUPPORTED.
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_playback.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_streaming_retune.cpp)
   # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
@@ -1055,6 +1100,10 @@ if(BUILD_SHARED)
   if(BUILD_MIXING_ASSISTANT)
     target_link_libraries(sonare_shared PUBLIC sonare_mixing_assistant)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING_ASSISTANT=1)
+  endif()
+  if(BUILD_PLAYBACK)
+    target_link_libraries(sonare_shared PUBLIC sonare_playback)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_PLAYBACK=1)
   endif()
   if(BUILD_MIXING)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING=1)
@@ -1118,6 +1167,9 @@ if(BUILD_WASM)
   if(BUILD_VOICE_CHANGER)
     target_compile_options(sonare_voice_changer PUBLIC -msimd128)
   endif()
+  if(BUILD_PLAYBACK)
+    target_compile_options(sonare_playback PUBLIC -msimd128)
+  endif()
 
   target_compile_options(sonare_core_objects PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_core PUBLIC -matomics -mbulk-memory)
@@ -1144,6 +1196,9 @@ if(BUILD_WASM)
   endif()
   if(BUILD_VOICE_CHANGER)
     target_compile_options(sonare_voice_changer PUBLIC -matomics -mbulk-memory)
+  endif()
+  if(BUILD_PLAYBACK)
+    target_compile_options(sonare_playback PUBLIC -matomics -mbulk-memory)
   endif()
 
   if(SONARE_WASM_ANALYSIS_ONLY)
@@ -1176,6 +1231,7 @@ if(BUILD_WASM)
       wasm/bindings/effects/spectral_edit.cpp
       c_api/sonare_c_voice_changer.cpp
       c_api/sonare_c_streaming_retune.cpp
+      c_api/sonare_c_playback.cpp
       wasm/bindings/features/core.cpp
       wasm/bindings/features/music.cpp
       wasm/bindings/features/pitch.cpp
@@ -1204,6 +1260,7 @@ if(BUILD_WASM)
       wasm/bindings/analysis/quick_detailed.cpp
       wasm/bindings/effects/repair.cpp
       wasm/bindings/effects/realtime_voice_changer.cpp
+      wasm/bindings/playback/playback.cpp
       wasm/bindings/realtime/engine.cpp
       wasm/bindings/realtime/transport.cpp
       wasm/bindings/realtime/params.cpp
@@ -1254,6 +1311,10 @@ if(BUILD_WASM)
   if(BUILD_VOICE_CHANGER AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_voice_changer)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_VOICE_CHANGER=1)
+  endif()
+  if(BUILD_PLAYBACK AND NOT SONARE_WASM_ANALYSIS_ONLY)
+    target_link_libraries(sonare PRIVATE sonare_playback)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_PLAYBACK=1)
   endif()
   if(BUILD_MASTERING AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_mastering)
@@ -1354,6 +1415,7 @@ if(BUILD_WASM)
       c_api/sonare_c_assist.cpp
       c_api/project_soundfont.cpp
       c_api/sonare_c_mixing.cpp
+      c_api/sonare_c_playback.cpp
       c_api/sonare_c_sample_bank.cpp
       c_api/sonare_c_project.cpp
       c_api/sonare_c_streaming_retune.cpp
@@ -1390,6 +1452,7 @@ if(BUILD_WASM)
       wasm/bindings/mixing/mixing_strip.cpp
       wasm/bindings/mixing/mixing_topology.cpp
       wasm/bindings/offline.cpp
+      wasm/bindings/playback/playback.cpp
       wasm/bindings/project/project.cpp
       wasm/bindings/project/project_arrange.cpp
       wasm/bindings/project/project_bounce.cpp
@@ -1485,6 +1548,12 @@ if(BUILD_WASM)
       TARGET_DIRECTORY sonare_mixing
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
+  if(TARGET sonare_playback)
+    set_source_files_properties(
+      playback/config.cpp
+      TARGET_DIRECTORY sonare_playback
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
   if(TARGET sonare_serialize)
     set_source_files_properties(
       serialize/project_serializer.cpp
@@ -1574,6 +1643,7 @@ foreach(_sonare_target IN ITEMS
     sonare_graph
     sonare_pitch_editor
     sonare_voice_changer
+    sonare_playback
     sonare_midi
     sonare_engine
     sonare_arrangement
