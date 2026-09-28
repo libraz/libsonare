@@ -468,6 +468,17 @@ export class SonareRealtimeEngineWorkletProcessor {
         for (const binding of message.laneSidechains ?? []) {
           this.engine.setLaneSidechain(binding.trackId, binding.insertIndex, binding.sourceTrackId);
         }
+        for (const binding of message.busSidechains ?? []) {
+          this.engine.setBusSidechain(
+            binding.busId,
+            binding.insertIndex,
+            binding.sourceKind,
+            binding.sourceId,
+          );
+        }
+        for (const binding of message.masterSidechains ?? []) {
+          this.engine.setMasterSidechain(binding.insertIndex, binding.sourceKind, binding.sourceId);
+        }
         break;
       case 'syncCapture':
         this.engine.setCaptureBuffer(message.channels, message.bufferFrames);

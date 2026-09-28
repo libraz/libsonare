@@ -159,6 +159,25 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
                                     "setMidiClips: clip startPpq must be finite");
     }
     clip.length_samples = int64Property(clip_val, "lengthSamples", 0);
+    // Linear gain envelope over the destination's rendered audio (matches
+    // SonareEngineMidiClipSchedule.gain / fade_in_samples / fade_out_samples).
+    // Absent gain defaults to unity, absent fades default to none.
+    clip.gain = floatProperty(clip_val, "gain", 1.0f);
+    if (!(std::isfinite(clip.gain) && clip.gain >= 0.0f)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMidiClips: clip gain must be a finite non-negative number");
+    }
+    clip.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
+    clip.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
+    if (clip.fade_in_samples < 0 || clip.fade_out_samples < 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMidiClips: clip fade lengths must be non-negative");
+    }
+    // An open-ended clip (length_samples <= 0) has no end to fade out towards.
+    if (clip.fade_out_samples > 0 && clip.length_samples <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMidiClips: fade-out requires a bounded clip length");
+    }
     clip.loop_mode = boolProperty(clip_val, "loop", false) ? sonare::midi::MidiLoopMode::kLoop
                                                            : sonare::midi::MidiLoopMode::kOneShot;
     clip.loop_length_samples = int64Property(clip_val, "loopLengthSamples", 0);

@@ -1,4 +1,10 @@
-import { panLawCode, panModeCode, sendTimingCode, trackMonitorModeCode } from './codes';
+import {
+  panLawCode,
+  panModeCode,
+  sendTimingCode,
+  sidechainSourceKindCode,
+  trackMonitorModeCode,
+} from './codes';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
@@ -10,7 +16,7 @@ import type {
   SynthPatch,
 } from './project';
 import { normalizeSynthInstrument } from './project_internal';
-import type { EqBand, PanLawInput, PanMode, SendTiming } from './public_types';
+import type { EqBand, PanLawInput, PanMode, SendTiming, SidechainSourceKind } from './public_types';
 import type {
   WasmClipPageRequest,
   WasmEngineAutomationPoint,
@@ -102,6 +108,16 @@ export interface EngineBus {
    * to stereo.
    */
   channelLayout?: number;
+  /**
+   * Bus this bus's output sums into instead of the master mix (bus-to-bus
+   * routing); 0 or absent keeps it on the master mix.
+   */
+  outputBusId?: number;
+  /**
+   * Sends to other buses, in the same shape as a track lane's sends. A
+   * pre-fader send taps before `gainDb`, a post-fader one after it.
+   */
+  sends?: EngineTrackSend[];
 }
 
 export interface EngineMidiEvent {
@@ -139,6 +155,20 @@ export interface EngineMidiClipSchedule {
   loop?: boolean;
   loopLengthSamples?: number;
   events: EngineMidiEvent[];
+  /**
+   * Linear gain applied to the destination instrument's rendered audio while
+   * this clip is the most recently started active clip on it. Absent defaults
+   * to `1` (unity).
+   */
+  gain?: number;
+  /**
+   * Linear fade lengths over the clip's full length (not per internal loop
+   * repeat). Absent defaults to `0` (no fade). `fadeOutSamples` above `0` is
+   * rejected when `lengthSamples` is absent or `<= 0` (open-ended): an
+   * open-ended clip has no end to fade out towards.
+   */
+  fadeInSamples?: number;
+  fadeOutSamples?: number;
 }
 
 export const EXPECTED_ENGINE_ABI_VERSION = 3;
@@ -978,6 +1008,19 @@ export class RealtimeEngine {
     return this.native.clipCount();
   }
 
+  /**
+   * Normalizes each send's pre/post tap point to the integer the native layer
+   * reads (defaults to post-fader when omitted). Shared by track lanes and
+   * buses, which carry the same send shape.
+   */
+  private static normalizeSends(sends: EngineTrackSend[]): EngineTrackSend[] {
+    return sends.map((send) => ({
+      ...send,
+      // Post-fader (0) is the default for an omitted sendTiming.
+      sendTiming: send.sendTiming === undefined ? 0 : sendTimingCode(send.sendTiming),
+    }));
+  }
+
   setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
     this.native.setTrackLanes(
       lanes.map((lane) => {
@@ -987,16 +1030,7 @@ export class RealtimeEngine {
         if (!lane.sends) {
           return lane;
         }
-        // Normalize each send's pre/post tap point to the integer the native
-        // layer reads (defaults to post-fader when omitted).
-        return {
-          ...lane,
-          sends: lane.sends.map((send) => ({
-            ...send,
-            // Post-fader (0) is the default for an omitted sendTiming.
-            sendTiming: send.sendTiming === undefined ? 0 : sendTimingCode(send.sendTiming),
-          })),
-        };
+        return { ...lane, sends: RealtimeEngine.normalizeSends(lane.sends) };
       }),
     );
   }
@@ -1010,7 +1044,42 @@ export class RealtimeEngine {
   }
 
   setTrackBuses(buses: EngineBus[]): void {
-    this.native.setTrackBuses(buses);
+    // Array.isArray guards a caller-fabricated array-like (e.g. `{ length }`)
+    // meant to probe the native array-length read: passing it through
+    // unmodified lets that guard see the real (missing) length rather than
+    // failing here on a `.map` that array-likes do not implement.
+    this.native.setTrackBuses(
+      Array.isArray(buses)
+        ? buses.map((bus) =>
+            bus.sends ? { ...bus, sends: RealtimeEngine.normalizeSends(bus.sends) } : bus,
+          )
+        : buses,
+    );
+  }
+
+  /**
+   * Keys one insert of a bus strip from a track lane or another bus
+   * (ducking/sidechainRouter inserts). `sourceId` 0 removes the binding.
+   */
+  setBusSidechain(
+    busId: number,
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): void {
+    this.native.setBusSidechain(busId, insertIndex, sidechainSourceKindCode(sourceKind), sourceId);
+  }
+
+  /**
+   * Keys one insert of the master strip from a track lane or a bus. Same
+   * source rules as {@link setBusSidechain}.
+   */
+  setMasterSidechain(
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): void {
+    this.native.setMasterSidechain(insertIndex, sidechainSourceKindCode(sourceKind), sourceId);
   }
 
   setBusStripJson(busId: number, sceneJson: string): void {

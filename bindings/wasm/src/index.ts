@@ -772,6 +772,7 @@ export type {
   Section,
   SegmentMatrix,
   SendTiming,
+  SidechainSourceKind,
   SoloProcessor,
   SonareCapabilities,
   SpectralEditMode,

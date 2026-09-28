@@ -206,6 +206,17 @@ class RealtimeEngineWasm {
                         const emscripten::val& insert_index_val,
                         const emscripten::val& source_track_id_val);
   void setTrackBuses(emscripten::val buses);
+  /// Keys one insert of a bus strip from a track lane or another bus. Matches
+  /// sonare_engine_set_bus_sidechain (busId, insertIndex, sourceKind, sourceId);
+  /// sourceKind is a SonareSidechainSourceKind ordinal (0 track / 1 bus).
+  void setBusSidechain(const emscripten::val& bus_id_val, const emscripten::val& insert_index_val,
+                       const emscripten::val& source_kind_val,
+                       const emscripten::val& source_id_val);
+  /// Keys one insert of the master strip from a track lane or a bus. Matches
+  /// sonare_engine_set_master_sidechain.
+  void setMasterSidechain(const emscripten::val& insert_index_val,
+                          const emscripten::val& source_kind_val,
+                          const emscripten::val& source_id_val);
   void setBusStripJson(const emscripten::val& bus_id_val, const std::string& scene_json);
   void setTrackStripJson(const emscripten::val& track_id_val, const std::string& scene_json);
   void setTrackStripEqBandJson(const emscripten::val& track_id_val,

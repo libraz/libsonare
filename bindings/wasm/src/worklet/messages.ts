@@ -404,6 +404,18 @@ export interface SonareEngineSyncMixerMessage {
   masterStripJson?: string;
   /** Lane insert sidechain bindings (replayed after lanes/strips). */
   laneSidechains?: Array<{ trackId: number; insertIndex: number; sourceTrackId: number }>;
+  /**
+   * Bus insert sidechain bindings (replayed after lanes/buses/strips).
+   * `sourceKind` is a `SonareSidechainSourceKind` ordinal (0 track / 1 bus).
+   */
+  busSidechains?: Array<{
+    busId: number;
+    insertIndex: number;
+    sourceKind: number;
+    sourceId: number;
+  }>;
+  /** Master strip insert sidechain bindings. Same `sourceKind` convention. */
+  masterSidechains?: Array<{ insertIndex: number; sourceKind: number; sourceId: number }>;
 }
 
 export interface SonareEngineSyncCaptureMessage {

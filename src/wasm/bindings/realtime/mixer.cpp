@@ -8,6 +8,47 @@
 #include "mixing/pan_law.h"
 #include "realtime_engine_wasm.h"
 
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+// Reads an optional `sends` array off a track lane or bus object, in the one
+// shape both share. sendTiming mirrors SonareSendTiming (0 post, 1 pre) and
+// defaults to post-fader.
+std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& owner) {
+  std::vector<sonare::engine::TrackLaneConfig::Send> out;
+  if (owner["sends"].isUndefined() || owner["sends"].isNull()) return out;
+  val sends = owner["sends"];
+  const int send_count = static_cast<int>(wasmArrayLikeLength(sends, "sends"));
+  out.reserve(static_cast<size_t>(send_count));
+  for (int send_index = 0; send_index < send_count; ++send_index) {
+    val send = sends[send_index];
+    const int timing_value = intProperty(send, "sendTiming", 0);
+    if (timing_value != 0 && timing_value != 1) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "unknown mixing send timing");
+    }
+    const sonare::mixing::SendTiming timing = timing_value == 1
+                                                  ? sonare::mixing::SendTiming::PreFader
+                                                  : sonare::mixing::SendTiming::PostFader;
+    out.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
+                   floatProperty(send, "levelDb", 0.0f), boolProperty(send, "enabled", true),
+                   timing});
+  }
+  return out;
+}
+
+sonare::engine::SidechainSourceKind sidechainSourceKind(int source_kind) {
+  if (source_kind != static_cast<int>(sonare::engine::SidechainSourceKind::Track) &&
+      source_kind != static_cast<int>(sonare::engine::SidechainSourceKind::Bus)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown sidechain source kind");
+  }
+  return static_cast<sonare::engine::SidechainSourceKind>(source_kind);
+}
+
+}  // namespace
+#endif
+
 void RealtimeEngineWasm::setTrackLanes(val lanes) {
 #if defined(SONARE_WITH_MIXING)
   const int count = static_cast<int>(wasmArrayLikeLength(lanes, "lanes"));
@@ -34,30 +75,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
       }
       config.source_layout = static_cast<sonare::ChannelLayout>(raw_layout);
     }
-    if (lane_val.typeOf().as<std::string>() == "object" && !lane_val["sends"].isUndefined() &&
-        !lane_val["sends"].isNull()) {
-      val sends = lane_val["sends"];
-      const int send_count = static_cast<int>(wasmArrayLikeLength(sends, "sends"));
-      config.sends.reserve(static_cast<size_t>(send_count));
-      for (int send_index = 0; send_index < send_count; ++send_index) {
-        val send = sends[send_index];
-        // sendTiming integer mirrors SonareSendTiming (0 = post, 1 = pre) and
-        // defaults to post-fader, matching the historical lane-send behavior
-        // and the scene-JSON default. Post is value 0, so an omitted or zeroed
-        // value resolves to post-fader.
-        const int timing_value = intProperty(send, "sendTiming", 0);
-        if (timing_value != 0 && timing_value != 1) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "unknown mixing send timing");
-        }
-        const sonare::mixing::SendTiming timing = timing_value == 1
-                                                      ? sonare::mixing::SendTiming::PreFader
-                                                      : sonare::mixing::SendTiming::PostFader;
-        config.sends.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
-                                floatProperty(send, "levelDb", 0.0f),
-                                boolProperty(send, "enabled", true), timing});
-      }
-    }
+    if (lane_val.typeOf().as<std::string>() == "object") config.sends = readSends(lane_val);
     configs.push_back(std::move(config));
   }
   if (!engine_.set_track_lanes(std::move(configs))) {
@@ -105,9 +123,12 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "invalid bus channel layout");
     }
-    configs.push_back({static_cast<uint32_t>(intProperty(bus, "busId", 0)),
-                       floatProperty(bus, "gainDb", 0.0f),
-                       static_cast<sonare::ChannelLayout>(layout_value)});
+    sonare::engine::TrackBusConfig config{static_cast<uint32_t>(intProperty(bus, "busId", 0)),
+                                          floatProperty(bus, "gainDb", 0.0f),
+                                          static_cast<sonare::ChannelLayout>(layout_value)};
+    config.output_bus_id = static_cast<uint32_t>(intProperty(bus, "outputBusId", 0));
+    config.sends = readSends(bus);
+    configs.push_back(std::move(config));
   }
   if (!engine_.set_track_buses(std::move(configs))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -115,6 +136,51 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
   }
 #else
   (void)buses;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Keys one insert of a bus strip from a track lane or another bus (matches
+/// sonare_engine_set_bus_sidechain). sourceId 0 removes the binding.
+void RealtimeEngineWasm::setBusSidechain(const val& bus_id_val, const val& insert_index_val,
+                                         const val& source_kind_val, const val& source_id_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const int source_kind = checkedIntFromVal(source_kind_val, "sourceKind");
+  const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
+#if defined(SONARE_WITH_MIXING)
+  const sonare::engine::SidechainSourceKind kind = sidechainSourceKind(source_kind);
+  if (bus_id == 0 || !engine_.set_bus_sidechain(bus_id, insert_index, kind, source_id)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus sidechain binding");
+  }
+#else
+  (void)bus_id;
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Keys one insert of the master strip from a track lane or a bus (matches
+/// sonare_engine_set_master_sidechain). sourceId 0 removes the binding.
+void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const val& source_kind_val,
+                                            const val& source_id_val) {
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const int source_kind = checkedIntFromVal(source_kind_val, "sourceKind");
+  const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.set_master_sidechain(insert_index, sidechainSourceKind(source_kind), source_id)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid master sidechain binding");
+  }
+#else
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "mixing support is not compiled in");
 #endif
@@ -592,6 +658,8 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
   cls.function("setTrackLanes", &RealtimeEngineWasm::setTrackLanes)
       .function("setLaneSidechain", &RealtimeEngineWasm::setLaneSidechain)
       .function("setTrackBuses", &RealtimeEngineWasm::setTrackBuses)
+      .function("setBusSidechain", &RealtimeEngineWasm::setBusSidechain)
+      .function("setMasterSidechain", &RealtimeEngineWasm::setMasterSidechain)
       .function("setBusStripJson", &RealtimeEngineWasm::setBusStripJson)
       .function("setTrackStripJson", &RealtimeEngineWasm::setTrackStripJson)
       .function("setTrackStripEqBandJson", &RealtimeEngineWasm::setTrackStripEqBandJson)

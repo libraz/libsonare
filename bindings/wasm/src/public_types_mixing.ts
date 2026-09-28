@@ -130,6 +130,12 @@ export type MeterTap = 'preFader' | 'postFader';
 /** Pre/post-fader send timing (see {@link Mixer.addSend}). */
 export type SendTiming = 'preFader' | 'postFader';
 
+/**
+ * Source a bus or master insert's sidechain key is taken from: a track lane's
+ * post-strip signal, or a bus's signal before its `gainDb`.
+ */
+export type SidechainSourceKind = 'track' | 'bus';
+
 /** A single goniometer (left/right) sample returned by {@link Mixer.readGoniometerLatest}. */
 export interface GoniometerPoint {
   left: number;

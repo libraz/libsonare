@@ -1,5 +1,12 @@
 import type { ProjectAutomationCurve } from './project_types';
-import type { AutomationCurve, MeterTap, PanLawInput, PanMode, SendTiming } from './public_types';
+import type {
+  AutomationCurve,
+  MeterTap,
+  PanLawInput,
+  PanMode,
+  SendTiming,
+  SidechainSourceKind,
+} from './public_types';
 
 /** Resolve a numeric ordinal in an inclusive range without coercion. */
 export function resolveOrdinalInRange(
@@ -91,6 +98,7 @@ const PAN_MODE_VALUES = {
 } as const;
 const METER_TAP_VALUES = { preFader: 0, postFader: 1 } as const;
 const SEND_TIMING_VALUES = { postFader: 0, preFader: 1 } as const;
+const SIDECHAIN_SOURCE_KIND_VALUES = { track: 0, bus: 1 } as const;
 const TRACK_MONITOR_MODE_VALUES = { off: 0, pfl: 1, afl: 2 } as const;
 
 export function automationCurveCode(curve: AutomationCurve): number {
@@ -123,6 +131,11 @@ export function sendTimingCode(timing: SendTiming | number): number {
   // An unknown string is rejected rather than silently routed to post-fader,
   // matching the sibling enum-code helpers and Node's sendTimingValue.
   return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
+}
+
+/** Resolve a sidechain source kind to its `SonareSidechainSourceKind` ordinal. */
+export function sidechainSourceKindCode(kind: SidechainSourceKind | number): number {
+  return resolveEnumOrdinal(kind, SIDECHAIN_SOURCE_KIND_VALUES, 'sidechain source kind');
 }
 
 /** Resolve a per-track PFL/AFL monitor mode to its C-ABI ordinal. */

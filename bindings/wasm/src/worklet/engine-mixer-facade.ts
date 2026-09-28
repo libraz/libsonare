@@ -1,4 +1,11 @@
-import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from '../index';
+import { sidechainSourceKindCode } from '../codes';
+import type {
+  EngineBus,
+  EngineTrackLane,
+  EngineTrackSend,
+  RealtimeEngine,
+  SidechainSourceKind,
+} from '../index';
 import { normalizeTrackLanes } from './engine-offline';
 import { buildMixerLanes } from './engine-sync';
 import type { SonareEngineSyncMessage } from './messages';
@@ -18,6 +25,14 @@ export interface EngineMixerContext {
   readonly laneSidechains: Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
+  >;
+  readonly busSidechains: Map<
+    string,
+    { busId: number; insertIndex: number; sourceKind: number; sourceId: number }
+  >;
+  readonly masterSidechains: Map<
+    number,
+    { insertIndex: number; sourceKind: number; sourceId: number }
   >;
   readonly buses: EngineBus[];
   readonly trackStripJson: Map<number, string>;
@@ -104,6 +119,8 @@ export function syncMixer(ctx: EngineMixerContext): void {
     laneSidechains: Array.from(ctx.laneSidechains.values()),
     busStrips,
     masterStripJson: ctx.getMasterStripJson(),
+    busSidechains: Array.from(ctx.busSidechains.values()),
+    masterSidechains: Array.from(ctx.masterSidechains.values()),
   });
 }
 
@@ -180,17 +197,86 @@ export function setLaneSidechain(
     const sourceIndex = ctx.ensureTrackLane(sourceTarget);
     sourceTrackId = ctx.trackLaneIds[sourceIndex];
   }
+  ctx.offlineEngine.setLaneSidechain(trackId, insertIndex, sourceTrackId);
   if (sourceTrackId === 0) {
     ctx.laneSidechains.delete(key);
   } else {
     ctx.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
   }
-  ctx.offlineEngine.setLaneSidechain(trackId, insertIndex, sourceTrackId);
   ctx.postSync({
     type: 'syncMixer',
     lanes: ctx.mixerLanes(),
     laneSidechains: [{ trackId, insertIndex, sourceTrackId }],
   });
+}
+
+/**
+ * Keys one insert of a bus strip from a track lane or another bus
+ * (ducking/sidechainRouter inserts). `sourceId` 0 removes the binding. The
+ * binding is cached for resync only once the engine has accepted it.
+ */
+export function setBusSidechain(
+  ctx: EngineMixerContext,
+  busId: number,
+  insertIndex: number,
+  kind: SidechainSourceKind | number,
+  sourceId: number,
+): void {
+  const sourceKind = sidechainSourceKindCode(kind);
+  ctx.ensureBus(busId);
+  ensureSidechainSource(ctx, sourceKind, sourceId);
+  ctx.offlineEngine.setBusSidechain(busId, insertIndex, sourceKind, sourceId);
+  const key = `${busId}:${insertIndex}`;
+  if (sourceId === 0) {
+    ctx.busSidechains.delete(key);
+  } else {
+    ctx.busSidechains.set(key, { busId, insertIndex, sourceKind, sourceId });
+  }
+  ctx.postSync({
+    type: 'syncMixer',
+    lanes: ctx.mixerLanes(),
+    busSidechains: [{ busId, insertIndex, sourceKind, sourceId }],
+  });
+}
+
+/**
+ * Keys one insert of the master strip from a track lane or a bus. Same source
+ * rules as {@link setBusSidechain}.
+ */
+export function setMasterSidechain(
+  ctx: EngineMixerContext,
+  insertIndex: number,
+  kind: SidechainSourceKind | number,
+  sourceId: number,
+): void {
+  const sourceKind = sidechainSourceKindCode(kind);
+  ensureSidechainSource(ctx, sourceKind, sourceId);
+  ctx.offlineEngine.setMasterSidechain(insertIndex, sourceKind, sourceId);
+  if (sourceId === 0) {
+    ctx.masterSidechains.delete(insertIndex);
+  } else {
+    ctx.masterSidechains.set(insertIndex, { insertIndex, sourceKind, sourceId });
+  }
+  ctx.postSync({
+    type: 'syncMixer',
+    lanes: ctx.mixerLanes(),
+    masterSidechains: [{ insertIndex, sourceKind, sourceId }],
+  });
+}
+
+function ensureSidechainSource(
+  ctx: EngineMixerContext,
+  sourceKind: number,
+  sourceId: number,
+): void {
+  if (sourceId === 0) {
+    return;
+  }
+  if (sourceKind === 1) {
+    ctx.ensureBus(sourceId);
+  } else {
+    ctx.ensureTrackLane(sourceId);
+  }
 }
 
 export function setSends(

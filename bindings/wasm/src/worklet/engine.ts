@@ -22,6 +22,7 @@ import type {
   MidiCcBindOptions,
   PanLaw,
   PanMode,
+  SidechainSourceKind,
 } from '../index';
 import { RealtimeEngine } from '../index';
 import { createOpfsClipPageProvider, type OpfsClipPageProviderBinding } from '../opfs_clip_pages';
@@ -103,6 +104,14 @@ export class SonareEngine {
   private readonly laneSidechains = new Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
+  >();
+  private readonly busSidechains = new Map<
+    string,
+    { busId: number; insertIndex: number; sourceKind: number; sourceId: number }
+  >();
+  private readonly masterSidechains = new Map<
+    number,
+    { insertIndex: number; sourceKind: number; sourceId: number }
   >();
   private readonly buses: EngineBus[] = [];
   private readonly trackStripJson = new Map<number, string>();
@@ -468,6 +477,31 @@ export class SonareEngine {
 
   setTrackBuses(buses: EngineBus[]): void {
     mixer.setTrackBuses(this.mixerContext, buses);
+  }
+
+  /**
+   * Keys one insert of a bus strip from a track lane or another bus
+   * (ducking/sidechainRouter inserts). `sourceId` 0 removes the binding.
+   */
+  setBusSidechain(
+    busId: number,
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): void {
+    mixer.setBusSidechain(this.mixerContext, busId, insertIndex, sourceKind, sourceId);
+  }
+
+  /**
+   * Keys one insert of the master strip from a track lane or a bus. Same
+   * source rules as {@link setBusSidechain}.
+   */
+  setMasterSidechain(
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): void {
+    mixer.setMasterSidechain(this.mixerContext, insertIndex, sourceKind, sourceId);
   }
 
   setBusGain(busId: number, db: number): boolean {
@@ -1394,6 +1428,8 @@ export class SonareEngine {
       trackSends: this.trackSends,
       trackOutputBus: this.trackOutputBus,
       laneSidechains: this.laneSidechains,
+      busSidechains: this.busSidechains,
+      masterSidechains: this.masterSidechains,
       buses: this.buses,
       trackStripJson: this.trackStripJson,
       busStripJson: this.busStripJson,
