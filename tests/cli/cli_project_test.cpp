@@ -324,9 +324,9 @@ TEST_CASE("CLI project command group", "[cli]") {
     std::remove(wav.c_str());
   }
 
-  SECTION("bounce refuses a width it does not render, naming the option") {
-    // The bounce renders a stereo master and writes that pair or its mono
-    // downmix. Any other width used to reach the C ABI and come back as a bare
+  SECTION("bounce refuses a width no speaker layout has, naming the option") {
+    // The bounce renders its master at 1, 2, 6 or 8 channels. Any other width
+    // used to reach the C ABI and come back as a bare
     // "bounce project: Invalid parameter" after the project had been loaded,
     // with nothing pointing at the option that caused it.
     const std::string proj = unique_temp_path("_proj.json");
@@ -334,7 +334,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    for (const char* count : {"3", "6"}) {
+    for (const char* count : {"3", "4"}) {
       INFO(count);
       auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
                                    " --frames 256 --channels " + count + " -q");
@@ -354,6 +354,66 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE_THAT(missing_output, ContainsSubstring("--channels"));
 
     std::remove(proj.c_str());
+  }
+
+  SECTION("bounce refuses 6/8 that outgrow a stereo master, without naming the option") {
+    // 6 and 8 are speaker-layout widths, so validate_project_bounce_channels
+    // lets them through; a fresh `project new` project has no scene, which
+    // caps its master at stereo, so the request still fails, but only once it
+    // reaches the C ABI's own master-width check -- the generic error the
+    // render always had, with nothing option-specific in it.
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_bounce_narrow_master.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    for (const char* count : {"6", "8"}) {
+      INFO(count);
+      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                   " --frames 256 --channels " + count + " -q");
+      REQUIRE(bc == 3);
+      REQUIRE_THAT(bo, ContainsSubstring("Invalid parameter"));
+      REQUIRE_THAT(bo, !ContainsSubstring("--channels"));
+      std::ifstream out_file(wav);
+      REQUIRE_FALSE(out_file.good());
+    }
+
+    std::remove(proj.c_str());
+  }
+
+  SECTION("bounce renders 6/8 channels up to a surround master's own width") {
+    const std::string proj51 = unique_temp_path("_proj_51.json");
+    const std::string proj71 = unique_temp_path("_proj_71.json");
+    const std::string wav = unique_temp_path("_bounce_surround.wav");
+    create_surround_master_project(proj51, "5.1");
+    create_surround_master_project(proj71, "7.1");
+
+    {
+      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj51 + " -o " + wav +
+                                   " --frames 256 --channels 6 --json");
+      REQUIRE(bc == 0);
+      REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 6"));
+      REQUIRE(wav_header_channel_count(wav) == 6);
+    }
+    {
+      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj71 + " -o " + wav +
+                                   " --frames 256 --channels 8 --json");
+      REQUIRE(bc == 0);
+      REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 8"));
+      REQUIRE(wav_header_channel_count(wav) == 8);
+    }
+    // 8 still exceeds a 5.1 master's own 6-channel width: the value is a valid
+    // speaker layout, but this project's master is narrower than it.
+    {
+      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj51 + " -o " + wav +
+                                   " --frames 256 --channels 8 -q");
+      REQUIRE(bc == 3);
+      REQUIRE_THAT(bo, !ContainsSubstring("--channels"));
+    }
+
+    std::remove(proj51.c_str());
+    std::remove(proj71.c_str());
+    std::remove(wav.c_str());
   }
 
   SECTION("an input that outgrows its size probe is refused instead of buffered") {

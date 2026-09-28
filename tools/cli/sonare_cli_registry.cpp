@@ -373,11 +373,14 @@ CliValidationError validate_key_hpss_hop(const CliArgs& args) {
 }
 
 #ifdef SONARE_WITH_ARRANGEMENT
-// The project bounce renders a stereo master and writes either that pair or its
-// mono downmix, so the C ABI accepts a channel count of 1 or 2 and refuses any
-// other width rather than emitting silent planes. Without this the refusal
-// arrives from the render as a bare invalid-parameter error, after the project
-// has been loaded, with nothing naming the option that caused it.
+// The project bounce renders its master at a speaker-layout width, so the C
+// ABI accepts 1, 2, 6 or 8 channels -- each at most the scene master's own
+// layout width, which only the C ABI can see -- and refuses any other count
+// rather than emitting silent planes. Without this the refusal arrives from
+// the render as a bare invalid-parameter error, after the project has been
+// loaded, with nothing naming the option that caused it. The master-width cap
+// itself is not duplicated here: a count from this set that still exceeds the
+// scene's master reaches the same generic error the render always had.
 //
 // This is a command validator rather than a per-option domain because a domain
 // is published in the shared option inventory both CLIs are pinned against, and
@@ -391,10 +394,15 @@ CliValidationError validate_project_bounce_channels(const CliArgs& args) {
   // choose" sentinel (sonare_c_project_core.h: num_channels <= 0 => 2), so
   // refusing it made this validator stricter than the oracle it fronts and
   // stricter than the Python CLI, which accepts it. Only a positive count that
-  // is neither mono nor stereo is a value nothing downstream can honour.
-  if (channels <= 0 || channels == mono || channels == stereo) return {};
+  // is not one of the four speaker-layout widths is a value nothing
+  // downstream can honour.
+  if (channels <= 0 || channels == mono || channels == stereo ||
+      sonare::is_surround_channel_count(channels)) {
+    return {};
+  }
   return {"invalid value for --channels: " + std::to_string(channels) + " (expected one of " +
-              std::to_string(mono) + ", " + std::to_string(stereo) + ", or <= 0 for the default)",
+              std::to_string(mono) + ", " + std::to_string(stereo) +
+              ", 6, 8, or <= 0 for the default)",
           true};
 }
 #endif

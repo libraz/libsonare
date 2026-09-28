@@ -760,7 +760,12 @@ def register_project_parsers(
     )
     pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
     pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
-    pbounce.add_argument("--channels", type=int, default=2, help="Render channel count")
+    pbounce.add_argument(
+        "--channels",
+        type=int,
+        default=2,
+        help="Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)",
+    )
     pbounce.add_argument("--instrument-latency", type=int, default=0)
     # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
     # the id written with the path keeps the pairing in one token, so no second
@@ -882,7 +887,12 @@ def register_project_parsers(
     )
     midi_render_p.add_argument("--frames", type=int, default=0, help="Render length in frames")
     midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")
-    midi_render_p.add_argument("--channels", type=int, default=2, help="Render channel count")
+    midi_render_p.add_argument(
+        "--channels",
+        type=int,
+        default=2,
+        help="Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)",
+    )
     midi_render_p.add_argument("--instrument-latency", type=int, default=0)
     midi_render_p.add_argument(
         "--synth",

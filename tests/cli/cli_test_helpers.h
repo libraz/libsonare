@@ -173,6 +173,17 @@ inline unsigned int wav_header_sample_rate(const std::string& path) {
          (static_cast<unsigned int>(header[26]) << 16U) |
          (static_cast<unsigned int>(header[27]) << 24U);
 }
+
+/// @brief Writes a project JSON whose scene master carries @p layout
+///        ("5.1" or "7.1"), so a bounce up to that layout's width is accepted.
+/// @details The master is resolved by role rather than id, so this is the
+///   smallest document that widens what a project bounce may render.
+inline void create_surround_master_project(const std::string& path, const char* layout) {
+  std::ofstream file(path);
+  file << R"({"version":1,"sample_rate":48000,"tracks":[],"clips":[],)"
+       << R"("scene":{"version":1,"buses":[{"id":"bus.main","role":"master","layout":")" << layout
+       << R"("}]}})";
+}
 #endif  // SONARE_WITH_ARRANGEMENT
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)

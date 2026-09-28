@@ -11169,6 +11169,50 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "channels_exceed_master",
+          "argv": [
+            "project",
+            "bounce",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--channels",
+            "6",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "unsupported_channels",
+          "argv": [
+            "project",
+            "bounce",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--channels",
+            "4",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}
@@ -14160,6 +14204,27 @@
             "{bounce_output}",
             "--channels",
             "3",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "channels_exceed_master",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--channels",
+            "8",
             "--json"
           ],
           "exit": 3,

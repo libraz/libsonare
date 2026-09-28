@@ -825,8 +825,9 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   // The WAV writer requires the count and the layout to agree, so the layout is
   // derived from the count through the shared mapping rather than by a local
   // mono-or-stereo rule that would label any other width stereo. The count is
-  // restricted to what the bounce renders (mono or stereo) by
-  // validate_cli_arguments before this point.
+  // restricted to one of the four speaker-layout widths (1, 2, 6, 8) by
+  // validate_cli_arguments before this point; whether it also fits the
+  // scene's own master is the C ABI's own check.
   const ChannelLayout layout = layout_from_channel_count(channels);
   save_wav_multichannel(args.output_file, rendered.data(), frames, channels, layout, sample_rate);
 
@@ -1463,7 +1464,8 @@ void print_project_usage(std::ostream& out) {
       "  --sample-rate <hz>   Sample rate (new / bounce; bounce defaults to the project's own "
       "rate)\n"
       "  --frames <n>         Bounce length in frames\n"
-      "  --channels <n>       Bounce channel count: 1 (mono downmix) or 2 (default 2)\n"
+      "  --channels <n>       Bounce channel count: 1, 2, 6, or 8, at most the scene master's own "
+      "width (default 2)\n"
       "  --strict             Treat project load diagnostics as validation failures\n"
       "  --audio <id>=<file>  Bind decoded PCM to project audio source <id> (bounce;\n"
       "                       repeat once per source, since project JSON carries only a\n"
