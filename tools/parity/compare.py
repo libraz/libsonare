@@ -104,6 +104,12 @@ DEFAULT_HANDLE_PREFIXES = (
     # SonarePolyphonicAnalysis handle: polyphonic_* ops are methods on the analysis
     # object each facade returns.
     "polyphonic",
+    # SonarePlaybackRenderer / SonarePlaybackLoudnessMeter handles: playback_* ops
+    # are methods on the class each facade returns. The one plain free function
+    # sharing the prefix (playback_render_interleaved) is excepted below.
+    "playback",
+    # SonareHrtfSet handle: hrtf_set_* ops are methods on the HrtfSet class.
+    "hrtf",
 )
 
 # Free-function keys that share a handle prefix but ARE plain DSP free functions
@@ -112,6 +118,10 @@ HANDLE_PREFIX_FREEFN_EXCEPTIONS = (
     "master_audio",
     "master_audio_stereo",
     "voice_change",
+    # Shares the "playback" head token with the renderer/meter handles but takes
+    # the audio directly rather than holding a handle -- a plain DSP free
+    # function, credited via the render_playback alias in _ALIAS_COVERAGE.
+    "playback_render_interleaved",
 )
 
 # Full handle-instance prefixes, each paired with the facade class that owns the
@@ -142,6 +152,12 @@ _HANDLE_FULL_PREFIXES = (
     # shorter token so the destroy entry strips to a bare lifecycle key.
     ("polyphonic_analysis_", "PolyphonicAnalysis"),
     ("polyphonic_", "PolyphonicAnalysis"),
+    # SonarePlaybackLoudnessMeter / SonarePlaybackRenderer / SonareHrtfSet handles.
+    # ``playback_loudness_meter_`` is listed ahead of ``playback_renderer_`` even
+    # though the two never collide, to keep every ``playback_*`` handle grouped.
+    ("playback_loudness_meter_", "PlaybackLoudnessMeter"),
+    ("playback_renderer_", "PlaybackRenderer"),
+    ("hrtf_set_", "HrtfSet"),
     # SonareProject handle: e.g. ``project_split_clip`` -> facade ``Project``
     # method ``split_clip`` / ``splitClip``. Ops renamed on the facade
     # (serialize -> to_json, deserialize -> from_json, create -> ctor) are
@@ -160,17 +176,31 @@ def _is_lifecycle_key(key: str) -> bool:
     These are reported informationally, never gated (a "missing" one is not a
     coverage bug).
 
-    ``_create_ex`` is here because a constructor variant is still a constructor:
-    the extra arguments arrive as constructor options
-    (``loudnessStaticGainDb`` on the streaming mastering chain), so matching it
-    to a free function was never going to succeed. Tested by suffix, so the
-    ``_ex`` variant of a lifecycle op is gated the moment it is added while its
-    plain sibling never is — which is a family the list has to name, not an entry
-    per instance.
+    A constructor variant is still a constructor: ``_create_json`` and
+    ``_create_ex`` carry the extra arguments as constructor options
+    (``loudnessStaticGainDb`` on the streaming mastering chain), and
+    ``_create_default`` / ``_create_from_memory`` (the HRTF set's two factories)
+    name the source rather than adding an argument -- none of the four was ever
+    going to match a free function. Tested by suffix, so the ``_ex`` variant of a
+    lifecycle op is gated the moment it is added while its plain sibling never
+    is -- which is a family the list has to name, not an entry per instance. A
+    substring test (matching any ``_create*``) was considered and rejected: it
+    would also swallow a future non-constructor like ``*_create_clip``, silently
+    dropping it out of coverage instead of flagging it.
     """
     return (
         key.startswith("free_")
-        or key.endswith(("_free", "_create", "_create_json", "_create_ex", "_destroy"))
+        or key.endswith(
+            (
+                "_free",
+                "_create",
+                "_create_json",
+                "_create_ex",
+                "_create_default",
+                "_create_from_memory",
+                "_destroy",
+            )
+        )
         or "_free_" in key
     )
 
@@ -373,6 +403,19 @@ _ALIAS_COVERAGE = {
     "midi_gm2_drum_name": ("gm2_drum_name",),
     # Per-note controller name likewise drops the `midi_` prefix on every facade.
     "midi_per_note_controller_name": ("per_note_controller_name",),
+    # One-shot playback render: the C entry point names the operation
+    # (`_interleaved`, its only shape); every facade drops that suffix.
+    "playback_render_interleaved": ("render_playback",),
+    # PlaybackRenderer accessors: the C ABI hands back a JSON document (a
+    # setter takes one); every facade parses/serializes it and exposes the
+    # unsuffixed name as a property (Python, Node) or bare method (WASM).
+    "playback_renderer_config_json": ("config",),
+    "playback_renderer_set_config_json": ("set_config",),
+    "playback_renderer_diagnostics_json": ("diagnostics",),
+    # Renderer channel-count accessors drop the `_count` and abbreviate
+    # `channel` to plural, identically on all three facades.
+    "playback_renderer_input_channel_count": ("input_channels",),
+    "playback_renderer_output_channel_count": ("output_channels",),
 }
 
 

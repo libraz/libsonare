@@ -248,6 +248,34 @@ def test_lifecycle_ops_are_informational_not_active() -> None:
     assert ("free_floats", "python") in informational, informational
 
 
+def test_named_constructor_variants_are_lifecycle_not_active() -> None:
+    """A constructor named after its source, not just ``_ex``/``_json``, is still one.
+
+    The HRTF set's two factories name what they build from rather than adding an
+    argument, so ``_is_lifecycle_key`` names both suffixes explicitly, the same
+    way it names ``_create_json`` and ``_create_ex``.
+    """
+    rep = _report(_c("hrtf_set_create_default", "hrtf_set_create_from_memory"), _py())
+    assert _active(rep) == set(), _active(rep)
+    informational = {(f.key, f.surface) for f in rep.reported() if f.informational}
+    assert ("hrtf_set_create_default", "python") in informational, informational
+    assert ("hrtf_set_create_from_memory", "python") in informational, informational
+
+
+def test_one_shot_render_is_covered_by_its_alias() -> None:
+    """``playback_render_interleaved`` is a plain free function, not a handle op.
+
+    It shares the ``playback`` head token with the renderer/meter handles, so it
+    needs both the freefn exception (out of the handle bucket) and the alias (its
+    facades all drop ``_interleaved``).
+    """
+    rep = _report(_c("playback_render_interleaved"), _py(frees=["render_playback"]))
+    assert ("playback_render_interleaved", "python") not in _active(rep), _active(rep)
+
+    missing = _report(_c("playback_render_interleaved"), _py())
+    assert ("playback_render_interleaved", "python") in _active(missing), _active(missing)
+
+
 def test_real_repo_has_zero_active_coverage_gaps() -> None:
     """End-to-end: with the curated alias map + allowlist, the repo gate is green.
 

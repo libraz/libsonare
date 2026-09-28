@@ -17,6 +17,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | mastering | 108 | 97/108 | 97/108 | 99/108 | 11/108 | 9/108 |
 | metering | 40 | 40/40 | 38/40 | 40/40 | 7/40 | 7/40 |
 | mixing & routing | 57 | 55/57 | 55/57 | 55/57 | 2/57 | 2/57 |
+| playback | 22 | 22/22 | 22/22 | 22/22 | 8/22 | 8/22 |
 | polyphony | 13 | 13/13 | 13/13 | 13/13 | 4/13 | 4/13 |
 | project & arrangement | 147 | 139/147 | 138/147 | 138/147 | 11/147 | 8/147 |
 | realtime engine | 154 | 151/154 | 151/154 | 151/154 | 5/154 | 5/154 |
@@ -25,4 +26,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | streaming | 34 | 32/34 | 32/34 | 32/34 | 8/34 | 8/34 |
 | transcription | 4 | 3/4 | 3/4 | 3/4 | 2/4 | 2/4 |
 | voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 | 3/20 |
-| **all domains** | **841** | **775/841** | **772/841** | **772/841** | **118/841** | **137/841** |
+| **all domains** | **863** | **797/863** | **794/863** | **794/863** | **126/863** | **145/863** |
