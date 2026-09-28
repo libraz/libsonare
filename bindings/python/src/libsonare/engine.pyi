@@ -35,6 +35,7 @@ from .types import (
     PanLaw,
     ParameterInfo,
     ScopeTelemetryRecord,
+    SidechainSourceKind,
     TransportState,
 )
 
@@ -99,6 +100,16 @@ class RealtimeEngine:
     def flush_control_commands(self) -> None: ...
     def set_lane_sidechain(
         self, track_id: int, insert_index: int, source_track_id: int
+    ) -> None: ...
+    def set_bus_sidechain(
+        self,
+        bus_id: int,
+        insert_index: int,
+        source_kind: SidechainSourceKind | str | int,
+        source_id: int,
+    ) -> None: ...
+    def set_master_sidechain(
+        self, insert_index: int, source_kind: SidechainSourceKind | str | int, source_id: int
     ) -> None: ...
     def seek_ppq(self, ppq: float, render_frame: int = -1) -> None: ...
     def set_tempo(self, bpm: float) -> None: ...

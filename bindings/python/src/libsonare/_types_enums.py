@@ -131,6 +131,17 @@ class SendTiming(IntEnum):
     PRE_FADER = 1
 
 
+class SidechainSourceKind(IntEnum):
+    """Where a bus or master insert's sidechain key is taken from.
+
+    Mirrors ``SonareSidechainSourceKind``: a track's post-strip output, or a
+    bus's output before its gain.
+    """
+
+    TRACK = 0
+    BUS = 1
+
+
 class SectionType(IntEnum):
     """Song-structure section type (mirrors sonare::SectionType ordinals).
 

@@ -102,6 +102,7 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_curve_value": ((1.5,), ("linear",)),
     "_meter_tap_value": ((1.5,), ("post-fader",)),
     "_send_timing_value": ((1.5,), ("post-fader",)),
+    "_sidechain_source_kind_value": ((1.5,), ("track",)),
     "_warp_mode_value": ((1.5,), ("off",)),
     "_profile_value": (("not-a-key-profile",), ("krumhansl",)),
     "_mode_values": (("not-a-mode",), ("major-minor",)),

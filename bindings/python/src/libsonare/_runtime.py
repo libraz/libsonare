@@ -989,6 +989,19 @@ def _send_timing_value(value: SendTiming | str | int) -> int:
     return _resolve_enum(value, _SEND_TIMING_NAMES, "send timing", enum_cls=SendTiming, dash=True)
 
 
+_SIDECHAIN_SOURCE_KIND_NAMES = {
+    "track": int(SidechainSourceKind.TRACK),
+    "bus": int(SidechainSourceKind.BUS),
+}
+
+
+def _sidechain_source_kind_value(value: SidechainSourceKind | str | int) -> int:
+    """Resolve a sidechain source kind to its C enum value (0 track, 1 bus)."""
+    return _resolve_enum(
+        value, _SIDECHAIN_SOURCE_KIND_NAMES, "sidechain source kind", enum_cls=SidechainSourceKind
+    )
+
+
 _WARP_MODE_NAMES = {"off": 0, "repitch": 1, "tempo-sync": 2, "time-stretch": 3}
 
 

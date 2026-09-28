@@ -2125,6 +2125,24 @@
         "name": "channel_layout",
         "offset": 8,
         "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "output_bus_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "sends",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "send_count",
+        "offset": 24,
+        "size": 8
       }
     ],
     "size": 32
@@ -2646,6 +2664,24 @@
         "kind": "unsigned",
         "name": "event_count",
         "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "gain",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "fade_in_samples",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "fade_out_samples",
+        "offset": 88,
         "size": 8
       }
     ],

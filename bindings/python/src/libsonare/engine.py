@@ -700,6 +700,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 clip.track_id if clip.destination_id is None else clip.destination_id,
                 raw_events,
                 len(clip.events),
+                float(clip.gain),
+                clip.fade_in_samples,
+                clip.fade_out_samples,
             )
         _check(
             lib.sonare_engine_set_midi_clips(

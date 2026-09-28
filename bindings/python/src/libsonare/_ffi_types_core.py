@@ -405,12 +405,17 @@ class SonareEngineTrackLane(CStruct):
 
 
 class SonareEngineBus(CStruct):
-    """Maps to SonareEngineBus in sonare_c.h."""
+    """Maps to SonareEngineBus in sonare_c_types_engine.h."""
 
     _fields_ = [
         ("bus_id", ctypes.c_uint32),
         ("gain_db", ctypes.c_float),
         ("channel_layout", ctypes.c_uint8),
+        # Bus the output sums into instead of the master mix; 0 = master.
+        ("output_bus_id", ctypes.c_uint32),
+        # Sends to other buses, same shape as a track lane's sends.
+        ("sends", ctypes.POINTER(SonareEngineTrackSend)),
+        ("send_count", ctypes.c_size_t),
     ]
 
 

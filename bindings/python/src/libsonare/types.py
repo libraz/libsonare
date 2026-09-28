@@ -355,6 +355,9 @@ from ._types_enums import (
 from ._types_enums import (
     SendTiming as SendTiming,
 )
+from ._types_enums import (
+    SidechainSourceKind as SidechainSourceKind,
+)
 from ._types_mastering import (
     LoudnessMatch as LoudnessMatch,
 )

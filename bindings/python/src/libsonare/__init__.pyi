@@ -1082,6 +1082,9 @@ from .types import (
     SendTiming as SendTiming,
 )
 from .types import (
+    SidechainSourceKind as SidechainSourceKind,
+)
+from .types import (
     SpectrumReport as SpectrumReport,
 )
 from .types import (

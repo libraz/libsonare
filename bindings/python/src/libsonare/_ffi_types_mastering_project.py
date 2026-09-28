@@ -466,6 +466,15 @@ class SonareEngineMidiClipSchedule(CStruct):
         ("destination_id", ctypes.c_uint32),
         ("events", ctypes.POINTER(SonareEngineMidiEvent)),
         ("event_count", ctypes.c_size_t),
+        # Linear gain applied to the destination instrument's rendered audio
+        # while this clip is the most recently started active clip on it. A
+        # zero-initialized struct is silent; 1.0 is unity.
+        ("gain", ctypes.c_float),
+        # Linear fade lengths over the clip's full length (not per internal
+        # loop); fade_out_samples must be 0 when length_samples <= 0
+        # (open-ended).
+        ("fade_in_samples", ctypes.c_int64),
+        ("fade_out_samples", ctypes.c_int64),
     ]
 
 

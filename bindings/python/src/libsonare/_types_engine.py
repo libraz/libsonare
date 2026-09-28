@@ -300,6 +300,13 @@ class EngineMidiClipSchedule:
     length_samples: int = 0
     loop: bool = False
     loop_length_samples: int = 0
+    # Linear gain applied to the destination instrument's rendered audio while
+    # this clip is the most recently started active clip on it.
+    gain: float = 1.0
+    # Linear fade lengths over the clip's full length (not per internal loop);
+    # fade_out_samples must be 0 for an open-ended clip (length_samples <= 0).
+    fade_in_samples: int = 0
+    fade_out_samples: int = 0
 
 
 @dataclass(frozen=True, slots=True)

@@ -352,14 +352,17 @@ def test_engine_track_buses_route_lane_sends() -> None:
 
         engine.play()
         out = engine.process([[0.0] * 256])[0]
-        assert 2.82 < out[-1] < 2.84
+        # A 5.1 bus feeding a narrower (mono) output downmixes rather than
+        # truncating to the front channels, so the unity-level send adds half
+        # the direct level instead of doubling it.
+        assert 2.12 < out[-1] < 2.13
         meter_targets = {record.target_id for record in engine.drain_meter_telemetry()}
         assert {0, 1, 33}.issubset(meter_targets)
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": -6.0206}]}])
         engine.seek_sample(0)
         out = engine.process([[0.0] * 256])[0]
-        assert 2.11 < out[-1] < 2.13
+        assert 1.76 < out[-1] < 1.78
 
         engine.set_track_lanes(
             [{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0, "enabled": False}]}]

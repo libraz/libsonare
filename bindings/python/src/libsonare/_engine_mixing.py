@@ -11,6 +11,7 @@ from ._runtime import (
     _UINT32_MAX,
     PanLawInput,
     SendTiming,
+    SidechainSourceKind,
     SonareEngineBus,
     SonareEngineTrackLane,
     SonareEngineTrackSend,
@@ -20,6 +21,7 @@ from ._runtime import (
     _pan_law_value,
     _pan_mode_value,
     _send_timing_value,
+    _sidechain_source_kind_value,
     _to_c_float,
     _to_c_int,
     _to_c_uint,
@@ -111,8 +113,49 @@ class _EngineMixingMixin:
             )
         )
 
+    def set_bus_sidechain(
+        self,
+        bus_id: int,
+        insert_index: int,
+        source_kind: SidechainSourceKind | str | int,
+        source_id: int,
+    ) -> None:
+        """Key one insert of a bus strip from a track's or another bus's signal.
+
+        Bus-strip counterpart of :meth:`set_lane_sidechain`. ``source_kind`` is
+        ``"track"``/``"bus"`` (or the matching 0/1 ordinal); ``source_id`` 0
+        removes the binding. Control-thread-only: do not call concurrently
+        with :meth:`process`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_sidechain(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
+                _to_c_uint32(source_id, "source_id"),
+            )
+        )
+
+    def set_master_sidechain(
+        self, insert_index: int, source_kind: SidechainSourceKind | str | int, source_id: int
+    ) -> None:
+        """Key one insert of the master strip from a track's or a bus's signal.
+
+        Master-strip counterpart of :meth:`set_bus_sidechain`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_master_sidechain(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
+                _to_c_uint32(source_id, "source_id"),
+            )
+        )
+
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
+        send_arrays: list[object] = []
         for i, bus in enumerate(buses):
             # Assigned unconverted so the struct's own narrowing sees the caller
             # value; int() would truncate a fraction past it.
@@ -129,6 +172,42 @@ class _EngineMixingMixin:
                 )
             else:
                 raw[i].channel_layout = 1
+            sends = cast(Sequence[Mapping[str, object]], bus.get("sends", []))
+            if sends:
+                send_array = (SonareEngineTrackSend * len(sends))()
+                for send_index, send in enumerate(sends):
+                    if not isinstance(send, Mapping):
+                        raise TypeError("bus send must be a mapping")
+                    send_array[send_index].bus_id = cast(
+                        int, send["bus_id"] if "bus_id" in send else send["busId"]
+                    )
+                    send_array[send_index].level_db = float(
+                        cast(
+                            float,
+                            send["level_db"] if "level_db" in send else send.get("levelDb", 0.0),
+                        )
+                    )
+                    send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
+                    # Default to post-fader so callers that omit the timing key
+                    # keep the prior behavior.
+                    timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
+                    send_array[send_index].send_timing = (
+                        _send_timing_value(cast(SendTiming | str | int, timing))
+                        if timing is not None
+                        else int(SendTiming.POST_FADER)
+                    )
+                raw[i].sends = send_array
+                raw[i].send_count = len(sends)
+                send_arrays.append(send_array)
+            # Narrowed rather than coerced: int(0.5) is the 0 this field reads
+            # as "stay on the master mix", so a fractional bus id would leave
+            # the bus unrouted and report success.
+            raw[i].output_bus_id = _narrow_int(
+                bus["output_bus_id"] if "output_bus_id" in bus else bus.get("outputBusId", 0),
+                f"set_track_buses: buses[{i}].output_bus_id",
+                0,
+                _UINT32_MAX,
+            )
         _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 
     def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:

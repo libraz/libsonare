@@ -232,8 +232,12 @@ class MeterTap(IntEnum):
     POST_FADER = 1
 
 class SendTiming(IntEnum):
-    PRE_FADER = 0
-    POST_FADER = 1
+    POST_FADER = 0
+    PRE_FADER = 1
+
+class SidechainSourceKind(IntEnum):
+    TRACK = 0
+    BUS = 1
 
 class SectionType(IntEnum):
     """``PRE_CHORUS`` is never produced by the analyzer; every other value is
@@ -1934,6 +1938,9 @@ class EngineMidiClipSchedule:
     length_samples: int
     loop: bool
     loop_length_samples: int
+    gain: float
+    fade_in_samples: int
+    fade_out_samples: int
     def __init__(
         self,
         events: list[EngineMidiEvent],
@@ -1945,6 +1952,9 @@ class EngineMidiClipSchedule:
         length_samples: int = 0,
         loop: bool = False,
         loop_length_samples: int = 0,
+        gain: float = 1.0,
+        fade_in_samples: int = 0,
+        fade_out_samples: int = 0,
     ) -> None: ...
 
 class ClipPageRequest:

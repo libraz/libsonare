@@ -180,6 +180,23 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint,
             ctypes.c_uint32,
         ]
+    if hasattr(lib, "sonare_engine_set_bus_sidechain"):
+        lib.sonare_engine_set_bus_sidechain.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_sidechain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_set_master_sidechain"):
+        lib.sonare_engine_set_master_sidechain.restype = ctypes.c_int32
+        lib.sonare_engine_set_master_sidechain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_uint32,
+        ]
     if hasattr(lib, "sonare_engine_set_track_lanes"):
         lib.sonare_engine_set_track_lanes.restype = ctypes.c_int32
         lib.sonare_engine_set_track_lanes.argtypes = [
