@@ -960,6 +960,12 @@ class Mixer:
             _get_lib().sonare_mixer_destroy(self._handle)
             self._handle = None
 
+    def __enter__(self) -> Mixer:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
     def __del__(self) -> None:
         self.close()
 

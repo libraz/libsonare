@@ -589,6 +589,24 @@ def test_automation_rejects_invalid_curve(mixer) -> None:
         mixer.schedule_fader_automation("vocal", 0, -6.0, "wobble")
 
 
+def test_mixer_is_a_context_manager() -> None:
+    """Leaving a with-block closes the native handle, on a normal exit and on a raise."""
+    from libsonare import Mixer
+
+    with Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as mixer:
+        assert mixer.strip_count() > 0
+    with pytest.raises(RuntimeError):
+        mixer.strip_count()
+
+    with (
+        pytest.raises(KeyError),
+        Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as raised,
+    ):
+        raise KeyError("inside")
+    with pytest.raises(RuntimeError):
+        raised.strip_count()
+
+
 def test_methods_after_close_raise(mixer) -> None:
     """Calling a method after close raises RuntimeError (guarded contract)."""
     mixer.close()
