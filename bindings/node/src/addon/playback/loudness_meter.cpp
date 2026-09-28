@@ -60,9 +60,8 @@ Napi::Value PlaybackLoudnessMeterWrap::PushInterleaved(const Napi::CallbackInfo&
   }
   SONARE_NODE_TRY
   Napi::Float32Array samples = info[0].As<Napi::Float32Array>();
-  sonare_node::ThrowIfError(
-      env, sonare_playback_loudness_meter_push_interleaved(meter_, samples.Data(),
-                                                           samples.ElementLength()));
+  sonare_node::ThrowIfError(env, sonare_playback_loudness_meter_push_interleaved(
+                                     meter_, samples.Data(), samples.ElementLength()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

@@ -131,7 +131,8 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   int in_channels = 0;
-  if (!sonare_node::RequiredIntArg(env, info, 1, "inChannels", &in_channels)) return env.Undefined();
+  if (!sonare_node::RequiredIntArg(env, info, 1, "inChannels", &in_channels))
+    return env.Undefined();
   SONARE_NODE_TRY
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   if (in_channels <= 0 || input.ElementLength() % static_cast<size_t>(in_channels) != 0) {
@@ -148,10 +149,9 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
   Napi::Float32Array output =
       Napi::Float32Array::New(env, frames * static_cast<size_t>(out_channels));
   // Realtime entry: see the note in sonare_wrap_playback.h.
-  sonare_node::ThrowIfRealtimeError(
-      env, sonare_playback_renderer_process_interleaved(renderer_, input.Data(), in_channels,
-                                                        output.Data(), out_channels,
-                                                        static_cast<int>(frames)));
+  sonare_node::ThrowIfRealtimeError(env, sonare_playback_renderer_process_interleaved(
+                                             renderer_, input.Data(), in_channels, output.Data(),
+                                             out_channels, static_cast<int>(frames)));
   if (env.IsExceptionPending()) return env.Undefined();
   return output;
   SONARE_NODE_CATCH(env)
@@ -166,8 +166,8 @@ Napi::Value PlaybackRendererWrap::SetConfig(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   const std::string config_json = info[0].As<Napi::String>().Utf8Value();
-  sonare_node::ThrowIfError(env,
-                            sonare_playback_renderer_set_config_json(renderer_, config_json.c_str()));
+  sonare_node::ThrowIfError(
+      env, sonare_playback_renderer_set_config_json(renderer_, config_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -252,7 +252,8 @@ Napi::Value PlaybackRendererWrap::Diagnostics(const Napi::CallbackInfo& info) {
   char* json = nullptr;
   sonare_node::ThrowIfError(env, sonare_playback_renderer_diagnostics_json(renderer_, &json));
   if (env.IsExceptionPending()) return env.Undefined();
-  return sonare_node::ParseJsonObjectAndFree(env, json, "Failed to parse playback diagnostics JSON");
+  return sonare_node::ParseJsonObjectAndFree(env, json,
+                                             "Failed to parse playback diagnostics JSON");
   SONARE_NODE_CATCH(env)
 }
 

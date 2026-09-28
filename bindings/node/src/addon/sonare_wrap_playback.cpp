@@ -41,8 +41,9 @@ HrtfSetWrap::HrtfSetWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Hrtf
     set_ = info[0].As<Napi::External<SonareHrtfSet>>().Data();
     return;
   }
-  Napi::Error::New(env, "HrtfSet cannot be constructed directly; use HrtfSet.default() or "
-                       "HrtfSet.fromBytes()")
+  Napi::Error::New(env,
+                   "HrtfSet cannot be constructed directly; use HrtfSet.default() or "
+                   "HrtfSet.fromBytes()")
       .ThrowAsJavaScriptException();
   return;
   SONARE_NODE_CATCH_VOID(env)
