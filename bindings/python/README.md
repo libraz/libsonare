@@ -198,6 +198,7 @@ is preferred when doing more than one computation on the same signal.
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamAnalyzer`, `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
 - **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [Python API](https://libsonare.libraz.net/docs/python-api)
+- **Playback** — `PlaybackRenderer` renders decoded mono / stereo / 5.1 / 7.1 PCM to speakers or HRTF binaural headphones: channel conversion, loudness matching, night-mode dynamics, speaker calibration and bass management, head tracking, and a reportable fixed latency; `render_playback` is the one-shot form. → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
 Native return-code failures, including native input/parameter validation, raise

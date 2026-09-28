@@ -88,6 +88,12 @@ the browser to see what libsonare can power.
   lock-free automation down to individual instrument parameters, and
   capture/recording. The same engine runs in the browser through an
   AudioWorklet.
+- **Playback renderer** — turns decoded mono/stereo/5.1/7.1 PCM into what a
+  listener actually hears: channel conversion (upmix, downmix, remapping),
+  loudness matching, night-mode dynamics and dialogue level, speaker
+  calibration and bass management, HRTF-based binaural rendering with head
+  tracking and a synthesized room, and a reportable fixed latency for
+  audio/video sync. No decoding, containers, video, or DRM.
 
 See the [documentation](https://libsonare.libraz.net) for the full API of every
 feature, runtime, and processor.

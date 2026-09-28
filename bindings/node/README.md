@@ -221,6 +221,7 @@ Every area below has runnable examples and the full API in the
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
 - **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/native-bindings)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [API](https://libsonare.libraz.net/docs/native-bindings)
+- **Playback** — `PlaybackRenderer` renders decoded mono / stereo / 5.1 / 7.1 PCM to speakers or HRTF binaural headphones: channel conversion, loudness matching, night-mode dynamics, speaker calibration and bass management, head tracking, and a reportable fixed latency; `renderPlayback` is the one-shot form. → [API](https://libsonare.libraz.net/docs/native-bindings)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
 C-ABI failures throw a `SonareError` (`name` `'SonareError'`) carrying a numeric

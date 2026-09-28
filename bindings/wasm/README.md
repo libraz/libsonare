@@ -372,6 +372,7 @@ Every area below has runnable examples and the full API in the
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render, bounded-memory clip streaming), `StreamingMasteringChain` / `StreamingEqualizer` / `StreamingRetune`, `RealtimeVoiceChanger`, and the AudioWorklet bridge. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
 - **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/wasm)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [API](https://libsonare.libraz.net/docs/wasm)
+- **Playback** — `PlaybackRenderer` renders decoded mono / stereo / 5.1 / 7.1 PCM to speakers or HRTF binaural headphones: channel conversion, loudness matching, night-mode dynamics, speaker calibration and bass management, head tracking, and a reportable fixed latency; `renderPlayback` is the one-shot form. WASM takes an HRTF set from caller-supplied bytes; it ships no embedded default. → [API](https://libsonare.libraz.net/docs/wasm)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
 Native failures throw a `SonareError` carrying a numeric `code` (an `ErrorCode`
