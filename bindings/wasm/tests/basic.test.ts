@@ -79,6 +79,27 @@ describe('Sonare WASM Module', () => {
         hardwareConcurrency: expect.any(Number),
       });
       expect(capabilities().abi.project).toBeGreaterThan(0);
+      // The full bundle links every gated subsystem, so each flag is true.
+      expect(capabilities().features).toMatchObject({
+        arrangement: true,
+        acousticSim: true,
+        pitchEditor: true,
+        voiceChanger: true,
+        playback: true,
+      });
+      expect(Object.keys(capabilities().features).sort()).toEqual([
+        'acousticSim',
+        'arrangement',
+        'ffmpeg',
+        'fx',
+        'instrumentParamAutomation',
+        'mastering',
+        'mixing',
+        'mixingAssistant',
+        'pitchEditor',
+        'playback',
+        'voiceChanger',
+      ]);
       expect(capabilities().hardwareConcurrency).toBeGreaterThanOrEqual(1);
     });
 

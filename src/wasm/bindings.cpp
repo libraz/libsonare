@@ -88,6 +88,41 @@ constexpr bool capability_playback_enabled() {
 #endif
 }
 
+// These four read the link-scoped SONARE_WITH_* defines, like playback above:
+// the analysis-only bundle leaves some of the options on while linking none of
+// the subsystems, and a SONARE_BUILD_* read would advertise them there.
+constexpr bool capability_arrangement_enabled() {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_acoustic_sim_enabled() {
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_pitch_editor_enabled() {
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_voice_changer_enabled() {
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  return true;
+#else
+  return false;
+#endif
+}
+
 constexpr const char* capability_simd() {
 #if defined(__wasm_simd128__)
   return "wasm-simd128";
@@ -143,6 +178,10 @@ val js_capabilities() {
   features.set("fx", capability_fx_enabled());
   features.set("ffmpeg", capability_ffmpeg_enabled());
   features.set("instrumentParamAutomation", capability_instrument_param_automation_enabled());
+  features.set("arrangement", capability_arrangement_enabled());
+  features.set("acousticSim", capability_acoustic_sim_enabled());
+  features.set("pitchEditor", capability_pitch_editor_enabled());
+  features.set("voiceChanger", capability_voice_changer_enabled());
   features.set("playback", capability_playback_enabled());
   result.set("features", features);
 

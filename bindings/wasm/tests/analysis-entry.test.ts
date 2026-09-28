@@ -16,6 +16,13 @@ describe('analysis-only WASM entry', () => {
       // this flag is the only way a host can tell the two bundles apart.
       mixingAssistant: false,
       fx: false,
+      // Only the pitch editor is linked into the analysis bundle; the other
+      // gated subsystems are absent even where their options stay on.
+      arrangement: false,
+      acousticSim: false,
+      pitchEditor: true,
+      voiceChanger: false,
+      playback: false,
     });
     expect(analysis.meteringPeakDb(new Float32Array([0, 0.5, -0.25]))).toBeCloseTo(-6.0206, 3);
   });
