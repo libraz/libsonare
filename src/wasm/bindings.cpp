@@ -80,6 +80,14 @@ constexpr bool capability_instrument_param_automation_enabled() {
 #endif
 }
 
+constexpr bool capability_playback_enabled() {
+#if defined(SONARE_WITH_PLAYBACK)
+  return true;
+#else
+  return false;
+#endif
+}
+
 constexpr const char* capability_simd() {
 #if defined(__wasm_simd128__)
   return "wasm-simd128";
@@ -135,6 +143,7 @@ val js_capabilities() {
   features.set("fx", capability_fx_enabled());
   features.set("ffmpeg", capability_ffmpeg_enabled());
   features.set("instrumentParamAutomation", capability_instrument_param_automation_enabled());
+  features.set("playback", capability_playback_enabled());
   result.set("features", features);
 
   val decode = val::object();
@@ -447,6 +456,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
   registerStreamingEqualizerBindings();
   registerStreamingRetuneBindings();
   registerRealtimeVoiceChangerStreamingBindings();
+#if defined(SONARE_WITH_PLAYBACK)
+  registerPlaybackBindings();
+#endif
 
   registerStreamAnalyzerBindings();
 #endif

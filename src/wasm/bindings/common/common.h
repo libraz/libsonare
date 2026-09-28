@@ -510,6 +510,7 @@ void registerStreamingMasteringChainBindings();
 void registerStreamingEqualizerBindings();
 void registerStreamingRetuneBindings();
 void registerRealtimeVoiceChangerStreamingBindings();
+void registerPlaybackBindings();
 void registerMixingBindings();
 void registerOfflineBindings();
 void registerOfflineDynamicsEditingBindings();

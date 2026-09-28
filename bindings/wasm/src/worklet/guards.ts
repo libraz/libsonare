@@ -6,6 +6,7 @@ import type {
   SonareEngineSyncMessage,
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
+  SonarePlaybackMessage,
   SonareRealtimeVoiceChangerMessage,
   SonareWorkletExternalMidiMessage,
   SonareWorkletMessage,
@@ -258,6 +259,31 @@ export function isRealtimeVoiceChangerMessage(
     return false;
   }
   return value.type === 'setConfig' || value.type === 'reset' || value.type === 'destroy';
+}
+
+const isOptionalNumber = (value: unknown): boolean =>
+  value === undefined || typeof value === 'number';
+
+export function isPlaybackMessage(value: unknown): value is SonarePlaybackMessage {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+  switch (value.type) {
+    case 'config':
+      return typeof value.config === 'string';
+    case 'orientation':
+      return (
+        typeof value.yaw === 'number' &&
+        isOptionalNumber(value.pitch) &&
+        isOptionalNumber(value.roll)
+      );
+    case 'reset':
+    case 'diagnostics':
+    case 'destroy':
+      return true;
+    default:
+      return false;
+  }
 }
 
 export function isEngineTelemetryRecord(value: unknown): value is SonareEngineTelemetryRecord {

@@ -49,6 +49,17 @@ export type {
   SonareEngineTransportFacade,
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
+  SonarePlaybackConfigMessage,
+  SonarePlaybackDestroyMessage,
+  SonarePlaybackDiagnosticsReplyMessage,
+  SonarePlaybackDiagnosticsRequestMessage,
+  SonarePlaybackErrorMessage,
+  SonarePlaybackMessage,
+  SonarePlaybackNodeOptions,
+  SonarePlaybackOrientationMessage,
+  SonarePlaybackResetMessage,
+  SonarePlaybackWorkletDiagnostics,
+  SonarePlaybackWorkletProcessorOptions,
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
@@ -68,6 +79,11 @@ export {
   registerSonareWorkletProcessor,
   SonareWorkletProcessor,
 } from './worklet/mixer-processor';
+export {
+  createSonarePlaybackNode,
+  registerSonarePlaybackWorkletProcessor,
+  SonarePlaybackWorkletProcessor,
+} from './worklet/playback-processor';
 export {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,

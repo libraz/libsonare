@@ -5,6 +5,7 @@ const schemas = [
   'realtime-voice-changer-preset.schema.json',
   'realtime-voice-changer-preset-pack.schema.json',
   'mixer-scene.schema.json',
+  'playback-renderer-config.schema.json',
 ];
 const scriptDirectory = new URL('.', import.meta.url);
 const sourceDirectory = new URL('../../../schemas/', scriptDirectory);

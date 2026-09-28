@@ -11,6 +11,8 @@ import type {
   EngineTimeSignatureSegment,
   EngineTrackLane,
   EngineTransportState,
+  PlaybackDiagnostics,
+  PlaybackRendererConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
 } from '../index';
@@ -101,6 +103,87 @@ export type SonareRealtimeVoiceChangerMessage =
   | SonareRealtimeVoiceChangerSetConfigMessage
   | SonareRealtimeVoiceChangerResetMessage
   | SonareRealtimeVoiceChangerDestroyMessage;
+
+export interface SonarePlaybackWorkletProcessorOptions {
+  /** Renderer configuration; parsed once, in the processor constructor. Default `{}`. */
+  config?: PlaybackRendererConfig | string;
+  /**
+   * SHRF v1 bytes, required for a headphones target (e.g. the package asset
+   * `./hrtf/default.shrf`). Copied into the renderer at construction.
+   */
+  hrtf?: ArrayBuffer | Uint8Array;
+  /** Largest render quantum the processor accepts. Default 128. */
+  maxBlockSize?: number;
+  /** Defaults to the AudioWorkletGlobalScope `sampleRate`, then 48000. */
+  sampleRate?: number;
+}
+
+export interface SonarePlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
+  processorName?: string;
+  nodeFactory?: (
+    context: BaseAudioContext,
+    processorName: string,
+    options: AudioWorkletNodeOptions,
+  ) => AudioWorkletNode;
+}
+
+export interface SonarePlaybackConfigMessage {
+  type: 'config';
+  /** A complete configuration document, serialized on the main thread. */
+  config: string;
+}
+
+export interface SonarePlaybackOrientationMessage {
+  type: 'orientation';
+  /** Degrees; see `PlaybackRenderer.setHeadOrientation`. */
+  yaw: number;
+  pitch?: number;
+  roll?: number;
+}
+
+/** Clears the pipeline after a seek; the handler runs between render quanta. */
+export interface SonarePlaybackResetMessage {
+  type: 'reset';
+}
+
+/** Requests a {@link SonarePlaybackDiagnosticsReplyMessage}. */
+export interface SonarePlaybackDiagnosticsRequestMessage {
+  type: 'diagnostics';
+}
+
+export interface SonarePlaybackDestroyMessage {
+  type: 'destroy';
+}
+
+export type SonarePlaybackMessage =
+  | SonarePlaybackConfigMessage
+  | SonarePlaybackOrientationMessage
+  | SonarePlaybackResetMessage
+  | SonarePlaybackDiagnosticsRequestMessage
+  | SonarePlaybackDestroyMessage;
+
+/** The renderer's diagnostics plus the worklet's own block counter. */
+export interface SonarePlaybackWorkletDiagnostics extends PlaybackDiagnostics {
+  /**
+   * Render quanta whose input channel count the renderer does not accept
+   * (not 1, 2, 6 or 8 under `"auto"`; not the fixed layout's count otherwise).
+   * Each was rendered as silence on the active input layout, so the timeline
+   * still advanced.
+   */
+  unsupported_input_blocks: number;
+}
+
+export interface SonarePlaybackDiagnosticsReplyMessage {
+  type: 'diagnostics';
+  diagnostics: SonarePlaybackWorkletDiagnostics;
+}
+
+/** Posted when a control message is refused (e.g. a changed prepare key). */
+export interface SonarePlaybackErrorMessage {
+  type: 'error';
+  request: SonarePlaybackMessage['type'];
+  message: string;
+}
 
 export interface SonareRealtimeEngineNodeCapabilities {
   mode: 'sab' | 'postMessage';

@@ -117,3 +117,25 @@ if(BUILD_MIXING)
     ${PROJECT_SOURCE_DIR}/src
   )
 endif()
+
+if(BUILD_PLAYBACK)
+  add_executable(sonare_playback_binaural_bench playback_binaural_bench.cpp)
+  target_link_libraries(sonare_playback_binaural_bench PRIVATE sonare_playback)
+  target_compile_options(sonare_playback_binaural_bench PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_playback_binaural_bench PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+  )
+  # The WASM build embeds no HRTF, so both builds read the committed default
+  # set by path (NODERAWFS under Node).
+  target_compile_definitions(sonare_playback_binaural_bench PRIVATE
+    SONARE_PLAYBACK_DEFAULT_SHRF="${PROJECT_SOURCE_DIR}/src/playback/default.shrf"
+  )
+  if(EMSCRIPTEN)
+    target_link_options(sonare_playback_binaural_bench PRIVATE
+      -fexceptions
+      -sNODERAWFS=1
+      -sALLOW_MEMORY_GROWTH=1
+      -sEXIT_RUNTIME=1
+    )
+  endif()
+endif()

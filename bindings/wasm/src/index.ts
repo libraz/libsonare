@@ -516,6 +516,12 @@ export {
   createOpfsClipPageWorker,
   opfsClipPageWorkerSource,
 } from './opfs_clip_pages';
+export {
+  HrtfSet,
+  PlaybackLoudnessMeter,
+  PlaybackRenderer,
+  renderPlayback,
+} from './playback_renderer';
 export type { AnalyzePolyphonicRequest } from './polyphony';
 export { analyzePolyphonic, PolyphonicAnalysis } from './polyphony';
 export type {
@@ -755,10 +761,28 @@ export type {
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,
+  PlaybackBassManagementConfig,
+  PlaybackChannelRole,
+  PlaybackDiagnostics,
+  PlaybackHeadTrackingConfig,
+  PlaybackInputConfig,
+  PlaybackLoudnessConfig,
+  PlaybackNightModeConfig,
+  PlaybackOutputLimiterConfig,
+  PlaybackRendererConfig,
+  PlaybackRendererOptions,
+  PlaybackRoomConfig,
+  PlaybackSpeakerConfig,
+  PlaybackStageLatency,
+  PlaybackStageName,
+  PlaybackTargetConfig,
+  PlaybackUpmixConfig,
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
+  RenderPlaybackRequest,
+  RenderPlaybackResult,
   ReverbDetection,
   RhythmFeatures,
   RirDiagnostic,
