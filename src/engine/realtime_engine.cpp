@@ -6,6 +6,7 @@
 
 #include "engine/insert_automation_id.h"
 #include "engine/realtime_engine_internal.h"
+#include "midi/midi_clip_envelope.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
@@ -587,6 +588,16 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #endif
       instrument_rack_.for_each([&](uint32_t destination_id,
                                     midi::MidiInstrument* instrument) noexcept {
+        // MIDI clip gain/fade, resolved once and applied to every buffer this
+        // destination writes in either branch below.
+        const std::vector<midi::MidiClipSchedule>* clip_schedule = midi_sequencer_.current_clips();
+        const bool has_clip_envelope = clip_schedule != nullptr && !clip_schedule->empty();
+        midi::MidiClipEnvelopeBlock envelope_block;
+        if (has_clip_envelope) {
+          midi::resolve_midi_clip_envelope(*clip_schedule, destination_id,
+                                           transport_.sample_position(), num_frames,
+                                           &envelope_block);
+        }
 #if defined(SONARE_WITH_MIXING)
         // Source-aware render is valid only before PDC: a destination has
         // one legacy delay line, while each source needs independent delay
@@ -607,6 +618,13 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           instrument->set_transport(inst_state);
           if (instrument->process_source_tracks(outputs.data(), source_track_count + 1, channels,
                                                 num_frames)) {
+            if (has_clip_envelope) {
+              for (size_t source = 0; source <= source_track_count; ++source) {
+                midi::apply_midi_clip_envelope(envelope_block, *clip_schedule, destination_id,
+                                               transport_.sample_position(),
+                                               outputs[source].channels, channels, num_frames);
+              }
+            }
             if (instrument_source_render_sink_ != nullptr) {
               for (size_t source = 0; source <= source_track_count; ++source) {
                 instrument_source_render_sink_->on_instrument_source_audio(
@@ -641,6 +659,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
         instrument->set_transport(inst_state);
         instrument->process(midi_instrument_channels_.data(), channels, num_frames);
+        if (has_clip_envelope) {
+          midi::apply_midi_clip_envelope(envelope_block, *clip_schedule, destination_id,
+                                         transport_.sample_position(),
+                                         midi_instrument_channels_.data(), channels, num_frames);
+        }
         // PDC: an instrument faster than the project's slowest is delayed by the
         // remainder (total - its own latency) so it stays aligned with the clip
         // bus and the other instruments. The slowest instrument's delay is 0.

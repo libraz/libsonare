@@ -344,13 +344,32 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_TRACK_MONITOR_AFL = SONARE_ENGINE_TRACK_MONITOR_MODE_AFL,
 } SonareEngineTrackMonitorMode;
 
+/* Source a bus or master insert's sidechain key is taken from. Values are part
+   of the ABI — never renumber. */
+typedef enum SONARE_ENUM_BASE {
+  /* A track lane's post-strip signal, before its lane fader. */
+  SONARE_SIDECHAIN_SOURCE_TRACK = 0,
+  /* A bus's processed signal, before its gain_db; folded to stereo when wider. */
+  SONARE_SIDECHAIN_SOURCE_BUS = 1,
+} SonareSidechainSourceKind;
+
 typedef struct {
   uint32_t bus_id;
+  /* The bus fader. Pre-fader sends and bus-sourced sidechain keys tap before it. */
   float gain_db;
-  /* Channel layout of this bus (SonareChannelLayout). The master bus carries the
-     project output layout. Defaults to stereo. A 5.1/7.1 bus enables the
-     realtime lane mixer's surround scatter and per-plane metering. */
+  /* Channel layout of this bus (SonareChannelLayout). Defaults to stereo. A
+     5.1/7.1 bus enables the realtime lane mixer's surround scatter and per-plane
+     metering. A destination narrower than the bus (another bus, or the master at
+     the rendered channel count) receives an ITU-R BS.775 downmix; a wider one
+     receives the bus planes on the same plane indices. */
   uint8_t channel_layout;
+  /* Bus the output sums into instead of the master mix (bus-to-bus routing);
+     0 keeps the bus on the master mix. */
+  uint32_t output_bus_id;
+  /* Sends to other buses, in the same shape as a track lane's sends. A cycle
+     through outputs, sends or bus-sourced sidechain keys is rejected. */
+  const SonareEngineTrackSend* sends;
+  size_t send_count;
 } SonareEngineBus;
 
 typedef struct {

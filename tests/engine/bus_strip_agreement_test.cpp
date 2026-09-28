@@ -146,7 +146,8 @@ SonareBuiltinSynthConfig project_synth_config() {
 // bus (group routing via output_bus_id) -> master, one held note.
 void configure_engine(SonareRealtimeEngine* engine, const BusStripCase& c, uint32_t track_id) {
   REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
-  SonareEngineBus buses[] = {{kBusId, 0.0f, static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_STEREO)}};
+  SonareEngineBus buses[] = {
+      {kBusId, 0.0f, static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_STEREO), 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   const std::string bus_json = wrap_bus_scene(bus_body(c));
   REQUIRE(sonare_engine_set_bus_strip_json(engine, kBusId, bus_json.c_str()) == SONARE_OK);
@@ -164,7 +165,8 @@ void configure_engine(SonareRealtimeEngine* engine, const BusStripCase& c, uint3
       {0, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u},  // note-on, note 60, vel 127, no note-off
   };
   const SonareEngineMidiClipSchedule clips[] = {
-      {1, track_id, 0, 0.0, kTotalFrames * 2, 0, 0, kDestination, events, std::size(events)},
+      {1, track_id, 0, 0.0, kTotalFrames * 2, 0, 0, kDestination, events, std::size(events), 1.0f,
+       0, 0},
   };
   REQUIRE(sonare_engine_set_midi_clips(engine, clips, std::size(clips)) == SONARE_OK);
 }

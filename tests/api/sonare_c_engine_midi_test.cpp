@@ -209,6 +209,7 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
       {4096, midi1_word(0x8, 0, 60, 0), 0, 0, 0, 1, 0, 0, 0},
   };
   SonareEngineMidiClipSchedule clip{};
+  clip.gain = 1.0f;
   clip.id = 42;
   clip.track_id = 9;
   clip.length_samples = 8192;
@@ -253,6 +254,7 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
       {48, midi1_word(0x8, 1, 64, 0), 0, 0, 0, 1, 0, 0, 0},
   };
   SonareEngineMidiClipSchedule clip{};
+  clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
   clip.length_samples = 256;
@@ -322,6 +324,7 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
       {48, note_off, 0, 0, 0, 1, 0, 0, 0},
   };
   SonareEngineMidiClipSchedule clip{};
+  clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
   clip.length_samples = 256;
@@ -448,6 +451,7 @@ TEST_CASE("sonare_engine external MIDI stays monotonic across a loop wrap", "[c_
       {12000, midi1_word(0x8, 1, 64, 0), 0, 0, 0, 1, 0, 0, 0},
   };
   SonareEngineMidiClipSchedule clip{};
+  clip.gain = 1.0f;
   clip.id = 7;
   clip.track_id = 5;
   clip.length_samples = 24000;

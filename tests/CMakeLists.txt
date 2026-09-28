@@ -602,6 +602,7 @@ if(BUILD_ARRANGEMENT)
     engine/instrument_automation_test.cpp
     engine/bus_strip_agreement_test.cpp
     engine/midi_clip_gain_test.cpp
+    engine/midi_clip_engine_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
     bindings/project_bounce_overflow_test.cpp
@@ -618,6 +619,7 @@ if(BUILD_ARRANGEMENT)
     target_sources(sonare_tests PRIVATE
       engine/bus_aggregation_test.cpp
       mixing/graph_surround_test.cpp
+      api/sonare_c_engine_routing_test.cpp
     )
   endif()
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)

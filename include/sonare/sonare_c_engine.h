@@ -235,10 +235,34 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id);
 
-/// @brief Configure realtime engine aux buses used by track sends.
-/// @details Control-thread only; must not run concurrently with process().
+/// @brief Configure realtime engine buses: layout, fader, output and sends.
+/// @details Replaces the whole bus list. Rejects (SONARE_ERROR_INVALID_PARAMETER,
+///   state unchanged) an output or send naming an undeclared bus or the bus
+///   itself, a cycle through outputs, sends or bus-sourced sidechain keys, a
+///   non-default width on a surround bus, and a bus still referenced by a track
+///   lane's output or send. Control-thread only; must not run concurrently with
+///   process().
 SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
                                           const SonareEngineBus* buses, size_t bus_count);
+
+/// @brief Keys one insert of a bus strip from a track lane or another bus.
+/// @details @p source_kind is a SonareSidechainSourceKind; @p source_id is a
+///   track id or bus id, and 0 removes the binding. The key is taken before the
+///   source's lane fader or bus gain_db and is delay-compensated to the keyed
+///   bus. Rejects an undeclared bus or source, an out-of-range insert index, a
+///   bus keying itself, and a bus source that would form a cycle. Control-thread
+///   only; must not run concurrently with process().
+SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                            unsigned int insert_index, int source_kind,
+                                            uint32_t source_id);
+
+/// @brief Keys one insert of the master strip from a track lane or a bus.
+/// @details @p insert_index counts the master strip's pre-fader inserts first,
+///   then its post-fader inserts, as the other master insert setters do. Same
+///   source rules and threading contract as sonare_engine_set_bus_sidechain.
+SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
+                                               unsigned int insert_index, int source_kind,
+                                               uint32_t source_id);
 
 /// @brief Configure a bus strip from the first bus in a mixer scene JSON.
 /// @details The bus must already exist via sonare_engine_set_track_buses.
@@ -760,6 +784,14 @@ typedef struct {
   uint32_t destination_id;
   const SonareEngineMidiEvent* events;
   size_t event_count;
+  /* Linear gain applied to the destination instrument's rendered audio while
+     this clip is the most recently started active clip on it. A
+     zero-initialized struct is silent; set 1.0 for unity. */
+  float gain;
+  /* Linear fade lengths over the clip's full length (not per internal loop);
+     fade_out_samples must be 0 when length_samples <= 0 (open-ended). */
+  int64_t fade_in_samples;
+  int64_t fade_out_samples;
 } SonareEngineMidiClipSchedule;
 
 /// @brief Replaces the engine's realtime MIDI clip schedule snapshot.

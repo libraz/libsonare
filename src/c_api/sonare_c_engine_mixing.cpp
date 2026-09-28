@@ -103,6 +103,63 @@ SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint3
 #endif
 }
 
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+bool sidechain_source_kind_from_c(int source_kind, engine::SidechainSourceKind* out) {
+  switch (source_kind) {
+    case SONARE_SIDECHAIN_SOURCE_TRACK:
+      *out = engine::SidechainSourceKind::Track;
+      return true;
+    case SONARE_SIDECHAIN_SOURCE_BUS:
+      *out = engine::SidechainSourceKind::Bus;
+      return true;
+    default:
+      return false;
+  }
+}
+
+}  // namespace
+#endif
+
+SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                            unsigned int insert_index, int source_kind,
+                                            uint32_t source_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine::SidechainSourceKind kind;
+  if (!sidechain_source_kind_from_c(source_kind, &kind)) return SONARE_ERROR_INVALID_PARAMETER;
+  return engine->engine.set_bus_sidechain(bus_id, insert_index, kind, source_id)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+#endif
+}
+
+SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
+                                               unsigned int insert_index, int source_kind,
+                                               uint32_t source_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine::SidechainSourceKind kind;
+  if (!sidechain_source_kind_from_c(source_kind, &kind)) return SONARE_ERROR_INVALID_PARAMETER;
+  return engine->engine.set_master_sidechain(insert_index, kind, source_id)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+#endif
+}
+
 SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
                                           const SonareEngineBus* buses, size_t bus_count) {
   SONARE_C_API_ENTRY;
@@ -116,11 +173,24 @@ SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
   SONARE_C_TRY
   configs.reserve(bus_count);
   for (size_t i = 0; i < bus_count; ++i) {
+    if (buses[i].send_count > 0 && buses[i].sends == nullptr) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     if (!is_valid_channel_layout(buses[i].channel_layout)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    configs.push_back(
-        {buses[i].bus_id, buses[i].gain_db, static_cast<ChannelLayout>(buses[i].channel_layout)});
+    engine::TrackBusConfig bus;
+    bus.bus_id = buses[i].bus_id;
+    bus.gain_db = buses[i].gain_db;
+    bus.layout = static_cast<ChannelLayout>(buses[i].channel_layout);
+    bus.output_bus_id = buses[i].output_bus_id;
+    bus.sends.reserve(buses[i].send_count);
+    for (size_t send_index = 0; send_index < buses[i].send_count; ++send_index) {
+      const SonareEngineTrackSend& send = buses[i].sends[send_index];
+      bus.sends.push_back({send.bus_id, send.level_db, send.enabled != 0,
+                           sonare_c_mixing_detail::to_send_timing(send.send_timing)});
+    }
+    configs.push_back(std::move(bus));
   }
   return engine->engine.set_track_buses(std::move(configs)) ? SONARE_OK
                                                             : SONARE_ERROR_INVALID_PARAMETER;

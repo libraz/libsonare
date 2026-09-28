@@ -152,7 +152,9 @@ SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
   for (size_t i = 0; i < clip_count; ++i) {
     const SonareEngineMidiClipSchedule& src = clips[i];
     if (!std::isfinite(src.start_ppq) || src.loop < 0 ||
-        (src.event_count > 0 && src.events == nullptr)) {
+        (src.event_count > 0 && src.events == nullptr) ||
+        !(std::isfinite(src.gain) && src.gain >= 0.0f) || src.fade_in_samples < 0 ||
+        src.fade_out_samples < 0 || (src.fade_out_samples > 0 && src.length_samples <= 0)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     midi::MidiClipSchedule dst;
@@ -164,6 +166,9 @@ SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
     dst.loop_mode = src.loop ? midi::MidiLoopMode::kLoop : midi::MidiLoopMode::kOneShot;
     dst.loop_length_samples = src.loop_length_samples;
     dst.destination_id = src.destination_id;
+    dst.gain = src.gain;
+    dst.fade_in_samples = src.fade_in_samples;
+    dst.fade_out_samples = src.fade_out_samples;
     dst.events.reserve(src.event_count);
     for (size_t j = 0; j < src.event_count; ++j) {
       midi::MidiEvent event;

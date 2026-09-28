@@ -2106,7 +2106,7 @@
     "size": 28
   },
   "SonareEngineBus": {
-    "align": 4,
+    "align": 8,
     "fields": [
       {
         "kind": "unsigned",
@@ -2127,7 +2127,7 @@
         "size": 1
       }
     ],
-    "size": 12
+    "size": 32
   },
   "SonareEngineCaptureBuffer": {
     "align": 8,
@@ -2649,7 +2649,7 @@
         "size": 8
       }
     ],
-    "size": 72
+    "size": 96
   },
   "SonareEngineMidiEvent": {
     "align": 8,

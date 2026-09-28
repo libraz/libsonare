@@ -489,6 +489,7 @@ TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes
         {1, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0},
     };
     SonareEngineMidiClipSchedule clip{};
+    clip.gain = 1.0f;
     clip.id = 1;
     clip.track_id = kDestination;
     clip.length_samples = static_cast<int64_t>(kFrames);
@@ -571,7 +572,7 @@ TEST_CASE("sonare_engine_parameter_info describes a compressor insert on every s
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, track_json.c_str()) == SONARE_OK);
 
-  SonareEngineBus buses[] = {{1, 0.0f, 0}};
+  SonareEngineBus buses[] = {{1, 0.0f, 0, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_json.c_str()) == SONARE_OK);
 

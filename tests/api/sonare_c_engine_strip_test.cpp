@@ -416,17 +416,17 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
-  SonareEngineBus duplicate_buses[] = {{1, 0.0f, 1}, {1, 0.0f, 1}};
+  SonareEngineBus duplicate_buses[] = {{1, 0.0f, 1, 0, nullptr, 0}, {1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, duplicate_buses, 2) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   // A surround bus layout (5.1 = 2) is accepted; an out-of-range layout value
   // is rejected.
-  SonareEngineBus surround_bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1}};
+  SonareEngineBus surround_bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, surround_bus, 1) == SONARE_OK);
-  SonareEngineBus bad_layout_bus[] = {{1, 0.0f, 99}};
+  SonareEngineBus bad_layout_bus[] = {{1, 0.0f, 99, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, bad_layout_bus, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
@@ -520,7 +520,7 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
       R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":12,\"band0.enabled\":1}"}]}],"connections":[]})";
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_strip_json) == SONARE_OK);
 #else
-  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{}") == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -535,7 +535,7 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
   REQUIRE(engine != nullptr);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
 
-  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   const char* bus_strip_json =
       R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":0,\"band0.enabled\":1}"}]}],"connections":[]})";
@@ -957,7 +957,7 @@ TEST_CASE("sonare_engine_set_bus_strip_eq_band_json updates embedded bus EQ", "[
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
   SonareEngineTrackLane lane[] = {{10, send, 1, 0, 1}};
@@ -1113,7 +1113,7 @@ TEST_CASE(
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
   SonareEngineTrackLane lane[] = {{10, send, 1, 0, 1}};
@@ -1373,7 +1373,7 @@ TEST_CASE("sonare_engine bus strip pan setters reflect in realtime", "[c_api][en
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   // output_bus_id routes the lane's whole output to the bus (rather than the
   // master directly), so the bus panner is the only thing shaping the signal
@@ -1436,7 +1436,7 @@ TEST_CASE("sonare_engine bus strip pan setters refuse a surround bus",
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineBus surround_bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1}};
+  SonareEngineBus surround_bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, surround_bus, 1) == SONARE_OK);
 
   REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1487,7 +1487,7 @@ TEST_CASE("sonare_engine lane send timing taps pre or post fader", "[c_api][engi
     clip.gain = 1.0f;
     REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
-    SonareEngineBus buses[] = {{1, 0.0f, 1}};
+    SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
     REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
 
     // Establish the lane, attenuate the main path, then re-publish the lane with
@@ -1674,7 +1674,7 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
 
 #if defined(SONARE_WITH_MIXING)
   // A 5.1 group bus; the lane routes into it and is panned hard to Ls (-110deg).
-  SonareEngineBus buses[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1}};
+  SonareEngineBus buses[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
   REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 1, 1}};  // output_bus_id = 1
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);

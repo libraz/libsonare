@@ -3,6 +3,8 @@
 /// @file midi_clip_envelope.h
 /// @brief Pure per-destination MIDI clip gain/fade envelope evaluator.
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -11,61 +13,176 @@
 
 namespace sonare::midi {
 
-/// Evaluates g(t): the gain a MIDI destination's rendered audio carries at
-/// timeline sample `t`.
-///
-/// A clip in `clips` is ACTIVE at `t` when it targets `destination_id`, has
-/// started (`start_sample <= t`) and has not ended (`t < start_sample +
-/// length_samples`; an open-ended clip, `length_samples <= 0`, never ends).
-/// Among active clips the one with the latest `start_sample` wins (ties break
-/// on the higher clip id); its `gain * clip_fade_gain(...)` is returned.
-///
-/// With no active clip, the most recently ENDED clip (by `start_sample +
-/// length_samples`, ties on the higher clip id; open-ended clips never
-/// qualify) holds its end-of-clip value: 0 under an active fade-out, its own
-/// `gain` otherwise. Before any clip on this destination has started, the
-/// result is 1.0.
-///
-/// A clip's fade is evaluated over its own full `length_samples` exactly once
-/// -- an internal MIDI loop (`loop_mode` / `loop_length_samples`) does not
-/// retrigger it. Pure, allocation-free, RT-safe.
-inline float midi_clip_envelope_gain(const std::vector<MidiClipSchedule>& clips,
-                                     uint32_t destination_id, int64_t t) noexcept {
+/// The clips deciding g(t) at one instant: the latest-started active clip, and
+/// the most recently ended one that holds its end value while none is active.
+struct MidiClipEnvelopeWinner {
   const MidiClipSchedule* active = nullptr;
   const MidiClipSchedule* last_ended = nullptr;
-  int64_t last_ended_at = 0;
+};
 
+/// Picks the winner at timeline sample `t` for `destination_id`. A clip is
+/// active once started and until `start_sample + length_samples` (open-ended
+/// when `length_samples <= 0`); ties break on the higher clip id.
+inline MidiClipEnvelopeWinner find_midi_clip_envelope_winner(
+    const std::vector<MidiClipSchedule>& clips, uint32_t destination_id, int64_t t) noexcept {
+  MidiClipEnvelopeWinner winner;
+  int64_t last_ended_at = 0;
   for (const MidiClipSchedule& clip : clips) {
-    if (clip.destination_id != destination_id) continue;
-    if (clip.start_sample > t) continue;
-    const bool open_ended = clip.length_samples <= 0;
+    if (clip.destination_id != destination_id || clip.start_sample > t) continue;
     const int64_t end_sample = clip.start_sample + clip.length_samples;
-    const bool ended = !open_ended && t >= end_sample;
+    const bool ended = clip.length_samples > 0 && t >= end_sample;
     if (!ended) {
+      const MidiClipSchedule* active = winner.active;
       if (!active || clip.start_sample > active->start_sample ||
           (clip.start_sample == active->start_sample && clip.id > active->id)) {
-        active = &clip;
+        winner.active = &clip;
       }
-    } else if (!last_ended || end_sample > last_ended_at ||
-               (end_sample == last_ended_at && clip.id > last_ended->id)) {
-      last_ended = &clip;
+    } else if (!winner.last_ended || end_sample > last_ended_at ||
+               (end_sample == last_ended_at && clip.id > winner.last_ended->id)) {
+      winner.last_ended = &clip;
       last_ended_at = end_sample;
     }
   }
+  return winner;
+}
 
-  if (active != nullptr) {
-    const int64_t position = t - active->start_sample;
-    return active->gain * clip_fade_gain(position, active->length_samples, active->fade_in_samples,
-                                         active->fade_out_samples, active->fade_in_curve,
-                                         active->fade_out_curve);
+/// `clip`'s gain times its fade at `position` samples into the clip.
+inline float midi_clip_gain_at(const MidiClipSchedule& clip, int64_t position) noexcept {
+  return clip.gain * clip_fade_gain(position, clip.length_samples, clip.fade_in_samples,
+                                    clip.fade_out_samples, clip.fade_in_curve, clip.fade_out_curve);
+}
+
+/// Evaluates g(t): the gain a MIDI destination's rendered audio carries at
+/// timeline sample `t`. The active winner contributes its gain and fade; with
+/// none active the last ended clip holds its end value (0 after a fade-out);
+/// before any clip has started g is 1. A clip's fade spans its full length
+/// once -- an internal MIDI loop does not retrigger it. Pure, RT-safe.
+inline float midi_clip_envelope_gain(const std::vector<MidiClipSchedule>& clips,
+                                     uint32_t destination_id, int64_t t) noexcept {
+  const MidiClipEnvelopeWinner winner = find_midi_clip_envelope_winner(clips, destination_id, t);
+  if (winner.active != nullptr) {
+    return midi_clip_gain_at(*winner.active, t - winner.active->start_sample);
   }
-  if (last_ended != nullptr) {
-    return last_ended->gain * clip_fade_gain(last_ended->length_samples, last_ended->length_samples,
-                                             last_ended->fade_in_samples,
-                                             last_ended->fade_out_samples,
-                                             last_ended->fade_in_curve, last_ended->fade_out_curve);
+  if (winner.last_ended != nullptr) {
+    return midi_clip_gain_at(*winner.last_ended, winner.last_ended->length_samples);
   }
   return 1.0f;
+}
+
+/// A run of samples over which g(t) follows one clip's fade (`clip` set) or
+/// holds `constant_gain` (`clip == nullptr`).
+struct MidiClipEnvelopeRun {
+  int64_t frames = 0;
+  const MidiClipSchedule* clip = nullptr;
+  float constant_gain = 1.0f;
+};
+
+/// g(t) over one block, split into runs at clip starts and ends, the only
+/// points where the winner can change. `overflowed` means the block had more
+/// boundaries than fit and apply_midi_clip_envelope falls back to per-sample.
+struct MidiClipEnvelopeBlock {
+  static constexpr size_t kMaxRuns = 64;
+  std::array<MidiClipEnvelopeRun, kMaxRuns> runs{};
+  size_t run_count = 0;
+  bool overflowed = false;
+};
+
+/// AUDIO thread: resolves g(t) for `destination_id` over
+/// [block_start, block_start + length_samples) into `out`, once per
+/// destination per block. RT-safe, no allocation.
+inline void resolve_midi_clip_envelope(const std::vector<MidiClipSchedule>& clips,
+                                       uint32_t destination_id, int64_t block_start,
+                                       int64_t length_samples,
+                                       MidiClipEnvelopeBlock* out) noexcept {
+  out->run_count = 0;
+  out->overflowed = false;
+  if (length_samples <= 0) return;
+  const int64_t block_end = block_start + length_samples;
+
+  // Boundaries strictly inside the block, sorted; one fewer than kMaxRuns.
+  std::array<int64_t, MidiClipEnvelopeBlock::kMaxRuns - 1> breakpoints{};
+  size_t breakpoint_count = 0;
+  bool breakpoint_overflow = false;
+  const auto add_breakpoint = [&](int64_t t) noexcept {
+    if (t <= block_start || t >= block_end) return;
+    for (size_t i = 0; i < breakpoint_count; ++i) {
+      if (breakpoints[i] == t) return;
+    }
+    if (breakpoint_count >= breakpoints.size()) {
+      breakpoint_overflow = true;
+      return;
+    }
+    size_t pos = breakpoint_count;
+    while (pos > 0 && breakpoints[pos - 1] > t) {
+      breakpoints[pos] = breakpoints[pos - 1];
+      --pos;
+    }
+    breakpoints[pos] = t;
+    ++breakpoint_count;
+  };
+  for (const MidiClipSchedule& clip : clips) {
+    if (clip.destination_id != destination_id) continue;
+    add_breakpoint(clip.start_sample);
+    if (clip.length_samples > 0) add_breakpoint(clip.start_sample + clip.length_samples);
+  }
+  if (breakpoint_overflow) {
+    out->overflowed = true;
+    return;
+  }
+
+  int64_t segment_start = block_start;
+  for (size_t i = 0; i <= breakpoint_count; ++i) {
+    const int64_t segment_end = i < breakpoint_count ? breakpoints[i] : block_end;
+    MidiClipEnvelopeRun& run = out->runs[out->run_count++];
+    run = MidiClipEnvelopeRun{};
+    run.frames = segment_end - segment_start;
+    const MidiClipEnvelopeWinner winner =
+        find_midi_clip_envelope_winner(clips, destination_id, segment_start);
+    if (winner.active != nullptr) {
+      run.clip = winner.active;
+    } else if (winner.last_ended != nullptr) {
+      run.constant_gain = midi_clip_gain_at(*winner.last_ended, winner.last_ended->length_samples);
+    }
+    segment_start = segment_end;
+  }
+}
+
+/// AUDIO thread: multiplies `channel_count` buffers of `num_frames` samples
+/// (nullptr entries skipped) by g(t). `block` must come from
+/// resolve_midi_clip_envelope for the same clips, destination and range; one
+/// resolved block may be applied to several buffers. RT-safe, no allocation.
+inline void apply_midi_clip_envelope(const MidiClipEnvelopeBlock& block,
+                                     const std::vector<MidiClipSchedule>& clips,
+                                     uint32_t destination_id, int64_t block_start,
+                                     float* const* channels, int channel_count,
+                                     int num_frames) noexcept {
+  if (channels == nullptr || channel_count <= 0 || num_frames <= 0) return;
+  const auto scale = [&](int64_t i, float gain) noexcept {
+    if (gain == 1.0f) return;
+    for (int ch = 0; ch < channel_count; ++ch) {
+      if (channels[ch] != nullptr) channels[ch][i] *= gain;
+    }
+  };
+  if (block.overflowed) {
+    for (int i = 0; i < num_frames; ++i) {
+      scale(i, midi_clip_envelope_gain(clips, destination_id, block_start + i));
+    }
+    return;
+  }
+  int64_t offset = 0;
+  for (size_t r = 0; r < block.run_count; ++r) {
+    const MidiClipEnvelopeRun& run = block.runs[r];
+    if (run.clip == nullptr && run.constant_gain == 1.0f) {
+      offset += run.frames;
+      continue;
+    }
+    for (int64_t i = offset; i < offset + run.frames; ++i) {
+      scale(i, run.clip != nullptr
+                   ? midi_clip_gain_at(*run.clip, block_start + i - run.clip->start_sample)
+                   : run.constant_gain);
+    }
+    offset += run.frames;
+  }
 }
 
 }  // namespace sonare::midi
