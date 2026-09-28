@@ -370,7 +370,27 @@ export interface EngineBus {
    * path lands.
    */
   channelLayout?: ChannelLayout;
+  /**
+   * Bus this bus's output sums into instead of the master mix (bus-to-bus
+   * routing); 0 or absent keeps the bus on the master mix. An output naming an
+   * undeclared bus, itself, or forming a cycle (through outputs, sends, or
+   * bus-sourced sidechain keys) is rejected.
+   */
+  outputBusId?: number;
+  /**
+   * Sends to other buses, in the same shape as a track lane's sends. Pre-fader
+   * sends tap before {@link gainDb}; post-fader after.
+   */
+  sends?: EngineTrackSend[];
 }
+
+/**
+ * Source a bus or master insert's sidechain key is taken from, mirroring
+ * `SonareSidechainSourceKind`: a track lane's post-strip signal (before its
+ * lane fader), or a bus's processed signal (before its `gainDb`, folded to
+ * stereo when wider).
+ */
+export type SidechainSourceKind = 'track' | 'bus';
 
 export interface ClipPageRequest {
   clipId: number;
@@ -547,6 +567,20 @@ export interface EngineMidiClipSchedule {
   loop?: boolean;
   loopLengthSamples?: number;
   events: EngineMidiEvent[];
+  /**
+   * Linear gain applied to the destination instrument's rendered audio while
+   * this clip is the most recently started active clip on it. Absent defaults
+   * to `1` (unity); a zero-initialized C struct is silent, so this facade's
+   * default deliberately differs from the ABI's own zero-init default.
+   */
+  gain?: number;
+  /**
+   * Linear fade lengths in samples over the clip's full length (not per
+   * internal loop repeat). Absent defaults to `0` (no fade).
+   * `fadeOutSamples` must be `0` when `lengthSamples` is `0` (open-ended).
+   */
+  fadeInSamples?: number;
+  fadeOutSamples?: number;
 }
 
 /** Request form of {@link RealtimeEngine.renderOffline}. */

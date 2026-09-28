@@ -278,6 +278,7 @@ export type {
   SendTiming,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
+  SidechainSourceKind,
   SilenceCommonReport,
   SoloProcessor,
   SourceBackend,

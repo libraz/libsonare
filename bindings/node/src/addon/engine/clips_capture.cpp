@@ -58,6 +58,41 @@ SonareClipPageProvider* ProviderById(const std::vector<SonareClipPageProvider*>&
   return providers[static_cast<size_t>(id - 1)];
 }
 
+// Reads an optional `sends` array off a track lane or bus object, in the one
+// shape both share (SonareEngineTrackSend). Absent/null `sends` leaves
+// *out_sends empty and returns true. Returns false with a pending JS exception
+// on a malformed entry.
+bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
+                       std::vector<SonareEngineTrackSend>* out_sends) {
+  if (!obj.Has("sends") || obj.Get("sends").IsUndefined() || obj.Get("sends").IsNull()) {
+    return true;
+  }
+  if (!obj.Get("sends").IsArray()) {
+    Napi::TypeError::New(env, "sends must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  Napi::Array sends = obj.Get("sends").As<Napi::Array>();
+  out_sends->reserve(sends.Length());
+  for (uint32_t send_index = 0; send_index < sends.Length(); ++send_index) {
+    if (!sends.Get(send_index).IsObject()) {
+      Napi::TypeError::New(env, "send must be an object").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Object send_obj = sends.Get(send_index).As<Napi::Object>();
+    SonareEngineTrackSend send{};
+    if (!RequiredUint32Property(env, send_obj, "busId", &send.bus_id)) return false;
+    send.level_db = FloatProperty(send_obj, "levelDb", 0.0f);
+    send.enabled = BoolProperty(send_obj, "enabled", true) ? 1 : 0;
+    // Default to post-fader when sendTiming is absent to preserve the
+    // historical behavior before the field existed (post-fader is the zero
+    // value of SonareSendTiming).
+    send.send_timing = IntProperty(send_obj, "sendTiming", SONARE_SEND_TIMING_POST_FADER);
+    if (env.IsExceptionPending()) return false;
+    out_sends->push_back(send);
+  }
+  return true;
+}
+
 }  // namespace
 
 Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
@@ -227,35 +262,9 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
       lane.source_channel_layout = static_cast<uint8_t>(
           Uint32Property(obj, "sourceChannelLayout", lane.source_channel_layout));
       if (env.IsExceptionPending()) return env.Undefined();
-      if (obj.Has("sends") && !obj.Get("sends").IsUndefined() && !obj.Get("sends").IsNull()) {
-        if (!obj.Get("sends").IsArray()) {
-          Napi::TypeError::New(env, "track lane sends must be an array")
-              .ThrowAsJavaScriptException();
-          return env.Undefined();
-        }
-        Napi::Array sends = obj.Get("sends").As<Napi::Array>();
-        std::vector<SonareEngineTrackSend> lane_sends;
-        lane_sends.reserve(sends.Length());
-        for (uint32_t send_index = 0; send_index < sends.Length(); ++send_index) {
-          if (!sends.Get(send_index).IsObject()) {
-            Napi::TypeError::New(env, "track lane send must be an object")
-                .ThrowAsJavaScriptException();
-            return env.Undefined();
-          }
-          Napi::Object send_obj = sends.Get(send_index).As<Napi::Object>();
-          SonareEngineTrackSend send{};
-          if (!RequiredUint32Property(env, send_obj, "busId", &send.bus_id)) {
-            return env.Undefined();
-          }
-          send.level_db = FloatProperty(send_obj, "levelDb", 0.0f);
-          send.enabled = BoolProperty(send_obj, "enabled", true) ? 1 : 0;
-          // Default to post-fader when sendTiming is absent to preserve the
-          // historical behavior before the field existed (post-fader is the
-          // zero value of SonareSendTiming).
-          send.send_timing = IntProperty(send_obj, "sendTiming", SONARE_SEND_TIMING_POST_FADER);
-          if (env.IsExceptionPending()) return env.Undefined();
-          lane_sends.push_back(send);
-        }
+      std::vector<SonareEngineTrackSend> lane_sends;
+      if (!ReadOptionalSends(env, obj, &lane_sends)) return env.Undefined();
+      if (!lane_sends.empty()) {
         send_storage.push_back(std::move(lane_sends));
         lane.sends = send_storage.back().data();
         lane.send_count = send_storage.back().size();
@@ -300,7 +309,9 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
   }
   Napi::Array input = info[0].As<Napi::Array>();
   std::vector<SonareEngineBus> buses;
+  std::vector<std::vector<SonareEngineTrackSend>> send_storage;
   buses.reserve(input.Length());
+  send_storage.reserve(input.Length());
   for (uint32_t i = 0; i < input.Length(); ++i) {
     if (!input.Get(i).IsObject()) {
       Napi::TypeError::New(env, "track bus must be an object").ThrowAsJavaScriptException();
@@ -314,10 +325,60 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     // callers that omit it keep the prior stereo behavior.
     bus.channel_layout =
         static_cast<uint8_t>(Uint32Property(obj, "channelLayout", SONARE_CHANNEL_LAYOUT_STEREO));
+    // Bus this bus's output sums into instead of the master mix; 0 (the
+    // zero-init default) keeps the bus on the master mix.
+    bus.output_bus_id = Uint32Property(obj, "outputBusId", bus.output_bus_id);
     if (env.IsExceptionPending()) return env.Undefined();
+    std::vector<SonareEngineTrackSend> bus_sends;
+    if (!ReadOptionalSends(env, obj, &bus_sends)) return env.Undefined();
+    if (!bus_sends.empty()) {
+      send_storage.push_back(std::move(bus_sends));
+      bus.sends = send_storage.back().data();
+      bus.send_count = send_storage.back().size();
+    }
     buses.push_back(bus);
   }
   ThrowIfError(env, sonare_engine_set_track_buses(engine_, buses.data(), buses.size()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetBusSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 4 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "expected (busId, insertIndex, sourceKind, sourceId)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(
+      env,
+      sonare_engine_set_bus_sidechain(
+          engine_,
+          sonare_node::node_narrow_uint32(env, info[0], sonare_node::node_arg_label(0).c_str()),
+          sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
+          sonare_node::node_narrow_int(env, info[2], sonare_node::node_arg_label(2).c_str()),
+          sonare_node::node_narrow_uint32(env, info[3], sonare_node::node_arg_label(3).c_str())));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetMasterSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "expected (insertIndex, sourceKind, sourceId)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(
+      env,
+      sonare_engine_set_master_sidechain(
+          engine_,
+          sonare_node::node_narrow_uint32(env, info[0], sonare_node::node_arg_label(0).c_str()),
+          sonare_node::node_narrow_int(env, info[1], sonare_node::node_arg_label(1).c_str()),
+          sonare_node::node_narrow_uint32(env, info[2], sonare_node::node_arg_label(2).c_str())));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

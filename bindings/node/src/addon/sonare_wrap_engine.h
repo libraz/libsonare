@@ -46,6 +46,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTrackLanes(const Napi::CallbackInfo& info);
   Napi::Value SetLaneSidechain(const Napi::CallbackInfo& info);
   Napi::Value SetTrackBuses(const Napi::CallbackInfo& info);
+  Napi::Value SetBusSidechain(const Napi::CallbackInfo& info);
+  Napi::Value SetMasterSidechain(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripJson(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripEqBandJson(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripJson(const Napi::CallbackInfo& info);

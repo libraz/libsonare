@@ -613,8 +613,10 @@ describe('RealtimeEngine native binding', () => {
 
     engine.play();
     let [out] = engine.process([new Float32Array(256)]);
-    expect(out.at(-1)).toBeGreaterThan(2.82);
-    expect(out.at(-1)).toBeLessThan(2.84);
+    // A 5.1 bus feeding a narrower (mono) output downmixes rather than
+    // truncating to the front channels, so the unity send adds half the direct level.
+    expect(out.at(-1)).toBeGreaterThan(2.12);
+    expect(out.at(-1)).toBeLessThan(2.13);
     const meterTargets = new Set(engine.drainMeterTelemetry().map((record) => record.targetId));
     expect(meterTargets.has(1)).toBe(true);
     expect(meterTargets.has(33)).toBe(true);
@@ -623,8 +625,8 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: -6.0206 }] }]);
     engine.seekSample(0);
     [out] = engine.process([new Float32Array(256)]);
-    expect(out.at(-1)).toBeGreaterThan(2.11);
-    expect(out.at(-1)).toBeLessThan(2.13);
+    expect(out.at(-1)).toBeGreaterThan(1.76);
+    expect(out.at(-1)).toBeLessThan(1.78);
 
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: false }] }]);
     engine.seekSample(0);

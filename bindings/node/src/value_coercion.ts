@@ -16,6 +16,7 @@ import type {
   ProjectLoopMode,
   ProjectTrackDesc,
   SendTiming,
+  SidechainSourceKind,
   SynthPatch,
   WarpMode,
 } from './types.js';
@@ -236,6 +237,15 @@ export function meterTapValue(tap: MeterTap | number): number {
 
 export function sendTimingValue(timing: SendTiming | number): number {
   return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
+}
+
+const SIDECHAIN_SOURCE_KIND_VALUES: Record<SidechainSourceKind, number> = {
+  track: 0,
+  bus: 1,
+};
+
+export function sidechainSourceKindValue(kind: SidechainSourceKind | number): number {
+  return resolveEnumOrdinal(kind, SIDECHAIN_SOURCE_KIND_VALUES, 'sidechain source kind');
 }
 
 /**

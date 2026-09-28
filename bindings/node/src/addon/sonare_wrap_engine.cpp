@@ -198,6 +198,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetTrackLanes>("setTrackLanes"),
           InstanceMethod<&RealtimeEngineWrap::SetLaneSidechain>("setLaneSidechain"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackBuses>("setTrackBuses"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusSidechain>("setBusSidechain"),
+          InstanceMethod<&RealtimeEngineWrap::SetMasterSidechain>("setMasterSidechain"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripJson>("setBusStripJson"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripEqBandJson>("setBusStripEqBandJson"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripJson>("setTrackStripJson"),
@@ -906,6 +908,12 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     clip.loop = obj.Get("loop").ToBoolean().Value() ? 1 : 0;
     clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", kZeroIsSentinel);
     clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
+    // Same defaults as the audio clip's gain/fade fields (SetClips): a
+    // zero-initialized struct is silent, so an omitted gain reads as unity here
+    // rather than the C ABI's own zero-init default.
+    clip.gain = FloatProperty(obj, "gain", 1.0f);
+    clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
+    clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
     if (env.IsExceptionPending()) return env.Undefined();
     clip.events = event_storage[i].data();
     clip.event_count = event_storage[i].size();

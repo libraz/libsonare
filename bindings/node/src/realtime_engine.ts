@@ -26,6 +26,7 @@ import type {
   EngineTelemetry,
   EngineTrackLane,
   EngineTrackMonitorMode,
+  EngineTrackSend,
   EngineTransportState,
   EqBandInput,
   FileClipPageProviderOptions,
@@ -39,6 +40,7 @@ import type {
   ProjectTimeSignatureSegment,
   RenderOfflineRequest,
   Sf2InstrumentConfig,
+  SidechainSourceKind,
   SynthPatch,
 } from './types.js';
 import { assertNonNegativeSafeInteger } from './validation.js';
@@ -48,8 +50,22 @@ import {
   panLawValue,
   panModeValue,
   sendTimingValue,
+  sidechainSourceKindValue,
   trackMonitorModeValue,
 } from './value_coercion.js';
+
+/**
+ * Resolves each send's `sendTiming` spelling to its C ABI ordinal, shared by
+ * {@link RealtimeEngine.setTrackLanes} and {@link RealtimeEngine.setTrackBuses}
+ * so a track lane's sends and a bus's sends normalize identically.
+ */
+function normalizeSends(sends: EngineTrackSend[]): EngineTrackSend[] {
+  return sends.map((send) =>
+    send.sendTiming === undefined
+      ? send
+      : { ...send, sendTiming: sendTimingValue(send.sendTiming) },
+  );
+}
 
 /**
  * One normalizer for both {@link RealtimeEngine.renderOffline} call forms, so
@@ -300,20 +316,23 @@ export class RealtimeEngine {
         if (lane.sends === undefined) {
           return lane;
         }
-        return {
-          ...lane,
-          sends: lane.sends.map((send) =>
-            send.sendTiming === undefined
-              ? send
-              : { ...send, sendTiming: sendTimingValue(send.sendTiming) },
-          ),
-        };
+        return { ...lane, sends: normalizeSends(lane.sends) };
       }),
     );
   }
 
+  /**
+   * Configure realtime engine buses: layout, fader, output and sends. Replaces
+   * the whole bus list. An `outputBusId` or send naming an undeclared bus, the
+   * bus itself, or forming a cycle (through outputs, sends, or bus-sourced
+   * sidechain keys) is rejected and leaves the previous buses unchanged.
+   */
   setTrackBuses(buses: EngineBus[]): void {
-    this.native.setTrackBuses(buses);
+    this.native.setTrackBuses(
+      buses.map((bus) =>
+        bus.sends === undefined ? bus : { ...bus, sends: normalizeSends(bus.sends) },
+      ),
+    );
   }
 
   /**
@@ -322,6 +341,35 @@ export class RealtimeEngine {
    */
   setLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): void {
     this.native.setLaneSidechain(trackId, insertIndex, sourceTrackId);
+  }
+
+  /**
+   * Keys one insert of a bus strip from a track lane or another bus. The key
+   * is taken before the source's lane fader or bus `gainDb`. `sourceId` 0
+   * removes the binding. Control-thread only: must not be called concurrently
+   * with {@link process}.
+   */
+  setBusSidechain(
+    busId: number,
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): void {
+    this.native.setBusSidechain(busId, insertIndex, sidechainSourceKindValue(sourceKind), sourceId);
+  }
+
+  /**
+   * Keys one insert of the master strip from a track lane or a bus.
+   * `insertIndex` counts the master strip's pre-fader inserts first, then its
+   * post-fader inserts, as the other master insert setters do. Same source
+   * rules and threading contract as {@link setBusSidechain}.
+   */
+  setMasterSidechain(
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): void {
+    this.native.setMasterSidechain(insertIndex, sidechainSourceKindValue(sourceKind), sourceId);
   }
 
   setBusStripJson(busId: number, sceneJson: string): void {
