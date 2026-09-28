@@ -478,6 +478,28 @@ export interface SonareEngineSyncTempoMessage {
   timeSignatureSegments?: EngineTimeSignatureSegment[];
 }
 
+export type SonareEngineSyncMixerInsertParamOverride =
+  | {
+      kind: 'track';
+      trackId: number;
+      insertIndex: number;
+      paramName: string;
+      value: number;
+    }
+  | {
+      kind: 'bus';
+      busId: number;
+      insertIndex: number;
+      paramName: string;
+      value: number;
+    }
+  | {
+      kind: 'master';
+      insertIndex: number;
+      paramName: string;
+      value: number;
+    };
+
 export interface SonareEngineSyncMixerMessage {
   type: 'syncMixer';
   lanes: EngineTrackLane[];
@@ -485,6 +507,8 @@ export interface SonareEngineSyncMixerMessage {
   trackStrips?: Array<{ trackId: number; sceneJson: string }>;
   busStrips?: Array<{ busId: number; sceneJson: string }>;
   masterStripJson?: string;
+  /** Retained by-name insert values, applied after strip and sidechain replay. */
+  insertParamOverrides?: SonareEngineSyncMixerInsertParamOverride[];
   /** Lane insert sidechain bindings (replayed after lanes/strips). */
   laneSidechains?: Array<{ trackId: number; insertIndex: number; sourceTrackId: number }>;
   /**

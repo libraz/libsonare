@@ -479,6 +479,33 @@ export class SonareRealtimeEngineWorkletProcessor {
         for (const binding of message.masterSidechains ?? []) {
           this.engine.setMasterSidechain(binding.insertIndex, binding.sourceKind, binding.sourceId);
         }
+        for (const override of message.insertParamOverrides ?? []) {
+          switch (override.kind) {
+            case 'track':
+              this.engine.setTrackStripInsertParamByName(
+                override.trackId,
+                override.insertIndex,
+                override.paramName,
+                override.value,
+              );
+              break;
+            case 'bus':
+              this.engine.setBusStripInsertParamByName(
+                override.busId,
+                override.insertIndex,
+                override.paramName,
+                override.value,
+              );
+              break;
+            case 'master':
+              this.engine.setMasterStripInsertParamByName(
+                override.insertIndex,
+                override.paramName,
+                override.value,
+              );
+              break;
+          }
+        }
         break;
       case 'syncCapture':
         this.engine.setCaptureBuffer(message.channels, message.bufferFrames);

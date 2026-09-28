@@ -1081,6 +1081,75 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('drops removed bus scenes before replaying a neutral master strip', async () => {
+      const posted: unknown[] = [];
+      const livePosted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        128,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const live = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize: 128, channelCount: 2 },
+        { postMessage: (message) => livePosted.push(message) },
+      );
+      try {
+        engine.setTrackBuses([{ busId: 100 }]);
+        engine.setBusStripJson(
+          100,
+          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+        );
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 5);
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master","inputTrimDb":-30}],"buses":[],"connections":[]}',
+        );
+        engine.setTrackBuses([]);
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        );
+
+        const syncs = posted.filter(
+          (message) => (message as { type?: unknown }).type === 'syncMixer',
+        ) as Array<{
+          buses: unknown[];
+          busStrips: unknown[];
+          masterStripJson: string;
+          insertParamOverrides?: unknown[];
+        }>;
+        expect(syncs.at(-1)).toEqual(expect.objectContaining({ buses: [], busStrips: [] }));
+        expect(syncs.at(-1)?.insertParamOverrides ?? []).toEqual([]);
+        expect(JSON.parse(syncs.at(-1)?.masterStripJson ?? '{}').strips[0]).not.toHaveProperty(
+          'inputTrimDb',
+        );
+        for (const message of posted) {
+          const type = (message as { type?: unknown }).type;
+          if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+          }
+        }
+        expect(
+          livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
+        ).toEqual([]);
+
+        engine.setTrackBuses([{ busId: 100 }]);
+        const restoredSync = posted.at(-1) as { type: string; busStrips: unknown[] };
+        expect(restoredSync.type).toBe('syncMixer');
+        expect(restoredSync.busStrips).toEqual([]);
+      } finally {
+        live.destroy();
+        engine.destroy();
+      }
+    });
+
     it('keeps bus, master and track strip setters across a syncMixer re-post', async () => {
       // syncMixer re-posts every cached strip scene JSON to the worklet. A
       // setter the cache did not absorb is reverted there while the offline
@@ -1113,14 +1182,67 @@ describe('SonareRealtimeEngineNode', () => {
         ]);
         engine.setTrackOutputBus(7, 100);
         engine.setSends(7, [{ busId: 200, levelDb: -3, enabled: true }]);
-        const busStripJson = '{"version":1,"strips":[],"buses":[{"id":"100"}],"connections":[]}';
+        const eqParams = (gainDb: number) => ({
+          'band0.type': 1,
+          'band0.frequencyHz': 800,
+          'band0.gainDb': gainDb,
+          'band0.enabled': 1,
+        });
+        const busStripJson = JSON.stringify({
+          version: 1,
+          strips: [],
+          buses: [
+            {
+              id: '100',
+              // Keep the legacy params_json spelling to prove realtime edits
+              // do not silently canonicalize older project scenes.
+              inserts: [
+                {
+                  slot: 'pre',
+                  processor: 'eq.parametric',
+                  params_json: JSON.stringify(eqParams(0)),
+                },
+              ],
+            },
+          ],
+          connections: [],
+        });
         engine.setBusStripJson(100, busStripJson);
         engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+          JSON.stringify({
+            version: 1,
+            strips: [
+              {
+                id: 'master',
+                // The canonical key may still carry the legacy JSON-string
+                // value. It must remain a string after a by-name edit.
+                inserts: [
+                  {
+                    slot: 'pre',
+                    processor: 'eq.parametric',
+                    params: JSON.stringify(eqParams(0)),
+                  },
+                ],
+              },
+            ],
+            buses: [],
+            connections: [],
+          }),
         );
         engine.setTrackStripJson(
           7,
-          '{"version":1,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}',
+          JSON.stringify({
+            version: 1,
+            strips: [
+              {
+                id: 'track-7',
+                // Current scene files use an object-valued params bag.
+                inserts: [{ slot: 'pre', processor: 'eq.parametric', params: eqParams(0) }],
+              },
+            ],
+            buses: [],
+            connections: [],
+          }),
         );
         engine.setBusStripPanMode(100, 'stereoPan');
         engine.setBusStripPan(100, 0.6);
@@ -1144,6 +1266,36 @@ describe('SonareRealtimeEngineNode', () => {
           0,
           '{"type":"Peak","frequencyHz":1500,"gainDb":6,"enabled":true}',
         );
+        const replay = (messages: unknown[]): void => {
+          for (const message of messages) {
+            const type = (message as { type?: unknown }).type;
+            if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+              live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+            } else if (typeof type === 'number') {
+              live.receiveCommand(message as Parameters<typeof live.receiveCommand>[0]);
+            }
+          }
+        };
+        // Bring the worklet to the same pre-insert state before sending the
+        // three by-name edits. This keeps the following process block focused
+        // on the incremental setter path rather than replaying old setup.
+        const beforeInsert = posted.length;
+        replay(posted);
+        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', 6);
+        engine.setMasterStripInsertParamByName(0, 'band0.gainDb', -3);
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 4);
+        replay(posted.slice(beforeInsert));
+        // The by-name commands must be consumed before a later structural
+        // sync. Otherwise this test could pass while only the retained JSON
+        // is correct and the live smoother still has the old value.
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+        // Exercise the real user path where routing is changed in a later
+        // control turn, after the insert knob edit has already been flushed.
+        await Promise.resolve();
+        const beforeRouting = posted.length;
         // Bus 200 never received scene JSON, so its cache entry is synthesized.
         engine.setBusStripDualPan(200, -0.7, -0.2);
         engine.setBusStripPanMode(200, 'dualPan');
@@ -1167,16 +1319,32 @@ describe('SonareRealtimeEngineNode', () => {
               bandIndex: 2,
               bandJson: expect.stringContaining('"frequencyHz":800'),
             }),
+            expect.objectContaining({
+              type: 'syncTrackStripInsertParamByName',
+              trackId: 7,
+              insertIndex: 0,
+              paramName: 'band0.gainDb',
+              value: 6,
+            }),
+            expect.objectContaining({
+              type: 'syncMasterStripInsertParamByName',
+              insertIndex: 0,
+              paramName: 'band0.gainDb',
+              value: -3,
+            }),
+            expect.objectContaining({
+              type: 'syncBusStripInsertParamByName',
+              busId: 100,
+              insertIndex: 0,
+              paramName: 'band0.gainDb',
+              value: 4,
+            }),
           ]),
         );
-        // Replay the producer's sync stream into a real worklet processor and
-        // render it beside the offline mirror.
-        for (const message of posted) {
-          const type = (message as { type?: unknown }).type;
-          if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
-            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
-          }
-        }
+        // Replay only the structural messages generated after the drain block.
+        // This models a later-turn routing edit and makes the post-sync replay
+        // boundary explicit.
+        replay(posted.slice(beforeRouting));
         expect(
           livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
         ).toEqual([]);
@@ -1192,6 +1360,10 @@ describe('SonareRealtimeEngineNode', () => {
         ];
         offline.setClips(clips);
         live.receiveSync({ type: 'syncClips', clips });
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
         offline.play();
         live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
         let maxDiff = 0;
@@ -1225,6 +1397,14 @@ describe('SonareRealtimeEngineNode', () => {
           busStrips: Array<{ busId: number; sceneJson: string }>;
           trackStrips: Array<{ trackId: number; sceneJson: string }>;
           masterStripJson: string;
+          insertParamOverrides?: Array<{
+            kind: string;
+            trackId?: number;
+            busId?: number;
+            insertIndex: number;
+            paramName: string;
+            value: number;
+          }>;
         };
         const busScene = (busId: number) =>
           JSON.parse(lastSync.busStrips.find((strip) => strip.busId === busId)?.sceneJson ?? '{}');
@@ -1254,6 +1434,64 @@ describe('SonareRealtimeEngineNode', () => {
           enabled: true,
           bands: [expect.objectContaining({ frequencyHz: 1500, gainDb: 6 })],
         });
+        expect(trackScene.strips[0].inserts[0].params).toEqual(
+          expect.objectContaining({ 'band0.gainDb': 6 }),
+        );
+        expect(typeof JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params).toBe(
+          'string',
+        );
+        expect(
+          JSON.parse(JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params),
+        ).toEqual(expect.objectContaining({ 'band0.gainDb': -3 }));
+        expect(typeof busScene(100).buses[0].inserts[0].params_json).toBe('string');
+        expect(JSON.parse(busScene(100).buses[0].inserts[0].params_json)).toEqual(
+          expect.objectContaining({ 'band0.gainDb': 4 }),
+        );
+        expect(lastSync.insertParamOverrides).toHaveLength(3);
+        expect(lastSync.insertParamOverrides).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'track',
+              trackId: 7,
+              insertIndex: 0,
+              paramName: 'band0.gainDb',
+              value: 6,
+            }),
+            expect.objectContaining({
+              kind: 'master',
+              insertIndex: 0,
+              paramName: 'band0.gainDb',
+              value: -3,
+            }),
+            expect.objectContaining({
+              kind: 'bus',
+              busId: 100,
+              insertIndex: 0,
+              paramName: 'band0.gainDb',
+              value: 4,
+            }),
+          ]),
+        );
+
+        // Replacing a full strip scene is the new source of truth and clears
+        // only that target's retained by-name values.
+        engine.setTrackStripJson(
+          7,
+          '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
+        );
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
+        );
+        engine.setBusStripJson(
+          100,
+          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+        );
+        const clearedSync = posted.at(-1) as {
+          type: string;
+          insertParamOverrides?: unknown[];
+        };
+        expect(clearedSync.type).toBe('syncMixer');
+        expect(clearedSync.insertParamOverrides ?? []).toEqual([]);
       } finally {
         live.destroy();
         engine.destroy();

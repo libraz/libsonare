@@ -8,8 +8,18 @@ import type {
 } from '../index';
 import { normalizeTrackLanes } from './engine-offline';
 import { buildMixerLanes } from './engine-sync';
-import type { SonareEngineSyncMessage } from './messages';
+import type { SonareEngineSyncMessage, SonareEngineSyncMixerInsertParamOverride } from './messages';
 import { ENGINE_MIXER_PARAM_FADER_DB, engineMixerBusTarget } from './protocol';
+
+/** A latest by-name insert value retained across a later topology replay. */
+export interface InsertParamOverride {
+  target: StripJsonTarget;
+  insertIndex: number;
+  paramName: string;
+  value: number;
+}
+
+export type InsertParamOverrideMap = Map<string, InsertParamOverride>;
 
 /**
  * Collaborator surface the mixer/routing setters need from the owning
@@ -37,6 +47,8 @@ export interface EngineMixerContext {
   readonly buses: EngineBus[];
   readonly trackStripJson: Map<number, string>;
   readonly busStripJson: Map<number, string>;
+  readonly insertParamOverrides: InsertParamOverrideMap;
+  flushOfflineMirror(): void;
   postSync(message: SonareEngineSyncMessage): void;
   ensureTrackLane(target: string | number): number;
   ensureBus(busId: number): number;
@@ -52,6 +64,72 @@ export type StripJsonTarget =
   | { kind: 'track'; trackId: number }
   | { kind: 'bus'; busId: number }
   | { kind: 'master' };
+
+/** Builds a collision-safe key for one target/insert/parameter tuple. */
+export function insertParamOverrideKey(override: InsertParamOverride): string {
+  const targetId =
+    override.target.kind === 'track'
+      ? override.target.trackId
+      : override.target.kind === 'bus'
+        ? override.target.busId
+        : 'master';
+  return JSON.stringify([override.target.kind, targetId, override.insertIndex, override.paramName]);
+}
+
+/** Removes all retained insert values for one strip after a full scene replacement. */
+export function clearInsertParamOverrides(
+  overrides: InsertParamOverrideMap,
+  target: StripJsonTarget,
+): void {
+  for (const [key, override] of overrides) {
+    if (sameStripTarget(override.target, target)) {
+      overrides.delete(key);
+    }
+  }
+}
+
+function sameStripTarget(left: StripJsonTarget, right: StripJsonTarget): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === 'track' && right.kind === 'track') {
+    return left.trackId === right.trackId;
+  }
+  if (left.kind === 'bus' && right.kind === 'bus') {
+    return left.busId === right.busId;
+  }
+  return left.kind === 'master' && right.kind === 'master';
+}
+
+function flattenInsertParamOverride(
+  override: InsertParamOverride,
+): SonareEngineSyncMixerInsertParamOverride {
+  switch (override.target.kind) {
+    case 'track':
+      return {
+        kind: 'track',
+        trackId: override.target.trackId,
+        insertIndex: override.insertIndex,
+        paramName: override.paramName,
+        value: override.value,
+      };
+    case 'bus':
+      return {
+        kind: 'bus',
+        busId: override.target.busId,
+        insertIndex: override.insertIndex,
+        paramName: override.paramName,
+        value: override.value,
+      };
+    case 'master':
+      return {
+        kind: 'master',
+        insertIndex: override.insertIndex,
+        paramName: override.paramName,
+        value: override.value,
+      };
+  }
+}
 
 /** Reads a strip's cached scene JSON; undefined when none was ever set. */
 export function cachedStripJson(
@@ -103,6 +181,7 @@ export function syncMixer(ctx: EngineMixerContext): void {
   if (lanes.length > 0) {
     ctx.offlineEngine.setTrackLanes(lanes);
   }
+  replayInsertParamOverrides(ctx, lanes, buses);
   const trackStrips = Array.from(ctx.trackStripJson, ([trackId, sceneJson]) => ({
     trackId,
     sceneJson,
@@ -111,6 +190,10 @@ export function syncMixer(ctx: EngineMixerContext): void {
     busId,
     sceneJson,
   }));
+  const insertParamOverrides = Array.from(
+    ctx.insertParamOverrides.values(),
+    flattenInsertParamOverride,
+  );
   ctx.postSync({
     type: 'syncMixer',
     lanes,
@@ -121,7 +204,61 @@ export function syncMixer(ctx: EngineMixerContext): void {
     masterStripJson: ctx.getMasterStripJson(),
     busSidechains: Array.from(ctx.busSidechains.values()),
     masterSidechains: Array.from(ctx.masterSidechains.values()),
+    ...(insertParamOverrides.length > 0 ? { insertParamOverrides } : {}),
   });
+}
+
+/**
+ * Reapplies retained by-name values after native topology setters clear their
+ * smoother slots. This runs once per mixer sync, never once per knob tick.
+ */
+export function replayInsertParamOverrides(
+  ctx: EngineMixerContext,
+  lanes = mixerLanes(ctx),
+  buses = ctx.buses,
+): void {
+  const activeTrackIds = new Set(lanes.map((lane) => lane.trackId));
+  const activeBusIds = new Set(buses.map((bus) => bus.busId));
+  for (const [key, override] of ctx.insertParamOverrides) {
+    const active =
+      override.target.kind === 'track'
+        ? activeTrackIds.has(override.target.trackId)
+        : override.target.kind === 'bus'
+          ? activeBusIds.has(override.target.busId)
+          : true;
+    if (!active) {
+      ctx.insertParamOverrides.delete(key);
+      continue;
+    }
+    switch (override.target.kind) {
+      case 'track':
+        ctx.offlineEngine.setTrackStripInsertParamByName(
+          override.target.trackId,
+          override.insertIndex,
+          override.paramName,
+          override.value,
+        );
+        ctx.flushOfflineMirror();
+        break;
+      case 'bus':
+        ctx.offlineEngine.setBusStripInsertParamByName(
+          override.target.busId,
+          override.insertIndex,
+          override.paramName,
+          override.value,
+        );
+        ctx.flushOfflineMirror();
+        break;
+      case 'master':
+        ctx.offlineEngine.setMasterStripInsertParamByName(
+          override.insertIndex,
+          override.paramName,
+          override.value,
+        );
+        ctx.flushOfflineMirror();
+        break;
+    }
+  }
 }
 
 /**
@@ -295,6 +432,25 @@ export function setSends(
 
 export function setTrackBuses(ctx: EngineMixerContext, buses: EngineBus[]): void {
   ctx.buses.splice(0, ctx.buses.length, ...buses.map((bus) => ({ ...bus })));
+  const activeBusIds = new Set(ctx.buses.map((bus) => bus.busId));
+  for (const busId of ctx.busStripJson.keys()) {
+    if (!activeBusIds.has(busId)) {
+      ctx.busStripJson.delete(busId);
+    }
+  }
+  for (const [key, binding] of ctx.busSidechains) {
+    if (
+      !activeBusIds.has(binding.busId) ||
+      (binding.sourceKind === 1 && !activeBusIds.has(binding.sourceId))
+    ) {
+      ctx.busSidechains.delete(key);
+    }
+  }
+  for (const [key, binding] of ctx.masterSidechains) {
+    if (binding.sourceKind === 1 && !activeBusIds.has(binding.sourceId)) {
+      ctx.masterSidechains.delete(key);
+    }
+  }
   ctx.syncMixer();
 }
 
@@ -302,6 +458,7 @@ export function setBusGain(ctx: EngineMixerContext, busId: number, db: number): 
   const busIndex = ctx.ensureBus(busId);
   ctx.buses[busIndex] = { ...ctx.buses[busIndex], busId, gainDb: db };
   ctx.offlineEngine.setTrackBuses(ctx.buses);
+  replayInsertParamOverrides(ctx);
   return ctx.sendSmoothedParam(engineMixerBusTarget(busIndex, ENGINE_MIXER_PARAM_FADER_DB), db);
 }
 
@@ -309,5 +466,6 @@ export function setBusStripJson(ctx: EngineMixerContext, busId: number, sceneJso
   ctx.ensureBus(busId);
   ctx.offlineEngine.setBusStripJson(busId, sceneJson);
   ctx.busStripJson.set(busId, sceneJson);
+  clearInsertParamOverrides(ctx.insertParamOverrides, { kind: 'bus', busId });
   ctx.syncMixer();
 }

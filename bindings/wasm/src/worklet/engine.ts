@@ -35,7 +35,7 @@ import type { EngineClipContext } from './engine-clips';
 import * as clips from './engine-clips';
 import type { EngineMarkerContext } from './engine-markers';
 import * as markers from './engine-markers';
-import type { EngineMixerContext } from './engine-mixer-facade';
+import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade';
 import * as mixer from './engine-mixer-facade';
 import { SonareRealtimeEngineNode } from './engine-node';
 import { buildTransportFacade, type CaptureOptions } from './engine-offline';
@@ -116,6 +116,7 @@ export class SonareEngine {
   private readonly buses: EngineBus[] = [];
   private readonly trackStripJson = new Map<number, string>();
   private readonly busStripJson = new Map<number, string>();
+  private readonly insertParamOverrides: InsertParamOverrideMap = new Map();
   private masterStripJson: string | undefined;
   private captureConfig: Omit<SonareEngineSyncCaptureMessage, 'type'> | undefined;
   private tempoBpm = 120;
@@ -598,6 +599,7 @@ export class SonareEngine {
 
   setMasterStripJson(sceneJson: string): void {
     this.offlineEngine.setMasterStripJson(sceneJson);
+    mixer.clearInsertParamOverrides(this.insertParamOverrides, { kind: 'master' });
     this.masterStripJson = sceneJson;
     this.syncMixer();
   }
@@ -1433,6 +1435,8 @@ export class SonareEngine {
       buses: this.buses,
       trackStripJson: this.trackStripJson,
       busStripJson: this.busStripJson,
+      insertParamOverrides: this.insertParamOverrides,
+      flushOfflineMirror: () => this.flushOfflineMirror(),
       postSync: (message) => this.postSync(message),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       ensureBus: (busId) => this.ensureBus(busId),
@@ -1460,6 +1464,7 @@ export class SonareEngine {
       readStripJson: (target) => mixer.cachedStripJson(this.mixerContext, target),
       writeStripJson: (target, sceneJson) =>
         mixer.cacheStripJson(this.mixerContext, target, sceneJson),
+      insertParamOverrides: this.insertParamOverrides,
     };
   }
 
