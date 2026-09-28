@@ -231,6 +231,11 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'A clip start position on the timeline; 0 is the first frame.',
   ],
   [
+    'sonare_wrap_engine.cpp:fadeInSamples',
+    'A MIDI clip fade length in samples; 0 is no fade, a length the caller can mean.',
+  ],
+  ['sonare_wrap_engine.cpp:fadeOutSamples', 'Fade length, as fadeInSamples.'],
+  [
     'sonare_wrap_note_objects.h:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
   ],
