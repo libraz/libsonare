@@ -29,6 +29,7 @@ from ._runtime import (
 )
 from .types import (
     CapabilityCatalog,
+    MasteringAmpPresetCatalogEntry,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
@@ -349,6 +350,29 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
         return []
     parsed = json.loads(raw.decode("utf-8"))
     return cast("list[MasteringProcessorCatalogEntry]", parsed)
+
+
+def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
+    """Return the built-in amp-sim rig catalog.
+
+    One entry per rig, in ``saturation.ampSim`` ``presetIndex`` order, each
+    with ``index``, ``name``, and ``params`` (the rig's resolved starting
+    values under the insert's camelCase keys, e.g. ``drive``, ``bassDb``,
+    ``ampModel``, with enum-valued keys as integer ordinals). Returns an
+    empty list when the build lacks mastering support or the catalog cannot
+    be built.
+
+    The native layer returns a program-lifetime JSON array string the caller
+    must NOT free (same convention as :func:`mastering_processor_catalog`).
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_amp_preset_catalog"):
+        return []
+    raw = lib.sonare_mastering_amp_preset_catalog()
+    if not raw:
+        return []
+    parsed = json.loads(raw.decode("utf-8"))
+    return cast("list[MasteringAmpPresetCatalogEntry]", parsed)
 
 
 def capability_catalog() -> CapabilityCatalog:

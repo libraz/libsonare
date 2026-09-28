@@ -425,6 +425,141 @@ class _EngineMixingMixin:
             )
         )
 
+    def apply_track_strip_insert_param_by_name_now(
+        self, track_id: int, insert_index: int, param_name: str, value: float
+    ) -> bool:
+        """Apply one track-strip insert parameter immediately, bypassing the queue.
+
+        Runs on the calling (engine-owning) thread rather than going through
+        the command ring, and is recorded as the parameter's manual base like
+        :meth:`set_track_strip_insert_param_by_name`. An unknown track, insert
+        or name is reported by a ``False`` return instead of raising; not safe
+        concurrently with :meth:`process`.
+        """
+        out_applied = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_apply_track_strip_insert_param_by_name_now(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                param_name.encode("utf-8"),
+                _to_c_float(value, "value"),
+                ctypes.byref(out_applied),
+            )
+        )
+        return bool(out_applied.value)
+
+    def apply_master_strip_insert_param_by_name_now(
+        self, insert_index: int, param_name: str, value: float
+    ) -> bool:
+        """Master-strip counterpart of :meth:`apply_track_strip_insert_param_by_name_now`."""
+        out_applied = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_apply_master_strip_insert_param_by_name_now(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                param_name.encode("utf-8"),
+                _to_c_float(value, "value"),
+                ctypes.byref(out_applied),
+            )
+        )
+        return bool(out_applied.value)
+
+    def apply_bus_strip_insert_param_by_name_now(
+        self, bus_id: int, insert_index: int, param_name: str, value: float
+    ) -> bool:
+        """Bus-strip counterpart of :meth:`apply_track_strip_insert_param_by_name_now`."""
+        out_applied = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_apply_bus_strip_insert_param_by_name_now(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                param_name.encode("utf-8"),
+                _to_c_float(value, "value"),
+                ctypes.byref(out_applied),
+            )
+        )
+        return bool(out_applied.value)
+
+    def restore_track_strip_insert_param_by_name(
+        self, track_id: int, insert_index: int, param_name: str, value: float
+    ) -> None:
+        """Restore a retained track-strip insert value exactly, without a ramp.
+
+        Retires any in-flight smoother for the parameter and records the
+        value as the manual base. Used to replay retained edits after
+        :meth:`set_track_strip_json` replaced the strip. Raises if the track,
+        insert, or name is unknown; not safe concurrently with :meth:`process`.
+        """
+        _check(
+            _get_lib().sonare_engine_restore_track_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                param_name.encode("utf-8"),
+                _to_c_float(value, "value"),
+            )
+        )
+
+    def restore_master_strip_insert_param_by_name(
+        self, insert_index: int, param_name: str, value: float
+    ) -> None:
+        """Master-strip counterpart of :meth:`restore_track_strip_insert_param_by_name`."""
+        _check(
+            _get_lib().sonare_engine_restore_master_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                param_name.encode("utf-8"),
+                _to_c_float(value, "value"),
+            )
+        )
+
+    def restore_bus_strip_insert_param_by_name(
+        self, bus_id: int, insert_index: int, param_name: str, value: float
+    ) -> None:
+        """Bus-strip counterpart of :meth:`restore_track_strip_insert_param_by_name`."""
+        _check(
+            _get_lib().sonare_engine_restore_bus_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                param_name.encode("utf-8"),
+                _to_c_float(value, "value"),
+            )
+        )
+
+    def clear_track_insert_parameter_bases(self, track_id: int) -> None:
+        """Forget the remembered manual insert-parameter values of one track strip.
+
+        Also discards its queued insert edits. Call before
+        :meth:`set_track_strip_json` replaces the strip when its old values
+        must not carry over; the setter never does this itself, since a queued
+        edit may already target the new chain. Raises if the track is not a published
+        lane; not safe concurrently with :meth:`process`.
+        """
+        _check(
+            _get_lib().sonare_engine_clear_track_insert_parameter_bases(
+                self._require_handle(), _to_c_uint32(track_id, "track_id")
+            )
+        )
+
+    def clear_master_insert_parameter_bases(self) -> None:
+        """Master-strip counterpart of :meth:`clear_track_insert_parameter_bases`."""
+        _check(_get_lib().sonare_engine_clear_master_insert_parameter_bases(self._require_handle()))
+
+    def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
+        """Bus-strip counterpart of :meth:`clear_track_insert_parameter_bases`.
+
+        Also accepts a bus identity that was already removed, covering every
+        selector the identity held across remove/re-add.
+        """
+        _check(
+            _get_lib().sonare_engine_clear_bus_insert_parameter_bases(
+                self._require_handle(), _to_c_uint32(bus_id, "bus_id")
+            )
+        )
+
     def set_bus_strip_insert_bypassed(
         self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:

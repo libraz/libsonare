@@ -202,6 +202,17 @@ Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringAmpPresetCatalog(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  // sonare_mastering_amp_preset_catalog() returns a thread-local JSON array
+  // string (NOT to be freed); "[]" for a NULL result. The TS facade parses it
+  // into the typed MasteringAmpPresetCatalogEntry[].
+  const char* json = sonare_mastering_amp_preset_catalog();
+  return Napi::String::New(env, json != nullptr ? json : "[]");
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::CapabilityCatalog(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

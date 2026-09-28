@@ -449,6 +449,175 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngin
 #endif
 }
 
+SonareError sonare_engine_apply_track_strip_insert_param_by_name_now(
+    SonareRealtimeEngine* engine, uint32_t track_id, unsigned int insert_index,
+    const char* param_name, float value, int* out_applied) {
+  SONARE_C_API_ENTRY;
+  if (out_applied) *out_applied = 0;
+  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value) ||
+      !out_applied) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  *out_applied =
+      engine->engine.apply_track_insert_param_by_name_now(track_id, insert_index, param_name, value)
+          ? 1
+          : 0;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_apply_master_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+                                                                      unsigned int insert_index,
+                                                                      const char* param_name,
+                                                                      float value,
+                                                                      int* out_applied) {
+  SONARE_C_API_ENTRY;
+  if (out_applied) *out_applied = 0;
+  if (!engine || !param_name || param_name[0] == '\0' || !std::isfinite(value) || !out_applied) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  *out_applied =
+      engine->engine.apply_master_insert_param_by_name_now(insert_index, param_name, value) ? 1 : 0;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_apply_bus_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+                                                                   uint32_t bus_id,
+                                                                   unsigned int insert_index,
+                                                                   const char* param_name,
+                                                                   float value, int* out_applied) {
+  SONARE_C_API_ENTRY;
+  if (out_applied) *out_applied = 0;
+  if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value) ||
+      !out_applied) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  *out_applied =
+      engine->engine.apply_bus_insert_param_by_name_now(bus_id, insert_index, param_name, value)
+          ? 1
+          : 0;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                   uint32_t track_id,
+                                                                   unsigned int insert_index,
+                                                                   const char* param_name,
+                                                                   float value) {
+  SONARE_C_API_ENTRY;
+  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.restore_track_insert_param_by_name(track_id, insert_index, param_name,
+                                                           value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                    unsigned int insert_index,
+                                                                    const char* param_name,
+                                                                    float value) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !param_name || param_name[0] == '\0' || !std::isfinite(value)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.restore_master_insert_param_by_name(insert_index, param_name, value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_restore_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                 uint32_t bus_id,
+                                                                 unsigned int insert_index,
+                                                                 const char* param_name,
+                                                                 float value) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.restore_bus_insert_param_by_name(bus_id, insert_index, param_name, value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_clear_track_insert_parameter_bases(SonareRealtimeEngine* engine,
+                                                             uint32_t track_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return engine->engine.clear_track_insert_parameter_bases(track_id)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+#endif
+}
+
+SonareError sonare_engine_clear_master_insert_parameter_bases(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine->engine.clear_master_insert_parameter_bases();
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareRealtimeEngine* engine,
+                                                           uint32_t bus_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return engine->engine.clear_bus_insert_parameter_bases(bus_id) ? SONARE_OK
+                                                                 : SONARE_ERROR_INVALID_PARAMETER;
+#endif
+}
+
 SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
                                                              uint32_t track_id,
                                                              unsigned int insert_index,

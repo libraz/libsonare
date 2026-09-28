@@ -171,6 +171,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SeekSample>("seekSample"),
           InstanceMethod<&RealtimeEngineWrap::SettleParameters>("settleParameters"),
           InstanceMethod<&RealtimeEngineWrap::FlushControlCommands>("flushControlCommands"),
+          InstanceMethod<&RealtimeEngineWrap::SettleInsertParameters>("settleInsertParameters"),
+          InstanceMethod<&RealtimeEngineWrap::ApplyCommandsDueNowPreservingFuture>(
+              "applyCommandsDueNowPreservingFuture"),
           InstanceMethod<&RealtimeEngineWrap::SeekPpq>("seekPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
@@ -216,6 +219,24 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "setMasterStripInsertParamByName"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripInsertParamByName>(
               "setBusStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::ApplyTrackStripInsertParamByNameNow>(
+              "applyTrackStripInsertParamByNameNow"),
+          InstanceMethod<&RealtimeEngineWrap::RestoreTrackStripInsertParamByName>(
+              "restoreTrackStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::ApplyMasterStripInsertParamByNameNow>(
+              "applyMasterStripInsertParamByNameNow"),
+          InstanceMethod<&RealtimeEngineWrap::RestoreMasterStripInsertParamByName>(
+              "restoreMasterStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::ApplyBusStripInsertParamByNameNow>(
+              "applyBusStripInsertParamByNameNow"),
+          InstanceMethod<&RealtimeEngineWrap::RestoreBusStripInsertParamByName>(
+              "restoreBusStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::ClearTrackInsertParameterBases>(
+              "clearTrackInsertParameterBases"),
+          InstanceMethod<&RealtimeEngineWrap::ClearMasterInsertParameterBases>(
+              "clearMasterInsertParameterBases"),
+          InstanceMethod<&RealtimeEngineWrap::ClearBusInsertParameterBases>(
+              "clearBusInsertParameterBases"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripInsertBypassed>(
               "setBusStripInsertBypassed"),
           InstanceMethod<&RealtimeEngineWrap::ResolveTrackInsertAutomationId>(
@@ -476,6 +497,23 @@ Napi::Value RealtimeEngineWrap::FlushControlCommands(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   ThrowIfError(env, sonare_engine_flush_control_commands(engine_));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SettleInsertParameters(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  ThrowIfError(env, sonare_engine_settle_insert_parameters(engine_));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ApplyCommandsDueNowPreservingFuture(
+    const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  ThrowIfError(env, sonare_engine_apply_commands_due_now_preserving_future(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

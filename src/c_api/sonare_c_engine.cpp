@@ -221,6 +221,20 @@ SonareError sonare_engine_flush_control_commands(SonareRealtimeEngine* engine) {
   return SONARE_OK;
 }
 
+SonareError sonare_engine_settle_insert_parameters(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.settle_insert_parameters();
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_apply_commands_due_now_preserving_future(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.apply_commands_due_now_preserving_future();
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm) {
   SONARE_C_API_ENTRY;
   if (!engine || !transport::valid_public_tempo(bpm)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -433,6 +447,17 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
         {points[i].ppq, points[i].value, curve_from_int(points[i].curve_to_next)});
   }
 
+  if (breakpoints.empty()) {
+    // An empty lane drives nothing, so drop it rather than let cleared lanes accumulate.
+    engine->automation_lanes.erase(
+        std::remove_if(engine->automation_lanes.begin(), engine->automation_lanes.end(),
+                       [&](const automation::AutomationLane& item) {
+                         return item.target_param_id() == param_id;
+                       }),
+        engine->automation_lanes.end());
+    engine->engine.automation().set_lanes(engine->automation_lanes);
+    return SONARE_OK;
+  }
   automation::AutomationLane lane(param_id);
   lane.set_points(std::move(breakpoints));
   auto found = std::find_if(

@@ -9,6 +9,7 @@
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "mastering/saturation/amp_presets.h"
 #include "sonare_c_test_helpers.h"
 #include "support/schema_paths.h"
 #include "util/db.h"
@@ -930,6 +931,31 @@ TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
   REQUIRE(std::strstr(catalog, "\"latencySamples\":") != nullptr);
   REQUIRE(std::strstr(catalog, "\"tailSamples\":") != nullptr);
   REQUIRE(std::strstr(catalog, "\"realtimeCost\":") != nullptr);
+}
+
+TEST_CASE("sonare_mastering_amp_preset_catalog reports each rig's resolved config",
+          "[c_api][mastering]") {
+  namespace sat = sonare::mastering::saturation;
+  const char* raw = sonare_mastering_amp_preset_catalog();
+  REQUIRE(raw != nullptr);
+  REQUIRE(raw == sonare_mastering_amp_preset_catalog());
+  const auto catalog = sonare::util::json::parse_strict(raw);
+  const auto names = sat::amp_preset_names();
+  REQUIRE(catalog.as_array().size() == names.size());
+  for (size_t i = 0; i < names.size(); ++i) {
+    const auto& entry = catalog[i];
+    const sat::AmpSimConfig config = sat::amp_preset_config(static_cast<sat::AmpPreset>(i));
+    REQUIRE(entry["index"].as_number() == static_cast<double>(i));
+    REQUIRE(entry["name"].as_string() == names[i]);
+    const auto& params = entry["params"];
+    REQUIRE(params["drive"].as_number() == static_cast<double>(config.drive));
+    REQUIRE(params["bassDb"].as_number() == static_cast<double>(config.bass_db));
+    REQUIRE(params["ampModel"].as_number() == static_cast<int>(config.amp_model));
+    REQUIRE(params["powerTube"].as_number() == static_cast<int>(config.power_tube));
+    REQUIRE(params["preampStages"].as_number() == static_cast<double>(config.preamp_stages));
+    REQUIRE(params["cab"].as_bool() == config.cab);
+    REQUIRE(params["micBInvert"].as_bool() == config.mic_b_invert);
+  }
 }
 
 TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",

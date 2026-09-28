@@ -2556,4 +2556,172 @@ describe('RealtimeEngine native binding', () => {
     expect(after.getTransportState().playing).toBe(false);
     after.destroy();
   });
+
+  it('settles insert parameters and applies due commands without throwing', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.settleInsertParameters()).not.toThrow();
+    expect(() => engine.applyCommandsDueNowPreservingFuture()).not.toThrow();
+    engine.destroy();
+  });
+
+  it('clearing an automation lane with no points removes it', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.addParameter({
+      id: 7,
+      name: 'gain',
+      unit: 'dB',
+      minValue: -60,
+      maxValue: 12,
+      defaultValue: 0,
+      rtSafe: true,
+      defaultCurve: 0,
+    });
+    engine.setAutomationLane(7, [
+      { ppq: 0, value: 0 },
+      { ppq: 1, value: 6 },
+    ]);
+    expect(engine.automationLaneCount()).toBe(1);
+    engine.setAutomationLane(7, []);
+    expect(engine.automationLaneCount()).toBe(0);
+    engine.destroy();
+  });
+
+  it('applies, restores and clears retained insert parameters on track, master and bus strips', () => {
+    const engine = new RealtimeEngine(48000, 256, 64, 64);
+    engine.setTrackLanes([10]);
+    engine.setTrackStripJson(
+      10,
+      JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'track-10',
+            inserts: [{ slot: 'pre', processor: 'effects.reverb.fdn', params: '{"dryWet":0.0}' }],
+          },
+        ],
+        buses: [],
+        connections: [],
+      }),
+    );
+    engine.setMasterStripJson(
+      JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'master',
+            inserts: [
+              {
+                slot: 'pre',
+                processor: 'eq.parametric',
+                params: JSON.stringify({
+                  'band0.type': 1,
+                  'band0.frequencyHz': 1000,
+                  'band0.gainDb': 0,
+                  'band0.enabled': 1,
+                }),
+              },
+            ],
+          },
+        ],
+        buses: [],
+        connections: [],
+      }),
+    );
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 1 }]);
+    engine.setBusStripJson(
+      1,
+      JSON.stringify({
+        version: 1,
+        strips: [],
+        buses: [
+          {
+            id: '1',
+            inserts: [
+              {
+                slot: 'pre',
+                processor: 'eq.parametric',
+                params: JSON.stringify({
+                  'band0.type': 1,
+                  'band0.frequencyHz': 1000,
+                  'band0.gainDb': 0,
+                  'band0.enabled': 1,
+                }),
+              },
+            ],
+          },
+        ],
+        connections: [],
+      }),
+    );
+
+    // apply-now returns true for a known insert/param and false (never a throw)
+    // for an unknown target or name.
+    expect(engine.applyTrackStripInsertParamByNameNow(10, 0, 'dryWet', 1.0)).toBe(true);
+    expect(engine.applyTrackStripInsertParamByNameNow(10, 0, 'bogusParam', 1.0)).toBe(false);
+    expect(engine.applyTrackStripInsertParamByNameNow(99, 0, 'dryWet', 1.0)).toBe(false);
+    expect(engine.applyMasterStripInsertParamByNameNow(0, 'band0.gainDb', -3)).toBe(true);
+    expect(engine.applyMasterStripInsertParamByNameNow(0, 'bogusParam', -3)).toBe(false);
+    expect(engine.applyBusStripInsertParamByNameNow(1, 0, 'band0.gainDb', -3)).toBe(true);
+    expect(engine.applyBusStripInsertParamByNameNow(9, 0, 'band0.gainDb', -3)).toBe(false);
+
+    // restore applies exactly and throws for an unknown track/bus.
+    expect(() => engine.restoreTrackStripInsertParamByName(10, 0, 'dryWet', 0.5)).not.toThrow();
+    expect(() => engine.restoreMasterStripInsertParamByName(0, 'band0.gainDb', 1)).not.toThrow();
+    expect(() => engine.restoreBusStripInsertParamByName(1, 0, 'band0.gainDb', 1)).not.toThrow();
+
+    let restoreTrackError: unknown;
+    try {
+      engine.restoreTrackStripInsertParamByName(99, 0, 'dryWet', 0.5);
+    } catch (error) {
+      restoreTrackError = error;
+    }
+    expect(isSonareError(restoreTrackError)).toBe(true);
+    if (!isSonareError(restoreTrackError)) {
+      throw new Error('expected SonareError');
+    }
+    expect(restoreTrackError.code).toBe(ErrorCode.InvalidParameter);
+
+    let restoreBusError: unknown;
+    try {
+      engine.restoreBusStripInsertParamByName(99, 0, 'band0.gainDb', 1);
+    } catch (error) {
+      restoreBusError = error;
+    }
+    expect(isSonareError(restoreBusError)).toBe(true);
+    if (!isSonareError(restoreBusError)) {
+      throw new Error('expected SonareError');
+    }
+    expect(restoreBusError.code).toBe(ErrorCode.InvalidParameter);
+
+    // clear works for a known target and throws for an unknown track/bus.
+    expect(() => engine.clearTrackInsertParameterBases(10)).not.toThrow();
+    expect(() => engine.clearMasterInsertParameterBases()).not.toThrow();
+    expect(() => engine.clearBusInsertParameterBases(1)).not.toThrow();
+
+    let clearTrackError: unknown;
+    try {
+      engine.clearTrackInsertParameterBases(99);
+    } catch (error) {
+      clearTrackError = error;
+    }
+    expect(isSonareError(clearTrackError)).toBe(true);
+    if (!isSonareError(clearTrackError)) {
+      throw new Error('expected SonareError');
+    }
+    expect(clearTrackError.code).toBe(ErrorCode.InvalidParameter);
+
+    let clearBusError: unknown;
+    try {
+      engine.clearBusInsertParameterBases(99);
+    } catch (error) {
+      clearBusError = error;
+    }
+    expect(isSonareError(clearBusError)).toBe(true);
+    if (!isSonareError(clearBusError)) {
+      throw new Error('expected SonareError');
+    }
+    expect(clearBusError.code).toBe(ErrorCode.InvalidParameter);
+
+    engine.destroy();
+  });
 });

@@ -19,6 +19,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SeekSample(const Napi::CallbackInfo& info);
   Napi::Value SettleParameters(const Napi::CallbackInfo& info);
   Napi::Value FlushControlCommands(const Napi::CallbackInfo& info);
+  Napi::Value SettleInsertParameters(const Napi::CallbackInfo& info);
+  Napi::Value ApplyCommandsDueNowPreservingFuture(const Napi::CallbackInfo& info);
   Napi::Value SeekPpq(const Napi::CallbackInfo& info);
   Napi::Value SetTempo(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignature(const Napi::CallbackInfo& info);
@@ -59,6 +61,15 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTrackStripInsertParamByName(const Napi::CallbackInfo& info);
   Napi::Value SetMasterStripInsertParamByName(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value ApplyTrackStripInsertParamByNameNow(const Napi::CallbackInfo& info);
+  Napi::Value RestoreTrackStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value ApplyMasterStripInsertParamByNameNow(const Napi::CallbackInfo& info);
+  Napi::Value RestoreMasterStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value ApplyBusStripInsertParamByNameNow(const Napi::CallbackInfo& info);
+  Napi::Value RestoreBusStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value ClearTrackInsertParameterBases(const Napi::CallbackInfo& info);
+  Napi::Value ClearMasterInsertParameterBases(const Napi::CallbackInfo& info);
+  Napi::Value ClearBusInsertParameterBases(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripInsertBypassed(const Napi::CallbackInfo& info);
   Napi::Value ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info);

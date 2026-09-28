@@ -230,6 +230,18 @@ const char* sonare_mastering_processor_catalog(void) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
+const char* sonare_mastering_amp_preset_catalog(void) {
+  SONARE_C_TRY
+  static thread_local std::string catalog;
+  static thread_local bool built = false;
+  if (!built) {
+    catalog = sonare::mastering::api::amp_preset_catalog_json();
+    built = true;
+  }
+  return catalog.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
+}
+
 const char* sonare_capability_catalog_json(void) {
   SONARE_C_TRY
   namespace json = sonare::util::json;

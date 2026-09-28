@@ -173,6 +173,9 @@ from ._types_capabilities import (
     CapabilityCatalogPresets as CapabilityCatalogPresets,
 )
 from ._types_capabilities import (
+    MasteringAmpPresetCatalogEntry as MasteringAmpPresetCatalogEntry,
+)
+from ._types_capabilities import (
     MasteringChannelPolicy as MasteringChannelPolicy,
 )
 from ._types_capabilities import (

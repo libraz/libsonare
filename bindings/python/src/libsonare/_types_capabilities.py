@@ -158,6 +158,21 @@ class MasteringProcessorCatalogEntry(TypedDict):
     slots: list[MasteringInsertSlot]
 
 
+class MasteringAmpPresetCatalogEntry(TypedDict):
+    """One built-in amp-sim rig, as returned by :func:`mastering_amp_preset_catalog`.
+
+    ``params`` holds the rig's resolved starting values under the insert's
+    camelCase keys (``drive``, ``bassDb``, ``ampModel``, ...), with
+    enum-valued keys as integer ordinals. Read-only metadata for an editor
+    positioning inherited controls -- the DSP is still driven by the rig
+    index plus sparse overrides.
+    """
+
+    index: int
+    name: str
+    params: dict[str, float | int | bool]
+
+
 class CapabilityCatalogPresets(TypedDict):
     """Built-in preset identifiers grouped by public feature family."""
 

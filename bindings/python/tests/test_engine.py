@@ -1954,6 +1954,89 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
         assert master_param != bus_param
 
 
+def test_engine_settle_insert_parameters_and_apply_commands_due_now() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.settle_insert_parameters()
+        engine.apply_commands_due_now_preserving_future()
+
+
+def test_engine_empty_automation_lane_removes_it() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.add_parameter(
+            ParameterInfo(
+                id=7,
+                name="gain",
+                unit="dB",
+                min_value=-60.0,
+                max_value=12.0,
+                default_value=0.0,
+                rt_safe=True,
+                default_curve=AutomationCurve.LINEAR,
+            )
+        )
+        engine.set_automation_lane(7, [AutomationPoint(ppq=0.0, value=0.0)])
+        assert engine.automation_lane_count() == 1
+        engine.set_automation_lane(7, [])
+        assert engine.automation_lane_count() == 0
+
+
+def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_track_lanes([10])
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+            '"processor":"eq.parametric","params":"{\\"band0.type\\":1,'
+            '\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],'
+            '"buses":[],"connections":[]}',
+        )
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        engine.set_bus_strip_json(
+            1,
+            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
+            '{"slot":"pre","processor":"eq.parametric",'
+            '"params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,'
+            '\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+        )
+        engine.set_master_strip_json(
+            '{"version":1,"strips":[{"id":"master","inserts":['
+            '{"slot":"pre","processor":"dynamics.compressor",'
+            '"params":"{\\"thresholdDb\\":-3,\\"ratio\\":4}"}]}],'
+            '"buses":[],"connections":[]}'
+        )
+
+        # A known target applies immediately and reports True.
+        assert engine.apply_track_strip_insert_param_by_name_now(10, 0, "band0.gainDb", 3.0)
+        assert engine.apply_master_strip_insert_param_by_name_now(0, "thresholdDb", -6.0)
+        assert engine.apply_bus_strip_insert_param_by_name_now(1, 0, "band0.gainDb", 3.0)
+
+        # An unknown name -- or an otherwise-unknown target -- is not an
+        # error; it just does not apply.
+        assert not engine.apply_track_strip_insert_param_by_name_now(10, 0, "nope", 1.0)
+        assert not engine.apply_master_strip_insert_param_by_name_now(0, "nope", 1.0)
+        assert not engine.apply_bus_strip_insert_param_by_name_now(1, 0, "nope", 1.0)
+        assert not engine.apply_track_strip_insert_param_by_name_now(99, 0, "band0.gainDb", 1.0)
+
+        # A retained value replays exactly, without a ramp.
+        engine.restore_track_strip_insert_param_by_name(10, 0, "band0.gainDb", -3.0)
+        engine.restore_master_strip_insert_param_by_name(0, "thresholdDb", -9.0)
+        engine.restore_bus_strip_insert_param_by_name(1, 0, "band0.gainDb", -3.0)
+
+        # Unlike apply_*_now, restore raises for an unknown track.
+        with pytest.raises(SonareError):
+            engine.restore_track_strip_insert_param_by_name(99, 0, "band0.gainDb", 1.0)
+
+        # Forgetting the remembered manual values does not error for a known
+        # track/bus and the master strip.
+        engine.clear_track_insert_parameter_bases(10)
+        engine.clear_master_insert_parameter_bases()
+        engine.clear_bus_insert_parameter_bases(1)
+
+        # Unlike the bus/master forms, an unknown track is rejected.
+        with pytest.raises(SonareError):
+            engine.clear_track_insert_parameter_bases(99)
+
+
 def test_engine_drains_external_midi_routing_to_host() -> None:
     with RealtimeEngine(
         sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16

@@ -157,6 +157,26 @@ export class RealtimeEngine {
     this.native.flushControlCommands();
   }
 
+  /**
+   * Snaps only the in-flight strip insert parameter ramps (track, bus and
+   * master inserts) to their targets, leaving fader/pan ramps untouched. For
+   * use after a structural replay (strip replacement followed by restored
+   * insert values).
+   */
+  settleInsertParameters(): void {
+    this.native.settleInsertParameters();
+  }
+
+  /**
+   * Applies the queued commands already due at the current render frame,
+   * keeping future-dated commands queued in their original order.
+   * Control-only mirror counterpart of {@link flushControlCommands}, which
+   * drains future commands too.
+   */
+  applyCommandsDueNowPreservingFuture(): void {
+    this.native.applyCommandsDueNowPreservingFuture();
+  }
+
   seekPpq(ppq: number, renderFrame = -1): void {
     this.native.seekPpq(ppq, renderFrame);
   }
@@ -472,6 +492,93 @@ export class RealtimeEngine {
     value: number,
   ): void {
     this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  }
+
+  /**
+   * Applies a live track-strip insert edit on this engine's owning thread,
+   * bypassing the command queue. Returns `false` rather than throwing when
+   * the track, insert, or name is unknown, or the param is not realtime-safe.
+   * Not safe to call concurrently with {@link process}.
+   */
+  applyTrackStripInsertParamByNameNow(
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): boolean {
+    return this.native.applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value);
+  }
+
+  /**
+   * Restores a retained track-strip insert value exactly, without a ramp.
+   * Used to replay retained edits after {@link setTrackStripJson} replaced
+   * the strip. Throws if the track, insert, or name is unknown.
+   */
+  restoreTrackStripInsertParamByName(
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
+  }
+
+  /** Master-strip counterpart of {@link applyTrackStripInsertParamByNameNow}. */
+  applyMasterStripInsertParamByNameNow(
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): boolean {
+    return this.native.applyMasterStripInsertParamByNameNow(insertIndex, paramName, value);
+  }
+
+  /** Master-strip counterpart of {@link restoreTrackStripInsertParamByName}. */
+  restoreMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
+    this.native.restoreMasterStripInsertParamByName(insertIndex, paramName, value);
+  }
+
+  /** Bus-strip counterpart of {@link applyTrackStripInsertParamByNameNow}. */
+  applyBusStripInsertParamByNameNow(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): boolean {
+    return this.native.applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value);
+  }
+
+  /** Bus-strip counterpart of {@link restoreTrackStripInsertParamByName}. */
+  restoreBusStripInsertParamByName(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.restoreBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  }
+
+  /**
+   * Forgets the remembered manual insert-parameter values of one track strip
+   * and discards its queued insert edits. Call before {@link setTrackStripJson}
+   * replaces the strip when its old values must not carry over; the setter
+   * never does this itself, since a queued edit may already target the new chain.
+   */
+  clearTrackInsertParameterBases(trackId: number): void {
+    this.native.clearTrackInsertParameterBases(trackId);
+  }
+
+  /** Master-strip counterpart of {@link clearTrackInsertParameterBases}. */
+  clearMasterInsertParameterBases(): void {
+    this.native.clearMasterInsertParameterBases();
+  }
+
+  /**
+   * Bus-strip counterpart of {@link clearTrackInsertParameterBases}. Also
+   * accepts a bus identity that was already removed, covering every selector
+   * the identity held across remove/re-add.
+   */
+  clearBusInsertParameterBases(busId: number): void {
+    this.native.clearBusInsertParameterBases(busId);
   }
 
   /**

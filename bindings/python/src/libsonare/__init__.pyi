@@ -287,6 +287,9 @@ from .analyzer import (
     mastering_ab_match_loudness as mastering_ab_match_loudness,
 )
 from .analyzer import (
+    mastering_amp_preset_catalog as mastering_amp_preset_catalog,
+)
+from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
 )
 from .analyzer import (
@@ -955,6 +958,9 @@ from .types import (
 from .types import LufsResult as LufsResult
 from .types import (
     MarkerKind as MarkerKind,
+)
+from .types import (
+    MasteringAmpPresetCatalogEntry as MasteringAmpPresetCatalogEntry,
 )
 from .types import (
     MasteringChainResult as MasteringChainResult,

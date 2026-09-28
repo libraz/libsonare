@@ -257,6 +257,27 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(_get_lib().sonare_engine_flush_control_commands(self._require_handle()))
 
+    def settle_insert_parameters(self) -> None:
+        """Snap every in-flight strip insert parameter smoother to its target.
+
+        Insert-parameter counterpart of :meth:`settle_parameters`.
+        """
+        _check(_get_lib().sonare_engine_settle_insert_parameters(self._require_handle()))
+
+    def apply_commands_due_now_preserving_future(self) -> None:
+        """Apply commands already due at the current render frame.
+
+        Control-only mirror of :meth:`flush_control_commands` that keeps
+        future-dated commands queued in their original order instead of
+        draining them too. Not safe to call concurrently with a running
+        :meth:`process`.
+        """
+        _check(
+            _get_lib().sonare_engine_apply_commands_due_now_preserving_future(
+                self._require_handle()
+            )
+        )
+
     def seek_ppq(self, ppq: float, render_frame: int = -1) -> None:
         _check(
             _get_lib().sonare_engine_seek_ppq(

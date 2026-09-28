@@ -589,6 +589,117 @@ TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[
 }
 #endif
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine applies, restores and clears strip insert parameters by name",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
+
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  const char* eq_insert =
+      R"("inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":0,\"band0.enabled\":1}"}])";
+  const std::string track_json = std::string(R"({"version":1,"strips":[{"id":"track-10",)") +
+                                 eq_insert + R"(}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, track_json.c_str()) == SONARE_OK);
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  const std::string bus_json = std::string(R"({"version":1,"strips":[],"buses":[{"id":"1",)") +
+                               eq_insert + R"(}],"connections":[]})";
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_json.c_str()) == SONARE_OK);
+  const std::string master_json = std::string(R"({"version":1,"strips":[{"id":"master",)") +
+                                  eq_insert + R"(}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, master_json.c_str()) == SONARE_OK);
+
+  // Apply-now reports an unknown target through out_applied, not an error.
+  int applied = -1;
+  REQUIRE(sonare_engine_apply_track_strip_insert_param_by_name_now(engine, 10, 0, "band0.gainDb",
+                                                                   6.0f, &applied) == SONARE_OK);
+  REQUIRE(applied == 1);
+  applied = -1;
+  REQUIRE(sonare_engine_apply_track_strip_insert_param_by_name_now(engine, 10, 0, "nope", 6.0f,
+                                                                   &applied) == SONARE_OK);
+  REQUIRE(applied == 0);
+  REQUIRE(sonare_engine_apply_track_strip_insert_param_by_name_now(
+              engine, 10, 0, "band0.gainDb", 6.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  // A refused call still defines out_applied rather than leaving the caller's value.
+  applied = -1;
+  REQUIRE(sonare_engine_apply_track_strip_insert_param_by_name_now(
+              engine, 0, 0, "band0.gainDb", 6.0f, &applied) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(applied == 0);
+  applied = -1;
+  REQUIRE(sonare_engine_apply_master_strip_insert_param_by_name_now(engine, 0, "band0.gainDb", 3.0f,
+                                                                    &applied) == SONARE_OK);
+  REQUIRE(applied == 1);
+  applied = -1;
+  REQUIRE(sonare_engine_apply_bus_strip_insert_param_by_name_now(engine, 1, 0, "band0.gainDb", 3.0f,
+                                                                 &applied) == SONARE_OK);
+  REQUIRE(applied == 1);
+  applied = -1;
+  REQUIRE(sonare_engine_apply_bus_strip_insert_param_by_name_now(engine, 9, 0, "band0.gainDb", 3.0f,
+                                                                 &applied) == SONARE_OK);
+  REQUIRE(applied == 0);
+
+  // Restore refuses an unknown target outright.
+  REQUIRE(sonare_engine_restore_track_strip_insert_param_by_name(engine, 10, 0, "band0.gainDb",
+                                                                 -2.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_restore_track_strip_insert_param_by_name(
+              engine, 11, 0, "band0.gainDb", -2.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "band0.gainDb",
+                                                                  -2.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "nope", -2.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_restore_bus_strip_insert_param_by_name(engine, 1, 0, "band0.gainDb",
+                                                               -2.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_restore_bus_strip_insert_param_by_name(
+              engine, 9, 0, "band0.gainDb", -2.0f) == SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_clear_track_insert_parameter_bases(engine, 10) == SONARE_OK);
+  REQUIRE(sonare_engine_clear_track_insert_parameter_bases(engine, 11) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_clear_master_insert_parameter_bases(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_clear_bus_insert_parameter_bases(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_clear_bus_insert_parameter_bases(engine, 9) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_clear_bus_insert_parameter_bases(engine, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_settle_insert_parameters(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_apply_commands_due_now_preserving_future(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_settle_insert_parameters(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_apply_commands_due_now_preserving_future(nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_automation_lane with no points removes the lane", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  const char* track_json =
+      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":0,\"band0.enabled\":1}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, track_json) == SONARE_OK);
+  uint32_t id = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "band0.gainDb", &id) ==
+          SONARE_OK);
+
+  const SonareAutomationPoint points[] = {{0.0, 6.0f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, id, points, 1) == SONARE_OK);
+  size_t lane_count = 0;
+  REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
+  REQUIRE(lane_count == 1);
+  REQUIRE(sonare_engine_set_automation_lane(engine, id, nullptr, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
+  REQUIRE(lane_count == 0);
+
+  sonare_engine_destroy(engine);
+}
+#endif
+
 TEST_CASE("insert automation resolvers define out_id on every exit path",
           "[c_api][engine][mixing]") {
   SonareRealtimeEngine* engine = nullptr;

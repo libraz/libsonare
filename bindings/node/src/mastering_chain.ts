@@ -1018,6 +1018,28 @@ export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
   return JSON.parse(json) as MasteringProcessorCatalogEntry[];
 }
 
+/** One built-in amp-sim rig with its resolved starting configuration. */
+export interface MasteringAmpPresetCatalogEntry {
+  /** Stable index used by the amp-sim `presetIndex` parameter. */
+  index: number;
+  /** Canonical preset identifier accepted by the amp-sim insert. */
+  name: string;
+  /** Effective values from the core preset, before sparse user overrides. */
+  params: Record<string, number | boolean>;
+}
+
+/**
+ * Returns the built-in amp-sim rigs and their resolved control values.
+ *
+ * The catalog is read-only metadata for hosts such as Studio. Persist only the
+ * preset index and explicit overrides in a project so future core updates can
+ * continue to define the canonical DSP configuration.
+ */
+export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
+  const json = addon.masteringAmpPresetCatalog();
+  return JSON.parse(json) as MasteringAmpPresetCatalogEntry[];
+}
+
 /**
  * Apply a two-input `match.*` processor. `source` and `reference` may have
  * independent lengths — the match primitives consume each buffer at its own

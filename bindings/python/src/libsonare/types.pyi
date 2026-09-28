@@ -77,6 +77,11 @@ class MasteringPresetCatalogEntry(TypedDict):
     truePeakCeilingDb: float | None
     maxLimiterGainReductionDb: float | None
 
+class MasteringAmpPresetCatalogEntry(TypedDict):
+    index: int
+    name: str
+    params: dict[str, float | int | bool]
+
 class MasteringInsertParamChoice(TypedDict):
     """One accepted value of a closed-set insert parameter.
 

@@ -418,6 +418,18 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///          @ref sonare_mastering_processor_names).
 const char* sonare_mastering_processor_catalog(void);
 
+/// @brief Returns the built-in amp-sim rig catalog as a UTF-8 JSON array.
+/// @details One entry per rig, in `saturation.ampSim` `presetIndex` order:
+///   `{"index": int, "name": string, "params": {...}}`. `params` holds the rig's
+///   resolved starting values under the insert's camelCase keys (`drive`,
+///   `bassDb`, `ampModel`, ...), with enum-valued keys as integer ordinals.
+///   Read-only metadata for an editor positioning inherited controls; the DSP
+///   is still driven by `presetIndex` plus sparse overrides. Backed by
+///   thread-local storage with the same lifetime rules as
+///   @ref sonare_mastering_processor_catalog; do NOT free it. Returns NULL if
+///   the catalog cannot be built.
+const char* sonare_mastering_amp_preset_catalog(void);
+
 /// @brief Returns the complete host-facing capability catalog as UTF-8 JSON.
 /// @details Aggregates the processor catalog (including existing parameter
 ///   descriptors) with the built-in mastering, synth, mixing-scene, and

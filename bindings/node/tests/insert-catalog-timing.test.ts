@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
+  masteringAmpPresetCatalog,
   masteringInsertParamInfo,
   masteringInsertTiming,
 } from '../src/index.js';
@@ -61,5 +62,29 @@ describe('insert catalog carries construction-only params, and timing answers pe
     expect(() => masteringInsertTiming('nope.nope', {}, 48000)).toThrowError(
       /unknown insert processor/,
     );
+  });
+});
+
+describe('mastering amp-sim preset catalog', () => {
+  it('reports every rig in stable index order with resolved params', () => {
+    const catalog = masteringAmpPresetCatalog();
+    expect(catalog.length).toBeGreaterThan(0);
+    expect(catalog.map((entry) => entry.index)).toEqual(catalog.map((_, index) => index));
+
+    const clean = catalog.find((entry) => entry.name === 'cleanCombo');
+    expect(clean).toBeDefined();
+    expect(typeof clean?.params.drive).toBe('number');
+    for (const entry of catalog) {
+      expect(typeof entry.name).toBe('string');
+      expect(entry.name.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('returns fresh parameter objects for read-only consumers', () => {
+    const first = masteringAmpPresetCatalog();
+    const originalDrive = first[0].params.drive;
+    first[0].params.drive = -1;
+    const second = masteringAmpPresetCatalog();
+    expect(second[0].params.drive).toBe(originalDrive);
   });
 });

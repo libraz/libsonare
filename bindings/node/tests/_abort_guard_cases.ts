@@ -410,6 +410,78 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.applyTrackStripInsertParamByNameNow',
+    missingRequired: [],
+    badArguments: [
+      {
+        argument: 'paramName',
+        call: (e) => e.applyTrackStripInsertParamByNameNow(TRACK_ID, 0, 42, 1),
+      },
+      {
+        argument: 'value',
+        call: (e) => e.applyTrackStripInsertParamByNameNow(TRACK_ID, 0, 'band0.gainDb', '1'),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.restoreTrackStripInsertParamByName',
+    missingRequired: [],
+    badArguments: [
+      {
+        argument: 'paramName',
+        call: (e) => e.restoreTrackStripInsertParamByName(TRACK_ID, 0, 42, 1),
+      },
+      {
+        argument: 'value',
+        call: (e) => e.restoreTrackStripInsertParamByName(TRACK_ID, 0, 'band0.gainDb', '1'),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.applyMasterStripInsertParamByNameNow',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'paramName', call: (e) => e.applyMasterStripInsertParamByNameNow(0, 42, 1) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.restoreMasterStripInsertParamByName',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'paramName', call: (e) => e.restoreMasterStripInsertParamByName(0, 42, 1) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.applyBusStripInsertParamByNameNow',
+    missingRequired: [],
+    badArguments: [
+      {
+        argument: 'paramName',
+        call: (e) => e.applyBusStripInsertParamByNameNow(BUS_ID, 0, 42, 1),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.restoreBusStripInsertParamByName',
+    missingRequired: [],
+    badArguments: [
+      {
+        argument: 'paramName',
+        call: (e) => e.restoreBusStripInsertParamByName(BUS_ID, 0, 42, 1),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.clearTrackInsertParameterBases',
+    missingRequired: [],
+    badArguments: [{ argument: 'trackId', call: (e) => e.clearTrackInsertParameterBases('10') }],
+  },
+  {
+    name: 'RealtimeEngine.clearBusInsertParameterBases',
+    missingRequired: [],
+    badArguments: [{ argument: 'busId', call: (e) => e.clearBusInsertParameterBases('1') }],
+  },
+  {
     name: 'RealtimeEngine.setBusStripInsertBypassed',
     missingRequired: [],
     badArguments: [

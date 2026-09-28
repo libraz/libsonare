@@ -120,6 +120,17 @@ SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
 ///   drained explicitly instead of relying on the next process() call to do it.
 /// @warning Not safe concurrently with a running @ref sonare_engine_process.
 SonareError sonare_engine_flush_control_commands(SonareRealtimeEngine* engine);
+/// @brief Snaps only the in-flight strip insert parameter ramps (track, bus and
+///   master inserts) to their targets, leaving fader/pan ramps untouched.
+/// @details For use after a structural replay (strip replacement followed by
+///   restored insert values). Not safe concurrently with a running audio thread.
+SonareError sonare_engine_settle_insert_parameters(SonareRealtimeEngine* engine);
+/// @brief Applies the queued commands already due at the current render frame,
+///   keeping future-dated commands queued in their original order.
+/// @details Control-only mirror counterpart of
+///   @ref sonare_engine_flush_control_commands, which drains future commands too.
+/// @warning Not safe concurrently with a running @ref sonare_engine_process.
+SonareError sonare_engine_apply_commands_due_now_preserving_future(SonareRealtimeEngine* engine);
 /// @brief Sets a finite tempo in the range (0, 100000] BPM.
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite, non-positive,
 ///         or greater-than-100000 value.
@@ -347,6 +358,76 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngin
                                                              uint32_t bus_id,
                                                              unsigned int insert_index,
                                                              const char* param_name, float value);
+/// @brief Applies one track-strip insert parameter by JSON-key name on the
+///        calling (engine-owning) thread, bypassing the command queue.
+/// @details The value retargets the insert's parameter smoother exactly as a
+///   queued edit would, and is recorded as the parameter's manual base. An
+///   unknown track, insert or name, or a non-realtime param, is reported through
+///   @p out_applied = 0 rather than an error. Not safe concurrently with
+///   @ref sonare_engine_process.
+SonareError sonare_engine_apply_track_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+                                                                     uint32_t track_id,
+                                                                     unsigned int insert_index,
+                                                                     const char* param_name,
+                                                                     float value, int* out_applied);
+/// @brief Master-strip counterpart of
+///        @ref sonare_engine_apply_track_strip_insert_param_by_name_now.
+SonareError sonare_engine_apply_master_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+                                                                      unsigned int insert_index,
+                                                                      const char* param_name,
+                                                                      float value,
+                                                                      int* out_applied);
+/// @brief Bus-strip counterpart of
+///        @ref sonare_engine_apply_track_strip_insert_param_by_name_now.
+SonareError sonare_engine_apply_bus_strip_insert_param_by_name_now(SonareRealtimeEngine* engine,
+                                                                   uint32_t bus_id,
+                                                                   unsigned int insert_index,
+                                                                   const char* param_name,
+                                                                   float value, int* out_applied);
+/// @brief Restores a retained track-strip insert value exactly, without a ramp.
+/// @details Retires any in-flight smoother for the parameter, applies @p value
+///   directly, and records it as the manual base. Used to replay retained edits
+///   after @ref sonare_engine_set_track_strip_json replaced the strip. Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the track, insert, or name is unknown.
+///   Not safe concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_restore_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                   uint32_t track_id,
+                                                                   unsigned int insert_index,
+                                                                   const char* param_name,
+                                                                   float value);
+/// @brief Master-strip counterpart of
+///        @ref sonare_engine_restore_track_strip_insert_param_by_name.
+SonareError sonare_engine_restore_master_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                    unsigned int insert_index,
+                                                                    const char* param_name,
+                                                                    float value);
+/// @brief Bus-strip counterpart of
+///        @ref sonare_engine_restore_track_strip_insert_param_by_name.
+SonareError sonare_engine_restore_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                 uint32_t bus_id,
+                                                                 unsigned int insert_index,
+                                                                 const char* param_name,
+                                                                 float value);
+/// @brief Forgets the remembered manual insert-parameter values of one track
+///        strip and discards its queued insert edits.
+/// @details Call before @ref sonare_engine_set_track_strip_json replaces the
+///   strip when its old values must not carry over; afterwards a released
+///   automation lane returns to the value the insert was built with. The strip
+///   setter never does this itself, because a queued edit may already target
+///   the new chain and only the caller knows which chain it was resolved on.
+///   Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the track is not a published lane. Not
+///   safe concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_clear_track_insert_parameter_bases(SonareRealtimeEngine* engine,
+                                                             uint32_t track_id);
+/// @brief Master-strip counterpart of
+///        @ref sonare_engine_clear_track_insert_parameter_bases.
+SonareError sonare_engine_clear_master_insert_parameter_bases(SonareRealtimeEngine* engine);
+/// @brief Bus-strip counterpart of @ref sonare_engine_clear_track_insert_parameter_bases.
+/// @details Also accepts a bus identity that was already removed, covering
+///   every selector the identity held across remove/re-add.
+SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareRealtimeEngine* engine,
+                                                           uint32_t bus_id);
 /// @brief Resolves a track-lane insert parameter to its reserved automation id.
 /// @details The returned id can be driven over time with
 ///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once

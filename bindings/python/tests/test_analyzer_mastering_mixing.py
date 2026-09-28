@@ -157,6 +157,23 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert by_id["effects.reverb.fdn"]["realtimeCost"] == "moderate"
 
 
+def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
+    """The amp-sim rig catalog lists built-in rigs in presetIndex order."""
+    import libsonare
+
+    catalog = libsonare.mastering_amp_preset_catalog()
+    assert isinstance(catalog, list)
+    assert len(catalog) > 0
+
+    for expected_index, entry in enumerate(catalog):
+        assert entry["index"] == expected_index
+
+    first = catalog[0]
+    assert first["name"] == "cleanCombo"
+    assert "drive" in first["params"]
+    assert "ampModel" in first["params"]
+
+
 def test_capability_catalog_aggregates_processors_and_presets() -> None:
     """The aggregate catalog retains native version, ABI, and processor metadata."""
     import libsonare

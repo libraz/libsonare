@@ -50,10 +50,6 @@ wasm = [
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
-  # Studio's browser amp editor needs resolved rig values to position inherited
-  # controls. Native callers can inspect amp_preset_config() directly; the C ABI
-  # has no editor-metadata surface, and no audio/control behavior depends on this.
-  "mastering_amp_preset_catalog",
   "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "synth_patch_round_trip_for_test", # WASM-only regression hook for embind patch shape
