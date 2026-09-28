@@ -619,6 +619,7 @@ if(BUILD_ARRANGEMENT)
     target_sources(sonare_tests PRIVATE
       engine/bus_aggregation_test.cpp
       mixing/graph_surround_test.cpp
+      engine/mixer_routing_agreement_test.cpp
       api/sonare_c_engine_routing_test.cpp
     )
   endif()
