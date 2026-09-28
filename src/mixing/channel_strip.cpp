@@ -192,19 +192,14 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
     send->prepare(sample_rate, max_block_size);
   }
 
-  const auto rows = static_cast<size_t>(kPreparedChannels);
   const auto cols = static_cast<size_t>(max_block_size_);
-  // pre_tap_ is wider than the other two on purpose. It feeds sends (which are
-  // stereo and clamp themselves to kPreparedChannels) AND the pre-fader meter,
-  // and the meter has to observe the same planes the strip processes. Sizing it
-  // at kPreparedChannels made the segmented path -- the one automation takes --
-  // meter only the front pair, so a 5.1 strip dropped from 6 planes to 2 for
-  // exactly the blocks an automation event landed in. post_tap_ stays narrow
-  // because the post-fader meter reads the full-width buffer directly.
-  const auto pre_tap_rows = static_cast<size_t>(std::max(kPreparedChannels, prepared_channels_));
-  pre_tap_.assign(pre_tap_rows, std::vector<float>(cols, 0.0f));
-  post_tap_.assign(rows, std::vector<float>(cols, 0.0f));
-  send_temp_.assign(rows, std::vector<float>(cols, 0.0f));
+  // The taps and the send scratch span every plane the strip may be handed: a
+  // send is as wide as the caller asks (a surround return strip sends its whole
+  // bed), and the pre-fader meter has to observe the planes the strip processes.
+  const auto tap_rows = static_cast<size_t>(std::max(kPreparedChannels, prepared_channels_));
+  pre_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
+  post_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
+  send_temp_.assign(tap_rows, std::vector<float>(cols, 0.0f));
 
   // ParametricEq allocates its per-channel filter state lazily on the first process() with a
   // given channel count. Warm it up here (off the audio thread) so process() stays RT-safe.
@@ -615,9 +610,9 @@ void ChannelStrip::reset() {
     if (lane) lane->clear();
   }
   goniometer_.reset();
-  zero_taps(pre_tap_, kPreparedChannels, max_block_size_);
-  zero_taps(post_tap_, kPreparedChannels, max_block_size_);
-  zero_taps(send_temp_, kPreparedChannels, max_block_size_);
+  for (auto* taps : {&pre_tap_, &post_tap_, &send_temp_}) {
+    zero_taps(*taps, static_cast<int>(taps->size()), max_block_size_);
+  }
 }
 
 void ChannelStrip::settle() noexcept {
@@ -679,12 +674,14 @@ void ChannelStrip::set_prepared_channels(int num_channels) {
   // remember the ordering.
   alignment_delay_.set_prepared_channels(prepared_channels_);
   prepare_insert_alignment_delays();
-  // The pre-fader meter reads pre_tap_, so its width has to follow the declared
-  // layout too; otherwise a widened strip would meter only the planes the
-  // narrower prepare() happened to allocate.
-  const auto pre_tap_rows = static_cast<size_t>(std::max(kPreparedChannels, prepared_channels_));
-  if (!pre_tap_.empty() && pre_tap_.size() != pre_tap_rows) {
-    pre_tap_.resize(pre_tap_rows, std::vector<float>(pre_tap_[0].size(), 0.0f));
+  // The taps and the send scratch follow the declared layout too; otherwise a
+  // widened strip would meter and send only the planes the narrower prepare()
+  // happened to allocate.
+  const auto tap_rows = static_cast<size_t>(std::max(kPreparedChannels, prepared_channels_));
+  for (auto* taps : {&pre_tap_, &post_tap_, &send_temp_}) {
+    if (!taps->empty() && taps->size() != tap_rows) {
+      taps->resize(tap_rows, std::vector<float>((*taps)[0].size(), 0.0f));
+    }
   }
 }
 
@@ -1082,8 +1079,8 @@ void ChannelStrip::mix_send_at(size_t index, float* const* dest, int num_channel
 
   const auto& tap = (sends_[index]->timing() == SendTiming::PreFader) ? pre_tap_ : post_tap_;
 
-  const int rows =
-      std::min<int>(std::min(num_channels, kPreparedChannels), static_cast<int>(tap.size()));
+  const int rows = std::min<int>({num_channels, kMaxStackChannels, static_cast<int>(tap.size()),
+                                  static_cast<int>(send_temp_.size())});
   const int n = std::min(num_samples, max_block_size_);
 
   for (int ch = 0; ch < rows; ++ch) {
@@ -1100,7 +1097,7 @@ void ChannelStrip::mix_send_from_at(size_t index, const float* const* source, fl
   }
 
   const int rows =
-      std::min<int>(std::min(num_channels, kPreparedChannels), static_cast<int>(send_temp_.size()));
+      std::min<int>({num_channels, kMaxStackChannels, static_cast<int>(send_temp_.size())});
   const int n = std::min(num_samples, max_block_size_);
 
   for (int ch = 0; ch < rows; ++ch) {
@@ -1116,8 +1113,7 @@ void ChannelStrip::mix_send_from_at(size_t index, const float* const* source, fl
 int ChannelStrip::copy_pre_fader_tap(float* const* dest, int num_channels,
                                      int num_samples) const noexcept {
   if (dest == nullptr || num_channels <= 0 || num_samples <= 0) return 0;
-  const int rows =
-      std::min<int>(std::min(num_channels, kPreparedChannels), static_cast<int>(pre_tap_.size()));
+  const int rows = std::min<int>(num_channels, static_cast<int>(pre_tap_.size()));
   const int n = std::min(num_samples, max_block_size_);
   int written = 0;
   for (int ch = 0; ch < rows; ++ch) {
@@ -1136,7 +1132,7 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
                                         int64_t block_start) {
   SendProcessor& send = *sends_[index];
 
-  float* temp[kPreparedChannels];
+  float* temp[kMaxStackChannels];
   for (int ch = 0; ch < rows; ++ch) {
     temp[ch] = send_temp_[ch].data();
   }
@@ -1160,7 +1156,7 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
       const int next_offset = next_event_offset(send_events, send_count, send_event_index, n);
       const int segment_samples = std::max(0, next_offset - cursor);
       if (segment_samples > 0) {
-        float* segment[kPreparedChannels]{};
+        float* segment[kMaxStackChannels]{};
         for (int ch = 0; ch < rows; ++ch) {
           segment[ch] = send_temp_[ch].data() + cursor;
         }

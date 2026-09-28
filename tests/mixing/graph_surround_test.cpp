@@ -33,7 +33,7 @@ constexpr uint32_t kTrackId = 10;
 constexpr uint32_t kBusId = 1;
 // Sentinel for render_engine_offline: the lane sums straight into the master.
 constexpr int kNoBus = -1;
-// max|a-b| <= kMetricScale * max(1, max|a|), the design doc's agreement bound.
+// Agreement bound: max|a-b| <= kMetricScale * max(1, max|a|).
 constexpr double kMetricScale = 1.0e-6;
 // Reference RMS floor: an agreement between two silent renders proves nothing.
 constexpr double kMinRmsDb = -40.0;
@@ -215,18 +215,28 @@ void fill_input(int block_index, std::vector<float>* left, std::vector<float>* r
 }
 
 // Renders @p blocks blocks through @p scene_json at @p out_channels, planar.
+// The first @p fed_strips strips receive the test tone; the rest get silence.
 std::vector<std::vector<float>> render_mixer(const std::string& scene_json, int out_channels,
-                                             int blocks) {
+                                             int blocks, size_t fed_strips = SIZE_MAX) {
   MixerHandle handle;
   handle.mixer =
       sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(kSampleRate), kBlockSize);
   REQUIRE(handle.mixer != nullptr);
   sonare_c_mixing_detail::set_output_channels(handle.mixer, out_channels);
   const size_t strips = sonare_mixer_strip_count(handle.mixer);
+  // Open every fader at its scene value rather than gliding in from unity.
+  for (const auto& strip : handle.mixer->strips) {
+    REQUIRE(sonare_strip_settle(strip.get()) == SONARE_OK);
+  }
   std::vector<float> left(kBlockSize);
   std::vector<float> right(kBlockSize);
-  std::vector<const float*> in_l(strips, left.data());
-  std::vector<const float*> in_r(strips, right.data());
+  const std::vector<float> silence(kBlockSize, 0.0f);
+  std::vector<const float*> in_l(strips, silence.data());
+  std::vector<const float*> in_r(strips, silence.data());
+  for (size_t index = 0; index < std::min(strips, fed_strips); ++index) {
+    in_l[index] = left.data();
+    in_r[index] = right.data();
+  }
   std::vector<std::vector<float>> planes(
       static_cast<size_t>(out_channels),
       std::vector<float>(static_cast<size_t>(blocks) * kBlockSize));
@@ -243,6 +253,52 @@ std::vector<std::vector<float>> render_mixer(const std::string& scene_json, int 
   }
   return planes;
 }
+
+// Largest |actual - expected| over every plane from @p begin, and the largest |expected|.
+struct PlaneDiff {
+  double max_diff = 0.0;
+  double max_ref = 0.0;
+  size_t worst_plane = 0;
+  size_t worst_frame = 0;
+};
+
+PlaneDiff compare_planes(const std::vector<std::vector<float>>& actual,
+                         const std::vector<std::vector<float>>& expected, size_t begin) {
+  PlaneDiff result;
+  REQUIRE(actual.size() == expected.size());
+  for (size_t ch = 0; ch < actual.size(); ++ch) {
+    REQUIRE(actual[ch].size() == expected[ch].size());
+    for (size_t i = begin; i < actual[ch].size(); ++i) {
+      const double d = std::abs(static_cast<double>(actual[ch][i]) - expected[ch][i]);
+      if (d > result.max_diff) {
+        result.max_diff = d;
+        result.worst_plane = ch;
+        result.worst_frame = i;
+      }
+      result.max_ref = std::max(result.max_ref, static_cast<double>(std::abs(expected[ch][i])));
+    }
+  }
+  return result;
+}
+
+// track -> 5.1 "surr" -> [return strip "ret"] -> 5.1 master. @p ret_body is
+// spliced into the return strip; with an empty body the scene has no return
+// strip and "surr" feeds the master directly. @p extra_buses is appended.
+std::string return_strip_scene(const std::string& ret_body, const std::string& extra_buses = "") {
+  std::string scene = std::string(R"({"version":1,"strips":[{)") + track_strip_body() + "}";
+  if (!ret_body.empty()) scene += R"(,{"id":"ret")" + ret_body + "}";
+  scene += R"(],"buses":[{"id":"surr","layout":"5.1"},)" + extra_buses +
+           R"({"id":"master","role":"master","layout":"5.1"}],)" +
+           R"("connections":[{"source":"track","destination":"surr"},)";
+  scene += ret_body.empty() ? R"({"source":"surr","destination":"master"}]})"
+                            : R"({"source":"surr","destination":"ret"},)"
+                              R"({"source":"ret","destination":"master"}]})";
+  return scene;
+}
+
+constexpr int kReturnBlocks = 12;
+// A send gain glides for 5 ms from its construction; compare after.
+constexpr size_t kReturnSettle = static_cast<size_t>(4 * kBlockSize);
 
 }  // namespace
 
@@ -470,4 +526,135 @@ TEST_CASE("a mixer refuses an output width wider than its master layout", "[grap
   sonare_c_mixing_detail::set_output_channels(handle.mixer, 2);
   CHECK(sonare_c_mixing_detail::process_planar(handle.mixer, in_l, in_r, 1, out.data(), 2,
                                                kBlockSize) == SONARE_OK);
+}
+
+TEST_CASE("a return strip behind a 5.1 bus keeps all six planes through its fader",
+          "[graph_surround]") {
+  const auto reference = render_mixer(return_strip_scene(""), 6, kReturnBlocks, 1);
+  const auto returned =
+      render_mixer(return_strip_scene(R"(,"faderDb":-12.0)"), 6, kReturnBlocks, 1);
+  const float gain = std::pow(10.0f, -12.0f / 20.0f);
+  auto expected = reference;
+  for (auto& plane : expected) {
+    for (float& v : plane) v *= gain;
+  }
+  const PlaneDiff diff = compare_planes(returned, expected, kReturnSettle);
+  INFO("max_diff=" << diff.max_diff << " max_ref=" << diff.max_ref << " plane=" << diff.worst_plane
+                   << " frame=" << diff.worst_frame);
+  CHECK(diff.max_ref > 1.0e-2);
+  CHECK(diff.max_diff <= kMetricScale * std::max(1.0, diff.max_ref));
+  // Non-vacuity: the bed's centre and LFE planes carry signal a front-pair fold would lose.
+  CHECK(plane_peak(reference[2], 1, 0) > 1.0e-3);
+  CHECK(plane_peak(reference[3], 1, 0) > 1.0e-3);
+}
+
+TEST_CASE("a surround return strip sends its whole bed, folded only into a narrower bus",
+          "[graph_surround]") {
+  constexpr float kSendDb = -6.0f;
+  const float send_gain = std::pow(10.0f, kSendDb / 20.0f);
+  const auto reference = render_mixer(return_strip_scene(""), 6, kReturnBlocks, 1);
+  const auto send_to = [&](const char* bus) {
+    return std::string(R"(,"sends":[{"id":"s","destinationBusId":")") + bus +
+           R"(","sendDb":-6.0,"timing":"post"}])";
+  };
+
+  SECTION("into another 5.1 bus, plane for plane") {
+    const std::string scene =
+        return_strip_scene(send_to("wide"), R"({"id":"wide","layout":"5.1"},)");
+    // The explicit "wide" bus is patched to the master so the send is audible.
+    const std::string patched =
+        scene.substr(0, scene.size() - 2) + R"(,{"source":"wide","destination":"master"}]})";
+    const auto rendered = render_mixer(patched, 6, kReturnBlocks, 1);
+    auto expected = reference;
+    for (auto& plane : expected) {
+      for (float& v : plane) v *= 1.0f + send_gain;
+    }
+    const PlaneDiff diff = compare_planes(rendered, expected, kReturnSettle);
+    INFO("max_diff=" << diff.max_diff << " max_ref=" << diff.max_ref
+                     << " plane=" << diff.worst_plane << " frame=" << diff.worst_frame);
+    CHECK(diff.max_ref > 1.0e-2);
+    CHECK(diff.max_diff <= kMetricScale * std::max(1.0, diff.max_ref));
+  }
+
+  SECTION("into a stereo bus, through mixing::downmix") {
+    const std::string scene = return_strip_scene(send_to("st"), R"({"id":"st"},)");
+    const std::string patched =
+        scene.substr(0, scene.size() - 2) + R"(,{"source":"st","destination":"master"}]})";
+    const auto rendered = render_mixer(patched, 6, kReturnBlocks, 1);
+    const size_t n = reference[0].size();
+    std::vector<float> folded_l(n);
+    std::vector<float> folded_r(n);
+    const float* in[6];
+    for (int ch = 0; ch < 6; ++ch) in[ch] = reference[static_cast<size_t>(ch)].data();
+    float* out[2] = {folded_l.data(), folded_r.data()};
+    sonare::mixing::downmix(sonare::ChannelLayout::FivePointOne, sonare::ChannelLayout::Stereo, in,
+                            out, n);
+    auto expected = reference;
+    for (size_t i = 0; i < n; ++i) {
+      expected[0][i] += send_gain * folded_l[i];
+      expected[1][i] += send_gain * folded_r[i];
+    }
+    const PlaneDiff diff = compare_planes(rendered, expected, kReturnSettle);
+    INFO("max_diff=" << diff.max_diff << " max_ref=" << diff.max_ref
+                     << " plane=" << diff.worst_plane << " frame=" << diff.worst_frame);
+    CHECK(diff.max_ref > 1.0e-2);
+    CHECK(diff.max_diff <= kMetricScale * std::max(1.0, diff.max_ref));
+    // Non-vacuity: the fold is not the send's front pair alone.
+    double front_only_diff = 0.0;
+    for (size_t i = kReturnSettle; i < n; ++i) {
+      const double front_only = reference[0][i] * (1.0f + send_gain);
+      front_only_diff =
+          std::max(front_only_diff, std::abs(static_cast<double>(rendered[0][i]) - front_only));
+    }
+    CHECK(front_only_diff > 1.0e-3);
+  }
+}
+
+TEST_CASE("a key tapped from a surround return strip is its main output folded to stereo",
+          "[graph_surround]") {
+  // A stereo "bed" strip into a ducked stereo bus; the ducker is keyed by the
+  // return strip (unity fader, so its main output is the 5.1 bus itself) or by
+  // the bus directly. A bus key is the downmix of its planes, so the two agree.
+  const auto scene = [](const std::string& key) {
+    std::string ducker =
+        R"({"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-30,\"ratio\":8,\"attackMs\":1,\"releaseMs\":20,\"rangeDb\":18}")";
+    if (!key.empty()) ducker += R"(,"sidechainKey":")" + key + "\"";
+    ducker += "}";
+    return std::string(R"({"version":1,"strips":[{"id":"bed"},{)") + track_strip_body() +
+           R"(},{"id":"ret"}],"buses":[{"id":"surr","layout":"5.1"},)" +
+           R"({"id":"duck","inserts":[)" + ducker + "]}," +
+           R"({"id":"master","role":"master","layout":"5.1"}],)" +
+           R"("connections":[{"source":"bed","destination":"duck"},)" +
+           R"({"source":"duck","destination":"master"},)" +
+           R"({"source":"track","destination":"surr"},)" +
+           R"({"source":"surr","destination":"ret"},{"source":"ret","destination":"master"}]})";
+  };
+  const auto keyed_by_return = render_mixer(scene("ret"), 6, kReturnBlocks, 2);
+  const auto keyed_by_bus = render_mixer(scene("surr"), 6, kReturnBlocks, 2);
+  const PlaneDiff diff = compare_planes(keyed_by_return, keyed_by_bus, 0);
+  INFO("max_diff=" << diff.max_diff << " max_ref=" << diff.max_ref << " plane=" << diff.worst_plane
+                   << " frame=" << diff.worst_frame);
+  CHECK(diff.max_ref > 1.0e-2);
+  CHECK(diff.max_diff <= kMetricScale * std::max(1.0, diff.max_ref));
+  // Non-vacuity: the key reaches the ducker, so an unkeyed ducker sounds different.
+  const auto unkeyed = render_mixer(scene(""), 6, kReturnBlocks, 2);
+  CHECK(compare_planes(keyed_by_return, unkeyed, 0).max_diff > 1.0e-3);
+
+  // The return strip runs at the bus's six planes and its key passes a fold.
+  MixerHandle handle;
+  handle.mixer =
+      sonare_mixer_from_scene_json(scene("ret").c_str(), static_cast<int>(kSampleRate), kBlockSize);
+  REQUIRE(handle.mixer != nullptr);
+  sonare_c_mixing_detail::set_output_channels(handle.mixer, 6);
+  std::vector<float> zeros(kBlockSize, 0.0f);
+  const float* in[] = {zeros.data(), zeros.data(), zeros.data()};
+  std::vector<std::vector<float>> planes(6, std::vector<float>(kBlockSize));
+  std::vector<float*> out;
+  for (auto& plane : planes) out.push_back(plane.data());
+  REQUIRE(sonare_c_mixing_detail::process_planar(handle.mixer, in, in, 3, out.data(), 6,
+                                                 kBlockSize) == SONARE_OK);
+  const sonare::graph::Node* ret = handle.mixer->graph.node("ret");
+  REQUIRE(ret != nullptr);
+  CHECK(ret->num_ports() == 6);
+  CHECK(handle.mixer->graph.node("__sonare_downmix__/ret#0>2") != nullptr);
 }

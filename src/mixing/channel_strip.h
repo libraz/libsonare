@@ -497,7 +497,7 @@ class ChannelStrip : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
 
-  // Preallocated scratch taps, [kPreparedChannels][max_block_size_].
+  // Preallocated scratch taps, [max(kPreparedChannels, prepared_channels_)][max_block_size_].
   std::vector<std::vector<float>> pre_tap_;    // post-input/pre-insert chain, pre-fader signal
   std::vector<std::vector<float>> post_tap_;   // final output
   std::vector<std::vector<float>> send_temp_;  // per-send work buffer

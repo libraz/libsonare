@@ -21,11 +21,11 @@ bool eq_has_active_band(const sonare::mastering::eq::ParametricEq& eq) {
 }
 
 // Graph wrapper that exposes a ChannelStrip's main path and its aux send taps
-// as separate output ports. Ports 0,1 carry the processed main L/R signal (and
-// are where a sidechain key taps it); when the main destination is wider than
-// two planes, ports [2, 2 + W) carry that signal scattered by the surround
-// panner; the next 2 * S ports carry send index s's L/R tap; sidechain inputs
-// come last. The strip is owned and prepared externally (by SonareStrip).
+// as separate output ports. Ports [0, I) carry the processed main signal at the
+// strip's input width I (2, or a surround bus's width for the strip behind it);
+// a stereo strip whose main destination is wider scatters it into the next W
+// ports through the surround panner; then I ports per send tap; sidechain
+// inputs come last. The strip is owned and prepared externally (by SonareStrip).
 class StripNode final : public sonare::rt::ProcessorBase {
  public:
   struct SidechainInput {
@@ -34,11 +34,12 @@ class StripNode final : public sonare::rt::ProcessorBase {
     int right_port = 0;
   };
 
-  StripNode(SonareStrip* owner, int scatter_planes, int num_sends, int64_t sample_pos,
-            std::vector<SidechainInput> sidechain_inputs = {})
+  StripNode(SonareStrip* owner, int input_planes, int scatter_planes, int num_sends,
+            int64_t sample_pos, std::vector<SidechainInput> sidechain_inputs = {})
       : strip_(&owner->strip),
         surround_(&owner->surround),
         surround_prepared_(&owner->surround_prepared),
+        input_planes_(input_planes),
         scatter_planes_(scatter_planes),
         num_sends_(num_sends),
         sidechain_inputs_(std::move(sidechain_inputs)),
@@ -58,15 +59,15 @@ class StripNode final : public sonare::rt::ProcessorBase {
   }
 
   void process(float* const* channels, int num_channels, int num_samples) override {
-    (void)num_channels;  // Node passes num_ports; main path always uses L/R.
+    (void)num_channels;  // Node passes num_ports; the main path spans the input planes.
     strip_->clear_insert_sidechains();
     for (const auto& input : sidechain_inputs_) {
       const float* key[2] = {channels[input.left_port], channels[input.right_port]};
       strip_->set_insert_sidechain(input.insert_index, key, 2, num_samples);
     }
-    strip_->process_at(channels, 2, num_samples, sample_pos_);
+    strip_->process_at(channels, input_planes_, num_samples, sample_pos_);
     if (scatter_planes_ > 0) {
-      float* const* scatter = channels + 2;
+      float* const* scatter = channels + input_planes_;
       for (int p = 0; p < scatter_planes_; ++p) {
         std::fill(scatter[p], scatter[p] + num_samples, 0.0f);
       }
@@ -74,12 +75,12 @@ class StripNode final : public sonare::rt::ProcessorBase {
       const float* main[2] = {channels[0], channels[1]};
       surround_->process_add(main, 2, scatter, scatter_planes_, num_samples);
     }
-    const int send_base = 2 + scatter_planes_;
+    const int send_base = input_planes_ + scatter_planes_;
     for (int s = 0; s < num_sends_; ++s) {
-      float* dst[2] = {channels[send_base + 2 * s], channels[send_base + 1 + 2 * s]};
-      std::fill(dst[0], dst[0] + num_samples, 0.0f);
-      std::fill(dst[1], dst[1] + num_samples, 0.0f);
-      strip_->mix_send_at(static_cast<size_t>(s), dst, 2, num_samples, sample_pos_);  // additive
+      float* const* dst = channels + send_base + input_planes_ * s;
+      for (int p = 0; p < input_planes_; ++p) std::fill(dst[p], dst[p] + num_samples, 0.0f);
+      strip_->mix_send_at(static_cast<size_t>(s), dst, input_planes_, num_samples,
+                          sample_pos_);  // additive
     }
     sample_pos_ += num_samples;
   }
@@ -93,9 +94,9 @@ class StripNode final : public sonare::rt::ProcessorBase {
   int latency_samples_q8() const noexcept override { return strip_->latency_samples_q8(); }
   int tail_samples() const noexcept override { return strip_->tail_samples(); }
   int output_latency_samples_q8(int output_port) const noexcept override {
-    const int send_base = 2 + scatter_planes_;
+    const int send_base = input_planes_ + scatter_planes_;
     if (output_port >= send_base) {
-      const int send_index = (output_port - send_base) / 2;
+      const int send_index = (output_port - send_base) / input_planes_;
       return strip_->send_latency_samples_q8(static_cast<size_t>(send_index));
     }
     return strip_->post_fader_latency_samples_q8();
@@ -105,6 +106,7 @@ class StripNode final : public sonare::rt::ProcessorBase {
   sonare::mixing::ChannelStrip* strip_;                // borrowed; owned by SonareStrip
   sonare::mixing::SurroundPannerProcessor* surround_;  // borrowed; owned by SonareStrip
   bool* surround_prepared_;                            // borrowed; owned by SonareStrip
+  int input_planes_;
   int scatter_planes_;
   int num_sends_;
   std::vector<SidechainInput> sidechain_inputs_;
@@ -379,7 +381,9 @@ void build_and_compile(SonareMixer* mixer) {
   }
 
   // Plane widths. The master runs at the render's output width; a surround bus
-  // at its layout's; every other bus (mono included) and every strip input at 2.
+  // at its layout's; every other bus (mono included) at 2. A strip runs at the
+  // widest source feeding it -- a surround bus's width for the strip behind it,
+  // 2 otherwise -- resolved to a fixed point so a chain of strips carries it on.
   std::unordered_map<std::string, int> input_planes;
   for (const auto& bus : buses) {
     const int layout_planes = sonare::channel_count(bus.layout);
@@ -390,14 +394,42 @@ void build_and_compile(SonareMixer* mixer) {
   for (const auto& strip : mixer->strips) {
     input_planes[strip->id] = 2;
   }
-  // A strip scatters when its widest main destination has more than two planes.
+  for (bool widened = true; widened;) {
+    widened = false;
+    for (const auto& strip : mixer->strips) {
+      int widest = input_planes[strip->id];
+      for (const auto& conn : mixer->connections) {
+        if (conn.destination != strip->id) continue;
+        const auto source = input_planes.find(conn.source);
+        if (source != input_planes.end() && sonare::is_surround_channel_count(source->second)) {
+          widest = std::max(widest, source->second);
+        }
+      }
+      if (widest != input_planes[strip->id]) {
+        input_planes[strip->id] = widest;
+        widened = true;
+      }
+    }
+  }
+  // A stereo strip scatters when its widest main destination has more than two
+  // planes; a strip already running at a surround width does not, and a wide
+  // strip destination takes the stereo signal on its front pair instead.
+  std::unordered_map<std::string, bool> is_strip;
+  for (const auto& strip : mixer->strips) {
+    is_strip[strip->id] = true;
+  }
   std::unordered_map<std::string, int> scatter_planes_by_id;
   for (const auto& strip : mixer->strips) {
+    if (input_planes[strip->id] > 2) {
+      scatter_planes_by_id[strip->id] = 0;
+      continue;
+    }
     int widest = 0;
     bool routed = false;
     for (const auto& conn : mixer->connections) {
       if (conn.source != strip->id) continue;
       routed = true;
+      if (is_strip.count(conn.destination) != 0 && input_planes[conn.destination] > 2) continue;
       const auto it = input_planes.find(conn.destination);
       if (it != input_planes.end()) widest = std::max(widest, it->second);
     }
@@ -442,17 +474,18 @@ void build_and_compile(SonareMixer* mixer) {
     }
   }
 
-  // Strip nodes: 2 main ports, the scatter planes, 2 ports per send tap, keys.
-  std::unordered_map<std::string, SonareStrip*> strip_by_id;
+  // Strip nodes: the main ports, the scatter planes, one main width per send
+  // tap, keys.
   std::unordered_map<std::string, std::vector<StripNode::SidechainInput>> sidechain_inputs_by_id;
   std::unordered_map<std::string, std::vector<std::string>> sidechain_keys_by_id;
   for (const auto& strip : mixer->strips) {
     const int num_sends = static_cast<int>(strip->strip.num_sends());
+    const int main_planes = input_planes[strip->id];
     const int scatter_planes = scatter_planes_by_id[strip->id];
     // A stereo build records its width the way the engine's stereo block does, so
     // a later surround build opens at placement instead of gliding from old gains.
     if (scatter_planes == 0) strip->surround.reset();
-    int next_sidechain_port = 2 + scatter_planes + 2 * num_sends;
+    int next_sidechain_port = main_planes + scatter_planes + main_planes * num_sends;
     std::vector<StripNode::SidechainInput> sidechain_inputs;
     std::vector<std::string> sidechain_keys;
     const size_t pre_insert_count =
@@ -480,13 +513,12 @@ void build_and_compile(SonareMixer* mixer) {
     sidechain_inputs_by_id[strip->id] = sidechain_inputs;
     sidechain_keys_by_id[strip->id] = sidechain_keys;
     auto node =
-        std::make_unique<StripNode>(strip.get(), scatter_planes, num_sends,
+        std::make_unique<StripNode>(strip.get(), main_planes, scatter_planes, num_sends,
                                     mixer->timeline_sample_pos, std::move(sidechain_inputs));
     if (!graph.add_node(strip->id, std::move(node), num_ports)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "duplicate or invalid strip id: " + strip->id);
     }
-    strip_by_id[strip->id] = strip.get();
   }
 
   // An output span: the node, its first port and how many planes it carries.
@@ -495,13 +527,19 @@ void build_and_compile(SonareMixer* mixer) {
     int first_port = 0;
     int planes = 2;
   };
-  auto main_output = [&](const std::string& node_id) -> Span {
-    const auto scatter = scatter_planes_by_id.find(node_id);
-    if (scatter != scatter_planes_by_id.end()) {
-      return scatter->second > 0 ? Span{node_id, 2, scatter->second} : Span{node_id, 0, 2};
-    }
+  // The main signal before any scatter: where a key taps it, and what a strip
+  // destination receives.
+  auto unscattered = [&](const std::string& node_id) -> Span {
     const auto planes = input_planes.find(node_id);
     return {node_id, 0, planes == input_planes.end() ? 2 : planes->second};
+  };
+  auto main_output = [&](const std::string& node_id) -> Span {
+    const Span main = unscattered(node_id);
+    const auto scatter = scatter_planes_by_id.find(node_id);
+    if (scatter != scatter_planes_by_id.end() && scatter->second > 0) {
+      return {node_id, main.planes, scatter->second};
+    }
+    return main;
   };
   // Narrows @p source to @p planes through a DownmixNode shared by every edge
   // that asks for the same fold of the same span.
@@ -537,11 +575,11 @@ void build_and_compile(SonareMixer* mixer) {
     }
     audio_inputs_by_id[destination].push_back(from.node);
   };
-  // Sidechain edge: always two planes, folded down when the source is wider.
+  // Sidechain edge: always two planes, tapped before any scatter and folded
+  // down when the source runs wider.
   auto connect_key = [&](const std::string& key_source, const std::string& destination,
                          int left_port, int right_port) {
-    const bool is_strip = strip_by_id.count(key_source) != 0;
-    const Span from = narrowed(is_strip ? Span{key_source, 0, 2} : main_output(key_source), 2);
+    const Span from = narrowed(unscattered(key_source), 2);
     checked_connect(
         {from.node, from.first_port, destination, left_port, sonare::graph::Connection::Mix::Add});
     checked_connect({from.node, from.first_port + 1, destination, right_port,
@@ -557,7 +595,11 @@ void build_and_compile(SonareMixer* mixer) {
           ErrorCode::InvalidParameter,
           "connection references unknown node: " + conn.source + " -> " + conn.destination);
     }
-    connect_audio(main_output(conn.source), conn.destination);
+    const bool wide_strip_destination =
+        is_strip.count(conn.destination) != 0 && input_planes[conn.destination] > 2;
+    const Span source =
+        wide_strip_destination ? unscattered(conn.source) : main_output(conn.source);
+    connect_audio(source, conn.destination);
     has_main_out[conn.source] = true;
   }
 
@@ -585,14 +627,15 @@ void build_and_compile(SonareMixer* mixer) {
   // Send taps: strip send output ports -> destination bus input ports.
   for (const auto& strip : mixer->strips) {
     const auto& sends = strip->scene_strip.sends;
-    const int send_base = 2 + scatter_planes_by_id[strip->id];
+    const int send_planes = input_planes[strip->id];
+    const int send_base = send_planes + scatter_planes_by_id[strip->id];
     for (size_t s = 0; s < sends.size(); ++s) {
       const std::string& dest = sends[s].destination_bus_id;
       if (!is_bus.count(dest)) {
         throw SonareException(ErrorCode::InvalidParameter, "send destination is not a bus: " +
                                                                dest + " (strip " + strip->id + ")");
       }
-      connect_audio({strip->id, send_base + 2 * static_cast<int>(s), 2}, dest);
+      connect_audio({strip->id, send_base + send_planes * static_cast<int>(s), send_planes}, dest);
     }
   }
 
