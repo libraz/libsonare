@@ -990,8 +990,10 @@ void ChannelStrip::set_insert_sidechain(unsigned int insert_index, const float* 
 }
 
 void ChannelStrip::clear_insert_sidechains() noexcept {
+  // A slot that was ever keyed stays managed, so its processor drops the
+  // previous block's borrowed key instead of reading it again.
   for (auto& sidechain : insert_sidechains_) {
-    sidechain = {};
+    sidechain = {{}, 0, 0, sidechain.managed};
   }
 }
 

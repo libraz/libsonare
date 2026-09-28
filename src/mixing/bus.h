@@ -62,6 +62,8 @@ class BusProcessor : public rt::ProcessorBase {
   int insert_parameter_id_for_key(unsigned int insert_index, const std::string& key) const noexcept;
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
+  // Drops every key for the next block. Slots once keyed through
+  // set_insert_sidechain() clear their processor's sidechain; others are left alone.
   void clear_insert_sidechains() noexcept;
   MeterSnapshot meter_snapshot() const noexcept { return meter_.snapshot(); }
   size_t insert_sidechain_slot_count() const noexcept { return insert_sidechains_.size(); }
