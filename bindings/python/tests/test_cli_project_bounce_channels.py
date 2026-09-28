@@ -9,9 +9,9 @@ through the installed console script, matching the native CLI's own tests.
 from __future__ import annotations
 
 import json
+import struct
 import subprocess
 import sys
-import wave
 from pathlib import Path
 
 EXIT_INVALID_PARAMETER = 3
@@ -23,6 +23,17 @@ def _console_script() -> Path:
     script = Path(sys.executable).parent / "sonare"
     assert script.is_file(), f"installed console script is missing: {script}"
     return script
+
+
+def _wav_channel_count(path: Path) -> int:
+    """Read nChannels from the fmt chunk directly.
+
+    A >2-channel bounce is WAVE_FORMAT_EXTENSIBLE (matching the native CLI's
+    own writer), which stdlib `wave` cannot open.
+    """
+    with open(path, "rb") as handle:
+        header = handle.read(24)
+    return struct.unpack("<H", header[22:24])[0]
 
 
 def _run_console(*args: str) -> subprocess.CompletedProcess[str]:
@@ -81,15 +92,13 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
         "project", "bounce", "--in", str(project_51), "-o", str(output), "--channels", "6"
     )
     assert result.returncode == 0, result.stderr
-    with wave.open(str(output), "rb") as wav:
-        assert wav.getnchannels() == 6
+    assert _wav_channel_count(output) == 6
 
     result = _run_console(
         "project", "bounce", "--in", str(project_71), "-o", str(output), "--channels", "8"
     )
     assert result.returncode == 0, result.stderr
-    with wave.open(str(output), "rb") as wav:
-        assert wav.getnchannels() == 8
+    assert _wav_channel_count(output) == 8
 
     # 8 is a valid speaker-layout width, but still exceeds a 5.1 master's own
     # 6-channel width.

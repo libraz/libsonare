@@ -436,6 +436,119 @@ def _atomic_wav_writer(
         raise
 
 
+# WAVE_FORMAT_EXTENSIBLE, and the KSDATAFORMAT_SUBTYPE_PCM subformat GUID
+# {00000001-0000-0010-8000-00AA00389B71} stored as little-endian Data1/2/3
+# followed by the 8 Data4 bytes verbatim -- the same layout the native CLI's
+# `save_wav_multichannel` writes.
+_WAVE_FORMAT_EXTENSIBLE = 0xFFFE
+_PCM_SUBFORMAT_GUID = bytes(
+    [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71]
+)
+# dwChannelMask by channel count, matching src/core/channel_layout.h's
+# wave_channel_mask table (mono carries no meaningful mask).
+_CHANNEL_MASKS = {1: 0x0, 2: 0x3, 6: 0x3F, 8: 0x63F}
+# RIFF/WAVE(12) + fmt chunk id/size/body(8 + 40) + data chunk id/size(8).
+_EXTENSIBLE_HEADER_SIZE = 68
+
+
+class _ExtensibleWavWriter:
+    """Streams raw PCM into an open WAVE_FORMAT_EXTENSIBLE file; header patched on close.
+
+    Exposes the same ``writeframesraw`` surface stdlib ``wave.Wave_write``
+    does, so a caller already chunking through ``_atomic_wav_writer`` needs no
+    second code path for a >2-channel target.
+    """
+
+    def __init__(self, handle: Any, channels: int, sample_rate: int, bits_per_sample: int) -> None:
+        self._handle = handle
+        self._channels = channels
+        self._sample_rate = sample_rate
+        self._bits_per_sample = bits_per_sample
+        self._data_size = 0
+
+    def writeframesraw(self, data: bytes | bytearray) -> None:
+        self._handle.write(bytes(data))
+        self._data_size += len(data)
+
+    def write_header(self) -> None:
+        """Patch the RIFF/fmt/data header now that ``_data_size`` is known."""
+        import struct
+
+        block_align = self._channels * (self._bits_per_sample // 8)
+        byte_rate = self._sample_rate * block_align
+        fmt_size = 40
+        riff_size = 4 + (8 + fmt_size) + (8 + self._data_size)
+        channel_mask = _CHANNEL_MASKS.get(self._channels, 0)
+        header = bytearray()
+        header += b"RIFF" + struct.pack("<I", riff_size) + b"WAVE"
+        header += b"fmt " + struct.pack("<I", fmt_size)
+        header += struct.pack(
+            "<HHIIHHHHI",
+            _WAVE_FORMAT_EXTENSIBLE,
+            self._channels,
+            self._sample_rate,
+            byte_rate,
+            block_align,
+            self._bits_per_sample,
+            22,  # cbSize
+            self._bits_per_sample,  # wValidBitsPerSample
+            channel_mask,
+        )
+        header += _PCM_SUBFORMAT_GUID
+        header += b"data" + struct.pack("<I", self._data_size)
+        assert len(header) == _EXTENSIBLE_HEADER_SIZE
+        self._handle.seek(0)
+        self._handle.write(bytes(header))
+
+
+@contextmanager
+def _atomic_wav_writer_multichannel(
+    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16
+) -> Iterator[_ExtensibleWavWriter]:
+    """Yield a WAVE_FORMAT_EXTENSIBLE writer whose completed file atomically replaces ``path``.
+
+    Stdlib ``wave`` always emits plain WAVE_FORMAT_PCM, which carries no
+    channel mask a 5.1/7.1 player needs to place its planes correctly, so a
+    width beyond stereo is hand-written here to match the native CLI's own
+    ``save_wav_multichannel`` layout byte for byte. Mono and stereo stay on
+    ``_atomic_wav_writer``, which already writes the right (plain-PCM) format
+    for those widths.
+    """
+    if bits_per_sample not in (16, 24):
+        raise ValueError("WAV bits must be 16 or 24")
+    target = os.path.abspath(path)
+    directory = os.path.dirname(target)
+    try:
+        raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
+            mode="w+b",
+            prefix=f".{os.path.basename(target)}.",
+            suffix=".tmp",
+            dir=directory,
+            delete=False,
+        )
+    except OSError as exc:
+        raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
+    temporary = raw.name
+    writer = _ExtensibleWavWriter(raw, channels, sample_rate, bits_per_sample)
+    try:
+        try:
+            raw.seek(_EXTENSIBLE_HEADER_SIZE)
+            yield writer
+            writer.write_header()
+            raw.flush()
+            os.fsync(raw.fileno())
+            raw.close()
+            os.replace(temporary, target)
+        except OSError as exc:
+            raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
+    except BaseException:
+        with suppress(Exception):
+            raw.close()
+        with suppress(FileNotFoundError):
+            os.unlink(temporary)
+        raise
+
+
 def _write_wav_mono_frames(wav: Any, samples: Sequence[float], bits_per_sample: int = 16) -> None:
     """Append one bounded mono PCM chunk to an open WAV writer."""
     frames = bytearray()
@@ -533,8 +646,17 @@ def _write_channel_output(
         _write_wav(path, channels[0], sample_rate, bits_per_sample)
 
 
-def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
-    """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
+def _write_frame_major_wav(
+    path: str, audio: object, sample_rate: int, bits_per_sample: int = 16
+) -> tuple[int, int]:
+    """Write frame-major PCM (row i holds frame i's per-channel values) to WAV.
+
+    Channel width comes from ``audio`` itself: ``shape[1]`` for an ndarray, or
+    the widest row otherwise. A width beyond stereo goes through
+    ``_atomic_wav_writer_multichannel`` (WAVE_FORMAT_EXTENSIBLE, matching the
+    native CLI's own writer); mono and stereo stay on the plain-PCM
+    ``_atomic_wav_writer``. Returns (frames, channels written).
+    """
     frames = len(cast(Any, audio))
     shape = cast(tuple[int, ...], getattr(audio, "shape", ()))
     if len(shape) >= 2:
@@ -545,7 +667,12 @@ def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tup
             if isinstance(row, Sequence) and not isinstance(row, (str, bytes, bytearray)):
                 channels = max(channels, len(row))
 
-    with _atomic_wav_writer(path, channels, sample_rate) as wav:
+    writer_cm = (
+        _atomic_wav_writer_multichannel(path, channels, sample_rate, bits_per_sample)
+        if channels > 2
+        else _atomic_wav_writer(path, channels, sample_rate, bits_per_sample)
+    )
+    with writer_cm as wav:
         pcm = bytearray()
         chunk_frames = 0
         for row in cast(Any, audio):
@@ -555,7 +682,8 @@ def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tup
                 values = (row,)
             row_values = [float(sample) for sample in values]
             for channel in range(channels):
-                pcm.extend(_pcm16(row_values[channel] if channel < len(row_values) else 0.0))
+                value = row_values[channel] if channel < len(row_values) else 0.0
+                pcm.extend(_pcm(value, bits_per_sample))
             chunk_frames += 1
             if chunk_frames == _WAV_CHUNK_FRAMES:
                 wav.writeframesraw(pcm)
@@ -564,6 +692,11 @@ def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tup
         if pcm:
             wav.writeframesraw(pcm)
     return frames, channels
+
+
+def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
+    """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
+    return _write_frame_major_wav(path, audio, sample_rate)
 
 
 def _atomic_write_bytes(path: str, data: bytes) -> None:
