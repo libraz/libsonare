@@ -44,6 +44,7 @@ set(BUILD_PITCH_EDITOR ON CACHE BOOL "" FORCE)
 set(BUILD_VOICE_CHANGER ON CACHE BOOL "" FORCE)
 set(BUILD_ACOUSTIC_SIM ON CACHE BOOL "" FORCE)
 set(BUILD_ARRANGEMENT ON CACHE BOOL "" FORCE)
+set(BUILD_PLAYBACK ON CACHE BOOL "" FORCE)
 
 # Optional: enable FFmpeg-backed decoding (M4A/AAC/FLAC/OGG/Opus/...). Forwarded
 # from the npm build via SONARE_FFMPEG (handled in scripts/build-native.mjs):
@@ -96,6 +97,10 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_streaming.cpp
   src/addon/streaming/realtime_voice_changer.cpp
   src/addon/streaming/stream_analyzer.cpp
+  src/addon/sonare_wrap_playback.cpp
+  src/addon/playback/renderer.cpp
+  src/addon/playback/loudness_meter.cpp
+  src/addon/playback/render_offline.cpp
   src/addon/sonare_wrap_transcribe.cpp
   src/addon/sonare_wrap_utils.cpp
 )
@@ -138,6 +143,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/sonare_c_transcribe.cpp
   ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_sample_bank.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_playback.cpp
 )
 
 add_library(${PROJECT_NAME} SHARED
@@ -164,6 +170,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   sonare_engine
   sonare_voice_changer
   sonare_acoustic
+  sonare_playback
   # Headless-project C ABI (sonare_c_project.cpp) wraps the arrangement control
   # plane: EditHistory + the compiler/offline bounce, the serializer, and
   # the MIR tempo/grid bridges. sonare_engine already PUBLIC-links sonare_midi
@@ -187,6 +194,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   SONARE_WITH_VOICE_CHANGER=1
   SONARE_WITH_ACOUSTIC_SIM=1
   SONARE_WITH_ARRANGEMENT=1
+  SONARE_WITH_PLAYBACK=1
 )
 
 # -Werror matches the core targets: a warning the addon layer emits is a defect

@@ -197,8 +197,20 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
     'Instance method on StreamAnalyzer, which needs a configured session; its frame-count rejection is driven by basic_streaming_metering.test.ts.',
   ],
   [
+    'PlaybackLoudnessMeter',
+    'Constructor for PlaybackLoudnessMeter; its channels/sampleRate rejection is driven by playback.test.ts.',
+  ],
+  [
+    'processInterleaved',
+    'Instance method on PlaybackRenderer, which needs a configured renderer; its inChannels rejection is driven by playback.test.ts.',
+  ],
+  [
     'readGoniometerLatest',
     'Instance method on Mixer, which needs a configured strip and a running meter; covered by metering-and-scale.test.ts.',
+  ],
+  [
+    'renderPlayback',
+    'Stateless free function over an offline render request; its channels/sampleRate rejection is driven by playback.test.ts.',
   ],
   [
     'reset',
@@ -207,6 +219,10 @@ const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
   [
     'setBand',
     'Instance method on StreamingEqualizer, which needs an initialized equalizer; its band-index rejection is driven by basic_streaming_metering.test.ts.',
+  ],
+  [
+    'setHeadOrientation',
+    'Instance method on PlaybackRenderer, which needs a configured renderer; its pitchDeg/rollDeg rejection is driven by playback.test.ts.',
   ],
   [
     'setNoteEdit',

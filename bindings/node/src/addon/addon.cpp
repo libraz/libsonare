@@ -7,6 +7,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_playback.h"
 #include "sonare_wrap_polyphony.h"
 #include "sonare_wrap_project.h"
 #include "sonare_wrap_sample_bank.h"
@@ -552,6 +553,11 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   ProjectWrap::Init(env, exports);
   SampleBankWrap::Init(env, exports);
   sonare_node::PolyphonicAnalysisWrap::Init(env, exports);
+  HrtfSetWrap::Init(env, exports);
+  PlaybackRendererWrap::Init(env, exports);
+  PlaybackLoudnessMeterWrap::Init(env, exports);
+  exports.Set("renderPlayback",
+              Napi::Function::New(env, &sonare_node::RenderPlayback, "renderPlayback"));
   exports.Set("engineAbiVersion", Napi::Function::New(env, EngineAbiVersion, "engineAbiVersion"));
   exports.Set("voiceChangerAbiVersion",
               Napi::Function::New(env, VoiceChangerAbiVersion, "voiceChangerAbiVersion"));

@@ -34,6 +34,8 @@ export interface Capabilities {
      */
     arrangement: boolean;
     acousticSim: boolean;
+    /** True when the playback renderer (upmix, binaural, speaker output) is compiled in. */
+    playback: boolean;
     pitchEditor: boolean;
     voiceChanger: boolean;
   };

@@ -102,6 +102,7 @@ describe('standalone functions', () => {
       instrumentParamAutomation: expect.any(Boolean),
       arrangement: expect.any(Boolean),
       acousticSim: expect.any(Boolean),
+      playback: expect.any(Boolean),
       pitchEditor: expect.any(Boolean),
       voiceChanger: expect.any(Boolean),
     });

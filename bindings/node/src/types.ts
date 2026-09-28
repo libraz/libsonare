@@ -6,6 +6,7 @@ export * from './types_instrument.js';
 export * from './types_mastering.js';
 export * from './types_mixing.js';
 export * from './types_notes.js';
+export * from './types_playback.js';
 export * from './types_project.js';
 export * from './types_repair.js';
 export * from './types_voice_changer.js';

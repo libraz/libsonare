@@ -7,6 +7,7 @@ export * from './features.js';
 export * from './metering.js';
 export * from './mixer.js';
 export * from './mixing_assistant.js';
+export * from './playback.js';
 export * from './project.js';
 export * from './realtime_engine.js';
 // Named rather than `export *`, so a helper added to this module later cannot
@@ -208,6 +209,22 @@ export type {
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,
+  PlaybackBassManagementConfig,
+  PlaybackChannelRole,
+  PlaybackDiagnostics,
+  PlaybackHeadTrackingConfig,
+  PlaybackInputConfig,
+  PlaybackLoudnessConfig,
+  PlaybackNightModeConfig,
+  PlaybackOutputLimiterConfig,
+  PlaybackRendererConfig,
+  PlaybackRendererOptions,
+  PlaybackRoomConfig,
+  PlaybackSpeakerConfig,
+  PlaybackStageLatency,
+  PlaybackStageName,
+  PlaybackTargetConfig,
+  PlaybackUpmixConfig,
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
   ProgressCallback,
@@ -258,6 +275,8 @@ export type {
   RealtimeVoiceChangerPresetMetadata,
   ReassignedSpectrogramResult,
   RenderOfflineRequest,
+  RenderPlaybackRequest,
+  RenderPlaybackResult,
   ReverbDetection,
   RhythmResult,
   RirDiagnostic,
