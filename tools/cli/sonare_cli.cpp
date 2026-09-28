@@ -150,6 +150,11 @@ const std::vector<CommandInfo>& get_commands() {
       {"midi-render", "Render a MIDI project through NativeSynth", cmd_midi_render, false},
       {"transcribe", "Transcribe audio to a Standard MIDI File", cmd_transcribe, true},
 #endif
+#ifdef SONARE_WITH_PLAYBACK
+      {"playback",
+       "Render movie audio to speakers or binaural headphones (upmix/binaural/night mode)",
+       cmd_playback, true},
+#endif
   };
   return commands;
 }
@@ -480,9 +485,11 @@ int main(int argc, char* argv[]) {
     // exception is the leaf's own declared behaviour, read from the registry,
     // and only for the two channels such a leaf carries.
     const CliCommandSpec* command_spec = cli_command_spec_for_path(command_path_for_args(args));
-    const bool carried_as_stereo =
-        source_channels == 2 && command_spec != nullptr && command_spec->preserves_stereo_input;
-    if (source_channels > 1 && !carried_as_stereo) {
+    const bool carries_every_channel =
+        command_spec != nullptr &&
+        ((source_channels == 2 && command_spec->preserves_stereo_input) ||
+         command_spec->preserves_multichannel_input);
+    if (source_channels > 1 && !carries_every_channel) {
       std::cerr << "warning: " << source_channels
                 << "-channel input is downmixed to mono by this CLI command; use the stereo "
                    "library API for channel-preserving processing\n";

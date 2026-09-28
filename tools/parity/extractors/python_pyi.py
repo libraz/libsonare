@@ -301,6 +301,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
             "_cli_mastering.py",
             "_cli_mixing.py",
             "_cli_options.py",
+            "_cli_playback.py",
             "_cli_project.py",
         ),
     ),

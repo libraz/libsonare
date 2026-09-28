@@ -108,6 +108,12 @@ struct CliCommandSpec {
   /// leaf that re-reads the file to keep both channels says so here rather than
   /// being recognized by name wherever that difference matters.
   bool preserves_stereo_input = false;
+  /// True when the handler reads every plane of the input file itself (1, 2, 6
+  /// or 8 channels), rather than the mono downmix main() decodes. Generalizes
+  /// `preserves_stereo_input` to the wider widths a speaker-layout command
+  /// accepts, so main()'s downmix-warning suppression covers both from one
+  /// leaf-declared flag instead of a name check for each width.
+  bool preserves_multichannel_input = false;
   bool inventory = true;
   /// Cross-option constraint, run after every per-option check passes.
   CliCommandValidator validate = nullptr;

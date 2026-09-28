@@ -136,7 +136,7 @@ CliOptionSpec path_value(const char* name, bool required = false, bool global_le
 CliOptionSpec required_path(const char* name) { return path_value(name, true); }
 #endif
 
-#ifdef SONARE_WITH_MASTERING
+#if defined(SONARE_WITH_MASTERING) || defined(SONARE_WITH_PLAYBACK)
 // A string option whose absence is null rather than the empty string. Both
 // spellings mean "not supplied" to the reader, but the CLI contract compares
 // declared defaults across the two front-ends, so the representation has to
@@ -442,9 +442,10 @@ std::vector<CliOptionSpec> with_json(std::vector<CliOptionSpec> options) {
 void add_command(std::vector<CliCommandSpec>& registry, const char* path, bool requires_audio,
                  std::vector<CliOptionSpec> options, std::vector<std::string> aliases = {},
                  CliCommandValidator validate = nullptr, size_t positionals = 0,
-                 bool preserves_stereo_input = false) {
+                 bool preserves_stereo_input = false, bool preserves_multichannel_input = false) {
   registry.push_back({path, std::move(aliases), with_json(std::move(options)), requires_audio,
-                      requires_audio ? 1u : positionals, preserves_stereo_input, true, validate});
+                      requires_audio ? 1u : positionals, preserves_stereo_input,
+                      preserves_multichannel_input, true, validate});
 }
 
 const std::vector<CliCommandSpec>& build_cli_registry() {
@@ -1070,6 +1071,35 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_project_command("project.import-smf", {required_path("smf"), required_output()});
     add_project_command("project.export-midi2", {required_path("in"), required_output()});
     add_project_command("project.import-midi2", {required_path("midi2"), required_output()});
+#endif
+#ifdef SONARE_WITH_PLAYBACK
+    // Movie-audio playback renderer: mono/stereo/5.1/7.1 PCM in, either
+    // speaker-layout audio (upmix, calibration, bass management) or binaural
+    // headphones audio out. `--input-layout` reaches the renderer's own
+    // `input.layout` verbatim; the input file's actual channel count is a
+    // property of the file rather than an option value, so it is checked by
+    // the handler once the file is open rather than by a domain here.
+    add_command(
+        commands, "playback", true,
+        {with_domain(
+             nullable_string_value("target"),
+             choices_of({"headphones", "stereo", "5.1", "7.1"}, CliOptionDomainStage::Usage)),
+         with_domain(
+             nullable_string_value("input-layout"),
+             choices_of({"auto", "mono", "stereo", "5.1", "7.1"}, CliOptionDomainStage::Usage)),
+         path_value("config"), flag("no-upmix"),
+         with_domain(number_value("night"), between(0.0, 1.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("dialogue-db"),
+                     between(-12.0, 12.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("program-lufs"),
+                     between(-70.0, 0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("target-lufs"),
+                     between(-40.0, -5.0, CliOptionDomainStage::Usage)),
+         with_domain(nullable_string_value("room"),
+                     choices_of({"none", "living_room", "home_theater", "screening_room"},
+                                CliOptionDomainStage::Usage)),
+         path_value("hrtf"), required_output()},
+        {}, nullptr, 0, /*preserves_stereo_input=*/false, /*preserves_multichannel_input=*/true);
 #endif
     return commands;
   }();

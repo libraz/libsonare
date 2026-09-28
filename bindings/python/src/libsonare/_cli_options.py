@@ -307,6 +307,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "note-move",
         "note-stretch",
         "tune-to-midi",
+        "playback",
         "polyphonic-render",
         "pitch-shift",
         "time-stretch",

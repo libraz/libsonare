@@ -792,6 +792,92 @@
       "exclusiveMinimum": false,
       "maximum": 4294967295.0,
       "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "target",
+      "rejectExit": "usage",
+      "choices": [
+        "headphones",
+        "stereo",
+        "5.1",
+        "7.1"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "input-layout",
+      "rejectExit": "usage",
+      "choices": [
+        "auto",
+        "mono",
+        "stereo",
+        "5.1",
+        "7.1"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "room",
+      "rejectExit": "usage",
+      "choices": [
+        "none",
+        "living_room",
+        "home_theater",
+        "screening_room"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "night",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "dialogue-db",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": -12.0,
+      "exclusiveMinimum": false,
+      "maximum": 12.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "program-lufs",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": -70.0,
+      "exclusiveMinimum": false,
+      "maximum": 0.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "playback",
+      "option": "target-lufs",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": -40.0,
+      "exclusiveMinimum": false,
+      "maximum": -5.0,
+      "exclusiveMaximum": false
     }
   ],
   "requiredInvalidParameter": [
@@ -861,6 +947,10 @@
     },
     {
       "command": "pitch-shift",
+      "option": "output"
+    },
+    {
+      "command": "playback",
       "option": "output"
     },
     {

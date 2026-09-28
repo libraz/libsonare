@@ -52,6 +52,7 @@ _FEATURE_NAMES = {
     "acousticSim",
     "pitchEditor",
     "voiceChanger",
+    "playback",
 }
 # The two exits a gated-off command may answer with, one per gate shape:
 # ErrorCode::NotImplemented from a stub handler, and the parser's own unknown

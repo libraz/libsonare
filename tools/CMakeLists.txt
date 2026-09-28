@@ -9,6 +9,7 @@ add_executable(sonare
   cli/sonare_cli_features_metering.cpp
   cli/sonare_cli_json.cpp
   cli/sonare_cli_mastering_mixing.cpp
+  cli/sonare_cli_playback.cpp
   cli/sonare_cli_processing.cpp
   cli/sonare_cli_project.cpp
   cli/sonare_cli_registry.cpp
@@ -53,6 +54,14 @@ if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
   # RIR synthesis + room estimation (acoustic) and the offline morph (fx).
   target_link_libraries(sonare PRIVATE sonare_acoustic sonare_fx)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
+endif()
+if(BUILD_PLAYBACK)
+  # The C ABI translation unit is not part of any static lib the CLI links
+  # (sonare_playback holds only the DSP), so compile it directly, matching
+  # sonare_c_project.cpp under BUILD_ARRANGEMENT below.
+  target_sources(sonare PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_playback.cpp)
+  target_link_libraries(sonare PRIVATE sonare_playback)
+  target_compile_definitions(sonare PRIVATE SONARE_WITH_PLAYBACK=1)
 endif()
 if(BUILD_ARRANGEMENT)
   # The `project` command group wraps the sonare_project_* C ABI. That C-API

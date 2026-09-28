@@ -294,3 +294,7 @@ int cmd_project(const CliArgs& args, const Audio& audio);
 int cmd_midi_render(const CliArgs& args, const Audio& audio);
 int cmd_transcribe(const CliArgs& args, const Audio& audio);
 #endif
+
+#ifdef SONARE_WITH_PLAYBACK
+int cmd_playback(const CliArgs& args, const Audio& audio);
+#endif

@@ -4363,6 +4363,165 @@
           "required": false,
           "domain": null
         }
+      ],
+      "playback": [
+        {
+          "name": "config",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "dialogue-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": -12.0,
+            "exclusiveMinimum": false,
+            "maximum": 12.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "hrtf",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "input-layout",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": ["auto", "mono", "stereo", "5.1", "7.1"],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "night",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0.0,
+            "exclusiveMinimum": false,
+            "maximum": 1.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "no-upmix",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": ["o"],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "program-lufs",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": -70.0,
+            "exclusiveMinimum": false,
+            "maximum": 0.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "room",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": ["none", "living_room", "home_theater", "screening_room"],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": ["headphones", "stereo", "5.1", "7.1"],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "target-lufs",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": -40.0,
+            "exclusiveMinimum": false,
+            "maximum": -5.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        }
       ]
     }
   },
@@ -5197,6 +5356,14 @@
       "option_status": "active",
       "requires": [
         "mixingAssistant"
+      ]
+    },
+    "playback": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active",
+      "requires": [
+        "playback"
       ]
     }
   },
@@ -12153,6 +12320,7 @@
                 "mixing": "boolean",
                 "mixingAssistant": "boolean",
                 "pitchEditor": "boolean",
+                "playback": "boolean",
                 "voiceChanger": "boolean"
               }
             },
@@ -15317,6 +15485,212 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "playback",
+      "options": [
+        {
+          "name": "config",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "dialogue-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": -12.0,
+            "exclusiveMinimum": false,
+            "maximum": 12.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "hrtf",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "input-layout",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": ["auto", "mono", "stereo", "5.1", "7.1"],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "night",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0.0,
+            "exclusiveMinimum": false,
+            "maximum": 1.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "no-upmix",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": ["o"],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "program-lufs",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": -70.0,
+            "exclusiveMinimum": false,
+            "maximum": 0.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "room",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": ["none", "living_room", "home_theater", "screening_room"],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": ["headphones", "stereo", "5.1", "7.1"],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "target-lufs",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": -40.0,
+            "exclusiveMinimum": false,
+            "maximum": -5.0,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "active_input_layout": "string",
+            "layout_switches": "integer",
+            "truncated_drains": "integer",
+            "inactive_stages": "array:string",
+            "latency": "any",
+            "loudness_gain_db": "number",
+            "loudness_gain_clamped": "boolean",
+            "hrtf_ignored": "boolean",
+            "limiter_gain_reduction_db": "number",
+            "non_finite_discards": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "headphones",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--target", "headphones", "--json"],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "seven_one",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--target", "7.1", "--json"],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}

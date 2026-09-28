@@ -215,6 +215,7 @@ from ._cli_options import (
 from ._cli_options import (
     build_shared_parsers as build_shared_parsers,
 )
+from ._cli_playback import *  # noqa: F403
 from ._cli_project import *  # noqa: F403
 from ._cli_project import (
     _load_project as _load_project,
@@ -252,6 +253,7 @@ def _build_parser() -> _ContractArgumentParser:
     register_mastering_parsers(sub, shared)
     register_project_parsers(sub, shared)
     register_mixing_parsers(sub, shared)
+    register_playback_parsers(sub, shared)
 
     # Add file argument to all subcommands that need it
     for name in [
@@ -310,6 +312,7 @@ def _build_parser() -> _ContractArgumentParser:
         "mastering-profile",
         "mix-strip",
         "transcribe",
+        "playback",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
 
@@ -425,6 +428,7 @@ def _dispatch() -> None:
         "mixing-preset": cmd_mixing_preset,
         "mix": cmd_mix,
         "mix-strip": cmd_mix_strip,
+        "playback": cmd_playback,
     }
 
     handler = commands.get(args.command)
