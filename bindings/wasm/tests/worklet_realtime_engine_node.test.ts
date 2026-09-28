@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
 import {
   describe,
@@ -298,9 +299,9 @@ describe('SonareRealtimeEngineNode', () => {
         rtSafe: true,
         defaultCurve: 2,
       });
-      const originalFlush = offline.flushControlCommands.bind(offline);
+      const originalFlush = offline.applyCommandsDueNowPreservingFuture.bind(offline);
       let flushCount = 0;
-      offline.flushControlCommands = () => {
+      offline.applyCommandsDueNowPreservingFuture = () => {
         flushCount += 1;
         originalFlush();
       };
@@ -1112,6 +1113,24 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setMasterStripJson(
           '{"version":1,"strips":[{"id":"master","inputTrimDb":-30}],"buses":[],"connections":[]}',
         );
+        engine.setTrackOutputBus(7, 100);
+        const beforeRejectedRemoval = posted.length;
+        expect(() => engine.setTrackBuses([])).toThrow();
+        expect(posted).toHaveLength(beforeRejectedRemoval);
+        engine.setSends(7, []);
+        const retained = posted.at(-1) as {
+          type: string;
+          buses: Array<{ busId: number }>;
+          busStrips: Array<{ busId: number }>;
+          insertParamOverrides?: Array<{ kind: string; busId?: number }>;
+        };
+        expect(retained.type).toBe('syncMixer');
+        expect(retained.buses).toEqual([expect.objectContaining({ busId: 100 })]);
+        expect(retained.busStrips).toEqual([expect.objectContaining({ busId: 100 })]);
+        expect(retained.insertParamOverrides).toEqual([
+          expect.objectContaining({ kind: 'bus', busId: 100 }),
+        ]);
+        engine.setTrackOutputBus(7, 0);
         engine.setTrackBuses([]);
         engine.setMasterStripJson(
           '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
@@ -1144,6 +1163,334 @@ describe('SonareRealtimeEngineNode', () => {
         const restoredSync = posted.at(-1) as { type: string; busStrips: unknown[] };
         expect(restoredSync.type).toBe('syncMixer');
         expect(restoredSync.busStrips).toEqual([]);
+      } finally {
+        live.destroy();
+        engine.destroy();
+      }
+    });
+
+    it('keeps a pending bus insert command on its bus when buses are reordered', async () => {
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        blockSize,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const live = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { postMessage: () => undefined },
+      );
+      try {
+        engine.setTrackBuses([{ busId: 100 }, { busId: 200 }]);
+        engine.setTrackOutputBus(7, 100);
+        engine.setTrackOutputBus(8, 200);
+        for (const busId of [100, 200]) {
+          engine.setBusStripJson(
+            busId,
+            JSON.stringify({
+              version: 1,
+              strips: [],
+              buses: [
+                {
+                  id: String(busId),
+                  inserts: [
+                    {
+                      slot: 'pre',
+                      processor: 'eq.parametric',
+                      params: {
+                        'band0.type': 1,
+                        'band0.frequencyHz': busId === 100 ? 800 : 3000,
+                        'band0.gainDb': 0,
+                        'band0.enabled': 1,
+                      },
+                    },
+                  ],
+                },
+              ],
+              connections: [],
+            }),
+          );
+        }
+        const automationId = offline.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
+        expect(automationId).toBeGreaterThan(0);
+        offline.setParameter(automationId, 12, 64);
+        live.receiveCommand({
+          type: SonareEngineCommandType.SetParam,
+          targetId: automationId,
+          sampleTime: 64,
+          argFloat: 12,
+        });
+        // No process block between the scheduled command and topology edit.
+        engine.setTrackBuses([{ busId: 200 }, { busId: 100, gainDb: -96 }]);
+        for (const message of posted) {
+          const type = (message as { type?: unknown }).type;
+          if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+          }
+        }
+        const frames = blockSize * 40;
+        const a = new Float32Array(frames);
+        const b = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) {
+          a[i] = 0.2 * Math.sin((2 * Math.PI * 800 * i) / 48000);
+          b[i] = 0.2 * Math.sin((2 * Math.PI * 3000 * i) / 48000);
+        }
+        const clips = [
+          { id: 1, trackId: 7, channels: [a, a], startPpq: 0, lengthSamples: frames },
+          { id: 2, trackId: 8, channels: [b, b], startPpq: 0, lengthSamples: frames },
+        ];
+        offline.setClips(clips);
+        live.receiveSync({ type: 'syncClips', clips });
+        offline.play();
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        let maxDiff = 0;
+        let maxAbs = 0;
+        for (let block = 0; block < 30; block += 1) {
+          const expected = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          const actual = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          expect(live.process([[]], [actual])).toBe(true);
+          for (let channel = 0; channel < 2; channel += 1) {
+            for (let i = 0; i < blockSize; i += 1) {
+              maxAbs = Math.max(maxAbs, Math.abs(expected[channel][i]));
+              maxDiff = Math.max(maxDiff, Math.abs(expected[channel][i] - actual[channel][i]));
+            }
+          }
+        }
+        expect(maxAbs).toBeGreaterThan(0.05);
+        // Only bus 200 remains audible. If the pending bus-100 command is
+        // misrouted to its new slot, bus 200's 3 kHz band becomes much louder.
+        expect(maxAbs).toBeLessThan(0.35);
+        expect(maxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
+      } finally {
+        live.destroy();
+        engine.destroy();
+      }
+    });
+
+    it('keeps queued bus insert automation IDs stable across reorder and retires removed IDs', async () => {
+      const realtime = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      const scene = (busId: number) =>
+        JSON.stringify({
+          version: 1,
+          strips: [],
+          buses: [
+            {
+              id: String(busId),
+              inserts: [
+                {
+                  slot: 'pre',
+                  processor: 'eq.parametric',
+                  params: {
+                    'band0.type': 1,
+                    'band0.frequencyHz': 1000,
+                    'band0.gainDb': 0,
+                    'band0.enabled': 1,
+                  },
+                },
+              ],
+            },
+          ],
+          connections: [],
+        });
+      try {
+        realtime.setTrackBuses([{ busId: 100 }, { busId: 200 }]);
+        realtime.setBusStripJson(100, scene(100));
+        realtime.setBusStripJson(200, scene(200));
+        const oldId = realtime.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
+        expect(oldId).toBeGreaterThan(0);
+        realtime.setParameter(oldId, 12, 64);
+        realtime.setTrackBuses([{ busId: 200 }, { busId: 100 }]);
+        expect(realtime.resolveBusInsertAutomationId(100, 0, 'band0.gainDb')).toBe(oldId);
+        const otherId = realtime.resolveBusInsertAutomationId(200, 0, 'band0.gainDb');
+        expect(otherId).toBeGreaterThan(0);
+        expect(otherId).not.toBe(oldId);
+        realtime.setTrackBuses([{ busId: 200 }]);
+        realtime.setTrackBuses([{ busId: 200 }, { busId: 100 }]);
+        realtime.setBusStripJson(100, scene(100));
+        const replacementId = realtime.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
+        expect(replacementId).toBeGreaterThan(0);
+        expect(replacementId).not.toBe(oldId);
+        expect(realtime.resolveBusInsertAutomationId(200, 0, 'band0.gainDb')).toBe(otherId);
+      } finally {
+        realtime.destroy();
+      }
+    });
+
+    it('keeps a burst of more master insert values than the smoother slot capacity', async () => {
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const livePosted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        blockSize,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const live = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { postMessage: (message) => livePosted.push(message) },
+      );
+      const replay = (messages: unknown[]): void => {
+        for (const message of messages) {
+          const type = (message as { type?: unknown }).type;
+          if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+          }
+        }
+      };
+      try {
+        engine.setTrackLanes([7]);
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+        );
+        replay(posted);
+        const liveEngine = (live as unknown as { engine: OfflineEngineOption }).engine;
+        const exactFallback = vi.spyOn(liveEngine, 'restoreMasterStripInsertParamByName');
+        for (let band = 0; band < 17; band += 1) {
+          const before = posted.length;
+          engine.setMasterStripInsertParamByName(0, `band${band}.gainDb`, 1 + band / 10);
+          replay(posted.slice(before));
+        }
+        expect(exactFallback).toHaveBeenCalledTimes(1);
+        expect(exactFallback).toHaveBeenCalledWith(0, 'band16.gainDb', 2.6);
+        const beforeRouting = posted.length;
+        engine.setSends(7, []);
+        const sync = posted.at(-1) as { insertParamOverrides?: unknown[] };
+        expect(sync.insertParamOverrides).toHaveLength(17);
+        replay(posted.slice(beforeRouting));
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+        expect(
+          offline
+            .drainTelemetry()
+            .filter((item) => item.error === SonareEngineTelemetryError.InsertAutomationOverflow),
+        ).toEqual([]);
+        expect(
+          livePosted.filter((item) => (item as { type?: unknown }).type === 'syncError'),
+        ).toEqual([]);
+      } finally {
+        live.destroy();
+        engine.destroy();
+      }
+    });
+
+    it('returns an automated insert to the replacement scene value', async () => {
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        blockSize,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const live = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      const replay = (messages: unknown[]): void => {
+        for (const message of messages) {
+          const type = (message as { type?: unknown }).type;
+          if (typeof type === 'string' && type in ENGINE_SYNC_MESSAGE_TYPES) {
+            live.receiveSync(message as Parameters<typeof live.receiveSync>[0]);
+          } else if (typeof type === 'number') {
+            live.receiveCommand(message as Parameters<typeof live.receiveCommand>[0]);
+          }
+        }
+      };
+      const scene = (levelDb: number) =>
+        JSON.stringify({
+          version: 1,
+          strips: [
+            {
+              id: 'track-7',
+              inserts: [{ slot: 'pre', processor: 'utility.gain', params: { levelDb } }],
+            },
+          ],
+          buses: [],
+          connections: [],
+        });
+      try {
+        engine.setTrackLanes([7]);
+        engine.setTrackStripJson(7, scene(0));
+        engine.setTrackStripInsertParamByName(7, 0, 'levelDb', 6);
+        engine.setTrackStripJson(7, scene(-12));
+        replay(posted);
+        const frames = blockSize * 180;
+        const tone = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) {
+          tone[i] = 0.25 * Math.sin((2 * Math.PI * 440 * i) / 48000);
+        }
+        const clips = [
+          { id: 1, trackId: 7, channels: [tone, tone], startPpq: 0, lengthSamples: frames },
+        ];
+        offline.setClips(clips);
+        live.receiveSync({ type: 'syncClips', clips });
+        offline.play();
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        const power = (): number => {
+          let sum = 0;
+          let liveSum = 0;
+          for (let block = 0; block < 24; block += 1) {
+            const out = offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+            const liveOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+            expect(live.process([[]], [liveOut])).toBe(true);
+            if (block < 8) {
+              continue;
+            }
+            for (let i = 0; i < blockSize; i += 1) {
+              sum += out[0][i] ** 2;
+              liveSum += liveOut[0][i] ** 2;
+            }
+          }
+          expect(liveSum).toBeCloseTo(sum, 3);
+          return sum;
+        };
+        const scenePower = power();
+        expect(scenePower).toBeGreaterThan(0.01);
+        const id = engine.resolveTrackInsertAutomationId(7, 0, 'levelDb');
+        const beforeAutomation = posted.length;
+        engine.setAutomationLane(id, [{ ppq: 0, value: 0 }]);
+        replay(posted.slice(beforeAutomation));
+        const automatedPower = power();
+        expect(automatedPower / scenePower).toBeGreaterThan(8);
+        const beforeRelease = posted.length;
+        engine.setAutomationLane(id, []);
+        replay(posted.slice(beforeRelease));
+        const releasedPower = power();
+        expect(releasedPower / scenePower).toBeGreaterThan(0.9);
+        expect(releasedPower / scenePower).toBeLessThan(1.1);
       } finally {
         live.destroy();
         engine.destroy();
@@ -1276,18 +1623,26 @@ describe('SonareRealtimeEngineNode', () => {
             }
           }
         };
-        // Bring the worklet to the same pre-insert state before sending the
-        // three by-name edits. This keeps the following process block focused
-        // on the incremental setter path rather than replaying old setup.
+        // Bring the worklet to the same pre-insert state. First claim the
+        // smoother slots at values far from the intended targets.
         const beforeInsert = posted.length;
         replay(posted);
+        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', -6);
+        engine.setMasterStripInsertParamByName(0, 'band0.gainDb', 3);
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', -12);
+        replay(posted.slice(beforeInsert));
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+        // Move existing slots toward new targets for only one block. A later
+        // bus topology update drops its active slot while the processor still
+        // holds an intermediate value; replay must restore the final target.
+        const beforeTarget = posted.length;
         engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', 6);
         engine.setMasterStripInsertParamByName(0, 'band0.gainDb', -3);
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 4);
-        replay(posted.slice(beforeInsert));
-        // The by-name commands must be consumed before a later structural
-        // sync. Otherwise this test could pass while only the retained JSON
-        // is correct and the live smoother still has the old value.
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 12);
+        replay(posted.slice(beforeTarget));
         offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
         expect(
           live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
@@ -1337,7 +1692,7 @@ describe('SonareRealtimeEngineNode', () => {
               busId: 100,
               insertIndex: 0,
               paramName: 'band0.gainDb',
-              value: 4,
+              value: 12,
             }),
           ]),
         );
@@ -1348,7 +1703,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(
           livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
         ).toEqual([]);
-        const frames = blockSize * 48;
+        const frames = blockSize * 320;
         const left = new Float32Array(frames);
         const right = new Float32Array(frames);
         for (let i = 0; i < frames; i += 1) {
@@ -1369,6 +1724,7 @@ describe('SonareRealtimeEngineNode', () => {
         let maxDiff = 0;
         let maxAbs = 0;
         let imbalance = 0;
+        let beforeRepeatEnergy = 0;
         for (let block = 0; block < 40; block += 1) {
           const expected = offline.process([
             new Float32Array(blockSize),
@@ -1380,6 +1736,9 @@ describe('SonareRealtimeEngineNode', () => {
             for (let i = 0; i < blockSize; i += 1) {
               maxAbs = Math.max(maxAbs, Math.abs(expected[channel][i]));
               maxDiff = Math.max(maxDiff, Math.abs(expected[channel][i] - liveOut[channel][i]));
+              if (block >= 20) {
+                beforeRepeatEnergy += expected[channel][i] ** 2;
+              }
             }
           }
           for (let i = 0; i < blockSize; i += 1) {
@@ -1389,7 +1748,33 @@ describe('SonareRealtimeEngineNode', () => {
         expect(maxAbs).toBeGreaterThan(0.05);
         expect(imbalance).toBeGreaterThan(0.01);
         expect(maxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
-        // The cache itself is the state a later re-post replays.
+        // Repeating the same bus target after the routing edit must not alter
+        // settled audio. Without structural replay, the cleared bus slot
+        // freezes at its intermediate value and this second set changes it.
+        const beforeRepeat = posted.length;
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 12);
+        replay(posted.slice(beforeRepeat));
+        let afterRepeatEnergy = 0;
+        for (let block = 0; block < 40; block += 1) {
+          const expected = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          const liveOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          expect(live.process([[]], [liveOut])).toBe(true);
+          if (block < 20) {
+            continue;
+          }
+          for (let channel = 0; channel < 2; channel += 1) {
+            for (let i = 0; i < blockSize; i += 1) {
+              afterRepeatEnergy += expected[channel][i] ** 2;
+            }
+          }
+        }
+        expect(beforeRepeatEnergy).toBeGreaterThan(0.01);
+        expect(afterRepeatEnergy / beforeRepeatEnergy).toBeCloseTo(1, 1);
+        // The construction scene stays at its original insert params. The
+        // separate overrides restore live values without rebuilding inserts.
         const mixerSyncs = posted.filter(
           (message) => (message as { type?: unknown }).type === 'syncMixer',
         );
@@ -1435,17 +1820,17 @@ describe('SonareRealtimeEngineNode', () => {
           bands: [expect.objectContaining({ frequencyHz: 1500, gainDb: 6 })],
         });
         expect(trackScene.strips[0].inserts[0].params).toEqual(
-          expect.objectContaining({ 'band0.gainDb': 6 }),
+          expect.objectContaining({ 'band0.gainDb': 0 }),
         );
         expect(typeof JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params).toBe(
           'string',
         );
         expect(
           JSON.parse(JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params),
-        ).toEqual(expect.objectContaining({ 'band0.gainDb': -3 }));
+        ).toEqual(expect.objectContaining({ 'band0.gainDb': 0 }));
         expect(typeof busScene(100).buses[0].inserts[0].params_json).toBe('string');
         expect(JSON.parse(busScene(100).buses[0].inserts[0].params_json)).toEqual(
-          expect.objectContaining({ 'band0.gainDb': 4 }),
+          expect.objectContaining({ 'band0.gainDb': 0 }),
         );
         expect(lastSync.insertParamOverrides).toHaveLength(3);
         expect(lastSync.insertParamOverrides).toEqual(
@@ -1468,16 +1853,17 @@ describe('SonareRealtimeEngineNode', () => {
               busId: 100,
               insertIndex: 0,
               paramName: 'band0.gainDb',
-              value: 4,
+              value: 12,
             }),
           ]),
         );
 
         // Replacing a full strip scene is the new source of truth and clears
         // only that target's retained by-name values.
+        const beforeReplacement = posted.length;
         engine.setTrackStripJson(
           7,
-          '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
+          '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
         );
         engine.setMasterStripJson(
           '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
@@ -1492,6 +1878,159 @@ describe('SonareRealtimeEngineNode', () => {
         };
         expect(clearedSync.type).toBe('syncMixer');
         expect(clearedSync.insertParamOverrides ?? []).toEqual([]);
+        const replacements = posted
+          .slice(beforeReplacement)
+          .filter((message) => (message as { type?: unknown }).type === 'syncMixer') as Array<{
+          forceInsertResets?: Array<{ kind: string }>;
+        }>;
+        expect(replacements.map((message) => message.forceInsertResets?.[0]?.kind)).toEqual([
+          'track',
+          'master',
+          'bus',
+        ]);
+        replay(posted.slice(beforeReplacement));
+        expect(
+          livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
+        ).toEqual([]);
+        let afterResetEnergy = 0;
+        let resetMaxDiff = 0;
+        for (let block = 0; block < 40; block += 1) {
+          const expected = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          const liveOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          expect(live.process([[]], [liveOut])).toBe(true);
+          if (block < 20) {
+            continue;
+          }
+          for (let channel = 0; channel < 2; channel += 1) {
+            for (let i = 0; i < blockSize; i += 1) {
+              afterResetEnergy += expected[channel][i] ** 2;
+              resetMaxDiff = Math.max(
+                resetMaxDiff,
+                Math.abs(expected[channel][i] - liveOut[channel][i]),
+              );
+            }
+          }
+        }
+        expect(afterResetEnergy / beforeRepeatEnergy).toBeLessThan(0.8);
+        expect(resetMaxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
+        const insertAutomationId = engine.resolveTrackInsertAutomationId(7, 0, 'band0.gainDb');
+        expect(insertAutomationId).toBeGreaterThan(0);
+        let beforeAutomation = posted.length;
+        engine.setAutomationLane(insertAutomationId, [{ ppq: 0, value: -12 }]);
+        replay(posted.slice(beforeAutomation));
+        for (let block = 0; block < 16; block += 1) {
+          offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+          expect(
+            live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+          ).toBe(true);
+        }
+        beforeAutomation = posted.length;
+        engine.setAutomationLane(insertAutomationId, []);
+        replay(posted.slice(beforeAutomation));
+        let releasedEnergy = 0;
+        for (let block = 0; block < 32; block += 1) {
+          const output = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          expect(
+            live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+          ).toBe(true);
+          if (block < 12) {
+            continue;
+          }
+          for (const channel of output) {
+            for (const sample of channel) {
+              releasedEnergy += sample ** 2;
+            }
+          }
+        }
+        expect(releasedEnergy / afterResetEnergy).toBeGreaterThan(0.9);
+        expect(releasedEnergy / afterResetEnergy).toBeLessThan(1.1);
+        const beforeOneShotCheck = posted.length;
+        engine.setSends(7, []);
+        expect(
+          (posted.at(-1) as { insertParamOverrides?: unknown[] }).insertParamOverrides ?? [],
+        ).toEqual([]);
+        replay(posted.slice(beforeOneShotCheck));
+
+        // A later full replacement may remove a sidechained insert entirely.
+        // Its cached binding must be pruned before offline replay and posting.
+        let beforeChange = posted.length;
+        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', -6);
+        replay(posted.slice(beforeChange));
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+        beforeChange = posted.length;
+        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', 6);
+        replay(posted.slice(beforeChange));
+        // These messages are sidechain deltas while the track insert is
+        // gliding. They must not rebuild lanes and freeze that glide live.
+        beforeChange = posted.length;
+        engine.setBusSidechain(100, 0, 'track', 7);
+        engine.setMasterSidechain(0, 'bus', 100);
+        replay(posted.slice(beforeChange));
+        let sidechainMaxDiff = 0;
+        let sidechainMaxAbs = 0;
+        // The offline mirror stores the target immediately; live playback
+        // glides to it. Compare their audible settled output after that glide.
+        for (let block = 0; block < 64; block += 1) {
+          const expected = offline.process([
+            new Float32Array(blockSize),
+            new Float32Array(blockSize),
+          ]);
+          const liveOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          expect(live.process([[]], [liveOut])).toBe(true);
+          if (block < 56) {
+            continue;
+          }
+          for (let channel = 0; channel < 2; channel += 1) {
+            for (let i = 0; i < blockSize; i += 1) {
+              sidechainMaxAbs = Math.max(sidechainMaxAbs, Math.abs(expected[channel][i]));
+              sidechainMaxDiff = Math.max(
+                sidechainMaxDiff,
+                Math.abs(expected[channel][i] - liveOut[channel][i]),
+              );
+            }
+          }
+        }
+        expect(sidechainMaxAbs).toBeGreaterThan(0.01);
+        expect(sidechainMaxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
+        beforeChange = posted.length;
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 12);
+        engine.setMasterStripInsertParamByName(0, 'band0.gainDb', -3);
+        replay(posted.slice(beforeChange));
+        offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+        expect(
+          live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+        beforeChange = posted.length;
+        engine.setBusStripJson(
+          100,
+          '{"version":1,"strips":[],"buses":[{"id":"100"}],"connections":[]}',
+        );
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        );
+        replay(posted.slice(beforeChange));
+        const noInserts = posted.at(-1) as {
+          busSidechains: unknown[];
+          masterSidechains: unknown[];
+          insertParamOverrides?: unknown[];
+        };
+        expect(noInserts.busSidechains).toEqual([]);
+        expect(noInserts.masterSidechains).toEqual([]);
+        expect(noInserts.insertParamOverrides ?? []).toEqual([
+          expect.objectContaining({ kind: 'track', trackId: 7, value: 6 }),
+        ]);
+        expect(
+          livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),
+        ).toEqual([]);
       } finally {
         live.destroy();
         engine.destroy();
@@ -1916,6 +2455,148 @@ describe('SonareRealtimeEngineNode', () => {
         ]),
       );
       engine.destroy();
+    });
+
+    it('clears insert automation on full strip replacement without clearing other strips', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const scene = (kind: 'track' | 'bus' | 'master', withInsert: boolean) =>
+        JSON.stringify({
+          version: 1,
+          strips:
+            kind === 'bus'
+              ? []
+              : [
+                  {
+                    id: kind === 'track' ? 'track-7' : 'master',
+                    inserts: withInsert
+                      ? [{ slot: 'pre', processor: 'eq.parametric', params: { 'band0.gainDb': 0 } }]
+                      : [],
+                  },
+                ],
+          buses:
+            kind === 'bus'
+              ? [
+                  {
+                    id: '100',
+                    inserts: withInsert
+                      ? [{ slot: 'pre', processor: 'eq.parametric', params: { 'band0.gainDb': 0 } }]
+                      : [],
+                  },
+                ]
+              : [],
+          connections: [],
+        });
+      try {
+        engine.setTrackLanes([7]);
+        engine.setTrackStripJson(7, scene('track', true));
+        engine.setBusStripJson(100, scene('bus', true));
+        engine.setMasterStripJson(scene('master', true));
+        const ids = [
+          engine.resolveTrackInsertAutomationId(7, 0, 'band0.gainDb'),
+          engine.resolveBusInsertAutomationId(100, 0, 'band0.gainDb'),
+          engine.resolveMasterInsertAutomationId(0, 'band0.gainDb'),
+        ];
+        expect(ids.every((id) => id >= 0)).toBe(true);
+        expect(new Set(ids).size).toBe(3);
+        for (const id of ids) {
+          engine.setAutomationLane(id, [{ ppq: 0, value: 6 }]);
+        }
+        expect(engine.automationLaneCount()).toBe(3);
+
+        const replace = [
+          () => engine.setTrackStripJson(7, scene('track', false)),
+          () => engine.setBusStripJson(100, scene('bus', false)),
+          () => engine.setMasterStripJson(scene('master', false)),
+        ];
+        for (let index = 0; index < replace.length; index += 1) {
+          const before = posted.length;
+          replace[index]();
+          expect(engine.automationLaneCount()).toBe(2 - index);
+          expect(posted.slice(before)).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ type: 'syncAutomation', paramId: ids[index], points: [] }),
+            ]),
+          );
+          expect(
+            posted
+              .slice(before)
+              .filter((message) =>
+                ids.some(
+                  (id) =>
+                    id !== ids[index] &&
+                    (message as { type?: string; paramId?: number }).type === 'syncAutomation' &&
+                    (message as { paramId?: number }).paramId === id,
+                ),
+              ),
+          ).toEqual([]);
+        }
+
+        // A UI may cache the resolved id while repeatedly editing the same
+        // slot. Reinstalling a lane through that id must remain associated
+        // with the strip for the next full replacement.
+        engine.setTrackStripJson(7, scene('track', true));
+        engine.setAutomationLane(ids[0], [{ ppq: 0, value: 3 }]);
+        expect(engine.automationLaneCount()).toBe(1);
+        engine.setTrackStripJson(7, scene('track', false));
+        expect(engine.automationLaneCount()).toBe(0);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('removes a deleted bus automation lane before its identity is reused', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const scene = JSON.stringify({
+        version: 1,
+        strips: [],
+        buses: [
+          {
+            id: '100',
+            inserts: [{ slot: 'pre', processor: 'eq.parametric', params: { 'band0.gainDb': 0 } }],
+          },
+        ],
+        connections: [],
+      });
+      try {
+        engine.setBusStripJson(100, scene);
+        const oldId = engine.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
+        expect(oldId).toBeGreaterThanOrEqual(0);
+        engine.setAutomationLane(oldId, [{ ppq: 0, value: 5 }]);
+        expect(engine.automationLaneCount()).toBe(1);
+
+        const beforeRemoval = posted.length;
+        engine.setTrackBuses([]);
+        expect(engine.automationLaneCount()).toBe(0);
+        expect(posted.slice(beforeRemoval)).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'syncAutomation', paramId: oldId, points: [] }),
+          ]),
+        );
+
+        engine.setBusStripJson(100, scene);
+        const newId = engine.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
+        expect(newId).toBeGreaterThanOrEqual(0);
+        expect(newId).not.toBe(oldId);
+        expect(engine.automationLaneCount()).toBe(0);
+      } finally {
+        engine.destroy();
+      }
     });
 
     it('sets and reads the warp voice capacity, mirroring it to the worklet', async () => {

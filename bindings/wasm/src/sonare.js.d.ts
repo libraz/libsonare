@@ -1365,7 +1365,9 @@ export interface WasmRealtimeEngine {
   stop: (renderFrame?: number) => void;
   seekSample: (timelineSample: number, renderFrame?: number) => void;
   settleParameters: () => void;
+  settleInsertParameters: () => void;
   flushControlCommands: () => void;
+  applyCommandsDueNowPreservingFuture: () => void;
   seekPpq: (ppq: number, renderFrame?: number) => void;
   setTempo: (bpm: number) => void;
   setTempoSegments: (segments: WasmEngineTempoSegment[]) => void;
@@ -1427,13 +1429,50 @@ export interface WasmRealtimeEngine {
     paramName: string,
     value: number,
   ) => void;
+  applyTrackStripInsertParamByNameNow: (
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => boolean;
+  restoreTrackStripInsertParamByName: (
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => void;
   setMasterStripInsertParamByName: (insertIndex: number, paramName: string, value: number) => void;
+  applyMasterStripInsertParamByNameNow: (
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => boolean;
+  restoreMasterStripInsertParamByName: (
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => void;
   setBusStripInsertParamByName: (
     busId: number,
     insertIndex: number,
     paramName: string,
     value: number,
   ) => void;
+  applyBusStripInsertParamByNameNow: (
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => boolean;
+  restoreBusStripInsertParamByName: (
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => void;
+  clearTrackInsertParameterBases: (trackId: number) => void;
+  clearBusInsertParameterBases: (busId: number) => void;
+  clearMasterInsertParameterBases: () => void;
   setBusStripInsertBypassed: (
     busId: number,
     insertIndex: number,
@@ -2408,19 +2447,15 @@ export interface SonareModule {
     applyGainAtInputRate: boolean,
   ) => WasmMasteringResult;
   masteringProcessorNames: () => string[];
-  masteringAmpPresetCatalog: () => Array<{
-    index: number;
-    name: string;
-    params: Record<string, number | boolean>;
-  }>;
   masteringPairProcessorNames: () => string[];
   masteringPairAnalysisNames: () => string[];
   masteringStereoAnalysisNames: () => string[];
   masteringInsertNames: () => string[];
   masteringInsertParamNames: (name: string) => string[];
-  // Both return JSON the facade parses; the raw module has no object shape here.
+  // These return JSON the facade parses; the raw module has no object shape here.
   masteringInsertParamInfo: (name: string) => string;
   masteringProcessorCatalog: () => string;
+  masteringAmpPresetCatalog: () => string;
   masteringInsertTiming: (
     name: string,
     paramsJson: string,

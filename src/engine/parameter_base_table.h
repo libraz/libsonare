@@ -12,12 +12,13 @@
 
 namespace sonare::engine {
 
-/// Open-addressing (linear probe, no tombstones -- entries are only ever
-/// overwritten, never removed) `uint32_t id -> float` table.
+/// Open-addressing (linear probe) `uint32_t id -> float` table.
 ///
 /// Capacity is fixed by @ref prepare and never grows afterward, so
-/// @ref record and @ref lookup never allocate: both are RT-safe for the
-/// audio thread once prepared on the control thread.
+/// @ref record, @ref lookup, and @ref erase_if never allocate: all are RT-safe
+/// for the audio thread once prepared on the control thread. Erasure leaves a
+/// tombstone so a collision chain remains searchable; a later record reuses
+/// the tombstone without growing the table.
 class ParameterBaseTable {
  public:
   /// Sizes the table. @p slot_count must be a power of two (linear probing
@@ -41,6 +42,7 @@ class ParameterBaseTable {
   bool record(uint32_t id, float value) noexcept {
     if (id == 0 || slots_.empty()) return false;
     uint32_t index = id & mask_;
+    uint32_t first_tombstone = static_cast<uint32_t>(slots_.size());
     for (uint32_t probe = 0; probe < slots_.size(); ++probe) {
       Slot& slot = slots_[index];
       if (slot.occupied && slot.id == id) {
@@ -48,14 +50,30 @@ class ParameterBaseTable {
         return true;
       }
       if (!slot.occupied) {
+        if (slot.tombstone) {
+          if (first_tombstone == slots_.size()) first_tombstone = index;
+          index = (index + 1) & mask_;
+          continue;
+        }
         if (count_ >= max_entries_) return false;
-        slot.occupied = true;
-        slot.id = id;
-        slot.value = value;
+        Slot& destination = first_tombstone == slots_.size() ? slot : slots_[first_tombstone];
+        destination.occupied = true;
+        destination.tombstone = false;
+        destination.id = id;
+        destination.value = value;
         ++count_;
         return true;
       }
       index = (index + 1) & mask_;
+    }
+    if (first_tombstone != slots_.size() && count_ < max_entries_) {
+      Slot& destination = slots_[first_tombstone];
+      destination.occupied = true;
+      destination.tombstone = false;
+      destination.id = id;
+      destination.value = value;
+      ++count_;
+      return true;
     }
     // Every slot probed without an empty one or a match: the entry cap (at
     // or below the slot count's load factor) should always leave room well
@@ -71,16 +89,38 @@ class ParameterBaseTable {
     uint32_t index = id & mask_;
     for (uint32_t probe = 0; probe < slots_.size(); ++probe) {
       const Slot& slot = slots_[index];
-      // No tombstones (record() never removes an entry), so the first
-      // unoccupied slot on the probe sequence proves id is absent.
-      if (!slot.occupied) return false;
-      if (slot.id == id) {
+      if (slot.id == id && slot.occupied) {
         *out_value = slot.value;
         return true;
       }
+      // An unoccupied tombstone does not terminate the probe sequence. A
+      // genuinely empty slot does: no later entry can have crossed it.
+      if (!slot.occupied && !slot.tombstone) return false;
       index = (index + 1) & mask_;
     }
     return false;
+  }
+
+  /// Erases every occupied entry for which @p predicate returns true.
+  ///
+  /// The predicate receives the id and stored value. Erasure is bounded by the
+  /// fixed table size, performs no allocation, and leaves collision-safe
+  /// tombstones for lookup(). A later record() reuses those tombstones. The
+  /// predicate must be non-throwing; as with the other RT-safe operations, a
+  /// throwing predicate would violate the caller's real-time contract.
+  template <typename Predicate>
+  uint32_t erase_if(Predicate&& predicate) noexcept {
+    uint32_t erased = 0;
+    for (Slot& slot : slots_) {
+      if (!slot.occupied || !predicate(slot.id, slot.value)) continue;
+      slot.occupied = false;
+      slot.tombstone = true;
+      slot.id = 0;
+      slot.value = 0.0f;
+      --count_;
+      ++erased;
+    }
+    return erased;
   }
 
   /// Number of distinct ids currently recorded.
@@ -89,6 +129,7 @@ class ParameterBaseTable {
  private:
   struct Slot {
     bool occupied = false;
+    bool tombstone = false;
     uint32_t id = 0;
     float value = 0.0f;
   };

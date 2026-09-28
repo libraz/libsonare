@@ -2,7 +2,10 @@ import { panLawCode, panModeCode } from '../codes';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine } from '../index';
 import type { InsertParamOverrideMap } from './engine-mixer-facade';
 import {
+  applyFullStripJson,
   clearInsertParamOverrides,
+  emptyStripJson,
+  hasInsertParamOverrides,
   type InsertParamOverride,
   insertParamOverrideKey,
   type StripJsonTarget,
@@ -32,17 +35,6 @@ function trackIdFor(ctx: EngineStripContext, target: string | number): number {
 
 type SceneEntry = Record<string, unknown>;
 
-function synthesizedStripJson(target: StripJsonTarget): string {
-  switch (target.kind) {
-    case 'track':
-      return `{"version":1,"strips":[{"id":"track-${target.trackId}"}],"buses":[],"connections":[]}`;
-    case 'bus':
-      return `{"version":1,"strips":[],"buses":[{"id":"bus-${target.busId}"}],"connections":[]}`;
-    case 'master':
-      return '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}';
-  }
-}
-
 /**
  * Folds a setter's change into the strip's cached scene JSON, so the next
  * syncMixer re-post replays it instead of reverting it on the worklet.
@@ -52,7 +44,7 @@ function mergeStripJson(
   target: StripJsonTarget,
   update: (entry: SceneEntry) => void,
 ): void {
-  const scene = JSON.parse(ctx.readStripJson(target) ?? synthesizedStripJson(target)) as {
+  const scene = JSON.parse(ctx.readStripJson(target) ?? emptyStripJson(target)) as {
     strips: SceneEntry[];
     buses: SceneEntry[];
   };
@@ -77,94 +69,6 @@ function mergeEqBand(
   });
 }
 
-/**
- * Returns a cached scene with one insert parameter folded into its original
- * JSON representation. Scene loading accepts both the current object form
- * (`params`) and the two pre-object forms (`params` / `params_json` carrying a
- * JSON string). Keep whichever spelling and representation the caller gave us
- * so a realtime edit does not rewrite unrelated project data.
- *
- * `undefined` means no scene was retained for this target, so the native setter
- * remains the source of truth and there is no cache to merge. If a retained
- * scene exists but cannot be merged, this throws before the native mutation so
- * the durable replay state cannot silently diverge.
- */
-function mergedInsertParamJson(
-  ctx: EngineStripContext,
-  target: StripJsonTarget,
-  insertIndex: number,
-  paramName: string,
-  value: number,
-): string | undefined {
-  const retainedJson = ctx.readStripJson(target);
-  const cannotRetain = (reason: string): undefined => {
-    if (retainedJson !== undefined) {
-      throw new Error(['Cannot retain insert parameter edit: ', reason, '.'].join(''));
-    }
-    return undefined;
-  };
-  let scene: { strips?: unknown; buses?: unknown };
-  try {
-    scene = JSON.parse(retainedJson ?? synthesizedStripJson(target)) as {
-      strips?: unknown;
-      buses?: unknown;
-    };
-  } catch {
-    return cannotRetain('cached strip JSON is invalid');
-  }
-  if (!scene || typeof scene !== 'object' || Array.isArray(scene)) {
-    return cannotRetain('cached strip JSON is not an object');
-  }
-
-  const entries = target.kind === 'bus' ? scene.buses : scene.strips;
-  if (!Array.isArray(entries) || !entries[0] || typeof entries[0] !== 'object') {
-    return cannotRetain('the target strip or bus is missing');
-  }
-  const strip = entries[0] as Record<string, unknown>;
-  if (!Array.isArray(strip.inserts)) {
-    return cannotRetain('the target has no insert list');
-  }
-  const insert = strip.inserts[insertIndex];
-  if (!insert || typeof insert !== 'object' || Array.isArray(insert)) {
-    return cannotRetain(['insert ', String(insertIndex), ' is missing'].join(''));
-  }
-
-  const insertObject = insert as Record<string, unknown>;
-  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
-  const hasParams = Object.prototype.hasOwnProperty.call(insertObject, 'params');
-  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
-  const hasLegacyParams = Object.prototype.hasOwnProperty.call(insertObject, 'params_json');
-  const sourceKey = hasParams ? 'params' : hasLegacyParams ? 'params_json' : 'params';
-  const source = insertObject[sourceKey];
-  let params: Record<string, unknown>;
-
-  if (source === undefined) {
-    params = {};
-  } else if (source !== null && typeof source === 'object' && !Array.isArray(source)) {
-    params = { ...(source as Record<string, unknown>) };
-  } else if (typeof source === 'string') {
-    try {
-      const parsed = JSON.parse(source) as unknown;
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return cannotRetain('the insert params value is not an object');
-      }
-      params = { ...(parsed as Record<string, unknown>) };
-    } catch {
-      return cannotRetain('the insert params JSON is invalid');
-    }
-  } else {
-    return cannotRetain('the insert params value has an unsupported type');
-  }
-
-  params[paramName] = value;
-  insertObject[sourceKey] =
-    source === undefined ||
-    (source !== null && typeof source === 'object' && !Array.isArray(source))
-      ? params
-      : JSON.stringify(params);
-  return JSON.stringify(scene);
-}
-
 function setInsertParamByName(
   ctx: EngineStripContext,
   target: StripJsonTarget,
@@ -174,13 +78,10 @@ function setInsertParamByName(
   applyNative: () => void,
   message: SonareEngineSyncMessage,
 ): void {
-  // Build the candidate first. If the native call rejects the target or its
-  // command queue is full, the retained JSON must remain unchanged as well.
-  const mergedJson = mergedInsertParamJson(ctx, target, insertIndex, paramName, value);
   applyNative();
-  if (mergedJson !== undefined) {
-    ctx.writeStripJson(target, mergedJson);
-  }
+  // Keep the construction scene unchanged. Rewriting insert params here makes
+  // a later syncMixer rebuild stateful effects; the override is replayed after
+  // the scene on both engines instead.
   const override: InsertParamOverride = { target, insertIndex, paramName, value };
   ctx.insertParamOverrides.set(insertParamOverrideKey(override), override);
   ctx.postSync(message);
@@ -191,10 +92,15 @@ export function setTrackStripJson(
   trackId: number,
   sceneJson: string,
   trackStripJson: Map<number, string>,
-): void {
-  ctx.offlineEngine.setTrackStripJson(trackId, sceneJson);
-  clearInsertParamOverrides(ctx.insertParamOverrides, { kind: 'track', trackId });
+): { resetInserts: boolean } {
+  const target: StripJsonTarget = { kind: 'track', trackId };
+  const resetInserts =
+    (trackStripJson.has(trackId) && trackStripJson.get(trackId) !== sceneJson) ||
+    hasInsertParamOverrides(ctx.insertParamOverrides, target);
+  applyFullStripJson(ctx.offlineEngine, target, sceneJson, resetInserts);
+  clearInsertParamOverrides(ctx.insertParamOverrides, target);
   trackStripJson.set(trackId, sceneJson);
+  return { resetInserts };
 }
 
 export function setTrackStripEqBand(
@@ -242,7 +148,8 @@ export function setTrackStripInsertParamByName(
     insertIndex,
     paramName,
     value,
-    () => ctx.offlineEngine.setTrackStripInsertParamByName(trackId, insertIndex, paramName, value),
+    () =>
+      ctx.offlineEngine.restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value),
     { type: 'syncTrackStripInsertParamByName', trackId, insertIndex, paramName, value },
   );
 }
@@ -363,7 +270,7 @@ export function setMasterStripInsertParamByName(
     insertIndex,
     paramName,
     value,
-    () => ctx.offlineEngine.setMasterStripInsertParamByName(insertIndex, paramName, value),
+    () => ctx.offlineEngine.restoreMasterStripInsertParamByName(insertIndex, paramName, value),
     { type: 'syncMasterStripInsertParamByName', insertIndex, paramName, value },
   );
 }
@@ -381,7 +288,7 @@ export function setBusStripInsertParamByName(
     insertIndex,
     paramName,
     value,
-    () => ctx.offlineEngine.setBusStripInsertParamByName(busId, insertIndex, paramName, value),
+    () => ctx.offlineEngine.restoreBusStripInsertParamByName(busId, insertIndex, paramName, value),
     { type: 'syncBusStripInsertParamByName', busId, insertIndex, paramName, value },
   );
 }

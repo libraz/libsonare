@@ -187,6 +187,13 @@ class ParamMap {
   /// @brief Design default of every key probed while building, keyed by name.
   const std::unordered_map<std::string, ParamDefault>& probed_defaults() const { return defaults_; }
 
+  /// Effective construction values, including accessor fallbacks and aliases.
+  /// Later writes win when a builder overlays the same config field twice.
+  void note_effective(const std::string& key, double value) const {
+    if (records_declarations_) effective_[key] = value;
+  }
+  const std::unordered_map<std::string, double>& effective_values() const { return effective_; }
+
   /// @brief Records the declared values of the enum a builder read @p key as.
   /// @details The first record wins: a later one comes from the same enum type.
   void note_choices(const std::string& key, std::vector<EnumChoice> choices) const {
@@ -232,6 +239,7 @@ class ParamMap {
   ///          exactly as they were.
   void adopt_declarations(const ParamMap& other) const {
     for (const auto& [key, kind] : other.kinds_) note_kind(key, kind);
+    for (const auto& [key, value] : other.effective_) effective_.try_emplace(key, value);
     for (const auto& [key, choices] : other.choices_) note_choices(key, choices);
     for (const auto& [key, fallback] : other.defaults_) {
       if (!fallback.ambiguous) note_default(key, fallback.value);
@@ -260,6 +268,7 @@ class ParamMap {
   mutable std::unordered_set<std::string> probed_;
   mutable std::unordered_map<std::string, ParamKind> kinds_;
   mutable std::unordered_map<std::string, ParamDefault> defaults_;
+  mutable std::unordered_map<std::string, double> effective_;
   mutable std::unordered_map<std::string, std::vector<EnumChoice>> choices_;
   mutable std::vector<std::pair<std::string, SlotDeclaration>> slots_;
   bool records_declarations_ = true;
@@ -278,16 +287,24 @@ inline float f(const ParamMap& params, const char* key, float default_value) {
   params.note_kind(key, ParamKind::Number);
   params.note_default(key, static_cast<double>(default_value));
   auto it = params.find(key);
-  return it == params.end() ? default_value : static_cast<float>(it->second);
+  const float value = it == params.end() ? default_value : static_cast<float>(it->second);
+  params.note_effective(key, value);
+  return value;
 }
 
 inline int i(const ParamMap& params, const char* key, int default_value) {
   params.note_kind(key, ParamKind::Integer);
   params.note_default(key, static_cast<double>(default_value));
   auto it = params.find(key);
-  if (it == params.end()) return default_value;
+  if (it == params.end()) {
+    params.note_effective(key, default_value);
+    return default_value;
+  }
   int converted = 0;
-  if (numeric::checked_integral_cast(it->second, &converted)) return converted;
+  if (numeric::checked_integral_cast(it->second, &converted)) {
+    params.note_effective(key, converted);
+    return converted;
+  }
   // Named, because the key is in hand: a caller who wrote 512.7 needs to know
   // which field refused it and that a whole number is what it wants.
   reject_integer_param(key, it->second);
@@ -297,7 +314,9 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
   params.note_kind(key, ParamKind::Boolean);
   params.note_default(key, default_value ? 1.0 : 0.0);
   auto it = params.find(key);
-  return it == params.end() ? default_value : it->second != 0.0;
+  const bool value = it == params.end() ? default_value : it->second != 0.0;
+  params.note_effective(key, value ? 1.0 : 0.0);
+  return value;
 }
 
 /// @brief Reads a flat enum selector, refusing a value no enumerator declares.
@@ -307,7 +326,10 @@ inline Enum read_enum(const ParamMap& params, const char* key, Enum fallback) {
   params.note_default(key, field_as_double(fallback));
   if (params.records_declarations()) params.note_choices(key, enum_choices<Enum>());
   auto it = params.find(key);
-  if (it == params.end()) return fallback;
+  if (it == params.end()) {
+    params.note_effective(key, field_as_double(fallback));
+    return fallback;
+  }
   int converted = 0;
   if (!numeric::checked_integral_cast(it->second, &converted)) {
     reject_integer_param(key, it->second);
@@ -317,6 +339,7 @@ inline Enum read_enum(const ParamMap& params, const char* key, Enum fallback) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " is not a declared value");
   }
+  params.note_effective(key, converted);
   return candidate;
 }
 
@@ -350,6 +373,7 @@ inline void read_enum_field(const ParamMap& params, const char* key, int& dst, E
   if (params.records_declarations()) params.note_choices(key, enum_choices(name_of));
   auto it = params.find(key);
   if (it != params.end()) assign_enum_value(dst, it->second, name_of);
+  params.note_effective(key, dst);
 }
 
 /// @brief Overlays a flat param onto a config field, leaving it untouched when
@@ -373,6 +397,7 @@ inline void read_field(const ParamMap& params, const char* key, T& dst) {
     params.note_default(key, field_as_double(dst));
     auto it = params.find(key);
     if (it != params.end()) assign_field(dst, it->second);
+    params.note_effective(key, field_as_double(dst));
   }
 }
 

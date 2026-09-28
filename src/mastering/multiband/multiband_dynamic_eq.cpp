@@ -165,8 +165,8 @@ std::vector<rt::ParamDescriptor> MultibandDynamicEq::parameter_descriptors() con
   // for the field order). The keys match the construction-time convention
   // band{cb}.dyn{db}.<field> read by populate_dynamic_eq_bands.
   static constexpr std::array<const char*, eq::DynamicEq::kParamsPerBand> kFieldKeys{
-      "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",      "rangeDb",
-      "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "lookaheadMs"};
+      "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",          "rangeDb",
+      "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "detectorDelayMs"};
   std::vector<rt::ParamDescriptor> descriptors;
   descriptors.reserve(processors_.size() * kParamsPerCrossoverBand);
   for (unsigned int cb = 0; cb < processors_.size(); ++cb) {
@@ -176,6 +176,9 @@ std::vector<rt::ParamDescriptor> MultibandDynamicEq::parameter_descriptors() con
       const unsigned int band_offset = db * eq::DynamicEq::kParamsPerBand;
       for (unsigned int field = 0; field < eq::DynamicEq::kParamsPerBand; ++field) {
         descriptors.push_back({prefix + kFieldKeys[field], block + band_offset + field});
+        if (field == eq::DynamicEq::kParamsPerBand - 1) {
+          descriptors.push_back({prefix + "lookaheadMs", block + band_offset + field});
+        }
       }
     }
   }

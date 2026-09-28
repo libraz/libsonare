@@ -895,6 +895,20 @@ bool ChannelStrip::apply_insert_parameter(unsigned int insert_index, unsigned in
   return insert->set_parameter(param_id, value);
 }
 
+bool ChannelStrip::constructed_insert_parameter_value(unsigned int insert_index,
+                                                      unsigned int param_id,
+                                                      float* out) const noexcept {
+  const size_t idx = insert_index;
+  const size_t pre_count = pre_inserts_.size();
+  const rt::ProcessorBase* insert = nullptr;
+  if (idx < pre_count) {
+    insert = pre_inserts_[idx].get();
+  } else if (idx - pre_count < post_inserts_.size()) {
+    insert = post_inserts_[idx - pre_count].get();
+  }
+  return insert != nullptr && insert->constructed_parameter_value(param_id, out);
+}
+
 int ChannelStrip::insert_parameter_id_for_key(unsigned int insert_index,
                                               const std::string& key) const noexcept {
   const size_t idx = insert_index;

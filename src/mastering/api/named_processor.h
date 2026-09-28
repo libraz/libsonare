@@ -111,6 +111,14 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // processor_names() are still reported. Ids are emitted sorted.
 std::string processor_catalog_json();
 
+/// @brief Read-only catalog of the built-in amp-sim rigs as a JSON array.
+/// @details One entry per saturation::AmpPreset in amp_preset_names() order:
+/// {"index","name","params"}, where params holds the rig's resolved
+/// AmpSimConfig under the camelCase keys the saturation.ampSim insert accepts
+/// (enums as their integer ordinals). Values come from amp_preset_config(), so
+/// the catalog cannot drift from the DSP presets.
+std::string amp_preset_catalog_json();
+
 /// @brief Canonical field paths for one entry of the processor catalog array.
 /// @details The array is the root, so each path begins with the `[]` element
 /// segment. The `params` and `slots` interiors repeat

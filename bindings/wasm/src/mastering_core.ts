@@ -282,16 +282,8 @@ export interface MasteringAmpPresetCatalogEntry {
  * continue to define the canonical DSP configuration.
  */
 export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
-  const entries = Array.from(requireModule().masteringAmpPresetCatalog()) as Array<{
-    index: number;
-    name: string;
-    params: Record<string, number | boolean>;
-  }>;
-  return entries.map((entry) => ({
-    index: Number(entry.index),
-    name: String(entry.name),
-    params: { ...entry.params },
-  }));
+  const json = requireModule().masteringAmpPresetCatalog();
+  return JSON.parse(json) as MasteringAmpPresetCatalogEntry[];
 }
 
 /**

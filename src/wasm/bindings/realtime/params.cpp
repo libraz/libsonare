@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+
 #include "realtime_engine_wasm.h"
 
 // Canonical AutomationCurve ordinals (Linear=0, Exp=1, Hold=2, SCurve=3) are
@@ -123,6 +125,16 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
                                     "automation breakpoint ppq and value must be finite");
     }
     breakpoints.push_back({ppq, value, automationCurveFromInt(curve)});
+  }
+  if (breakpoints.empty()) {
+    automation_lanes_.erase(
+        std::remove_if(automation_lanes_.begin(), automation_lanes_.end(),
+                       [param_id](const sonare::automation::AutomationLane& existing) {
+                         return existing.target_param_id() == static_cast<uint32_t>(param_id);
+                       }),
+        automation_lanes_.end());
+    engine_.automation().set_lanes(automation_lanes_);
+    return;
   }
   lane.set_points(std::move(breakpoints));
   bool replaced = false;

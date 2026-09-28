@@ -62,11 +62,51 @@ using sonare::mastering::api::Preset;
 using sonare::mastering::api::preset_config;
 using sonare::resource::ProjectImportResourceLimits;
 
+float ConstructedValue(const std::string& name, const std::string& params, const std::string& key) {
+  auto processor = make_insert(name, params);
+  REQUIRE(processor != nullptr);
+  for (const auto& descriptor : processor->parameter_descriptors()) {
+    if (descriptor.key != key) continue;
+    float value = 0.0f;
+    REQUIRE(processor->constructed_parameter_value(descriptor.id, &value));
+    return value;
+  }
+  FAIL("missing realtime parameter descriptor");
+  return 0.0f;
+}
+
 bool ListContains(const std::vector<std::string>& names, const std::string& target) {
   for (const auto& name : names) {
     if (name == target) return true;
   }
   return false;
+}
+
+TEST_CASE("insert construction captures effective realtime parameter values",
+          "[insert][automation]") {
+  REQUIRE_THAT(
+      ConstructedValue("effects.reverb.fdn", R"({"decaySec":12,"hfDamping":0.2})", "decay"),
+      WithinAbs(1.2f, 1e-6f));
+  REQUIRE_THAT(
+      ConstructedValue("effects.reverb.fdn", R"({"decaySec":12,"hfDamping":0.2})", "damping"),
+      WithinAbs(0.2f, 1e-6f));
+  REQUIRE_THAT(ConstructedValue("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})",
+                                "band0.detectorDelayMs"),
+               WithinAbs(8.0f, 1e-6f));
+  REQUIRE_THAT(
+      ConstructedValue("saturation.ampSim", R"({"preset":"britStack","presetIndex":5})", "drive"),
+      WithinAbs(ConstructedValue("saturation.ampSim", R"({"presetIndex":5})", "drive"), 1e-6f));
+  for (const auto& name : insert_factory_names()) {
+    auto processor = make_insert(name, "{}");
+    REQUIRE(processor != nullptr);
+    for (const auto& descriptor : processor->parameter_descriptors()) {
+      if (!processor->parameter_is_realtime_safe(descriptor.id)) continue;
+      float value = 0.0f;
+      INFO(name << ":" << descriptor.key);
+      REQUIRE(processor->constructed_parameter_value(descriptor.id, &value));
+      REQUIRE(std::isfinite(value));
+    }
+  }
 }
 
 // The base64 helpers feed an inline IR to the convolution reverb and to the amp

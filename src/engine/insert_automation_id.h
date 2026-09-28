@@ -21,8 +21,10 @@ namespace sonare::engine {
 ///     [7:0]   param  (8 bits)
 ///
 /// The strip field selects a track lane by index, the master strip
-/// (kInsertStripMaster), or a bus (kInsertStripBusBase - bus_index). The whole id
-/// fits in 32 bits, so no handle table is needed.
+/// (kInsertStripMaster), or a stable bus selector. Bus selectors are allocated
+/// by bus identity from the range below, rather than by the bus's current array
+/// index, so a queued/recorded id cannot move to another bus after a reorder.
+/// The whole id fits in 32 bits, so no handle table is needed.
 constexpr uint32_t kInsertParamTag = 0xE0000000u;
 constexpr uint32_t kInsertParamMask = 0xE0000000u;
 constexpr uint32_t kInsertStripShift = 16u;
@@ -30,10 +32,10 @@ constexpr uint32_t kInsertIndexShift = 8u;
 constexpr uint32_t kInsertStripMask = 0x1FFFu;
 constexpr uint32_t kInsertIndexMask = 0xFFu;
 constexpr uint32_t kInsertParamFieldMask = 0xFFu;
-// Strip selector for the master strip and the bus range (bus N occupies
-// kInsertStripBusBase - N, growing downward from the master sentinel).
+// The stable bus range stops above the track-lane selectors (0..31).
 constexpr uint32_t kInsertStripMaster = 0x1FFFu;
 constexpr uint32_t kInsertStripBusBase = 0x1FFEu;
+constexpr uint32_t kInsertStripBusMin = 0x0020u;
 
 /// Composes a reserved insert-automation parameter id from a strip selector,
 /// insert index, and the processor's integer param id. Each field is masked to

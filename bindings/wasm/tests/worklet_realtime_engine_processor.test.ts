@@ -231,6 +231,46 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('drains a large SAB command snapshot before a structural strip sync', () => {
+      const commandRing = createSonareEngineCommandRingBuffer(2048);
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        {
+          sampleRate: 48000,
+          blockSize: 128,
+          channelCount: 2,
+          commandSharedBuffer: commandRing.sharedBuffer,
+        },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        for (let index = 0; index < 1080; index += 1) {
+          expect(
+            pushSonareEngineCommandRingBuffer(commandRing, {
+              type: SonareEngineCommandType.TransportPlay,
+              sampleTime: 48000,
+            }),
+          ).toBe(true);
+        }
+        processor.receiveSync({
+          type: 'syncMixer',
+          lanes: [{ trackId: 7 }],
+          forceInsertResets: [{ kind: 'track', trackId: 7 }],
+        });
+        expect(Atomics.load(commandRing.header, 1)).toBe(1080);
+        expect(posted).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: SonareEngineTelemetryType.Error,
+              error: SonareEngineTelemetryError.InvalidCommand,
+            }),
+          ]),
+        );
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('routes the cue bus to a second output only when asked', () => {
       const blockSize = 128;
       const clipFrames = blockSize * 4;
@@ -1365,6 +1405,77 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             bpm: 90,
             timeSignature: { numerator: 7, denominator: 8 },
           },
+        });
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('preserves a full block of future commands while restoring insert values', () => {
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 1 },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: 64 });
+        for (let index = 1; index < 64; index++) {
+          processor.receiveCommand({
+            type: SonareEngineCommandType.TransportSeekSample,
+            sampleTime: 64,
+            argInt: 0,
+          });
+        }
+        const insertParams =
+          '{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}';
+        processor.receiveSync({
+          type: 'syncMixer',
+          lanes: [],
+          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"${insertParams}"}]}],"buses":[],"connections":[]}`,
+          insertParamOverrides: [
+            { kind: 'master', insertIndex: 0, paramName: 'band0.gainDb', value: 6 },
+          ],
+        });
+        expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
+        processor.receiveTransportRequest({ type: 'transportRequest', requestId: 42, op: 'state' });
+        expect(posted.at(-1)).toMatchObject({
+          type: 'transportResponse',
+          requestId: 42,
+          ok: true,
+          state: { playing: true },
+        });
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('keeps an overflowed future command queued for the next audio block', () => {
+      const blockSize = 128;
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 1 },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        for (let index = 0; index < 64; index++) {
+          processor.receiveCommand({
+            type: SonareEngineCommandType.TransportSeekSample,
+            sampleTime: 64,
+            argInt: 0,
+          });
+        }
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: 64 });
+        processor.receiveSync({ type: 'syncMixer', lanes: [] });
+        for (let index = 0; index < 2; index++) {
+          expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
+        }
+        processor.receiveTransportRequest({ type: 'transportRequest', requestId: 43, op: 'state' });
+        expect(posted.at(-1)).toMatchObject({
+          type: 'transportResponse',
+          requestId: 43,
+          ok: true,
+          state: { playing: true },
         });
       } finally {
         processor.destroy();

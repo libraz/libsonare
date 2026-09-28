@@ -11,7 +11,6 @@
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/platform_targets.h"
 #include "mastering/match/ab_switcher.h"
-#include "mastering/saturation/amp_presets.h"
 #include "midi/synth/synth_presets.h"
 #include "mixing/api/presets.h"
 #include "sonare.h"
@@ -21,55 +20,12 @@
 
 val js_mastering_processor_names() { return stringVectorToVal(mastering::api::processor_names()); }
 
-// Read-only catalog for the named amp rigs used by saturation.ampSim. Keep the
-// values resolved by the core preset registry rather than duplicating them in
-// a binding table: the Studio UI can display a preset's actual starting knobs
-// while `presetIndex` and sparse overrides remain the source of DSP truth.
-val js_mastering_amp_preset_catalog() {
-  const std::vector<std::string> names = sonare::mastering::saturation::amp_preset_names();
-  val catalog = val::array();
-  for (size_t index = 0; index < names.size(); ++index) {
-    const auto config = sonare::mastering::saturation::amp_preset_config(
-        static_cast<sonare::mastering::saturation::AmpPreset>(index));
-    val params = val::object();
-    params.set("topology", static_cast<int>(config.topology));
-    params.set("inputDb", config.input_db);
-    params.set("drive", config.drive);
-    params.set("bassDb", config.bass_db);
-    params.set("midDb", config.mid_db);
-    params.set("trebleDb", config.treble_db);
-    params.set("presenceDb", config.presence_db);
-    params.set("levelDb", config.level_db);
-    params.set("cab", config.cab);
-    params.set("ampModel", static_cast<int>(config.amp_model));
-    params.set("cabModel", static_cast<int>(config.cab_model));
-    params.set("micModel", static_cast<int>(config.mic_model));
-    params.set("power", config.power);
-    params.set("sag", config.sag);
-    params.set("transformer", config.transformer);
-    params.set("nfb", config.nfb);
-    params.set("micAxis", config.mic_axis);
-    params.set("micDistanceCm", config.mic_distance_cm);
-    params.set("micBlend", config.mic_blend);
-    params.set("micBModel", static_cast<int>(config.mic_b_model));
-    params.set("micBAxis", config.mic_b_axis);
-    params.set("micBDistanceCm", config.mic_b_distance_cm);
-    params.set("micBInvert", config.mic_b_invert);
-    params.set("cone", config.cone);
-    params.set("doppler", config.doppler);
-    params.set("preampStages", config.preamp_stages);
-    params.set("biasShift", config.bias_shift);
-    params.set("crossover", config.crossover);
-    params.set("powerTube", static_cast<int>(config.power_tube));
-
-    val entry = val::object();
-    entry.set("index", index);
-    entry.set("name", names[index]);
-    entry.set("params", params);
-    catalog.call<void>("push", entry);
-  }
-  return catalog;
-}
+// Read-only catalog for the named amp rigs used by saturation.ampSim, as a
+// JSON array string. The TS facade parses it. Keep the values resolved by the
+// core preset registry rather than duplicating them in a binding table: the
+// Studio UI can display a preset's actual starting knobs while `presetIndex`
+// and sparse overrides remain the source of DSP truth.
+std::string js_mastering_amp_preset_catalog() { return mastering::api::amp_preset_catalog_json(); }
 
 // Names of the insert processors the mastering chain can instantiate by name
 // (mastering::api::insert_factory_names). Mirrors the C ABI

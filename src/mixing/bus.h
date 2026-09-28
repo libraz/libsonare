@@ -50,6 +50,11 @@ class BusProcessor : public rt::ProcessorBase {
   // Mirrors ChannelStrip::apply_insert_parameter.
   bool apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
                               float value) noexcept;
+  bool constructed_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
+                                          float* out) const noexcept {
+    return insert_index < inserts_.size() && inserts_[insert_index] != nullptr &&
+           inserts_[insert_index]->constructed_parameter_value(param_id, out);
+  }
   // Toggles bypass for the insert at @p insert_index. When @p reset_on_bypass is
   // true the processor is reset as it is bypassed. Returns false for an
   // out-of-range insert. Mirrors ChannelStrip::set_insert_bypassed.

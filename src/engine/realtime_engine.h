@@ -598,11 +598,29 @@ class RealtimeEngine : private ClipPageRequestSink {
                                                        float value) noexcept;
   bool set_track_insert_param(uint32_t track_id, unsigned int insert_index, const std::string& key,
                               float value) noexcept;
+  /// Applies a track insert edit directly on the engine's owning thread. This
+  /// retargets the insert smoother without enqueueing a command.
+  bool apply_track_insert_param_by_name_now(uint32_t track_id, unsigned int insert_index,
+                                            const std::string& key, float value) noexcept;
+  /// Restores a retained track insert value exactly, clearing any matching
+  /// smoother target first.
+  bool restore_track_insert_param_by_name(uint32_t track_id, unsigned int insert_index,
+                                          const std::string& key, float value) noexcept;
+  /// Drops remembered manual bases for every insert parameter on the current
+  /// track selector and discards its queued insert edits. Never implied by
+  /// set_track_strip: a queued edit may already target the replacement chain.
+  bool clear_track_insert_parameter_bases(uint32_t track_id) noexcept;
   InsertParamSetResult set_master_insert_param_detailed(unsigned int insert_index,
                                                         const std::string& key,
                                                         float value) noexcept;
   bool set_master_insert_param(unsigned int insert_index, const std::string& key,
                                float value) noexcept;
+  bool apply_master_insert_param_by_name_now(unsigned int insert_index, const std::string& key,
+                                             float value) noexcept;
+  bool restore_master_insert_param_by_name(unsigned int insert_index, const std::string& key,
+                                           float value) noexcept;
+  /// Drops remembered manual bases for every master insert parameter.
+  void clear_master_insert_parameter_bases() noexcept;
   // Realtime change of one BUS insert parameter, addressed by JSON-key name. The
   // name is resolved to the integer param_id on the control thread, then applied
   // at the next block head. insert/param must fit in 8 bits.
@@ -610,6 +628,13 @@ class RealtimeEngine : private ClipPageRequestSink {
                                                      const std::string& key, float value) noexcept;
   bool set_bus_insert_param(uint32_t bus_id, unsigned int insert_index, const std::string& key,
                             float value) noexcept;
+  bool apply_bus_insert_param_by_name_now(uint32_t bus_id, unsigned int insert_index,
+                                          const std::string& key, float value) noexcept;
+  bool restore_bus_insert_param_by_name(uint32_t bus_id, unsigned int insert_index,
+                                        const std::string& key, float value) noexcept;
+  /// Drops remembered manual bases for every insert parameter on a bus identity.
+  /// The selector remains stable even when the bus was already tombstoned.
+  bool clear_bus_insert_parameter_bases(uint32_t bus_id) noexcept;
   // Resolves a track-lane / master / bus insert parameter (JSON-key name) to the
   // reserved insert-automation id used by setAutomationLane / setParameter. The
   // returned id encodes (strip selector, insert index, processor param id) in the
@@ -672,6 +697,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// audible block renders at the settled values instead of ramping in from
   /// defaults. Not safe concurrently with a running audio thread.
   void settle_parameters() noexcept;
+  void settle_insert_parameters() noexcept;
+  /// Applies only commands due at the current render frame while keeping
+  /// future commands in their original FIFO order. Control-thread/offline
+  /// mirror helper; unlike flush_control_commands it never drains a future
+  /// event or overfills the pending bank.
+  void apply_commands_due_now_preserving_future() noexcept;
   /// Runs the offline pre-roll a one-shot render needs before its first audible
   /// block: applies every queued command, renders one throwaway block so lane
   /// automation resolves at the start position, then calls
@@ -775,6 +806,22 @@ class RealtimeEngine : private ClipPageRequestSink {
   void release_instrument_automations(uint32_t destination_id) noexcept;
 #endif
 #if defined(SONARE_WITH_MIXING)
+  // Control-thread-only invalidation used before a full insert-strip
+  // replacement. Removes queued and already-staged insert edits for one
+  // selector so a future command cannot retarget the replacement strip.
+  void discard_insert_commands_for_selector(uint32_t selector) noexcept;
+  // Removes queued and staged commands for every selector historically bound
+  // to one bus identity. A bus can have several generations after
+  // remove/re-add, so clearing only its active selector leaves stale ids.
+  void discard_insert_commands_for_bus_id(uint32_t bus_id) noexcept;
+  // Removes commands for retired bus selectors in one queue/pending pass after
+  // an accepted bus-list replacement. This keeps removal bounded by the live
+  // command storage rather than the full selector namespace.
+  void discard_insert_commands_for_retired_bus_selectors() noexcept;
+  // Fallback for insert ids whose manual table entry was purged during a full
+  // strip replacement. The immutable construction metadata belongs to the
+  // processor instance and is read without allocation on the audio thread.
+  bool constructed_insert_parameter_base(uint32_t target_id, float* out_value) const noexcept;
   // Sets the smoothed target of a master-strip insert parameter from a reserved
   // automation lane. The master insert chain lives outside TrackMixerRuntime, so
   // its automated params get a parallel slot table here, advanced once per

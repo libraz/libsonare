@@ -11,6 +11,23 @@ namespace sonare::engine {
 
 using sonare::constants::kFloorDb;
 
+namespace {
+
+template <typename Bus>
+auto constructed_bus_parameter_value(const Bus& bus, unsigned int insert_index,
+                                     unsigned int param_id, float* out_value, int) noexcept
+    -> decltype(bus.constructed_insert_parameter_value(insert_index, param_id, out_value)) {
+  return bus.constructed_insert_parameter_value(insert_index, param_id, out_value);
+}
+
+template <typename Bus>
+bool constructed_bus_parameter_value(const Bus&, unsigned int, unsigned int, float*,
+                                     long) noexcept {
+  return false;
+}
+
+}  // namespace
+
 bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param_id,
                                            float value) noexcept {
   acquire_lanes();
@@ -138,6 +155,71 @@ bool TrackMixerRuntime::resolve_track_insert_param(uint32_t track_id, unsigned i
   return false;
 }
 
+bool TrackMixerRuntime::apply_track_insert_param_by_name_now(uint32_t track_id,
+                                                             unsigned int insert_index,
+                                                             const std::string& key,
+                                                             float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  size_t lane_index = 0;
+  unsigned int param_id = 0;
+  if (!resolve_track_insert_param(track_id, insert_index, key, &lane_index, &param_id)) {
+    return false;
+  }
+  // A direct edit may arrive before the first render has acquired a newly
+  // published lane snapshot (offline mirror and worklet both use this path).
+  // Arrange the audio-side lane state before claiming the smoother slot.
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
+  }
+  return route_lane_insert_param_smoothed(lane_index, insert_index, param_id, value);
+}
+
+bool TrackMixerRuntime::restore_track_insert_param_by_name(uint32_t track_id,
+                                                           unsigned int insert_index,
+                                                           const std::string& key,
+                                                           float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  size_t lane_index = 0;
+  unsigned int param_id = 0;
+  if (!resolve_track_insert_param(track_id, insert_index, key, &lane_index, &param_id)) {
+    return false;
+  }
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
+  }
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.assigned && !slot.is_bus && slot.index == lane_index &&
+        slot.insert_index == insert_index && slot.param_id == param_id) {
+      slot.active = false;
+      slot.assigned = false;
+    }
+  }
+  return apply_lane_insert_parameter(lane_index, insert_index, param_id, value);
+}
+
+bool TrackMixerRuntime::track_insert_constructed_parameter_value(uint32_t track_id,
+                                                                 unsigned int insert_index,
+                                                                 unsigned int param_id,
+                                                                 float* out_value) const noexcept {
+  if (out_value == nullptr) return false;
+  const mixing::ChannelStrip* strip = bound_strip_for(track_id);
+  return strip != nullptr &&
+         strip->constructed_insert_parameter_value(insert_index, param_id, out_value);
+}
+
+bool TrackMixerRuntime::track_insert_constructed_parameter_value_by_selector(
+    uint32_t selector, unsigned int insert_index, unsigned int param_id,
+    float* out_value) const noexcept {
+  if (out_value == nullptr || selector >= kMaxTrackLanes) return false;
+  // release_parameter_base() runs from the audio thread. Read the already
+  // prepared lane state instead of the control-side binding/snapshot tables.
+  const LaneState& lane = lane_states_[selector];
+  return lane.track_id != 0 && lane.strip != nullptr &&
+         lane.strip->constructed_insert_parameter_value(insert_index, param_id, out_value);
+}
+
 bool TrackMixerRuntime::apply_lane_insert_parameter(size_t lane_index, unsigned int insert_index,
                                                     unsigned int param_id, float value) noexcept {
   if (lane_index >= lane_states_.size()) return false;
@@ -161,6 +243,44 @@ bool TrackMixerRuntime::resolve_bus_insert_param(uint32_t bus_id, unsigned int i
   return false;
 }
 
+bool TrackMixerRuntime::apply_bus_insert_param_by_name_now(uint32_t bus_id,
+                                                           unsigned int insert_index,
+                                                           const std::string& key,
+                                                           float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  size_t bus_index = 0;
+  unsigned int param_id = 0;
+  if (!resolve_bus_insert_param(bus_id, insert_index, key, &bus_index, &param_id)) return false;
+  return route_bus_insert_param_smoothed_by_id(bus_id, insert_index, param_id, value);
+}
+
+bool TrackMixerRuntime::restore_bus_insert_param_by_name(uint32_t bus_id, unsigned int insert_index,
+                                                         const std::string& key,
+                                                         float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  size_t bus_index = 0;
+  unsigned int param_id = 0;
+  if (!resolve_bus_insert_param(bus_id, insert_index, key, &bus_index, &param_id)) return false;
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.assigned && slot.is_bus && slot.bus_id == bus_id &&
+        slot.insert_index == insert_index && slot.param_id == param_id) {
+      slot.active = false;
+      slot.assigned = false;
+    }
+  }
+  return apply_bus_insert_parameter(bus_index, insert_index, param_id, value);
+}
+
+bool TrackMixerRuntime::bus_insert_constructed_parameter_value(uint32_t bus_id,
+                                                               unsigned int insert_index,
+                                                               unsigned int param_id,
+                                                               float* out_value) const noexcept {
+  if (out_value == nullptr) return false;
+  const BusState* state = bus_state_for(bus_id);
+  return state != nullptr && state->bus != nullptr &&
+         constructed_bus_parameter_value(state->bus->bus(), insert_index, param_id, out_value, 0);
+}
+
 bool TrackMixerRuntime::apply_bus_insert_parameter(size_t bus_index, unsigned int insert_index,
                                                    unsigned int param_id, float value) noexcept {
   if (bus_index >= bus_states_.size()) return false;
@@ -170,12 +290,13 @@ bool TrackMixerRuntime::apply_bus_insert_parameter(size_t bus_index, unsigned in
 }
 
 TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
-    bool is_bus, size_t index, unsigned int insert_index, unsigned int param_id,
+    bool is_bus, size_t index, uint32_t bus_id, unsigned int insert_index, unsigned int param_id,
     float value) noexcept {
   InsertAutoSlot* free_slot = nullptr;
   InsertAutoSlot* settled_match = nullptr;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    if (slot.assigned && slot.is_bus == is_bus && slot.index == index &&
+    if (slot.assigned && slot.is_bus == is_bus &&
+        (is_bus ? slot.bus_id == bus_id : slot.index == index) &&
         slot.insert_index == insert_index && slot.param_id == param_id) {
       if (slot.active) return &slot;
       settled_match = &slot;
@@ -196,6 +317,7 @@ TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
   free_slot->assigned = true;
   free_slot->is_bus = is_bus;
   free_slot->index = index;
+  free_slot->bus_id = bus_id;
   free_slot->insert_index = insert_index;
   free_slot->param_id = param_id;
   // Snap to the first observed value so the smoother does not glide up from the
@@ -213,7 +335,7 @@ bool TrackMixerRuntime::route_lane_insert_param_smoothed(size_t lane_index,
     return false;
   }
   InsertAutoSlot* slot =
-      find_or_claim_insert_slot(false, lane_index, insert_index, param_id, value);
+      find_or_claim_insert_slot(false, lane_index, 0, insert_index, param_id, value);
   if (slot == nullptr) return false;
   slot->smoother.set_target(value);
   return true;
@@ -226,10 +348,22 @@ bool TrackMixerRuntime::route_bus_insert_param_smoothed(size_t bus_index, unsign
   if (bus_index >= bus_states_.size() || bus_states_[bus_index].bus == nullptr) {
     return false;
   }
-  InsertAutoSlot* slot = find_or_claim_insert_slot(true, bus_index, insert_index, param_id, value);
+  const uint32_t bus_id = bus_states_[bus_index].bus_id;
+  InsertAutoSlot* slot =
+      find_or_claim_insert_slot(true, bus_index, bus_id, insert_index, param_id, value);
   if (slot == nullptr) return false;
   slot->smoother.set_target(value);
   return true;
+}
+
+bool TrackMixerRuntime::route_bus_insert_param_smoothed_by_id(uint32_t bus_id,
+                                                              unsigned int insert_index,
+                                                              unsigned int param_id,
+                                                              float value) noexcept {
+  const int bus_index = configured_bus_index(bus_id);
+  if (bus_index < 0) return false;
+  return route_bus_insert_param_smoothed(static_cast<size_t>(bus_index), insert_index, param_id,
+                                         value);
 }
 
 void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {
@@ -239,6 +373,13 @@ void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_samples);
     if (slot.is_bus) {
+      const int bus_index = configured_bus_index(slot.bus_id);
+      if (bus_index < 0) {
+        slot.active = false;
+        slot.assigned = false;
+        continue;
+      }
+      slot.index = static_cast<size_t>(bus_index);
       apply_bus_insert_parameter(slot.index, slot.insert_index, slot.param_id, value);
     } else {
       apply_lane_insert_parameter(slot.index, slot.insert_index, slot.param_id, value);
@@ -495,6 +636,18 @@ int TrackMixerRuntime::find_sidechain_binding(SidechainTargetKind target_kind, u
     }
   }
   return -1;
+}
+
+void TrackMixerRuntime::prune_lane_sidechains(uint32_t track_id, size_t insert_count) noexcept {
+  for (size_t i = sidechain_binding_count_.load(std::memory_order_relaxed); i > 0; --i) {
+    const SidechainBinding& binding = sidechain_bindings_[i - 1];
+    if (static_cast<SidechainTargetKind>(binding.target_kind.load(std::memory_order_relaxed)) ==
+            SidechainTargetKind::Lane &&
+        binding.target_id.load(std::memory_order_relaxed) == track_id &&
+        binding.insert_index.load(std::memory_order_relaxed) >= insert_count) {
+      remove_sidechain_binding(i - 1);
+    }
+  }
 }
 
 void TrackMixerRuntime::remove_sidechain_binding(size_t index) noexcept {

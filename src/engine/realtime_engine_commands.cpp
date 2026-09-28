@@ -77,7 +77,16 @@ bool RealtimeEngine::parameter_base_lookup(uint32_t target_id, float* out_value)
 
 void RealtimeEngine::release_parameter_base(uint32_t target_id) noexcept {
   float value = 0.0f;
-  if (!parameter_base_lookup(target_id, &value)) return;  // No manual value was ever sent.
+  bool found = parameter_base_lookup(target_id, &value);
+#if defined(SONARE_WITH_MIXING)
+  // A full insert-strip replacement intentionally purges the mutable manual
+  // table. Reconstructing a DSP processor on the audio thread is forbidden;
+  // insert factories attach an immutable construction baseline instead.
+  if (!found && is_insert_param_id(target_id)) {
+    found = constructed_insert_parameter_base(target_id, &value);
+  }
+#endif
+  if (!found) return;  // No manual or construction baseline is available.
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
   if (parameter_target_reserved(target_id)) {
     route_engine_parameter(target_id, value);
@@ -92,6 +101,105 @@ void RealtimeEngine::release_parameter_base(uint32_t target_id) noexcept {
 void RealtimeEngine::release_parameter_base_thunk(void* context, uint32_t param_id) noexcept {
   static_cast<RealtimeEngine*>(context)->release_parameter_base(param_id);
 }
+
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+bool command_targets_insert_selector(const rt::Command& command, uint32_t selector) noexcept {
+  switch (command.type) {
+    case rt::CommandType::kSetParam:
+    case rt::CommandType::kSetParamSmoothed:
+      return is_insert_param_id(command.target_id) &&
+             insert_param_strip(command.target_id) == selector;
+    case rt::CommandType::kSetTrackInsertParam:
+      // The legacy track command stores the lane selector in the high byte of
+      // target_id. Bus selectors must never match this positional vocabulary.
+      return selector < kInsertStripBusMin && ((command.target_id >> 16u) & 0xFFu) == selector;
+    case rt::CommandType::kSetMasterInsertParam:
+      // The legacy master command has no strip field; its only valid selector
+      // is the reserved master value.
+      return selector == kInsertStripMaster;
+    default:
+      return false;
+  }
+}
+
+template <size_t N, typename Predicate>
+void discard_insert_commands_if(std::array<rt::Command, N>& pending,
+                                std::array<bool, N>& pending_active,
+                                rt::SpscQueue<rt::Command>& commands,
+                                Predicate&& predicate) noexcept {
+  // Remove matching staged records and compact the fixed bank so unrelated
+  // records retain their order and their due-time behavior.
+  size_t out = 0;
+  for (size_t i = 0; i < pending.size(); ++i) {
+    if (!pending_active[i]) continue;
+    if (predicate(pending[i])) {
+      pending_active[i] = false;
+      continue;
+    }
+    if (out != i) {
+      pending[out] = pending[i];
+      pending_active[out] = true;
+      pending_active[i] = false;
+    }
+    ++out;
+  }
+
+  // The command ring is control-thread-owned while strip/bus replacement runs
+  // (the same contract as the clear_* APIs). Rotate exactly the snapshot that
+  // was present at entry, preserving FIFO order without allocating or adding
+  // records, so a full queue cannot turn the scrub into an overflow.
+  const size_t queued = commands.size_approx();
+  for (size_t i = 0; i < queued; ++i) {
+    rt::Command command{};
+    if (!commands.pop(command)) break;
+    if (predicate(command)) continue;
+    (void)commands.push(command);
+  }
+}
+
+}  // namespace
+
+void RealtimeEngine::discard_insert_commands_for_selector(uint32_t selector) noexcept {
+  discard_insert_commands_if(pending_, pending_active_, commands_,
+                             [selector](const rt::Command& command) noexcept {
+                               return command_targets_insert_selector(command, selector);
+                             });
+}
+
+void RealtimeEngine::discard_insert_commands_for_bus_id(uint32_t bus_id) noexcept {
+  if (bus_id == 0) return;
+  discard_insert_commands_if(
+      pending_, pending_active_, commands_, [this, bus_id](const rt::Command& command) noexcept {
+        if (command.type != rt::CommandType::kSetParam &&
+            command.type != rt::CommandType::kSetParamSmoothed) {
+          return false;
+        }
+        if (!is_insert_param_id(command.target_id)) return false;
+        const uint32_t selector = insert_param_strip(command.target_id);
+        return selector >= kInsertStripBusMin && selector <= kInsertStripBusBase &&
+               track_mixer_runtime_.bus_id_for_insert_automation_selector_for_clear(selector) ==
+                   bus_id;
+      });
+}
+
+void RealtimeEngine::discard_insert_commands_for_retired_bus_selectors() noexcept {
+  discard_insert_commands_if(
+      pending_, pending_active_, commands_, [this](const rt::Command& command) noexcept {
+        if (command.type != rt::CommandType::kSetParam &&
+            command.type != rt::CommandType::kSetParamSmoothed) {
+          return false;
+        }
+        if (!is_insert_param_id(command.target_id)) return false;
+        const uint32_t selector = insert_param_strip(command.target_id);
+        return selector >= kInsertStripBusMin && selector <= kInsertStripBusBase &&
+               track_mixer_runtime_.bus_id_for_insert_automation_selector_for_clear(selector) !=
+                   0 &&
+               track_mixer_runtime_.bus_id_for_insert_automation_selector(selector) == 0;
+      });
+}
+#endif
 
 #if defined(SONARE_WITH_GRAPH)
 bool RealtimeEngine::swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
@@ -544,6 +652,13 @@ void RealtimeEngine::settle_parameters() noexcept {
 #endif
 }
 
+void RealtimeEngine::settle_insert_parameters() noexcept {
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.settle_insert_automations();
+  settle_master_insert_automations();
+#endif
+}
+
 void RealtimeEngine::flush_control_commands() noexcept {
   const int64_t render_frame = transport_.render_frame();
   while (!commands_.empty()) {
@@ -553,6 +668,33 @@ void RealtimeEngine::flush_control_commands() noexcept {
   // A previous drain may have populated due commands even if the queue was
   // already empty when this method was entered.
   apply_due_commands(render_frame);
+}
+
+void RealtimeEngine::apply_commands_due_now_preserving_future() noexcept {
+  const int64_t render_frame = transport_.render_frame();
+  // Commands already staged in the pending bank precede anything still in the
+  // queue. Apply only the due subset; future entries remain untouched.
+  apply_due_commands(render_frame);
+
+  // Snapshot the queue length before rotating future commands back into it.
+  // Popping and immediately re-pushing a future command preserves FIFO order,
+  // while the fixed iteration count prevents those commands from cycling
+  // forever. The control thread is the sole producer for this queue.
+  const size_t queued = commands_.size_approx();
+  for (size_t i = 0; i < queued; ++i) {
+    rt::Command command{};
+    if (!commands_.pop(command)) break;
+    if (command.sample_time < 0 || command.sample_time <= render_frame) {
+      command.sample_time = render_frame;
+      apply_command(command);
+      continue;
+    }
+    // A pop made one slot available, so a command that was present in the
+    // snapshot can always be returned to the queue. Fail closed if a future
+    // producer races this control-only helper; the normal contract has no
+    // concurrent producer.
+    (void)commands_.push(command);
+  }
 }
 
 bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {

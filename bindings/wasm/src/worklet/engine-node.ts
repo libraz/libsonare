@@ -281,6 +281,9 @@ export class SonareRealtimeEngineNode {
       'commandRingCapacity',
       1,
     );
+    if (commandRingCapacity > 65536) {
+      throw new RangeError('commandRingCapacity must be at most 65536');
+    }
     const telemetryRingCapacity = requireIntegerOption(
       options.telemetryRingCapacity,
       128,

@@ -272,6 +272,8 @@ class ChannelStrip : public rt::ProcessorBase {
   // out-of-range insert or a param the processor reports non-RT-safe.
   bool apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
                               float value) noexcept;
+  bool constructed_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
+                                          float* out) const noexcept;
   // Resolves a processor JSON-key parameter name to its integer param_id for the
   // insert at @p insert_index, or -1 if unknown. Control-thread API: reads the
   // processor's static descriptor table, touching no mutable audio state.

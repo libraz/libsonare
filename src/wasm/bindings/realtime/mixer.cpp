@@ -14,7 +14,7 @@ namespace {
 // Reads an optional `sends` array off a track lane or bus object, in the one
 // shape both share. sendTiming mirrors SonareSendTiming (0 post, 1 pre) and
 // defaults to post-fader.
-std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& owner) {
+std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner) {
   std::vector<sonare::engine::TrackLaneConfig::Send> out;
   if (owner["sends"].isUndefined() || owner["sends"].isNull()) return out;
   val sends = owner["sends"];
@@ -75,7 +75,7 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
       }
       config.source_layout = static_cast<sonare::ChannelLayout>(raw_layout);
     }
-    if (lane_val.typeOf().as<std::string>() == "object") config.sends = readSends(lane_val);
+    if (lane_val.typeOf().as<std::string>() == "object") config.sends = readOptionalSends(lane_val);
     configs.push_back(std::move(config));
   }
   if (!engine_.set_track_lanes(std::move(configs))) {
@@ -127,7 +127,7 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
                                           floatProperty(bus, "gainDb", 0.0f),
                                           static_cast<sonare::ChannelLayout>(layout_value)};
     config.output_bus_id = static_cast<uint32_t>(intProperty(bus, "outputBusId", 0));
-    config.sends = readSends(bus);
+    config.sends = readOptionalSends(bus);
     configs.push_back(std::move(config));
   }
   if (!engine_.set_track_buses(std::move(configs))) {
@@ -390,6 +390,61 @@ void RealtimeEngineWasm::setTrackStripInsertParamByName(const val& track_id_val,
 #endif
 }
 
+bool RealtimeEngineWasm::applyTrackStripInsertParamByNameNow(const val& track_id_val,
+                                                             const val& insert_index_val,
+                                                             const std::string& param_name,
+                                                             const val& value_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
+#if defined(SONARE_WITH_MIXING)
+  return engine_.apply_track_insert_param_by_name_now(track_id, insert_index, param_name, value);
+#else
+  (void)track_id;
+  (void)insert_index;
+  (void)param_name;
+  (void)value;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::clearTrackStripInsertParameterBases(const val& track_id_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.clear_track_insert_parameter_bases(track_id)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid track strip insert base target");
+  }
+#else
+  (void)track_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::restoreTrackStripInsertParamByName(const val& track_id_val,
+                                                            const val& insert_index_val,
+                                                            const std::string& param_name,
+                                                            const val& value_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.restore_track_insert_param_by_name(track_id, insert_index, param_name, value)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid track strip insert parameter target");
+  }
+#else
+  (void)track_id;
+  (void)insert_index;
+  (void)param_name;
+  (void)value;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void RealtimeEngineWasm::setMasterStripInsertParamByName(const val& insert_index_val,
                                                          const std::string& param_name,
                                                          const val& value_val) {
@@ -404,6 +459,50 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(const val& insert_index
   if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue master strip insert parameter");
+  }
+#else
+  (void)insert_index;
+  (void)param_name;
+  (void)value;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+bool RealtimeEngineWasm::applyMasterStripInsertParamByNameNow(const val& insert_index_val,
+                                                              const std::string& param_name,
+                                                              const val& value_val) {
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
+#if defined(SONARE_WITH_MIXING)
+  return engine_.apply_master_insert_param_by_name_now(insert_index, param_name, value);
+#else
+  (void)insert_index;
+  (void)param_name;
+  (void)value;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::clearMasterStripInsertParameterBases() {
+#if defined(SONARE_WITH_MIXING)
+  engine_.clear_master_insert_parameter_bases();
+#else
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::restoreMasterStripInsertParamByName(const val& insert_index_val,
+                                                             const std::string& param_name,
+                                                             const val& value_val) {
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.restore_master_insert_param_by_name(insert_index, param_name, value)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid master strip insert parameter target");
   }
 #else
   (void)insert_index;
@@ -431,6 +530,61 @@ void RealtimeEngineWasm::setBusStripInsertParamByName(const val& bus_id_val,
   if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue bus strip insert parameter");
+  }
+#else
+  (void)bus_id;
+  (void)insert_index;
+  (void)param_name;
+  (void)value;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+bool RealtimeEngineWasm::applyBusStripInsertParamByNameNow(const val& bus_id_val,
+                                                           const val& insert_index_val,
+                                                           const std::string& param_name,
+                                                           const val& value_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
+#if defined(SONARE_WITH_MIXING)
+  return engine_.apply_bus_insert_param_by_name_now(bus_id, insert_index, param_name, value);
+#else
+  (void)bus_id;
+  (void)insert_index;
+  (void)param_name;
+  (void)value;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::clearBusStripInsertParameterBases(const val& bus_id_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.clear_bus_insert_parameter_bases(bus_id)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip insert base target");
+  }
+#else
+  (void)bus_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+void RealtimeEngineWasm::restoreBusStripInsertParamByName(const val& bus_id_val,
+                                                          const val& insert_index_val,
+                                                          const std::string& param_name,
+                                                          const val& value_val) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.restore_bus_insert_param_by_name(bus_id, insert_index, param_name, value)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip insert parameter target");
   }
 #else
   (void)bus_id;
@@ -670,9 +824,27 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("setMasterStripInsertBypassed", &RealtimeEngineWasm::setMasterStripInsertBypassed)
       .function("setTrackStripInsertParamByName",
                 &RealtimeEngineWasm::setTrackStripInsertParamByName)
+      .function("applyTrackStripInsertParamByNameNow",
+                &RealtimeEngineWasm::applyTrackStripInsertParamByNameNow)
+      .function("restoreTrackStripInsertParamByName",
+                &RealtimeEngineWasm::restoreTrackStripInsertParamByName)
+      .function("clearTrackInsertParameterBases",
+                &RealtimeEngineWasm::clearTrackStripInsertParameterBases)
       .function("setMasterStripInsertParamByName",
                 &RealtimeEngineWasm::setMasterStripInsertParamByName)
+      .function("applyMasterStripInsertParamByNameNow",
+                &RealtimeEngineWasm::applyMasterStripInsertParamByNameNow)
+      .function("restoreMasterStripInsertParamByName",
+                &RealtimeEngineWasm::restoreMasterStripInsertParamByName)
+      .function("clearMasterInsertParameterBases",
+                &RealtimeEngineWasm::clearMasterStripInsertParameterBases)
       .function("setBusStripInsertParamByName", &RealtimeEngineWasm::setBusStripInsertParamByName)
+      .function("applyBusStripInsertParamByNameNow",
+                &RealtimeEngineWasm::applyBusStripInsertParamByNameNow)
+      .function("restoreBusStripInsertParamByName",
+                &RealtimeEngineWasm::restoreBusStripInsertParamByName)
+      .function("clearBusInsertParameterBases",
+                &RealtimeEngineWasm::clearBusStripInsertParameterBases)
       .function("setBusStripInsertBypassed", &RealtimeEngineWasm::setBusStripInsertBypassed)
       .function("resolveTrackInsertAutomationId",
                 &RealtimeEngineWasm::resolveTrackInsertAutomationId)

@@ -3,10 +3,12 @@
 /// @file processor_base.h
 /// @brief Base interface for stateful mastering processors.
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "rt/overflow_counter.h"
@@ -33,26 +35,30 @@ class ProcessorBase {
   ProcessorBase(const ProcessorBase& other)
       : bypassed_(other.bypassed_.load(std::memory_order_acquire)),
         detector_excluded_channel_(
-            other.detector_excluded_channel_.load(std::memory_order_acquire)) {}
+            other.detector_excluded_channel_.load(std::memory_order_acquire)),
+        constructed_parameter_values_(other.constructed_parameter_values_) {}
   ProcessorBase& operator=(const ProcessorBase& other) {
     if (this != &other) {
       bypassed_.store(other.bypassed_.load(std::memory_order_acquire), std::memory_order_release);
       detector_excluded_channel_.store(
           other.detector_excluded_channel_.load(std::memory_order_acquire),
           std::memory_order_release);
+      constructed_parameter_values_ = other.constructed_parameter_values_;
     }
     return *this;
   }
   ProcessorBase(ProcessorBase&& other) noexcept
       : bypassed_(other.bypassed_.load(std::memory_order_acquire)),
         detector_excluded_channel_(
-            other.detector_excluded_channel_.load(std::memory_order_acquire)) {}
+            other.detector_excluded_channel_.load(std::memory_order_acquire)),
+        constructed_parameter_values_(std::move(other.constructed_parameter_values_)) {}
   ProcessorBase& operator=(ProcessorBase&& other) noexcept {
     if (this != &other) {
       bypassed_.store(other.bypassed_.load(std::memory_order_acquire), std::memory_order_release);
       detector_excluded_channel_.store(
           other.detector_excluded_channel_.load(std::memory_order_acquire),
           std::memory_order_release);
+      constructed_parameter_values_ = std::move(other.constructed_parameter_values_);
     }
     return *this;
   }
@@ -212,6 +218,25 @@ class ProcessorBase {
   // safe to call concurrently with process() on the audio thread.
   virtual std::vector<ParamDescriptor> parameter_descriptors() const { return {}; }
 
+  /// The insert factory supplies the effective values of realtime parameters
+  /// after aliases, presets, and construction-time conversions have resolved.
+  /// Publish before the processor is handed to an audio thread.
+  void set_constructed_parameter_values(std::vector<std::pair<unsigned int, float>> values) {
+    std::sort(values.begin(), values.end(),
+              [](const auto& left, const auto& right) { return left.first < right.first; });
+    constructed_parameter_values_ = std::move(values);
+  }
+
+  /// Lookup is allocation-free and reads only immutable construction metadata.
+  bool constructed_parameter_value(unsigned int id, float* out) const noexcept {
+    const auto it = std::lower_bound(
+        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), id,
+        [](const auto& entry, unsigned int value) { return entry.first < value; });
+    if (it == constructed_parameter_values_.end() || it->first != id) return false;
+    *out = it->second;
+    return true;
+  }
+
   // Opaque instance-state persistence for host session save/restore. save_state
   // appends the processor's full restorable state (preset + automatable
   // parameter values, voice config, etc.) to @p out as an OPAQUE byte span and
@@ -249,6 +274,7 @@ class ProcessorBase {
  private:
   std::atomic<bool> bypassed_{false};
   std::atomic<int> detector_excluded_channel_{-1};
+  std::vector<std::pair<unsigned int, float>> constructed_parameter_values_;
   OverflowCounter non_finite_discards_;
 };
 

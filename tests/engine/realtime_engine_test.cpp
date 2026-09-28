@@ -11,6 +11,9 @@
 
 #include "engine/clip_player.h"
 #include "engine/engine_controller.h"
+#if defined(SONARE_WITH_MIXING)
+#include "engine/insert_automation_id.h"
+#endif
 #include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
 #include "transport/tempo_map.h"
@@ -123,6 +126,33 @@ class CaptureProcessor final : public sonare::rt::ProcessorBase {
   std::array<float, 8> values{};
   int count = 0;
 };
+
+#if defined(SONARE_WITH_MIXING)
+class InsertCommandProbe final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  bool set_parameter(unsigned int param_id, float value) override {
+    if (param_id == 0) {
+      insert_value = value;
+      ++insert_count;
+      return true;
+    }
+    if (param_id == 7) {
+      unrelated_value = value;
+      ++unrelated_count;
+      return true;
+    }
+    return false;
+  }
+
+  float insert_value = 1.0f;
+  float unrelated_value = 0.0f;
+  int insert_count = 0;
+  int unrelated_count = 0;
+};
+#endif
 
 #if defined(SONARE_WITH_GRAPH)
 class GraphLatencyProcessor final : public sonare::rt::ProcessorBase {
@@ -602,6 +632,247 @@ TEST_CASE("ParameterBaseTable reports capacity overflow once max_entries is reac
   REQUIRE(table.lookup(2, &value));
   REQUIRE(value == -2.0f);
 }
+
+TEST_CASE("ParameterBaseTable erase_if preserves collision chains", "[engine]") {
+  sonare::engine::ParameterBaseTable table;
+  table.prepare(8, 8);
+
+  // These ids all hash to slot 1 when the table uses its mask. Removing the
+  // first one must not make either later entry look absent.
+  REQUIRE(table.record(1, 1.0f));
+  REQUIRE(table.record(9, 9.0f));
+  REQUIRE(table.record(17, 17.0f));
+  REQUIRE(table.entry_count() == 3);
+
+  REQUIRE(table.erase_if([](uint32_t id, float) noexcept { return id == 1; }) == 1u);
+  float value = 0.0f;
+  REQUIRE_FALSE(table.lookup(1, &value));
+  REQUIRE(table.lookup(9, &value));
+  REQUIRE(value == 9.0f);
+  REQUIRE(table.lookup(17, &value));
+  REQUIRE(value == 17.0f);
+
+  // A subsequent insert reuses the tombstone while retaining the existing
+  // collision chain and entry count semantics.
+  REQUIRE(table.record(25, 25.0f));
+  REQUIRE(table.lookup(25, &value));
+  REQUIRE(value == 25.0f);
+  REQUIRE(table.entry_count() == 3);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("Clearing an insert base drops queued and pending stale commands",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  constexpr int64_t kFuture = 1000;
+
+  sonare::mixing::ChannelStrip strip;
+  auto probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* probe_ptr = probe.get();
+  strip.add_pre_insert(std::move(probe));
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, /*command_capacity=*/128);
+  REQUIRE(engine.set_track_lanes({{10}}));
+  REQUIRE(engine.bind_track_strip(10, &strip));
+  REQUIRE(engine.automation().bind_target(7, probe_ptr));
+
+  const uint32_t stale_id = sonare::engine::make_insert_param_id(0, 0, 0);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  // Fill the first drain batch with unrelated future commands. The two stale
+  // insert commands then remain in the command ring, followed by an unrelated
+  // command whose FIFO position must survive the scrub.
+  for (uint32_t i = 0; i < sonare::engine::RealtimeEngine::kMaxCommandsPerBlock - 1; ++i) {
+    sonare::rt::Command filler{};
+    filler.type = sonare::rt::CommandType::kSetParam;
+    filler.target_id = 7;
+    filler.sample_time = kFuture;
+    filler.arg.f = static_cast<float>(i);
+    REQUIRE(engine.push_command(filler));
+  }
+  sonare::rt::Command stale_generic{};
+  stale_generic.type = sonare::rt::CommandType::kSetParam;
+  stale_generic.target_id = stale_id;
+  stale_generic.sample_time = kFuture;
+  stale_generic.arg.f = 0.25f;
+  REQUIRE(engine.push_command(stale_generic));
+
+  sonare::rt::Command stale_legacy{};
+  stale_legacy.type = sonare::rt::CommandType::kSetTrackInsertParam;
+  stale_legacy.target_id = 0;  // lane 0, insert 0, param 0
+  stale_legacy.sample_time = kFuture;
+  stale_legacy.arg.f = 0.5f;
+  REQUIRE(engine.push_command(stale_legacy));
+
+  sonare::rt::Command unrelated{};
+  unrelated.type = sonare::rt::CommandType::kSetParam;
+  unrelated.target_id = 7;
+  unrelated.sample_time = kFuture;
+  unrelated.arg.f = 777.0f;
+  REQUIRE(engine.push_command(unrelated));
+
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);  // drains 64; stale commands remain queued
+  REQUIRE(engine.clear_track_insert_parameter_bases(10));
+
+  for (int block = 0; block < 20; ++block) {
+    output.fill(0.0f);
+    engine.process(io, 1, kBlock);
+  }
+
+  // The unrelated command made it through the queue rotation, while both
+  // legacy and tagged insert commands were discarded before they could claim
+  // the insert smoother.
+  REQUIRE(probe_ptr->unrelated_count > 0);
+  REQUIRE(probe_ptr->unrelated_value == 777.0f);
+  REQUIRE(probe_ptr->insert_count == 0);
+  REQUIRE(probe_ptr->insert_value == 1.0f);
+
+  // Repeat with commands that have already entered pending_. This exercises
+  // the fixed-bank compaction path separately from queue rotation.
+  const int64_t pending_time = engine.transport().render_frame() + 128;
+  stale_generic.sample_time = pending_time;
+  stale_generic.arg.f = 0.125f;
+  REQUIRE(engine.push_command(stale_generic));
+  stale_legacy.sample_time = pending_time;
+  stale_legacy.arg.f = 0.875f;
+  REQUIRE(engine.push_command(stale_legacy));
+  engine.process(io, 1, kBlock);  // both stale commands are staged as future
+  REQUIRE(engine.clear_track_insert_parameter_bases(10));
+  for (int block = 0; block < 3; ++block) {
+    output.fill(0.0f);
+    engine.process(io, 1, kBlock);
+  }
+  REQUIRE(probe_ptr->insert_count == 0);
+  REQUIRE(probe_ptr->insert_value == 1.0f);
+}
+
+TEST_CASE("Bus removal scrubs retired selectors while preserving active bus commands",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  constexpr int64_t kQueuedFuture = 1024;
+  constexpr int64_t kPendingFuture = 2048;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, /*command_capacity=*/128);
+  REQUIRE(engine.set_track_buses({{1, 0.0f}, {2, 0.0f}}));
+
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(engine.set_bus_strip(1, bus));
+  bus.id = "2";
+  REQUIRE(engine.set_bus_strip(2, bus));
+
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 2;
+  REQUIRE(engine.set_track_lanes({lane}));
+  constexpr size_t kSourceFrames = static_cast<size_t>(kBlock * 64);
+  std::array<float, kSourceFrames> source{};
+  source.fill(1.0f);
+  const float* source_channels[] = {source.data()};
+  sonare::engine::ClipSchedule clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.buffer = {source_channels, 1, kSourceFrames};
+  clip.length_samples = static_cast<int64_t>(kSourceFrames);
+  clip.gain = 1.0f;
+  engine.set_clips({clip});
+
+  const int64_t old_bus_id = engine.resolve_bus_insert_automation_id(1, 0, "levelDb");
+  const int64_t other_bus_id = engine.resolve_bus_insert_automation_id(2, 0, "levelDb");
+  REQUIRE(old_bus_id >= 0);
+  REQUIRE(other_bus_id >= 0);
+  REQUIRE(old_bus_id != other_bus_id);
+
+  const uint32_t old_target = static_cast<uint32_t>(old_bus_id);
+  const uint32_t other_target = static_cast<uint32_t>(other_bus_id);
+  auto command = [](uint32_t target, int64_t sample_time, float value) {
+    sonare::rt::Command result{};
+    result.type = sonare::rt::CommandType::kSetParam;
+    result.target_id = target;
+    result.sample_time = sample_time;
+    result.arg.f = value;
+    return result;
+  };
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  // Fill the pending bank with valid commands for the other bus, then leave a
+  // retired bus command in the ring. Removal must discard only the stale ring
+  // record: the other bus's pending edits must remain FIFO and must not produce
+  // a queue or pending overflow when the future timestamp arrives.
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);  // Start playback before scheduling edits.
+  for (size_t i = 0; i < sonare::engine::RealtimeEngine::kMaxCommandsPerBlock; ++i) {
+    REQUIRE(engine.push_command(command(other_target, kQueuedFuture, -6.0f)));
+  }
+  REQUIRE(engine.push_command(command(old_target, kQueuedFuture, -12.0f)));
+
+  engine.process(io, 1, kBlock);  // 64 commands enter pending_; stale stays queued.
+  REQUIRE(engine.set_track_buses({{2, 0.0f}}));
+  REQUIRE(engine.set_track_buses({{2, 0.0f}, {1, 0.0f}}));
+  bus.id = "1";
+  REQUIRE(engine.set_bus_strip(1, bus));
+
+  for (int block = 0; block < 20; ++block) {
+    output.fill(0.0f);
+    engine.process(io, 1, kBlock);
+  }
+  const float other_bus_level_after_remove = output.back();
+  REQUIRE(other_bus_level_after_remove > 0.35f);
+  REQUIRE(other_bus_level_after_remove < 0.70f);
+
+  const int64_t new_bus_id = engine.resolve_bus_insert_automation_id(1, 0, "levelDb");
+  REQUIRE(new_bus_id >= 0);
+  REQUIRE(new_bus_id != old_bus_id);
+
+  // Reintroduce an old-generation command deliberately after the re-add. The
+  // clear API must scrub every historical selector for this identity, while a
+  // valid command for bus 2 remains staged and applies without an error.
+  REQUIRE(engine.push_command(command(old_target, kPendingFuture, -18.0f)));
+  REQUIRE(engine.push_command(command(static_cast<uint32_t>(new_bus_id), kPendingFuture, -6.0f)));
+  REQUIRE(engine.push_command(command(other_target, kPendingFuture, -3.0f)));
+  engine.process(io, 1, kBlock);  // Stage all three future commands in pending_.
+  REQUIRE(engine.clear_bus_insert_parameter_bases(1));
+
+  for (int block = 0; block < 20; ++block) {
+    output.fill(0.0f);
+    engine.process(io, 1, kBlock);
+  }
+  // The command for the still-active bus survived both scrubs and was applied
+  // after the retained -6 dB value, so this final level is audibly higher.
+  REQUIRE(output.back() > other_bus_level_after_remove + 0.10f);
+  REQUIRE(output.back() < 0.85f);
+
+  int unknown_target_count = 0;
+  int overflow_count = 0;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    if (telemetry.error == sonare::engine::TelemetryErrorCode::kUnknownTarget &&
+        (telemetry.value == old_target || telemetry.value == static_cast<uint32_t>(new_bus_id))) {
+      ++unknown_target_count;
+    }
+    if (telemetry.error == sonare::engine::TelemetryErrorCode::kCommandQueueOverflow ||
+        telemetry.error == sonare::engine::TelemetryErrorCode::kPendingCommandOverflow) {
+      ++overflow_count;
+    }
+  }
+  REQUIRE(unknown_target_count == 0);
+  REQUIRE(overflow_count == 0);
+}
+#endif
 
 TEST_CASE(
     "RealtimeEngine restores the manual base value when its lane empties, "

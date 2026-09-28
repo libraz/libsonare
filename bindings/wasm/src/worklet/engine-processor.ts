@@ -1,6 +1,7 @@
 import type { EngineClip } from '../index';
 import { RealtimeEngine } from '../index';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
+import { emptyStripJson } from './engine-mixer-facade';
 import { requireChannelCount, requireIntegerOption } from './guards';
 import {
   DEFAULT_METRONOME_CONFIG,
@@ -157,10 +158,13 @@ export class SonareRealtimeEngineWorkletProcessor {
           options.externalMidiRingCapacity,
         )
       : undefined;
+    if (this.commandRing && this.commandRing.capacity > 65536) {
+      throw new RangeError('commandRingCapacity must be at most 65536');
+    }
     this.engine = new RealtimeEngine(
       this.sampleRate,
       this.blockSize,
-      1024,
+      Math.max(1024, this.commandRing?.capacity ?? 0),
       1024,
       this.channelCount,
     );
@@ -451,11 +455,69 @@ export class SonareRealtimeEngineWorkletProcessor {
           );
         }
         break;
-      case 'syncMixer':
+      case 'syncMixer': {
+        if (message.sidechainDelta === true) {
+          // Sidechain setters send a binding delta through this message type.
+          // Their `lanes` field is context, not a request to rebuild routing;
+          // rebuilding it here would discard live insert smoother slots.
+          for (const binding of message.laneSidechains ?? []) {
+            this.engine.setLaneSidechain(
+              binding.trackId,
+              binding.insertIndex,
+              binding.sourceTrackId,
+            );
+          }
+          for (const binding of message.busSidechains ?? []) {
+            this.engine.setBusSidechain(
+              binding.busId,
+              binding.insertIndex,
+              binding.sourceKind,
+              binding.sourceId,
+            );
+          }
+          for (const binding of message.masterSidechains ?? []) {
+            this.engine.setMasterSidechain(
+              binding.insertIndex,
+              binding.sourceKind,
+              binding.sourceId,
+            );
+          }
+          break;
+        }
+        // SAB commands are published before the control thread posts this
+        // structural sync. Drain the whole snapshot so a future command past
+        // the normal 64-per-render budget cannot enter native after the strip
+        // replacement has invalidated its target.
+        if (this.commandRing) {
+          const write = Atomics.load(this.commandRing.header, 0);
+          const read = Atomics.load(this.commandRing.header, 1);
+          this.drainCommands(Math.min(this.commandRing.capacity, Math.max(0, write - read)));
+        }
+        // Complete earlier immediate edits in message order. Scheduled
+        // commands remain queued for their render frame.
+        this.engine.applyCommandsDueNowPreservingFuture();
+        this.engine.settleInsertParameters();
         if (message.buses) {
           this.engine.setTrackBuses(message.buses);
         }
         this.engine.setTrackLanes(message.lanes);
+        for (const target of message.forceInsertResets ?? []) {
+          const emptyJson = emptyStripJson(target);
+          switch (target.kind) {
+            case 'track':
+              this.engine.clearTrackInsertParameterBases(target.trackId);
+              this.engine.setTrackStripJson(target.trackId, emptyJson);
+              break;
+            case 'bus':
+              this.engine.clearBusInsertParameterBases(target.busId);
+              this.engine.setBusStripJson(target.busId, emptyJson);
+              break;
+            case 'master':
+              this.engine.clearMasterInsertParameterBases();
+              this.engine.setMasterStripJson(emptyJson);
+              break;
+          }
+        }
         for (const strip of message.trackStrips ?? []) {
           this.engine.setTrackStripJson(strip.trackId, strip.sceneJson);
         }
@@ -482,7 +544,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         for (const override of message.insertParamOverrides ?? []) {
           switch (override.kind) {
             case 'track':
-              this.engine.setTrackStripInsertParamByName(
+              this.engine.restoreTrackStripInsertParamByName(
                 override.trackId,
                 override.insertIndex,
                 override.paramName,
@@ -490,7 +552,7 @@ export class SonareRealtimeEngineWorkletProcessor {
               );
               break;
             case 'bus':
-              this.engine.setBusStripInsertParamByName(
+              this.engine.restoreBusStripInsertParamByName(
                 override.busId,
                 override.insertIndex,
                 override.paramName,
@@ -498,7 +560,7 @@ export class SonareRealtimeEngineWorkletProcessor {
               );
               break;
             case 'master':
-              this.engine.setMasterStripInsertParamByName(
+              this.engine.restoreMasterStripInsertParamByName(
                 override.insertIndex,
                 override.paramName,
                 override.value,
@@ -507,6 +569,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           }
         }
         break;
+      }
       case 'syncCapture':
         this.engine.setCaptureBuffer(message.channels, message.bufferFrames);
         this.engine.setCaptureSource(message.source);
@@ -538,27 +601,58 @@ export class SonareRealtimeEngineWorkletProcessor {
         );
         break;
       case 'syncTrackStripInsertParamByName':
-        this.engine.setTrackStripInsertParamByName(
-          message.trackId,
-          message.insertIndex,
-          message.paramName,
-          message.value,
-        );
+        this.engine.applyCommandsDueNowPreservingFuture();
+        if (
+          !this.engine.applyTrackStripInsertParamByNameNow(
+            message.trackId,
+            message.insertIndex,
+            message.paramName,
+            message.value,
+          )
+        ) {
+          // A burst can exhaust the fixed smoother slots before the next
+          // render quantum. Apply the last knob value exactly in that case.
+          this.engine.restoreTrackStripInsertParamByName(
+            message.trackId,
+            message.insertIndex,
+            message.paramName,
+            message.value,
+          );
+        }
         break;
       case 'syncMasterStripInsertParamByName':
-        this.engine.setMasterStripInsertParamByName(
-          message.insertIndex,
-          message.paramName,
-          message.value,
-        );
+        this.engine.applyCommandsDueNowPreservingFuture();
+        if (
+          !this.engine.applyMasterStripInsertParamByNameNow(
+            message.insertIndex,
+            message.paramName,
+            message.value,
+          )
+        ) {
+          this.engine.restoreMasterStripInsertParamByName(
+            message.insertIndex,
+            message.paramName,
+            message.value,
+          );
+        }
         break;
       case 'syncBusStripInsertParamByName':
-        this.engine.setBusStripInsertParamByName(
-          message.busId,
-          message.insertIndex,
-          message.paramName,
-          message.value,
-        );
+        this.engine.applyCommandsDueNowPreservingFuture();
+        if (
+          !this.engine.applyBusStripInsertParamByNameNow(
+            message.busId,
+            message.insertIndex,
+            message.paramName,
+            message.value,
+          )
+        ) {
+          this.engine.restoreBusStripInsertParamByName(
+            message.busId,
+            message.insertIndex,
+            message.paramName,
+            message.value,
+          );
+        }
         break;
       case 'syncBusStripInsertBypassed':
         this.engine.setBusStripInsertBypassed(
@@ -837,11 +931,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
-  private drainCommands(): void {
+  private drainCommands(limit = 64): void {
     if (!this.commandRing) {
       return;
     }
-    for (let i = 0; i < 64; i++) {
+    for (let i = 0; i < limit; i++) {
       const command = popSonareEngineCommandRingBuffer(this.commandRing);
       if (!command) {
         return;

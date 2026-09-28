@@ -16,7 +16,7 @@
  *
  * WHAT A GREEN RUN DOES AND DOES NOT MEAN. Green says every cross-surface reader
  * disagreement in the scanned trees is one that was looked at and written down.
- * It does NOT say the surfaces agree -- 175 fields still diverge, in three
+ * It does NOT say the surfaces agree -- 179 fields still diverge, in three
  * classes recorded below -- and it says nothing about fields the scan cannot
  * pair, for the reasons `_reader_family_sources.ts` records.
  *
@@ -66,7 +66,7 @@ import {
  * the other surface's helper normalizes to.
  */
 const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
-  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 132 fields.
+  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 136 fields.
   //
   // The addon's presence-checked readers REFUSE a wrong-typed value by name; embind's read the
   // same field through `val::as<T>()`, which COERCES. A numeric string and a one-element array
@@ -91,6 +91,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'notesegments:referenceHz',
       'notesegments:segmentationThresholdCents',
       'notesegments:voicedThreshold',
+      'optionalsends:levelDb',
       'pcen:bias',
       'pcen:eps',
       'pcen:gain',
@@ -111,9 +112,9 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'setclips:gain',
       'setmetronome:accentGain',
       'setmetronome:beatGain',
+      'setmidiclips:gain',
       'setsf2instrument:gain',
       'settrackbuses:gainDb',
-      'settracklanes:levelDb',
       'synthesizerir:airHumidityPercent',
       'synthesizerir:airTemperatureC',
       'synthesizerir:crossfadeMs',
@@ -156,6 +157,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'midirouteevents:filterChannel',
       'midirouteevents:filterGroup',
       'midirouteevents:remapChannel',
+      'optionalsends:sendTiming',
       'pcen:hopLength',
       'pcen:sampleRate',
       'pitchcorrecttimevarying:scaleModeMask',
@@ -172,7 +174,6 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'setmarkers:kind',
       'setmetronome:clickSamples',
       'setsf2instrument:polyphony',
-      'settracklanes:sendTiming',
       'synthesizerir:ismOrder',
       'synthesizerir:sampleRate',
     ],
@@ -182,13 +183,13 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
     [
       'bounceoffline:normalizeLufs',
       'estimateroom:preferEyring',
+      'optionalsends:enabled',
       'roommorph:airAbsorptionEnabled',
       'roommorph:preferEyring',
       'setclips:loop',
       'setmarkerex:keyMinor',
       'setmarkers:keyMinor',
       'setmetronome:enabled',
-      'settracklanes:enabled',
       'synthesizerir:airAbsorptionEnabled',
       'synthesizerir:preferEyring',
       'tempooptionsfrom:adaptiveTempo',
@@ -205,6 +206,8 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'setclips:fadeInSamples',
       'setclips:fadeOutSamples',
       'setclips:lengthSamples',
+      'setmidiclips:fadeInSamples',
+      'setmidiclips:fadeOutSamples',
       'setmidiclips:lengthSamples',
       'setmidiclips:loopLengthSamples',
       'setmidiclips:startSample',
@@ -236,6 +239,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
     [
       'setclips:trackId',
       'settrackbuses:channelLayout',
+      'settrackbuses:outputBusId',
       'settracklanes:outputBusId',
       'settracklanes:sourceChannelLayout',
     ],

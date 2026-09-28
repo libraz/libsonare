@@ -61,6 +61,8 @@ class RealtimeEngineWasm {
   void play(const emscripten::val& render_frame_val);
   void stop(const emscripten::val& render_frame_val);
   void settleParameters();
+  void settleInsertParameters();
+  void applyCommandsDueNowPreservingFuture();
   void flushControlCommands();
   void seekSample(int64_t timeline_sample, const emscripten::val& render_frame_val);
   void seekPpq(double ppq, const emscripten::val& render_frame_val);
@@ -235,13 +237,38 @@ class RealtimeEngineWasm {
                                       const emscripten::val& insert_index_val,
                                       const std::string& param_name,
                                       const emscripten::val& value_val);
+  bool applyTrackStripInsertParamByNameNow(const emscripten::val& track_id_val,
+                                           const emscripten::val& insert_index_val,
+                                           const std::string& param_name,
+                                           const emscripten::val& value_val);
+  void restoreTrackStripInsertParamByName(const emscripten::val& track_id_val,
+                                          const emscripten::val& insert_index_val,
+                                          const std::string& param_name,
+                                          const emscripten::val& value_val);
+  void clearTrackStripInsertParameterBases(const emscripten::val& track_id_val);
   void setMasterStripInsertParamByName(const emscripten::val& insert_index_val,
                                        const std::string& param_name,
                                        const emscripten::val& value_val);
+  bool applyMasterStripInsertParamByNameNow(const emscripten::val& insert_index_val,
+                                            const std::string& param_name,
+                                            const emscripten::val& value_val);
+  void restoreMasterStripInsertParamByName(const emscripten::val& insert_index_val,
+                                           const std::string& param_name,
+                                           const emscripten::val& value_val);
+  void clearMasterStripInsertParameterBases();
   void setBusStripInsertParamByName(const emscripten::val& bus_id_val,
                                     const emscripten::val& insert_index_val,
                                     const std::string& param_name,
                                     const emscripten::val& value_val);
+  bool applyBusStripInsertParamByNameNow(const emscripten::val& bus_id_val,
+                                         const emscripten::val& insert_index_val,
+                                         const std::string& param_name,
+                                         const emscripten::val& value_val);
+  void restoreBusStripInsertParamByName(const emscripten::val& bus_id_val,
+                                        const emscripten::val& insert_index_val,
+                                        const std::string& param_name,
+                                        const emscripten::val& value_val);
+  void clearBusStripInsertParameterBases(const emscripten::val& bus_id_val);
   void setBusStripInsertBypassed(const emscripten::val& bus_id_val,
                                  const emscripten::val& insert_index_val, bool bypassed,
                                  bool reset_on_bypass);

@@ -33,6 +33,10 @@ void RealtimeEngineWasm::stop(const val& render_frame_val) {
 /// at settled values instead of ramping in from defaults. Matches
 /// sonare_engine_settle_parameters.
 void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
+void RealtimeEngineWasm::settleInsertParameters() { engine_.settle_insert_parameters(); }
+void RealtimeEngineWasm::applyCommandsDueNowPreservingFuture() {
+  engine_.apply_commands_due_now_preserving_future();
+}
 void RealtimeEngineWasm::flushControlCommands() { engine_.flush_control_commands(); }
 
 void RealtimeEngineWasm::seekSample(int64_t timeline_sample, const val& render_frame_val) {
@@ -336,6 +340,9 @@ void registerRealtimeEngineTransport(class_<RealtimeEngineWasm>& cls) {
       .function("stop", &RealtimeEngineWasm::stop)
       .function("seekSample", &RealtimeEngineWasm::seekSample)
       .function("settleParameters", &RealtimeEngineWasm::settleParameters)
+      .function("settleInsertParameters", &RealtimeEngineWasm::settleInsertParameters)
+      .function("applyCommandsDueNowPreservingFuture",
+                &RealtimeEngineWasm::applyCommandsDueNowPreservingFuture)
       .function("flushControlCommands", &RealtimeEngineWasm::flushControlCommands)
       .function("seekPpq", &RealtimeEngineWasm::seekPpq)
       .function("setTempo", &RealtimeEngineWasm::setTempo)

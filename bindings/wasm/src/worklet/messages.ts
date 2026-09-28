@@ -502,6 +502,8 @@ export type SonareEngineSyncMixerInsertParamOverride =
 
 export interface SonareEngineSyncMixerMessage {
   type: 'syncMixer';
+  /** Apply only supplied sidechain bindings; preserve current mixer topology. */
+  sidechainDelta?: boolean;
   lanes: EngineTrackLane[];
   buses?: EngineBus[];
   trackStrips?: Array<{ trackId: number; sceneJson: string }>;
@@ -509,6 +511,10 @@ export interface SonareEngineSyncMixerMessage {
   masterStripJson?: string;
   /** Retained by-name insert values, applied after strip and sidechain replay. */
   insertParamOverrides?: SonareEngineSyncMixerInsertParamOverride[];
+  /** Explicit full strip replacements that must reset retained insert state. */
+  forceInsertResets?: Array<
+    { kind: 'track'; trackId: number } | { kind: 'bus'; busId: number } | { kind: 'master' }
+  >;
   /** Lane insert sidechain bindings (replayed after lanes/strips). */
   laneSidechains?: Array<{ trackId: number; insertIndex: number; sourceTrackId: number }>;
   /**

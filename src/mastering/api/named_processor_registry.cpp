@@ -6,8 +6,10 @@
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/saturation/amp_presets.h"
 #include "rt/processor_base.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 namespace sonare::mastering::api {
 
@@ -346,6 +348,53 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].slots[].minCrossoverCutoffs",
   };
   return paths;
+}
+
+std::string amp_preset_catalog_json() {
+  namespace json = sonare::util::json;
+  namespace sat = sonare::mastering::saturation;
+  const std::vector<std::string> names = sat::amp_preset_names();
+  json::Array catalog;
+  for (size_t index = 0; index < names.size(); ++index) {
+    const sat::AmpSimConfig config = sat::amp_preset_config(static_cast<sat::AmpPreset>(index));
+    json::Object params;
+    params["topology"] = static_cast<int>(config.topology);
+    params["inputDb"] = static_cast<double>(config.input_db);
+    params["drive"] = static_cast<double>(config.drive);
+    params["bassDb"] = static_cast<double>(config.bass_db);
+    params["midDb"] = static_cast<double>(config.mid_db);
+    params["trebleDb"] = static_cast<double>(config.treble_db);
+    params["presenceDb"] = static_cast<double>(config.presence_db);
+    params["levelDb"] = static_cast<double>(config.level_db);
+    params["cab"] = config.cab;
+    params["ampModel"] = static_cast<int>(config.amp_model);
+    params["cabModel"] = static_cast<int>(config.cab_model);
+    params["micModel"] = static_cast<int>(config.mic_model);
+    params["power"] = static_cast<double>(config.power);
+    params["sag"] = static_cast<double>(config.sag);
+    params["transformer"] = static_cast<double>(config.transformer);
+    params["nfb"] = static_cast<double>(config.nfb);
+    params["micAxis"] = static_cast<double>(config.mic_axis);
+    params["micDistanceCm"] = static_cast<double>(config.mic_distance_cm);
+    params["micBlend"] = static_cast<double>(config.mic_blend);
+    params["micBModel"] = static_cast<int>(config.mic_b_model);
+    params["micBAxis"] = static_cast<double>(config.mic_b_axis);
+    params["micBDistanceCm"] = static_cast<double>(config.mic_b_distance_cm);
+    params["micBInvert"] = config.mic_b_invert;
+    params["cone"] = static_cast<double>(config.cone);
+    params["doppler"] = static_cast<double>(config.doppler);
+    params["preampStages"] = static_cast<int>(config.preamp_stages);
+    params["biasShift"] = static_cast<double>(config.bias_shift);
+    params["crossover"] = static_cast<double>(config.crossover);
+    params["powerTube"] = static_cast<int>(config.power_tube);
+
+    json::Object entry;
+    entry["index"] = static_cast<int>(index);
+    entry["name"] = names[index];
+    entry["params"] = std::move(params);
+    catalog.push_back(std::move(entry));
+  }
+  return json::dump(catalog);
 }
 
 }  // namespace sonare::mastering::api

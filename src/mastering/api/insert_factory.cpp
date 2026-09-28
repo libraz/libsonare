@@ -705,6 +705,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     } else {
       config.decay = f(params, "decay", config.decay);
     }
+    params.note_effective("decay", config.decay);
     config.damping = f(params, "damping", config.damping);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     // Figure-8 tank modulation (the plate's chorused tail); wire both fields so
@@ -739,6 +740,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     } else {
       config.decay = f(params, "decay", config.decay);
     }
+    params.note_effective("decay", config.decay);
     config.hf_damping = f(params, "damping", f(params, "hfDamping", config.hf_damping));
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     return make<FdnReverb>(config);
@@ -761,6 +763,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       config.reverb_time_s = std::clamp(f(params, "reverbTimeS", config.reverb_time_s), 0.05f,
                                         VelvetReverbConfig::kMaxReverbTimeSeconds);
     }
+    params.note_effective("reverbTimeS", config.reverb_time_s);
     config.density_hz = f(params, "densityHz", config.density_hz);
     config.enable_shelf = b(params, "enableShelf", config.enable_shelf);
     return make<VelvetReverb>(config);
@@ -992,6 +995,20 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
   return nullptr;
 }
 
+void attach_constructed_parameter_values(Processor* processor, const ParamMap& params) {
+  if (processor == nullptr) return;
+  std::vector<std::pair<unsigned int, float>> values;
+  std::unordered_set<unsigned int> seen;
+  for (const auto& descriptor : processor->parameter_descriptors()) {
+    if (!processor->parameter_is_realtime_safe(descriptor.id)) continue;
+    const auto it = params.effective_values().find(descriptor.key);
+    if (it == params.effective_values().end() || !std::isfinite(it->second)) continue;
+    if (!seen.insert(descriptor.id).second) continue;
+    values.emplace_back(descriptor.id, static_cast<float>(it->second));
+  }
+  processor->set_constructed_parameter_values(std::move(values));
+}
+
 }  // namespace
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
@@ -1006,6 +1023,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
   const std::vector<Param> param_list = insert_params_from_root(json_root, name);
   const ParamMap params = detail::make_map(param_list);
   auto processor = build_insert(name, params, json_root);
+  attach_constructed_parameter_values(processor.get(), params);
   // Only report ignored keys for a recognized processor: build_insert() probes
   // every key the processor reads (even absent ones), so any supplied key it
   // never touched took no effect. An unknown name is surfaced as a hard error by
@@ -1019,7 +1037,9 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
     const std::string& name, const std::vector<Param>& param_list) {
   const ParamMap params = detail::make_map(param_list);
-  return build_insert(name, params);
+  auto processor = build_insert(name, params);
+  attach_constructed_parameter_values(processor.get(), params);
+  return processor;
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
@@ -1042,6 +1062,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     auto reverb = std::make_unique<effects::reverb::ConvolutionReverb>(config);
     reverb->load_ir(impulse_response, ir_num_samples);
+    attach_constructed_parameter_values(reverb.get(), params);
     return reverb;
   }
 #endif

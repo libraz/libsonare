@@ -877,9 +877,19 @@ export class RealtimeEngine {
     this.native.settleParameters();
   }
 
+  /** Snap only insert automation slots after structural replay. */
+  settleInsertParameters(): void {
+    this.native.settleInsertParameters();
+  }
+
   /** Drains queued commands on an offline/control-only engine immediately. */
   flushControlCommands(): void {
     this.native.flushControlCommands();
+  }
+
+  /** Applies commands already due on a control-only mirror, retaining future commands. */
+  applyCommandsDueNowPreservingFuture(): void {
+    this.native.applyCommandsDueNowPreservingFuture();
   }
 
   seekPpq(ppq: number, renderFrame = -1): void {
@@ -1183,9 +1193,41 @@ export class RealtimeEngine {
     this.native.setTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
   }
 
+  /** Apply a live insert edit on this engine's owning thread without draining its command queue. */
+  applyTrackStripInsertParamByNameNow(
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): boolean {
+    return this.native.applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value);
+  }
+
+  /** Restore a retained insert value exactly after a strip scene is replayed. */
+  restoreTrackStripInsertParamByName(
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
+  }
+
   /** Master-strip counterpart of {@link setTrackStripInsertParamByName}. */
   setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
     this.native.setMasterStripInsertParamByName(insertIndex, paramName, value);
+  }
+
+  applyMasterStripInsertParamByNameNow(
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): boolean {
+    return this.native.applyMasterStripInsertParamByNameNow(insertIndex, paramName, value);
+  }
+
+  restoreMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
+    this.native.restoreMasterStripInsertParamByName(insertIndex, paramName, value);
   }
 
   /** Bus-strip counterpart of {@link setTrackStripInsertParamByName}. */
@@ -1196,6 +1238,42 @@ export class RealtimeEngine {
     value: number,
   ): void {
     this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  }
+
+  applyBusStripInsertParamByNameNow(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): boolean {
+    return this.native.applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value);
+  }
+
+  restoreBusStripInsertParamByName(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.restoreBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  }
+
+  /**
+   * Forgets the remembered manual insert-parameter values of one track strip
+   * and discards its queued insert edits. Call before {@link setTrackStripJson}
+   * replaces the strip when its old values must not carry over; the setter
+   * never does this itself, since a queued edit may already target the new chain.
+   */
+  clearTrackInsertParameterBases(trackId: number): void {
+    this.native.clearTrackInsertParameterBases(trackId);
+  }
+
+  clearBusInsertParameterBases(busId: number): void {
+    this.native.clearBusInsertParameterBases(busId);
+  }
+
+  clearMasterInsertParameterBases(): void {
+    this.native.clearMasterInsertParameterBases();
   }
 
   /** Bus-strip counterpart of {@link setTrackStripInsertBypassed}. */

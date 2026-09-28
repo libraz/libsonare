@@ -155,6 +155,21 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
   const bool ok = track_mixer_runtime_.set_buses(std::move(buses));
   if (ok) {
+    // A removed bus leaves a selector tombstone so an old queued command can
+    // never retarget a later bus. Drop its manual bases as well, otherwise
+    // those unreachable ids would consume the bounded base-table capacity for
+    // the rest of the session. Reordered active selectors remain intact.
+    // Scrub the command queue at the same transition. A removed bus may have
+    // commands in either the ring or the fixed pending bank; leaving them
+    // around would turn the selector tombstone into a later UnknownTarget
+    // report (and would make a same-id re-add observe an old edit).
+    discard_insert_commands_for_retired_bus_selectors();
+    parameter_base_table_.erase_if([this](uint32_t id, float) noexcept {
+      if (!is_insert_param_id(id)) return false;
+      const uint32_t selector = insert_param_strip(id);
+      return selector >= kInsertStripBusMin && selector <= kInsertStripBusBase &&
+             track_mixer_runtime_.bus_id_for_insert_automation_selector(selector) == 0;
+    });
     update_reported_graph_latency();
   }
   return ok;
@@ -251,6 +266,42 @@ bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int inse
          InsertParamSetResult::kQueued;
 }
 
+bool RealtimeEngine::apply_track_insert_param_by_name_now(uint32_t track_id,
+                                                          unsigned int insert_index,
+                                                          const std::string& key,
+                                                          float value) noexcept {
+  const bool applied =
+      track_mixer_runtime_.apply_track_insert_param_by_name_now(track_id, insert_index, key, value);
+  if (applied) {
+    const int64_t automation_id = resolve_track_insert_automation_id(track_id, insert_index, key);
+    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+  }
+  return applied;
+}
+
+bool RealtimeEngine::restore_track_insert_param_by_name(uint32_t track_id,
+                                                        unsigned int insert_index,
+                                                        const std::string& key,
+                                                        float value) noexcept {
+  const bool applied =
+      track_mixer_runtime_.restore_track_insert_param_by_name(track_id, insert_index, key, value);
+  if (applied) {
+    const int64_t automation_id = resolve_track_insert_automation_id(track_id, insert_index, key);
+    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+  }
+  return applied;
+}
+
+bool RealtimeEngine::clear_track_insert_parameter_bases(uint32_t track_id) noexcept {
+  uint32_t selector = 0;
+  if (!track_mixer_runtime_.track_insert_automation_selector(track_id, &selector)) return false;
+  discard_insert_commands_for_selector(selector);
+  parameter_base_table_.erase_if([selector](uint32_t id, float) noexcept {
+    return is_insert_param_id(id) && insert_param_strip(id) == selector;
+  });
+  return true;
+}
+
 InsertParamSetResult RealtimeEngine::set_master_insert_param_detailed(unsigned int insert_index,
                                                                       const std::string& key,
                                                                       float value) noexcept {
@@ -279,6 +330,49 @@ bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const st
          InsertParamSetResult::kQueued;
 }
 
+bool RealtimeEngine::apply_master_insert_param_by_name_now(unsigned int insert_index,
+                                                           const std::string& key,
+                                                           float value) noexcept {
+  if (owned_master_strip_ == nullptr || !insert_param_value_acceptable(value)) return false;
+  const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
+  if (id < 0) return false;
+  const bool applied =
+      route_master_insert_param_smoothed(insert_index, static_cast<unsigned int>(id), value);
+  if (applied) {
+    const int64_t automation_id = resolve_master_insert_automation_id(insert_index, key);
+    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+  }
+  return applied;
+}
+
+bool RealtimeEngine::restore_master_insert_param_by_name(unsigned int insert_index,
+                                                         const std::string& key,
+                                                         float value) noexcept {
+  if (owned_master_strip_ == nullptr || !insert_param_value_acceptable(value)) return false;
+  const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
+  if (id < 0) return false;
+  const unsigned int param_id = static_cast<unsigned int>(id);
+  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+    if (slot.assigned && slot.insert_index == insert_index && slot.param_id == param_id) {
+      slot.active = false;
+      slot.assigned = false;
+    }
+  }
+  const bool applied = owned_master_strip_->apply_insert_parameter(insert_index, param_id, value);
+  if (applied) {
+    const int64_t automation_id = resolve_master_insert_automation_id(insert_index, key);
+    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+  }
+  return applied;
+}
+
+void RealtimeEngine::clear_master_insert_parameter_bases() noexcept {
+  discard_insert_commands_for_selector(kInsertStripMaster);
+  parameter_base_table_.erase_if([](uint32_t id, float) noexcept {
+    return is_insert_param_id(id) && insert_param_strip(id) == kInsertStripMaster;
+  });
+}
+
 InsertParamSetResult RealtimeEngine::set_bus_insert_param_detailed(uint32_t bus_id,
                                                                    unsigned int insert_index,
                                                                    const std::string& key,
@@ -296,10 +390,11 @@ InsertParamSetResult RealtimeEngine::set_bus_insert_param_detailed(uint32_t bus_
     return InsertParamSetResult::kInvalidTarget;
   }
   // Route through the reserved insert-automation id over the generic kSetParam
-  // command: apply_command already forwards reserved ids to the smoothed insert
-  // router, so a manual set glides exactly like an automated breakpoint without a
-  // dedicated command type (no engine ABI change).
-  const uint32_t selector = kInsertStripBusBase - static_cast<uint32_t>(bus_index);
+  // command. The selector is bound to the bus identity, not this snapshot's
+  // positional index, so a queued command cannot move to another bus after a
+  // reorder.
+  const uint32_t selector = track_mixer_runtime_.bus_insert_automation_selector(bus_id);
+  if (selector == 0) return InsertParamSetResult::kInvalidTarget;
   rt::Command command;
   command.type = rt::CommandType::kSetParam;
   command.target_id = make_insert_param_id(selector, insert_index, param_id);
@@ -312,6 +407,50 @@ bool RealtimeEngine::set_bus_insert_param(uint32_t bus_id, unsigned int insert_i
                                           const std::string& key, float value) noexcept {
   return set_bus_insert_param_detailed(bus_id, insert_index, key, value) ==
          InsertParamSetResult::kQueued;
+}
+
+bool RealtimeEngine::apply_bus_insert_param_by_name_now(uint32_t bus_id, unsigned int insert_index,
+                                                        const std::string& key,
+                                                        float value) noexcept {
+  const bool applied =
+      track_mixer_runtime_.apply_bus_insert_param_by_name_now(bus_id, insert_index, key, value);
+  if (applied) {
+    const int64_t automation_id = resolve_bus_insert_automation_id(bus_id, insert_index, key);
+    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+  }
+  return applied;
+}
+
+bool RealtimeEngine::restore_bus_insert_param_by_name(uint32_t bus_id, unsigned int insert_index,
+                                                      const std::string& key,
+                                                      float value) noexcept {
+  const bool applied =
+      track_mixer_runtime_.restore_bus_insert_param_by_name(bus_id, insert_index, key, value);
+  if (applied) {
+    const int64_t automation_id = resolve_bus_insert_automation_id(bus_id, insert_index, key);
+    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+  }
+  return applied;
+}
+
+bool RealtimeEngine::clear_bus_insert_parameter_bases(uint32_t bus_id) noexcept {
+  if (bus_id == 0) return false;
+  const uint32_t selector = track_mixer_runtime_.bus_insert_automation_selector_for_clear(bus_id);
+  if (selector == 0) {
+    return false;
+  }
+  // A bus identity can have more than one selector after remove/re-add. Clear
+  // every historical selector in one queue/pending pass so a command staged
+  // under an older generation cannot survive this purge and report
+  // UnknownTarget later. Unrelated buses retain FIFO.
+  discard_insert_commands_for_bus_id(bus_id);
+  parameter_base_table_.erase_if([this, bus_id](uint32_t id, float) noexcept {
+    if (!is_insert_param_id(id)) return false;
+    const uint32_t selector = insert_param_strip(id);
+    return selector >= kInsertStripBusMin && selector <= kInsertStripBusBase &&
+           track_mixer_runtime_.bus_id_for_insert_automation_selector_for_clear(selector) == bus_id;
+  });
+  return true;
 }
 
 int64_t RealtimeEngine::resolve_track_insert_automation_id(uint32_t track_id,
@@ -358,7 +497,8 @@ int64_t RealtimeEngine::resolve_bus_insert_automation_id(uint32_t bus_id, unsign
       param_id > kInsertParamFieldMask) {
     return -1;
   }
-  const uint32_t selector = kInsertStripBusBase - static_cast<uint32_t>(bus_index);
+  const uint32_t selector = track_mixer_runtime_.bus_insert_automation_selector(bus_id);
+  if (selector == 0) return -1;
   return make_insert_param_id(selector, insert_index, param_id);
 }
 
@@ -466,8 +606,9 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
 #endif
   // Insert-automation namespace: decode (strip selector, insert, param) and set
   // the matching per-target smoother. Master inserts use this engine's slot
-  // table; lane/bus inserts use the track mixer's. The strip selector is an
-  // integer index, so a stale target resolves to a no-op (dangling-safe).
+  // table; lane/bus inserts use the track mixer's. Bus selectors resolve back
+  // to stable bus identities, so a stale target is a no-op (dangling-safe)
+  // rather than following a positional reorder.
   if (is_insert_param_id(target_id)) {
     const uint32_t strip = insert_param_strip(target_id);
     const unsigned int insert_index = static_cast<unsigned int>(insert_param_index(target_id));
@@ -475,11 +616,11 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
     if (strip == kInsertStripMaster) {
       return route_master_insert_param_smoothed(insert_index, param_id, value);
     }
-    if (strip <= kInsertStripBusBase &&
-        strip > kInsertStripBusBase - TrackMixerRuntime::kMaxBusLanes) {
-      const size_t bus_index = kInsertStripBusBase - strip;
-      return track_mixer_runtime_.route_bus_insert_param_smoothed(bus_index, insert_index, param_id,
-                                                                  value);
+    if (strip >= kInsertStripBusMin && strip <= kInsertStripBusBase) {
+      const uint32_t bus_id = track_mixer_runtime_.bus_id_for_insert_automation_selector(strip);
+      if (bus_id == 0) return false;
+      return track_mixer_runtime_.route_bus_insert_param_smoothed_by_id(bus_id, insert_index,
+                                                                        param_id, value);
     }
     return track_mixer_runtime_.route_lane_insert_param_smoothed(static_cast<size_t>(strip),
                                                                  insert_index, param_id, value);
@@ -529,11 +670,10 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
       const std::string* name = strip_insert_processor_name_at(master_strip_spec_, insert_index);
       if (name == nullptr) return false;
       processor_name = *name;
-    } else if (strip <= kInsertStripBusBase &&
-               strip > kInsertStripBusBase - TrackMixerRuntime::kMaxBusLanes) {
-      const size_t bus_index = kInsertStripBusBase - strip;
-      if (!track_mixer_runtime_.bus_insert_processor_name(bus_index, insert_index,
-                                                          &processor_name)) {
+    } else if (strip >= kInsertStripBusMin && strip <= kInsertStripBusBase) {
+      const uint32_t bus_id = track_mixer_runtime_.bus_id_for_insert_automation_selector(strip);
+      if (bus_id == 0 || !track_mixer_runtime_.bus_insert_processor_name_by_id(bus_id, insert_index,
+                                                                               &processor_name)) {
         return false;
       }
     } else {
@@ -596,6 +736,26 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
   out->rt_safe = true;
   out->default_curve = automation::CurveType::Linear;
   return true;
+}
+
+bool RealtimeEngine::constructed_insert_parameter_base(uint32_t target_id,
+                                                       float* out_value) const noexcept {
+  if (out_value == nullptr || !is_insert_param_id(target_id)) return false;
+  const uint32_t strip = insert_param_strip(target_id);
+  const unsigned int insert_index = static_cast<unsigned int>(insert_param_index(target_id));
+  const unsigned int param_id = static_cast<unsigned int>(insert_param_param(target_id));
+  if (strip == kInsertStripMaster) {
+    return owned_master_strip_ != nullptr &&
+           owned_master_strip_->constructed_insert_parameter_value(insert_index, param_id,
+                                                                   out_value);
+  }
+  if (strip >= kInsertStripBusMin && strip <= kInsertStripBusBase) {
+    const uint32_t bus_id = track_mixer_runtime_.bus_id_for_insert_automation_selector(strip);
+    return bus_id != 0 && track_mixer_runtime_.bus_insert_constructed_parameter_value(
+                              bus_id, insert_index, param_id, out_value);
+  }
+  return track_mixer_runtime_.track_insert_constructed_parameter_value_by_selector(
+      strip, insert_index, param_id, out_value);
 }
 
 bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,

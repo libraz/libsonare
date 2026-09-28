@@ -95,6 +95,7 @@ export class SonareEngine {
   private readonly offlineBlockSize: number;
   private readonly offlineChannelCount: number;
   private readonly automationLanes = new Map<number, EngineAutomationPoint[]>();
+  private readonly insertAutomationIdsByTarget = new Map<string, Set<number>>();
   private readonly clips = new Map<number, EngineClip>();
   private readonly midiClips = new Map<number, EngineMidiClipSchedule>();
   private readonly markers = new Map<number, EngineMarker>();
@@ -330,12 +331,17 @@ export class SonareEngine {
     insertIndex: number,
     paramName: string,
   ): number {
-    return parameter.resolveTrackInsertAutomationId(
+    const id = parameter.resolveTrackInsertAutomationId(
       this.parameterContext,
       target,
       insertIndex,
       paramName,
     );
+    if (id >= 0) {
+      const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+      this.rememberInsertAutomationId({ kind: 'track', trackId }, id);
+    }
+    return id;
   }
 
   /**
@@ -347,7 +353,15 @@ export class SonareEngine {
    * @returns Reserved insert-automation id, or -1 when insert/key unknown.
    */
   resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
-    return parameter.resolveMasterInsertAutomationId(this.parameterContext, insertIndex, paramName);
+    const id = parameter.resolveMasterInsertAutomationId(
+      this.parameterContext,
+      insertIndex,
+      paramName,
+    );
+    if (id >= 0) {
+      this.rememberInsertAutomationId({ kind: 'master' }, id);
+    }
+    return id;
   }
 
   /**
@@ -361,12 +375,16 @@ export class SonareEngine {
    * @returns Reserved insert-automation id, or -1 when bus/insert/key unknown.
    */
   resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
-    return parameter.resolveBusInsertAutomationId(
+    const id = parameter.resolveBusInsertAutomationId(
       this.parameterContext,
       busId,
       insertIndex,
       paramName,
     );
+    if (id >= 0) {
+      this.rememberInsertAutomationId({ kind: 'bus', busId }, id);
+    }
+    return id;
   }
 
   /**
@@ -512,8 +530,17 @@ export class SonareEngine {
   setTrackStripJson(target: string | number, sceneJson: string): void {
     const laneIndex = this.ensureTrackLane(target);
     const trackId = this.trackLaneIds[laneIndex];
-    strips.setTrackStripJson(this.stripContext, trackId, sceneJson, this.trackStripJson);
-    this.syncMixer();
+    const { resetInserts } = strips.setTrackStripJson(
+      this.stripContext,
+      trackId,
+      sceneJson,
+      this.trackStripJson,
+    );
+    if (resetInserts) {
+      this.clearInsertAutomationLanes({ kind: 'track', trackId });
+    }
+    mixer.pruneStripSidechains(this.mixerContext, { kind: 'track', trackId }, sceneJson);
+    this.syncMixer(resetInserts ? [{ kind: 'track', trackId }] : []);
   }
 
   setTrackStripEqBand(target: string | number, bandIndex: number, band: EqBand | string): void {
@@ -598,10 +625,18 @@ export class SonareEngine {
   }
 
   setMasterStripJson(sceneJson: string): void {
-    this.offlineEngine.setMasterStripJson(sceneJson);
-    mixer.clearInsertParamOverrides(this.insertParamOverrides, { kind: 'master' });
+    const target = { kind: 'master' } as const;
+    const resetInserts =
+      (this.masterStripJson !== undefined && this.masterStripJson !== sceneJson) ||
+      mixer.hasInsertParamOverrides(this.insertParamOverrides, target);
+    mixer.applyFullStripJson(this.offlineEngine, target, sceneJson, resetInserts);
+    if (resetInserts) {
+      this.clearInsertAutomationLanes(target);
+    }
+    mixer.pruneStripSidechains(this.mixerContext, target, sceneJson);
+    mixer.clearInsertParamOverrides(this.insertParamOverrides, target);
     this.masterStripJson = sceneJson;
-    this.syncMixer();
+    this.syncMixer(resetInserts ? [target] : []);
   }
 
   setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
@@ -1361,8 +1396,42 @@ export class SonareEngine {
     return mixer.mixerLanes(this.mixerContext);
   }
 
-  private syncMixer(): void {
-    mixer.syncMixer(this.mixerContext);
+  private syncMixer(forceInsertResets: mixer.StripJsonTarget[] = []): void {
+    mixer.syncMixer(this.mixerContext, false, forceInsertResets);
+  }
+
+  private insertAutomationTargetKey(target: mixer.StripJsonTarget): string {
+    return target.kind === 'track'
+      ? `track:${target.trackId}`
+      : target.kind === 'bus'
+        ? `bus:${target.busId}`
+        : 'master';
+  }
+
+  private rememberInsertAutomationId(target: mixer.StripJsonTarget, id: number): void {
+    const key = this.insertAutomationTargetKey(target);
+    const ids = this.insertAutomationIdsByTarget.get(key) ?? new Set<number>();
+    ids.add(id);
+    this.insertAutomationIdsByTarget.set(key, ids);
+  }
+
+  private clearInsertAutomationLanes(
+    target: mixer.StripJsonTarget,
+    forgetResolvedIds = false,
+  ): void {
+    const key = this.insertAutomationTargetKey(target);
+    const ids = this.insertAutomationIdsByTarget.get(key);
+    if (!ids) {
+      return;
+    }
+    for (const id of ids) {
+      if (this.automationLanes.has(id)) {
+        this.setAutomationLane(id, []);
+      }
+    }
+    if (forgetResolvedIds) {
+      this.insertAutomationIdsByTarget.delete(key);
+    }
   }
 
   private postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void {
@@ -1393,22 +1462,17 @@ export class SonareEngine {
     if (this.destroyed) {
       return;
     }
-    try {
-      if (transfer && transfer.length > 0) {
-        this.realtimeNode.node.port.postMessage(message, transfer);
-      } else {
-        this.realtimeNode.node.port.postMessage(message);
-      }
-    } finally {
-      this.flushOfflineMirror();
+    if (transfer && transfer.length > 0) {
+      this.realtimeNode.node.port.postMessage(message, transfer);
+    } else {
+      this.realtimeNode.node.port.postMessage(message);
     }
   }
 
-  // The offline engine is a control-thread mirror. It has no render loop to
-  // drain its command ring, so drain it after each control operation. Never
-  // call this from the worklet/audio path: it is intentionally control-only.
+  // The control-only mirror applies due commands immediately while preserving
+  // scheduled ones for its next render block.
   private flushOfflineMirror(): void {
-    this.offlineEngine.flushControlCommands();
+    this.offlineEngine.applyCommandsDueNowPreservingFuture();
   }
 
   private sendMirroredCommand(
@@ -1441,7 +1505,9 @@ export class SonareEngine {
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       ensureBus: (busId) => this.ensureBus(busId),
       mixerLanes: () => this.mixerLanes(),
-      syncMixer: () => this.syncMixer(),
+      syncMixer: (forceInsertResets) => this.syncMixer(forceInsertResets),
+      clearInsertAutomationLanes: (target, forgetResolvedIds) =>
+        this.clearInsertAutomationLanes(target, forgetResolvedIds),
       sendSmoothedParam: (paramId, value) => this.sendSmoothedParam(paramId, value),
       getMasterStripJson: () => this.masterStripJson,
       cacheMasterStripJson: (sceneJson) => {
