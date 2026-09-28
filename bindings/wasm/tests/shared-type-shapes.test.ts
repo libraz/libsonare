@@ -131,6 +131,7 @@ const catalogPresets = {
   synth: [],
   mixingScene: [],
   voiceChanger: [],
+  playbackRoom: [],
 } satisfies CapabilityCatalogPresets;
 
 const catalogMasteringPreset = {

@@ -11,6 +11,9 @@
 #include "mastering/api/presets.h"
 #include "mastering/match/ab_switcher.h"
 #include "mastering/maximizer/loudness_optimize.h"
+#if defined(SONARE_WITH_PLAYBACK)
+#include "playback/config.h"
+#endif
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 #include "util/json.h"
@@ -263,6 +266,16 @@ const char* sonare_capability_catalog_json(void) {
 #else
   presets["voiceChanger"] = json::Array{};
 #endif
+#if defined(SONARE_WITH_PLAYBACK)
+  json::Array playback_room_presets;
+  for (auto preset : {playback::RoomPreset::None, playback::RoomPreset::LivingRoom,
+                      playback::RoomPreset::HomeTheater, playback::RoomPreset::ScreeningRoom}) {
+    playback_room_presets.emplace_back(playback::room_preset_name(preset));
+  }
+  presets["playbackRoom"] = std::move(playback_room_presets);
+#else
+  presets["playbackRoom"] = json::Array{};
+#endif
   catalog["presets"] = std::move(presets);
 
   json::Array mastering_presets;
@@ -305,6 +318,7 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "presets.synth",
       "presets.mixingScene",
       "presets.voiceChanger",
+      "presets.playbackRoom",
       "masteringPresets",
       "masteringPresets[].name",
       "masteringPresets[].kind",

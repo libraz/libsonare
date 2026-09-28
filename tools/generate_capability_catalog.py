@@ -23,7 +23,7 @@ README_FX_OFF_COUNT_PATTERNS = {
     Path("README.md"): r"or (\d+) with\s+`BUILD_FX=OFF`",
     Path("README_ja.md"): r"外れて (\d+) 個になります",
 }
-PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger")
+PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger", "playbackRoom")
 MASTERING_PRESET_KEYS = {
     "name",
     "kind",

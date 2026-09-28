@@ -68,6 +68,7 @@ class CapabilityCatalogPresets(TypedDict):
     synth: list[str]
     mixingScene: list[str]
     voiceChanger: list[str]
+    playbackRoom: list[str]
 
 class MasteringPresetCatalogEntry(TypedDict):
     name: str

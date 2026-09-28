@@ -253,6 +253,12 @@
       "drumBusSubgroup",
       "commentaryDucking"
     ],
+    "playbackRoom": [
+      "none",
+      "living_room",
+      "home_theater",
+      "screening_room"
+    ],
     "synth": [
       "sine",
       "saw",

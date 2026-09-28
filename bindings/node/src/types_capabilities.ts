@@ -158,6 +158,7 @@ export interface CapabilityCatalogPresets {
   synth: string[];
   mixingScene: string[];
   voiceChanger: string[];
+  playbackRoom: string[];
 }
 
 /**
