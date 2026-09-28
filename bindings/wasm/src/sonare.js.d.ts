@@ -2408,6 +2408,11 @@ export interface SonareModule {
     applyGainAtInputRate: boolean,
   ) => WasmMasteringResult;
   masteringProcessorNames: () => string[];
+  masteringAmpPresetCatalog: () => Array<{
+    index: number;
+    name: string;
+    params: Record<string, number | boolean>;
+  }>;
   masteringPairProcessorNames: () => string[];
   masteringPairAnalysisNames: () => string[];
   masteringStereoAnalysisNames: () => string[];

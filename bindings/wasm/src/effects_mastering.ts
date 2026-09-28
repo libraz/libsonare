@@ -43,6 +43,7 @@ export {
 } from './mastering_chain';
 export type {
   MasteringAbMatchLoudnessRequest,
+  MasteringAmpPresetCatalogEntry,
   MasteringAssistantParamsRequest,
   MasteringAssistantStereoParamsRequest,
   MasteringChannelPolicy,
@@ -66,6 +67,7 @@ export type {
 export {
   mastering,
   masteringAbMatchLoudness,
+  masteringAmpPresetCatalog,
   masteringAssistantSuggest,
   masteringAssistantSuggestChain,
   masteringAssistantSuggestChainStereo,

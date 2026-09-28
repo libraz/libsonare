@@ -264,6 +264,36 @@ export interface MasteringInsertTiming {
   tailSamples: number;
 }
 
+/** One built-in amp-sim rig with its resolved starting configuration. */
+export interface MasteringAmpPresetCatalogEntry {
+  /** Stable index used by the amp-sim `presetIndex` parameter. */
+  index: number;
+  /** Canonical preset identifier accepted by the amp-sim insert. */
+  name: string;
+  /** Effective values from the core preset, before sparse user overrides. */
+  params: Record<string, number | boolean>;
+}
+
+/**
+ * Returns the built-in amp-sim rigs and their resolved control values.
+ *
+ * The catalog is read-only metadata for hosts such as Studio. Persist only the
+ * preset index and explicit overrides in a project so future core updates can
+ * continue to define the canonical DSP configuration.
+ */
+export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
+  const entries = Array.from(requireModule().masteringAmpPresetCatalog()) as Array<{
+    index: number;
+    name: string;
+    params: Record<string, number | boolean>;
+  }>;
+  return entries.map((entry) => ({
+    index: Number(entry.index),
+    name: String(entry.name),
+    params: { ...entry.params },
+  }));
+}
+
 /**
  * Reject a `params` value {@link masteringInsertTiming} cannot serialize:
  * anything other than a finite number or a boolean, naming the offending key.
