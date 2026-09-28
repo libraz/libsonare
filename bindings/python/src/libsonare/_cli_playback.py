@@ -191,7 +191,7 @@ def _resolved_program_lufs(
     meter = PlaybackLoudnessMeter(channels, sample_rate)
     try:
         meter.push_interleaved(interleaved)
-        measured = meter.integrated_lufs
+        measured = meter.integrated_lufs()
     finally:
         meter.close()
     if not math.isfinite(measured) or measured < -70.0 or measured > 0.0:
@@ -230,7 +230,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
         # --json) the renderer's own diagnostics; the one-shot render below
         # owns no handle of its own to ask.
         renderer = PlaybackRenderer(config, hrtf=hrtf, sample_rate=sample_rate)
-        out_channels = renderer.output_channels
+        out_channels = renderer.output_channels()
         rendered = render_playback(
             interleaved, channels=channels, sample_rate=sample_rate, config=config, hrtf=hrtf
         )

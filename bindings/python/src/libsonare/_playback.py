@@ -160,7 +160,6 @@ class PlaybackRenderer:
             )
         )
 
-    @property
     def config(self) -> dict[str, Any]:
         """The current complete configuration document."""
         out = ctypes.c_char_p()
@@ -187,7 +186,6 @@ class PlaybackRenderer:
             )
         )
 
-    @property
     def input_channels(self) -> int:
         """Channel count of the active input layout.
 
@@ -200,7 +198,6 @@ class PlaybackRenderer:
         )
         return int(out.value)
 
-    @property
     def output_channels(self) -> int:
         """Channel count of the output target; fixed for the renderer's lifetime."""
         out = ctypes.c_int()
@@ -209,7 +206,6 @@ class PlaybackRenderer:
         )
         return int(out.value)
 
-    @property
     def latency_samples(self) -> int:
         """Renderer latency in frames (headphones: near ear).
 
@@ -220,7 +216,6 @@ class PlaybackRenderer:
         _check(self._lib.sonare_playback_renderer_latency_samples(self._handle, ctypes.byref(out)))
         return int(out.value)
 
-    @property
     def non_finite_discard_count(self) -> int:
         """Non-finite input samples replaced with 0 since creation."""
         out = ctypes.c_uint32()
@@ -242,12 +237,12 @@ class PlaybackRenderer:
 
         ``planes`` is a sequence of equal-length channel buffers, or a 2-D
         ``(input_channels, frames)`` array. With a fixed input layout the plane
-        count must equal :attr:`input_channels`; with ``"auto"`` it must be 1,
+        count must equal :meth:`input_channels`; with ``"auto"`` it must be 1,
         2, 6 or 8, and a change switches the input layout at the start of this
-        block without changing :attr:`latency_samples`.
+        block without changing :meth:`latency_samples`.
         """
         in_arrays, in_ptrs, frames = _planar_channel_arrays(planes, subject="planes")
-        out_channels = self.output_channels
+        out_channels = self.output_channels()
         out_arrays = [(ctypes.c_float * frames)() for _ in range(out_channels)]
         out_ptr_type = ctypes.POINTER(ctypes.c_float) * out_channels
         out_ptrs = out_ptr_type(
@@ -282,7 +277,7 @@ class PlaybackRenderer:
         if total % ch != 0:
             raise SonareValueError("interleaved samples length must be divisible by in_channels")
         frames = total // ch
-        out_channels = self.output_channels
+        out_channels = self.output_channels()
         out_len = frames * out_channels
         out_buf = np.zeros(out_len, dtype=np.float32)
         c_out = (
@@ -393,7 +388,6 @@ class PlaybackLoudnessMeter:
             )
         )
 
-    @property
     def integrated_lufs(self) -> float:
         """Integrated loudness of everything pushed so far, in LUFS."""
         out = ctypes.c_float()

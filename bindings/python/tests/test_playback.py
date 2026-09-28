@@ -40,14 +40,14 @@ def test_capabilities_report_playback() -> None:
 
 def test_renderer_reports_its_shape() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.output_channels == 6
-        assert renderer.input_channels == 2
-        assert renderer.latency_samples == 1312
+        assert renderer.output_channels() == 6
+        assert renderer.input_channels() == 2
+        assert renderer.latency_samples() == 1312
 
 
 def test_headphones_default_config_is_stereo_out() -> None:
     with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
-        assert renderer.output_channels == 2
+        assert renderer.output_channels() == 2
 
 
 def test_process_planar_renders_finite_output_of_the_right_shape() -> None:
@@ -61,10 +61,10 @@ def test_process_planar_renders_finite_output_of_the_right_shape() -> None:
 
 def test_process_planar_switches_auto_input_layout() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.input_channels == 2
+        assert renderer.input_channels() == 2
         planes = [_sine(BLOCK) for _ in range(6)]
         renderer.process_planar(planes)
-        assert renderer.input_channels == 6
+        assert renderer.input_channels() == 6
 
 
 def test_process_interleaved_renders_finite_output() -> None:
@@ -94,17 +94,17 @@ def test_process_interleaved_rejects_nonpositive_channels() -> None:
 
 def test_non_finite_input_is_discarded_and_counted() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.non_finite_discard_count == 0
+        assert renderer.non_finite_discard_count() == 0
         samples = np.zeros(BLOCK * 2, dtype=np.float32)
         samples[3] = float("nan")
         out = renderer.process_interleaved(samples, in_channels=2)
         assert np.isfinite(out).all()
-        assert renderer.non_finite_discard_count == 1
+        assert renderer.non_finite_discard_count() == 1
 
 
 def test_config_roundtrip_and_prepare_key_rejection() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        config = renderer.config
+        config = renderer.config()
         assert config["target"]["kind"] == "speakers"
         assert config["target"]["layout"] == "5.1"
 
@@ -112,7 +112,7 @@ def test_config_roundtrip_and_prepare_key_rejection() -> None:
         # accepted.
         config["night_mode"] = {"amount": 1}
         renderer.set_config(config)
-        assert renderer.config["night_mode"]["amount"] == 1
+        assert renderer.config()["night_mode"]["amount"] == 1
 
         # A document that changes the prepare shape (target.kind) is rejected.
         with pytest.raises(SonareError, match="requires a new renderer"):
@@ -174,7 +174,7 @@ def test_hrtf_set_default_and_lifecycle() -> None:
         HrtfSet.default() as hrtf,
         PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK) as renderer,
     ):
-        assert renderer.output_channels == 2
+        assert renderer.output_channels() == 2
 
 
 def test_hrtf_set_from_bytes_rejects_malformed_data() -> None:
@@ -186,7 +186,7 @@ def test_loudness_meter_integrates_pushed_frames() -> None:
     with PlaybackLoudnessMeter(2, SR) as meter:
         block = _sine(4096 * 2, hz=200.0)
         meter.push_interleaved(block)
-        lufs = meter.integrated_lufs
+        lufs = meter.integrated_lufs()
         assert np.isfinite(lufs)
         assert lufs < 0.0
 
