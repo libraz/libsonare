@@ -41,6 +41,7 @@
     "CapabilityCatalogPresets": [
       "mastering",
       "mixingScene",
+      "playbackRoom",
       "synth",
       "voiceChanger"
     ],
