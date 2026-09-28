@@ -124,10 +124,13 @@ def test_set_config_accepts_a_json_string() -> None:
         renderer.set_config('{"target": {"kind": "speakers", "layout": "5.1"}}')
 
 
-def test_set_head_orientation_is_accepted_including_non_finite() -> None:
+def test_set_head_orientation_accepts_finite_and_refuses_non_finite() -> None:
     with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
         renderer.set_head_orientation(30.0, -10.0, 5.0)
-        renderer.set_head_orientation(float("nan"))
+        with pytest.raises(SonareValueError):
+            renderer.set_head_orientation(float("nan"))
+        with pytest.raises(SonareValueError):
+            renderer.set_head_orientation(0.0, 1e40)
 
 
 def test_reset_clears_state() -> None:

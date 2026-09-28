@@ -28,6 +28,7 @@ from ._runtime import (
     _get_lib,
     _narrow_int,
     _planar_channel_arrays,
+    _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -171,19 +172,18 @@ class PlaybackRenderer:
     ) -> None:
         """Publish the listener head orientation; ignored by a speakers target.
 
-        Realtime-safe: callable from any single thread concurrently with
-        :meth:`process_planar` / :meth:`process_interleaved`. Unlike the rest
-        of the binding, a non-finite angle is not rejected here -- the C ABI
-        silently ignores it (RT entries report nothing through the error
-        channel), so the angle is passed through as a raw ``c_float`` rather
-        than through :func:`_to_c_float`.
+        Callable from any single thread concurrently with
+        :meth:`process_planar` / :meth:`process_interleaved`.
+
+        Raises:
+            SonareValueError: An angle is not finite or does not fit a C float.
         """
         _check_realtime(
             self._lib.sonare_playback_renderer_set_head_orientation(
                 self._handle,
-                ctypes.c_float(yaw_deg),
-                ctypes.c_float(pitch_deg),
-                ctypes.c_float(roll_deg),
+                _to_c_float(yaw_deg, "yaw_deg"),
+                _to_c_float(pitch_deg, "pitch_deg"),
+                _to_c_float(roll_deg, "roll_deg"),
             )
         )
 
