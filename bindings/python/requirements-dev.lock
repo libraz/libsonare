@@ -12,6 +12,7 @@
 -e file:.
 ast-serialize==0.11.2
     # via mypy
+h5py==3.16.0
 iniconfig==2.3.0
     # via pytest
 librt==0.15.0
@@ -20,6 +21,7 @@ mypy==2.3.1
 mypy-extensions==1.1.0
     # via mypy
 numpy==2.4.6
+    # via h5py
     # via libsonare
 packaging==26.3
     # via pytest

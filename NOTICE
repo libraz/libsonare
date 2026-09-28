@@ -126,3 +126,26 @@ Eigen
   from the URL below.
 
   https://gitlab.com/libeigen/eigen
+
+================================================================================
+SADIE II HRTF Database
+================================================================================
+
+  Copyright 2018, University of York.
+
+  Licensed under the Apache License, Version 2.0 (SPDX: Apache-2.0).
+
+  libsonare embeds a derived subset of the SADIE II database's subject D1
+  (KU100) head-related impulse responses as the playback renderer's default
+  HRTF set. The original measurements were reduced to a 5-degree-azimuth by
+  15-degree-elevation grid, converted to 128-tap minimum-phase filters with a
+  separately extracted interaural time delay per direction, and quantized to
+  int16 in libsonare's own SHRF container format.
+
+  Citation: Armstrong, C., Thresh, L., Murphy, D., Kearney, G. (2018). "A
+  Perceptual Evaluation of Individual and Non-Individual HRTFs: A Case Study
+  of the SADIE II Database." Applied Sciences, 8(11), 2029.
+
+  https://www.york.ac.uk/sadie-project/database.html
+
+  Embedded as: src/playback/default.shrf

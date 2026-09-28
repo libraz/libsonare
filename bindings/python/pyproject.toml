@@ -163,6 +163,9 @@ follow_imports_for_stubs = true
 
 [tool.rye]
 dev-dependencies = [
+    # Reads SOFA (HDF5) HRIR files for tools/playback/sofa_to_shrf.py; not needed
+    # at runtime or by the published package.
+    "h5py>=3.12",
     "mypy>=1.13",
     "pytest>=9.0.2",
     "ruff>=0.8",
