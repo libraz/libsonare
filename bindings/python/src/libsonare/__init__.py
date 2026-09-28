@@ -4,6 +4,12 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 from ._effects_polyphony import PolyphonicAnalysis
+from ._playback import (
+    HrtfSet,
+    PlaybackLoudnessMeter,
+    PlaybackRenderer,
+    render_playback,
+)
 from ._project import (
     AssistSidecar,
     BuiltinSynthConfig,
@@ -600,6 +606,10 @@ __all__ = [
     "PhaseScopeReport",
     "PitchClass",
     "PitchResult",
+    "HrtfSet",
+    "PlaybackLoudnessMeter",
+    "PlaybackRenderer",
+    "render_playback",
     "Project",
     "ProjectDeserializeResult",
     "ProjectClip",

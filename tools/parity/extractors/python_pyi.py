@@ -250,6 +250,7 @@ _SCANNED: tuple[str, ...] = (
     "_engine_pages.py",
     "_acoustic.py",
     "_conversions.py",
+    "_playback.py",
 )
 
 # Modules deliberately NOT parsed, each family with the reason it carries no
@@ -284,6 +285,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
             "_ffi_signatures_mixing_assistant.py",
             "_ffi_signatures_project.py",
             "_ffi_signatures_repair_dynamics.py",
+            "_ffi_signatures_playback.py",
         ),
     ),
     (

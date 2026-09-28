@@ -48,6 +48,7 @@ class CapabilitiesFeatures(TypedDict):
     acousticSim: bool
     pitchEditor: bool
     voiceChanger: bool
+    playback: bool
 
 class CapabilitiesDecode(TypedDict):
     builtin: list[str]

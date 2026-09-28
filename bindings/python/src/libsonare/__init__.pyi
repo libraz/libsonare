@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
+from ._playback import HrtfSet as HrtfSet
+from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
+from ._playback import PlaybackRenderer as PlaybackRenderer
+from ._playback import render_playback as render_playback
 from ._project import AssistSidecar as AssistSidecar
 from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import ExternalInstrument as ExternalInstrument
