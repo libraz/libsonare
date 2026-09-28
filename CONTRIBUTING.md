@@ -58,7 +58,7 @@ Tests import built output, so build before testing. The Node and WASM tests impo
 
 Build through the package scripts rather than calling `tsc` yourself. A declaration emit only ever adds to `dist/`, so a deleted or renamed source leaves its `.d.ts` behind, and the npm tarball ships `dist/` whole — `yarn build` is what removes it, and nothing fails while the orphan is there.
 
-**The WASM module** — additionally emsdk 5.0.2:
+**The WASM module** — additionally emsdk 6.0.10:
 
 ```bash
 source /path/to/emsdk/emsdk_env.sh

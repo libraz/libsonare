@@ -112,7 +112,7 @@ def main() -> int:
     if args.write_baseline:
         payload = {
             "format": 1,
-            "toolchain": {"emsdk": "5.0.2"},
+            "toolchain": {"emsdk": "6.0.10"},
             "artifacts": current,
         }
         args.baseline.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
