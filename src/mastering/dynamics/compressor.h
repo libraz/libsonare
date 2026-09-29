@@ -55,6 +55,10 @@ class Compressor : public rt::ProcessorBase,
   // envelope follower) are recomputed on the audio thread when the snapshot is
   // adopted, so no per-channel state is written concurrently with processing.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// @brief Most-negative gain reduction since the last prepare()/reset(), for
+  ///        offline callers that want the whole-program worst rather than the
+  ///        instantaneous @ref last_gain_reduction_db.
+  float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
 
   // Automatable parameters (control-thread; no audio-state reset):
   //   0 = threshold_db
@@ -122,6 +126,7 @@ class Compressor : public rt::ProcessorBase,
   // Log-domain attack/release smoothing on the gain-reduction signal (in dB).
   sonare::rt::EnvelopeFollower reduction_smoother_;
   float last_gain_reduction_db_ = 0.0f;
+  float minimum_gain_reduction_db_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::dynamics

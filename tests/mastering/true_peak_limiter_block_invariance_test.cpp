@@ -47,14 +47,20 @@ TruePeakLimiterConfig limiter_config() {
   return config;
 }
 
+TruePeakLimiterConfig detect_only_limiter_config() {
+  TruePeakLimiterConfig config = limiter_config();
+  config.apply_gain_at_input_rate = true;
+  return config;
+}
+
 // Runs one limiter instance over @p input, handing it @p block samples at a
 // time (the final chunk is whatever is left).
-std::vector<std::vector<float>> run_in_blocks(const std::vector<std::vector<float>>& input,
-                                              int prepared_block_size,
-                                              const std::vector<int>& block_sizes) {
+std::vector<std::vector<float>> run_in_blocks(
+    const std::vector<std::vector<float>>& input, int prepared_block_size,
+    const std::vector<int>& block_sizes, const TruePeakLimiterConfig& config = limiter_config()) {
   auto output = input;
   const int channels = static_cast<int>(output.size());
-  TruePeakLimiter limiter(limiter_config());
+  TruePeakLimiter limiter(config);
   limiter.prepare(kSampleRate, prepared_block_size, channels);
   std::vector<float*> pointers(static_cast<std::size_t>(channels));
   int offset = 0;
@@ -151,6 +157,46 @@ TEST_CASE("TruePeakLimiter output does not depend on the caller's block size",
     CAPTURE(block);
     require_identical(run_in_blocks(input, total, uniform_blocks(total, block)), reference);
     require_identical(run_in_blocks(input, total, {kSignalSamples, kFlushSamples}), reference);
+  }
+}
+
+// mastering-009: process_polyphase_detect_only (apply_gain_at_input_rate=true)
+// used to upsample through the non-delayed upsample_with_history, whose
+// truncated-forward-stencil block-boundary error (documented on
+// TruePeakFilter::upsample_with_history) is invisible for a one-shot call but
+// depends on how the caller chunked the stream for a continuous signal path --
+// exactly the same shape of bug the mono/stereo cases above guard against for
+// the default (polyphase) path.
+TEST_CASE("TruePeakLimiter detect-only output does not depend on the caller's block size",
+          "[mastering][maximizer][block_invariance]") {
+  const float drive = GENERATE(1.0f, 2.0f, 5.0f, 15.0f, 60.0f);
+  CAPTURE(drive);
+  const auto mono_input = program(drive);
+  const int total = static_cast<int>(mono_input.size());
+  const TruePeakLimiterConfig config = detect_only_limiter_config();
+
+  SECTION("mono") {
+    const std::vector<std::vector<float>> input{mono_input};
+    const auto reference = run_in_blocks(input, total, {total}, config);
+
+    const int block = GENERATE(256, 512, 1024, 4096, 16384);
+    CAPTURE(block);
+    require_identical(run_in_blocks(input, total, uniform_blocks(total, block), config), reference);
+    // A ragged split that lands mid-transient.
+    require_identical(run_in_blocks(input, total, {5000, 7001, total - 12001}, config), reference);
+  }
+
+  SECTION("stereo stays linked") {
+    std::vector<float> right = mono_input;
+    for (std::size_t i = 0; i < right.size(); ++i) {
+      right[i] *= (i % 3 == 0) ? 0.5f : 1.0f;
+    }
+    const std::vector<std::vector<float>> input{mono_input, right};
+    const auto reference = run_in_blocks(input, total, {total}, config);
+
+    const int block = GENERATE(512, 4096);
+    CAPTURE(block);
+    require_identical(run_in_blocks(input, total, uniform_blocks(total, block), config), reference);
   }
 }
 

@@ -522,6 +522,8 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
       auto result = maximizer::loudness_optimize(audio, config);
       applied_gain_db += result.applied_gain_db;
       outcome.loudness_target_limited = result.loudness_target_limited;
+      accumulate_substitutions(outcome.non_finite_substitution_count,
+                               result.non_finite_substitution_count);
       return result.audio;
     });
   } else if (name == "saturation.tape") {

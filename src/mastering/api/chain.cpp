@@ -474,7 +474,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"dynamics.deesser", processor.last_gain_reduction_db()});
+        {"dynamics.deesser", processor.minimum_gain_reduction_db()});
     if (!report("dynamics.deesser")) return std::nullopt;
   }
 
@@ -490,7 +490,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"dynamics.compressor", processor.last_gain_reduction_db()});
+        {"dynamics.compressor", processor.minimum_gain_reduction_db()});
     if (!report("dynamics.compressor")) return std::nullopt;
   }
 
@@ -499,7 +499,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"dynamics.multibandComp", max_abs_gain_reduction(processor.last_gain_reductions_db())});
+        {"dynamics.multibandComp", max_abs_gain_reduction(processor.minimum_gain_reductions_db())});
     if (!report("dynamics.multibandComp")) return std::nullopt;
   }
 
@@ -728,7 +728,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     mastering::dynamics::DeEsser processor(config_.dynamics.deesser.config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"dynamics.deesser", processor.last_gain_reduction_db()});
+        {"dynamics.deesser", processor.minimum_gain_reduction_db()});
     if (!report("dynamics.deesser")) return std::nullopt;
   }
 
@@ -744,7 +744,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     mastering::dynamics::Compressor processor(config_.dynamics.compressor.config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"dynamics.compressor", processor.last_gain_reduction_db()});
+        {"dynamics.compressor", processor.minimum_gain_reduction_db()});
     if (!report("dynamics.compressor")) return std::nullopt;
   }
 
@@ -753,7 +753,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     mastering::multiband::MultibandCompressor processor(config_.dynamics.multiband_comp.config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"dynamics.multibandComp", max_abs_gain_reduction(processor.last_gain_reductions_db())});
+        {"dynamics.multibandComp", max_abs_gain_reduction(processor.minimum_gain_reductions_db())});
     if (!report("dynamics.multibandComp")) return std::nullopt;
   }
 

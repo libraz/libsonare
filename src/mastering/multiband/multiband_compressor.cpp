@@ -108,6 +108,15 @@ void MultibandCompressor::process(float* const* channels, int num_channels, int 
   if (member_discards() != member_discards_before) note_non_finite_discard();
 }
 
+std::vector<float> MultibandCompressor::minimum_gain_reductions_db() const {
+  std::vector<float> out;
+  out.reserve(compressors_.size());
+  for (const auto& compressor : compressors_) {
+    out.push_back(compressor.minimum_gain_reduction_db());
+  }
+  return out;
+}
+
 void MultibandCompressor::reset() {
   crossover_.reset();
   for (auto& compressor : compressors_) {

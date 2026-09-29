@@ -43,6 +43,10 @@ class DeEsser : public rt::ProcessorBase, public rt::RtConfigLifecycle<DeEsser, 
   // follower) are recomputed on the audio thread when the snapshot is adopted,
   // so no per-channel state is written concurrently with processing.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// @brief Most-negative gain reduction since the last prepare()/reset(), for
+  ///        offline callers that want the whole-program worst rather than the
+  ///        instantaneous @ref last_gain_reduction_db.
+  float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = frequency_hz (clamped to > 0)
@@ -77,6 +81,7 @@ class DeEsser : public rt::ProcessorBase, public rt::RtConfigLifecycle<DeEsser, 
   std::vector<Biquad> bandpass2_;
   std::vector<sonare::rt::EnvelopeFollower> followers_;
   float last_gain_reduction_db_ = 0.0f;
+  float minimum_gain_reduction_db_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::dynamics

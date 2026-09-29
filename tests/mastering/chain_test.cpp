@@ -24,6 +24,7 @@
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/common/loudness_measure.h"
@@ -733,6 +734,51 @@ TEST_CASE("Mono chain measures loudness at the stage input after upstream makeup
   REQUIRE_THAT(result.output_lufs, WithinAbs(config.loudness.target_lufs, 0.05f));
 }
 
+// mastering-012: the offline runner processes in
+// internal::kOfflineProcessorBlockSize (~1.49 s at 44.1 kHz) blocks, and
+// dynamics.compressor/deesser/multibandComp used to report
+// last_gain_reduction_db() -- the FINAL block's instantaneous value -- while
+// the limiter stages already used the whole-program minimum. A program that
+// only compresses in its first block, with the compressor fully released by
+// the time the last (mostly silent) block finishes, used to read back near
+// 0 dB regardless of the real mid-song reduction.
+TEST_CASE("dynamics.compressor's reported gain reduction reflects the whole program, not the "
+          "final block",
+          "[mastering][chain]") {
+  using sonare::mastering::api::internal::kOfflineProcessorBlockSize;
+  constexpr int kSampleRate = 44100;
+  // Three blocks: loud, then two full blocks of silence. last_gain_reduction_db()
+  // reports the worst reduction WITHIN its own process() call, so one silent
+  // block after the loud one still carries the release tail crossing that
+  // block boundary; a second silent block is needed for the envelope to fully
+  // settle before the "final block" the old code read from begins.
+  const std::size_t total = static_cast<std::size_t>(kOfflineProcessorBlockSize) * 3;
+
+  std::vector<float> samples(total, 0.0f);
+  // Loud enough (threshold_db -18, ratio 2) to force real gain reduction, only
+  // in the first block; the render ends two full blocks (~2.97 s) of silence
+  // later, so the compressor's release (100 ms default) has long recovered by
+  // the time the final block's own worst-reduction figure is taken.
+  for (std::size_t i = 0; i < static_cast<std::size_t>(kOfflineProcessorBlockSize); ++i) {
+    samples[i] = 0.9f * std::sin(sonare::constants::kTwoPi * 300.0f * static_cast<float>(i) /
+                                 kSampleRate);
+  }
+
+  MasteringChainConfig config;
+  config.dynamics.compressor.enabled = true;
+  const auto result =
+      MasteringChain(config).process_mono(samples.data(), samples.size(), kSampleRate);
+
+  float compressor_reduction = 0.0f;
+  for (const auto& entry : result.stage_gain_reductions) {
+    if (entry.stage == "dynamics.compressor") compressor_reduction = entry.gain_reduction_db;
+  }
+  CAPTURE(compressor_reduction);
+  // The final block is silent, so the old last-block-only report would read
+  // back near 0 dB; the whole-program minimum must show the real reduction.
+  REQUIRE(compressor_reduction < -3.0f);
+}
+
 TEST_CASE("Mono chain leaves silence unchanged when loudness is enabled",
           "[mastering][chain][loudness]") {
   constexpr int sample_rate = 48000;
@@ -1234,6 +1280,61 @@ TEST_CASE("StreamingMasteringChain options constructor ignores gain when loudnes
   chain.prepare(44100.0, 512, 1);
   const auto& names = chain.stage_names();
   REQUIRE(std::find(names.begin(), names.end(), "loudness.optimize") == names.end());
+}
+
+// mastering-013: release_ms=0 is the documented "use the library default"
+// sentinel (LoudnessStage::release_ms). The offline chain resolves it before
+// building its post-gain true-peak limiter (loudness_release_ms(), chain.cpp);
+// the streaming chain used to pass the raw sentinel straight through, so its
+// limiter ran with an effectively instantaneous release instead of
+// kDefaultLoudnessReleaseMs. A config built with the sentinel and one built
+// with the default spelled out explicitly must therefore process identically.
+TEST_CASE(
+    "StreamingMasteringChain resolves the loudness release_ms=0 sentinel like the offline "
+    "chain",
+    "[mastering][chain][streaming]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 256;
+  constexpr int kSamples = 4096;
+
+  auto burst_then_quiet = []() {
+    // A loud transient burst forces real gain reduction; the long quiet tail
+    // that follows is where a 0 ms and a 50 ms release audibly disagree.
+    std::vector<float> signal(static_cast<size_t>(kSamples), 0.02f);
+    for (int i = 0; i < 200; ++i) {
+      signal[static_cast<size_t>(i)] = 0.95f;
+    }
+    return signal;
+  };
+
+  auto process = [&](float release_ms) {
+    MasteringChainConfig config;
+    config.loudness.enabled = true;
+    config.loudness.target_lufs = -6.0f;
+    config.loudness.ceiling_db = -0.3f;
+    config.loudness.release_ms = release_ms;
+    config.loudness.max_limiter_gain_reduction_db = 24.0f;
+
+    StreamingMasteringChainOptions options;
+    options.loudness_static_gain_db = 18.0f;  // drive the limiter hard
+
+    StreamingMasteringChain chain(config, options);
+    chain.prepare(kSampleRate, kBlockSize, 1);
+
+    std::vector<float> signal = burst_then_quiet();
+    for (int offset = 0; offset < kSamples; offset += kBlockSize) {
+      float* channel = signal.data() + offset;
+      float* channels[] = {channel};
+      chain.process_block(channels, 1, kBlockSize);
+    }
+    return signal;
+  };
+
+  const auto sentinel = process(0.0f);
+  const auto explicit_default = process(sonare::mastering::maximizer::kDefaultLoudnessReleaseMs);
+
+  REQUIRE(sentinel.size() == explicit_default.size());
+  CHECK(max_abs_difference(sentinel, explicit_default) == 0.0f);
 }
 
 TEST_CASE("StreamingMasteringChain processes mono blocks", "[mastering][chain][streaming]") {

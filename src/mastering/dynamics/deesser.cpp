@@ -98,6 +98,7 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
   if (discarded) note_non_finite_discard();
 
   last_gain_reduction_db_ = max_reduction;
+  minimum_gain_reduction_db_ = std::min(minimum_gain_reduction_db_, last_gain_reduction_db_);
 }
 
 void DeEsser::reset() {
@@ -107,6 +108,7 @@ void DeEsser::reset() {
     follower.reset();
   }
   last_gain_reduction_db_ = 0.0f;
+  minimum_gain_reduction_db_ = 0.0f;
 }
 
 bool DeEsser::set_parameter(unsigned int param_id, float value) {

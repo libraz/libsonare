@@ -160,6 +160,10 @@ std::vector<rt::ParamDescriptor> AdaptiveRelease::parameter_descriptors() const 
           {"crestLow", 4},  {"crestHigh", 5},    {"releaseSmoothingMs", 6}};
 }
 
+bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id != 0u;
+}
+
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
   if (config.lookahead_ms < 0.0f || config.min_release_ms < 0.0f ||
       config.max_release_ms < config.min_release_ms || config.crest_window_ms <= 0.0f ||

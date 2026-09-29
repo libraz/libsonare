@@ -70,6 +70,9 @@ class AdaptiveRelease : public rt::ProcessorBase {
   // Automatable parameters: 0=ceilingDb, 1=minReleaseMs, 2=maxReleaseMs,
   // 3=crestWindowMs, 4=crestLow, 5=crestHigh, 6=releaseSmoothingMs.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
+  // ceilingDb forwards to the inner TruePeakLimiter's set_config(), which
+  // allocates a new config snapshot (see TruePeakLimiter::parameter_is_realtime_safe).
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:
   static void validate_config(const AdaptiveReleaseConfig& config);

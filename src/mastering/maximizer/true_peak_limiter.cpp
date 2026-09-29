@@ -96,9 +96,18 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
   // prior contents outright): a re-prepare with a different lookahead /
   // oversample factor must not keep stale delay-line lengths, which would
   // misalign the gain envelope against the signal.
+  // process_polyphase_detect_only's own lookahead: the configured lookahead_ms
+  // PLUS true_peak_filter_'s own group delay, since that path now upsamples
+  // through upsample_with_history_delayed (a continuous signal path, not a
+  // one-shot measurement -- see its own doc) and must delay the base-rate
+  // signal it applies the derived gain to by the same amount, or the gain
+  // envelope and the samples it multiplies drift out of alignment across
+  // every block boundary. Mirrored in latency_samples() below.
+  const int detect_only_lookahead_samples =
+      std::max(lookahead_samples_, 0) + std::max(true_peak_filter_.latency_samples(), 0);
   lookahead_.assign(dynamics::kRealtimePreparedChannels, {});
   for (auto& buffer : lookahead_) {
-    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
+    buffer.prepare(static_cast<size_t>(detect_only_lookahead_samples));
   }
   oversampled_lookahead_.assign(dynamics::kRealtimePreparedChannels, {});
   for (auto& buffer : oversampled_lookahead_) {
@@ -288,9 +297,9 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
     oversampled_ptrs_[static_cast<size_t>(ch)] =
         oversampled_buffers_[static_cast<size_t>(ch)].data();
   }
-  true_peak_filter_.upsample_with_history(input_ptrs_.data(), oversampled_ptrs_.data(),
-                                          num_channels, num_samples, true_peak_history_,
-                                          true_peak_scratch_);
+  true_peak_filter_.upsample_with_history_delayed(input_ptrs_.data(), oversampled_ptrs_.data(),
+                                                  num_channels, num_samples, true_peak_history_,
+                                                  true_peak_scratch_);
 
   std::fill_n(linked_abs_.begin(), static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
   const int excluded_channel = detector_excluded_channel(num_channels);
@@ -495,8 +504,9 @@ void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
 }
 
 int TruePeakLimiter::latency_samples() const noexcept {
-  const int oversampling_delay =
-      config_.apply_gain_at_input_rate ? 0 : downsampler_.streaming_round_trip_latency_samples();
+  const int oversampling_delay = config_.apply_gain_at_input_rate
+                                     ? true_peak_filter_.latency_samples()
+                                     : downsampler_.streaming_round_trip_latency_samples();
   return limiter_.latency_samples() + oversampling_delay;
 }
 

@@ -693,14 +693,34 @@ TEST_CASE("loudness_optimize reports the substitutions its internal limiter made
   }
 }
 
-TEST_CASE("a stereo-only branch reports the substitutions it made",
+// mastering-014: this branch (named_processor.cpp's mono maximizer.loudnessOptimize
+// case) used to drop result.non_finite_substitution_count on the floor while
+// copying applied_gain_db and loudness_target_limited out of the same
+// LoudnessOptimizeResult, so a mono caller always saw 0 regardless of what the
+// internal limiter actually substituted.
+TEST_CASE("maximizer.loudnessOptimize's mono branch reports the substitutions it made",
+          "[mastering][named-processor][non-finite]") {
+  using sonare::mastering::api::apply_named_processor;
+
+  const std::vector<float> program = chain_program();
+  const std::vector<sonare::mastering::api::Param> params{{"targetLufs", 1.0e6},
+                                                          {"ceilingDb", 1.0e6}};
+  const auto result = apply_named_processor("maximizer.loudnessOptimize", program.data(),
+                                            program.size(), kChainSampleRate, params);
+  REQUIRE(result.non_finite_substitution_count > 0u);
+  REQUIRE(non_finite_count(result.samples) == 0u);
+}
+
+TEST_CASE("maximizer.loudnessOptimize's stereo branch reports the substitutions it made",
           "[mastering][named-processor][non-finite]") {
   using sonare::mastering::api::apply_named_processor_stereo;
 
-  // maximizer.loudnessOptimize has no mono branch, so it is dispatched by the
-  // stereo entry directly rather than through the shared dispatch the cases
-  // above reach. A result assembled there carries the count only if that branch
-  // threads the same outcome the shared one does.
+  // maximizer.loudnessOptimize has its own dedicated stereo branch: it measures
+  // the pair's integrated LUFS together and runs a TruePeakLimiter directly,
+  // rather than going through the shared per-channel apply_per_channel()
+  // dispatch the mono branch (and the cases above) use. A result assembled
+  // there carries the count only if that branch threads the same outcome the
+  // shared one does.
   const std::vector<float> program = chain_program();
   const std::vector<sonare::mastering::api::Param> params{{"targetLufs", 1.0e6},
                                                           {"ceilingDb", 1.0e6}};

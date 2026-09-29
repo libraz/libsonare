@@ -13,6 +13,7 @@
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
 #include "mastering/eq/tilt.h"
+#include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/denoise_streaming.h"
@@ -290,10 +291,19 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   // matches the offline render.
   std::unique_ptr<rt::ProcessorBase> loudness_limiter;
   if (config_.loudness.enabled) {
+    // release_ms 0 is the documented "use the library default" sentinel
+    // (LoudnessStage::release_ms); the offline chain resolves it the same way
+    // (loudness_release_ms(), chain.cpp) before building its own limiter
+    // config, so the two chains must resolve it identically here too. The
+    // config was already accepted by validate_mastering_chain_config() above,
+    // so this call cannot throw -- it exists only for the resolved value.
+    const float resolved_release_ms = mastering::maximizer::validate_loudness_params(
+        config_.loudness.target_lufs, config_.loudness.ceiling_db, config_.loudness.release_ms,
+        config_.loudness.max_limiter_gain_reduction_db, config_.loudness.true_peak_oversample);
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
-            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
-            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
+            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample, resolved_release_ms,
+            config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size, num_channels);
     substitution_sources.push_back(limiter.get());

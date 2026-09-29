@@ -14,9 +14,8 @@ extern "C" {
 // Mastering
 // ============================================================================
 
-// Config for the simple one-shot sonare_mastering_process / _stereo helpers.
-// These run the maximizer in full apply (not detect-only) mode. To select
-// detect-only mode or chain other processors, use the named-processor path
+// Config for the simple one-shot sonare_mastering_process helper. To chain
+// other processors, use the named-processor path
 // (sonare_mastering_apply_named_processor with "maximizer.loudnessOptimize") or
 // the full MasteringChain API instead.
 //
@@ -151,8 +150,13 @@ typedef struct {
   // Per-stage gain reductions for the dynamics / maximizer stages that report
   // one (a subset of @c stages). @c stage_gain_reduction_stages holds the stage
   // identifiers and @c stage_gain_reduction_values the matching dB values
-  // (<= 0), both of length @c stage_gain_reductions_count. Memory is allocated
-  // by libsonare and released by @c sonare_free_mastering_chain_result.
+  // (<= 0), both of length @c stage_gain_reductions_count. Every entry is the
+  // most-negative reduction reported anywhere in the whole render, not an
+  // instantaneous or final-block value -- consistent across every stage that
+  // can appear here (dynamics.deesser, dynamics.compressor,
+  // dynamics.multibandComp, maximizer.truePeakLimiter, loudness.optimize).
+  // Memory is allocated by libsonare and released by
+  // @c sonare_free_mastering_chain_result.
   char** stage_gain_reduction_stages;
   float* stage_gain_reduction_values;
   size_t stage_gain_reductions_count;

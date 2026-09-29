@@ -36,6 +36,12 @@ class MultibandCompressor : public rt::ProcessorBase {
   void set_config(const MultibandCompressorConfig& config);
   const MultibandCompressorConfig& config() const { return config_; }
   const std::vector<float>& last_gain_reductions_db() const { return last_gain_reductions_db_; }
+  /// @brief Per-band most-negative gain reduction since the last
+  ///        prepare()/reset(), mirroring @ref last_gain_reductions_db but each
+  ///        entry sourced from that band's own
+  ///        dynamics::Compressor::minimum_gain_reduction_db(), which already
+  ///        tracks it -- no separate whole-program state to keep in sync here.
+  std::vector<float> minimum_gain_reductions_db() const;
 
   // Automatable parameters (RT-safe, no allocation, no audio-state reset).
   // Per-band block layout with kBandStride params per band: band b occupies

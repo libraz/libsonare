@@ -18,15 +18,29 @@ namespace sonare::mastering::maximizer {
 struct TruePeakLimiterConfig {
   /// @brief Output true-peak ceiling in dBTP.
   /// @details Enforced per sample at @ref oversample_factor, which is the
-  ///   resolution this limiter reconstructs the signal at. A meter running at a
-  ///   HIGHER oversampling than the limiter interpolates points the limiter
-  ///   never evaluated, so it reads slightly above the ceiling: measured at
-  ///   +0.02 dB for a -0.3 dBTP ceiling with the default 4x limiter read by an
-  ///   8x meter, on transient program material, flat from 0 to +36 dB of drive.
-  ///   That residue is a property of measuring finer than the limiter runs, not
-  ///   a limiter fault, and it is bounded — it does not grow with drive. Meter
-  ///   at the same oversampling as the limiter to see the ceiling held exactly,
-  ///   or raise @ref oversample_factor to push the residue down.
+  ///   resolution this limiter reconstructs the signal at. Two independent
+  ///   residues can put a meter above the ceiling, and only the first shrinks
+  ///   to nothing by matching the meter's oversampling to the limiter's:
+  ///
+  ///   1. A meter running at a HIGHER oversampling than the limiter
+  ///      interpolates points the limiter never evaluated: measured at +0.02
+  ///      dB for a -0.3 dBTP ceiling with the default 4x limiter read by an 8x
+  ///      meter, on transient program material, flat from 0 to +36 dB of
+  ///      drive. Bounded, does not grow with drive; raise @ref oversample_factor
+  ///      to push it down, or match the meter's factor to eliminate it.
+  ///   2. Even a meter at the SAME oversample_factor can read above the
+  ///      ceiling: the limiter's own internal decimation step (the polyphase
+  ///      lowpass that returns the oversampled, ceiling-bounded signal to the
+  ///      base rate) is a different FIR design from the canonical true-peak
+  ///      interpolation filter this class and every metering::true_peak_db
+  ///      caller use to CHECK the ceiling, so decimating with one filter and
+  ///      re-interpolating with the other is not a lossless round trip.
+  ///      Measured up to ~0.47 dB over a -1.0 dBTP ceiling on full-scale
+  ///      broadband noise (white noise, 48 kHz, 4x, release_ms=50); musical
+  ///      program material measures closer to the smaller end of this range.
+  ///      This residue does NOT shrink by raising the meter's oversampling,
+  ///      because it is not an interpolation-resolution gap -- it needs the
+  ///      two filters reconciled to close (tracked separately).
   ///
   ///   The ceiling is applied sample by sample and never as a whole-block
   ///   rescale: a correction derived from a block's own maximum would make the
@@ -150,12 +164,17 @@ class TruePeakLimiter : public rt::ProcessorBase {
  private:
   void prepare_buffers(int num_channels);
   void update_time_constants();
-  /// @brief Sample rate the gain-smoother loop actually advances at.
-  /// @details The fast/slow attack, release and crest envelopes are updated once
-  ///          per OVERSAMPLED sample, so their millisecond time constants must be
-  ///          converted to one-pole coefficients at the oversampled rate
-  ///          (base rate * oversample factor). Converting at the base rate makes
-  ///          every envelope run a factor of `oversample_factor` too fast.
+  /// @brief Sample rate the RELEASE and crest-detector envelopes are converted
+  ///        at; the fast/slow ATTACK envelopes deliberately are not (see
+  ///        update_time_constants()).
+  /// @details The gain-smoother loop advances once per OVERSAMPLED sample, so
+  ///          the release and crest time constants must be converted to
+  ///          one-pole coefficients at this rate (base rate * oversample
+  ///          factor) or a nominal release runs a factor of `oversample_factor`
+  ///          too fast. The attack coefficients are converted at the base rate
+  ///          instead, on purpose: they are already near-instant peak clamps,
+  ///          and running them `oversample_factor` times faster only tightens
+  ///          limiting further, never loosens it.
   double smoother_sample_rate() const noexcept;
   float adaptive_release_coeff(float linked_peak);
   void process_polyphase(float* const* channels, int num_channels, int num_samples);

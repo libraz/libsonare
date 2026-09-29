@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <vector>
 
 #include "mastering/api/internal_processor_runner.h"
@@ -165,12 +166,67 @@ TEST_CASE("TruePeakLimiter catches sinc-estimated inter-sample overs", "[masteri
   REQUIRE(metering::true_peak_db(limited, 8) <= -0.99f);
 }
 
+// mastering-008: the limiter's internal decimation filter (rt::Oversampler,
+// a generic Kaiser-windowed lowpass) is a different FIR design from the
+// canonical true-peak interpolation filter metering::true_peak_db uses, so
+// decimating the ceiling-bounded oversampled signal with one filter and
+// re-checking it with the other is not a lossless round trip -- even at
+// matching oversample factors. This is a bounded, measured residue (see
+// true_peak_limiter.h's ceiling_db doc), NOT a brickwall guarantee: reconciling
+// the two filter designs is a cross-module change (src/rt/oversampler.cpp)
+// outside this fix's scope, so this asserts the measured bound rather than
+// "always holds".
+TEST_CASE(
+    "TruePeakLimiter's decimation residue on broadband content stays within the "
+    "documented bound",
+    "[mastering][maximizer]") {
+  const int sample_rate = 48000;
+  const int total_samples = sample_rate * 2;
+  const int block_size = 512;
+  const float ceiling_db = -1.0f;
+  TruePeakLimiter limiter({ceiling_db, 1.0f, 50.0f, 4});
+  limiter.prepare(static_cast<double>(sample_rate), block_size);
+
+  // Full-scale white noise: broadband, sharp sample-to-sample transitions,
+  // the kind of content that most exercises the decimation filter's stopband
+  // (a steady tone, even near Nyquist, has no edges to ring on).
+  std::vector<float> signal(static_cast<size_t>(total_samples));
+  std::mt19937 rng(99);
+  std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+  for (float& s : signal) {
+    s = dist(rng);
+  }
+  // Realistic streaming block size, not one giant call, matching how every
+  // real caller (and every other test in this file) drives the limiter; the
+  // residue measures identically either way (it is not a block-size artifact).
+  for (int offset = 0; offset < total_samples; offset += block_size) {
+    const int count = std::min(block_size, total_samples - offset);
+    float* block = signal.data() + offset;
+    limiter.process(&block, 1, count);
+  }
+
+  const Audio limited = Audio::from_buffer(signal.data(), signal.size(), sample_rate);
+  // Measured at the limiter's own oversample factor, matching the header's
+  // "meter at the same oversampling" guidance -- and still not exact.
+  const float measured = metering::true_peak_db(limited, 4);
+  // Measured ~0.47 dB over ceiling on this exact fixture; bounded to 0.6 dB
+  // (a real margin against FP/build variance, not "anything goes") rather
+  // than asserting the false brickwall measured <= ceiling_db.
+  REQUIRE(measured <= ceiling_db + 0.6f);
+}
+
 TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
           "[mastering][maximizer]") {
   TruePeakLimiter limiter({-6.0f, 0.0f, 0.0f, 4, true});
   limiter.prepare(48000.0, 64);
 
+  // mastering-009: detect-only now delays the base-rate signal by
+  // true_peak_filter_'s own group delay (see latency_samples()) before
+  // applying the derived gain, so the transient's effect on the output no
+  // longer lands at the same index it arrived at -- the tail must be long
+  // enough for it to propagate through that delay first.
   std::vector<float> signal = {0.0f, 1.2f, 0.3f, -1.1f, 0.0f};
+  signal.resize(signal.size() + static_cast<size_t>(limiter.latency_samples()), 0.0f);
   process(limiter, signal);
 
   REQUIRE(peak_abs(signal) <= 0.502f);
@@ -278,13 +334,24 @@ TEST_CASE("TruePeakLimiter keeps mono channel state across stereo alternation",
   limiter.process(first_mono, 1, 1);
   REQUIRE_THAT(first_left[0], WithinAbs(0.0f, 0.0001f));
 
-  float second_left[] = {0.0f};
-  float second_right[] = {0.0f};
-  float* second_stereo[] = {second_left, second_right};
+  // mastering-009: detect-only's own group delay (true_peak_filter_.latency_
+  // samples(), folded into latency_samples() below) now adds to the
+  // lookahead_ms-derived delay, so the loud sample surfaces later than the
+  // very next call -- everything up to that point must stay silent, still on
+  // the stereo channel count this case is about switching to.
+  const int total_delay = limiter.latency_samples();
+  float second_left = 0.0f;
+  float second_right = 0.0f;
+  for (int i = 1; i < total_delay; ++i) {
+    float* silent_stereo[] = {&second_left, &second_right};
+    limiter.process(silent_stereo, 2, 1);
+    REQUIRE_THAT(second_left, WithinAbs(0.0f, 0.0001f));
+  }
+  float* second_stereo[] = {&second_left, &second_right};
   limiter.process(second_stereo, 2, 1);
 
-  REQUIRE(second_left[0] > 0.2f);
-  REQUIRE(second_left[0] <= 0.502f);
+  REQUIRE(second_left > 0.2f);
+  REQUIRE(second_left <= 0.502f);
 }
 
 TEST_CASE("TruePeakLimiter release time constant is independent of oversample factor",
@@ -386,7 +453,11 @@ TEST_CASE("TruePeakLimiter detect-only forces base samples down for inter-sample
   limiter.prepare(48000.0, 64);
 
   // Alternating extreme samples create strong inter-sample peaks between bases.
+  // mastering-009: padded with true_peak_filter_'s own group delay (see
+  // latency_samples()) so the transient's effect on the output has time to
+  // propagate through detect-only's now-delayed base-rate signal path.
   std::vector<float> signal = {0.0f, 1.2f, -1.2f, 1.1f, -1.1f, 0.0f};
+  signal.resize(signal.size() + static_cast<size_t>(limiter.latency_samples()), 0.0f);
   process(limiter, signal);
 
   REQUIRE(peak_abs(signal) <= 0.502f);
@@ -551,6 +622,21 @@ TEST_CASE("AdaptiveRelease preserves lookahead state across release updates",
 
   REQUIRE(released_sample > 0.2f);
   REQUIRE(released_sample <= 0.502f);
+}
+
+// mastering-007: ceilingDb forwards to the inner TruePeakLimiter's
+// set_config(), which allocates a new config snapshot -- the same reason
+// TruePeakLimiter, Maximizer and SoftKneeMax all refuse automation on their
+// own ceiling parameter.
+TEST_CASE("AdaptiveRelease refuses realtime automation on ceilingDb", "[mastering][maximizer]") {
+  AdaptiveRelease limiter;
+  REQUIRE_FALSE(limiter.parameter_is_realtime_safe(0));
+  REQUIRE(limiter.parameter_is_realtime_safe(1));
+  REQUIRE(limiter.parameter_is_realtime_safe(2));
+  REQUIRE(limiter.parameter_is_realtime_safe(3));
+  REQUIRE(limiter.parameter_is_realtime_safe(4));
+  REQUIRE(limiter.parameter_is_realtime_safe(5));
+  REQUIRE(limiter.parameter_is_realtime_safe(6));
 }
 
 TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceiling",
