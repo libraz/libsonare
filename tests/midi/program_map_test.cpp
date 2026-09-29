@@ -469,9 +469,11 @@ TEST_CASE("ExternalPortDescriptor is_midi2 gates emission protocol", "[midi]") {
   REQUIRE(destination_emits_midi2(host));
   REQUIRE(destination_emits_midi2(SoundDestination::Null()));
 
+  sonare::midi::Midi1ToMidi2Translator translator;
+
   // A MIDI 2.0 event to a MIDI 1.0 port is down-converted (and re-grouped).
   const Ump on2 = make_midi2_note_on(0, 4, 60, 0x8000);
-  const Ump to_midi1 = convert_for_destination(on2, midi1_port);
+  const Ump to_midi1 = convert_for_destination(on2, midi1_port, translator);
   REQUIRE(to_midi1.message_type() == UmpMessageType::kMidi1ChannelVoice);
   REQUIRE(to_midi1.note_number() == 60);
   REQUIRE(to_midi1.channel() == 4);
@@ -479,7 +481,7 @@ TEST_CASE("ExternalPortDescriptor is_midi2 gates emission protocol", "[midi]") {
 
   // A MIDI 1.0 event to a MIDI 2.0 port is up-converted (and re-grouped).
   const Ump on1 = make_midi1_note_on(0, 4, 60, 100);
-  const Ump to_midi2 = convert_for_destination(on1, midi2_port);
+  const Ump to_midi2 = convert_for_destination(on1, midi2_port, translator);
   REQUIRE(to_midi2.message_type() == UmpMessageType::kMidi2ChannelVoice);
   REQUIRE(to_midi2.note_number() == 60);
   REQUIRE(to_midi2.group == 3);
@@ -487,9 +489,19 @@ TEST_CASE("ExternalPortDescriptor is_midi2 gates emission protocol", "[midi]") {
   // An event already in the target protocol passes through with only the group
   // applied (no lossy re-conversion).
   const Ump already1 = make_midi1_note_on(0, 4, 60, 100);
-  const Ump passthrough = convert_for_destination(already1, midi1_port);
+  const Ump passthrough = convert_for_destination(already1, midi1_port, translator);
   REQUIRE(passthrough.message_type() == UmpMessageType::kMidi1ChannelVoice);
   REQUIRE(passthrough.group == 5);
+
+  // Bank select on the way to a MIDI 2.0 port is absorbed and reappears inside
+  // the next program change; nothing is sent for the CCs themselves.
+  const Ump absorbed = convert_for_destination(
+      sonare::midi::make_midi1_control_change(0, 4, 0, 0x79), midi2_port, translator);
+  REQUIRE(absorbed.word_count == 0);
+  const Ump banked = convert_for_destination(sonare::midi::make_midi1_program_change(0, 4, 24),
+                                             midi2_port, translator);
+  REQUIRE(banked ==
+          sonare::midi::make_midi2_program_change(3, 4, 24, 0x79, 0, /*bank_valid=*/true));
 }
 
 TEST_CASE("convert_for_destination_messages expands a banked program change for a MIDI 1.0 port",
@@ -499,12 +511,14 @@ TEST_CASE("convert_for_destination_messages expands a banked program change for 
   const auto midi2_port =
       SoundDestination::ExternalPort(1, "P2", "Dev", /*group=*/3, /*is_midi2=*/true);
 
+  sonare::midi::Midi1ToMidi2Translator translator;
+
   // A MIDI 2.0 banked program change to a MIDI 1.0 port must NOT drop the bank:
   // it expands to CC#0 (bank MSB), CC#32 (bank LSB), then Program Change.
   const Ump pc = sonare::midi::make_midi2_program_change(/*group=*/0, /*channel=*/2,
                                                          /*program=*/24, /*bank_msb=*/0x79,
                                                          /*bank_lsb=*/1, /*bank_valid=*/true);
-  const auto lowered = sonare::midi::convert_for_destination_messages(pc, midi1_port);
+  const auto lowered = sonare::midi::convert_for_destination_messages(pc, midi1_port, translator);
   REQUIRE(lowered.count == 3);
   REQUIRE(lowered.messages[0].status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange));
   REQUIRE(lowered.messages[0].note_number() == 0);   // bank MSB controller (CC#0)
@@ -515,7 +529,7 @@ TEST_CASE("convert_for_destination_messages expands a banked program change for 
   }
 
   // The same event to a MIDI 2.0 port stays a single up-protocol message.
-  const auto kept = sonare::midi::convert_for_destination_messages(pc, midi2_port);
+  const auto kept = sonare::midi::convert_for_destination_messages(pc, midi2_port, translator);
   REQUIRE(kept.count == 1);
   REQUIRE(kept.messages[0].message_type() == UmpMessageType::kMidi2ChannelVoice);
 }

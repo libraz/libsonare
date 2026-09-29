@@ -212,15 +212,15 @@ class CcMap {
   /// the narrowest single-UMP form that carries it losslessly:
   ///  - kControlChange7  -> 7-bit MIDI 1.0 control-change.
   ///  - kControlChange14 -> MIDI 2.0 control-change with the 14-bit value
-  ///    bit-replicated into the 32-bit field (a single 7-bit MIDI 1.0 CC cannot
+  ///    up-scaled into the 32-bit field (a single 7-bit MIDI 1.0 CC cannot
   ///    carry 14 bits, and a MIDI 1.0 MSB/LSB pair is two messages).
   ///  - kRpn / kNrpn     -> MIDI 2.0 Registered / Assignable Controller, whose
   ///    one word carries the selector as (bank, index) plus the 32-bit value.
   ///    The MIDI 1.0 spelling of the same gesture is four messages.
   ///
-  /// The scaling is bit-replication (scale_cc_14_to_32), the controller family --
-  /// not the min-center-max pitch-bend family, which trades precision across the
-  /// range to keep a center value a controller does not have.
+  /// The scaling is min-center-max (scale_cc_14_to_32), the default family of
+  /// M2-115-U 3, which keeps minimum, center and maximum exact; down-scaling by
+  /// truncation returns the 14-bit value.
   ///
   /// Returns false ONLY when no binding targets `param_id`; a supported binding
   /// never fails here, so the caller can report the two apart. Every emitted

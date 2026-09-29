@@ -113,19 +113,26 @@ inline bool destination_emits_midi2(const SoundDestination& destination) noexcep
 
 /// Converts `ump` to the wire protocol `destination` actually speaks: a MIDI 2.0
 /// channel-voice message is down-converted to MIDI 1.0 for a 1.0 port, and a
-/// MIDI 1.0 channel-voice message is up-converted to 2.0 for a 2.0 port. The
-/// group is forced to the external port's @ref ExternalPortDescriptor::group so
-/// the event lands on the configured group. Messages that are already in the
-/// target protocol (and non-channel-voice messages) pass through with only the
-/// group applied. A form with no single-message MIDI 1.0 equivalent (per-note
-/// controllers; registered / assignable controllers, which need
+/// MIDI 1.0 channel-voice message is up-converted to 2.0 for a 2.0 port through
+/// @p translator, which the caller owns (one per external port) because bank
+/// select and RPN / NRPN data entry translate statefully. A MIDI 1.0 message the
+/// translator absorbs (bank select, an RPN / NRPN part still incomplete) yields
+/// an Ump with `word_count == 0` (caller drops it). The group is forced to the external port's @ref
+/// ExternalPortDescriptor::group so the event lands on the configured group. Messages that are
+/// already in the target protocol (and non-channel-voice messages) pass through with only the group
+/// applied. A form with no single-message MIDI 1.0 equivalent (per-note controllers; registered /
+/// assignable controllers, which need
 /// @ref convert_for_destination_messages) yields an Ump with `word_count == 0`
 /// (caller drops it). RT-safe; no allocation.
-inline Ump convert_for_destination(const Ump& ump, const SoundDestination& destination) noexcept {
+inline Ump convert_for_destination(const Ump& ump, const SoundDestination& destination,
+                                   Midi1ToMidi2Translator& translator) noexcept {
   Ump out = ump;
   const bool to_midi2 = destination_emits_midi2(destination);
   if (to_midi2) {
-    if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) out = midi1_to_midi2(ump);
+    if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) {
+      const Midi2MessageList translated = translator.translate(ump);
+      out = translated.count != 0 ? translated.messages[0] : Ump{};
+    }
   } else {
     if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) out = midi2_to_midi1(ump);
   }
@@ -146,7 +153,8 @@ inline Ump convert_for_destination(const Ump& ump, const SoundDestination& desti
 /// RPN / NRPN selector pair plus Data Entry MSB/LSB. The external port's group is applied to every
 /// emitted message. RT-safe; no allocation. Callers send `messages[0..count)` in order.
 inline Midi1MessageList convert_for_destination_messages(
-    const Ump& ump, const SoundDestination& destination) noexcept {
+    const Ump& ump, const SoundDestination& destination,
+    Midi1ToMidi2Translator& translator) noexcept {
   Midi1MessageList out;
   const bool to_midi2 = destination_emits_midi2(destination);
   if (!to_midi2) {
@@ -156,7 +164,7 @@ inline Midi1MessageList convert_for_destination_messages(
   // multi-message lowering does not expand, fall back to the single-UMP path
   // (which up-converts, passes through, and applies the group).
   if (out.count == 0) {
-    const Ump single = convert_for_destination(ump, destination);
+    const Ump single = convert_for_destination(ump, destination, translator);
     if (single.word_count != 0) {
       out.messages[0] = single;
       out.count = 1;

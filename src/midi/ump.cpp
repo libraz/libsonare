@@ -41,26 +41,10 @@ Ump make_midi1(uint8_t group, UmpStatus status, uint8_t channel, uint8_t data1,
 
 namespace {
 
-// MIDI-CI/UMP bit replication up-scaling. Repeat the source bit pattern until
-// it covers the destination width, then trim the low excess bits. This maps
-// both zero and the source maximum exactly to the destination extrema; plain
-// top-bit truncation on the reverse path therefore round-trips the source.
-uint32_t scale_up(uint32_t value, uint32_t src_bits, uint32_t dst_bits) noexcept {
-  uint64_t repeated = value & ((uint64_t{1} << src_bits) - 1u);
-  uint32_t bits = src_bits;
-  while (bits < dst_bits) {
-    repeated = (repeated << src_bits) | value;
-    bits += src_bits;
-  }
-  return static_cast<uint32_t>(repeated >> (bits - dst_bits));
-}
-
-// MIDI 2.0 "min-center-max" up-scaling (M2-104-UM). Unlike plain bit
-// replication this maps the source center exactly to the destination center in
-// addition to the extrema, which pitch bend requires: an unbent (center) MIDI
-// 1.0 value must stay unbent after up-conversion. Values at or below center are
-// a pure left shift; values above center replicate the upper bits so the
-// maximum still saturates. Top-bit truncation on the reverse path round-trips.
+// Min-center-max up-scaling (M2-115-U 3.3, M2-104-UM D.1.3): extrema and center
+// are preserved. Values at or below center are a pure left shift; values above
+// center replicate the lower bits so the maximum saturates. Right-shift
+// truncation on the reverse path round-trips.
 uint32_t scale_up_center(uint32_t value, uint32_t src_bits, uint32_t dst_bits) noexcept {
   const uint32_t scale_bits = dst_bits - src_bits;
   uint32_t shifted = value << scale_bits;
@@ -82,7 +66,7 @@ uint32_t scale_up_center(uint32_t value, uint32_t src_bits, uint32_t dst_bits) n
 }  // namespace
 
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept {
-  return static_cast<uint16_t>(scale_up(velocity7 & 0x7Fu, 7u, 16u));
+  return static_cast<uint16_t>(scale_up_center(velocity7 & 0x7Fu, 7u, 16u));
 }
 
 uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept {
@@ -94,12 +78,23 @@ uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept {
   return velocity16 != 0 && velocity7 == 0 ? 1u : velocity7;
 }
 
-uint32_t scale_cc_7_to_32(uint8_t value7) noexcept { return scale_up(value7 & 0x7Fu, 7u, 32u); }
+uint32_t scale_cc_7_to_32(uint8_t value7) noexcept {
+  return scale_up_center(value7 & 0x7Fu, 7u, 32u);
+}
 
 uint8_t scale_cc_32_to_7(uint32_t value32) noexcept { return static_cast<uint8_t>(value32 >> 25u); }
 
 uint32_t scale_cc_14_to_32(uint16_t value14) noexcept {
-  return scale_up(value14 & 0x3FFFu, 14u, 32u);
+  return scale_up_center(value14 & 0x3FFFu, 14u, 32u);
+}
+
+uint32_t scale_rpn_14_to_32_zero_extend(uint16_t value14) noexcept {
+  return static_cast<uint32_t>(value14 & 0x3FFFu) << 18u;
+}
+
+uint32_t scale_data_entry_14_to_32(bool is_registered, uint8_t index, uint16_t value14) noexcept {
+  return is_registered && index < 32u ? scale_rpn_14_to_32_zero_extend(value14)
+                                      : scale_cc_14_to_32(value14);
 }
 
 uint16_t scale_cc_32_to_14(uint32_t value32) noexcept {
@@ -261,6 +256,50 @@ Ump make_midi2_assignable_controller(uint8_t group, uint8_t channel, uint8_t ban
   ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kAssignableController), channel,
                              bank, index);
   ump.words[1] = value32;
+  ump.word_count = 2;
+  ump.group = static_cast<uint8_t>(group & 0x0Fu);
+  return ump;
+}
+
+Ump make_midi2_relative_registered_controller(uint8_t group, uint8_t channel, uint8_t bank,
+                                              uint8_t index, uint32_t delta32) noexcept {
+  Ump ump;
+  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kRelativeRegisteredController),
+                             channel, bank, index);
+  ump.words[1] = delta32;
+  ump.word_count = 2;
+  ump.group = static_cast<uint8_t>(group & 0x0Fu);
+  return ump;
+}
+
+Ump make_midi2_relative_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank,
+                                              uint8_t index, uint32_t delta32) noexcept {
+  Ump ump;
+  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kRelativeAssignableController),
+                             channel, bank, index);
+  ump.words[1] = delta32;
+  ump.word_count = 2;
+  ump.group = static_cast<uint8_t>(group & 0x0Fu);
+  return ump;
+}
+
+Ump make_midi2_per_note_pitch_bend(uint8_t group, uint8_t channel, uint8_t note,
+                                   uint32_t bend32) noexcept {
+  Ump ump;
+  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kPerNotePitchBend), channel,
+                             static_cast<uint8_t>(note & 0x7Fu), 0);
+  ump.words[1] = bend32;
+  ump.word_count = 2;
+  ump.group = static_cast<uint8_t>(group & 0x0Fu);
+  return ump;
+}
+
+Ump make_midi2_per_note_management(uint8_t group, uint8_t channel, uint8_t note, bool detach,
+                                   bool reset) noexcept {
+  Ump ump;
+  const uint8_t flags = static_cast<uint8_t>((detach ? 0x02u : 0x00u) | (reset ? 0x01u : 0x00u));
+  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kPerNoteManagement), channel,
+                             static_cast<uint8_t>(note & 0x7Fu), flags);
   ump.word_count = 2;
   ump.group = static_cast<uint8_t>(group & 0x0Fu);
   return ump;
@@ -592,9 +631,9 @@ Ump midi1_to_midi2(const Ump& ump) noexcept {
   const uint8_t d2 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
   switch (static_cast<UmpStatus>(status)) {
     case UmpStatus::kNoteOn:
-      // MIDI 1.0 running-status note-on with velocity 0 means note-off.
+      // Velocity 0 is a note-off; D.3.1 fixes its release velocity at 0x8000.
       if (d2 == 0) {
-        return make_midi2_note_off(ump.group, channel, d1, scale_velocity_7_to_16(d2));
+        return make_midi2_note_off(ump.group, channel, d1, 0x8000u);
       }
       return make_midi2_note_on(ump.group, channel, d1, scale_velocity_7_to_16(d2));
     case UmpStatus::kNoteOff:
@@ -647,9 +686,13 @@ Ump midi2_to_midi1(const Ump& ump) noexcept {
     case UmpStatus::kRegisteredPerNoteController:
     case UmpStatus::kAssignablePerNoteController:
     case UmpStatus::kRegisteredController:
-    case UmpStatus::kAssignableController: {
+    case UmpStatus::kAssignableController:
+    case UmpStatus::kRelativeRegisteredController:
+    case UmpStatus::kRelativeAssignableController:
+    case UmpStatus::kPerNotePitchBend:
+    case UmpStatus::kPerNoteManagement: {
       // No single-message MIDI 1.0 form (the channel controllers take four, see
-      // midi2_to_midi1_messages()): signal "drop me".
+      // midi2_to_midi1_messages(); the rest have none, D.2.8): signal "drop me".
       Ump dropped;
       dropped.word_count = 0;
       return dropped;
@@ -706,6 +749,91 @@ Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept {
     out.count = 1;
   }
   return out;
+}
+
+Midi2MessageList Midi1ToMidi2Translator::translate(const Ump& ump) noexcept {
+  Midi2MessageList out;
+  const auto emit = [&out](const Ump& message) {
+    out.messages[0] = message;
+    out.count = 1;
+  };
+  if (ump.message_type() != UmpMessageType::kMidi1ChannelVoice) {
+    emit(ump);
+    return out;
+  }
+  Channel& ch = channels[ump.channel()];
+  const uint8_t group = ump.group;
+  const uint8_t channel = ump.channel();
+  const uint8_t d1 = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
+  const uint8_t d2 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
+
+  // A complete selector that is not the null function.
+  const auto selection_usable = [&ch]() {
+    return ch.selection_msb_valid && ch.selection_lsb_valid &&
+           !(ch.selection_msb == 0x7Fu && ch.selection_lsb == 0x7Fu);
+  };
+  const auto emit_data_entry = [&](uint8_t lsb) {
+    const uint16_t value14 = static_cast<uint16_t>((ch.data_msb << 7u) | lsb);
+    const uint32_t value32 =
+        scale_data_entry_14_to_32(!ch.selection_is_nrpn, ch.selection_lsb, value14);
+    emit(ch.selection_is_nrpn ? make_midi2_assignable_controller(group, channel, ch.selection_msb,
+                                                                 ch.selection_lsb, value32)
+                              : make_midi2_registered_controller(group, channel, ch.selection_msb,
+                                                                 ch.selection_lsb, value32));
+  };
+  const auto select = [&ch](bool nrpn, bool is_msb, uint8_t value) {
+    if (ch.selection_is_nrpn != nrpn) {
+      ch.selection_is_nrpn = nrpn;
+      ch.selection_msb_valid = false;
+      ch.selection_lsb_valid = false;
+    }
+    (is_msb ? ch.selection_msb : ch.selection_lsb) = value;
+    (is_msb ? ch.selection_msb_valid : ch.selection_lsb_valid) = true;
+    ch.data_msb_valid = false;
+    ch.data_pending = false;
+  };
+
+  if (static_cast<UmpStatus>(ump.status_nibble()) == UmpStatus::kProgramChange) {
+    emit(make_midi2_program_change(group, channel, d1, ch.bank_msb, ch.bank_lsb, ch.bank_valid));
+    return out;
+  }
+  if (static_cast<UmpStatus>(ump.status_nibble()) != UmpStatus::kControlChange) {
+    emit(midi1_to_midi2(ump));
+    return out;
+  }
+
+  switch (d1) {
+    case 0:
+      ch.bank_msb = d2;
+      ch.bank_valid = true;
+      return out;
+    case 32:
+      ch.bank_lsb = d2;
+      ch.bank_valid = true;
+      return out;
+    case 6:
+      // A second CC 6 ends the message the first one started.
+      if (ch.data_pending && selection_usable()) emit_data_entry(0);
+      ch.data_msb = d2;
+      ch.data_msb_valid = true;
+      ch.data_pending = true;
+      return out;
+    case 38:
+      if (ch.data_msb_valid && selection_usable()) emit_data_entry(d2);
+      ch.data_pending = false;
+      return out;
+    case 98:
+    case 99:
+    case 100:
+    case 101:
+      // A new selector ends whatever message was still waiting for its LSB.
+      if (ch.data_pending && selection_usable()) emit_data_entry(0);
+      select(/*nrpn=*/d1 <= 99, /*is_msb=*/d1 == 99 || d1 == 101, d2);
+      return out;
+    default:
+      emit(midi1_to_midi2(ump));
+      return out;
+  }
 }
 
 }  // namespace sonare::midi

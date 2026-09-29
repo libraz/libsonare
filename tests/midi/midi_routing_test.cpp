@@ -676,12 +676,11 @@ TEST_CASE("CcMap observe_live_cc resolves one-word RPN and NRPN", "[midi]") {
   REQUIRE_FALSE(map.observe_live_cc(wrong_channel, &param, &unit));
 }
 
-// A controller has no "unbent" center to preserve, so it scales by bit
-// replication. The min-center-max pitch-bend scaler this used to call buys that
-// center at the cost of precision across the rest of the range: it round-trips
-// the extremes exactly and is off by up to 3.1e-5 in the middle, which is three
-// orders of magnitude worse than float can represent.
-TEST_CASE("CcMap param_to_cc scales 14-bit CC at float precision across the range", "[midi]") {
+// A 14-bit controller up-scales by min-center-max (M2-115-U 3), so minimum,
+// center and maximum are exact and truncating to 14 bits returns the value. The
+// linear read of the 32-bit field is off by at most half a 14-bit step (3.05e-5)
+// in the upper half of the range.
+TEST_CASE("CcMap param_to_cc up-scales 14-bit CC losslessly across the range", "[midi]") {
   CcMap map;
   CcBinding wide;
   wide.kind = sonare::midi::CcBindingKind::kControlChange14;
@@ -701,9 +700,10 @@ TEST_CASE("CcMap param_to_cc scales 14-bit CC at float precision across the rang
     float norm = 0.0f;
     REQUIRE(sonare::midi::cc_normalized_value(out, &norm));
     worst = std::max(worst, std::fabs(norm - unit));
+    // Not just the extremes: every one of the 16384 representable values.
+    REQUIRE(sonare::midi::scale_cc_32_to_14(out.words[1]) == static_cast<uint16_t>(step));
   }
-  // Not just the extremes: every one of the 16384 representable values.
-  REQUIRE(worst < 1.0e-6f);
+  REQUIRE(worst <= 0.5f / 16384.0f + 1.0e-7f);
 }
 
 // The kind is not part of a binding's address, so binding a controller a second

@@ -558,17 +558,17 @@ TEST_CASE("MIDI 1.0 -> 2.0 -> 1.0 channel-voice round-trips losslessly (top bits
   REQUIRE((bend_back.words[0] & 0x7Fu) == 0x24u);
 }
 
-TEST_CASE("MIDI 1.0 -> 2.0 velocity/CC up-scale replicates source bits", "[midi]") {
-  // Velocity 7->16 repeats the seven source bits to fill the destination.
+TEST_CASE("MIDI 1.0 -> 2.0 velocity/CC up-scale is min-center-max", "[midi]") {
+  // M2-115-U 3.3: shift up to the center, bit-repeat above it.
   REQUIRE(sonare::midi::scale_velocity_7_to_16(0) == 0u);
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(1) == 516u);
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(64) == 33026u);
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(100) == 51603u);
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(127) == 65535u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(1) == 0x0200u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(10) == 0x1400u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(64) == 0x8000u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(87) == 0xAEBAu);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(127) == 0xFFFFu);
 
-  // CC 7->32.
-  REQUIRE(sonare::midi::scale_cc_7_to_32(64) == 0x81020408u);
-  REQUIRE(sonare::midi::scale_cc_7_to_32(100) == 0xC993264Cu);
+  REQUIRE(sonare::midi::scale_cc_7_to_32(0) == 0u);
+  REQUIRE(sonare::midi::scale_cc_7_to_32(64) == 0x80000000u);
   REQUIRE(sonare::midi::scale_cc_7_to_32(127) == 0xFFFFFFFFu);
 
   // The note-on path embeds the up-scaled 16-bit velocity in word[1].
@@ -577,6 +577,68 @@ TEST_CASE("MIDI 1.0 -> 2.0 velocity/CC up-scale replicates source bits", "[midi]
   const Ump cc2 =
       sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_control_change(0, 0, 7, 127));
   REQUIRE(cc2.words[1] == 0xFFFFFFFFu);
+  const Ump cc64 =
+      sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_control_change(0, 0, 7, 64));
+  REQUIRE(cc64.words[1] == 0x80000000u);
+}
+
+TEST_CASE("min-center-max up-scale then truncating down-scale returns every source value",
+          "[midi]") {
+  for (uint32_t v = 0; v < 128u; ++v) {
+    INFO("7-bit value " << v);
+    const uint8_t v7 = static_cast<uint8_t>(v);
+    REQUIRE(sonare::midi::scale_velocity_16_to_7(sonare::midi::scale_velocity_7_to_16(v7)) == v7);
+    REQUIRE(sonare::midi::scale_cc_32_to_7(sonare::midi::scale_cc_7_to_32(v7)) == v7);
+  }
+  for (uint32_t v = 0; v < 0x4000u; ++v) {
+    INFO("14-bit value " << v);
+    const uint16_t v14 = static_cast<uint16_t>(v);
+    const uint32_t up = sonare::midi::scale_cc_14_to_32(v14);
+    REQUIRE(sonare::midi::scale_cc_32_to_14(up) == v14);
+    // Same family as pitch bend.
+    REQUIRE(up == sonare::midi::scale_bend_14_to_32(v14));
+  }
+  REQUIRE(sonare::midi::scale_cc_14_to_32(0x2000u) == 0x80000000u);
+  REQUIRE(sonare::midi::scale_cc_14_to_32(0x3FFFu) == 0xFFFFFFFFu);
+  REQUIRE(sonare::midi::scale_cc_14_to_32(0u) == 0u);
+}
+
+TEST_CASE("MIDI 1.0 note-on velocity zero translates to note-off velocity 0x8000", "[midi]") {
+  const Ump off = sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_note_on(3, 7, 61, 0));
+  REQUIRE(off.message_type() == UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(off.status_nibble() == static_cast<uint8_t>(UmpStatus::kNoteOff));
+  REQUIRE(off.group == 3);
+  REQUIRE(off.channel() == 7);
+  REQUIRE(off.note_number() == 61);
+  REQUIRE(off.words[0] == sonare::midi::make_midi2_note_off(3, 7, 61, 0x8000u).words[0]);
+  REQUIRE(off.words[1] == 0x80000000u);   // velocity 0x8000, attribute data 0.
+  REQUIRE((off.words[0] & 0xFFu) == 0u);  // attribute type 0.
+
+  // Velocity 1 stays a note-on at 0x0200 with no attribute.
+  const Ump on = sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_note_on(0, 0, 60, 1));
+  REQUIRE(on.status_nibble() == static_cast<uint8_t>(UmpStatus::kNoteOn));
+  REQUIRE(on.words[1] == 0x02000000u);
+  REQUIRE((on.words[0] & 0xFFu) == 0u);
+
+  // A real MIDI 1.0 note-off scales its release velocity like any velocity.
+  const Ump real_off =
+      sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_note_off(0, 0, 60, 64));
+  REQUIRE(real_off.status_nibble() == static_cast<uint8_t>(UmpStatus::kNoteOff));
+  REQUIRE(real_off.words[1] == 0x80000000u);
+}
+
+TEST_CASE("MIDI 2.0 registered controller lowers by truncating to 14 bits", "[midi]") {
+  // 32-bit 0x80000000 is the center: MSB 0x40, LSB 0x00.
+  const auto center = sonare::midi::midi2_to_midi1_messages(
+      sonare::midi::make_midi2_registered_controller(0, 0, 0, 0, 0x80000000u));
+  REQUIRE(center.count == 4);
+  REQUIRE(center.messages[2].data2_7bit() == 0x40u);
+  REQUIRE(center.messages[3].data2_7bit() == 0x00u);
+  // Just under the next 14-bit step: truncation, not rounding, so it stays put.
+  const auto low = sonare::midi::midi2_to_midi1_messages(
+      sonare::midi::make_midi2_registered_controller(0, 0, 0, 0, 0x8003FFFFu));
+  REQUIRE(low.messages[2].data2_7bit() == 0x40u);
+  REQUIRE(low.messages[3].data2_7bit() == 0x00u);
 }
 
 TEST_CASE("MIDI 2.0 -> 1.0 velocity/CC down-scale is the top-7-bit truncation", "[midi]") {
@@ -760,4 +822,231 @@ TEST_CASE("MIDI 2.0 registered and assignable controllers lower to RPN / NRPN da
   REQUIRE(sonare::midi::midi2_to_midi1_messages(
               sonare::midi::make_midi2_per_note_controller(2, 5, 60, 1, value))
               .count == 0);
+}
+
+TEST_CASE("UMP message type and status enums cover the MIDI 2.0 additions", "[midi]") {
+  REQUIRE(static_cast<uint8_t>(UmpMessageType::kFlexData) == 0xD);
+  REQUIRE(static_cast<uint8_t>(UmpMessageType::kStream) == 0xF);
+  REQUIRE(static_cast<uint8_t>(UmpStatus::kRelativeRegisteredController) == 0x4);
+  REQUIRE(static_cast<uint8_t>(UmpStatus::kRelativeAssignableController) == 0x5);
+  REQUIRE(static_cast<uint8_t>(UmpStatus::kPerNotePitchBend) == 0x6);
+  REQUIRE(static_cast<uint8_t>(UmpStatus::kPerNoteManagement) == 0xF);
+}
+
+TEST_CASE("MIDI 2.0 relative controller, per-note bend and management builders lay out fields",
+          "[midi]") {
+  // Relative controllers carry a 32-bit two's-complement delta.
+  const Ump rrc = sonare::midi::make_midi2_relative_registered_controller(
+      1, 2, /*bank=*/0, /*index=*/3, static_cast<uint32_t>(int32_t{-5}));
+  REQUIRE(rrc.words[0] == 0x41420003u);
+  REQUIRE(rrc.words[1] == 0xFFFFFFFBu);
+  REQUIRE(rrc.word_count == 2);
+  REQUIRE(rrc.group == 1);
+  const Ump rac =
+      sonare::midi::make_midi2_relative_assignable_controller(1, 2, /*bank=*/9, /*index=*/17, 7u);
+  REQUIRE(rac.words[0] == 0x41520911u);
+  REQUIRE(rac.words[1] == 7u);
+
+  const Ump pnb = sonare::midi::make_midi2_per_note_pitch_bend(3, 4, 60, 0x80000000u);
+  REQUIRE(pnb.words[0] == 0x4364'3C00u);
+  REQUIRE(pnb.words[1] == 0x80000000u);
+  REQUIRE(pnb.message_type() == UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(pnb.status_nibble() == static_cast<uint8_t>(UmpStatus::kPerNotePitchBend));
+
+  // Per-Note Management: D is bit 1 and S is bit 0 of the flags byte.
+  REQUIRE(sonare::midi::make_midi2_per_note_management(0, 5, 61, false, false).words[0] ==
+          0x40F53D00u);
+  REQUIRE(sonare::midi::make_midi2_per_note_management(0, 5, 61, false, true).words[0] ==
+          0x40F53D01u);
+  REQUIRE(sonare::midi::make_midi2_per_note_management(0, 5, 61, true, false).words[0] ==
+          0x40F53D02u);
+  const Ump pnm = sonare::midi::make_midi2_per_note_management(0, 5, 61, true, true);
+  REQUIRE(pnm.words[0] == 0x40F53D03u);
+  REQUIRE(pnm.words[1] == 0u);
+  REQUIRE(pnm.word_count == 2);
+}
+
+TEST_CASE("MIDI 2.0 note-on exposes its attribute type and data", "[midi]") {
+  const Ump on = sonare::midi::make_midi2_note_on(0, 1, 60, 0x1234u, /*type=*/3, /*data=*/0xBEEFu);
+  REQUIRE(sonare::midi::note_attribute_type(on) == 3u);
+  REQUIRE(sonare::midi::note_attribute_data(on) == 0xBEEFu);
+  REQUIRE(sonare::midi::note_attribute_type(sonare::midi::make_midi2_note_on(0, 1, 60, 1)) == 0u);
+}
+
+TEST_CASE("zero-extension is a plain left shift, selected by registered index 0..31", "[midi]") {
+  // M2-115-U 4.3.2: 7-bit 127 -> 0xFE00, so a 14-bit RPN value shifts by 18.
+  REQUIRE(sonare::midi::scale_rpn_14_to_32_zero_extend(0x2000u) == 0x80000000u);
+  REQUIRE(sonare::midi::scale_rpn_14_to_32_zero_extend(0x3FFFu) == 0xFFFC0000u);
+  REQUIRE(sonare::midi::scale_rpn_14_to_32_zero_extend(0u) == 0u);
+  for (uint32_t v = 0; v < 0x4000u; ++v) {
+    const uint32_t up = sonare::midi::scale_rpn_14_to_32_zero_extend(static_cast<uint16_t>(v));
+    REQUIRE(up == (v << 18u));
+    REQUIRE(sonare::midi::scale_cc_32_to_14(up) == v);
+  }
+
+  for (uint8_t index = 0; index < 32; ++index) {
+    REQUIRE(sonare::midi::scale_data_entry_14_to_32(true, index, 0x3FFFu) == 0xFFFC0000u);
+  }
+  REQUIRE(sonare::midi::scale_data_entry_14_to_32(true, 32, 0x3FFFu) == 0xFFFFFFFFu);
+  REQUIRE(sonare::midi::scale_data_entry_14_to_32(true, 127, 0x2001u) ==
+          sonare::midi::scale_cc_14_to_32(0x2001u));
+  // Assignable controllers always take min-center-max, whatever the index.
+  REQUIRE(sonare::midi::scale_data_entry_14_to_32(false, 0, 0x3FFFu) == 0xFFFFFFFFu);
+}
+
+TEST_CASE("MIDI 2.0 messages with no MIDI 1.0 form are dropped on down-conversion", "[midi]") {
+  const Ump dropped[] = {
+      sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 0, 1u),
+      sonare::midi::make_midi2_relative_assignable_controller(0, 0, 0, 0, 1u),
+      sonare::midi::make_midi2_per_note_controller(0, 0, 60, 1, 1u),
+      sonare::midi::make_midi2_assignable_per_note_controller(0, 0, 60, 1, 1u),
+      sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0x80000000u),
+      sonare::midi::make_midi2_per_note_management(0, 0, 60, true, true),
+  };
+  for (const Ump& ump : dropped) {
+    INFO("status " << int{ump.status_nibble()});
+    REQUIRE(sonare::midi::midi2_to_midi1(ump).word_count == 0);
+    REQUIRE(sonare::midi::midi2_to_midi1_messages(ump).count == 0);
+  }
+  // Registered controller 0/7 (per-note bend sensitivity) has no MIDI 1.0
+  // function of its own but is still an RPN, so it is lowered like any other.
+  REQUIRE(sonare::midi::midi2_to_midi1_messages(
+              sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 0x10000000u))
+              .count == 4);
+}
+
+namespace {
+
+using sonare::midi::Midi1ToMidi2Translator;
+
+std::vector<Ump> translate(Midi1ToMidi2Translator& t, const Ump& in) {
+  const auto out = t.translate(in);
+  return std::vector<Ump>(out.messages.begin(), out.messages.begin() + out.count);
+}
+
+std::vector<Ump> feed_cc(Midi1ToMidi2Translator& t, uint8_t channel, uint8_t cc, uint8_t value) {
+  return translate(t, sonare::midi::make_midi1_control_change(0, channel, cc, value));
+}
+
+}  // namespace
+
+TEST_CASE("translator latches bank select into the next program change", "[midi]") {
+  Midi1ToMidi2Translator t;
+  // A program change with no bank information keeps bank-valid clear.
+  auto out = translate(t, sonare::midi::make_midi1_program_change(0, 3, 9));
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_program_change(0, 3, 9, 0, 0, false));
+
+  // Bank select CCs are consumed and only surface inside the program change.
+  REQUIRE(feed_cc(t, 3, 0, 0x78).empty());
+  REQUIRE(feed_cc(t, 3, 32, 2).empty());
+  out = translate(t, sonare::midi::make_midi1_program_change(0, 3, 9));
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_program_change(0, 3, 9, 0x78, 2, true));
+
+  // Other channels are unaffected.
+  out = translate(t, sonare::midi::make_midi1_program_change(0, 4, 9));
+  REQUIRE(out[0] == sonare::midi::make_midi2_program_change(0, 4, 9, 0, 0, false));
+
+  // The bank stays current for later program changes on the channel.
+  out = translate(t, sonare::midi::make_midi1_program_change(0, 3, 10));
+  REQUIRE(out[0] == sonare::midi::make_midi2_program_change(0, 3, 10, 0x78, 2, true));
+}
+
+TEST_CASE("translator assembles RPN data entry with zero-extension for indices 0..31", "[midi]") {
+  Midi1ToMidi2Translator t;
+  REQUIRE(feed_cc(t, 1, 101, 0).empty());
+  REQUIRE(feed_cc(t, 1, 100, 0).empty());
+  REQUIRE(feed_cc(t, 1, 6, 0x40).empty());
+  auto out = feed_cc(t, 1, 38, 0);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_registered_controller(0, 1, 0, 0, 0x80000000u));
+
+  // Index 0..31 shifts (0x3FFF -> 0xFFFFC000); index 32.. is min-center-max.
+  REQUIRE(feed_cc(t, 1, 100, 6).empty());
+  REQUIRE(feed_cc(t, 1, 6, 0x7F).empty());
+  out = feed_cc(t, 1, 38, 0x7F);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_registered_controller(0, 1, 0, 6, 0xFFFC0000u));
+
+  REQUIRE(feed_cc(t, 1, 100, 32).empty());
+  REQUIRE(feed_cc(t, 1, 6, 0x7F).empty());
+  out = feed_cc(t, 1, 38, 0x7F);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_registered_controller(0, 1, 0, 32, 0xFFFFFFFFu));
+}
+
+TEST_CASE("translator assembles NRPN data entry with min-center-max", "[midi]") {
+  Midi1ToMidi2Translator t;
+  REQUIRE(feed_cc(t, 0, 99, 5).empty());
+  REQUIRE(feed_cc(t, 0, 98, 9).empty());
+  REQUIRE(feed_cc(t, 0, 6, 0x7F).empty());
+  const auto out = feed_cc(t, 0, 38, 0x7F);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_assignable_controller(0, 0, 5, 9, 0xFFFFFFFFu));
+}
+
+TEST_CASE("translator emits pending data entry when the next trigger arrives", "[midi]") {
+  Midi1ToMidi2Translator t;
+  REQUIRE(feed_cc(t, 0, 101, 0).empty());
+  REQUIRE(feed_cc(t, 0, 100, 2).empty());
+  REQUIRE(feed_cc(t, 0, 6, 0x10).empty());
+  // A second CC 6 ends the first message (LSB not sent -> 0) and starts a new one.
+  auto out = feed_cc(t, 0, 6, 0x20);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_registered_controller(0, 0, 0, 2, 0x10u << 25));
+  out = feed_cc(t, 0, 38, 0x01);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] ==
+          sonare::midi::make_midi2_registered_controller(
+              0, 0, 0, 2, sonare::midi::scale_rpn_14_to_32_zero_extend((0x20u << 7) | 1u)));
+
+  // A new selector ends a data-entry MSB that never got its LSB.
+  REQUIRE(feed_cc(t, 0, 6, 0x30).empty());
+  out = feed_cc(t, 0, 99, 1);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_registered_controller(0, 0, 0, 2, 0x30u << 25));
+  // The data entry does not leak into the new NRPN selection.
+  REQUIRE(feed_cc(t, 0, 98, 1).empty());
+  REQUIRE(feed_cc(t, 0, 38, 5).empty());
+}
+
+TEST_CASE("translator ignores data entry with no selector and the null function", "[midi]") {
+  Midi1ToMidi2Translator t;
+  REQUIRE(feed_cc(t, 0, 6, 0x40).empty());
+  REQUIRE(feed_cc(t, 0, 38, 0x00).empty());
+
+  REQUIRE(feed_cc(t, 0, 101, 0x7F).empty());
+  REQUIRE(feed_cc(t, 0, 100, 0x7F).empty());
+  REQUIRE(feed_cc(t, 0, 6, 0x40).empty());
+  REQUIRE(feed_cc(t, 0, 38, 0x00).empty());
+  // Selecting a real parameter again resumes emission.
+  REQUIRE(feed_cc(t, 0, 100, 0).empty());
+  REQUIRE(feed_cc(t, 0, 101, 0).empty());
+  REQUIRE(feed_cc(t, 0, 6, 0x40).empty());
+  REQUIRE(feed_cc(t, 0, 38, 0x00).size() == 1);
+}
+
+TEST_CASE("translator keeps CC 96 and 97 as control changes and applies stateless rules",
+          "[midi]") {
+  Midi1ToMidi2Translator t;
+  for (uint8_t cc : {uint8_t{96}, uint8_t{97}}) {
+    const auto out = feed_cc(t, 2, cc, 1);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0] ==
+            sonare::midi::make_midi2_control_change(0, 2, cc, sonare::midi::scale_cc_7_to_32(1)));
+  }
+  auto out = feed_cc(t, 2, 64, 64);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0].words[1] == 0x80000000u);
+
+  out = translate(t, sonare::midi::make_midi1_note_on(0, 2, 60, 0));
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == sonare::midi::make_midi2_note_off(0, 2, 60, 0x8000u));
+
+  // Messages that are not MIDI 1.0 channel voice pass through untouched.
+  const Ump m2 = sonare::midi::make_midi2_note_on(0, 2, 60, 0x1234u);
+  out = translate(t, m2);
+  REQUIRE(out.size() == 1);
+  REQUIRE(out[0] == m2);
 }

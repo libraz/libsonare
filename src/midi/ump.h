@@ -12,16 +12,19 @@
 /// never inline, only a handle into a control-thread @ref SysExStore, which is
 /// what keeps the RT path free of variable-length data.
 ///
-/// MIDI 1.0 <-> 2.0 translation, pinned in the test:
-///   - Velocity (7 vs 16 bits) and CC value (7 vs 32) up-scale by repeating the
-///     source bit pattern and down-scale by taking the top 7 bits. A 1.0 round
-///     trip is lossless; a 2.0 value with non-zero low bits is not.
+/// MIDI 1.0 <-> 2.0 translation follows M2-104-UM Appendix D, pinned in the test:
+///   - Velocity, CC, pressure and bend up-scale by min-center-max (M2-115-U 3);
+///     registered controllers with index 0..31 up-scale by zero-extension
+///     (M2-115-U 4). Every down-scale is a plain right shift, so a 1.0 round trip
+///     is lossless; a 2.0 value with non-zero low bits is not.
 ///   - Note number, channel, group, CC index, program and bank are identical
 ///     fields in both protocols and always round-trip.
 ///   - Registered / assignable controllers lower to the four-message RPN / NRPN
-///     sequence (selector MSB/LSB, then Data Entry MSB/LSB). Per-note
-///     controllers, the note-on attribute and per-note pitch exist only in 2.0
-///     and are DROPPED on down-convert.
+///     sequence (selector MSB/LSB, then Data Entry MSB/LSB). Relative and
+///     per-note controllers, per-note pitch bend, per-note management and the
+///     note-on attribute exist only in 2.0 and are DROPPED on down-convert.
+///   - Going up, the stateless midi1_to_midi2() covers single messages; bank
+///     select and RPN / NRPN need Midi1ToMidi2Translator.
 
 #include <array>
 #include <cstddef>
@@ -39,7 +42,9 @@ enum class UmpMessageType : uint8_t {
   kMidi1ChannelVoice = 0x2,
   kData64 = 0x3,  // 64-bit data (SysEx7) — represented via handle, not inline.
   kMidi2ChannelVoice = 0x4,
-  kData128 = 0x5,  // 128-bit data (SysEx8/Mixed) — handle only.
+  kData128 = 0x5,   // 128-bit data (SysEx8/Mixed) — handle only.
+  kFlexData = 0xD,  // 128-bit Flex Data (tempo, time signature, lyrics, ...).
+  kStream = 0xF,    // 128-bit UMP Stream (endpoint and function-block discovery).
 };
 
 /// MIDI channel-voice status nibbles (shared opcode space for 1.0 and 2.0).
@@ -57,6 +62,10 @@ enum class UmpStatus : uint8_t {
   kAssignablePerNoteController = 0x1,
   kRegisteredController = 0x2,
   kAssignableController = 0x3,
+  kRelativeRegisteredController = 0x4,
+  kRelativeAssignableController = 0x5,
+  kPerNotePitchBend = 0x6,
+  kPerNoteManagement = 0xF,
 };
 
 /// Handle id for an out-of-band SysEx / property payload. 0 means "no SysEx".
@@ -215,6 +224,28 @@ Ump make_midi2_registered_controller(uint8_t group, uint8_t channel, uint8_t ban
                                      uint32_t value32) noexcept;
 Ump make_midi2_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank, uint8_t index,
                                      uint32_t value32) noexcept;
+/// MIDI 2.0 relative registered / assignable controllers (statuses 0x4 / 0x5).
+/// `delta32` is a 32-bit two's-complement change to apply to the addressed value.
+Ump make_midi2_relative_registered_controller(uint8_t group, uint8_t channel, uint8_t bank,
+                                              uint8_t index, uint32_t delta32) noexcept;
+Ump make_midi2_relative_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank,
+                                              uint8_t index, uint32_t delta32) noexcept;
+/// MIDI 2.0 per-note pitch bend (status 0x6), `bend32` centered at 0x80000000.
+Ump make_midi2_per_note_pitch_bend(uint8_t group, uint8_t channel, uint8_t note,
+                                   uint32_t bend32) noexcept;
+/// MIDI 2.0 per-note management (status 0xF). `detach` is the D flag (bit 1 of
+/// the flags byte) and `reset` the S flag (bit 0).
+Ump make_midi2_per_note_management(uint8_t group, uint8_t channel, uint8_t note, bool detach,
+                                   bool reset) noexcept;
+
+/// Note-on / note-off attribute type (word[0] bits 0..7) of a MIDI 2.0 note message.
+inline uint8_t note_attribute_type(const Ump& ump) noexcept {
+  return static_cast<uint8_t>(ump.words[0] & 0xFFu);
+}
+/// Note-on / note-off attribute data (word[1] bits 0..15) of a MIDI 2.0 note message.
+inline uint16_t note_attribute_data(const Ump& ump) noexcept {
+  return static_cast<uint16_t>(ump.words[1] & 0xFFFFu);
+}
 
 // ===========================================================================
 // SysEx handle constructor
@@ -393,15 +424,64 @@ size_t ump_to_midi1_bytes(const Ump& ump, uint8_t* out, size_t cap) noexcept;
 // MIDI 1.0 <-> MIDI 2.0 channel-voice conversion (see lossy notes in header)
 // ===========================================================================
 
-/// Up-converts a MIDI 1.0 channel-voice UMP to MIDI 2.0. Velocity/CC values are
-/// bit-scaled up (lossless top bits). Returns the original unchanged if `ump`
-/// is not a MIDI 1.0 channel-voice message.
+/// Up-converts a single MIDI 1.0 channel-voice UMP to MIDI 2.0 (M2-104-UM D.3).
+/// Velocity, CC, pressure and bend scale up by min-center-max, and a note-on with
+/// velocity 0 becomes a note-off with velocity 0x8000. CC 0/32, CC 6/38 and
+/// CC 98..101 stay Control Changes here because their translation needs state;
+/// use @ref Midi1ToMidi2Translator for those. Returns the original unchanged if
+/// `ump` is not a MIDI 1.0 channel-voice message.
 Ump midi1_to_midi2(const Ump& ump) noexcept;
+
+/// Result of one @ref Midi1ToMidi2Translator step: at most one MIDI 2.0 UMP.
+struct Midi2MessageList {
+  std::array<Ump, 1> messages{};
+  uint8_t count = 0;
+};
+
+/// Stateful MIDI 1.0 -> MIDI 2.0 Default Translation (M2-104-UM D.3.3, D.3.4).
+/// One instance serves one external port and holds, per channel, the bank select
+/// latch and the RPN / NRPN selection with its Data Entry MSB. Owned by the
+/// caller; RT-safe (no allocation, no exceptions).
+///
+///   - CC 0 / CC 32 are consumed. The latest bank is attached, with bank-valid
+///     set, to every later Program Change on that channel.
+///   - CC 99 / 101 (CC 98 / 100) select an NRPN / RPN. CC 6 latches the Data
+///     Entry MSB and CC 38 completes the message: one Assignable / Registered
+///     Controller carrying the 14-bit value. A pending MSB that gets no CC 38 is
+///     emitted with LSB 0 when the next CC 6 or a new selector arrives.
+///   - The null function (7F/7F) and data entry without a complete selector
+///     produce nothing.
+///   - RPN index 0..31 is zero-extended, everything else min-center-max.
+///   - Everything else follows the stateless midi1_to_midi2(); CC 96 / 97 stay
+///     Control Changes. Non-MIDI-1.0 messages pass through unchanged.
+struct Midi1ToMidi2Translator {
+  struct Channel {
+    uint8_t bank_msb = 0;
+    uint8_t bank_lsb = 0;
+    bool bank_valid = false;
+    bool selection_is_nrpn = false;
+    uint8_t selection_msb = 0;
+    uint8_t selection_lsb = 0;
+    bool selection_msb_valid = false;
+    bool selection_lsb_valid = false;
+    uint8_t data_msb = 0;
+    bool data_msb_valid = false;
+    bool data_pending = false;
+  };
+  std::array<Channel, 16> channels{};
+
+  /// Translates one UMP into zero or one MIDI 2.0 UMPs.
+  Midi2MessageList translate(const Ump& ump) noexcept;
+  /// Forgets all latched state.
+  void reset() noexcept { channels = {}; }
+};
 
 /// Down-converts a MIDI 2.0 channel-voice UMP to MIDI 1.0. Velocity/CC are
 /// down-scaled to 7 bits (LOSSY low bits). Forms with no single-message MIDI 1.0
-/// equivalent -- per-note controllers, and registered / assignable controllers,
-/// which take four (see midi2_to_midi1_messages()) -- return an Ump with
+/// equivalent -- registered / assignable controllers, which take four (see
+/// midi2_to_midi1_messages()), and the forms with no MIDI 1.0 counterpart at all
+/// (relative and per-note controllers, per-note pitch bend, per-note management,
+/// M2-104-UM D.2.8) -- return an Ump with
 /// `word_count == 0` (caller should drop them). Returns the original unchanged if `ump` is not a
 /// MIDI 2.0 channel-voice message.
 Ump midi2_to_midi1(const Ump& ump) noexcept;
@@ -419,7 +499,7 @@ struct Midi1MessageList {
 /// the bank-valid flag set produces CC#0, CC#32, and Program Change at the same
 /// timestamp; a Registered (Assignable) Controller produces CC#101/100
 /// (CC#99/98) with its bank and index, then CC#6 and CC#38 with the top 14 bits
-/// of its value. Per-note controller forms produce count == 0.
+/// of its value. Forms with no MIDI 1.0 counterpart (D.2.8) produce count == 0.
 Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept;
 
 /// True for a MIDI 2.0 Registered or Assignable (channel) Controller: the RPN /
@@ -431,10 +511,7 @@ inline bool is_registered_or_assignable_controller(const Ump& ump) noexcept {
           ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kAssignableController));
 }
 
-/// 7-bit -> 16-bit velocity up-scale (bit-replication scaling: repeats the
-/// source bits to fill the destination width). Distinct from pitch bend's
-/// true min-center-max scaling (see scale_bend_14_to_32), which velocity does
-/// not need since it has no "unbent" center value to preserve.
+/// 7-bit -> 16-bit velocity up-scale, min-center-max (M2-115-U 3.3).
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept;
 /// 16-bit -> 7-bit velocity down-scale (top 7 bits). LOSSY.
 uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept;
@@ -443,19 +520,21 @@ uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept;
 /// down-scales to 0: velocity 0 on a MIDI 1.0 note-on means note-off, so the
 /// quietest audible note-on clamps to 1 instead of being silently dropped.
 uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept;
-/// 7-bit -> 32-bit CC up-scale.
+/// 7-bit -> 32-bit CC up-scale, min-center-max.
 uint32_t scale_cc_7_to_32(uint8_t value7) noexcept;
 /// 32-bit -> 7-bit CC down-scale (top 7 bits). LOSSY.
 uint8_t scale_cc_32_to_7(uint32_t value32) noexcept;
-/// 14-bit -> 32-bit CC up-scale, for the controller quantities assembled from an
-/// MSB/LSB CC pair or from RPN/NRPN Data Entry.
-///
-/// Bit-replication, the same family as scale_cc_7_to_32, NOT the min-center-max
-/// scale_bend_14_to_32 below: a controller has no "unbent" center to preserve,
-/// and preserving one costs precision everywhere else. Measured over all 16384
-/// values, replication round-trips within 3.0e-8 (float epsilon) while the
-/// center-preserving scaler is off by up to 3.1e-5 near the middle of the range.
+/// 14-bit -> 32-bit up-scale, min-center-max, for the controller quantities
+/// assembled from an MSB/LSB CC pair or from Data Entry (same family as
+/// scale_bend_14_to_32). Registered controllers with index 0..31 use
+/// scale_rpn_14_to_32_zero_extend instead; scale_data_entry_14_to_32 picks.
 uint32_t scale_cc_14_to_32(uint16_t value14) noexcept;
+/// 14-bit -> 32-bit zero-extension up-scale (M2-115-U 4.3): a left shift by 18.
+uint32_t scale_rpn_14_to_32_zero_extend(uint16_t value14) noexcept;
+/// Up-scales a 14-bit Data Entry value with the family M2-115-U assigns to the
+/// controller: zero-extension for a registered controller whose index is 0..31,
+/// min-center-max otherwise (the bank does not take part in the choice).
+uint32_t scale_data_entry_14_to_32(bool is_registered, uint8_t index, uint16_t value14) noexcept;
 /// 32-bit -> 14-bit CC down-scale (top 14 bits). LOSSY.
 uint16_t scale_cc_32_to_14(uint32_t value32) noexcept;
 /// 14-bit pitch bend -> 32-bit MIDI 2.0 value.
