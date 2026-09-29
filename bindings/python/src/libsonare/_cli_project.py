@@ -767,7 +767,9 @@ def register_project_parsers(
         "--channels",
         type=int,
         default=2,
-        help="Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)",
+        help=(
+            "Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)"
+        ),
     )
     pbounce.add_argument("--instrument-latency", type=int, default=0)
     # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
@@ -897,7 +899,9 @@ def register_project_parsers(
         "--channels",
         type=int,
         default=2,
-        help="Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)",
+        help=(
+            "Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)"
+        ),
     )
     midi_render_p.add_argument("--instrument-latency", type=int, default=0)
     midi_render_p.add_argument(

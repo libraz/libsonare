@@ -556,9 +556,13 @@ def generate_cqt_family_reference():
     y = (0.5 * np.sin(2 * np.pi * low_hz * t) + 0.5 * np.sin(2 * np.pi * high_hz * t)).astype(
         np.float32
     )
-    common = dict(
-        sr=sr, hop_length=hop_length, fmin=fmin, n_bins=n_bins, bins_per_octave=bins_per_octave
-    )
+    common = {
+        "sr": sr,
+        "hop_length": hop_length,
+        "fmin": fmin,
+        "n_bins": n_bins,
+        "bins_per_octave": bins_per_octave,
+    }
     pseudo = np.abs(librosa.pseudo_cqt(y, **common))
     hybrid = np.abs(librosa.hybrid_cqt(y, **common))
     vqt = np.abs(librosa.vqt(y, **common))

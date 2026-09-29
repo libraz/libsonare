@@ -2267,9 +2267,10 @@ def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
     """A budget too small to consume a record is refused, not silently ignored.
 
     One queued record lowers to at most four MIDI 1.0 messages (a registered
-    controller's RPN sequence), so a budget of 1 to 3 can never consume one. It used to take neither the empty-budget early
-    return nor a drain: the loop broke on its first iteration and returned an
-    empty list with the events still queued, on every repeated call. The C ABI
+    controller's RPN sequence), so a budget of 1 to 3 can never consume one.
+    It used to take neither the empty-budget early return nor a drain: the
+    loop broke on its first iteration and returned an empty list with the
+    events still queued, on every repeated call. The C ABI
     and the other bindings refuse the same budget.
     """
     with RealtimeEngine(
