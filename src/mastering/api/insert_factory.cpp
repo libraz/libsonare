@@ -941,6 +941,16 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.semitones = f(params, "semitones", config.semitones);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     config.window_ms = f(params, "windowMs", config.window_ms);
+    config.cents = f(params, "cents", config.cents);
+    config.pan = f(params, "pan", config.pan);
+    config.semitones2 = f(params, "semitones2", config.semitones2);
+    config.cents2 = f(params, "cents2", config.cents2);
+    config.level2 = f(params, "level2", config.level2);
+    config.pan2 = f(params, "pan2", config.pan2);
+    config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
+    config.pre_delay2_ms = f(params, "preDelay2Ms", config.pre_delay2_ms);
+    config.feedback = f(params, "feedback", config.feedback);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<effects::modulation::PitchShifter>(config);
   }
   if (name == "effects.delay.stereo") {

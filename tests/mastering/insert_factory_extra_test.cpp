@@ -241,6 +241,11 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
           "effects.delay.stereo",
           R"({"tap3Ms":300,"tap4Ms":450,"tap1LevelDb":-3,"tap2LevelDb":-3,"tap3LevelDb":-6,"tap4LevelDb":-9,"tap3Pan":-0.5,"tap4Pan":0.5,"invertL":true,"invertR":false,"modRateHz":0.8,"modDepthMs":2,"modPhaseDeg":90,"glideMs":50,"crossMode":1,"mixLaw":1})") !=
       nullptr);
+  REQUIRE(
+      make_insert(
+          "effects.modulation.pitchShifter",
+          R"({"semitones":7,"cents":-20,"pan":-0.5,"semitones2":-5,"cents2":10,"level2":0.6,"pan2":0.5,"preDelayMs":12,"preDelay2Ms":30,"feedback":0.3,"mixLaw":1})") !=
+      nullptr);
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM

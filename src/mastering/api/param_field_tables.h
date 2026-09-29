@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/phaser.h"

@@ -10,15 +10,16 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "effects/delay/stereo_delay.h"
 
 namespace {
 
 using Catch::Approx;
+using sonare::effects::common::MixLaw;
 using sonare::effects::delay::StereoDelay;
 using sonare::effects::delay::StereoDelayConfig;
 using sonare::effects::delay::StereoDelayCrossMode;
-using sonare::effects::common::MixLaw;
 
 constexpr double kRate = 1000.0;
 constexpr int kLength = 400;

@@ -172,11 +172,21 @@ TEST_CASE(
   SECTION("effects.modulation.pitchShifter") {
     const RenderResult empty = render("effects.modulation.pitchShifter", "{}");
     const RenderResult explicit_defaults = render(
-        "effects.modulation.pitchShifter", R"({"semitones":0.0,"dryWet":1.0,"windowMs":22.5})");
+        "effects.modulation.pitchShifter",
+        R"({"semitones":0.0,"dryWet":1.0,"windowMs":22.5,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
     require_pinned(s, kPitchShifterRms, kPitchShifterCentroidHz);
+
+    // A shifted voice, where the grain path runs: the new keys at their defaults change nothing.
+    const RenderResult shifted_empty =
+        render("effects.modulation.pitchShifter", R"({"semitones":7})");
+    const RenderResult shifted_explicit = render(
+        "effects.modulation.pitchShifter",
+        R"({"semitones":7,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0})");
+    REQUIRE(shifted_empty.left == shifted_explicit.left);
+    REQUIRE(shifted_empty.right == shifted_explicit.right);
   }
 
   SECTION("saturation.bitcrusher") {

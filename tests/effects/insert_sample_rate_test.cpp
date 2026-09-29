@@ -33,6 +33,7 @@
 /// - rotary, acceleration time constant in seconds: the time constant itself.
 /// - rotary fast horn speed, tremolo rate in Hz: the rate asked for.
 /// - stereo delay tap 3, arrival time in ms: the time asked for.
+/// - pitch shifter pre-delay, arrival time in ms: the time asked for.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
 ///
@@ -831,6 +832,36 @@ double tap3_arrival_ms(double sample_rate) {
   return weight > 0.0 ? 1000.0 * moment / weight / sample_rate : 0.0;
 }
 
+// --- pitch shifter pre-delay ------------------------------------------------
+
+constexpr float kPreDelayMs = 25.0f;
+constexpr double kPreDelayTolerance = 0.005;
+
+/// Arrival time in ms of an impulse through a unity-ratio voice with a
+/// pre-delay, read as the centroid of the response so a time between two samples
+/// is resolved.
+double pre_delay_arrival_ms(double sample_rate) {
+  PitchShifterConfig config;
+  config.dry_wet = 1.0f;
+  config.pre_delay_ms = kPreDelayMs;
+  PitchShifter shifter(config);
+  const int samples = static_cast<int>(0.1 * sample_rate);
+  shifter.prepare(sample_rate, samples);
+  std::vector<float> left(static_cast<std::size_t>(samples), 0.0f);
+  std::vector<float> right(left.size(), 0.0f);
+  left[0] = right[0] = 1.0f;
+  float* channels[2] = {left.data(), right.data()};
+  shifter.process(channels, 2, samples);
+  double weight = 0.0;
+  double moment = 0.0;
+  for (int i = 0; i < samples; ++i) {
+    const double h = std::fabs(static_cast<double>(left[static_cast<std::size_t>(i)]));
+    weight += h;
+    moment += h * i;
+  }
+  return weight > 0.0 ? 1000.0 * moment / weight / sample_rate : 0.0;
+}
+
 // --- parametric EQ ----------------------------------------------------------
 
 // Band-type selectors, in the order the insert's params decode them.
@@ -1199,6 +1230,22 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     }
     tally.within(measured[0], measured[1], kTap3Tolerance,
                  "the stereo delay's tap 3 arrives at the same time in ms at both rates");
+  }
+
+  // --- pitch shifter pre-delay: the arrival time, in ms ---------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = pre_delay_arrival_ms(rates[r]);
+      WARN("pitch shifter pre-delay" << at_rate(rates[r]) << ": " << measured[r] << " ms");
+      tally.at_least(measured[r], 1.0,
+                     "the pitch shifter's pre-delay" + at_rate(rates[r]) + ", is readable at all");
+      tally.within(
+          measured[r], static_cast<double>(kPreDelayMs), kPreDelayTolerance,
+          "the pitch shifter's pre-delay" + at_rate(rates[r]) + ", against the time asked");
+    }
+    tally.within(measured[0], measured[1], kPreDelayTolerance,
+                 "the pitch shifter's pre-delay arrives at the same time in ms at both rates");
   }
 
   // The glide reaches the audio and not only the rotor's own accessor: two

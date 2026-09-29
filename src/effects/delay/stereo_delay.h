@@ -13,6 +13,7 @@
 #include <array>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
 
