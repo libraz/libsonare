@@ -13,6 +13,14 @@
 namespace sonare::mastering::saturation {
 
 struct HardClipperConfig {
+  /// @brief Clip level. The None, Adaa1 and Adaa2 modes bound every emitted
+  ///   sample to it. Oversample4x bounds the signal at 4x and decimates, and the
+  ///   decimation lowpass rings above the bound it was fed: measured +1.6 dB
+  ///   over the ceiling on a 0.36 fs sine clipped 5 dB deep and +3.0 dB on
+  ///   full-scale white noise. Re-bounding the decimated output would fold the
+  ///   aliases the mode exists to remove back in (a per-sample clamp measured
+  ///   -19.5 dB against the mode's -87 dB), so a hard sample bound after this
+  ///   mode is the true-peak limiter's job, or the other modes' promise.
   float ceiling = 1.0f;
   sonare::rt::AliasingControl aliasing = sonare::rt::AliasingControl::None;
 };
@@ -68,8 +76,7 @@ class HardClipper : public rt::ProcessorBase {
   bool prepared_ = false;
   int max_block_size_ = 0;
   static constexpr int kOversampleFactor = 4;
-  static constexpr int kOversampleTapsPerPhase = 24;
-  sonare::rt::Oversampler oversampler_{kOversampleFactor, kOversampleTapsPerPhase};
+  sonare::rt::Oversampler oversampler_{kOversampleFactor};
   // Oversample4x scratch: preallocated in prepare() so the audio-thread
   // process() path never allocates. Blocks wider than max_block_size_ are
   // rejected rather than resized.

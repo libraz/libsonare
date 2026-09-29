@@ -6,6 +6,7 @@
 
 #include "core/fft.h"
 #include "mastering/saturation/tape.h"
+#include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -115,7 +116,8 @@ TEST_CASE("Tape oversampling is invariant to process block partitioning",
   Tape partitioned(config);
   one_shot.prepare(kSampleRate, static_cast<int>(input.size() + one_shot.latency_samples()));
   partitioned.prepare(kSampleRate, 128);
-  REQUIRE(one_shot.latency_samples() == 12);
+  REQUIRE(one_shot.latency_samples() ==
+          sonare::rt::Oversampler(4).streaming_round_trip_latency_samples());
   REQUIRE(partitioned.latency_samples() == one_shot.latency_samples());
 
   input.resize(input.size() + static_cast<size_t>(one_shot.latency_samples()), 0.0f);

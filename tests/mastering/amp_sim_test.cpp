@@ -21,6 +21,7 @@
 #include "mastering/saturation/amp_physics.h"
 #include "mastering/saturation/amp_presets.h"
 #include "mastering/saturation/triode.h"
+#include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
 
 namespace {
@@ -191,7 +192,8 @@ TEST_CASE("saturation.ampSim is reachable through offline named processing",
 
   REQUIRE(result.sample_rate == static_cast<int>(kRate));
   REQUIRE(result.samples.size() == input.size());
-  REQUIRE(result.latency_samples == 12);
+  REQUIRE(result.latency_samples ==
+          sonare::rt::Oversampler(4).streaming_round_trip_latency_samples());
   REQUIRE(result.samples != input);
   for (const float sample : result.samples) {
     REQUIRE(std::isfinite(sample));

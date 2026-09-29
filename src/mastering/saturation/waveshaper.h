@@ -68,8 +68,7 @@ class Waveshaper : public rt::ProcessorBase {
   bool prepared_ = false;
   int max_block_size_ = 0;
   static constexpr int kOversampleFactor = 4;
-  static constexpr int kOversampleTapsPerPhase = 24;
-  sonare::rt::Oversampler oversampler_{kOversampleFactor, kOversampleTapsPerPhase};
+  sonare::rt::Oversampler oversampler_{kOversampleFactor};
   // Oversample4x scratch and the dry-path delay that keeps the wet
   // oversampled signal time-aligned with the dry mix; preallocated in
   // prepare() so the audio-thread process() path never allocates.

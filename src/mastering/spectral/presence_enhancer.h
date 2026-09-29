@@ -63,8 +63,7 @@ class PresenceEnhancer : public rt::ProcessorBase {
   // untouched input time-matched with the delayed harmonic content before
   // the two are summed.
   static constexpr int kHarmonicOversampleFactor = 4;
-  static constexpr int kHarmonicTapsPerPhase = 24;
-  sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor, kHarmonicTapsPerPhase};
+  sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor};
   std::vector<sonare::rt::Oversampler::StreamingState> harmonic_oversampler_states_;
   std::vector<sonare::rt::DelayLine> dry_delays_;
   std::vector<float> band_scratch_;

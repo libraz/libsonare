@@ -3,6 +3,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
@@ -15,6 +16,7 @@
 #include "mastering/saturation/transformer.h"
 #include "mastering/saturation/tube.h"
 #include "mastering/saturation/waveshaper.h"
+#include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 
@@ -275,6 +277,35 @@ TEST_CASE("SoftClipper and HardClipper support ADAA mode", "[mastering][saturati
   REQUIRE_THAT(repeated[0], WithinAbs(hard_signal[0], 0.0001f));
 }
 
+// The oversampled mode bounds the signal at 4x; its decimation lowpass rings
+// above that bound (Gibbs), and any re-bound of the decimated output folds the
+// aliases the mode removes back in. The overshoot is therefore documented as a
+// measured figure rather than removed: +3.0 dB on full-scale white noise, the
+// worst case tried, against the bound stated on HardClipperConfig::ceiling.
+TEST_CASE("HardClipper Oversample4x overshoots its ceiling by no more than the documented bound",
+          "[mastering][saturation]") {
+  constexpr float kCeiling = 0.5f;
+  constexpr float kDocumentedOvershootDb = 3.5f;
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    std::vector<float> signal(static_cast<size_t>(sample_rate));
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+    for (float& s : signal) s = dist(rng);
+
+    HardClipper clipper({kCeiling, sonare::rt::AliasingControl::Oversample4x});
+    clipper.prepare(sample_rate, 512);
+    for (size_t offset = 0; offset < signal.size(); offset += 512) {
+      float* block = signal.data() + offset;
+      clipper.process(&block, 1, static_cast<int>(std::min<size_t>(512, signal.size() - offset)));
+    }
+    const float overshoot_db = 20.0f * std::log10(peak_abs(signal) / kCeiling);
+    CAPTURE(overshoot_db);
+    REQUIRE(overshoot_db > 0.0f);
+    REQUIRE(overshoot_db <= kDocumentedOvershootDb);
+  }
+}
+
 TEST_CASE("HardClipper Oversample4x suppresses high-tone alias products",
           "[mastering][saturation]") {
   for (const int sample_rate : {44100, 48000}) {
@@ -396,7 +427,8 @@ TEST_CASE("Tube uses Dempwolf 12AX7 model with configurable oversampling",
   signal.resize(signal.size() + static_cast<size_t>(tube.latency_samples()), 0.0f);
   process(tube, signal);
 
-  REQUIRE(tube.latency_samples() == 12);
+  REQUIRE(tube.latency_samples() ==
+          sonare::rt::Oversampler(4).streaming_round_trip_latency_samples());
   signal.erase(signal.begin(), signal.begin() + tube.latency_samples());
 
   for (float sample : signal) REQUIRE(std::isfinite(sample));
@@ -463,7 +495,8 @@ TEST_CASE("Tube oversampling is invariant to process block partitioning",
   Tube partitioned(config);
   one_shot.prepare(48000.0, kFrames + one_shot.latency_samples());
   partitioned.prepare(48000.0, 128);
-  REQUIRE(one_shot.latency_samples() == 12);
+  REQUIRE(one_shot.latency_samples() ==
+          sonare::rt::Oversampler(4).streaming_round_trip_latency_samples());
   REQUIRE(partitioned.latency_samples() == one_shot.latency_samples());
 
   input.resize(input.size() + static_cast<size_t>(one_shot.latency_samples()), 0.0f);

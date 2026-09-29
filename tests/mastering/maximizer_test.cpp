@@ -19,6 +19,7 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
+#include "rt/oversampler.h"
 #include "rt/true_peak_fir.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
@@ -292,21 +293,56 @@ TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
   REQUIRE(limiter.last_gain_reduction_db() < -5.5f);
 }
 
+// Below threshold the limiter is a delay: the two gain-application modes differ
+// in latency, not in what they do to the spectrum.
+TEST_CASE("TruePeakLimiter modes agree below threshold across the audio band",
+          "[mastering][maximizer]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 16384;
+  constexpr int kBlock = 512;
+  constexpr int kSettle = 4096;
+  const double frequency = GENERATE(0.1, 0.3, 0.4, 0.45);
+  CAPTURE(frequency);
+
+  float gain_db[2] = {0.0f, 0.0f};
+  for (const bool detect_only : {false, true}) {
+    std::vector<float> signal(static_cast<size_t>(kSamples));
+    for (int i = 0; i < kSamples; ++i) {
+      signal[static_cast<size_t>(i)] =
+          0.0316f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * frequency * i));
+    }
+    const float input_rms = sonare::test::rms(signal, kSettle);
+    TruePeakLimiter limiter({-1.0f, 1.0f, 50.0f, 4, detect_only});
+    limiter.prepare(static_cast<double>(kSampleRate), kBlock);
+    for (int offset = 0; offset < kSamples; offset += kBlock) {
+      float* block = signal.data() + offset;
+      limiter.process(&block, 1, std::min(kBlock, kSamples - offset));
+    }
+    gain_db[detect_only ? 1 : 0] =
+        20.0f * std::log10(sonare::test::rms(signal, kSettle) / input_rms);
+  }
+  CAPTURE(gain_db[0], gain_db[1]);
+  REQUIRE(std::abs(gain_db[0]) <= 0.1f);
+  REQUIRE(std::abs(gain_db[1]) <= 0.1f);
+}
+
 TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][maximizer]") {
   TruePeakLimiter limiter({-1.0f, 1.0f, 10.0f, 4});
   limiter.prepare(48000.0, 64);
 
-  // Lookahead (1 ms), one FIR group delay while upsampling and another while
-  // decimating, and the output guard's stencil less one sample. The 2x and 4x
-  // designs share a taps-per-phase count, so the total is the same at both.
+  // Lookahead (1 ms), the oversampler's interpolation and decimation group
+  // delays, and the output guard's stencil less one sample. The oversampler's
+  // prototype has the same length at every factor, so the total is too.
   const int lookahead = 48;
-  const int stencil = rt::true_peak_fir_for(4).taps_per_phase;
-  const int expected = lookahead + 2 * (stencil / 2) + (stencil - 1);
-  REQUIRE(expected == 71);
+  const int guard = rt::true_peak_fir_for(4).taps_per_phase - 1;
+  const int expected =
+      lookahead + rt::Oversampler(4).streaming_round_trip_latency_samples() + guard;
+  REQUIRE(expected == 107);
   REQUIRE(limiter.latency_samples() == expected);
 
   limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
-  REQUIRE(rt::true_peak_fir_for(2).taps_per_phase == stencil);
+  REQUIRE(rt::Oversampler(2).streaming_round_trip_latency_samples() ==
+          rt::Oversampler(4).streaming_round_trip_latency_samples());
   REQUIRE(limiter.latency_samples() == expected);
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
@@ -355,9 +391,10 @@ TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping runn
   // lookahead is reflected in the reported latency.
   limiter.set_config({-3.0f, 2.0f, 50.0f, 4});
   REQUIRE(limiter.last_gain_reduction_db() == 0.0f);
-  // 2 ms lookahead plus the fixed oversampling and guard delays (12 + 11).
-  const int stencil = rt::true_peak_fir_for(4).taps_per_phase;
-  REQUIRE(limiter.latency_samples() == 96 + 2 * (stencil / 2) + (stencil - 1));
+  // 2 ms lookahead plus the oversampling round trip and the guard's stencil.
+  REQUIRE(limiter.latency_samples() ==
+          96 + rt::Oversampler(4).streaming_round_trip_latency_samples() +
+              (rt::true_peak_fir_for(4).taps_per_phase - 1));
 
   // The updated -3 dB ceiling (0.708) is in effect on subsequent processing:
   // the 0.95 sine is limited near the NEW ceiling — clearly above the stale
@@ -437,9 +474,10 @@ TEST_CASE("TruePeakLimiter release time constant is independent of oversample fa
   auto recovery_samples = [&](int factor) {
     TruePeakLimiter limiter({ceiling_db, 0.0f, release_ms, factor});
     limiter.prepare(static_cast<double>(sample_rate), 1);
-    // Drive the gain hard down with a short loud burst, one base sample per
-    // block so last_gain_reduction_db() tracks the base-rate gain envelope.
-    for (int i = 0; i < 8; ++i) {
+    // Drive the gain hard down with a loud burst longer than the interpolator's
+    // group delay, one base sample per block so last_gain_reduction_db() tracks
+    // the base-rate gain envelope.
+    for (int i = 0; i < limiter.latency_samples() + 8; ++i) {
       float sample = 4.0f;
       float* channel[] = {&sample};
       limiter.process(channel, 1, 1);

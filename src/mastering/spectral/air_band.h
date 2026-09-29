@@ -62,9 +62,8 @@ class AirBand : public rt::ProcessorBase {
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   static constexpr int kHarmonicOversampleFactor = 4;
-  static constexpr int kHarmonicTapsPerPhase = 24;
   static constexpr int kShelfControlInterval = 8;
-  sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor, kHarmonicTapsPerPhase};
+  sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor};
   std::vector<sonare::rt::Oversampler::StreamingState> harmonic_oversampler_states_;
   // Delays the dry shelf output by the harmonic oversampler's round-trip
   // latency so it stays time-aligned with the harmonic content before the two

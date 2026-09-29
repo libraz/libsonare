@@ -6,10 +6,18 @@
 #include "util/exception.h"
 
 namespace sonare::rt {
-Oversampler::Oversampler(int factor, int taps_per_phase) : taps_per_phase_(taps_per_phase) {
-  SONARE_CHECK(taps_per_phase_ > 0, ErrorCode::InvalidParameter);
-  set_factor(factor);
-}
+namespace {
+
+// Kaiser beta for 80 dB of stopband attenuation (0.1102 * (80 - 8.7)).
+constexpr double kKaiserBeta = 7.85726;
+// At this beta the transition band is 0.1 fs wide, which places it between a
+// 0.45 fs passband edge and the 0.55 fs point where images and aliases of that
+// edge land: single pass -0.005 dB at 0.45 fs, -65 dB at 0.55 fs.
+constexpr int kTapsPerPhase = 48;
+
+}  // namespace
+
+Oversampler::Oversampler(int factor) { set_factor(factor); }
 
 void Oversampler::set_factor(int factor) {
   SONARE_CHECK(is_supported_polyphase_oversample_factor(factor), ErrorCode::InvalidParameter);
@@ -20,7 +28,7 @@ void Oversampler::set_factor(int factor) {
     return;
   }
   decimation_taps_ =
-      design_windowed_sinc_lowpass(taps_per_phase_ * factor_, factor_, 7.85726, true);
+      design_windowed_sinc_lowpass(kTapsPerPhase * factor_, factor_, kKaiserBeta, true);
   fir_ = build_polyphase(decimation_taps_, factor_);
 }
 

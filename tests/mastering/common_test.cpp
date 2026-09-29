@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
@@ -282,7 +283,8 @@ TEST_CASE("Oversampler filters every phase while interpolating intermediate samp
   REQUIRE(std::abs(upsampled[32 * 4 + 1]) > 0.01f);
   REQUIRE(std::abs(upsampled[32 * 4 + 2]) > 0.01f);
   REQUIRE(std::abs(upsampled[32 * 4 + 3]) > 0.01f);
-  REQUIRE(oversampler.latency_samples() == 6);
+  // Half of the prototype's 48 taps per phase.
+  REQUIRE(oversampler.latency_samples() == 24);
 }
 
 TEST_CASE("Oversampler round trip preserves a mid-band sine", "[mastering]") {
@@ -305,6 +307,28 @@ TEST_CASE("Oversampler round trip preserves a mid-band sine", "[mastering]") {
 
   CAPTURE(max_error);
   REQUIRE(max_error < 1.0e-3f);
+}
+
+// An interpolation/decimation pair exists to move a nonlinearity to a higher
+// rate, not to shape the signal: on band-limited content the round trip has to
+// be transparent across the audio band at every supported factor.
+TEST_CASE("Oversampler round trip is flat to 0.45 fs at every factor", "[mastering]") {
+  constexpr size_t kLength = 16384;
+  constexpr size_t kEdge = 2048;
+  const int factor = GENERATE(2, 4, 8, 16);
+  const double frequency = GENERATE(0.3, 0.4, 0.45);
+  CAPTURE(factor, frequency);
+
+  Oversampler oversampler(factor);
+  std::vector<float> input(kLength, 0.0f);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = 0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * frequency *
+                                                  static_cast<double>(i)));
+  }
+  const auto round_trip = oversampler.downsample(oversampler.upsample(input));
+  const float gain_db = 20.0f * std::log10(rms(round_trip, kEdge) / rms(input, kEdge));
+  CAPTURE(gain_db);
+  REQUIRE(std::abs(gain_db) <= 0.1f);
 }
 
 TEST_CASE("Oversampler downsample uses FIR decimation", "[mastering]") {

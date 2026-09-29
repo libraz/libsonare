@@ -12,7 +12,6 @@
 #include "rt/oversampler.h"
 #include "rt/polyphase_fir.h"
 #include "rt/sliding_max.h"
-#include "rt/true_peak_filter.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -201,17 +200,12 @@ class TruePeakLimiter : public rt::ProcessorBase {
 
   TruePeakLimiterConfig config_{};
   dynamics::BrickwallLimiter limiter_;
-  sonare::rt::TruePeakFilter true_peak_filter_;
-  sonare::rt::Oversampler downsampler_{4};
+  sonare::rt::Oversampler oversampler_{4};
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
   std::vector<sonare::rt::LookaheadBuffer> oversampled_lookahead_;
-  std::vector<std::vector<float>> true_peak_history_;
-  std::vector<const float*> input_ptrs_;
-  std::vector<float*> oversampled_ptrs_;
   std::vector<std::vector<float>> oversampled_buffers_;
   std::vector<std::vector<float>> limited_oversampled_buffers_;
-  std::vector<std::vector<float>> true_peak_scratch_;
-  std::vector<sonare::rt::Oversampler::StreamingState> downsampler_states_;
+  std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
   TruePeakOutputGuard output_guard_;
   std::vector<float> linked_abs_;
   std::vector<float> input_rate_gain_;
