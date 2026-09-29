@@ -8,8 +8,24 @@
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::reverb {
+
+/// Behaviour of the output gate once it has opened.
+enum class DattorroGateType {
+  kNormal,   ///< Full level until the hold runs out, then closed.
+  kReverse,  ///< Level ramps up over the hold time, then closed.
+  kSweep1,   ///< Normal gate; the wet image sweeps left to right over the hold time.
+  kSweep2,   ///< Normal gate; the wet image sweeps right to left over the hold time.
+};
+inline constexpr int kDattorroGateTypeCount = 4;
+
+/// Highest `character` value; 0 is the canonical tank and 1-6 are the six sets below.
+inline constexpr int kDattorroMaxCharacter = 6;
+
+/// Gate thresholds at or below this (dB) leave the gate off.
+inline constexpr float kDattorroGateOffDb = sonare::constants::kFloorDb;
 
 struct DattorroReverbConfig {
   float decay = 0.5f;              ///< Tank feedback / tail length, clamped to [0, 0.98].
@@ -18,6 +34,19 @@ struct DattorroReverbConfig {
   float mod_rate_hz = 0.5f;        ///< Tank allpass modulation rate.
   float mod_depth_samples = 6.0f;  ///< Modulation depth (at reference rate 29761 Hz).
   float pre_delay_samples = 0.0f;  ///< Input pre-delay (at reference rate 29761 Hz).
+  /// Corner of the tank's one-pole damping low-pass, in Hz, built at the working
+  /// rate. Above 0 it replaces `damping`; 0 keeps `damping`.
+  float damping_hz = 0.0f;
+  /// Gate on the wet output: it closes `gate_hold_ms` after the wet level last
+  /// exceeded this threshold. At or below kDattorroGateOffDb the gate is off.
+  float gate_threshold_db = kDattorroGateOffDb;
+  float gate_hold_ms = 100.0f;  ///< Hold time after the level falls below the threshold.
+  DattorroGateType gate_type = DattorroGateType::kNormal;
+  /// Tank length set, in [0, kDattorroMaxCharacter]: 0 is the canonical tank, 1-6 are
+  /// Room 1, Room 2, Stage 1, Stage 2, Hall 1, Hall 2. The sets are ratios applied to the
+  /// four tank delay lines and the output taps that read them. Lengths size the buffers, so
+  /// this is read at prepare() only and has no automation id.
+  int character = 0;
 };
 
 class DattorroReverb : public rt::ProcessorBase {
@@ -41,11 +70,17 @@ class DattorroReverb : public rt::ProcessorBase {
   //   3 = mod_rate_hz (recomputes the LFO increment in place)
   //   4 = mod_depth_samples (may grow the modulated allpass buffers when the
   //       requested depth exceeds the prepared guard)
-  // Note: pre_delay_samples is not automatable; changing it resizes the
-  // pre-delay buffer and requires prepare().
+  //   5 = damping_hz (0 restores `damping`), 6 = gate_threshold_db,
+  //   7 = gate_hold_ms, 8 = gate_type (a whole number naming a type, refused otherwise)
+  // Note: pre_delay_samples and character are not automatable; they size buffers
+  // and require prepare().
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
+
+  /// @brief One-pole coefficient `a` of `y += a * (x - y)` whose response is 3 dB down at
+  ///        @p corner_hz when running at @p sample_rate.
+  static float damping_coefficient(double corner_hz, double sample_rate) noexcept;
 
  private:
   /// @brief Schroeder allpass: out = -g*in + buf[read]; buf[write] = in + g*out.
@@ -118,6 +153,13 @@ class DattorroReverb : public rt::ProcessorBase {
   float damp_r_ = 0.0f;
   float tail_l_ = 0.0f;
   float tail_r_ = 0.0f;
+
+  // Output gate (wet path).
+  float gate_env_ = 0.0f;   ///< Peak envelope of the ungated wet output.
+  float gate_gain_ = 1.0f;  ///< Smoothed gate gain.
+  int gate_hold_left_ = 0;  ///< Samples until an open gate closes.
+  int gate_elapsed_ = 0;    ///< Samples since the gate opened.
+  bool gate_open_ = false;
 
   // Output tap offsets (scaled to the working sample rate).
   size_t tap_l_l1a_ = 0, tap_l_l1b_ = 0, tap_l_apl_ = 0, tap_l_l2_ = 0;

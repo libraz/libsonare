@@ -1,6 +1,6 @@
 /// @file insert_bit_identity_test.cpp
 /// @brief Every GS-EFX-driven insert (chorus / flanger / phaser / stereo
-///        delay / rotary / pitch shifter / bitcrusher) runs through
+///        delay / rotary / pitch shifter / dattorro reverb / bitcrusher) runs through
 ///        insert_factory's `"{}"` path for the entire GM default rig
 ///        (gm_fallback_map.cpp's kRigStages) and every GM bounce, and no
 ///        golden covers it (gm_program_golden_test.cpp never injects a
@@ -91,6 +91,9 @@ constexpr float kPitchShifterRms = 0.206451163f;
 constexpr float kPitchShifterCentroidHz = 249.117661f;
 constexpr float kBitcrusherRms = 0.206448466f;
 constexpr float kBitcrusherCentroidHz = 249.123016f;
+
+constexpr float kDattorroRms = 0.119705729f;
+constexpr float kDattorroCentroidHz = 273.524597f;
 
 void require_pinned(const Scalars& s, float expected_rms, float expected_centroid_hz) {
   REQUIRE(s.rms_value == Catch::Approx(expected_rms).epsilon(1e-6));
@@ -187,6 +190,17 @@ TEST_CASE(
         R"({"semitones":7,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0})");
     REQUIRE(shifted_empty.left == shifted_explicit.left);
     REQUIRE(shifted_empty.right == shifted_explicit.right);
+  }
+
+  SECTION("effects.reverb.dattorro") {
+    const RenderResult empty = render("effects.reverb.dattorro", "{}");
+    const RenderResult explicit_defaults = render(
+        "effects.reverb.dattorro",
+        R"({"decay":0.5,"damping":0.5,"dryWet":0.35,"modRateHz":0.5,"modDepthSamples":6.0,"preDelayMs":0.0,"dampingHz":0.0,"gateThresholdDb":-120.0,"gateHoldMs":100.0,"gateType":0,"character":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    const Scalars s = measure(empty.left);
+    require_pinned(s, kDattorroRms, kDattorroCentroidHz);
   }
 
   SECTION("saturation.bitcrusher") {

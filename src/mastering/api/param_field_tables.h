@@ -28,6 +28,7 @@
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/phaser.h"
+#include "effects/reverb/dattorro_reverb.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/eq_band.h"
@@ -175,6 +176,20 @@ constexpr const char* enum_choice_name(sonare::effects::delay::StereoDelayCrossM
       return "pingPong";
     case sonare::effects::delay::StereoDelayCrossMode::kCross:
       return "cross";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::reverb::DattorroGateType value) {
+  switch (value) {
+    case sonare::effects::reverb::DattorroGateType::kNormal:
+      return "normal";
+    case sonare::effects::reverb::DattorroGateType::kReverse:
+      return "reverse";
+    case sonare::effects::reverb::DattorroGateType::kSweep1:
+      return "sweep1";
+    case sonare::effects::reverb::DattorroGateType::kSweep2:
+      return "sweep2";
   }
   return nullptr;
 }

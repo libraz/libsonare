@@ -24,6 +24,8 @@
 ///   holding the corner does not hold the notch.
 /// - stereo delay, damping half-power corner in Hz: computed. A discrete one
 ///   pole crosses half power above the corner it is built from.
+/// - dattorro, damping half-power corner in Hz: the corner itself, which the
+///   coefficient is solved to place exactly at every rate.
 /// - chorus / flanger, pre-filter half-power corner in Hz: computed, same pole.
 /// - chorus feedback, comb tooth spacing in Hz: the reciprocal of the loop delay.
 /// - ensemble pre-delay deviation, spacing between voices in seconds: the deviation itself.
@@ -58,6 +60,7 @@
 #include "effects/modulation/phaser.h"
 #include "effects/modulation/pitch_shifter.h"
 #include "effects/modulation/rotary.h"
+#include "effects/reverb/dattorro_reverb.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "support/audio_fixtures.h"
@@ -83,6 +86,8 @@ using sonare::effects::modulation::PitchShifterConfig;
 using sonare::effects::modulation::PreFilterMode;
 using sonare::effects::modulation::Rotary;
 using sonare::effects::modulation::RotaryConfig;
+using sonare::effects::reverb::DattorroReverb;
+using sonare::effects::reverb::DattorroReverbConfig;
 using sonare::mastering::saturation::BitCrusher;
 using sonare::mastering::saturation::BitCrusherConfig;
 using sonare::mastering::saturation::QuantizerMode;
@@ -298,6 +303,75 @@ StereoDelayConfig bare_delay(float damping_hz) {
   config.dry_wet = 1.0f;
   config.damping_hz = damping_hz;
   return config;
+}
+
+// --- dattorro damping -------------------------------------------------------
+
+constexpr float kDattorroCornerHz[] = {700.0f, 3000.0f};
+constexpr double kDattorroTolerance = 0.05;
+// The stretch of the impulse response reached through a damping cell exactly
+// once: past the unfiltered early taps, before any path has crossed a second
+// cell. Every path in it is one delay chain times one cell, so the ratio of two
+// renders that differ only in the corner is the cell's own response.
+constexpr double kDattorroWindowStartS = 0.35;
+constexpr double kDattorroWindowEndS = 0.53;
+
+std::vector<float> dattorro_response(float damping_hz, double sample_rate) {
+  DattorroReverbConfig config;
+  config.damping_hz = damping_hz;
+  config.dry_wet = 1.0f;
+  config.mod_depth_samples = 0.0f;
+  DattorroReverb reverb(config);
+  reverb.prepare(sample_rate, 512);
+  const int samples = static_cast<int>(kDattorroWindowEndS * sample_rate) + 1;
+  std::vector<float> left(static_cast<std::size_t>(samples), 0.0f);
+  std::vector<float> right(left.size(), 0.0f);
+  left[0] = right[0] = 1.0f;
+  float* channels[2] = {left.data(), right.data()};
+  reverb.process(channels, 2, samples);
+  return left;
+}
+
+/// Power of the windowed response averaged over a band a tenth either side of
+/// @p centre_hz, so the delay chains' comb structure does not decide the value.
+double dattorro_band_power(const std::vector<float>& response, double centre_hz,
+                           double sample_rate) {
+  constexpr int kPoints = 24;
+  const std::size_t first = static_cast<std::size_t>(kDattorroWindowStartS * sample_rate);
+  double total = 0.0;
+  for (int k = 0; k < kPoints; ++k) {
+    const double f = centre_hz * (0.9 + 0.2 * k / (kPoints - 1));
+    const double w = kTwoPiD * f / sample_rate;
+    std::complex<double> sum(0.0, 0.0);
+    for (std::size_t n = first; n < response.size(); ++n) {
+      sum += static_cast<double>(response[n]) * std::polar(1.0, -w * static_cast<double>(n));
+    }
+    total += std::norm(sum);
+  }
+  return total / kPoints;
+}
+
+/// Frequency where the damped tail's power falls to half that of a tail with the
+/// cell wide open, found by scanning log-spaced bands and interpolating.
+double dattorro_half_power_hz(double corner_hz, double sample_rate) {
+  const std::vector<float> damped = dattorro_response(static_cast<float>(corner_hz), sample_rate);
+  const std::vector<float> open =
+      dattorro_response(static_cast<float>(0.49 * sample_rate), sample_rate);
+  constexpr int kSteps = 60;
+  double previous_f = 0.0;
+  double previous_ratio = 1.0;
+  for (int i = 0; i <= kSteps; ++i) {
+    const double f = corner_hz * 0.25 * std::pow(16.0, static_cast<double>(i) / kSteps);
+    const double ratio =
+        dattorro_band_power(damped, f, sample_rate) / dattorro_band_power(open, f, sample_rate);
+    if (ratio < 0.5 && i > 0) {
+      const double t = (previous_ratio - 0.5) / (previous_ratio - ratio);
+      return previous_f * std::pow(f / previous_f, t);
+    }
+    previous_f = f;
+    previous_ratio = ratio;
+  }
+  return 0.0;
 }
 
 // --- chorus and flanger -----------------------------------------------------
@@ -1051,6 +1125,24 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                      std::to_string(static_cast<int>(corner)) + " Hz");
   }
 
+  // --- dattorro: the damping's half-power corner, in hertz -------------------
+  for (const float corner : kDattorroCornerHz) {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      const std::string where = "the reverb's damping corner, asked for " +
+                                std::to_string(static_cast<int>(corner)) + " Hz" +
+                                at_rate(rates[r]);
+      measured[r] = dattorro_half_power_hz(corner, rates[r]);
+      WARN(where << ": " << measured[r] << " Hz");
+      tally.at_least(measured[r], 1.0, where + " is readable at all");
+      tally.within(measured[r], static_cast<double>(corner), kDattorroTolerance,
+                   where + ", against the corner asked for");
+    }
+    tally.within(measured[0], measured[1], kDattorroTolerance,
+                 "the reverb's damping corner lands on one frequency at both rates, asked for " +
+                     std::to_string(static_cast<int>(corner)) + " Hz");
+  }
+
   // --- chorus and flanger: the pre-filter's half-power corner, in hertz ------
   // The same section, run per instance, so both types are read.
   for (const float corner : kPreFilterCornerHz) {
@@ -1293,5 +1385,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   }
 
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 97);
+  REQUIRE(tally.count() >= 107);
 }

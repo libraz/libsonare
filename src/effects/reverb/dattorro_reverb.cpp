@@ -27,6 +27,25 @@ constexpr float kGainIn = 0.75f;   // Input diffusion allpass gain.
 constexpr float kGainMod = 0.7f;   // Modulated tank allpass gain.
 constexpr float kGainDiff = 0.5f;  // Decay diffusion allpass gain.
 
+// Ratios applied to the four tank delay lines (L1, L2, R1, R2) for characters 1-6
+// (Room 1, Room 2, Stage 1, Stage 2, Hall 1, Hall 2). Invented values: shorter
+// lines give a denser, quicker tail, longer ones a sparser, longer one.
+constexpr double kCharacterRatios[kDattorroMaxCharacter + 1][4] = {
+    {1.0, 1.0, 1.0, 1.0},     {0.30, 0.28, 0.32, 0.27}, {0.45, 0.42, 0.47, 0.40},
+    {0.70, 0.66, 0.72, 0.62}, {0.85, 0.80, 0.90, 0.78}, {1.15, 1.10, 1.20, 1.05},
+    {1.40, 1.30, 1.50, 1.25}};
+
+int clamp_character(int character) { return std::clamp(character, 0, kDattorroMaxCharacter); }
+
+// Gate time constants: the peak detector's fall, and the gain's approach to its target.
+constexpr double kGateDetectorReleaseMs = 5.0;
+constexpr double kGateSmoothingMs = 1.0;
+
+// One-pole smoothing coefficient for a time constant in milliseconds at the working rate.
+float smoothing_coefficient(double ms, double sr) {
+  return static_cast<float>(1.0 - std::exp(-1000.0 / (ms * sr)));
+}
+
 // Folds an LFO phase back into [0, 2pi) for any increment. A single
 // conditional subtract only covers an increment below one period, and nothing
 // bounds the modulation rate against the sample rate, so a rate above it would
@@ -151,6 +170,15 @@ float DattorroReverb::TapDelay::read_at(size_t offset) const {
 
 // --- DattorroReverb --------------------------------------------------------
 
+float DattorroReverb::damping_coefficient(double corner_hz, double sample_rate) noexcept {
+  // Solves |H(w_c)|^2 = 1/2 for y += a (x - y): with b = 1 - a and c = cos(w_c),
+  // b^2 - (4 - 2c) b + 1 = 0, taking the root below one.
+  const double fc = std::clamp(corner_hz, 0.0, 0.49 * sample_rate);
+  const double c = std::cos(kTwoPi * fc / sample_rate);
+  const double b = (2.0 - c) - std::sqrt((2.0 - c) * (2.0 - c) - 1.0);
+  return static_cast<float>(1.0 - b);
+}
+
 DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {}
 
 void DattorroReverb::prepare(double sample_rate, int) {
@@ -174,29 +202,34 @@ void DattorroReverb::prepare(double sample_rate, int) {
   mod_ap_l_.prepare(scale_len(672.0, sr), max_depth, kGainMod);
   mod_ap_r_.prepare(scale_len(908.0, sr), max_depth, kGainMod);
 
-  delay_l1_.prepare(scale_len(4453.0, sr));
-  delay_l2_.prepare(scale_len(3720.0, sr));
-  delay_r1_.prepare(scale_len(4217.0, sr));
-  delay_r2_.prepare(scale_len(3163.0, sr));
+  const double* ratio = kCharacterRatios[clamp_character(config_.character)];
+  const double r_l1 = ratio[0];
+  const double r_l2 = ratio[1];
+  const double r_r1 = ratio[2];
+  const double r_r2 = ratio[3];
+  delay_l1_.prepare(scale_len(4453.0 * r_l1, sr));
+  delay_l2_.prepare(scale_len(3720.0 * r_l2, sr));
+  delay_r1_.prepare(scale_len(4217.0 * r_r1, sr));
+  delay_r2_.prepare(scale_len(3163.0 * r_r2, sr));
   decay_ap_l_.prepare(scale_len(1800.0, sr), kGainDiff);
   decay_ap_r_.prepare(scale_len(2656.0, sr), kGainDiff);
 
-  // Output taps.
-  tap_l_l1a_ = scale_len(266.0, sr);
-  tap_l_l1b_ = scale_len(2974.0, sr);
-  tap_l_apl_ = scale_len(1913.0, sr);
-  tap_l_l2_ = scale_len(1996.0, sr);
-  tap_l_r1_ = scale_len(1990.0, sr);
+  // Output taps; a tap that reads a delay line scales with that line.
+  tap_l_l1a_ = scale_len(266.0 * r_l1, sr);
+  tap_l_l1b_ = scale_len(2974.0 * r_l1, sr);
+  tap_l_apl_ = scale_len(1913.0 * r_l2, sr);
+  tap_l_l2_ = scale_len(1996.0 * r_l2, sr);
+  tap_l_r1_ = scale_len(1990.0 * r_r1, sr);
   tap_l_apr_ = scale_len(187.0, sr);
-  tap_l_r2_ = scale_len(1066.0, sr);
+  tap_l_r2_ = scale_len(1066.0 * r_r2, sr);
 
-  tap_r_r1a_ = scale_len(353.0, sr);
-  tap_r_r1b_ = scale_len(3627.0, sr);
+  tap_r_r1a_ = scale_len(353.0 * r_r1, sr);
+  tap_r_r1b_ = scale_len(3627.0 * r_r1, sr);
   tap_r_apr_ = scale_len(1228.0, sr);
-  tap_r_r2_ = scale_len(2673.0, sr);
-  tap_r_l1_ = scale_len(2111.0, sr);
+  tap_r_r2_ = scale_len(2673.0 * r_r2, sr);
+  tap_r_l1_ = scale_len(2111.0 * r_l1, sr);
   tap_r_apl_ = scale_len(335.0, sr);
-  tap_r_l2_ = scale_len(121.0, sr);
+  tap_r_l2_ = scale_len(121.0 * r_l2, sr);
 
   lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sr);
 
@@ -215,11 +248,26 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
   float* right = stereo ? channels[1] : channels[0];
 
   const float decay = std::clamp(config_.decay, 0.0f, 0.98f);
-  const float damp_d = std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f;
+  const float damp_d = config_.damping_hz > 0.0f
+                           ? damping_coefficient(config_.damping_hz, sample_rate_)
+                           : std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f;
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
+
+  const bool gate_on = config_.gate_threshold_db > kDattorroGateOffDb;
+  const float gate_threshold = gate_on ? std::pow(10.0f, config_.gate_threshold_db / 20.0f) : 0.0f;
+  const int gate_hold =
+      static_cast<int>(std::lround(std::max(0.0f, config_.gate_hold_ms) * sample_rate_ / 1000.0));
+  const int gate_ramp = std::max(1, gate_hold);
+  const float detector_release = 1.0f - smoothing_coefficient(kGateDetectorReleaseMs, sample_rate_);
+  const float gate_smoothing = smoothing_coefficient(kGateSmoothingMs, sample_rate_);
+  if (!gate_on) {
+    gate_env_ = 0.0f;
+    gate_gain_ = 1.0f;
+    gate_open_ = false;
+  }
 
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
@@ -284,14 +332,45 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     // diffuser (delay_l2_, length 3720), per the canonical Dattorro topology.
     // It must NOT read decay_ap_l_ (length 1800): 1913 > 1800 would wrap the
     // allpass ring and return the wrong node (sample 113).
-    const float out_l = delay_l1_.read_at(tap_l_l1a_) + delay_l1_.read_at(tap_l_l1b_) -
-                        delay_l2_.read_at(tap_l_apl_) + delay_l2_.read_at(tap_l_l2_) -
-                        delay_r1_.read_at(tap_l_r1_) - decay_ap_r_.read_at(tap_l_apr_) -
-                        delay_r2_.read_at(tap_l_r2_);
-    const float out_r = delay_r1_.read_at(tap_r_r1a_) + delay_r1_.read_at(tap_r_r1b_) -
-                        decay_ap_r_.read_at(tap_r_apr_) + delay_r2_.read_at(tap_r_r2_) -
-                        delay_l1_.read_at(tap_r_l1_) - decay_ap_l_.read_at(tap_r_apl_) -
-                        delay_l2_.read_at(tap_r_l2_);
+    float out_l = delay_l1_.read_at(tap_l_l1a_) + delay_l1_.read_at(tap_l_l1b_) -
+                  delay_l2_.read_at(tap_l_apl_) + delay_l2_.read_at(tap_l_l2_) -
+                  delay_r1_.read_at(tap_l_r1_) - decay_ap_r_.read_at(tap_l_apr_) -
+                  delay_r2_.read_at(tap_l_r2_);
+    float out_r = delay_r1_.read_at(tap_r_r1a_) + delay_r1_.read_at(tap_r_r1b_) -
+                  decay_ap_r_.read_at(tap_r_apr_) + delay_r2_.read_at(tap_r_r2_) -
+                  delay_l1_.read_at(tap_r_l1_) - decay_ap_l_.read_at(tap_r_apl_) -
+                  delay_l2_.read_at(tap_r_l2_);
+
+    if (gate_on) {
+      const float level = std::max(std::fabs(out_l), std::fabs(out_r));
+      gate_env_ = std::max(level, gate_env_ * detector_release);
+      if (gate_env_ >= gate_threshold) {
+        if (!gate_open_) gate_elapsed_ = 0;
+        gate_open_ = true;
+        gate_hold_left_ = gate_hold;
+      } else if (gate_open_) {
+        if (gate_hold_left_ > 0) {
+          --gate_hold_left_;
+        } else {
+          gate_open_ = false;
+        }
+      }
+      if (gate_open_ && gate_elapsed_ < gate_ramp) ++gate_elapsed_;
+      const float progress = static_cast<float>(gate_elapsed_) / static_cast<float>(gate_ramp);
+      float target = gate_open_ ? 1.0f : 0.0f;
+      if (config_.gate_type == DattorroGateType::kReverse && gate_open_) target = progress;
+      gate_gain_ += gate_smoothing * (target - gate_gain_);
+      float gain_l = gate_gain_;
+      float gain_r = gate_gain_;
+      if (config_.gate_type == DattorroGateType::kSweep1 ||
+          config_.gate_type == DattorroGateType::kSweep2) {
+        const float p = config_.gate_type == DattorroGateType::kSweep1 ? progress : 1.0f - progress;
+        gain_l *= std::min(1.0f, 2.0f * (1.0f - p));
+        gain_r *= std::min(1.0f, 2.0f * p);
+      }
+      out_l *= gain_l;
+      out_r *= gain_r;
+    }
 
     if (stereo) {
       left[i] = dry * in_l + wet * out_l;
@@ -310,6 +389,7 @@ void DattorroReverb::discard_non_finite() noexcept {
   // half whose tail is poisoned is not half a tank.
   if (!discard_group_if_non_finite(damp_l_, damp_r_, tail_l_, tail_r_)) return;
   note_non_finite_discard();
+  gate_env_ = 0.0f;
   // The lines and allpasses upstream are the loop that feeds these cells --
   // including the input diffusers, which recirculate their own output -- so the
   // poison cycles back instead of flowing out. O(line), recovery only.
@@ -324,6 +404,11 @@ void DattorroReverb::discard_non_finite() noexcept {
   delay_r2_.reset();
   decay_ap_l_.reset();
   decay_ap_r_.reset();
+  gate_env_ = 0.0f;
+  gate_gain_ = 1.0f;
+  gate_open_ = false;
+  gate_hold_left_ = 0;
+  gate_elapsed_ = 0;
 }
 
 int DattorroReverb::tail_samples() const noexcept {
@@ -331,8 +416,13 @@ int DattorroReverb::tail_samples() const noexcept {
   const double decay = std::clamp(static_cast<double>(config_.decay), 0.0, 0.98);
   if (decay <= 0.0) return 0;
 
-  constexpr double kTankLoopSeconds = 21589.0 / kRefRate;
-  const double t60_seconds = std::log(1000.0) * kTankLoopSeconds / (-4.0 * std::log(decay));
+  // Both halves' allpasses (672 + 908 + 1800 + 2656) plus the four delay lines at
+  // their character's ratios; 21589 for the canonical tank.
+  const double* ratio = kCharacterRatios[clamp_character(config_.character)];
+  const double tank_loop_seconds = (672.0 + 908.0 + 1800.0 + 2656.0 + 4453.0 * ratio[0] +
+                                    3720.0 * ratio[1] + 4217.0 * ratio[2] + 3163.0 * ratio[3]) /
+                                   kRefRate;
+  const double t60_seconds = std::log(1000.0) * tank_loop_seconds / (-4.0 * std::log(decay));
   const double pre_delay_seconds =
       std::max(0.0, static_cast<double>(config_.pre_delay_samples)) / kRefRate;
   const double samples = (pre_delay_seconds + t60_seconds) * sample_rate_;
@@ -370,17 +460,37 @@ bool DattorroReverb::set_parameter(unsigned int param_id, float value) {
         mod_ap_r_.ensure_capacity(max_depth);
       }
       return true;
+    case 5:
+      config_.damping_hz = std::max(0.0f, value);
+      return true;
+    case 6:
+      config_.gate_threshold_db = value;
+      return true;
+    case 7:
+      config_.gate_hold_ms = std::max(0.0f, value);
+      return true;
+    case 8:
+      // An unnamed type is refused rather than rounded onto a neighbour.
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(kDattorroGateTypeCount)) {
+        return false;
+      }
+      config_.gate_type = static_cast<DattorroGateType>(static_cast<int>(value));
+      return true;
     default:
       return false;
   }
 }
 
 bool DattorroReverb::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  // Id 4 may grow the modulated allpass buffers; the rest are in-place scalar updates.
   return param_id != 4u;
 }
 
 std::vector<rt::ParamDescriptor> DattorroReverb::parameter_descriptors() const {
-  return {{"decay", 0}, {"damping", 1}, {"dryWet", 2}, {"modRateHz", 3}, {"modDepthSamples", 4}};
+  return {{"decay", 0},           {"damping", 1},         {"dryWet", 2},
+          {"modRateHz", 3},       {"modDepthSamples", 4}, {"dampingHz", 5},
+          {"gateThresholdDb", 6}, {"gateHoldMs", 7},      {"gateType", 8}};
 }
 
 void DattorroReverb::reset() {

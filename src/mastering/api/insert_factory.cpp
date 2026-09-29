@@ -559,7 +559,7 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
 // The nested members are pinned separately: a field added to a room's
 // dimensions or to its climate does not move the arity of the config holding
 // them, and would otherwise arrive unreachable with nothing red.
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::DattorroReverbConfig, 6);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::DattorroReverbConfig, 11);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::FdnReverbConfig, 3);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::VelvetReverbConfig, 5);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::ConvolutionReverbConfig, 4);
@@ -686,6 +686,12 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       config.pre_delay_samples = f(params, "preDelayMs", 0.0f) *
                                  static_cast<float>(DattorroReverb::kReferenceSampleRate) / 1000.0f;
     }
+    config.damping_hz = f(params, "dampingHz", config.damping_hz);
+    config.gate_threshold_db = f(params, "gateThresholdDb", config.gate_threshold_db);
+    config.gate_hold_ms = f(params, "gateHoldMs", config.gate_hold_ms);
+    detail::read_field(params, "gateType", config.gate_type);
+    // Construction-only: the tank's delay lengths follow it.
+    detail::read_field(params, "character", config.character);
     return make<DattorroReverb>(config);
   }
   if (name == "effects.reverb.fdn") {

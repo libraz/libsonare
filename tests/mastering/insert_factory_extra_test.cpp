@@ -246,6 +246,11 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
           "effects.modulation.pitchShifter",
           R"({"semitones":7,"cents":-20,"pan":-0.5,"semitones2":-5,"cents2":10,"level2":0.6,"pan2":0.5,"preDelayMs":12,"preDelay2Ms":30,"feedback":0.3,"mixLaw":1})") !=
       nullptr);
+  REQUIRE(
+      make_insert(
+          "effects.reverb.dattorro",
+          R"({"dampingHz":2500,"gateThresholdDb":-40,"gateHoldMs":120,"gateType":2,"character":5})") !=
+      nullptr);
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
