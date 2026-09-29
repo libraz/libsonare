@@ -402,9 +402,15 @@ export interface PolyphonicAnalysisOptions {
   maxRefineHz?: number;
   /** Worst F0 error tolerated by the fit, in cents. Default 50. */
   f0ToleranceCents?: number;
-  /** Cents of pitch change that cut one ridge into two notes. Default 50. */
+  /**
+   * Scales each note's reported `f0Stability` only. Every tracked ridge is one
+   * note, so a mid-ridge pitch jump is never split into two. Default 50.
+   */
   segmentationThresholdCents?: number;
-  /** Shortest span kept as a note, in ms. Default 30. */
+  /**
+   * Not read: every tracked ridge is one note, so nothing filters a short note
+   * here. Use `minRidgeDurationMs` to drop short ridges instead. Default 30.
+   */
   minNoteMs?: number;
   /** Reference pitch each note's `medianCents` is measured against. Default 440. */
   referenceHz?: number;

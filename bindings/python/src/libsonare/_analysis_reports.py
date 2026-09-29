@@ -789,7 +789,7 @@ def detect_acoustic(
     min_decay_db: float = 30.0,
     noise_floor_margin_db: float = 10.0,
 ) -> AcousticResult:
-    """Estimate blind RT60/EDT acoustic parameters from ordinary audio."""
+    """Estimate blind RT60 from ordinary audio (EDT and clarity read as NaN)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareAcousticResult()

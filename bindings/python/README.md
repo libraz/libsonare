@@ -195,7 +195,7 @@ is preferred when doing more than one computation on the same signal.
 - **Mixing** — offline `mix_stereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Mixing assistant** — `suggest_mix_scene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
-- **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, `estimate_room`, `synthesize_rir`, `room_morph`. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
+- **Room acoustics** — blind RT60, impulse-response EDT and clarity metrics, `estimate_room`, `synthesize_rir`, `room_morph`. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamAnalyzer`, `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
 - **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [Python API](https://libsonare.libraz.net/docs/python-api)

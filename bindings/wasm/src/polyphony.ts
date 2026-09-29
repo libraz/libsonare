@@ -256,7 +256,9 @@ export class PolyphonicAnalysis {
  *
  * @throws {RangeError} on empty samples, a non-finite sample, or a `sampleRate`
  *   outside `[8000, 384000]`
- * @throws {SonareError} `InvalidParameter` on a config value the chain rejects
+ * @throws {SonareError} `InvalidParameter` on a config value the chain rejects,
+ *   or on audio too short for two STFT frames at the configured `nFft`/`hopLength`
+ *   (roughly one `hopLength`, ~512 samples at the default)
  *
  * @example
  * ```typescript

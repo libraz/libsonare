@@ -201,8 +201,11 @@ export interface NoteSegmentsRequest {
    */
   voicedProb: Float32Array;
   frameRate: number;
+  /** Cents of pitch change that start a new segment. Default 50. */
   segmentationThresholdCents?: number;
+  /** Shortest segment kept, in ms. Default 30. */
   minNoteMs?: number;
+  /** Reference pitch each segment's cents are measured against. Default 440. */
   referenceHz?: number;
   /** Voicing threshold applied to `voicedProb`; defaults to `0.5`. */
   voicedThreshold?: number;

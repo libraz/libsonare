@@ -585,7 +585,7 @@ class Audio:
         min_decay_db: float = 30.0,
         noise_floor_margin_db: float = 10.0,
     ) -> AcousticResult:
-        """Estimate blind RT60/EDT acoustic parameters from this audio."""
+        """Estimate blind RT60 from this audio (EDT and clarity read as NaN)."""
         return _detect_acoustic(
             self.data,
             self.sample_rate,

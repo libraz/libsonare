@@ -235,9 +235,12 @@ class PolyphonicAnalysis:
             max_refine_hz: Highest partial usable to refine an F0; 0 derives one,
                 and is passed through as given.
             f0_tolerance_cents: Worst F0 error tolerated (default 50).
-            segmentation_threshold_cents: Pitch jump that cuts a new note out of
-                a ridge (default 50).
-            min_note_ms: Shortest note kept (default 30).
+            segmentation_threshold_cents: Scales each note's reported
+                ``f0_stability`` only (default 50). Every tracked ridge is one
+                note, so a mid-ridge pitch jump is never split into two.
+            min_note_ms: Not read (default 30): every tracked ridge is one
+                note, so nothing filters a short note here. Use
+                ``min_ridge_duration_ms`` to drop short ridges instead.
             reference_hz: Reference for each note's ``median_cents`` (default
                 A4 = 440).
 
@@ -245,6 +248,9 @@ class PolyphonicAnalysis:
             SonareValueError: If ``samples`` is empty, non-finite, or not a
                 one-dimensional numeric buffer.
             SonareError: If the C call rejects the request, including
+                ``ErrorCode.INVALID_PARAMETER`` for audio too short for two STFT
+                frames at the configured ``n_fft``/``hop_length`` (roughly one
+                ``hop_length``, ~512 samples at the default) and
                 ``ErrorCode.NOT_SUPPORTED`` when the library was built without
                 the pitch editor.
         """
