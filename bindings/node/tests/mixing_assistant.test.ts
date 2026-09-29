@@ -146,6 +146,29 @@ describe('mixing assistant native binding', () => {
     expect(silent?.exclusionReason).not.toBe('');
     expect(result.tracks.find((track) => track.stripId === 'tone')?.usable).toBe(true);
   });
+
+  it('reports only integratedLufs as null for a silent track, as the types declare', () => {
+    const result = suggestMixScene({
+      tracks: [
+        { id: 'mono', left: new Float32Array(SR) },
+        { id: 'stereo', left: new Float32Array(SR), right: new Float32Array(SR) },
+      ],
+      sampleRate: SR,
+    });
+
+    for (const track of result.tracks) {
+      expect(track.usable, track.stripId).toBe(false);
+      expect(track.integratedLufs, track.stripId).toBeNull();
+      // The true peak and crest factor are floored to finite values, so their
+      // plain number types hold even for silence.
+      expect(Number.isFinite(track.truePeakDb), track.stripId).toBe(true);
+      expect(Number.isFinite(track.crestFactorDb), track.stripId).toBe(true);
+      const nullFields = Object.entries(track)
+        .filter(([, value]) => value === null)
+        .map(([key]) => key);
+      expect(nullFields, track.stripId).toEqual(['integratedLufs']);
+    }
+  });
 });
 
 describe('mixing assistant options', () => {
