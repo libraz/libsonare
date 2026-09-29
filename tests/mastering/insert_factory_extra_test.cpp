@@ -236,6 +236,8 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
                       R"({"shape":2,"phaseDeg":90,"stereoSpread":0.5})") != nullptr);
   REQUIRE(make_insert("stereo.autoPan", R"({"shape":3})") != nullptr);
   REQUIRE(make_insert("stereo.stereoBalance", R"({"balance":0.3,"law":1})") != nullptr);
+  REQUIRE(make_insert("dynamics.limiter", R"({"ratio":4,"postGainDb":-3})") != nullptr);
+  REQUIRE(make_insert("eq.graphic", R"({"band10GainDb":3,"q":5})") != nullptr);
   REQUIRE(
       make_insert(
           "effects.delay.stereo",

@@ -18,6 +18,10 @@ struct LimiterConfig {
   float threshold_db = -1.0f;
   float lookahead_ms = 1.0f;
   float release_ms = 50.0f;
+  /// Compression ratio above the threshold; 0 means infinity (brick-wall). Otherwise >= 1.
+  float ratio = 0.0f;
+  /// Gain applied after the limiter, in dB.
+  float post_gain_db = 0.0f;
 };
 
 class Limiter : public rt::ProcessorBase {
@@ -67,6 +71,10 @@ class Limiter : public rt::ProcessorBase {
   ///          updated and the published snapshot is untouched, so a later
   ///          snapshot adoption will overwrite the in-place threshold.
   void set_threshold_in_place(float threshold_db) noexcept;
+  /// @brief Realtime-safe ratio update (0 = brick-wall, otherwise held at >= 1).
+  void set_ratio_in_place(float ratio) noexcept;
+  /// @brief Realtime-safe post gain update in dB.
+  void set_post_gain_db_in_place(float post_gain_db) noexcept;
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread.
   /// @details NOT realtime-safe and NOT safe to call concurrently with
@@ -80,9 +88,11 @@ class Limiter : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = threshold_db
   //   1 = release_ms (clamped to >= 0)
+  //   2 = ratio (0 = brick-wall, otherwise clamped to >= 1)
+  //   3 = post_gain_db
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   bool set_parameter(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=thresholdDb, 1=releaseMs
+  // Automatable parameters: 0=thresholdDb, 1=releaseMs, 2=ratio, 3=postGainDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
@@ -138,6 +148,10 @@ class Limiter : public rt::ProcessorBase {
   // update_coefficients() on snapshot adoption and by set_threshold_in_place()
   // for RT-safe per-block automation, so a ceiling change needs no publish.
   float threshold_db_ = -1.0f;
+  // Exponent of (ceiling / peak) giving the gain above threshold: 1 - 1/ratio.
+  // 0 selects the brick-wall path (ceiling / peak) exactly.
+  float ratio_exponent_ = 0.0f;
+  float post_gain_ = 1.0f;
   float last_gain_reduction_db_ = 0.0f;
 };
 

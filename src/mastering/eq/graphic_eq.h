@@ -23,6 +23,9 @@ class GraphicEq : public rt::ProcessorBase {
   void set_gain_db(size_t index, float gain_db);
   void set_gain_for_frequency(float frequency_hz, float gain_db);
   void clear();
+  /// @brief Sets one Q for every band; 0 restores the gain-derived per-band Q.
+  /// @details Redesigns the band filters in place (no allocation, state kept).
+  void set_q(float q);
 
   // Automatable parameters (RT-safe: recomputes only the affected band's biquad
   // coefficients in place, preserves filter state). Each of the 31 ISO bands
@@ -30,8 +33,9 @@ class GraphicEq : public rt::ProcessorBase {
   //   id b (0 .. kNumBands-1) = gain_db for band b (center frequency is fixed;
   //                             band Q is derived from gain via
   //                             band_q_for_gain_db()).
+  //   id kNumBands            = q shared by all bands (0 = the gain-derived default).
   bool set_parameter(unsigned int param_id, float value) override;
-  // Automatable parameters: id b (0 .. kNumBands-1) = "band<b>GainDb".
+  // Automatable parameters: id b (0 .. kNumBands-1) = "band<b>GainDb"; id kNumBands = "q".
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   float gain_db(size_t index) const;
@@ -51,6 +55,8 @@ class GraphicEq : public rt::ProcessorBase {
   // Captured in prepare(); used to clamp fixed ISO center frequencies to the
   // open (0 Hz, Nyquist) interval so bands above Nyquist do not throw.
   double sample_rate_ = 44100.0;
+  // Shared band Q; 0 keeps band_q_for_gain_db().
+  float q_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::eq

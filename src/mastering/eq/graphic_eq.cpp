@@ -55,7 +55,11 @@ void GraphicEq::set_gain_db(size_t index, float gain_db) {
 }
 
 bool GraphicEq::set_parameter(unsigned int param_id, float value) {
-  if (param_id >= kNumBands) {
+  if (param_id == kNumBands) {
+    set_q(value);
+    return true;
+  }
+  if (param_id > kNumBands) {
     return false;
   }
   const size_t index = param_id;
@@ -67,11 +71,20 @@ bool GraphicEq::set_parameter(unsigned int param_id, float value) {
 std::vector<rt::ParamDescriptor> GraphicEq::parameter_descriptors() const {
   // Construction-time keys mirror configure_graphic(): "band<index>GainDb".
   std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(kNumBands);
+  descriptors.reserve(kNumBands + 1);
   for (unsigned int index = 0; index < kNumBands; ++index) {
     descriptors.push_back({"band" + std::to_string(index) + "GainDb", index});
   }
+  descriptors.push_back({"q", static_cast<unsigned int>(kNumBands)});
   return descriptors;
+}
+
+void GraphicEq::set_q(float q) {
+  // A non-finite or negative Q falls back to the gain-derived default.
+  q_ = std::isfinite(q) && q > 0.0f ? q : 0.0f;
+  for (size_t i = 0; i < kNumBands; ++i) {
+    rebuild_band(i);
+  }
 }
 
 void GraphicEq::set_gain_for_frequency(float frequency_hz, float gain_db) {
@@ -132,7 +145,7 @@ void GraphicEq::rebuild_band(size_t index) {
   const float center = std::clamp(kCenterFrequencies[index], 1.0e-3f,
                                   static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
   const EqBand band{EqBandType::Peak, center, gains_db_[index],
-                    band_q_for_gain_db(gains_db_[index]), enabled};
+                    q_ > 0.0f ? q_ : band_q_for_gain_db(gains_db_[index]), enabled};
   if (index < ParametricEq::kMaxBands) {
     low_eq_.set_band(index, band);
   } else {

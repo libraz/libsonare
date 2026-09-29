@@ -93,6 +93,7 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
   // snapshot adoption, or overridden by set_threshold_in_place for RT-safe
   // per-block automation).
   const float ceiling = db_to_linear(threshold_db_);
+  const float post_gain = post_gain_;
   float min_gain = 1.0f;
   // Reuse the preallocated scratch (sized in prepare()) instead of allocating a
   // fresh vector each block; only the first num_channels entries are read.
@@ -116,12 +117,16 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
       }
     }
 
-    const float target_gain = peak > ceiling && peak > 0.0f ? ceiling / peak : 1.0f;
+    float target_gain = 1.0f;
+    if (peak > ceiling && peak > 0.0f) {
+      target_gain =
+          ratio_exponent_ == 0.0f ? ceiling / peak : std::pow(ceiling / peak, ratio_exponent_);
+    }
     // Smooth the linked target once, then apply the same gain to every channel
     // so the stereo image is preserved.
     const float gain = gain_smoother_.smooth_bidirectional(target_gain, release_coeff_, true);
     for (int ch = 0; ch < num_channels; ++ch) {
-      channels[ch][i] = delayed_[static_cast<size_t>(ch)] * gain;
+      channels[ch][i] = delayed_[static_cast<size_t>(ch)] * gain * post_gain;
     }
     min_gain = std::min(min_gain, gain);
   }
@@ -176,6 +181,15 @@ void Limiter::set_release_ms_in_place(float release_ms) noexcept {
   release_coeff_ = time_to_coefficient(sample_rate_, std::max(0.0f, release_ms));
 }
 
+void Limiter::set_ratio_in_place(float ratio) noexcept {
+  // 0 keeps the brick-wall path; the caller has refused anything else below 1.
+  ratio_exponent_ = ratio > 0.0f ? 1.0f - 1.0f / ratio : 0.0f;
+}
+
+void Limiter::set_post_gain_db_in_place(float post_gain_db) noexcept {
+  post_gain_ = db_to_linear(post_gain_db);
+}
+
 void Limiter::set_threshold_in_place(float threshold_db) noexcept {
   // RT-safe: only update the scalar threshold the per-sample loop reads. No
   // publish, no allocation. The control-thread config_ mirror and the published
@@ -198,13 +212,22 @@ bool Limiter::set_parameter(unsigned int param_id, float value) {
     case 1:
       set_release_ms_in_place(std::max(0.0f, value));
       return true;
+    case 2:
+      // 0 is the brick-wall; anything else must be a finite ratio of at least 1.
+      if (!std::isfinite(value) || (value != 0.0f && value < 1.0f)) return false;
+      set_ratio_in_place(value);
+      return true;
+    case 3:
+      if (!std::isfinite(value)) return false;
+      set_post_gain_db_in_place(value);
+      return true;
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> Limiter::parameter_descriptors() const {
-  return {{"thresholdDb", 0}, {"releaseMs", 1}};
+  return {{"thresholdDb", 0}, {"releaseMs", 1}, {"ratio", 2}, {"postGainDb", 3}};
 }
 
 void Limiter::validate_config(const LimiterConfig& config) {
@@ -216,6 +239,12 @@ void Limiter::validate_config(const LimiterConfig& config) {
     // A non-finite threshold becomes a non-finite ceiling (db_to_linear) and
     // poisons every gain in the block; reject it here (matches BrickwallLimiter).
     throw SonareException(ErrorCode::InvalidParameter, "limiter threshold must be finite");
+  }
+  if (!std::isfinite(config.post_gain_db)) {
+    throw SonareException(ErrorCode::InvalidParameter, "limiter post gain must be finite");
+  }
+  if (!std::isfinite(config.ratio) || (config.ratio != 0.0f && config.ratio < 1.0f)) {
+    throw SonareException(ErrorCode::InvalidParameter, "limiter ratio must be 0 or at least 1");
   }
 }
 
@@ -234,6 +263,8 @@ void Limiter::prepare_buffers(int num_channels) {
 void Limiter::update_coefficients(const LimiterConfig& config) {
   release_coeff_ = time_to_coefficient(sample_rate_, config.release_ms);
   threshold_db_ = config.threshold_db;
+  set_ratio_in_place(config.ratio);
+  set_post_gain_db_in_place(config.post_gain_db);
 }
 
 }  // namespace sonare::mastering::dynamics

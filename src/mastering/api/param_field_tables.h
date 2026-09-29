@@ -759,7 +759,9 @@ inline double field_as_double(Enum value) {
 #define SONARE_FIELDS_LIMITER(X) \
   X("thresholdDb", threshold_db) \
   X("lookaheadMs", lookahead_ms) \
-  X("releaseMs", release_ms)
+  X("releaseMs", release_ms)     \
+  X("ratio", ratio)              \
+  X("postGainDb", post_gain_db)
 
 #define SONARE_FIELDS_BRICKWALL_LIMITER(X) \
   X("ceilingDb", ceiling_db)               \

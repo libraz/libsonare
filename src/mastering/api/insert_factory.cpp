@@ -353,6 +353,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   if (name == "eq.graphic") {
     auto p = std::make_unique<eq::GraphicEq>();
     detail::configure_graphic(*p, params);
+    p->set_q(f(params, "q", 0.0f));
     return p;
   }
   if (name == "eq.midSide") {

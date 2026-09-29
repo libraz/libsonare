@@ -39,6 +39,8 @@
 /// - stereo delay tap 3, arrival time in ms: the time asked for.
 /// - stereo balance glide, settling time in ms: the 5 ms it is built for.
 /// - pitch shifter pre-delay, arrival time in ms: the time asked for.
+/// - graphic EQ, a band's -3 dB bandwidth in Hz at a shared Q: computed from the analog
+///   peaking section the band is built from.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
 ///
@@ -1147,6 +1149,74 @@ double peak_centre_hz(const std::vector<float>& response, float corner_hz, doubl
   return std::exp((lo + hi) / 2.0);
 }
 
+// --- graphic EQ -------------------------------------------------------------
+
+constexpr int kGraphicBand = 17;  // The 1 kHz ISO band.
+constexpr double kGraphicCentreHz = 1000.0;
+constexpr double kGraphicGainDb = 12.0;
+constexpr float kGraphicQs[] = {2.0f, 6.0f};
+constexpr double kGraphicBandwidthTolerance = 0.03;
+
+std::vector<float> graphic_impulse(float q, double sample_rate) {
+  std::ostringstream json;
+  json << "{\"band" << kGraphicBand << "GainDb\":" << kGraphicGainDb << ",\"q\":" << q << "}";
+  auto eq = sonare::mastering::api::make_insert("eq.graphic", json.str());
+  REQUIRE(eq != nullptr);
+  eq->prepare(sample_rate, kFftLength);
+  std::vector<float> response = sonare::test::generate_impulse(kFftLength);
+  sonare::test::process(*eq, response);
+  return response;
+}
+
+/// Width in Hz between the two points 3.01 dB below the response's peak, each
+/// bisected in log frequency on its own side of the centre.
+double bandwidth_3db_hz(const std::vector<float>& response, double sample_rate) {
+  const double centre = peak_centre_hz(response, static_cast<float>(kGraphicCentreHz), sample_rate);
+  const double level = response_db(response, centre, sample_rate) - 3.0103;
+  auto crossing = [&](double inner, double outer) {
+    double a = inner;
+    double b = outer;
+    const bool a_above = response_db(response, a, sample_rate) > level;
+    for (int i = 0; i < 60; ++i) {
+      const double mid = std::sqrt(a * b);
+      if ((response_db(response, mid, sample_rate) > level) == a_above) {
+        a = mid;
+      } else {
+        b = mid;
+      }
+    }
+    return std::sqrt(a * b);
+  };
+  return crossing(centre, centre * 8.0) - crossing(centre, centre / 8.0);
+}
+
+/// The same width for the analog peaking section (s^2 + sA/Q + 1) / (s^2 + s/(AQ) + 1),
+/// which the band's bilinear design pre-warps onto its centre.
+double analog_bandwidth_3db_hz(float q) {
+  const double gain = std::pow(10.0, kGraphicGainDb / 40.0);
+  const double quality = static_cast<double>(q);
+  auto power_db = [&](double x) {
+    const double d = (1.0 - x * x) * (1.0 - x * x);
+    return 10.0 * std::log10((d + x * x * gain * gain / (quality * quality)) /
+                             (d + x * x / (gain * gain * quality * quality)));
+  };
+  const double level = kGraphicGainDb - 3.0103;
+  auto crossing = [&](double inner, double outer) {
+    double a = inner;
+    double b = outer;
+    for (int i = 0; i < 60; ++i) {
+      const double mid = std::sqrt(a * b);
+      if ((power_db(mid) > level) == (power_db(a) > level)) {
+        a = mid;
+      } else {
+        b = mid;
+      }
+    }
+    return std::sqrt(a * b);
+  };
+  return (crossing(1.0, 8.0) - crossing(1.0, 1.0 / 8.0)) * kGraphicCentreHz;
+}
+
 std::string at_rate(double sample_rate) {
   return " at " + std::to_string(static_cast<int>(sample_rate)) + " Hz";
 }
@@ -1553,8 +1623,24 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                  "the EQ " + asked + ", lands on one frequency at both rates");
   }
 
+  // --- graphic EQ: a band's -3 dB bandwidth at a shared Q, in hertz ----------
+  for (const float q : kGraphicQs) {
+    const std::string asked = "the graphic EQ's -3 dB bandwidth, Q " + std::to_string(q);
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = bandwidth_3db_hz(graphic_impulse(q, rates[r]), rates[r]);
+      tally.at_least(measured[r], 1.0, asked + at_rate(rates[r]) + ", is readable at all");
+      tally.within(measured[r], analog_bandwidth_3db_hz(q), kGraphicBandwidthTolerance,
+                   asked + at_rate(rates[r]) + ", against the section the Q builds");
+    }
+    tally.within(measured[0], measured[1], kGraphicBandwidthTolerance,
+                 asked + ", lands on one width at both rates");
+    WARN(asked << ": " << measured[0] << " Hz at " << rates[0] << ", " << measured[1] << " Hz at "
+               << rates[1]);
+  }
+
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 113);
+  REQUIRE(tally.count() >= 207);
 }

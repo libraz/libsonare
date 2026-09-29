@@ -268,4 +268,27 @@ TEST_CASE(
     const Scalars s = measure(empty.left);
     require_pinned(s, kBitcrusherRms, kBitcrusherCentroidHz);
   }
+
+  SECTION("dynamics.limiter") {
+    // A -20 dB ceiling makes the limiter act on the test signal.
+    const RenderResult empty = render("dynamics.limiter", R"({"thresholdDb":-20.0})");
+    const RenderResult explicit_defaults = render(
+        "dynamics.limiter",
+        R"({"thresholdDb":-20.0,"lookaheadMs":1.0,"releaseMs":50.0,"ratio":0.0,"postGainDb":0.0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    const RenderResult soft = render("dynamics.limiter", R"({"thresholdDb":-20.0,"ratio":4.0})");
+    REQUIRE(empty.left != soft.left);
+  }
+
+  SECTION("eq.graphic") {
+    const RenderResult empty = render("eq.graphic", R"({"band15GainDb":6.0,"band20GainDb":-9.0})");
+    const RenderResult explicit_defaults =
+        render("eq.graphic", R"({"band15GainDb":6.0,"band20GainDb":-9.0,"q":0.0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    const RenderResult narrow =
+        render("eq.graphic", R"({"band15GainDb":6.0,"band20GainDb":-9.0,"q":9.0})");
+    REQUIRE(empty.left != narrow.left);
+  }
 }
