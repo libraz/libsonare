@@ -502,35 +502,42 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
 
   // Bus-level body resonators (the components the NativeSynth host folds in):
   // the piano's modal soundboard + pedal-gated sympathetic bank, and the
-  // plucked-string open-string halo. Re-prepared only when the part's patch
-  // kind changes; a different soundboard mix only re-states the return level,
-  // since the part's earlier notes may still be ringing through the board.
-  FallbackBodyState& body = fallback_body_[part];
-  if (patch.mode == SynthEngineMode::kPiano) {
-    if (body.kind != FallbackBodyKind::kPiano) {
-      body.kind = FallbackBodyKind::kPiano;
-      fallback_board_[part].prepare(sample_rate_, patch.piano.soundboard);
-      fallback_reso_[part].prepare(sample_rate_);
-    } else if (body.soundboard_mix != patch.piano.soundboard) {
-      fallback_board_[part].set_mix(patch.piano.soundboard);
+  // plucked-string open-string halo. Each kind has its own body on the part and
+  // is prepared once, at its first note; a different soundboard mix only
+  // re-states the return level, since earlier notes may still ring through it.
+  FallbackBodyKind body_kind{};
+  if (fallback_body_kind(patch, &body_kind)) {
+    FallbackBodyState& state = fallback_body_[part];
+    FallbackBody& body = state.bodies[static_cast<size_t>(body_kind)];
+    if (body_kind == FallbackBodyKind::kPiano) {
+      if (!body.prepared) {
+        fallback_board_[part].prepare(sample_rate_, patch.piano.soundboard);
+        fallback_reso_[part].prepare(sample_rate_);
+      } else if (state.soundboard_mix != patch.piano.soundboard) {
+        fallback_board_[part].set_mix(patch.piano.soundboard);
+      }
+      state.soundboard_mix = patch.piano.soundboard;
+      // The blow into the structure, which the board is struck with once rather
+      // than driven by. After any prepare() above, which clears the network.
+      fallback_board_[part].strike(voice->piano.case_strike());
+      fallback_board_[part].strike_board(voice->piano.board_strike());
+    } else if (!body.prepared) {
+      fallback_halo_[part].prepare_guitar_sympathetic(sample_rate_);
     }
-    body.soundboard_mix = patch.piano.soundboard;
-    // The blow into the structure, which the board is struck with once rather
-    // than driven by. After any prepare() above, which clears the network.
-    fallback_board_[part].strike(voice->piano.case_strike());
-    fallback_board_[part].strike_board(voice->piano.board_strike());
-  } else if (patch.mode == SynthEngineMode::kKarplusStrong && patch.ks.sympathetic) {
-    if (body.kind != FallbackBodyKind::kGuitarHalo) {
-      body.kind = FallbackBodyKind::kGuitarHalo;
-      body.soundboard_mix = -1.0f;
-      fallback_reso_[part].prepare_guitar_sympathetic(sample_rate_);
-    }
-  } else if (body.kind != FallbackBodyKind::kNone && !is_drum) {
-    // The part moved to a program with no body resonator.
-    body.kind = FallbackBodyKind::kNone;
-    body.soundboard_mix = -1.0f;
-    body.ringout = 0;
+    body.prepared = true;
   }
+}
+
+bool Sf2Player::fallback_body_kind(const NativeSynthPatch& patch, FallbackBodyKind* kind) noexcept {
+  if (patch.mode == SynthEngineMode::kPiano) {
+    *kind = FallbackBodyKind::kPiano;
+    return true;
+  }
+  if (patch.mode == SynthEngineMode::kKarplusStrong && patch.ks.sympathetic) {
+    *kind = FallbackBodyKind::kGuitarHalo;
+    return true;
+  }
+  return false;
 }
 
 void Sf2Player::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept {
@@ -681,13 +688,14 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   // its output: the piano soundboard and sympathetic bank ring for ~1.5 s and
   // the wind chest holds its tremulant/sag state, so killing the voices alone
   // would leak an audible wash past the stop. These are per-part, so clearing
-  // them touches no other channel; the body's kind/tuning is kept so the next
+  // them touches no other channel; each body's tuning is kept so the next
   // note-on does not re-prepare.
   const size_t part = ch;
   fallback_board_[part].reset();
   fallback_reso_[part].reset();
+  fallback_halo_[part].reset();
   fallback_wind_[part].reset();
-  fallback_body_[part].ringout = 0;
+  for (FallbackBody& body : fallback_body_[part].bodies) body.ringout = 0;
   if (pool_.active_count() == 0 && fallback_pool_.active_count() == 0) {
     // Bus-wide (every part feeds one mix), so only once nothing is sounding.
     dc_x1_ = {};

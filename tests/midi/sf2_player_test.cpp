@@ -617,3 +617,50 @@ TEST_CASE("Sf2Player applies GS per-note drum NRPN to the fallback voice", "[mid
     REQUIRE(peak(out.left) > 4.0f * peak(out.right));
   }
 }
+
+TEST_CASE("Sf2Player keeps a ringing note on the body it was struck through", "[midi][sf2][body]") {
+  // A part plays a note on one program, then switches program and strikes a
+  // near-silent note. The control strikes that note on another part instead, so
+  // the two renders differ only in whether the part's body was handed over.
+  struct Switch {
+    uint8_t first_program;
+    uint8_t second_program;
+  };
+  const Switch cases[] = {
+      {0, 19},  // piano -> church organ (no body)
+      {25, 0},  // steel guitar (halo) -> piano (board)
+      {0, 25},  // piano -> steel guitar
+  };
+  const int lead = static_cast<int>(0.3 * kOutRate);
+  const int window = static_cast<int>(0.1 * kOutRate);
+  auto program = [](Sf2Player& p, uint8_t channel, uint8_t value) {
+    p.on_event(0, event(sonare::midi::make_midi1_program_change(0, channel, value)));
+  };
+  auto note = [](Sf2Player& p, uint8_t channel, uint8_t key, uint8_t velocity) {
+    p.on_event(0, event(sonare::midi::make_midi1_note_on(0, channel, key, velocity)));
+  };
+  auto window_rms = [&](uint8_t second_channel, const Switch& s) {
+    Sf2Player p = make_fallback_player();
+    program(p, 0, s.first_program);
+    note(p, 0, 60, 100);
+    render(p, lead);
+    program(p, second_channel, s.second_program);
+    note(p, second_channel, 72, 1);
+    const StereoRender out = render(p, window);
+    double acc = 0.0;
+    for (size_t i = 0; i < out.left.size(); ++i) {
+      acc += static_cast<double>(out.left[i]) * out.left[i] +
+             static_cast<double>(out.right[i]) * out.right[i];
+    }
+    return std::sqrt(acc / (2.0 * static_cast<double>(out.left.size())));
+  };
+  for (const Switch& s : cases) {
+    CAPTURE(static_cast<int>(s.first_program), static_cast<int>(s.second_program));
+    const double same_part = window_rms(0, s);
+    const double other_part = window_rms(1, s);
+    REQUIRE(other_part > 1.0e-3);
+    const double delta_db = 20.0 * std::log10(same_part / other_part);
+    CAPTURE(same_part, other_part, delta_db);
+    CHECK(std::abs(delta_db) < 0.1);
+  }
+}

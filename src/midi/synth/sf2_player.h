@@ -566,6 +566,11 @@ class Sf2Player final : public MidiInstrument {
   float dc_r_ = 0.0f;
   std::array<float, 2> dc_x1_{};
   std::array<float, 2> dc_y1_{};
+  /// Kinds of fallback body resonator a part can hold, one of each (see
+  /// fallback_body_ below).
+  enum class FallbackBodyKind : uint8_t { kPiano, kGuitarHalo };
+  static constexpr size_t kFallbackBodyKinds = 2;
+
   /// Shared-bus residual, split per component so each lands on the sources
   /// that produced it, one chunk (kChunkFrames) at a time:
   ///  - part_bus_splitters_[part]: a bussed part's whole post-insert bus
@@ -574,16 +579,18 @@ class Sf2Player final : public MidiInstrument {
   ///    by every voice routed into it.
   ///  - send_residual_splitter_: the reverb/chorus/delay return, weighted by
   ///    each voice's send energy (a routed voice's through its unit's send).
-  ///  - body_residual_splitters_[part]: a non-bussed part's board or halo
-  ///    return, weighted by that part's voices.
+  ///  - body_residual_splitters_[part * kFallbackBodyKinds + kind]: a
+  ///    non-bussed part's board or halo return, weighted by the voices feeding
+  ///    that body.
   ///  - residual_splitter_: the remainder (master EQ, DC block), weighted by
   ///    every voice's dry energy.
   SourceResidualSplitter residual_splitter_;
   std::array<SourceResidualSplitter, 16> part_bus_splitters_;
   std::array<SourceResidualSplitter, kGsEfxUnitCount> unit_splitters_;
   SourceResidualSplitter send_residual_splitter_;
-  std::array<SourceResidualSplitter, 16> body_residual_splitters_;
-  /// Per-part staging for body_residual_splitters_, 16 x (L, R) x kChunkFrames.
+  std::array<SourceResidualSplitter, 16 * kFallbackBodyKinds> body_residual_splitters_;
+  /// Per-body staging for body_residual_splitters_, 16 x kFallbackBodyKinds x
+  /// (L, R) x kChunkFrames.
   std::vector<float> body_residual_;
 
   /// Renders one chunk (n <= kChunkFrames) of the 16-part bus graph into the
@@ -710,20 +717,29 @@ class Sf2Player final : public MidiInstrument {
   };
   std::array<OrganWindSupply, 16> fallback_wind_;
   std::array<FallbackWindParams, 16> fallback_wind_params_{};
-  /// Shared body resonators for the fallback voices, one per part — the same
-  /// bus-level components the NativeSynth host folds in: the piano's modal
-  /// soundboard + pedal-gated sympathetic string bank, and the plucked-string
-  /// open-string halo (ks.sympathetic patches). Driven by the part's summed
-  /// fallback dry signal; kept processing for a ring-out window after the last
-  /// voice dies so the resonator tail is not truncated.
-  enum class FallbackBodyKind : uint8_t { kNone, kPiano, kGuitarHalo };
-  struct FallbackBodyState {
-    FallbackBodyKind kind = FallbackBodyKind::kNone;
-    float soundboard_mix = -1.0f;
+  /// Shared body resonators for the fallback voices, one of each kind per part
+  /// — the same bus-level components the NativeSynth host folds in: the piano's
+  /// modal soundboard + pedal-gated sympathetic string bank, and the
+  /// plucked-string open-string halo (ks.sympathetic patches). Each voice feeds
+  /// the body its own patch was struck with, so a program change on the part
+  /// never re-prepares or silences a body earlier notes still ring through.
+  /// A body is prepared at the first note-on of its kind and kept processing
+  /// for a ring-out window after its last voice dies.
+  /// The body @p patch strikes; false when it has none.
+  static bool fallback_body_kind(const NativeSynthPatch& patch, FallbackBodyKind* kind) noexcept;
+  struct FallbackBody {
+    bool prepared = false;
     int64_t ringout = 0;
   };
+  struct FallbackBodyState {
+    std::array<FallbackBody, kFallbackBodyKinds> bodies{};
+    float soundboard_mix = -1.0f;
+  };
   std::array<PianoSoundboard, 16> fallback_board_;
+  /// Piano sympathetic string bank, behind the board.
   std::array<PianoResonanceBank, 16> fallback_reso_;
+  /// Plucked-string open-string halo.
+  std::array<PianoResonanceBank, 16> fallback_halo_;
   std::array<FallbackBodyState, 16> fallback_body_{};
 
   // Chunk scratch (prepared on the control thread).

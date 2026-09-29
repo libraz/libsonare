@@ -176,7 +176,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   // shared wind chest advances once per sample per part, not per voice.
   int organ_demand[16] = {0};
   bool any_wind = false;
-  bool body_has_voice[16] = {false};
+  bool body_has_voice[16][kFallbackBodyKinds] = {};
   for (const NativeSynthVoice& v : fallback_pool_) {
     if (!v.active || v.patch == nullptr) continue;
     const uint8_t part = v.channel & 0x0Fu;
@@ -184,22 +184,27 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       ++organ_demand[part];
       any_wind = any_wind || fallback_wind_[part].active();
     }
-    if (fallback_body_[part].kind != FallbackBodyKind::kNone) body_has_voice[part] = true;
+    FallbackBodyKind kind{};
+    if (fallback_body_kind(*v.patch, &kind)) {
+      body_has_voice[part][static_cast<size_t>(kind)] = true;
+    }
   }
   // Body resonators keep ringing for a bounded tail after the last voice dies
   // (the bank's own decay), then stop costing anything.
-  bool body_active[16] = {false};
+  bool body_active[16][kFallbackBodyKinds] = {};
   bool any_body = false;
   for (int part = 0; part < 16; ++part) {
-    FallbackBodyState& body = fallback_body_[static_cast<size_t>(part)];
-    if (body.kind == FallbackBodyKind::kNone) continue;
-    if (body_has_voice[part]) {
-      body.ringout = static_cast<int64_t>(kPianoBodyRingS * sample_rate_);
-    } else if (body.ringout > 0) {
-      body.ringout = std::max<int64_t>(0, body.ringout - n);
+    for (size_t k = 0; k < kFallbackBodyKinds; ++k) {
+      FallbackBody& body = fallback_body_[static_cast<size_t>(part)].bodies[k];
+      if (!body.prepared) continue;
+      if (body_has_voice[part][k]) {
+        body.ringout = static_cast<int64_t>(kPianoBodyRingS * sample_rate_);
+      } else if (body.ringout > 0) {
+        body.ringout = std::max<int64_t>(0, body.ringout - n);
+      }
+      body_active[part][k] = body_has_voice[part][k] || body.ringout > 0;
+      any_body = any_body || body_active[part][k];
     }
-    body_active[part] = body_has_voice[part] || body.ringout > 0;
-    any_body = any_body || body_active[part];
   }
 
   for (int i = 0; i < n; ++i) {
@@ -295,7 +300,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     }
     // Synth-fallback voices: same bus routing, channel-level (CC) sends only
     // (no zone send generators).
-    float body_dry[16] = {0.0f};
+    float body_dry[16][kFallbackBodyKinds] = {};
     for (NativeSynthVoice& v : fallback_pool_) {
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
@@ -312,17 +317,21 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
       float l = s * v.gain_left;
       float r = s * v.gain_right;
-      if (body_active[part]) {
-        body_dry[part] += 0.5f * (l + r);
+      // The body this voice was struck through, from its own patch.
+      FallbackBodyKind body_kind{};
+      const bool has_body = v.patch != nullptr && fallback_body_kind(*v.patch, &body_kind);
+      const size_t k = static_cast<size_t>(body_kind);
+      if (has_body && body_active[part][k]) {
+        body_dry[part][k] += 0.5f * (l + r);
         // A bussed part's body return rides its bus and that bus's weight.
         if (source_render && !part_bussed[part]) {
-          body_residual_splitters_[part].accumulate(v.source_track_id, l * out_gain_l,
-                                                    r * out_gain_r);
+          body_residual_splitters_[static_cast<size_t>(part) * kFallbackBodyKinds + k].accumulate(
+              v.source_track_id, l * out_gain_l, r * out_gain_r);
         }
       }
       // Piano radiates mostly through the board (the body block below); only
       // the direct share of the raw string waveform stays in the voice path.
-      if (fallback_body_[part].kind == FallbackBodyKind::kPiano) {
+      if (has_body && body_kind == FallbackBodyKind::kPiano) {
         l *= kPianoDirectGain;
         r *= kPianoDirectGain;
       }
@@ -397,67 +406,73 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     // and the plucked halo on the same per-part sustain gate.
     if (any_body) {
       for (int part = 0; part < 16; ++part) {
-        if (!body_active[part]) continue;
-        const FallbackBodyState& body = fallback_body_[static_cast<size_t>(part)];
-        const float dry = body_dry[part];
-        float add = 0.0f;
-        // The board's two radiation paths differ in phase, so its return is
-        // added to one leg and subtracted from the other. Zero at a zero board
-        // width, and never non-zero for a non-piano body.
-        float side = 0.0f;
-        if (body.kind == FallbackBodyKind::kPiano) {
-          PianoSoundboard& board = fallback_board_[static_cast<size_t>(part)];
-          add = board.process(dry) +
-                fallback_reso_[static_cast<size_t>(part)].process(
-                    board.last_diffused(), channels_[static_cast<size_t>(part)].sustain);
-          side = board.last_side();
-        } else {
-          // Plucked-string halo: damped exactly like the piano's bank above,
-          // by whichever channel on this part is holding the sustain pedal.
-          add = fallback_reso_[static_cast<size_t>(part)].process(
-              dry, channels_[static_cast<size_t>(part)].sustain);
-        }
-        if (source_render && !part_bussed[part]) {
-          float* staged = body_residual_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-          staged[i] = add + side;
-          staged[kChunkFrames + i] = add - side;
-        }
-        if (add == 0.0f && side == 0.0f) continue;
-        if (part_bussed[part]) {
-          float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-          bus[i] += add + side;
-          bus[kChunkFrames + i] += add - side;
-        } else {
-          mix_l_[static_cast<size_t>(i)] += add + side;
-          mix_r_[static_cast<size_t>(i)] += add - side;
-          if (eq_byp_l != nullptr && eq_bypassed_[static_cast<size_t>(part)]) {
-            eq_byp_l[i] += add + side;
-            eq_byp_r[i] += add - side;
+        for (size_t k = 0; k < kFallbackBodyKinds; ++k) {
+          if (!body_active[part][k]) continue;
+          const float dry = body_dry[part][k];
+          float add = 0.0f;
+          // The board's two radiation paths differ in phase, so its return is
+          // added to one leg and subtracted from the other. Zero at a zero board
+          // width, and never non-zero for a non-piano body.
+          float side = 0.0f;
+          if (static_cast<FallbackBodyKind>(k) == FallbackBodyKind::kPiano) {
+            PianoSoundboard& board = fallback_board_[static_cast<size_t>(part)];
+            add = board.process(dry) +
+                  fallback_reso_[static_cast<size_t>(part)].process(
+                      board.last_diffused(), channels_[static_cast<size_t>(part)].sustain);
+            side = board.last_side();
+          } else {
+            // Plucked-string halo: damped exactly like the piano's bank above,
+            // by whichever channel on this part is holding the sustain pedal.
+            add = fallback_halo_[static_cast<size_t>(part)].process(
+                dry, channels_[static_cast<size_t>(part)].sustain);
           }
-        }
+          if (source_render && !part_bussed[part]) {
+            float* staged = body_residual_.data() +
+                            (static_cast<size_t>(part) * kFallbackBodyKinds + k) * 2 * kChunkFrames;
+            staged[i] = add + side;
+            staged[kChunkFrames + i] = add - side;
+          }
+          if (add == 0.0f && side == 0.0f) continue;
+          if (part_bussed[part]) {
+            float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+            bus[i] += add + side;
+            bus[kChunkFrames + i] += add - side;
+          } else {
+            mix_l_[static_cast<size_t>(i)] += add + side;
+            mix_r_[static_cast<size_t>(i)] += add - side;
+            if (eq_byp_l != nullptr && eq_bypassed_[static_cast<size_t>(part)]) {
+              eq_byp_l[i] += add + side;
+              eq_byp_r[i] += add - side;
+            }
+          }
 #if defined(SONARE_MIDI_WITH_FX)
-        // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
-        if (rev_l != nullptr && !efx_routed[part]) {
-          const Sf2ChannelMod& mod = mods[part];
-          if (mod.fallback_reverb_send > 0.0f) {
-            rev_l[i] += add * mod.fallback_reverb_send;
-            rev_r[i] += add * mod.fallback_reverb_send;
+          // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
+          if (rev_l != nullptr && !efx_routed[part]) {
+            const Sf2ChannelMod& mod = mods[part];
+            if (mod.fallback_reverb_send > 0.0f) {
+              rev_l[i] += add * mod.fallback_reverb_send;
+              rev_r[i] += add * mod.fallback_reverb_send;
+            }
+            if (mod.fallback_chorus_send > 0.0f) {
+              cho_l[i] += add * mod.fallback_chorus_send;
+              cho_r[i] += add * mod.fallback_chorus_send;
+            }
           }
-          if (mod.fallback_chorus_send > 0.0f) {
-            cho_l[i] += add * mod.fallback_chorus_send;
-            cho_r[i] += add * mod.fallback_chorus_send;
-          }
-        }
 #endif
+        }
       }
     }
   }
   if (source_render && any_body) {
-    // A non-bussed part's board/halo return follows that part's own voices.
+    // A non-bussed part's board/halo return follows the voices feeding it.
     for (int part = 0; part < 16; ++part) {
-      if (!body_active[part] || part_bussed[static_cast<size_t>(part)]) continue;
-      const float* staged = body_residual_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-      flush_component(body_residual_splitters_[part], staged, staged + kChunkFrames);
+      if (part_bussed[static_cast<size_t>(part)]) continue;
+      for (size_t k = 0; k < kFallbackBodyKinds; ++k) {
+        if (!body_active[part][k]) continue;
+        const size_t body = static_cast<size_t>(part) * kFallbackBodyKinds + k;
+        const float* staged = body_residual_.data() + body * 2 * kChunkFrames;
+        flush_component(body_residual_splitters_[body], staged, staged + kChunkFrames);
+      }
     }
   }
 

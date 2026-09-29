@@ -195,7 +195,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   dc_x1_ = {};
   dc_y1_ = {};
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
-  body_residual_.assign(16 * 2 * static_cast<size_t>(kChunkFrames), 0.0f);
+  body_residual_.assign(16 * kFallbackBodyKinds * 2 * static_cast<size_t>(kChunkFrames), 0.0f);
   // One bus per insertion unit, so parts sharing a unit sum into it and it runs
   // once (docs/gs.md). Allocated with the part bus and on the same condition: a
   // unit is realisable exactly where an insert factory is.
@@ -287,6 +287,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
     fallback_wind_params_[static_cast<size_t>(part)] = {};
     fallback_board_[static_cast<size_t>(part)].reset();
     fallback_reso_[static_cast<size_t>(part)].reset();
+    fallback_halo_[static_cast<size_t>(part)].reset();
     fallback_body_[static_cast<size_t>(part)] = {};
   }
 }
