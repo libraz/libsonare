@@ -1,6 +1,7 @@
 #include "effects/modulation/wah.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "rt/scoped_no_denormals.h"
 
@@ -35,6 +36,8 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), 10.0f, max_cutoff);
   const float hi = std::clamp(std::max(config_.min_hz, config_.max_hz), lo, max_cutoff);
   const float q = std::max(0.5f, config_.resonance);
+  const bool lowpass = config_.filter_type == WahFilterType::kLowpass;
+  const WahSweepLaw law = config_.sweep_law;
   // Stereo-pair processor: one bandpass filter per plane is allocated for two
   // planes only, so planes beyond the pair pass through dry (see the registry's
   // stereoPairOnly classification).
@@ -42,11 +45,11 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   for (int i = 0; i < num_samples; ++i) {
     // LFO in [-1, 1] -> a [0, 1] sweep position -> centre frequency.
     const float sweep = 0.5f * (lfo_.process() + 1.0f);
-    const float fc = lo + (hi - lo) * sweep;
+    const float fc = wah_sweep_hz(law, lo, hi, sweep);
     for (int ch = 0; ch < active; ++ch) {
       if (channels[ch] == nullptr) continue;
       const float in = channels[ch][i];
-      channels[ch][i] = dry * in + wet * filters_[ch].process(in, fc, q);
+      channels[ch][i] = dry * in + wet * filters_[ch].process(in, fc, q, lowpass);
     }
   }
   bool discarded = false;
@@ -79,13 +82,28 @@ bool Wah::set_parameter(unsigned int param_id, float value) {
     case 4:
       config_.dry_wet = value;
       return true;
+    case 5:
+    case 6: {
+      // An unnamed value is refused rather than rounded onto a neighbour.
+      const int count = param_id == 5 ? kWahFilterTypeCount : kWahSweepLawCount;
+      if (value < 0.0f || value != std::floor(value) || value >= static_cast<float>(count)) {
+        return false;
+      }
+      if (param_id == 5) {
+        config_.filter_type = static_cast<WahFilterType>(static_cast<int>(value));
+      } else {
+        config_.sweep_law = static_cast<WahSweepLaw>(static_cast<int>(value));
+      }
+      return true;
+    }
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> Wah::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"minHz", 1}, {"maxHz", 2}, {"resonance", 3}, {"dryWet", 4}};
+  return {{"rateHz", 0}, {"minHz", 1},      {"maxHz", 2},   {"resonance", 3},
+          {"dryWet", 4}, {"filterType", 5}, {"sweepLaw", 6}};
 }
 
 }  // namespace sonare::effects::modulation

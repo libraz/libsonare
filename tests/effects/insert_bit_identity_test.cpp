@@ -161,6 +161,27 @@ TEST_CASE(
     require_pinned(s, kFlangerRms, kFlangerCentroidHz);
   }
 
+  SECTION("effects.modulation.wah") {
+    const RenderResult empty = render("effects.modulation.wah", "{}");
+    const RenderResult explicit_defaults = render(
+        "effects.modulation.wah",
+        R"({"rateHz":1.5,"minHz":400.0,"maxHz":2000.0,"resonance":4.0,"dryWet":1.0,"filterType":0,"sweepLaw":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+  }
+
+  SECTION("effects.modulation.autoWah") {
+    const RenderResult empty = render("effects.modulation.autoWah", "{}");
+    const RenderResult explicit_defaults = render(
+        "effects.modulation.autoWah",
+        R"({"sensitivity":1.0,"minHz":300.0,"maxHz":2500.0,"resonance":4.0,"attackMs":8.0,"releaseMs":120.0,"dryWet":1.0,"lfoRateHz":1.0,"lfoDepth":0.0,"filterType":0,"direction":0,"sweepLaw":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    // With the LFO off its rate is inert.
+    const RenderResult other_rate = render("effects.modulation.autoWah", R"({"lfoRateHz":7.0})");
+    REQUIRE(empty.left == other_rate.left);
+  }
+
   SECTION("effects.delay.stereo") {
     const RenderResult empty = render("effects.delay.stereo", "{}");
     const RenderResult explicit_defaults = render(

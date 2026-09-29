@@ -35,8 +35,9 @@ class SvfBandpass {
   bool discard_non_finite() noexcept { return ::sonare::discard_group_if_non_finite(ic1_, ic2_); }
 
   /// Process one sample with the given centre frequency (Hz) and resonance Q.
-  /// The bandpass output is scaled to unity peak gain at resonance.
-  float process(float input, float cutoff_hz, float q) noexcept {
+  /// The bandpass output is scaled to unity peak gain at resonance; with
+  /// @p lowpass the second integrator's state is returned instead.
+  float process(float input, float cutoff_hz, float q, bool lowpass = false) noexcept {
     const float nyquist = static_cast<float>(sample_rate_ * 0.5);
     const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * nyquist);
     const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
@@ -50,6 +51,7 @@ class SvfBandpass {
     const float v2 = ic2_ + a2 * ic1_ + a3 * v3;
     ic1_ = 2.0f * v1 - ic1_;
     ic2_ = 2.0f * v2 - ic2_;
+    if (lowpass) return v2;
     // v1 is the bandpass state; multiply by k so the resonant peak reaches unity.
     return k * v1;
   }

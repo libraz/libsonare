@@ -902,6 +902,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.max_hz = f(params, "maxHz", config.max_hz);
     config.resonance = f(params, "resonance", config.resonance);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    detail::read_field(params, "filterType", config.filter_type);
+    detail::read_field(params, "sweepLaw", config.sweep_law);
     return make<effects::modulation::Wah>(config);
   }
   if (name == "effects.modulation.autoWah") {
@@ -913,6 +915,11 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.attack_ms = f(params, "attackMs", config.attack_ms);
     config.release_ms = f(params, "releaseMs", config.release_ms);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.lfo_rate_hz = f(params, "lfoRateHz", config.lfo_rate_hz);
+    config.lfo_depth = f(params, "lfoDepth", config.lfo_depth);
+    detail::read_field(params, "filterType", config.filter_type);
+    detail::read_field(params, "direction", config.direction);
+    detail::read_field(params, "sweepLaw", config.sweep_law);
     return make<effects::modulation::AutoWah>(config);
   }
   if (name == "effects.modulation.rotary") {

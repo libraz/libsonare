@@ -26,8 +26,10 @@
 
 #include "effects/common/mix_law.h"
 #include "effects/delay/stereo_delay.h"
+#include "effects/modulation/auto_wah.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/phaser.h"
+#include "effects/modulation/wah.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/cut_filter.h"
@@ -190,6 +192,36 @@ constexpr const char* enum_choice_name(sonare::effects::modulation::PhaserMixMod
       return "crossfade";
     case sonare::effects::modulation::PhaserMixMode::kDrySum:
       return "drySum";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::WahFilterType value) {
+  switch (value) {
+    case sonare::effects::modulation::WahFilterType::kBandpass:
+      return "bandpass";
+    case sonare::effects::modulation::WahFilterType::kLowpass:
+      return "lowpass";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::WahSweepLaw value) {
+  switch (value) {
+    case sonare::effects::modulation::WahSweepLaw::kLinearHz:
+      return "linearHz";
+    case sonare::effects::modulation::WahSweepLaw::kLinearOctave:
+      return "linearOctave";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::AutoWahDirection value) {
+  switch (value) {
+    case sonare::effects::modulation::AutoWahDirection::kUp:
+      return "up";
+    case sonare::effects::modulation::AutoWahDirection::kDown:
+      return "down";
   }
   return nullptr;
 }

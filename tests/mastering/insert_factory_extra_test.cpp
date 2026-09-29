@@ -246,6 +246,13 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
           "effects.modulation.pitchShifter",
           R"({"semitones":7,"cents":-20,"pan":-0.5,"semitones2":-5,"cents2":10,"level2":0.6,"pan2":0.5,"preDelayMs":12,"preDelay2Ms":30,"feedback":0.3,"mixLaw":1})") !=
       nullptr);
+  REQUIRE(make_insert("effects.modulation.wah",
+                      R"({"filterType":1,"sweepLaw":1,"rateHz":2,"minHz":300,"maxHz":2500})") !=
+          nullptr);
+  REQUIRE(
+      make_insert("effects.modulation.autoWah",
+                  R"({"lfoRateHz":3,"lfoDepth":0.5,"filterType":1,"direction":1,"sweepLaw":1})") !=
+      nullptr);
   REQUIRE(
       make_insert(
           "effects.reverb.dattorro",
