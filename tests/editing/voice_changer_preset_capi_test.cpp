@@ -4,14 +4,10 @@
 #include "voice_changer_test_helpers.h"
 
 TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][preset-golden]") {
+  // The fixture is tracked and read relative to the repo root, where ctest and
+  // the documented direct run both start; not finding it is a harness error.
   std::ifstream file("schemas/realtime-voice-changer-presets.example.json");
-  if (!file.is_open()) {
-    // CMAKE_SOURCE_DIR-relative path missing usually means the test binary was
-    // run with a different working directory (e.g. ctest in a build subdir).
-    // Skip with a clear hint instead of failing on environment.
-    WARN("Skipping golden test: schemas/realtime-voice-changer-presets.example.json not found");
-    return;
-  }
+  REQUIRE(file.is_open());
   std::stringstream buffer;
   buffer << file.rdbuf();
   const auto root = sonare::util::json::parse(buffer.str());
