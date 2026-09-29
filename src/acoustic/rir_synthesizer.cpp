@@ -350,9 +350,9 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   length = std::min(length, cap);
   if (length < 1) length = 1;
 
-  // Two cases yield no usable late tail across the crossover: a fully-rigid room
-  // (every band RT60 == 0, so the tail is empty), and a highly-absorptive room
-  // whose short tail ends before the early/late crossover (late_n < t1).
+  // Two cases yield no usable late tail across the crossover: no measurable
+  // decay in any in-range band (a rigid room's 0 RT60 clamps to the maximal tail
+  // instead), and a highly-absorptive room whose tail ends before t1.
   // Crossfading either would ramp x toward 1 past t1 where the tail is zero,
   // silencing the early reflections and leaving an abruptly faded RIR. Fall back
   // to early-only (no crossfade) and note it, so the geometric energy is

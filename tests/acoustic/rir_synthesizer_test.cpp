@@ -423,23 +423,30 @@ TEST_CASE("wall scattering biases the early/late energy balance and the RIR", "[
   REQUIRE(late_energy(rough_fixed, late_from) > late_energy(smooth_fixed, late_from));
 }
 
-TEST_CASE("fully-rigid room yields an early-only RIR, not abrupt silence", "[acoustic][rir]") {
+// A rigid room's RT60 == 0 bands are the unbounded-decay sentinel, so the RIR
+// carries the maximal clamped late tail rather than early reflections only.
+TEST_CASE("fully-rigid room synthesizes a real late tail instead of early-only silence",
+          "[acoustic][rir]") {
   const int sr = 48000;
-  // Rigid walls (default-constructed materials: no absorption) => every band
-  // RT60 == 0 => empty late tail. The RIR must keep its early reflections past
-  // the would-be mixing time instead of crossfading to silence.
   ShoeboxRoom rigid;
   rigid.dims = {7.0f, 5.0f, 3.0f};  // walls default-constructed: rigid
   const SourceListener pl{{1.5f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
 
-  const RirSynthResult res = synthesize_rir(rigid, pl, sr, {/*ism_order=*/3});
+  RirSynthConfig cfg;
+  cfg.ism_order = 3;
+  // Bounds the otherwise ~60 s (kMaxRt60Seconds) render to keep the test fast;
+  // still far past the auto mixing time (~sqrt(V) ms, a few ms here), so it
+  // does not itself starve the late tail below the crossover.
+  cfg.max_seconds = 0.3f;
+  const RirSynthResult res = synthesize_rir(rigid, pl, sr, cfg);
   REQUIRE_FALSE(has_error(res.diagnostics));
-  REQUIRE(has_code(res.diagnostics, "acoustic.no_late_tail"));
+  REQUIRE_FALSE(has_code(res.diagnostics, "acoustic.no_late_tail"));
   REQUIRE(res.rir.size() > 0);
+  for (float v : res.rir) REQUIRE(std::isfinite(v));
 
-  // Past the auto mixing time (capped at 150 ms) the early reflections survive:
-  // there is non-trivial energy in the late region, not a silenced tail. Compare
-  // against the standalone early-only IR, which the rigid RIR must equal.
+  // The late field now carries the synthesized decay's own energy, so the RIR
+  // must no longer equal the early-only IR -- exactly what the old (buggy)
+  // empty-late-tail behavior produced.
   const std::vector<ImageSource> images = shoebox_image_sources(rigid, pl, 3);
   const Audio early = synthesize_early_ir(images, sr);
   const size_t n = std::min(res.rir.size(), early.size());
@@ -448,7 +455,19 @@ TEST_CASE("fully-rigid room yields an early-only RIR, not abrupt silence", "[aco
   for (size_t i = 0; i < n && matches_early; ++i) {
     matches_early = (std::fabs(res.rir[i] - early[i]) < 1e-6f);
   }
-  REQUIRE(matches_early);
+  REQUIRE_FALSE(matches_early);
+
+  // The last quarter of the (0.3 s) render, comfortably past any mixing time
+  // this small a room can auto-derive (capped at 150 ms) and past the sparse,
+  // finite-order early reflections' own natural end -- only the synthesized
+  // tail can still be sounding there.
+  double late_energy = 0.0;
+  const size_t late_from = res.rir.size() * 3 / 4;
+  REQUIRE(late_from < res.rir.size());
+  for (size_t i = late_from; i < res.rir.size(); ++i) {
+    late_energy += static_cast<double>(res.rir[i]) * res.rir[i];
+  }
+  REQUIRE(late_energy > 0.0);
 }
 
 TEST_CASE("synthesize_rir bounds the RIR length to max_seconds", "[acoustic][rir]") {

@@ -17,6 +17,18 @@ using sonare::constants::kTwoPiD;
 
 // kSabineCoeff and kMaxAutoSamples are shared via late_reverb.h.
 
+// Upper bound (seconds) on the reverberation time used to size the auto tail. No
+// real room sustains longer; clamping here keeps a near-rigid room's effectively
+// unbounded RT60 from driving a multi-gigabyte tail allocation (a hard,
+// uncatchable abort under the WASM allocator).
+constexpr float kMaxRt60Seconds = 60.0f;
+
+// sabine_rt60/eyring_rt60 return 0 for an unbounded decay (a perfectly reflective
+// band), so it clamps to the maximum; NaN alone means no measurement.
+float unbounded_rt60_as_max(float rt60) noexcept {
+  return (!std::isnan(rt60) && !(rt60 > 0.0f)) ? kMaxRt60Seconds : rt60;
+}
+
 // Butterworth order of each octave crossover (96 dB/oct once run zero-phase). A single RBJ
 // bandpass let a 6 s low band outlast a 0.2 s 4 kHz band's own decay after ~0.2 s.
 constexpr int kOctaveSplitOrder = 8;
@@ -33,13 +45,13 @@ float third_octave_upper_edge_hz(int k) noexcept {
 }
 
 // RT60 of third-octave band @p k, log-log interpolated between its octave neighbours; a band
-// beside a non-positive (no tail) octave takes the nearer octave's value.
+// beside a NaN (no measurement) octave takes the nearer octave's value.
 float third_octave_rt60(const std::vector<float>& octave_rt60, int k) noexcept {
   const int lower = k / kThirdsPerOctave;
   const int step = k % kThirdsPerOctave;
-  const float lo = octave_rt60[static_cast<size_t>(lower)];
+  const float lo = unbounded_rt60_as_max(octave_rt60[static_cast<size_t>(lower)]);
   if (step == 0) return lo;
-  const float hi = octave_rt60[static_cast<size_t>(lower + 1)];
+  const float hi = unbounded_rt60_as_max(octave_rt60[static_cast<size_t>(lower + 1)]);
   if (!(lo > 0.0f) || !(hi > 0.0f) || !std::isfinite(lo) || !std::isfinite(hi)) {
     return 2 * step < kThirdsPerOctave ? lo : hi;
   }
@@ -49,12 +61,6 @@ float third_octave_rt60(const std::vector<float>& octave_rt60, int k) noexcept {
 
 // -60 dB of energy: env(RT60) = 10^-3 in amplitude, i.e. exp(-ln(1000) * t/RT60).
 constexpr double kLn1000 = 6.90775527898213705;
-
-// Upper bound (seconds) on the reverberation time used to size the auto tail. No
-// real room sustains longer; clamping here keeps a near-rigid room's effectively
-// unbounded RT60 from driving a multi-gigabyte tail allocation (a hard,
-// uncatchable abort under the WASM allocator).
-constexpr float kMaxRt60Seconds = 60.0f;
 
 // Deterministic, platform-independent PRNG (SplitMix64) so synthesized tails are
 // bit-reproducible from the seed alone, never relying on std distribution
@@ -292,10 +298,9 @@ LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
   for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
     const float center = octave_center_hz(static_cast<int>(b));
     if (center * kSqrt2 >= nyquist) continue;
-    const float rt60 = rt.rt60_bands[b];
-    // NaN is not a finite decay; positive infinity retains the historical
-    // 60-second sizing clamp without ever entering an unbounded cast.
-    if (!(rt60 > 0.0f)) continue;
+    // NaN carries no measurement; infinity reaches the clamp via std::min.
+    const float rt60 = unbounded_rt60_as_max(rt.rt60_bands[b]);
+    if (std::isnan(rt60)) continue;
     longest = std::max(longest, std::min(rt60, kMaxRt60Seconds));
   }
   if (!(longest > 0.0f)) return resolution;

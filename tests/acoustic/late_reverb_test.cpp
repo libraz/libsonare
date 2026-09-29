@@ -128,9 +128,25 @@ TEST_CASE("air absorption coefficient grows with frequency", "[acoustic][late_re
   REQUIRE(m_high > m_low);  // absorption rises steeply toward high frequencies
 }
 
-TEST_CASE("late tail is empty when no band has finite decay", "[acoustic][late_reverb]") {
+// RT60 == 0 is the unbounded-decay sentinel, so an all-zero room gets the
+// maximal clamped tail, not silence.
+TEST_CASE("a fully reflective room synthesizes the maximal clamped tail, not silence",
+          "[acoustic][late_reverb]") {
   ReverbTime rt;
   rt.rt60_bands = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  const Audio tail = synthesize_late_tail(rt, 48000);
+  REQUIRE_FALSE(tail.empty());
+  // 60 s (kMaxRt60Seconds) at 48 kHz, the same ceiling a measured decay past it
+  // clamps to -- confirms this reaches the clamp rather than some other length.
+  REQUIRE(tail.size() >= static_cast<size_t>(59.0 * 48000));
+}
+
+// The only case that still legitimately carries no measurement: NaN, which is
+// neither a finite decay nor the 0/perfectly-reflective sentinel.
+TEST_CASE("late tail is empty when no band has finite decay", "[acoustic][late_reverb]") {
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  ReverbTime rt;
+  rt.rt60_bands = {kNaN, kNaN, kNaN, kNaN, kNaN, kNaN};
   const Audio tail = synthesize_late_tail(rt, 48000);
   REQUIRE(tail.empty());
 }
