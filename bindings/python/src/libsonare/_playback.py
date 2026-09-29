@@ -26,6 +26,7 @@ from ._runtime import (
     _check_realtime,
     _from_c_float_array,
     _get_lib,
+    _guard_buffer,
     _narrow_int,
     _planar_channel_arrays,
     _to_c_float,
@@ -331,6 +332,7 @@ class PlaybackRenderer:
         return out_buf
 
 
+@_guard_buffer("samples")
 def render_playback(
     samples: Sequence[float] | list[float] | np.ndarray,
     *,
@@ -423,6 +425,7 @@ class PlaybackLoudnessMeter:
         with contextlib.suppress(Exception):
             self.close()
 
+    @_guard_buffer("samples")
     def push_interleaved(self, samples: Sequence[float] | list[float] | np.ndarray) -> None:
         """Feed interleaved frames of any length."""
         c_array, total = _to_c_float_array(samples)

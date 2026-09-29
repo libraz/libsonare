@@ -141,6 +141,10 @@ _SCALAR_ARGS: dict[str, Any] = {
     "delta": 0.1,
     "wait": 1,
     "sample_offset": 0,
+    "in_channels": 1,
+    # The nested playback config document; {} takes every schema default, the
+    # cheapest value that opens the same code path a real one would.
+    "config": {},
 }
 
 # How to build an instance for a class whose buffer methods need one. Same
@@ -149,6 +153,8 @@ _SCALAR_ARGS: dict[str, Any] = {
 # constructor arguments are the cheapest configuration that opens the handle —
 # what is being probed is the preflight, which runs before any of them matter.
 _CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
+    "PlaybackLoudnessMeter": lambda: libsonare.PlaybackLoudnessMeter(1, 22050),
+    "PlaybackRenderer": lambda: libsonare.PlaybackRenderer({}, max_block_size=128),
     "Project": lambda: libsonare.Project(),
     "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050),
     "SampleBank": lambda: libsonare.SampleBank(),
@@ -302,6 +308,12 @@ _EXEMPT = sorted(_EMPTY_INPUT_IS_DEFINED & set(_ENTRY_POINTS))
 # xfail, so guarding one turns it into an xpass and fails here until the entry
 # is removed — an exemption would have let the same fix pass unnoticed.
 _REALTIME_BLOCK_PATH = {
+    "PlaybackRenderer.process_interleaved": (
+        "silent: the caller owns the finite check on an audio-thread block call "
+        "(it goes through _check_realtime, not _check); output stays finite (measured "
+        "zeros) rather than carrying the input's NaNs through, and an empty block is "
+        "accepted as a legitimate zero-frame no-op"
+    ),
     "RealtimeVoiceChanger.process_interleaved": (
         "silent: the caller owns the finite check on an audio-thread block call; "
         "output stays finite but is perturbed from the latency boundary onwards"
@@ -358,15 +370,15 @@ def _guard_parameters() -> list[Any]:
 _GUARD_PARAMETERS = _guard_parameters()
 
 
-def _invoke(name: str, entry: _EntryPoint, args: list[Any]) -> Any:
-    """Call ``name`` with ``args``, opening and closing a handle if it needs one."""
+def _invoke(name: str, entry: _EntryPoint, args: list[Any], kwargs: dict[str, Any]) -> Any:
+    """Call ``name`` with ``args``/``kwargs``, opening/closing a handle if it needs one."""
     if entry.owner is None:
-        return getattr(libsonare, name)(*args)
+        return getattr(libsonare, name)(*args, **kwargs)
 
     method_name = name.split(".", 1)[1]
     owner = getattr(libsonare, entry.owner)
     if "self" not in entry.signature.parameters:
-        return getattr(owner, method_name)(*args)
+        return getattr(owner, method_name)(*args, **kwargs)
 
     factory = _CLASS_INSTANCES.get(entry.owner)
     if factory is None:
@@ -376,46 +388,57 @@ def _invoke(name: str, entry: _EntryPoint, args: list[Any]) -> Any:
         )
     instance = factory()
     try:
-        return getattr(instance, method_name)(*args)
+        return getattr(instance, method_name)(*args, **kwargs)
     finally:
         close = getattr(instance, "close", None)
         if callable(close):
             close()
 
 
-def _call_arguments(name: str, signature: inspect.Signature, buffer: np.ndarray) -> list[Any]:
-    """Positional arguments that reach ``name``'s body with ``buffer`` as input."""
+def _probe_value(name: str, parameter: inspect.Parameter, buffer: np.ndarray) -> Any:
+    """The probe value for one required parameter, by name/shape lookup."""
+    if parameter.name in _BUFFER_ARGS:
+        return buffer
+    if parameter.name in _SEQUENCE_ARGS:
+        return []
+    if parameter.name in _SCALAR_ARGS:
+        return _SCALAR_ARGS[parameter.name]
+    if parameter.name in _MATRIX_ROW_ARGS:
+        return 1
+    if parameter.name in _MATRIX_COL_ARGS:
+        return len(buffer)
+    if parameter.name == "key_root":
+        return libsonare.PitchClass.C
+    pytest.fail(
+        f"{name}: no probe value for required parameter {parameter.name!r}; "
+        "add one to this module so the guard stays covered"
+    )
+    raise AssertionError("unreachable")  # pytest.fail always raises; satisfies the type checker.
+
+
+def _call_arguments(
+    name: str, signature: inspect.Signature, buffer: np.ndarray
+) -> tuple[list[Any], dict[str, Any]]:
+    """Positional args and required keyword-only args that reach ``name`` with ``buffer``."""
     args: list[Any] = []
+    kwargs: dict[str, Any] = {}
     for index, parameter in enumerate(_leading_parameters(signature)):
-        if parameter.kind in (
-            parameter.KEYWORD_ONLY,
-            parameter.VAR_POSITIONAL,
-            parameter.VAR_KEYWORD,
-        ):
+        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
             break
+        if parameter.kind is parameter.KEYWORD_ONLY:
+            # An optional keyword-only parameter (e.g. `hrtf=None`) needs no
+            # probe; a required one (no default) does, the same as a required
+            # positional one below.
+            if parameter.default is parameter.empty:
+                kwargs[parameter.name] = _probe_value(name, parameter, buffer)
+            continue
         if index == 0:
             args.append(buffer)
             continue
         if parameter.default is not parameter.empty:
             break
-        if parameter.name in _BUFFER_ARGS:
-            args.append(buffer)
-        elif parameter.name in _SEQUENCE_ARGS:
-            args.append([])
-        elif parameter.name in _SCALAR_ARGS:
-            args.append(_SCALAR_ARGS[parameter.name])
-        elif parameter.name in _MATRIX_ROW_ARGS:
-            args.append(1)
-        elif parameter.name in _MATRIX_COL_ARGS:
-            args.append(len(buffer))
-        elif parameter.name == "key_root":
-            args.append(libsonare.PitchClass.C)
-        else:
-            pytest.fail(
-                f"{name}: no probe value for required parameter {parameter.name!r}; "
-                "add one to this module so the guard stays covered"
-            )
-    return args
+        args.append(_probe_value(name, parameter, buffer))
+    return args, kwargs
 
 
 def test_buffer_entry_point_floor() -> None:
@@ -496,8 +519,8 @@ def test_exemption_accepts_empty_input(name: str) -> None:
     is to be a function that returns a result for it.
     """
     entry = _ENTRY_POINTS[name]
-    args = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
-    _invoke(name, entry, args)
+    args, kwargs = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
+    _invoke(name, entry, args, kwargs)
 
 
 def _assert_names_the_entry_point(name: str, message: str) -> None:
@@ -518,18 +541,18 @@ def _assert_names_the_entry_point(name: str, message: str) -> None:
 @pytest.mark.parametrize("name", _GUARD_PARAMETERS)
 def test_empty_buffer_is_rejected(name: str) -> None:
     entry = _ENTRY_POINTS[name]
-    args = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
+    args, kwargs = _call_arguments(name, entry.signature, np.zeros(0, dtype=np.float32))
     with pytest.raises(SonareValueError) as excinfo:
-        _invoke(name, entry, args)
+        _invoke(name, entry, args, kwargs)
     _assert_names_the_entry_point(name, str(excinfo.value))
 
 
 @pytest.mark.parametrize("name", _GUARD_PARAMETERS)
 def test_non_finite_buffer_is_rejected(name: str) -> None:
     entry = _ENTRY_POINTS[name]
-    args = _call_arguments(name, entry.signature, np.full(64, np.nan, dtype=np.float32))
+    args, kwargs = _call_arguments(name, entry.signature, np.full(64, np.nan, dtype=np.float32))
     with pytest.raises(SonareValueError) as excinfo:
-        _invoke(name, entry, args)
+        _invoke(name, entry, args, kwargs)
     _assert_names_the_entry_point(name, str(excinfo.value))
 
 
