@@ -15,6 +15,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "midi/synth/gs_efx_convert.h"
+
 namespace sonare::midi::synth {
 
 /// One insert control an insertion-effect byte drives.
@@ -499,5 +501,977 @@ inline constexpr std::array<GsEfxBinding, 310> kGsEfxBindings = {{
      kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0500, 19, 4, 0, 13, 27, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
 }};
+
+// The stages and controls kGsEfxBindingRows and kGsEfxEnables point at.
+inline constexpr std::array<std::string_view, 14> kGsEfxRowStages = {{
+    "dynamics.compressor",
+    "effects.delay.stereo",
+    "effects.modulation.chorus",
+    "effects.modulation.ensemble",
+    "effects.modulation.flanger",
+    "effects.modulation.phaser",
+    "effects.modulation.pitchShifter",
+    "effects.modulation.ringModulator",
+    "effects.modulation.rotary",
+    "effects.reverb.dattorro",
+    "eq.graphic",
+    "eq.parametric",
+    "stereo.autoPan",
+    "utility.gain",
+}};
+
+inline constexpr std::array<std::string_view, 35> kGsEfxRowKeys = {{
+    "accelTauS",     "band0.frequencyHz", "band0.gainDb",      "band1.frequencyHz",
+    "band1.gainDb",  "band1.q",           "band11GainDb",      "band14GainDb",
+    "band17GainDb",  "band18GainDb",      "band2.frequencyHz", "band2.gainDb",
+    "band2.q",       "band20GainDb",      "band22GainDb",      "band23GainDb",
+    "band26GainDb",  "band3.frequencyHz", "band3.gainDb",      "carrierHz",
+    "centerDelayMs", "dampingHz",         "decelTauS",         "delayTimeLMs",
+    "delayTimeRMs",  "drumUndershootHz",  "feedback",          "levelDb",
+    "makeupGainDb",  "preDelayMs",        "preFilterHz",       "rateHz",
+    "semitones",     "undershootHz",      "windowMs",
+}};
+
+// The designed laws the rows below hold by value, one name per law id.
+inline constexpr GsEfxDesignedLaw kGsEfxLawNone = {kGsEfxFormNone, 0.0f, 0.0f, 0};
+
+// Translated and designed rows alike, read through gs_efx_binding_value. A
+// designed row holds its law by value; a ratio row holds its printed ends.
+// Sorted by (type, slot, key).
+inline constexpr std::array<GsEfxBindingRow, 310> kGsEfxBindingRows = {{
+    // corner.low -> eq.parametric.band0.frequencyHz
+    {0x0100, 0, kGsEfxRowTranslated, 13, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 1, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0100, 1, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // corner.high -> eq.parametric.band3.frequencyHz
+    {0x0100, 2, kGsEfxRowTranslated, 13, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 17, 0},
+    // gain.tone -> eq.parametric.band3.gainDb
+    {0x0100, 3, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     18, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0100, 4, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x0100, 5, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0100, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     4, 0},
+    // freq.eq -> eq.parametric.band2.frequencyHz
+    {0x0100, 7, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     10, 0},
+    // width.section -> eq.parametric.band2.q
+    {0x0100, 8, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     12, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0100, 9, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     11, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0100, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.graphic.band11GainDb
+    {0x0101, 0, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     6, 0},
+    // gain.tone -> eq.graphic.band14GainDb
+    {0x0101, 1, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     7, 0},
+    // gain.tone -> eq.graphic.band17GainDb
+    {0x0101, 2, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     8, 0},
+    // gain.tone -> eq.graphic.band18GainDb
+    {0x0101, 3, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     9, 0},
+    // gain.tone -> eq.graphic.band20GainDb
+    {0x0101, 4, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     13, 0},
+    // gain.tone -> eq.graphic.band22GainDb
+    {0x0101, 5, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     14, 0},
+    // gain.tone -> eq.graphic.band23GainDb
+    {0x0101, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     15, 0},
+    // gain.tone -> eq.graphic.band26GainDb
+    {0x0101, 7, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 10, 0,
+     16, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0101, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0102, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0102, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0102, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0110, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0110, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0110, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0111, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0111, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0111, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // rate.wide -> effects.modulation.phaser.rateHz
+    {0x0120, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0120, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0120, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0120, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0121, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0121, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0121, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // accel.rotor -> effects.modulation.rotary.drumUndershootHz
+    {0x0122, 2, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
+     GsEfxOut::kUndershootHz, 8, 0, 25, 0},
+    // accel.rotor -> effects.modulation.rotary.accelTauS
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau, 8,
+     0, 0, 0},
+    // accel.rotor -> effects.modulation.rotary.decelTauS
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau, 8,
+     0, 22, 0},
+    // accel.rotor -> effects.modulation.rotary.undershootHz
+    {0x0122, 6, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
+     GsEfxOut::kUndershootHz, 8, 0, 33, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0122, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0122, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0122, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // freq.pre_filter -> effects.modulation.flanger.preFilterHz
+    {0x0123, 1, kGsEfxRowTranslated, 2, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     30, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x0123, 2, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x0123, 3, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x0123, 5, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0123, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0123, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0123, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x0124, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x0124, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x0124, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0124, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0124, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0124, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // rate.wide -> effects.modulation.ringModulator.carrierHz
+    {0x0125, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
+     19, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0125, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0125, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0125, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // rate.wide -> stereo.autoPan.rateHz
+    {0x0126, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 12, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0126, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0126, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0126, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // post_gain.makeup -> dynamics.compressor.makeupGainDb
+    {0x0130, 2, kGsEfxRowTranslated, 11, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 0, 0,
+     28, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0130, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0130, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0130, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0131, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0131, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0131, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.ensemble.centerDelayMs
+    {0x0140, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 3, 0,
+     20, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0140, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0140, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0140, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0141, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0141, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // rate.wide -> effects.modulation.ringModulator.carrierHz
+    {0x0141, 4, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 7, 0,
+     19, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0141, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0141, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0141, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // freq.pre_filter -> effects.modulation.chorus.preFilterHz
+    {0x0142, 1, kGsEfxRowTranslated, 2, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     30, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0142, 2, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0142, 3, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0142, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0142, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0142, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0143, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0143, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0143, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0143, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0143, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0144, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0144, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0144, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0144, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0144, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0150, 0, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0150, 1, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0150, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0150, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0150, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0150, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0150, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0151, 0, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0151, 1, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0151, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0151, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0151, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0151, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0151, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time1 -> effects.delay.stereo.delayTimeLMs
+    {0x0152, 0, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
+    {0x0152, 1, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0152, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0152, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0152, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0152, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0152, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time1 -> effects.delay.stereo.delayTimeLMs
+    {0x0153, 0, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
+    {0x0153, 1, kGsEfxRowTranslated, 1, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0153, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0153, 9, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0153, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0153, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0153, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time2 -> effects.delay.stereo.delayTimeLMs
+    {0x0154, 0, kGsEfxRowTranslated, 1, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time2 -> effects.delay.stereo.delayTimeRMs
+    {0x0154, 0, kGsEfxRowTranslated, 1, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0154, 2, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0154, 3, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0154, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0154, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0154, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.reverb.dattorro.preDelayMs
+    {0x0155, 1, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 9, 0,
+     29, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0155, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0155, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0155, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.reverb.dattorro.preDelayMs
+    {0x0156, 1, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 9, 0,
+     29, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0156, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0156, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0156, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0157, 0, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0157, 1, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0157, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0157, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0157, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0157, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0157, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    {0x0160, 0, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 6,
+     0, 32, 0},
+    // window.splice -> effects.modulation.pitchShifter.windowMs
+    {0x0160, 8, kGsEfxRowTranslated, 12, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 6, 0,
+     34, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0160, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0160, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0160, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    {0x0161, 0, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 6,
+     0, 32, 0},
+    // window.splice -> effects.modulation.pitchShifter.windowMs
+    {0x0161, 4, kGsEfxRowTranslated, 12, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 6, 0,
+     34, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0161, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0161, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0161, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0172, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0172, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0172, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0173, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0173, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0173, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0200, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0200, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0200, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0200, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0200, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x0201, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x0201, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x0201, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0201, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0201, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0201, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0202, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0202, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0202, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0202, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0202, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0202, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0202, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0203, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0203, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0203, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0203, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0203, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x0204, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x0204, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x0204, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0204, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0204, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0204, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0205, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0205, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0205, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0205, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0205, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0205, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0205, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0206, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0206, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0206, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0206, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0206, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x0207, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x0207, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x0207, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0207, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0207, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0207, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0208, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0208, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0208, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0208, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0208, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0208, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0208, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0209, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0209, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0209, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0209, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x0209, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0209, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0209, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0209, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0209, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x020A, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x020A, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x020A, 3, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x020A, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x020A, 5, kGsEfxRowTranslated, 1, 3, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // ratio.percent -> effects.delay.stereo.feedback
+    {0x020A, 6, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 1,
+     0, 26, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x020A, 7, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x020A, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x020A, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x020A, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x020B, 0, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.chorus.rateHz
+    {0x020B, 1, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x020B, 5, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     20, 0},
+    // rate.wide -> effects.modulation.flanger.rateHz
+    {0x020B, 6, kGsEfxRowTranslated, 0, 1, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 4, 0,
+     31, 0},
+    // ratio.percent -> effects.modulation.flanger.feedback
+    {0x020B, 8, kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98, GsEfxOut::kValue, 4,
+     0, 26, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x020B, 16, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 2, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x020B, 17, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // level.output -> utility.gain.levelDb
+    {0x020B, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x020C, 2, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x020C, 3, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x020C, 4, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x020C, 5, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     4, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x020C, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     11, 0},
+    // accel.rotor -> effects.modulation.rotary.drumUndershootHz
+    {0x020C, 9, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
+     GsEfxOut::kUndershootHz, 8, 0, 25, 0},
+    // accel.rotor -> effects.modulation.rotary.accelTauS
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kAccelTau,
+     8, 0, 0, 0},
+    // accel.rotor -> effects.modulation.rotary.decelTauS
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kDecelTau,
+     8, 0, 22, 0},
+    // accel.rotor -> effects.modulation.rotary.undershootHz
+    {0x020C, 13, kGsEfxRowTranslated, 10, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0,
+     GsEfxOut::kUndershootHz, 8, 0, 33, 0},
+    // level.output -> utility.gain.levelDb
+    {0x020C, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0400, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0400, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0400, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0400, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0401, 9, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0401, 10, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x0401, 11, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0401, 12, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0401, 13, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 11, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0401, 15, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0401, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0402, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0402, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0402, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0402, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0403, 4, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0403, 5, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x0403, 6, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0403, 7, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     4, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0403, 8, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     11, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0403, 10, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0403, 14, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0403, 14, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0403, 16, kGsEfxRowTranslated, 2, 2, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     21, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0403, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0404, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0404, 7, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x0404, 8, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0404, 9, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     4, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0404, 10, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 11, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0404, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0404, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0404, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0404, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0405, 9, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0405, 10, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x0405, 11, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0405, 12, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 4, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0405, 13, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11,
+     0, 11, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0405, 15, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0405, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // rate.narrow -> effects.modulation.phaser.rateHz
+    {0x0406, 3, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
+     31, 0},
+    // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0406, 9, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     20, 0},
+    // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0406, 10, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 2, 0,
+     31, 0},
+    // rate.narrow -> stereo.autoPan.rateHz
+    {0x0406, 16, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 12,
+     0, 31, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0406, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0500, 2, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     2, 0},
+    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0500, 3, kGsEfxRowTranslated, 2, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     3, 0},
+    // width.section -> eq.parametric.band1.q
+    {0x0500, 4, kGsEfxRowTranslated, 5, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     5, 0},
+    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0500, 5, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     4, 0},
+    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0500, 6, kGsEfxRowTranslated, 3, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 11, 0,
+     11, 0},
+    // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    {0x0500, 7, kGsEfxRowTranslated, 14, 1, kGsEfxLawNone, 0x28, 0x4C, -24, 12, GsEfxOut::kValue, 6,
+     0, 32, 0},
+    // rate.narrow -> effects.modulation.phaser.rateHz
+    {0x0500, 12, kGsEfxRowTranslated, 0, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 5, 0,
+     31, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0500, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     23, 0},
+    // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0500, 16, kGsEfxRowTranslated, 1, 4, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 1, 0,
+     24, 0},
+    // level.output -> utility.gain.levelDb
+    {0x0500, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13,
+     0, 27, 0},
+}};
+
+// The switches and selectors: which stages a byte turns on. Sorted by (type, slot).
+inline constexpr std::array<GsEfxEnable, 0> kGsEfxEnables = {};
 
 }  // namespace sonare::midi::synth

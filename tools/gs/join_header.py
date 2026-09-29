@@ -1,12 +1,13 @@
 """Render the insertion-effect adjudication into a C++ header the tests walk.
 
 ``tools/gs/efx-bindings/*.json`` answers, for one printed (type, slot) of the
-GS insertion-effect block, which of five things happens to the byte: it is
-assigned to an insert control, left as a documented state, unmapped because
-the type realises no chain, assembled by the chain skeleton, or unreadable.
+GS insertion-effect block, what happens to the byte: it is assigned to an
+insert control, driven through a designed law, switches stages on, or -- in
+the older forms -- is left as a documented state, unmapped because the type
+realises no chain, assembled by the chain skeleton, or unreadable.
 ``bindings_header.py`` renders the assigned rows for the runtime; this renders
 **every** adjudicated row for the test, which is the side that has to be able
-to tell a form apart from the four it is not.
+to tell a form apart from the others.
 
 A row carries its reason string and, where a state row names the control its
 insert does not have, that (stage, key) pair -- so the claim "the limiter
@@ -23,6 +24,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -30,15 +32,16 @@ from pathlib import Path
 
 GENERATED_BY = "tools/gs/join_header.py"
 
-# The five forms, in the order the header numbers them and the coverage
-# equation adds them up.
-FORMS = ("stage", "state", "unmapped", "builder", "unreadable")
+# The forms, in the order the header numbers them.
+FORMS = ("stage", "state", "unmapped", "builder", "unreadable", "designed", "enables")
 FORM_CONSTANT = {
     "stage": "kGsEfxJoinAssigned",
     "state": "kGsEfxJoinState",
     "unmapped": "kGsEfxJoinUnmapped",
     "builder": "kGsEfxJoinBuilder",
     "unreadable": "kGsEfxJoinUnreadable",
+    "designed": "kGsEfxJoinDesigned",
+    "enables": "kGsEfxJoinEnables",
 }
 FORM_ROWS_CONSTANT = {
     "stage": "kGsEfxJoinAssignedRows",
@@ -46,7 +49,33 @@ FORM_ROWS_CONSTANT = {
     "unmapped": "kGsEfxJoinUnmappedRows",
     "builder": "kGsEfxJoinBuilderRows",
     "unreadable": "kGsEfxJoinUnreadableRows",
+    "designed": "kGsEfxJoinDesignedRows",
+    "enables": "kGsEfxJoinEnablesRows",
 }
+# Where a row's law comes from: measured for this (type, slot), carried from
+# another, or invented. Rows in the older forms carry none.
+BASES = ("none", "measured", "carried", "invented")
+BASIS_CONSTANT = {
+    "none": "kGsEfxJoinNoBasis",
+    "measured": "kGsEfxJoinMeasured",
+    "carried": "kGsEfxJoinCarried",
+    "invented": "kGsEfxJoinInvented",
+}
+MARK_LITERALS = {None: "0", "+": "'+'", "#": "'#'"}
+
+
+def _coverage():
+    path = Path(__file__).resolve().parent / "coverage.py"
+    spec = importlib.util.spec_from_file_location("gs_efx_coverage", path)
+    if spec is None or spec.loader is None:
+        sys.exit(f"could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Row forms are coverage.py's, so the two read a row alike.
+coverage = _coverage()
 
 NO_NAME = 0xFF
 NO_REASON = 0xFFFF
@@ -100,10 +129,8 @@ def collect(rows: list[dict]) -> tuple[list[dict], int]:
     claimed: set[tuple[int, int]] = set()
     for row in rows:
         where = f"{row['_file']}[{row['_index']}]"
-        present = [form for form in FORMS if form in row]
-        if len(present) != 1:
-            sys.exit(f"{where}: must carry exactly one of {list(FORMS)}, has {present}")
-        form = present[0]
+        form = coverage.row_form(row, where)
+        form = "stage" if form == "translated" else form
 
         gs_type = parsed_type(row["type"])
         slot = int(row["slot"])
@@ -113,11 +140,19 @@ def collect(rows: list[dict]) -> tuple[list[dict], int]:
             sys.exit(f"{where}: (type, slot) already adjudicated by another row")
         claimed.add((gs_type, slot))
 
+        # Declared keys count the translated rows alone: the binding table they
+        # are compared against holds those and no others.
         if form == "stage":
             declared_keys += len(keys_of(row))
-            reason = None
+        reason = None if form in ("stage", "designed", "enables") else str(row[form])
+        if form == "stage":
+            basis = "measured"
+        elif form in ("designed", "enables"):
+            basis = str(row[form].get("basis"))
+            if basis not in coverage.BASES:
+                sys.exit(f"{where}: basis {basis!r} is not one of {list(coverage.BASES)}")
         else:
-            reason = str(row[form])
+            basis = "none"
 
         out.append(
             {
@@ -126,6 +161,9 @@ def collect(rows: list[dict]) -> tuple[list[dict], int]:
                 "form": form,
                 "reason": reason,
                 "absent": absent_of(row, where, form),
+                "basis": basis,
+                "ordinal": int(row.get("ordinal", 0)),
+                "mark": row.get("printed_mark"),
             }
         )
     out.sort(key=lambda entry: (entry["type"], entry["slot"]))
@@ -147,9 +185,9 @@ def render(entries: list[dict], declared_keys: int) -> str:
     w("//")
     w("// What the binding files say about each printed insertion-effect (type,")
     w("// slot): the byte reaches a control, or it does not and the row says why.")
-    w("// gs_efx_bindings.h carries the assigned rows alone, because that is all")
-    w("// the chain builder needs; this carries all five forms, because telling a")
-    w("// form apart from the four it is not is the test's whole job. A byte")
+    w("// gs_efx_bindings.h carries the rows that reach a control, because that is")
+    w("// all the chain builder needs; this carries every form, because telling a")
+    w("// form apart from the others is the test's whole job. A byte")
     w("// counted as a state has to be inert, and one counted as unmapped has to")
     w("// belong to a type that realises nothing -- neither is checkable from a")
     w("// table that only lists what did reach a control.")
@@ -162,10 +200,14 @@ def render(entries: list[dict], declared_keys: int) -> str:
     w("")
     w("namespace sonare::midi::synth {")
     w("")
-    w("// The five forms a binding row takes. Exactly one applies to a row, and")
-    w("// the coverage equation adds these five up to the printed parameter count.")
+    w("// The forms a binding row takes. Exactly one applies to a row, and the")
+    w("// coverage tool adds them up to the printed parameter count.")
     for index, form in enumerate(FORMS):
         w(f"inline constexpr uint8_t {FORM_CONSTANT[form]} = {index};")
+    w("")
+    w("// Where a row's law comes from; the older forms carry no law.")
+    for index, basis in enumerate(BASES):
+        w(f"inline constexpr uint8_t {BASIS_CONSTANT[basis]} = {index};")
     w("")
     w("/// No name at this position (an assigned row, or a state row that names no")
     w("/// missing control).")
@@ -181,6 +223,9 @@ def render(entries: list[dict], declared_keys: int) -> str:
     w("  uint8_t absent_stage;  ///< Index into kGsEfxJoinStages, or kGsEfxJoinNoName.")
     w("  uint8_t absent_key;    ///< Index into kGsEfxJoinKeys, or kGsEfxJoinNoName.")
     w("  uint16_t reason;       ///< Index into kGsEfxJoinReasons, or kGsEfxJoinNoReason.")
+    w("  uint8_t basis;         ///< One of the kGsEfxJoin* basis constants.")
+    w("  uint8_t ordinal;       ///< Which same-named stage of the chain the row drives.")
+    w("  uint8_t printed_mark;  ///< 0, '+' or '#'.")
     w("};")
     w("")
     w("// The inserts and controls a state row names as missing. A state row that")
@@ -216,7 +261,8 @@ def render(entries: list[dict], declared_keys: int) -> str:
         )
         w(
             f"    {{0x{entry['type']:04X}, {entry['slot']}, {FORM_CONSTANT[entry['form']]}, "
-            f"{absent_stage}, {absent_key}, {reason}}},"
+            f"{absent_stage}, {absent_key}, {reason}, {BASIS_CONSTANT[entry['basis']]}, "
+            f"{entry['ordinal']}, {MARK_LITERALS[entry['mark']]}}},"
         )
     w("}};")
     w("")

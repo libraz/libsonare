@@ -17,10 +17,17 @@ read between the printed endpoints a row carries in ``range``. It is admitted
 only where those endpoints force a whole step per byte, and the header is
 refused otherwise, because a rounded step is a conversion nobody measured.
 
+Two renderings are emitted. ``kGsEfxBindings`` holds the translated rows in
+the older shape. ``kGsEfxBindingRows`` holds translated and designed rows as
+``GsEfxBindingRow`` (declared in ``gs_efx_convert.h``), each carrying its law
+by value -- a designed law resolved from ``tools/gs/efx-designed-laws.json``,
+a ratio's endpoints -- and ``kGsEfxEnables`` holds the enables rows.
+
 Usage::
 
     bindings_header.py [--bindings tools/gs/efx-bindings]
                        [--tables tools/gs/efx-tables.json]
+                       [--laws tools/gs/efx-designed-laws.json]
                        [--header src/midi/synth/gs_efx_bindings.h] [--check]
 """
 
@@ -35,15 +42,48 @@ import sys
 from pathlib import Path
 
 GENERATED_BY = "tools/gs/bindings_header.py"
+ROOT = Path(__file__).resolve().parents[2]
+CONVERT_HEADER = ROOT / "src" / "midi" / "synth" / "gs_efx_convert.h"
 
 # Laws no measured table holds, numbered after the classes gs_efx_tables.h
-# numbers. A table names the printed unit the endpoints are spelled in.
-BINDING_LAWS = {"ratio": ("percent", "semitone")}
+# numbers. A table names the printed unit the endpoints are spelled in: percent
+# reaches a control as the fraction, semitone and cent as printed.
+BINDING_LAWS = {"ratio": ("percent", "semitone", "cent")}
+# A carried law with a reader of its own, numbered after the binding laws.
+CARRIED_CLASSES = {"drive": ("gain",)}
+# Which gs_efx_convert.h constant names each extra class; the header's numbers
+# are checked against this numbering rather than restated.
+CLASS_CONSTANTS = {"ratio": "kGsEfxRowClassRatio", "drive": "kGsEfxRowClassDrive"}
+
+FORM_CONSTANTS = {
+    None: "kGsEfxFormNone",
+    "linear": "kGsEfxFormLinear",
+    "log": "kGsEfxFormLog",
+    "db": "kGsEfxFormDb",
+    "bipolar": "kGsEfxFormBipolar",
+    "enum": "kGsEfxFormEnum",
+}
+MARK_LITERALS = {None: "0", "+": "'+'", "#": "'#'"}
+NAME_INDEX_LIMIT = 0xFFFF
 
 # The spelling of a printed byte range, as the archive's printed_values has it.
 BYTE_RANGE_RE = re.compile(r"^([0-9A-F]{2})–([0-9A-F]{2})$")
 
 NO_RANGE = 0xFF
+
+
+def _module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        sys.exit(f"could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Row forms, law resolution and printed-domain reading are coverage.py's; the
+# generator reads them from there so the two agree by construction.
+coverage = _module("gs_efx_coverage", Path(__file__).resolve().parent / "coverage.py")
 
 
 def class_order(derive_path: Path) -> tuple[str, ...]:
@@ -53,12 +93,7 @@ def class_order(derive_path: Path) -> tuple[str, ...]:
     two headers' class numbers silently out of step, and nothing downstream
     compares them.
     """
-    spec = importlib.util.spec_from_file_location("derive_efx_tables", derive_path)
-    if spec is None or spec.loader is None:
-        sys.exit(f"could not load {derive_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return tuple(module.CLASS_ORDER)
+    return tuple(_module("derive_efx_tables", derive_path).CLASS_ORDER)
 
 
 def load_rows(bindings_dir: Path) -> list[dict]:
@@ -119,7 +154,7 @@ def collect(rows: list[dict], classes: dict, order: tuple[str, ...]) -> list[dic
     numbering = list(order) + list(BINDING_LAWS)
     out: list[dict] = []
     for row in rows:
-        if "stage" not in row:
+        if "stage" not in row or "designed" in row:
             continue
         where = f"{row['_file']}[{row['_index']}]"
         gs_class = row.get("class")
@@ -166,11 +201,127 @@ def collect(rows: list[dict], classes: dict, order: tuple[str, ...]) -> list[dic
     return out
 
 
+def out_of(key: str) -> str:
+    """Which quantity a row's control takes from a table that yields two."""
+    spelled = key.lower()
+    if spelled.endswith("undershoothz"):
+        return "GsEfxOut::kUndershootHz"
+    if spelled.endswith("deceltaus"):
+        return "GsEfxOut::kDecelTau"
+    if spelled.endswith("acceltaus"):
+        return "GsEfxOut::kAccelTau"
+    return "GsEfxOut::kValue"
+
+
+def row_class_numbering(order: tuple[str, ...]) -> list[str]:
+    """Measured classes, then the binding laws, then the carried classes with readers."""
+    return list(order) + list(BINDING_LAWS) + list(CARRIED_CLASSES)
+
+
+def check_convert_constants(order: tuple[str, ...], header: Path) -> None:
+    """The extra class numbers here and in gs_efx_convert.h have to be the same."""
+    text = header.read_text(encoding="utf-8")
+    numbering = row_class_numbering(order)
+    for name, constant in CLASS_CONSTANTS.items():
+        match = re.search(rf"\b{constant}\s*=\s*(\d+)\s*;", text)
+        if match is None or int(match.group(1)) != numbering.index(name):
+            sys.exit(f"{header}: {constant} is not {numbering.index(name)}, this class's number")
+
+
+def collect_rows(
+    rows: list[dict], classes: dict, order: tuple[str, ...], laws: dict
+) -> tuple[list[dict], list[dict]]:
+    """One GsEfxBindingRow per (type, slot, key) translated or designed, and every enables row."""
+    tables_of = {name: list(body["tables"]) for name, body in classes.items()}
+    tables_of.update({name: list(tables) for name, tables in BINDING_LAWS.items()})
+    tables_of.update({name: list(tables) for name, tables in CARRIED_CLASSES.items()})
+    numbering = row_class_numbering(order)
+    entries: list[dict] = []
+    enables: list[dict] = []
+    for row in rows:
+        where = f"{row['_file']}[{row['_index']}]"
+        form = coverage.row_form(row, where)
+        entry = {
+            "type": parsed_type(row["type"]),
+            "slot": int(row["slot"]),
+            "ordinal": int(row.get("ordinal", 0)),
+            "mark": row.get("printed_mark"),
+            "law": None,
+            "byte": (0, 0),
+            "unit": (0, 0),
+        }
+        if form == "enables":
+            enables.append(dict(entry, **enable_of(row["enables"], where)))
+            continue
+        if form == "translated":
+            entry["kind"] = "kGsEfxRowTranslated"
+            gs_class, table = row.get("class"), row.get("table")
+            if gs_class in BINDING_LAWS:
+                lo_byte, hi_byte, lo_unit, hi_unit = printed_range(row, where)
+                entry["byte"], entry["unit"] = (lo_byte, hi_byte), (lo_unit, hi_unit)
+        elif form == "designed":
+            entry["kind"] = "kGsEfxRowDesigned"
+            if "printed_values" not in row:
+                sys.exit(f"{where}: a designed row needs printed_values")
+            entry["byte"] = coverage.byte_domain(row["printed_values"])
+            law = row["designed"]["law"]
+            if row["designed"]["basis"] == "invented":
+                entry["law"] = coverage.designed_law(laws, law)
+                if entry["law"] is None:
+                    sys.exit(f"{where}: designed law {law!r} is not in the designed-law file")
+                gs_class, table = None, None
+            else:
+                gs_class, table = law.split(".", 1)
+        else:
+            continue
+        if gs_class is None:
+            entry["class"], entry["table"], label = 0, 0, row["designed"]["law"]
+        else:
+            if gs_class not in numbering or table not in tables_of[gs_class]:
+                sys.exit(f"{where}: {gs_class}.{table} is not a class this header numbers")
+            entry["class"] = numbering.index(gs_class)
+            entry["table"] = tables_of[gs_class].index(table)
+            label = f"{gs_class}.{table}"
+        for key in keys_of(row):
+            entries.append(dict(entry, stage=str(row["stage"]), key=key, label=label))
+    entries.sort(key=lambda e: (e["type"], e["slot"], e["key"]))
+    enables.sort(key=lambda e: (e["type"], e["slot"]))
+    return entries, enables
+
+
+def enable_of(enables: dict, where: str) -> dict:
+    """An enables row's stages and the bytes that turn them on."""
+    mode = "select" if "select" in enables else "stages"
+    refs = enables[mode]
+    if not isinstance(refs, list) or not 1 <= len(refs) <= coverage.MAX_ENABLE_STAGES:
+        sys.exit(f"{where}: enables.{mode} names 1-{coverage.MAX_ENABLE_STAGES} stages")
+    mask = [0, 0, 0, 0]
+    for byte in enables.get("on_states", []) if mode == "stages" else []:
+        mask[byte >> 5] |= 1 << (byte & 31)
+    return {
+        "mode": "kGsEfxEnableSelect" if mode == "select" else "kGsEfxEnableStages",
+        "stages": [str(ref["stage"]) for ref in refs],
+        "ordinals": [int(ref.get("ordinal", 0)) for ref in refs],
+        "mask": mask,
+    }
+
+
+def float_literal(value: float) -> str:
+    return f"{float(value)!r}f"
+
+
+def law_constant(law_id: str) -> str:
+    """``d.cutoff_hz`` -> ``kGsEfxLawCutoffHz``; ``none`` -> ``kGsEfxLawNone``."""
+    return "kGsEfxLaw" + camel(law_id.removeprefix("d."))
+
+
 def camel(name: str) -> str:
     return "".join(part.capitalize() for part in name.split("_"))
 
 
-def render(entries: list[dict], order: tuple[str, ...]) -> str:
+def render(
+    entries: list[dict], order: tuple[str, ...], rows: list[dict], enables: list[dict]
+) -> str:
     stages = sorted({entry["stage"] for entry in entries})
     keys = sorted({entry["key"] for entry in entries})
     ranges = sorted({entry["range"] for entry in entries if entry["range"] is not None})
@@ -195,6 +346,8 @@ def render(entries: list[dict], order: tuple[str, ...]) -> str:
     w("#include <array>")
     w("#include <cstdint>")
     w("#include <string_view>")
+    w("")
+    w('#include "midi/synth/gs_efx_convert.h"')
     w("")
     w("namespace sonare::midi::synth {")
     w("")
@@ -259,8 +412,76 @@ def render(entries: list[dict], order: tuple[str, ...]) -> str:
         )
     w("}};")
     w("")
+    render_rows(w, rows, enables)
     w("}  // namespace sonare::midi::synth")
     return "\n".join(out) + "\n"
+
+
+def render_rows(w, rows: list[dict], enables: list[dict]) -> None:
+    """kGsEfxBindingRows and kGsEfxEnables, with the name tables they index."""
+    stages = sorted({e["stage"] for e in rows} | {s for e in enables for s in e["stages"]})
+    keys = sorted({e["key"] for e in rows})
+    if max(len(stages), len(keys)) > NAME_INDEX_LIMIT:
+        sys.exit("the row name tables outgrew their index width")
+    stage_index = {name: i for i, name in enumerate(stages)}
+    key_index = {name: i for i, name in enumerate(keys)}
+
+    w("// The stages and controls kGsEfxBindingRows and kGsEfxEnables point at.")
+    w(f"inline constexpr std::array<std::string_view, {len(stages)}> kGsEfxRowStages = {{{{")
+    for stage in stages:
+        w(f'    "{stage}",')
+    w("}};")
+    w("")
+    w(f"inline constexpr std::array<std::string_view, {len(keys)}> kGsEfxRowKeys = {{{{")
+    for key in keys:
+        w(f'    "{key}",')
+    w("}};")
+    w("")
+    # Each designed law the rows use, spelled once and copied into a row by name.
+    laws = {"none": {"form": None, "lo": 0, "hi": 0, "n_states": 0}}
+    for e in rows:
+        if e["law"] is not None:
+            laws[e["label"]] = e["law"]
+    w("// The designed laws the rows below hold by value, one name per law id.")
+    for law_id, law in laws.items():
+        w(
+            f"inline constexpr GsEfxDesignedLaw {law_constant(law_id)} = "
+            f"{{{FORM_CONSTANTS[law['form']]}, {float_literal(law['lo'])}, "
+            f"{float_literal(law['hi'])}, {law['n_states']}}};"
+        )
+    w("")
+    w("// Translated and designed rows alike, read through gs_efx_binding_value. A")
+    w("// designed row holds its law by value; a ratio row holds its printed ends.")
+    w("// Sorted by (type, slot, key).")
+    w(f"inline constexpr std::array<GsEfxBindingRow, {len(rows)}> kGsEfxBindingRows = {{{{")
+    for e in rows:
+        spelled_law = law_constant(e["label"] if e["law"] is not None else "none")
+        w(f"    // {e['label']} -> {e['stage']}.{e['key']}")
+        w(
+            f"    {{0x{e['type']:04X}, {e['slot']}, {e['kind']}, {e['class']}, {e['table']}, "
+            f"{spelled_law}, 0x{e['byte'][0]:02X}, 0x{e['byte'][1]:02X}, {e['unit'][0]}, "
+            f"{e['unit'][1]}, {out_of(e['key'])}, {stage_index[e['stage']]}, {e['ordinal']}, "
+            f"{key_index[e['key']]}, {MARK_LITERALS[e['mark']]}}},"
+        )
+    w("}};")
+    w("")
+    w("// The switches and selectors: which stages a byte turns on. Sorted by (type, slot).")
+    if not enables:
+        w("inline constexpr std::array<GsEfxEnable, 0> kGsEfxEnables = {};")
+    else:
+        w(f"inline constexpr std::array<GsEfxEnable, {len(enables)}> kGsEfxEnables = {{{{")
+    for e in enables:
+        padding = 4 - len(e["stages"])
+        spelled_stages = ", ".join(str(stage_index[s]) for s in e["stages"]) + ", 0" * padding
+        spelled_ordinals = ", ".join(str(o) for o in e["ordinals"]) + ", 0" * padding
+        spelled_mask = ", ".join(f"0x{word:X}u" for word in e["mask"])
+        w(
+            f"    {{0x{e['type']:04X}, {e['slot']}, {e['mode']}, {{{spelled_stages}}}, "
+            f"{{{spelled_ordinals}}}, {len(e['stages'])}, {{{spelled_mask}}}}},"
+        )
+    if enables:
+        w("}};")
+    w("")
 
 
 def laid_out(text: str, header: Path) -> str:
@@ -290,6 +511,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bindings", type=Path, default=Path("tools/gs/efx-bindings"))
     parser.add_argument("--tables", type=Path, default=Path("tools/gs/efx-tables.json"))
+    parser.add_argument("--laws", type=Path, default=Path("tools/gs/efx-designed-laws.json"))
     parser.add_argument("--derive", type=Path, default=Path("tools/gs/derive_efx_tables.py"))
     parser.add_argument("--header", type=Path, default=Path("src/midi/synth/gs_efx_bindings.h"))
     parser.add_argument(
@@ -304,10 +526,13 @@ def main() -> int:
     args = parse_args()
     order = class_order(args.derive)
     classes = json.loads(args.tables.read_text(encoding="utf-8"))["classes"]
-    entries = collect(load_rows(args.bindings), classes, order)
+    check_convert_constants(order, CONVERT_HEADER)
+    rows = load_rows(args.bindings)
+    entries = collect(rows, classes, order)
     if not entries:
         sys.exit("no binding row carries a stage; the header would bind nothing")
-    rendered = laid_out(render(entries, order), args.header)
+    row_entries, enables = collect_rows(rows, classes, order, coverage.load_laws(args.laws))
+    rendered = laid_out(render(entries, order, row_entries, enables), args.header)
 
     if args.check:
         try:

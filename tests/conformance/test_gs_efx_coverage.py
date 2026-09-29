@@ -1,4 +1,8 @@
-"""Conformance test for the GS EFX-table provenance and disagreement bookkeeping.
+"""Conformance tests for the GS EFX tables and the binding-row tooling.
+
+The first half checks the provenance and disagreement bookkeeping in the
+generated tables; the second drives ``tools/gs/coverage.py`` and the two
+header generators over tiny row sets written to a temporary directory.
 
 `tools/gs/efx-tables.json` is a generated, committed artifact; this test reads
 the file itself rather than the derivation script, because it is checking what
@@ -21,8 +25,12 @@ asserts instead of silently drifting from it.
 
 from __future__ import annotations
 
+import contextlib
+import copy
+import importlib.util
 import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -358,6 +366,384 @@ class DisagreementListTest(unittest.TestCase):
                     haystack,
                     f"no entry in 'disagreement' mentions {marker!r} (gs.md: {item!r})",
                 )
+
+
+GS_TOOLS = ROOT / "tools" / "gs"
+
+
+def _tool(name: str):
+    spec = importlib.util.spec_from_file_location(f"gs_{name}", GS_TOOLS / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+coverage = _tool("coverage")
+bindings_header = _tool("bindings_header")
+join_header = _tool("join_header")
+
+# A two-type printed set standing in for the archive: one continuous byte, one
+# three-state list, one two-state list, a rate column and a signed range.
+PRINTED = {
+    "01 42": {3: "*6", 4: "00–7F", 5: "00/01/02", 6: "00/01", 7: "0F–71"},
+    "04 00": {3: "00/01", 11: "00/01", 12: "00–7F"},
+}
+NAMES = {
+    "01 42": {3: "Rate", 4: "Depth", 5: "Pre Filter", 6: "Out", 7: "Feedback"},
+    "04 00": {3: "Cmp Sw", 11: "CF Sel", 12: "OD Level"},
+}
+INVENTED = {"basis": "invented", "replaced_when": {"model_binding": ["01 42", "40 03 07"]}}
+
+
+def _row(slot: int, **fields) -> dict:
+    return {"type": "01 42", "slot": slot, **fields}
+
+
+def _designed(slot: int, law: str, printed: str, **fields) -> dict:
+    return _row(
+        slot,
+        designed=dict(INVENTED, law=law),
+        printed_values=printed,
+        stage="effects.modulation.chorus",
+        key="depth",
+        **fields,
+    )
+
+
+@contextlib.contextmanager
+def _row_dir(rows: list[dict]):
+    """Rows written to a temporary binding directory, one file per MSB, as the tools read them."""
+    with tempfile.TemporaryDirectory() as name:
+        by_msb: dict[str, list[dict]] = {}
+        for row in rows:
+            by_msb.setdefault(row["type"].split()[0], []).append(row)
+        for msb, group in by_msb.items():
+            (Path(name) / f"{msb}.json").write_text(json.dumps(group), encoding="utf-8")
+        yield Path(name)
+
+
+def _tally(rows: list[dict], names=NAMES, laws=None) -> dict:
+    """Tally rows that carry the name ``names`` prints for their slot, as transcribed rows do.
+
+    A row that already sets ``printed_name`` keeps it; ``printed_name=None``
+    leaves the field out.
+    """
+    named = []
+    for row in rows:
+        row = dict(row)
+        if "printed_name" not in row:
+            row["printed_name"] = names[row["type"]][row["slot"]]
+        if row["printed_name"] is None:
+            del row["printed_name"]
+        named.append(row)
+    with _row_dir(named) as row_dir:
+        loaded = coverage.load_bindings(row_dir)
+    laws = laws if laws is not None else coverage.load_laws(coverage.DEFAULT_LAWS)
+    measured = coverage.measured_laws(coverage.DEFAULT_TABLES)
+    return coverage.tally(loaded, PRINTED, laws, measured)
+
+
+class CoverageVocabularyTest(unittest.TestCase):
+    """The designed / enables vocabulary is parsed, counted and checked beside the old forms."""
+
+    def assertRefused(self, rows: list[dict], fragment: str, **kwargs) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            _tally(rows, **kwargs)
+        self.assertIn(fragment, str(caught.exception.code))
+
+    def test_old_forms_are_still_accepted(self) -> None:
+        result = _tally(
+            [
+                _row(3, **{"class": "rate", "table": "wide"}, stage="s", key="rateHz"),
+                _row(4, state="a bare 00-7F with no unit printed beside it"),
+                _row(5, builder="the skeleton reads it"),
+                _row(6, unreadable="not a form any rule reads"),
+                {"type": "04 00", "slot": 3, "unmapped": "no chain"},
+            ]
+        )
+        counts = result["counts"]
+        self.assertEqual(
+            (counts["translated"], counts["state"], counts["builder"], counts["unreadable"]),
+            (1, 1, 1, 1),
+        )
+        self.assertEqual(counts["unmapped"], 1)
+
+    def test_line_one_keeps_its_wording_and_line_two_counts_the_new_forms(self) -> None:
+        result = _tally(
+            [
+                _row(3, **{"class": "rate", "table": "wide"}, stage="s", key="rateHz"),
+                _designed(4, "d.unit", "00–7F"),
+                _row(5, state="a bare 00-7F with no unit printed beside it"),
+                {
+                    "type": "04 00",
+                    "slot": 3,
+                    "enables": {
+                        "stages": [{"stage": "dynamics.compressor"}],
+                        "on_states": [1],
+                        **INVENTED,
+                    },
+                },
+            ]
+        )
+        lines = coverage.summary_lines(result, coverage.per_msb_of(PRINTED))
+        self.assertEqual(
+            lines[0],
+            "GS EFX coverage: printed=8 translated=1 state=1 unmapped=0 unreadable=0 builder=0",
+        )
+        self.assertEqual(
+            lines[1],
+            "GS EFX forms: translated=1 designed=1 enables=1 carried=0 invented=2",
+        )
+        self.assertIn(
+            "forms[01]: translated=1 designed=1 enables=0 state=1 unmapped=0 unreadable=0 "
+            "builder=0",
+            lines,
+        )
+        self.assertIn(
+            "forms[04]: translated=0 designed=0 enables=1 state=0 unmapped=0 unreadable=0 "
+            "builder=0",
+            lines,
+        )
+
+    def test_missing_replaced_when_is_refused(self) -> None:
+        row = _designed(4, "d.unit", "00–7F")
+        del row["designed"]["replaced_when"]
+        self.assertRefused([row], "replaced_when")
+
+    def test_unknown_replaced_when_key_is_refused(self) -> None:
+        row = _designed(4, "d.unit", "00–7F")
+        row["designed"]["replaced_when"] = {"someday": True}
+        self.assertRefused([row], "replaced_when")
+
+    def test_enables_without_replaced_when_is_refused(self) -> None:
+        row = {
+            "type": "04 00",
+            "slot": 3,
+            "enables": {"stages": [{"stage": "x"}], "on_states": [1], "basis": "invented"},
+        }
+        self.assertRefused([row], "replaced_when")
+
+    def test_unknown_designed_law_is_refused(self) -> None:
+        self.assertRefused([_designed(4, "d.nothing_like_it", "00–7F")], "d.nothing_like_it")
+
+    def test_carried_needs_a_measured_law_and_its_source(self) -> None:
+        carried = {
+            "basis": "carried",
+            "law": "level.output",
+            "replaced_when": {"stage_passed": "04 00"},
+        }
+        row = {
+            "type": "04 00",
+            "slot": 12,
+            "designed": dict(carried),
+            "printed_values": "00–7F",
+            "stage": "utility.gain",
+            "key": "levelDb",
+        }
+        self.assertRefused([row], "from")
+        row["designed"] = dict(carried, law="level.nowhere", **{"from": "a-claim"})
+        self.assertRefused([row], "level.nowhere")
+        row["designed"] = dict(carried, **{"from": "a-claim"})
+        self.assertEqual(_tally([row])["basis"]["carried"], 1)
+
+    def test_designed_row_holds_its_printed_values_to_the_archive(self) -> None:
+        self.assertRefused([_designed(4, "d.unit", "00–7E")], "printed_values")
+        row = _designed(4, "d.unit", "00–7F")
+        del row["printed_values"]
+        self.assertRefused([row], "printed_values")
+
+    def test_enum_state_count_must_match_the_printed_list(self) -> None:
+        self.assertRefused([_designed(5, "d.enum2", "00/01/02")], "state")
+        self.assertEqual(_tally([_designed(5, "d.enum3", "00/01/02")])["counts"]["designed"], 1)
+
+    def test_state_list_refuses_a_continuous_law(self) -> None:
+        self.assertRefused([_designed(5, "d.unit", "00/01/02")], "state list")
+
+    def test_continuous_range_refuses_an_enum_law(self) -> None:
+        self.assertRefused([_designed(4, "d.enum128", "00–7F")], "d.enum128")
+        self.assertRefused([_designed(4, "d.enum2", "00–7F")], "continuous")
+
+    def test_ordinal_and_printed_mark_are_checked(self) -> None:
+        ok = _designed(4, "d.unit", "00–7F", ordinal=1, printed_mark="+")
+        self.assertEqual(_tally([ok])["counts"]["designed"], 1)
+        self.assertRefused([_designed(4, "d.unit", "00–7F", ordinal=-1)], "ordinal")
+        self.assertRefused([_designed(4, "d.unit", "00–7F", printed_mark="*")], "printed_mark")
+
+    def test_name_rules_run_on_the_rows_printed_name(self) -> None:
+        rows = [_designed(4, "d.unit", "00–7F"), _designed(5, "d.enum3", "00/01/02")]
+        self.assertEqual(_tally(rows)["names_checked"], 2)
+
+    def test_a_new_vocabulary_row_without_printed_name_is_refused(self) -> None:
+        self.assertRefused([_designed(4, "d.unit", "00–7F", printed_name=None)], "printed_name")
+
+    def test_old_form_rows_need_no_printed_name(self) -> None:
+        state = _row(4, state="a bare 00-7F with no unit printed beside it", printed_name=None)
+        self.assertEqual(_tally([state])["names_checked"], 0)
+
+    def test_a_law_other_than_the_rule_is_refused(self) -> None:
+        self.assertRefused([_designed(4, "d.feedback", "00–7F")], "d.unit")
+
+    def test_no_matching_rule_is_refused(self) -> None:
+        names = copy.deepcopy(NAMES)
+        names["01 42"][4] = "Nothing Printed Like It"
+        self.assertRefused([_designed(4, "d.unit", "00–7F")], "no name rule", names=names)
+
+    def test_two_matching_rules_are_refused(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        laws["name_rules"].append({"name": "Depth", "printed": "00–7F", "law": "d.feedback"})
+        self.assertRefused([_designed(4, "d.unit", "00–7F")], "2 name rules", laws=laws)
+
+    def test_enables_rows_must_look_up_as_enables(self) -> None:
+        enable = {
+            "type": "04 00",
+            "slot": 3,
+            "enables": {"stages": [{"stage": "dynamics.compressor"}], "on_states": [1], **INVENTED},
+        }
+        self.assertEqual(_tally([enable])["counts"]["enables"], 1)
+        names = copy.deepcopy(NAMES)
+        names["04 00"][3] = "Out"
+        self.assertRefused([enable], "enables", names=names)
+
+    def test_select_needs_one_stage_per_printed_state(self) -> None:
+        select = {
+            "type": "04 00",
+            "slot": 11,
+            "enables": {"select": [{"stage": "a"}, {"stage": "b"}, {"stage": "c"}], **INVENTED},
+        }
+        self.assertRefused([select], "select")
+
+    def test_rule_file_resolves_every_law_it_names(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        laws["name_rules"].append({"name": "X", "law": "d.missing"})
+        with self.assertRaises(SystemExit):
+            coverage.check_rules(laws, coverage.measured_laws(coverage.DEFAULT_TABLES))
+
+
+class BindingRowHeaderTest(unittest.TestCase):
+    """The generators emit the new row and enable arrays beside the old ones."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.order = bindings_header.class_order(GS_TOOLS / "derive_efx_tables.py")
+        tables = json.loads((GS_TOOLS / "efx-tables.json").read_text(encoding="utf-8"))
+        cls.classes = tables["classes"]
+        cls.laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+
+    def _render(self, rows: list[dict]) -> str:
+        with _row_dir(rows) as row_dir:
+            loaded = bindings_header.load_rows(row_dir)
+        entries = bindings_header.collect(loaded, self.classes, self.order)
+        row_entries, enables = bindings_header.collect_rows(
+            loaded, self.classes, self.order, self.laws
+        )
+        return bindings_header.render(entries, self.order, row_entries, enables)
+
+    def test_translated_designed_and_enables_rows_are_emitted(self) -> None:
+        carried = {
+            "basis": "carried",
+            "law": "drive.gain",
+            "from": "a-claim",
+            "replaced_when": {"claim_names": ["01 42", "40 03 0A"]},
+        }
+        text = self._render(
+            [
+                _row(3, **{"class": "rate", "table": "wide"}, stage="fx.a", key="rateHz"),
+                _row(
+                    7,
+                    **{"class": "ratio", "table": "percent"},
+                    printed_values="0F–71",
+                    range=[-98, 98],
+                    stage="fx.a",
+                    key="feedback",
+                ),
+                _designed(4, "d.unit", "00–7F", ordinal=1, printed_mark="#"),
+                _designed(5, "d.enum3", "00/01/02"),
+                _row(6, designed=carried, printed_values="00/01", stage="fx.b", key="inputDb"),
+                {
+                    "type": "04 00",
+                    "slot": 3,
+                    "enables": {
+                        "stages": [{"stage": "fx.a"}, {"stage": "fx.b", "ordinal": 1}],
+                        "on_states": [1, 127],
+                        **INVENTED,
+                    },
+                },
+                {
+                    "type": "04 00",
+                    "slot": 11,
+                    "enables": {"select": [{"stage": "fx.a"}, {"stage": "fx.b"}], **INVENTED},
+                },
+            ]
+        )
+        self.assertIn("struct GsEfxBinding {", text)
+        self.assertIn("kGsEfxBindings", text)
+        self.assertIn('#include "midi/synth/gs_efx_convert.h"', text)
+        self.assertIn("std::array<GsEfxBindingRow, 5> kGsEfxBindingRows", text)
+        self.assertIn("std::array<GsEfxEnable, 2> kGsEfxEnables", text)
+        # The ratio row carries its endpoints; the invented row its law, domain,
+        # ordinal and mark; the enum its state count; the carried row the drive class.
+        self.assertIn("GsEfxDesignedLaw kGsEfxLawUnit = {kGsEfxFormLinear, 0.0f, 1.0f, 0};", text)
+        self.assertIn("GsEfxDesignedLaw kGsEfxLawEnum3 = {kGsEfxFormEnum, 0.0f, 2.0f, 3};", text)
+        self.assertNotIn("kGsEfxDesignedLaws", text)
+        self.assertRegex(text, r"kGsEfxRowTranslated, 14, 0, kGsEfxLawNone, 0x0F, 0x71, -98, 98")
+        self.assertRegex(
+            text,
+            r"kGsEfxRowDesigned, 0, 0, kGsEfxLawUnit, 0x00, 0x7F, 0, 0, "
+            r"GsEfxOut::kValue, \d+, 1, \d+, '#'",
+        )
+        self.assertRegex(text, r"kGsEfxLawEnum3, 0x00, 0x02")
+        self.assertRegex(text, r"kGsEfxRowDesigned, 15, 0, kGsEfxLawNone")
+        self.assertRegex(
+            text,
+            r"kGsEfxEnableStages, \{\d+, \d+, 0, 0\}, \{0, 1, 0, 0\}, 2, "
+            r"\{0x2u, 0x0u, 0x0u, 0x80000000u\}",
+        )
+        self.assertRegex(text, r"kGsEfxEnableSelect, \{\d+, \d+, 0, 0\}, \{0, 0, 0, 0\}, 2, ")
+
+    def test_the_out_selector_follows_the_key(self) -> None:
+        self.assertEqual(bindings_header.out_of("drumUndershootHz"), "GsEfxOut::kUndershootHz")
+        self.assertEqual(bindings_header.out_of("undershootHz"), "GsEfxOut::kUndershootHz")
+        self.assertEqual(bindings_header.out_of("decelTauS"), "GsEfxOut::kDecelTau")
+        self.assertEqual(bindings_header.out_of("accelTauS"), "GsEfxOut::kAccelTau")
+        self.assertEqual(bindings_header.out_of("rateHz"), "GsEfxOut::kValue")
+
+    def test_the_join_header_carries_the_new_forms(self) -> None:
+        with _row_dir(
+            [
+                _designed(4, "d.unit", "00–7F", printed_mark="+"),
+                {
+                    "type": "04 00",
+                    "slot": 3,
+                    "enables": {"stages": [{"stage": "x"}], "on_states": [1], **INVENTED},
+                },
+            ]
+        ) as row_dir:
+            entries, declared = join_header.collect(join_header.load_rows(row_dir))
+        text = join_header.render(entries, declared)
+        self.assertIn("kGsEfxJoinDesigned", text)
+        self.assertIn("kGsEfxJoinEnables", text)
+        self.assertIn("inline constexpr int kGsEfxJoinDesignedRows = 1;", text)
+        self.assertIn("inline constexpr int kGsEfxJoinEnablesRows = 1;", text)
+        self.assertIn("kGsEfxJoinInvented", text)
+
+
+class CoverageReportTest(unittest.TestCase):
+    """The report says how many rows the name rules were checked on."""
+
+    def test_the_name_check_count_is_printed(self) -> None:
+        result = _tally([_designed(4, "d.unit", "00–7F")])
+        lines = coverage.summary_lines(result, coverage.per_msb_of(PRINTED))
+        self.assertIn("name_rules: checked=1", lines)
+
+
+class CentRatioTest(unittest.TestCase):
+    """A fine-tune printed in cents is a translated ratio, read on table 2 as printed."""
+
+    def test_fine_is_a_cent_ratio(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        self.assertEqual(coverage.rule_matches(laws, "PS Fine", "0E–72"), ["ratio.cent"])
+        self.assertEqual(bindings_header.BINDING_LAWS["ratio"].index("cent"), 2)
 
 
 if __name__ == "__main__":
