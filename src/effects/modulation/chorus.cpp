@@ -15,6 +15,12 @@ constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms
 // clamps to this so the LFO peak (center + depth) stays within the buffer the
 // prepare() pass sizes for, and a later automation cannot be silently truncated.
 constexpr float kMaxChorusDelayMs = 50.0f;
+constexpr float kMaxFeedback = 0.95f;
+// Corner of the low-pass in the feedback return.
+constexpr float kFeedbackCornerHz = 6000.0f;
+constexpr float kMaxPhaseDeg = 180.0f;
+constexpr double kDegreesPerTurn = 360.0;
+constexpr unsigned int kPreFilterModeCount = 3;
 }  // namespace
 
 Chorus::Chorus(ChorusConfig config) : config_(config) {
@@ -25,6 +31,7 @@ Chorus::Chorus(ChorusConfig config) : config_(config) {
   // clamped consistently with set_parameter.
   config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxChorusDelayMs);
   config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxChorusDelayMs);
+  config_.phase_deg = std::clamp(config_.phase_deg, 0.0f, kMaxPhaseDeg);
 }
 
 void Chorus::prepare(double sample_rate, int) {
@@ -47,6 +54,9 @@ void Chorus::prepare(double sample_rate, int) {
   for (auto& pre_filter : pre_filters_) {
     pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
   }
+  for (auto& filter : feedback_filters_) {
+    filter.prepare(PreFilterMode::kLowPass, kFeedbackCornerHz, sample_rate_);
+  }
   reset();
 }
 
@@ -64,6 +74,7 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
   // smoother, so very fast large jumps on a big block may zipper faintly.
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
+  const float fb = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
     const float in_r = right[i];
@@ -72,8 +83,17 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
     const float delay_r = (config_.center_delay_ms + config_.depth_ms * lfos_[1].process()) *
                           0.001f * static_cast<float>(sample_rate_);
     // The section sits in front of the delay, not across the dry path.
-    const float wet_l = delays_[0].process(pre_filters_[0].process(in_l), delay_l);
-    const float wet_r = delays_[1].process(pre_filters_[1].process(in_r), delay_r);
+    float feed_l = pre_filters_[0].process(in_l);
+    float feed_r = pre_filters_[1].process(in_r);
+    // Skipped at zero gain so an untouched chorus stays bit-identical.
+    if (fb != 0.0f) {
+      feed_l += fb * feedback_filters_[0].state();
+      feed_r += fb * feedback_filters_[1].state();
+    }
+    const float wet_l = delays_[0].process(feed_l, delay_l);
+    const float wet_r = delays_[1].process(feed_r, delay_r);
+    feedback_filters_[0].process(wet_l);
+    feedback_filters_[1].process(wet_r);
     if (stereo) {
       left[i] = dry * in_l + wet * wet_l;
       right[i] = dry * in_r + wet * wet_r;
@@ -89,8 +109,12 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
 void Chorus::discard_non_finite() noexcept {
   // The section is recursive, so one non-finite sample would stay in it for
   // good; the line only carries what the section already let through.
-  if (std::isfinite(pre_filters_[0].state()) && std::isfinite(pre_filters_[1].state())) return;
+  if (std::isfinite(pre_filters_[0].state()) && std::isfinite(pre_filters_[1].state()) &&
+      std::isfinite(feedback_filters_[0].state()) && std::isfinite(feedback_filters_[1].state())) {
+    return;
+  }
   for (auto& pre_filter : pre_filters_) pre_filter.reset();
+  for (auto& filter : feedback_filters_) filter.reset();
   for (auto& delay : delays_) delay.reset();
   note_non_finite_discard();
 }
@@ -126,6 +150,27 @@ bool Chorus::set_parameter(unsigned int param_id, float value) {
       }
       return true;
     }
+    case 5:
+      config_.feedback = value;
+      return true;
+    case 6:
+      config_.phase_deg = std::clamp(value, 0.0f, kMaxPhaseDeg);
+      lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+      return true;
+    case 7: {
+      // An unnamed mode is refused rather than rounded onto a neighbour.
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(kPreFilterModeCount)) {
+        return false;
+      }
+      config_.pre_filter_mode = static_cast<PreFilterMode>(static_cast<int>(value));
+      for (auto& pre_filter : pre_filters_) {
+        const float carried = pre_filter.state();
+        pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
+        pre_filter.set_state(carried);
+      }
+      return true;
+    }
     default:
       return false;
   }
@@ -135,11 +180,12 @@ bool Chorus::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
   // delay lines are pre-sized to kMaxChorusDelayMs at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 4;
+  return param_id <= 7;
 }
 
 std::vector<rt::ParamDescriptor> Chorus::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"depthMs", 1}, {"centerDelayMs", 2}, {"dryWet", 3}, {"preFilterHz", 4}};
+  return {{"rateHz", 0},      {"depthMs", 1},  {"centerDelayMs", 2}, {"dryWet", 3},
+          {"preFilterHz", 4}, {"feedback", 5}, {"phaseDeg", 6},      {"preFilterMode", 7}};
 }
 
 void Chorus::reset() {
@@ -149,8 +195,11 @@ void Chorus::reset() {
   for (auto& pre_filter : pre_filters_) {
     pre_filter.reset();
   }
+  for (auto& filter : feedback_filters_) {
+    filter.reset();
+  }
   lfos_[0].reset(0.0);
-  lfos_[1].reset(0.25);
+  lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
 }
 
 }  // namespace sonare::effects::modulation

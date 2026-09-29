@@ -17,6 +17,8 @@ class Lfo {
   }
   void reset(double phase = 0.0) noexcept { phase_ = phase - std::floor(phase); }
   void set_rate_hz(float rate_hz) noexcept { rate_hz_ = std::max(0.0f, rate_hz); }
+  /// The phase the next process() call reads, in turns [0, 1).
+  double phase() const noexcept { return phase_; }
 
   float process() noexcept {
     const float value = static_cast<float>(std::sin(phase_ * ::sonare::constants::kTwoPiD));

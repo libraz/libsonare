@@ -25,6 +25,8 @@
 /// - stereo delay, damping half-power corner in Hz: computed. A discrete one
 ///   pole crosses half power above the corner it is built from.
 /// - chorus / flanger, pre-filter half-power corner in Hz: computed, same pole.
+/// - chorus feedback, comb tooth spacing in Hz: the reciprocal of the loop delay.
+/// - flanger step rate, hold period in seconds: the reciprocal of the step rate.
 /// - lofi, first aperture null in Hz: the hold rate itself.
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
 /// - rotary, acceleration time constant in seconds: the time constant itself.
@@ -333,6 +335,95 @@ double pre_filter_corner_hz(const Config& filtered, const Config& bypassed, doub
   std::vector<double> relative(with.db.size());
   for (std::size_t i = 0; i < relative.size(); ++i) relative[i] = with.db[i] - without.db[i];
   return first_crossing_hz(relative, sample_rate, kHalfPowerDb);
+}
+
+// --- chorus feedback comb and flanger step hold -----------------------------
+
+// 4 ms puts the teeth 250 Hz apart: fine enough to read a spacing to a per cent
+// from the bins, and long enough that the feedback low-pass's own delay (about
+// 17 microseconds) is under half a per cent of the loop.
+constexpr float kCombDelayMs = 4.0f;
+constexpr float kCombFeedback = 0.6f;
+constexpr double kCombLowHz = 100.0;
+constexpr double kCombHighHz = 3000.0;
+constexpr double kCombTolerance = 0.02;
+
+ChorusConfig comb_chorus() {
+  ChorusConfig config;
+  config.rate_hz = 0.0f;
+  config.depth_ms = 0.0f;
+  config.center_delay_ms = kCombDelayMs;
+  config.dry_wet = 1.0f;
+  config.feedback = kCombFeedback;
+  return config;
+}
+
+/// Mean distance between the comb's teeth: parabolic peaks of the magnitude
+/// between kCombLowHz and kCombHighHz, first to last over the gaps between them.
+double comb_spacing_hz(double sample_rate, std::size_t* teeth) {
+  const Spectrum response = impulse_spectrum<Chorus>(comb_chorus(), sample_rate);
+  std::vector<double> peaks;
+  const std::size_t first = static_cast<std::size_t>(kCombLowHz * kFftLength / sample_rate);
+  const std::size_t last = static_cast<std::size_t>(kCombHighHz * kFftLength / sample_rate);
+  for (std::size_t i = first; i < last; ++i) {
+    const double a = response.db[i - 1];
+    const double b = response.db[i];
+    const double c = response.db[i + 1];
+    if (b <= a || b < c) continue;
+    const double offset = 0.5 * (a - c) / (a - 2.0 * b + c);
+    peaks.push_back((static_cast<double>(i) + offset) * sample_rate / kFftLength);
+  }
+  *teeth = peaks.size();
+  if (peaks.size() < 2) return 0.0;
+  return (peaks.back() - peaks.front()) / static_cast<double>(peaks.size() - 1);
+}
+
+constexpr float kStepRateHz = 500.0f;
+constexpr float kStepLfoHz = 20.0f;
+constexpr double kStepTolerance = 0.01;
+// A change in the read-back delay below this is float noise, above it the LFO
+// moved.
+constexpr double kStepMovedSamples = 0.05;
+constexpr float kStepRampSlope = 1e-4f;
+
+/// Mean time between the held LFO's steps, in seconds. A linear ramp through the
+/// interpolated line comes back as `c * (n - d[n])`, which reads the delay used
+/// at each sample; a hold shows as long runs of one delay between jumps.
+double step_period_s(double sample_rate) {
+  FlangerConfig config;
+  config.rate_hz = kStepLfoHz;
+  config.depth_ms = 4.0f;
+  config.center_delay_ms = 5.0f;
+  config.feedback = 0.0f;
+  config.dry_wet = 1.0f;
+  config.step_rate_hz = kStepRateHz;
+  Flanger processor(config);
+  processor.prepare(sample_rate, static_cast<int>(sample_rate));
+  const std::size_t count = static_cast<std::size_t>(sample_rate);
+  std::vector<float> left(count);
+  for (std::size_t i = 0; i < count; ++i) left[i] = kStepRampSlope * static_cast<float>(i);
+  std::vector<float> right = left;
+  sonare::test::process_stereo(processor, left, right);
+  const double expected = sample_rate / kStepRateHz;
+  double previous = 0.0;
+  double last_jump = -1.0;
+  double total = 0.0;
+  int gaps = 0;
+  // Skip the first tenth of a second: the line is still filling.
+  for (std::size_t i = count / 10; i < count; ++i) {
+    const double delay = static_cast<double>(i) - static_cast<double>(left[i]) / kStepRampSlope;
+    if (i > count / 10 && std::fabs(delay - previous) > kStepMovedSamples) {
+      // A jump landing on a crest of the LFO is under the noise floor, and the
+      // gap across it is a double one, not a period.
+      if (last_jump >= 0.0 && static_cast<double>(i) - last_jump < 1.5 * expected) {
+        total += static_cast<double>(i) - last_jump;
+        ++gaps;
+      }
+      last_jump = static_cast<double>(i);
+    }
+    previous = delay;
+  }
+  return gaps > 0 ? total / gaps / sample_rate : 0.0;
 }
 
 // --- lofi hold --------------------------------------------------------------
@@ -845,6 +936,42 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
         "the flanger pre-filter corner lands on one frequency at both rates, asked for " + asked);
   }
 
+  // --- chorus feedback: the comb's tooth spacing, in hertz -------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    const double asked_hz = 1000.0 / static_cast<double>(kCombDelayMs);
+    for (std::size_t r = 0; r < 2; ++r) {
+      std::size_t teeth = 0;
+      measured[r] = comb_spacing_hz(rates[r], &teeth);
+      WARN("chorus comb spacing" << at_rate(rates[r]) << ": " << measured[r] << " Hz over " << teeth
+                                 << " teeth");
+      tally.at_least(static_cast<double>(teeth), 8.0,
+                     "the chorus feedback comb" + at_rate(rates[r]) + ", has teeth to read");
+      tally.within(measured[r], asked_hz, kCombTolerance,
+                   "the chorus feedback comb spacing" + at_rate(rates[r]) +
+                       ", against the reciprocal of the loop delay");
+    }
+    tally.within(measured[0], measured[1], kCombTolerance,
+                 "the chorus feedback comb has one spacing at both rates");
+  }
+
+  // --- flanger step rate: the hold period, in seconds ------------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    const double asked_s = 1.0 / static_cast<double>(kStepRateHz);
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = step_period_s(rates[r]);
+      WARN("flanger step period" << at_rate(rates[r]) << ": " << measured[r] << " s");
+      tally.at_least(measured[r], 1e-4,
+                     "the flanger hold" + at_rate(rates[r]) + ", has steps to read");
+      tally.within(measured[r], asked_s, kStepTolerance,
+                   "the flanger step period" + at_rate(rates[r]) +
+                       ", against the reciprocal of the step rate");
+    }
+    tally.within(measured[0], measured[1], kStepTolerance,
+                 "the flanger step period is the same length in seconds at both rates");
+  }
+
   // --- lofi: the first aperture null, in hertz -------------------------------
   for (const float hold : kHoldHz) {
     const std::string asked = with_value("hold", hold);
@@ -955,5 +1082,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   }
 
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 87);
+  REQUIRE(tally.count() >= 97);
 }

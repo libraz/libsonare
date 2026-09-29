@@ -34,6 +34,11 @@ struct FlangerConfig {
   /// engages it; a non-positive corner is out of domain and leaves it off.
   float pre_filter_hz = 0.0f;
   PreFilterMode pre_filter_mode = PreFilterMode::kOff;
+  /// Phase of the right LFO ahead of the left, in degrees, clamped to [0, 180].
+  float phase_deg = 180.0f;
+  /// Rate at which the LFO output is sampled and held, in hertz; zero leaves the
+  /// LFO continuous.
+  float step_rate_hz = 0.0f;
 };
 
 class Flanger : public rt::ProcessorBase {
@@ -51,8 +56,9 @@ class Flanger : public rt::ProcessorBase {
   //   3 = feedback (clamped to [-0.95, 0.95] in process(); the sign is carried)
   //   4 = dry_wet
   //   5 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
-  // Note: `pre_filter_mode` is not automatable -- it selects a structure rather
-  // than scaling one, and changing it needs prepare().
+  //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
+  //   7 = step_rate_hz (clamped to >= 0; 0 = continuous LFO)
+  //   8 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
@@ -70,6 +76,10 @@ class Flanger : public rt::ProcessorBase {
   /// instance: what the measurement calls one section is one design.
   std::array<PreFilter, 2> pre_filters_;
   std::array<float, 2> feedback_{{0.0f, 0.0f}};
+  /// Position within the current hold in turns of the step rate, and the held
+  /// [L, R] LFO values. A position of 1 or more latches on the next sample.
+  double step_phase_ = 1.0;
+  std::array<float, 2> held_{{0.0f, 0.0f}};
   /// Set by process() when a delay tap came back non-finite, cleared by
   /// discard_non_finite(). The poison is resident in the line rather than in a
   /// cell -- a tap reads it for a sample or two per lap and the cell is finite

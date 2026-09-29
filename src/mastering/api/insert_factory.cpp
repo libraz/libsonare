@@ -846,6 +846,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // Enum selectors go through the field overlay, which refuses a fractional
     // value rather than rounding it onto a neighbouring mode.
     detail::read_field(params, "preFilterMode", config.pre_filter_mode);
+    config.feedback = f(params, "feedback", config.feedback);
+    config.phase_deg = f(params, "phaseDeg", config.phase_deg);
     return make<effects::modulation::Chorus>(config);
   }
   if (name == "effects.modulation.ensemble") {
@@ -868,6 +870,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz);
     detail::read_field(params, "preFilterMode", config.pre_filter_mode);
+    config.phase_deg = f(params, "phaseDeg", config.phase_deg);
+    config.step_rate_hz = f(params, "stepRateHz", config.step_rate_hz);
     return make<effects::modulation::Flanger>(config);
   }
   if (name == "effects.modulation.phaser") {

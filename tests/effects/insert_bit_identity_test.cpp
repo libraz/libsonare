@@ -127,7 +127,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.chorus", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.chorus",
-        R"({"rateHz":0.8,"depthMs":6.0,"centerDelayMs":14.0,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0})");
+        R"({"rateHz":0.8,"depthMs":6.0,"centerDelayMs":14.0,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0,"feedback":0.0,"phaseDeg":90.0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -138,7 +138,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.flanger", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.flanger",
-        R"({"rateHz":0.25,"depthMs":2.0,"centerDelayMs":3.0,"feedback":0.3,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0})");
+        R"({"rateHz":0.25,"depthMs":2.0,"centerDelayMs":3.0,"feedback":0.3,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0,"phaseDeg":180.0,"stepRateHz":0.0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);

@@ -13,12 +13,16 @@ constexpr float kMaxFlangerDelayMs = 100.0f;
 // Minimum delay-buffer length so the buffer is never smaller than a typical
 // flanger range even for tiny configured delays.
 constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
+constexpr float kMaxPhaseDeg = 180.0f;
+constexpr double kDegreesPerTurn = 360.0;
+constexpr unsigned int kPreFilterModeCount = 3;
 
 }  // namespace
 
 Flanger::Flanger(FlangerConfig config) : config_(config) {
   config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxFlangerDelayMs);
   config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxFlangerDelayMs);
+  config_.phase_deg = std::clamp(config_.phase_deg, 0.0f, kMaxPhaseDeg);
 }
 
 void Flanger::prepare(double sample_rate, int) {
@@ -57,13 +61,28 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const float fb = std::clamp(config_.feedback, -0.95f, 0.95f);
+  // Derived from the rate in hertz each block, so the hold survives a rate change.
+  const double step_per_sample =
+      static_cast<double>(std::max(0.0f, config_.step_rate_hz)) / sample_rate_;
+  if (step_per_sample <= 0.0) step_phase_ = 1.0;
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
     const float in_r = right[i];
-    const float delay_l = (config_.center_delay_ms + config_.depth_ms * lfos_[0].process()) *
-                          0.001f * static_cast<float>(sample_rate_);
-    const float delay_r = (config_.center_delay_ms + config_.depth_ms * lfos_[1].process()) *
-                          0.001f * static_cast<float>(sample_rate_);
+    float lfo_l = lfos_[0].process();
+    float lfo_r = lfos_[1].process();
+    if (step_per_sample > 0.0) {
+      if (step_phase_ >= 1.0) {
+        step_phase_ -= std::floor(step_phase_);
+        held_ = {lfo_l, lfo_r};
+      }
+      step_phase_ += step_per_sample;
+      lfo_l = held_[0];
+      lfo_r = held_[1];
+    }
+    const float delay_l = (config_.center_delay_ms + config_.depth_ms * lfo_l) * 0.001f *
+                          static_cast<float>(sample_rate_);
+    const float delay_r = (config_.center_delay_ms + config_.depth_ms * lfo_r) * 0.001f *
+                          static_cast<float>(sample_rate_);
     // The section sits in front of the delay; the loop closes around the delay
     // alone, so the return re-enters after the filter rather than through it.
     const float wet_l =
@@ -135,6 +154,27 @@ bool Flanger::set_parameter(unsigned int param_id, float value) {
       }
       return true;
     }
+    case 6:
+      config_.phase_deg = std::clamp(value, 0.0f, kMaxPhaseDeg);
+      lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+      return true;
+    case 7:
+      config_.step_rate_hz = std::max(0.0f, value);
+      return true;
+    case 8: {
+      // An unnamed mode is refused rather than rounded onto a neighbour.
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(kPreFilterModeCount)) {
+        return false;
+      }
+      config_.pre_filter_mode = static_cast<PreFilterMode>(static_cast<int>(value));
+      for (auto& pre_filter : pre_filters_) {
+        const float carried = pre_filter.state();
+        pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
+        pre_filter.set_state(carried);
+      }
+      return true;
+    }
     default:
       return false;
   }
@@ -144,12 +184,13 @@ bool Flanger::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
   // delay lines are pre-sized to kMaxFlangerDelayMs at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 5;
+  return param_id <= 8;
 }
 
 std::vector<rt::ParamDescriptor> Flanger::parameter_descriptors() const {
-  return {{"rateHz", 0},   {"depthMs", 1}, {"centerDelayMs", 2},
-          {"feedback", 3}, {"dryWet", 4},  {"preFilterHz", 5}};
+  return {{"rateHz", 0},   {"depthMs", 1},    {"centerDelayMs", 2},
+          {"feedback", 3}, {"dryWet", 4},     {"preFilterHz", 5},
+          {"phaseDeg", 6}, {"stepRateHz", 7}, {"preFilterMode", 8}};
 }
 
 void Flanger::reset() {
@@ -160,7 +201,9 @@ void Flanger::reset() {
     pre_filter.reset();
   }
   lfos_[0].reset(0.0);
-  lfos_[1].reset(0.5);
+  lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+  step_phase_ = 1.0;
+  held_ = {0.0f, 0.0f};
   feedback_ = {0.0f, 0.0f};
   feedback_non_finite_ = false;
 }

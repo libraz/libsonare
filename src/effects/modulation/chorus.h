@@ -75,6 +75,11 @@ struct ChorusConfig {
   /// engages it; a non-positive corner is out of domain and leaves it off.
   float pre_filter_hz = 0.0f;
   PreFilterMode pre_filter_mode = PreFilterMode::kOff;
+  /// Gain of the return from the delay's output, through a one-pole low-pass at
+  /// 6 kHz, to its input. Clamped to +-0.95 in process(); zero leaves the path out.
+  float feedback = 0.0f;
+  /// Phase of the right LFO ahead of the left, in degrees, clamped to [0, 180].
+  float phase_deg = 90.0f;
 };
 
 class Chorus : public rt::ProcessorBase {
@@ -91,8 +96,9 @@ class Chorus : public rt::ProcessorBase {
   //   2 = center_delay_ms
   //   3 = dry_wet
   //   4 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
-  // Note: `pre_filter_mode` is not automatable -- it selects a structure rather
-  // than scaling one, and changing it needs prepare().
+  //   5 = feedback (clamped to [-0.95, 0.95] in process(); the sign is carried)
+  //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
+  //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
@@ -109,6 +115,8 @@ class Chorus : public rt::ProcessorBase {
   /// [L, R] pre-filter sections. One per channel, never shared with another
   /// instance: what the measurement calls one section is one design.
   std::array<PreFilter, 2> pre_filters_;
+  /// [L, R] low-pass sections in the feedback return; their state is the return.
+  std::array<PreFilter, 2> feedback_filters_;
 };
 
 }  // namespace sonare::effects::modulation

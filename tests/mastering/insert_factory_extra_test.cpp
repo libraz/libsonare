@@ -209,11 +209,15 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
   // Constructing with explicit params must not throw and must yield a processor;
   // the numeric mapping is validated indirectly via the set_parameter contract
   // test, here we just guard the param-reading code path.
-  REQUIRE(make_insert("effects.modulation.chorus",
-                      R"({"rateHz":1.2,"depthMs":4,"centerDelayMs":10,"dryWet":0.4})") != nullptr);
   REQUIRE(
-      make_insert("effects.modulation.flanger",
-                  R"({"rateHz":0.5,"depthMs":1,"centerDelayMs":2,"feedback":0.4,"dryWet":0.6})") !=
+      make_insert(
+          "effects.modulation.chorus",
+          R"({"rateHz":1.2,"depthMs":4,"centerDelayMs":10,"dryWet":0.4,"feedback":0.5,"phaseDeg":45})") !=
+      nullptr);
+  REQUIRE(
+      make_insert(
+          "effects.modulation.flanger",
+          R"({"rateHz":0.5,"depthMs":1,"centerDelayMs":2,"feedback":0.4,"dryWet":0.6,"phaseDeg":90,"stepRateHz":300})") !=
       nullptr);
   REQUIRE(make_insert("effects.modulation.phaser",
                       R"({"rateHz":0.3,"minHz":200,"maxHz":2000,"stages":6,"dryWet":0.5})") !=
