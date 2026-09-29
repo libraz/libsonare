@@ -587,14 +587,10 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
     }
   }
   // Master keys, aligned to the master input, for deliver_master_sidechains().
-  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_acquire);
-  for (size_t i = 0; i < binding_count; ++i) {
-    const SidechainBinding& binding = sidechain_bindings_[i];
-    if (binding.target_kind.load(std::memory_order_acquire) !=
-        static_cast<uint8_t>(SidechainTargetKind::Master)) {
-      continue;
-    }
-    const size_t slot = binding.key_slot.load(std::memory_order_acquire);
+  for (size_t i = 0; i < audio_sidechains_.count; ++i) {
+    const SidechainBinding& binding = audio_sidechains_.bindings[i];
+    if (binding.target_kind != static_cast<uint8_t>(SidechainTargetKind::Master)) continue;
+    const size_t slot = binding.key_slot;
     std::array<const float*, kMaxLaneChannels> planes{};
     const int key_channels = build_keyed_input(i, lane_channels, num_samples, planes, true);
     master_key_frames_[slot] = key_channels > 0 ? num_samples : 0;

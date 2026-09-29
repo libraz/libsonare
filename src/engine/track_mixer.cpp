@@ -186,26 +186,23 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     return std::any_of(buses.begin(), buses.end(),
                        [bus_id](const TrackBusConfig& bus) { return bus.bus_id == bus_id; });
   };
-  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  const size_t binding_count = sidechains_.count;
   std::array<bool, kMaxSidechainBindings> drop{};
   std::array<KeyEdge, kMaxSidechainBindings> key_edges{};
   size_t key_edge_count = 0;
   for (size_t i = 0; i < binding_count; ++i) {
-    const SidechainBinding& binding = sidechain_bindings_[i];
-    const auto target_kind =
-        static_cast<SidechainTargetKind>(binding.target_kind.load(std::memory_order_relaxed));
+    const SidechainBinding& binding = sidechains_.bindings[i];
+    const auto target_kind = static_cast<SidechainTargetKind>(binding.target_kind);
     if (target_kind == SidechainTargetKind::Lane) continue;
-    const uint32_t target_id = binding.target_id.load(std::memory_order_relaxed);
-    const uint32_t source_id = binding.source_id.load(std::memory_order_relaxed);
-    const bool bus_source = binding.source_kind.load(std::memory_order_relaxed) ==
-                            static_cast<uint8_t>(SidechainSourceKind::Bus);
+    const uint32_t target_id = binding.target_id;
+    const uint32_t source_id = binding.source_id;
+    const bool bus_source = binding.source_kind == static_cast<uint8_t>(SidechainSourceKind::Bus);
     if (bus_source && !declared(source_id)) drop[i] = true;
     if (target_kind == SidechainTargetKind::Bus) {
       const int previous = configured_bus_index(target_id);
       const mixing::FxBus* fx =
           previous >= 0 ? bus_states_[static_cast<size_t>(previous)].bus.get() : nullptr;
-      if (!declared(target_id) || fx == nullptr ||
-          binding.insert_index.load(std::memory_order_relaxed) >= fx->num_inserts()) {
+      if (!declared(target_id) || fx == nullptr || binding.insert_index >= fx->num_inserts()) {
         drop[i] = true;
       }
       if (!drop[i] && bus_source) key_edges[key_edge_count++] = KeyEdge{source_id, target_id};
@@ -579,12 +576,10 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   state->bus = std::move(fx);
   // Keys stay on (bus, insert index); an index the new chain lacks is dropped.
   const size_t insert_count = state->bus->num_inserts();
-  for (size_t i = sidechain_binding_count_.load(std::memory_order_relaxed); i > 0; --i) {
-    const SidechainBinding& binding = sidechain_bindings_[i - 1];
-    if (binding.target_kind.load(std::memory_order_relaxed) ==
-            static_cast<uint8_t>(SidechainTargetKind::Bus) &&
-        binding.target_id.load(std::memory_order_relaxed) == bus_id &&
-        binding.insert_index.load(std::memory_order_relaxed) >= insert_count) {
+  for (size_t i = sidechains_.count; i > 0; --i) {
+    const SidechainBinding& binding = sidechains_.bindings[i - 1];
+    if (binding.target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus) &&
+        binding.target_id == bus_id && binding.insert_index >= insert_count) {
       remove_sidechain_binding(i - 1);
     }
   }
@@ -921,18 +916,14 @@ bool TrackMixerRuntime::validate_bus_graph(const std::vector<TrackBusConfig>& bu
 size_t TrackMixerRuntime::collect_key_edges(std::array<KeyEdge, kMaxSidechainBindings>& out,
                                             size_t skip) const noexcept {
   size_t edges = 0;
-  const size_t count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  const size_t count = sidechains_.count;
   for (size_t i = 0; i < count; ++i) {
-    const SidechainBinding& binding = sidechain_bindings_[i];
-    if (i == skip ||
-        binding.target_kind.load(std::memory_order_relaxed) !=
-            static_cast<uint8_t>(SidechainTargetKind::Bus) ||
-        binding.source_kind.load(std::memory_order_relaxed) !=
-            static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+    const SidechainBinding& binding = sidechains_.bindings[i];
+    if (i == skip || binding.target_kind != static_cast<uint8_t>(SidechainTargetKind::Bus) ||
+        binding.source_kind != static_cast<uint8_t>(SidechainSourceKind::Bus)) {
       continue;
     }
-    out[edges++] = KeyEdge{binding.source_id.load(std::memory_order_relaxed),
-                           binding.target_id.load(std::memory_order_relaxed)};
+    out[edges++] = KeyEdge{binding.source_id, binding.target_id};
   }
   return edges;
 }
@@ -947,7 +938,7 @@ void TrackMixerRuntime::build_routes(const std::vector<TrackBusConfig>& buses,
     }
     return -1;
   };
-  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  const size_t binding_count = sidechains_.count;
   *routes = {};
   for (size_t bus_index = 0; bus_index < buses.size(); ++bus_index) {
     const TrackBusConfig& config = buses[bus_index];
@@ -960,12 +951,11 @@ void TrackMixerRuntime::build_routes(const std::vector<TrackBusConfig>& buses,
           route.any_pre_send || config.sends[send_index].timing == mixing::SendTiming::PreFader;
     }
     for (size_t i = 0; i < binding_count; ++i) {
-      const SidechainBinding& binding = sidechain_bindings_[i];
+      const SidechainBinding& binding = sidechains_.bindings[i];
       route.key_source =
-          route.key_source || (!skip[i] &&
-                               binding.source_kind.load(std::memory_order_relaxed) ==
-                                   static_cast<uint8_t>(SidechainSourceKind::Bus) &&
-                               binding.source_id.load(std::memory_order_relaxed) == config.bus_id);
+          route.key_source ||
+          (!skip[i] && binding.source_kind == static_cast<uint8_t>(SidechainSourceKind::Bus) &&
+           binding.source_id == config.bus_id);
     }
   }
 }
@@ -1278,13 +1268,12 @@ bool TrackMixerRuntime::plan_pdc(const std::vector<TrackLaneConfig>& lanes,
   std::array<int, kMaxBusLanes> bus_out{};
   bus_in.fill(max_strip_q8);
   int master_in = max_strip_q8;
-  const size_t binding_count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  const size_t binding_count = sidechains_.count;
   const auto live_bus_key = [&](size_t i, uint32_t source_bus) {
-    const SidechainBinding& binding = sidechain_bindings_[i];
+    const SidechainBinding& binding = sidechains_.bindings[i];
     return !view.skip_binding[i] &&
-           binding.source_kind.load(std::memory_order_relaxed) ==
-               static_cast<uint8_t>(SidechainSourceKind::Bus) &&
-           binding.source_id.load(std::memory_order_relaxed) == source_bus;
+           binding.source_kind == static_cast<uint8_t>(SidechainSourceKind::Bus) &&
+           binding.source_id == source_bus;
   };
   for (size_t order_index = 0; order_index < bus_count; ++order_index) {
     const size_t bus_index = view.order[order_index];
@@ -1301,12 +1290,12 @@ bool TrackMixerRuntime::plan_pdc(const std::vector<TrackLaneConfig>& lanes,
     }
     for (size_t i = 0; i < binding_count; ++i) {
       if (!live_bus_key(i, buses[bus_index].bus_id)) continue;
-      const SidechainBinding& binding = sidechain_bindings_[i];
-      const auto target_kind = binding.target_kind.load(std::memory_order_relaxed);
+      const SidechainBinding& binding = sidechains_.bindings[i];
+      const auto target_kind = binding.target_kind;
       if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Master)) {
         master_in = std::max(master_in, out);
       } else if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
-        const int target = index_of(binding.target_id.load(std::memory_order_relaxed));
+        const int target = index_of(binding.target_id);
         if (target >= 0) {
           int& in = bus_in[static_cast<size_t>(target)];
           in = std::max(in, out);
@@ -1331,22 +1320,21 @@ bool TrackMixerRuntime::plan_pdc(const std::vector<TrackLaneConfig>& lanes,
   // Key edges: in(target) - L from a track, in(target) - out(source) from a bus.
   for (size_t i = 0; i < binding_count; ++i) {
     if (view.skip_binding[i]) continue;
-    const SidechainBinding& binding = sidechain_bindings_[i];
-    const auto target_kind = binding.target_kind.load(std::memory_order_relaxed);
+    const SidechainBinding& binding = sidechains_.bindings[i];
+    const auto target_kind = binding.target_kind;
     if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Lane)) continue;
     int target = -1;
     if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
-      target = index_of(binding.target_id.load(std::memory_order_relaxed));
+      target = index_of(binding.target_id);
       if (target < 0) continue;
     }
     int source_out = max_strip_q8;
-    if (binding.source_kind.load(std::memory_order_relaxed) ==
-        static_cast<uint8_t>(SidechainSourceKind::Bus)) {
-      const int source = index_of(binding.source_id.load(std::memory_order_relaxed));
+    if (binding.source_kind == static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+      const int source = index_of(binding.source_id);
       if (source < 0) continue;
       source_out = bus_out[static_cast<size_t>(source)];
     }
-    plan->key_q8[binding.key_slot.load(std::memory_order_relaxed)] = input_of(target) - source_out;
+    plan->key_q8[binding.key_slot] = input_of(target) - source_out;
   }
   // What the engine advertises to the host: the master input's arrival.
   plan->latency_q8 = master_in;

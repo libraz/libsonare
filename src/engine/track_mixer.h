@@ -23,6 +23,7 @@
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
+#include "rt/seqlock_cell.h"
 
 namespace sonare::engine {
 
@@ -138,7 +139,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
   bool set_buses(std::vector<TrackBusConfig> buses);
-  void acquire_lanes() noexcept { lanes_.acquire(); }
+  /// AUDIO thread: acquires this block's lane config and sidechain binding table.
+  void acquire_lanes() noexcept {
+    lanes_.acquire();
+    sidechains_reader_.try_load_into(&audio_sidechains_);
+  }
   bool active() const noexcept;
   size_t lane_count() const noexcept;
   /// AUDIO thread: copies unique non-zero lane track ids into @p out. Call
@@ -536,14 +541,20 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // (bus and master targets only) and travels with the binding when the table
   // is compacted.
   struct SidechainBinding {
-    std::atomic<uint32_t> target_id{0};
-    std::atomic<unsigned int> insert_index{0};
-    std::atomic<uint32_t> source_id{0};
-    std::atomic<uint8_t> target_kind{0};
-    std::atomic<uint8_t> source_kind{0};
-    std::atomic<uint8_t> key_slot{0};
+    uint32_t target_id = 0;
+    unsigned int insert_index = 0;
+    uint32_t source_id = 0;
+    uint8_t target_kind = 0;
+    uint8_t source_kind = 0;
+    uint8_t key_slot = 0;
   };
   static constexpr size_t kMaxSidechainBindings = 32;
+  // The table crosses to the audio thread as one seqlock snapshot, so an edit
+  // that rewrites several slots (compaction) is never observed half-applied.
+  struct SidechainTable {
+    std::array<SidechainBinding, kMaxSidechainBindings> bindings{};
+    size_t count = 0;
+  };
   // One bus edge towards another bus: its output (slot 0) or a send (1 + index).
   static constexpr size_t kBusEdgesPerBus = 1 + mixing::ChannelStrip::kMaxSends;
   // Resolved routing of one configured bus, rebuilt on the control thread.
@@ -639,6 +650,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool apply_pdc(const PdcPlan& plan) noexcept;
   // Removes binding @p index (swap with the last entry). Control thread.
   void remove_sidechain_binding(size_t index) noexcept;
+  // Hands the control table to the audio thread as one snapshot. Every edit of
+  // sidechains_ ends here.
+  void publish_sidechains() noexcept { sidechains_published_.store(sidechains_); }
   void prune_lane_sidechains(uint32_t track_id, size_t insert_count) noexcept;
   // Adds or replaces the bus/master binding (kind, target, insert).
   bool store_keyed_binding(SidechainTargetKind target_kind, uint32_t target_id,
@@ -850,14 +864,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // every embedded RealtimeEngine by the full 13-bit selector namespace while
   // still allowing the audio thread to perform allocation-free lookups.
   std::vector<BusInsertSelectorBinding> bus_insert_selectors_;
-  std::array<SidechainBinding, kMaxSidechainBindings> sidechain_bindings_{};
-  // Written by the control thread in set_lane_sidechain(), read on the audio
-  // thread in deliver_lane_sidechains()/snapshot_sidechain_key(). Acquire/release
-  // so the count is published only after the binding it indexes is fully
-  // written, and an audio-thread reader that observes the new count also sees
-  // that binding. Each field is atomic because an audio reader may already hold
-  // the previous count while the control thread updates or compacts the table.
-  std::atomic<size_t> sidechain_binding_count_{0};
+  // Control-thread binding table; the audio thread never reads it.
+  SidechainTable sidechains_{};
+  rt::SeqlockCell<SidechainTable> sidechains_published_{};
+  // Audio-thread copy, refreshed in acquire_lanes() so one block reads one
+  // table. A torn read keeps the previous block's table.
+  rt::SeqlockCell<SidechainTable>::Reader sidechains_reader_ = sidechains_published_.reader();
+  SidechainTable audio_sidechains_{};
   // Fixed-capacity insert-automation slot table (lane + bus). Prepared once in
   // prepare(); claimed/advanced on the audio thread with no allocation.
   std::array<InsertAutoSlot, kMaxInsertAutomations> insert_auto_slots_{};

@@ -2,6 +2,8 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -193,12 +195,10 @@ TEST_CASE("TrackMixerRuntime bus pan setters run concurrently with rendering",
   REQUIRE_FALSE(control_failed.load());
 }
 
-// set_lane_sidechain (control thread) publishes the binding count through an
-// atomic release store only after the binding it indexes is written, and the
-// audio thread's deliver_lane_sidechains()/snapshot_sidechain_key() read the
-// count with an acquire load. Toggling a binding on/off while the render thread
-// spins must stay data-race-free (ThreadSanitizer) and never observe a count
-// that outruns its binding.
+// set_lane_sidechain (control thread) publishes the whole binding table through
+// a seqlock, and the audio thread takes one copy of it per block. Toggling a
+// binding on/off while the render thread spins must stay data-race-free
+// (ThreadSanitizer) and never observe a count that outruns its binding.
 TEST_CASE("TrackMixerRuntime sidechain binding toggles run concurrently with rendering",
           "[engine][track_mixer][concurrency]") {
   constexpr int kBlock = 128;
@@ -311,4 +311,161 @@ TEST_CASE("TrackMixerRuntime resolves control-thread strips without audio lane s
   REQUIRE(mixer.bind_track_strip(20, nullptr));
   REQUIRE_FALSE(mixer.set_track_pan(20, 0.0f));
   REQUIRE_FALSE(mixer.resolve_track_insert_param(20, 0, "gain", &lane_index, &param_id));
+}
+
+namespace {
+
+// Records the first key sample each block delivered (NaN when unkeyed) and can
+// run a hook from inside its own process() -- a point in the middle of the
+// mixer's per-block pass over the binding table.
+class KeyProbeProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {
+    observed_ = pending_;
+    pending_ = std::numeric_limits<float>::quiet_NaN();
+    if (hook_) {
+      auto hook = std::move(hook_);
+      hook_ = nullptr;
+      hook();
+    }
+  }
+  void reset() override {}
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override {
+    pending_ = (num_channels > 0 && num_samples > 0 && channels[0] != nullptr)
+                   ? channels[0][0]
+                   : std::numeric_limits<float>::quiet_NaN();
+  }
+  void clear_sidechain() override { pending_ = std::numeric_limits<float>::quiet_NaN(); }
+
+  float observed() const noexcept { return observed_; }
+  void arm(std::function<void()> hook) { hook_ = std::move(hook); }
+
+ private:
+  float pending_ = std::numeric_limits<float>::quiet_NaN();
+  float observed_ = std::numeric_limits<float>::quiet_NaN();
+  std::function<void()> hook_;
+};
+
+bool keyed_by(float observed, float expected) noexcept {
+  return std::isfinite(observed) && std::fabs(observed - expected) < 1e-6f;
+}
+
+// Three constant-valued source lanes (20/30/40) render first; lanes 10/11/12
+// each key insert 0 from one of them, so a key's value names its source.
+struct KeyedMixerFixture {
+  static constexpr int kBlock = 64;
+  std::array<std::array<float, kBlock>, 3> source{};
+  std::array<const float*, 3> source_planes{};
+  sonare::engine::ClipPlayer player;
+  sonare::engine::TrackMixerRuntime mixer;
+  std::array<sonare::mixing::ChannelStrip, 3> strips;
+  std::array<KeyProbeProcessor*, 3> probes{};
+
+  KeyedMixerFixture() {
+    const std::array<float, 3> values{0.2f, 0.3f, 0.4f};
+    std::vector<sonare::engine::ClipSchedule> clips;
+    for (size_t i = 0; i < 3; ++i) {
+      source[i].fill(values[i]);
+      source_planes[i] = source[i].data();
+      clips.push_back(clip_for_track(static_cast<uint32_t>(i + 1),
+                                     static_cast<uint32_t>(20 + 10 * i), &source_planes[i], 1,
+                                     kBlock));
+    }
+    player.prepare(48000.0, kBlock);
+    player.set_clips(clips);
+    mixer.prepare(48000.0, kBlock);
+  }
+
+  bool configure() {
+    if (!mixer.set_track_lanes({{20}, {30}, {40}, {10}, {11}, {12}})) return false;
+    for (size_t i = 0; i < 3; ++i) {
+      auto probe = std::make_unique<KeyProbeProcessor>();
+      probes[i] = probe.get();
+      strips[i].add_pre_insert(std::move(probe));
+      const auto keyed = static_cast<uint32_t>(10 + i);
+      if (!mixer.bind_track_strip(keyed, &strips[i])) return false;
+      if (!mixer.set_lane_sidechain(keyed, 0, static_cast<uint32_t>(20 + 10 * i))) return false;
+    }
+    return true;
+  }
+
+  bool render() {
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    return mixer.render_clips(player, out, 2, kBlock, 0);
+  }
+};
+
+}  // namespace
+
+// Removing binding 1 of 3 compacts binding 2 into its slot. Landing that removal
+// in the middle of a block (from lane 10's insert, after lane 10's key and before
+// lane 11's) must leave the whole block on the table it started with; the next
+// block sees the compacted table whole.
+TEST_CASE("TrackMixerRuntime sidechain removal publishes the compacted table as one snapshot",
+          "[engine][track_mixer][concurrency]") {
+  KeyedMixerFixture fixture;
+  REQUIRE(fixture.configure());
+
+  REQUIRE(fixture.render());
+  CHECK(keyed_by(fixture.probes[0]->observed(), 0.2f));
+  CHECK(keyed_by(fixture.probes[1]->observed(), 0.3f));
+  CHECK(keyed_by(fixture.probes[2]->observed(), 0.4f));
+
+  bool removed = false;
+  fixture.probes[0]->arm([&] { removed = fixture.mixer.set_lane_sidechain(11, 0, 0); });
+  REQUIRE(fixture.render());
+  REQUIRE(removed);
+  CHECK(keyed_by(fixture.probes[0]->observed(), 0.2f));
+  CHECK(keyed_by(fixture.probes[1]->observed(), 0.3f));
+  CHECK(keyed_by(fixture.probes[2]->observed(), 0.4f));
+
+  REQUIRE(fixture.render());
+  CHECK(keyed_by(fixture.probes[0]->observed(), 0.2f));
+  CHECK(std::isnan(fixture.probes[1]->observed()));
+  CHECK(keyed_by(fixture.probes[2]->observed(), 0.4f));
+}
+
+// Removing and re-adding a non-last binding compacts the table on every pass
+// while the render thread runs. Every key a probe receives must come from its
+// own source; a binding assembled from two table states would key a lane from
+// another lane's source.
+TEST_CASE("TrackMixerRuntime sidechain compaction never misroutes a key under rendering",
+          "[engine][track_mixer][concurrency]") {
+  constexpr int kControlIterations = 4000;
+  constexpr int kMaxBlocks = 400000;
+  KeyedMixerFixture fixture;
+  REQUIRE(fixture.configure());
+
+  std::atomic<bool> control_done{false};
+  std::atomic<bool> misrouted{false};
+  std::thread audio([&] {
+    const std::array<float, 3> expected{0.2f, 0.3f, 0.4f};
+    int blocks = 0;
+    while (!control_done.load(std::memory_order_acquire) && blocks < kMaxBlocks) {
+      if (!fixture.render()) {
+        misrouted.store(true, std::memory_order_relaxed);
+        break;
+      }
+      for (size_t i = 0; i < 3; ++i) {
+        const float observed = fixture.probes[i]->observed();
+        if (!std::isnan(observed) && !keyed_by(observed, expected[i])) {
+          misrouted.store(true, std::memory_order_relaxed);
+        }
+      }
+      ++blocks;
+    }
+  });
+
+  for (int i = 0; i < kControlIterations; ++i) {
+    const auto keyed = static_cast<uint32_t>(10 + (i % 2));
+    fixture.mixer.set_lane_sidechain(keyed, 0, 0);
+    fixture.mixer.set_lane_sidechain(keyed, 0, keyed == 10 ? 20 : 30);
+  }
+  control_done.store(true, std::memory_order_release);
+  audio.join();
+
+  REQUIRE_FALSE(misrouted.load());
 }
