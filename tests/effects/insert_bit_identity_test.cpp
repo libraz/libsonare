@@ -81,6 +81,8 @@ constexpr float kRotaryRms = 0.176608101f;
 constexpr float kRotaryCentroidHz = 249.350067f;
 constexpr float kChorusRms = 0.136745155f;
 constexpr float kChorusCentroidHz = 241.363144f;
+constexpr float kEnsembleRms = 0.117056258f;
+constexpr float kEnsembleCentroidHz = 285.598907f;
 constexpr float kFlangerRms = 0.150896922f;
 constexpr float kFlangerCentroidHz = 275.08844f;
 constexpr float kStereoDelayRms = 0.121026672f;
@@ -110,6 +112,17 @@ TEST_CASE(
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
     require_pinned(s, kPhaserRms, kPhaserCentroidHz);
+  }
+
+  SECTION("effects.modulation.ensemble") {
+    const RenderResult empty = render("effects.modulation.ensemble", "{}");
+    const RenderResult explicit_defaults = render(
+        "effects.modulation.ensemble",
+        R"({"rateSlowHz":0.6,"rateFastHz":5.5,"depthSlowMs":1.8,"depthFastMs":0.25,"centerDelayMs":5.0,"toneHz":6500.0,"dryWet":0.5,"rateHz":0.0,"preDelayDevMs":0.0,"depthDev":0.0,"panDev":0.0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    const Scalars s = measure(empty.left);
+    require_pinned(s, kEnsembleRms, kEnsembleCentroidHz);
   }
 
   SECTION("effects.modulation.rotary") {

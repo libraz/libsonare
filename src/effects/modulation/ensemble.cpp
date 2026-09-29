@@ -14,6 +14,7 @@ using constants::kTwoPi;
 namespace {
 constexpr float kMaxDepthMs = 10.0f;
 constexpr float kMaxCenterDelayMs = 25.0f;
+constexpr float kMaxPreDelayDevMs = 20.0f;
 constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms, matching Chorus
 }  // namespace
 
@@ -23,6 +24,24 @@ Ensemble::Ensemble(EnsembleConfig config) : config_(config) {
   config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxCenterDelayMs);
   config_.tone_hz = std::clamp(config_.tone_hz, 500.0f, 20000.0f);
   config_.dry_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  config_.rate_hz = std::max(0.0f, config_.rate_hz);
+  config_.pre_delay_dev_ms = std::clamp(config_.pre_delay_dev_ms, 0.0f, kMaxPreDelayDevMs);
+  config_.depth_dev = std::clamp(config_.depth_dev, -1.0f, 1.0f);
+  config_.pan_dev = std::clamp(config_.pan_dev, 0.0f, 1.0f);
+}
+
+void Ensemble::apply_rates() noexcept {
+  float slow = config_.rate_slow_hz;
+  float fast = config_.rate_fast_hz;
+  if (config_.rate_hz > 0.0f) {
+    const EnsembleConfig defaults;
+    const float ratio = config_.rate_slow_hz > 0.0f ? config_.rate_fast_hz / config_.rate_slow_hz
+                                                    : defaults.rate_fast_hz / defaults.rate_slow_hz;
+    slow = config_.rate_hz;
+    fast = config_.rate_hz * ratio;
+  }
+  for (auto& lfo : slow_lfos_) lfo.set_rate_hz(slow);
+  for (auto& lfo : fast_lfos_) lfo.set_rate_hz(fast);
 }
 
 void Ensemble::prepare(double sample_rate, int) {
@@ -36,9 +55,8 @@ void Ensemble::prepare(double sample_rate, int) {
   for (size_t tap = 0; tap < 3; ++tap) {
     slow_lfos_[tap].prepare(sample_rate_);
     fast_lfos_[tap].prepare(sample_rate_);
-    slow_lfos_[tap].set_rate_hz(config_.rate_slow_hz);
-    fast_lfos_[tap].set_rate_hz(config_.rate_fast_hz);
   }
+  apply_rates();
   reset();
 }
 
@@ -80,12 +98,19 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
     float wet_l = 0.0f;
     float wet_r = 0.0f;
     for (size_t tap = 0; tap < 3; ++tap) {
-      const float sweep = config_.depth_slow_ms * slow[tap] + config_.depth_fast_ms * fast[tap];
+      const float spread = static_cast<float>(tap) - 1.0f;  // -1, 0, +1 across the voices
+      const float pre_ms = config_.pre_delay_dev_ms * spread;
+      const float depth_scale = 1.0f + config_.depth_dev * spread;
+      const float pan = config_.pan_dev * spread;
+      const float gain_l = std::min(1.0f, 1.0f - pan);
+      const float gain_r = std::min(1.0f, 1.0f + pan);
+      const float sweep =
+          (config_.depth_slow_ms * slow[tap] + config_.depth_fast_ms * fast[tap]) * depth_scale;
       // Right channel: same 3-phase pattern with inverted LFO polarity.
-      const float delay_l = (config_.center_delay_ms + sweep) * ms_to_samples;
-      const float delay_r = (config_.center_delay_ms - sweep) * ms_to_samples;
-      wet_l += delays_[tap].process(in_l, std::max(0.0f, delay_l));
-      wet_r += delays_[3 + tap].process(in_r, std::max(0.0f, delay_r));
+      const float delay_l = (config_.center_delay_ms + pre_ms + sweep) * ms_to_samples;
+      const float delay_r = (config_.center_delay_ms + pre_ms - sweep) * ms_to_samples;
+      wet_l += gain_l * delays_[tap].process(in_l, std::max(0.0f, delay_l));
+      wet_r += gain_r * delays_[3 + tap].process(in_r, std::max(0.0f, delay_r));
     }
     wet_l *= 1.0f / 3.0f;
     wet_r *= 1.0f / 3.0f;
@@ -117,11 +142,11 @@ bool Ensemble::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.rate_slow_hz = std::max(0.0f, value);
-      for (auto& lfo : slow_lfos_) lfo.set_rate_hz(config_.rate_slow_hz);
+      apply_rates();
       return true;
     case 1:
       config_.rate_fast_hz = std::max(0.0f, value);
-      for (auto& lfo : fast_lfos_) lfo.set_rate_hz(config_.rate_fast_hz);
+      apply_rates();
       return true;
     case 2:
       config_.depth_slow_ms = std::clamp(value, 0.0f, kMaxDepthMs);
@@ -138,6 +163,19 @@ bool Ensemble::set_parameter(unsigned int param_id, float value) {
     case 6:
       config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
       return true;
+    case 7:
+      config_.rate_hz = std::max(0.0f, value);
+      apply_rates();
+      return true;
+    case 8:
+      config_.pre_delay_dev_ms = std::clamp(value, 0.0f, kMaxPreDelayDevMs);
+      return true;
+    case 9:
+      config_.depth_dev = std::clamp(value, -1.0f, 1.0f);
+      return true;
+    case 10:
+      config_.pan_dev = std::clamp(value, 0.0f, 1.0f);
+      return true;
     default:
       return false;
   }
@@ -148,12 +186,13 @@ bool Ensemble::parameter_is_realtime_safe(unsigned int param_id) const noexcept 
   // delay lines are pre-sized to kMaxCenterDelayMs + kMaxDepthMs at prepare(),
   // so no id allocates or resets audio state. Unknown ids are rejected by
   // set_parameter.
-  return param_id <= 6;
+  return param_id <= 10;
 }
 
 std::vector<rt::ParamDescriptor> Ensemble::parameter_descriptors() const {
   return {{"rateSlowHz", 0},    {"rateFastHz", 1}, {"depthSlowMs", 2}, {"depthFastMs", 3},
-          {"centerDelayMs", 4}, {"toneHz", 5},     {"dryWet", 6}};
+          {"centerDelayMs", 4}, {"toneHz", 5},     {"dryWet", 6},      {"rateHz", 7},
+          {"preDelayDevMs", 8}, {"depthDev", 9},   {"panDev", 10}};
 }
 
 }  // namespace sonare::effects::modulation

@@ -33,6 +33,15 @@ struct EnsembleConfig {
   /// BBD bandwidth: one-pole lowpass on the wet path (Hz).
   float tone_hz = 6500.0f;
   float dry_wet = 0.5f;
+  /// Single-rate drive (Hz): > 0 sets the slow LFO and derives the fast one at
+  /// the rate_fast_hz / rate_slow_hz ratio; 0 leaves the two rates independent.
+  float rate_hz = 0.0f;
+  /// Per-voice spread: voice i of N is offset by an evenly spaced value from
+  /// -dev to +dev. Pre-delay in ms (clamped to [0, 20]), depth as a fraction of
+  /// the voice's depth (clamped to [-1, 1]), pan in [-1, 1] balance units.
+  float pre_delay_dev_ms = 0.0f;
+  float depth_dev = 0.0f;
+  float pan_dev = 0.0f;
 };
 
 class Ensemble : public rt::ProcessorBase {
@@ -51,6 +60,11 @@ class Ensemble : public rt::ProcessorBase {
   //   4 = center_delay_ms (clamped to [0, 25])
   //   5 = tone_hz        (clamped to [500, 20000])
   //   6 = dry_wet        (clamped to [0, 1])
+  //   7 = rate_hz        (>= 0; 0 = independent slow/fast rates)
+  //   8 = pre_delay_dev_ms (clamped to [0, 20]; every voice stays inside the
+  //                        delay line prepare() sized)
+  //   9 = depth_dev      (clamped to [-1, 1])
+  //  10 = pan_dev        (clamped to [0, 1])
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
@@ -59,6 +73,9 @@ class Ensemble : public rt::ProcessorBase {
   /// Returns the tone filter to rest once a non-finite value has reached it,
   /// once per block (see util/non_finite_state.h).
   void discard_non_finite() noexcept;
+
+  /// Applies the slow/fast rates, or the single-rate drive when rate_hz > 0.
+  void apply_rates() noexcept;
 
   EnsembleConfig config_{};
   double sample_rate_ = 48000.0;

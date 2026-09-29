@@ -26,6 +26,7 @@
 ///   pole crosses half power above the corner it is built from.
 /// - chorus / flanger, pre-filter half-power corner in Hz: computed, same pole.
 /// - chorus feedback, comb tooth spacing in Hz: the reciprocal of the loop delay.
+/// - ensemble pre-delay deviation, spacing between voices in seconds: the deviation itself.
 /// - flanger step rate, hold period in seconds: the reciprocal of the step rate.
 /// - lofi, first aperture null in Hz: the hold rate itself.
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
@@ -49,6 +50,7 @@
 #include "core/fft.h"
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
+#include "effects/modulation/ensemble.h"
 #include "effects/modulation/flanger.h"
 #include "effects/modulation/phaser.h"
 #include "effects/modulation/pitch_shifter.h"
@@ -66,6 +68,8 @@ using sonare::effects::delay::StereoDelay;
 using sonare::effects::delay::StereoDelayConfig;
 using sonare::effects::modulation::Chorus;
 using sonare::effects::modulation::ChorusConfig;
+using sonare::effects::modulation::Ensemble;
+using sonare::effects::modulation::EnsembleConfig;
 using sonare::effects::modulation::Flanger;
 using sonare::effects::modulation::FlangerConfig;
 using sonare::effects::modulation::Phaser;
@@ -376,6 +380,42 @@ double comb_spacing_hz(double sample_rate, std::size_t* teeth) {
   *teeth = peaks.size();
   if (peaks.size() < 2) return 0.0;
   return (peaks.back() - peaks.front()) / static_cast<double>(peaks.size() - 1);
+}
+
+// Voices 5 ms apart or more, so a window at the midpoints holds one voice each.
+constexpr float kEnsembleCenterMs = 8.0f;
+constexpr float kEnsembleDevMs = 4.0f;
+constexpr double kEnsembleTolerance = 0.01;
+
+/// Spacing (ms) between the first and last voice's energy centroid in the
+/// impulse response, which a deviation of `dev` puts 2 * dev apart.
+double ensemble_voice_spread_ms(double sample_rate) {
+  EnsembleConfig config;
+  config.depth_slow_ms = 0.0f;
+  config.depth_fast_ms = 0.0f;
+  config.center_delay_ms = kEnsembleCenterMs;
+  config.tone_hz = 20000.0f;
+  config.dry_wet = 1.0f;
+  config.pre_delay_dev_ms = kEnsembleDevMs;
+  Ensemble processor(config);
+  processor.prepare(sample_rate, 2400);
+  std::vector<float> left = sonare::test::generate_impulse(2400);
+  std::vector<float> right = left;
+  sonare::test::process_stereo(processor, left, right);
+  const double per_ms = 0.001 * sample_rate;
+  const double half_gap = 0.5 * kEnsembleDevMs * per_ms;
+  const auto centroid = [&](int voice) {
+    const double lo = (kEnsembleCenterMs + (voice - 1) * kEnsembleDevMs) * per_ms - half_gap;
+    double sum = 0.0;
+    double moment = 0.0;
+    for (std::size_t i = static_cast<std::size_t>(std::max(0.0, lo)); i < lo + 2.0 * half_gap;
+         ++i) {
+      sum += left[i];
+      moment += left[i] * static_cast<double>(i);
+    }
+    return sum > 0.0 ? moment / sum / per_ms : 0.0;
+  };
+  return centroid(2) - centroid(0);
 }
 
 constexpr float kStepRateHz = 500.0f;
@@ -953,6 +993,22 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     }
     tally.within(measured[0], measured[1], kCombTolerance,
                  "the chorus feedback comb has one spacing at both rates");
+  }
+
+  // --- ensemble pre-delay deviation: the voice spacing, in seconds -----------
+  {
+    double measured[2] = {0.0, 0.0};
+    const double asked_ms = 2.0 * static_cast<double>(kEnsembleDevMs);
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = ensemble_voice_spread_ms(rates[r]);
+      tally.at_least(measured[r], 1.0,
+                     "the ensemble voices" + at_rate(rates[r]) + ", have a spread to read");
+      tally.within(measured[r], asked_ms, kEnsembleTolerance,
+                   "the ensemble outer-voice spacing" + at_rate(rates[r]) +
+                       ", against twice the pre-delay deviation");
+    }
+    tally.within(measured[0], measured[1], kEnsembleTolerance,
+                 "the ensemble voice spacing is the same length in milliseconds at both rates");
   }
 
   // --- flanger step rate: the hold period, in seconds ------------------------

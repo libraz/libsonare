@@ -859,6 +859,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
     config.tone_hz = f(params, "toneHz", config.tone_hz);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.pre_delay_dev_ms = f(params, "preDelayDevMs", config.pre_delay_dev_ms);
+    config.depth_dev = f(params, "depthDev", config.depth_dev);
+    config.pan_dev = f(params, "panDev", config.pan_dev);
     return make<effects::modulation::Ensemble>(config);
   }
   if (name == "effects.modulation.flanger") {

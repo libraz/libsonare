@@ -219,6 +219,10 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
           "effects.modulation.flanger",
           R"({"rateHz":0.5,"depthMs":1,"centerDelayMs":2,"feedback":0.4,"dryWet":0.6,"phaseDeg":90,"stepRateHz":300})") !=
       nullptr);
+  REQUIRE(
+      make_insert("effects.modulation.ensemble",
+                  R"({"rateHz":1.0,"preDelayDevMs":6,"depthDev":0.2,"panDev":0.5,"dryWet":0.5})") !=
+      nullptr);
   REQUIRE(make_insert("effects.modulation.phaser",
                       R"({"rateHz":0.3,"minHz":200,"maxHz":2000,"stages":6,"dryWet":0.5})") !=
           nullptr);
