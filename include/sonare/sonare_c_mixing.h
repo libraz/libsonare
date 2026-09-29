@@ -334,8 +334,9 @@ SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned
 // SonareAutomationPoint.curve_to_next; see the ordinal note above
 // sonare_strip_schedule_insert_automation.)
 //
-// Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if
-// strip is NULL, curve is unknown, or the event lane is full.
+// Returns @c SONARE_OK on success, @c SONARE_ERROR_OUT_OF_MEMORY if the event
+// lane is full, or @c SONARE_ERROR_INVALID_PARAMETER for a NULL strip, an
+// unknown curve, a non-finite value, or a non-monotonic @c sample_pos.
 SonareError sonare_strip_schedule_fader_automation(SonareStrip* strip, int64_t sample_pos,
                                                    float fader_db, int curve);
 SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sample_pos, float pan,
