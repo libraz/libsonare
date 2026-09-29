@@ -55,6 +55,9 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
 std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad = false);
 
 /// @brief Inverse of @ref recurrence_to_lag.
+/// @param n_lags n_rows for the unpadded (wrapped) layout, 2 * n_rows - 1 for the
+///        padded one.
+/// @throw sonare::SonareException (InvalidParameter) for any other @p n_lags.
 std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags);
 
 /// @brief Subdivides each segment between consecutive boundary frames into at

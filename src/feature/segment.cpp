@@ -264,35 +264,31 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
   }
 
   std::vector<float> out = cross_similarity(data, rows, cols, data, rows, cols, 0, metric);
-  // Zero out the central diagonal band.
+  // Which cells are neighbours is tracked apart from their values: a euclidean
+  // similarity is a negative distance, so no value, zero included, can stand for
+  // "not a neighbour". The |i - j| < width band is never a candidate.
+  std::vector<unsigned char> selected(static_cast<size_t>(cols) * cols, 0);
+  std::vector<size_t> candidates;
+  candidates.reserve(static_cast<size_t>(cols));
+  for (int i = 0; i < cols; ++i) {
+    candidates.clear();
+    for (int j = 0; j < cols; ++j) {
+      if (std::abs(i - j) >= width) candidates.push_back(static_cast<size_t>(j));
+    }
+    const size_t keep =
+        k > 0 ? std::min(candidates.size(), static_cast<size_t>(k)) : candidates.size();
+    std::partial_sort(candidates.begin(), candidates.begin() + static_cast<ptrdiff_t>(keep),
+                      candidates.end(),
+                      [&](size_t a, size_t b) { return out[i * cols + a] > out[i * cols + b]; });
+    for (size_t q = 0; q < keep; ++q) selected[static_cast<size_t>(i) * cols + candidates[q]] = 1;
+  }
+  // Symmetrised, an edge survives only where both directions chose it.
   for (int i = 0; i < cols; ++i) {
     for (int j = 0; j < cols; ++j) {
-      if (std::abs(i - j) < width) out[i * cols + j] = 0.0f;
-    }
-  }
-  if (k > 0 && k < cols) {
-    std::vector<size_t> order(cols);
-    std::vector<float> keep(cols, 0.0f);
-    for (int i = 0; i < cols; ++i) {
-      std::iota(order.begin(), order.end(), size_t{0});
-      std::partial_sort(order.begin(), order.begin() + k, order.end(),
-                        [&](size_t a, size_t b) { return out[i * cols + a] > out[i * cols + b]; });
-      // Every row starts from zeros: a position outside this row's top k must read 0, not
-      // whatever the previous row kept there.
-      std::fill(keep.begin(), keep.end(), 0.0f);
-      for (int q = 0; q < k; ++q) keep[order[q]] = out[i * cols + order[q]];
-      for (int j = 0; j < cols; ++j) out[i * cols + j] = keep[j];
-    }
-  }
-  if (sym) {
-    for (int i = 0; i < cols; ++i) {
-      for (int j = i + 1; j < cols; ++j) {
-        float a = out[i * cols + j];
-        float b = out[j * cols + i];
-        float v = std::min(a, b);
-        out[i * cols + j] = v;
-        out[j * cols + i] = v;
-      }
+      const size_t ij = static_cast<size_t>(i) * cols + j;
+      const bool keep_cell =
+          selected[ij] != 0 && (!sym || selected[static_cast<size_t>(j) * cols + i] != 0);
+      if (!keep_cell) out[ij] = 0.0f;
     }
   }
   return out;
@@ -324,16 +320,17 @@ std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad) {
 
 std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags) {
   if (lag == nullptr || n_rows <= 0 || n_lags <= 0) return {};
+  // The two layouts recurrence_to_lag writes: unpadded (n columns, wrapped) and
+  // padded (2n - 1 columns, lag -(n-1) at column 0).
+  const bool padded = n_lags == 2 * n_rows - 1 && n_lags != n_rows;
+  if (!padded && n_lags != n_rows) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "lag_to_recurrence: n_lags must be n_rows or 2 * n_rows - 1");
+  }
   std::vector<float> out(static_cast<size_t>(n_rows) * n_rows, 0.0f);
   for (int i = 0; i < n_rows; ++i) {
     for (int col = 0; col < n_lags; ++col) {
-      int lag_val = col;
-      if (n_lags == n_rows) {
-        if (lag_val >= n_rows / 2) lag_val -= n_rows;
-      } else {
-        lag_val = col - (n_rows - 1);
-      }
-      int j = i + lag_val;
+      const int j = padded ? i + col - (n_rows - 1) : (i + col) % n_rows;
       if (j >= 0 && j < n_rows) out[i * n_rows + j] = lag[i * n_lags + col];
     }
   }

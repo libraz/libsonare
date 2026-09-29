@@ -190,11 +190,11 @@ TEST_CASE("top-k trimming zeroes every position outside a row's own top k",
         recurrence_matrix(D.data(), 1, 4, /*k=*/2, /*width=*/1, /*sym=*/false, "euclidean");
     REQUIRE(R.size() == 16);
 
-    // Each row keeps its own column (zeroed by the diagonal band) and its nearest
-    // neighbour. Rows 2 and 3 are the ones a carried-over scratch would corrupt, in
-    // column 0, which rows 0 and 1 kept and they do not.
-    const std::vector<float> expected{0.0f, -1.0f, 0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,  0.0f,
-                                      0.0f, 0.0f,  0.0f, -1.0f, 0.0f,  0.0f, -1.0f, 0.0f};
+    // Each row keeps its two nearest neighbours outside the diagonal band, which is
+    // never a candidate. Rows 2 and 3 are the ones a carried-over scratch would
+    // corrupt, in column 0, which rows 0 and 1 kept and they do not.
+    const std::vector<float> expected{0.0f, -1.0f, -10.0f, 0.0f,  -1.0f, 0.0f,   -9.0f, 0.0f,
+                                      0.0f, -9.0f, 0.0f,   -1.0f, 0.0f,  -10.0f, -1.0f, 0.0f};
     for (size_t i = 0; i < expected.size(); ++i) {
       CAPTURE(i);
       REQUIRE(R[i] == expected[i]);
@@ -259,4 +259,22 @@ TEST_CASE("the segment primitives refuse features they cannot order", "[util][se
     CHECK(count_bad(back) == 1);
     CHECK(count_bad(enhanced) > 0);
   }
+}
+
+TEST_CASE("lag_to_recurrence inverts recurrence_to_lag with and without padding",
+          "[util][segment]") {
+  for (const int n : {1, 4, 7}) {
+    std::vector<float> rec(static_cast<size_t>(n) * n);
+    for (size_t i = 0; i < rec.size(); ++i) rec[i] = static_cast<float>(i + 1);
+    for (const bool pad : {false, true}) {
+      INFO("n " << n << " pad " << pad);
+      const auto lag = recurrence_to_lag(rec.data(), n, pad);
+      const int n_lags = pad ? 2 * n - 1 : n;
+      REQUIRE(lag.size() == static_cast<size_t>(n) * n_lags);
+      REQUIRE(lag_to_recurrence(lag.data(), n, n_lags) == rec);
+    }
+  }
+  // A lag width that is neither n nor 2n - 1 names no layout.
+  const std::vector<float> lag(4 * 5, 1.0f);
+  REQUIRE_THROWS_AS(lag_to_recurrence(lag.data(), 4, 5), SonareException);
 }

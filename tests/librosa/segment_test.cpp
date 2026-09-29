@@ -107,3 +107,45 @@ TEST_CASE("recurrence_matrix (affinity) matches librosa values", "[librosa][segm
     REQUIRE_THAT(R[i], WithinAbs(ref[i], 1e-5f));
   }
 }
+
+TEST_CASE("recurrence_matrix connectivity never takes the excluded band as neighbours",
+          "[librosa][segment]") {
+  // A drifting 2-D feature: every frame is closest to its immediate neighbours,
+  // which are exactly the band width excludes.
+  constexpr int kRows = 2;
+  constexpr int kCols = 12;
+  std::vector<float> X(static_cast<size_t>(kRows) * kCols);
+  for (int j = 0; j < kCols; ++j) {
+    X[static_cast<size_t>(j)] = static_cast<float>(j + 1);
+    X[static_cast<size_t>(kCols + j)] = 0.5f * static_cast<float>(j % 3);
+  }
+  constexpr int kK = 2;
+  constexpr int kWidth = 3;
+  for (const char* metric : {"euclidean", "cosine"}) {
+    INFO("metric " << metric);
+    const auto R = recurrence_matrix(X.data(), kRows, kCols, kK, kWidth, /*sym=*/false, metric);
+    for (int i = 0; i < kCols; ++i) {
+      int kept = 0;
+      for (int j = 0; j < kCols; ++j) {
+        const float v = R[static_cast<size_t>(i) * kCols + j];
+        if (std::abs(i - j) < kWidth) {
+          CHECK(v == 0.0f);
+        } else if (v != 0.0f) {
+          ++kept;
+        }
+      }
+      INFO("row " << i);
+      CHECK(kept == kK);
+    }
+    // Symmetrised, an edge survives only where both directions chose it.
+    const auto S = recurrence_matrix(X.data(), kRows, kCols, kK, kWidth, /*sym=*/true, metric);
+    for (int i = 0; i < kCols; ++i) {
+      for (int j = 0; j < kCols; ++j) {
+        const bool both = R[static_cast<size_t>(i) * kCols + j] != 0.0f &&
+                          R[static_cast<size_t>(j) * kCols + i] != 0.0f;
+        INFO("cell " << i << "," << j);
+        CHECK((S[static_cast<size_t>(i) * kCols + j] != 0.0f) == both);
+      }
+    }
+  }
+}
