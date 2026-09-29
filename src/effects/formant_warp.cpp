@@ -79,6 +79,8 @@ Audio FormantWarp::process(const Audio& audio) const {
   std::vector<float> warped(static_cast<size_t>(n_bins));
   std::vector<float> time_frame(static_cast<size_t>(n_fft));
   sonare::LpcResult model;
+  sonare::LpcWorkspace lpc_workspace;
+  std::vector<float> residual;
 
   // Start so that the first frame's analysis window is centred near sample 0.
   for (long start = -kFrameSize / 2; start < static_cast<long>(n); start += kHopSize) {
@@ -89,7 +91,7 @@ Audio FormantWarp::process(const Audio& audio) const {
       windowed[static_cast<size_t>(i)] = s * hann[static_cast<size_t>(i)];
     }
 
-    sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order, &model);
+    sonare::lpc_autocorrelation(windowed.data(), windowed.size(), order, &model, &lpc_workspace);
 
     // Degenerate frame: pass the windowed signal through OLA unchanged. The main
     // path reconstructs the analysis-windowed signal (time_frame[i] ~= s*hann[i])
@@ -113,8 +115,7 @@ Audio FormantWarp::process(const Audio& audio) const {
     const size_t ord = model.ar.size() - 1;
 
     // LPC residual (inverse filtering), zero-padded to n_fft.
-    const std::vector<float> residual =
-        sonare::lpc_residual(windowed.data(), windowed.size(), model);
+    sonare::lpc_residual(windowed.data(), windowed.size(), model, &residual);
     std::fill(padded.begin(), padded.end(), 0.0f);
     std::copy(residual.begin(), residual.end(), padded.begin());
     fft.forward(padded.data(), spec.data());

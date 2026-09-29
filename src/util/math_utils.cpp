@@ -73,15 +73,33 @@ float median(const float* data, size_t size) {
   return sorted[size / 2];
 }
 
+AutocorrelationWorkspace::AutocorrelationWorkspace() = default;
+AutocorrelationWorkspace::~AutocorrelationWorkspace() = default;
+AutocorrelationWorkspace::AutocorrelationWorkspace(AutocorrelationWorkspace&&) noexcept = default;
+AutocorrelationWorkspace& AutocorrelationWorkspace::operator=(AutocorrelationWorkspace&&) noexcept =
+    default;
+
 std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag) {
+  AutocorrelationWorkspace workspace;
+  std::vector<float> out;
+  unnormalized_autocorrelation(input, n, max_lag, &workspace, &out);
+  return out;
+}
+
+void unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag,
+                                  AutocorrelationWorkspace* workspace, std::vector<float>* out) {
   if (n > 0 && input == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "unnormalized_autocorrelation: null input with non-zero length");
   }
+  if (workspace == nullptr || out == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unnormalized_autocorrelation: workspace and output must not be null");
+  }
 
   const size_t out_size = std::min(max_lag, n);
-  std::vector<float> out(out_size, 0.0f);
-  if (out_size == 0) return out;
+  out->assign(out_size, 0.0f);
+  if (out_size == 0) return;
 
   constexpr size_t kFftThreshold = 64;
   if (n < kFftThreshold) {
@@ -90,9 +108,9 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
       for (size_t i = 0; i + lag < n; ++i) {
         acc += static_cast<double>(input[i]) * static_cast<double>(input[i + lag]);
       }
-      out[lag] = static_cast<float>(acc);
+      (*out)[lag] = static_cast<float>(acc);
     }
-    return out;
+    return;
   }
 
   constexpr size_t kMaxAutocorrN = (static_cast<size_t>(1) << 29);
@@ -102,13 +120,18 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
   }
 
   const size_t fft_size = next_power_of_2(2 * n - 1);
+  if (!workspace->fft || static_cast<size_t>(workspace->fft->n_fft()) != fft_size) {
+    workspace->fft = std::make_unique<FFT>(static_cast<int>(fft_size));
+  }
+  FFT& fft = *workspace->fft;
 
-  std::vector<float> padded(fft_size, 0.0f);
+  std::vector<float>& padded = workspace->padded;
+  padded.assign(fft_size, 0.0f);
   std::copy(input, input + n, padded.begin());
 
-  FFT fft(static_cast<int>(fft_size));
   const int n_bins = fft.n_bins();
-  std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>>& spectrum = workspace->spectrum;
+  spectrum.resize(static_cast<size_t>(n_bins));
   fft.forward(padded.data(), spectrum.data());
 
   for (int i = 0; i < n_bins; ++i) {
@@ -118,10 +141,10 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
     spectrum[index] = std::complex<float>(re * re + im * im, 0.0f);
   }
 
-  std::vector<float> raw(fft_size);
+  std::vector<float>& raw = workspace->raw;
+  raw.resize(fft_size);
   fft.inverse(spectrum.data(), raw.data());
-  std::copy(raw.begin(), raw.begin() + static_cast<std::ptrdiff_t>(out_size), out.begin());
-  return out;
+  std::copy(raw.begin(), raw.begin() + static_cast<std::ptrdiff_t>(out_size), out->begin());
 }
 
 double percentile_sorted(const std::vector<float>& sorted, double percentile) {

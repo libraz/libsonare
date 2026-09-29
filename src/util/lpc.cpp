@@ -136,7 +136,13 @@ LpcResult lpc_burg(const float* x, size_t n, int order) {
 }
 
 void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out) {
-  if (out == nullptr) {
+  LpcWorkspace workspace;
+  lpc_autocorrelation(x, n, order, out, &workspace);
+}
+
+void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out,
+                         LpcWorkspace* workspace) {
+  if (out == nullptr || workspace == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
   }
   validate_lpc_args(x, n, order);
@@ -151,14 +157,18 @@ void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out) {
     return;
   }
 
-  const std::vector<float> raw = unnormalized_autocorrelation(x, n, static_cast<size_t>(order + 1));
-  std::vector<double> r(static_cast<size_t>(order + 1), 0.0);
+  std::vector<float>& raw = workspace->lags;
+  unnormalized_autocorrelation(x, n, static_cast<size_t>(order + 1), &workspace->autocorrelation,
+                               &raw);
+  std::vector<double>& r = workspace->r;
+  r.assign(static_cast<size_t>(order + 1), 0.0);
   for (int lag = 0; lag <= order; ++lag) {
     r[static_cast<size_t>(lag)] =
         static_cast<double>(raw[static_cast<size_t>(lag)]) / static_cast<double>(n);
   }
 
-  std::vector<double> a(static_cast<size_t>(order + 1), 0.0);
+  std::vector<double>& a = workspace->a;
+  a.assign(static_cast<size_t>(order + 1), 0.0);
   a[0] = 1.0;
   double error = r[0];
   if (error <= 1.0e-20) {
@@ -166,19 +176,20 @@ void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out) {
     return;
   }
 
+  std::vector<double>& next_a = workspace->next_a;
   for (int i = 1; i <= order; ++i) {
     double acc = r[static_cast<size_t>(i)];
     for (int j = 1; j < i; ++j) {
       acc += a[static_cast<size_t>(j)] * r[static_cast<size_t>(i - j)];
     }
     const double reflection = -acc / error;
-    std::vector<double> next_a = a;
+    next_a = a;
     for (int j = 1; j < i; ++j) {
       next_a[static_cast<size_t>(j)] =
           a[static_cast<size_t>(j)] + reflection * a[static_cast<size_t>(i - j)];
     }
     next_a[static_cast<size_t>(i)] = reflection;
-    a = next_a;
+    a.swap(next_a);
     error *= 1.0 - reflection * reflection;
     if (error <= 1.0e-20) {
       error = 0.0;
@@ -199,14 +210,24 @@ LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
 }
 
 std::vector<float> lpc_residual(const float* x, size_t n, const LpcResult& model) {
+  std::vector<float> residual;
+  lpc_residual(x, n, model, &residual);
+  return residual;
+}
+
+void lpc_residual(const float* x, size_t n, const LpcResult& model, std::vector<float>* out) {
   if (x == nullptr && n > 0) {
     throw SonareException(ErrorCode::InvalidParameter, "input must not be null");
+  }
+  if (out == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
   }
   if (model.ar.empty() || model.ar[0] == 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid LPC model");
   }
   const size_t order = model.ar.size() - 1;
-  std::vector<float> residual(n, 0.0f);
+  std::vector<float>& residual = *out;
+  residual.assign(n, 0.0f);
   for (size_t i = 0; i < n; ++i) {
     double e = x[i];
     const size_t max_k = std::min(order, i);
@@ -215,7 +236,6 @@ std::vector<float> lpc_residual(const float* x, size_t n, const LpcResult& model
     }
     residual[i] = static_cast<float>(e);
   }
-  return residual;
 }
 
 void interpolate_gap(float* samples, size_t n, size_t start, size_t end) {

@@ -77,6 +77,7 @@ add_executable(sonare_tests
   effects/spectral_edit_test.cpp
   effects/pitch_shift_test.cpp
   effects/phase_vocoder_test.cpp
+  effects/formant_warp_test.cpp
   effects/normalize_test.cpp
   effects/fx_reachability_test.cpp
   analysis/key_profiles_test.cpp

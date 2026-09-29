@@ -5,13 +5,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstddef>
+#include <memory>
 #include <numeric>
 #include <vector>
 
 #include "constants.h"
 
 namespace sonare {
+
+class FFT;
 
 /// @brief Clamps a value between min and max.
 /// @details Forwards to std::clamp. The nested `std::max(min_val, std::min(...))`
@@ -139,6 +143,25 @@ float median(const float* data, size_t size);
 /// @param max_lag Number of lags to compute
 /// @return Unnormalized autocorrelation values
 std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag);
+
+/// @brief FFT plan and buffers an autocorrelation reuses while the input length
+///        keeps the same transform size.
+struct AutocorrelationWorkspace {
+  AutocorrelationWorkspace();
+  ~AutocorrelationWorkspace();
+  AutocorrelationWorkspace(AutocorrelationWorkspace&&) noexcept;
+  AutocorrelationWorkspace& operator=(AutocorrelationWorkspace&&) noexcept;
+
+  std::unique_ptr<FFT> fft;
+  std::vector<float> padded;
+  std::vector<std::complex<float>> spectrum;
+  std::vector<float> raw;
+};
+
+/// @brief unnormalized_autocorrelation() writing into @p out through
+///        @p workspace, so a per-frame loop builds its plan once.
+void unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag,
+                                  AutocorrelationWorkspace* workspace, std::vector<float>* out);
 
 /// @brief Linearly interpolated percentile of an ascending-sorted sequence.
 /// @details The single definition of "interpolated percentile" in the codebase.

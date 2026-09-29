@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "util/math_utils.h"
+
 namespace sonare {
 
 struct LpcResult {
@@ -22,7 +24,22 @@ LpcResult lpc_autocorrelation(const float* x, size_t n, int order);
 // Same estimate written into a caller-owned result, so a per-frame analysis loop
 // reuses one coefficient buffer instead of building a fresh vector each frame.
 void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out);
+
+/// Autocorrelation plan and Levinson buffers a per-frame analysis loop reuses.
+struct LpcWorkspace {
+  AutocorrelationWorkspace autocorrelation;
+  std::vector<float> lags;
+  std::vector<double> r;
+  std::vector<double> a;
+  std::vector<double> next_a;
+};
+
+// Same estimate again, with the transform and recursion scratch also reused.
+void lpc_autocorrelation(const float* x, size_t n, int order, LpcResult* out,
+                         LpcWorkspace* workspace);
 std::vector<float> lpc_residual(const float* x, size_t n, const LpcResult& model);
+// Same residual written into a caller-owned buffer.
+void lpc_residual(const float* x, size_t n, const LpcResult& model, std::vector<float>* out);
 
 /// @brief Fills [@p start, @p end) by cubic Hermite interpolation where four
 ///        surrounding samples exist, linear otherwise.
