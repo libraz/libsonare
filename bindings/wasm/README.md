@@ -38,8 +38,8 @@ mastering, mixing, or realtime-engine APIs, import the smaller analysis entry:
 import { detectBpm, init } from '@libraz/libsonare/analysis';
 ```
 
-With emsdk 5.0.2, the analysis binary is 0.96 MiB raw / 365 KiB gzip; the full
-entry is 4.96 MiB raw / 1.65 MiB gzip. Both are the measurement recorded in
+With emsdk 6.0.10, the analysis binary is 0.98 MiB raw / 373 KiB gzip; the full
+entry is 5.43 MiB raw / 1.80 MiB gzip. Both are the measurement recorded in
 `wasm-size-baseline.json`. The analysis entry deliberately has no
 `masterAudio`, `mixStereo`, `Project`, `Mixer`, or `RealtimeEngine` export.
 
@@ -368,7 +368,7 @@ Every area below has runnable examples and the full API in the
 - **Mixing** — offline `mixStereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Mixing assistant** — `suggestMixScene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
-- **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
+- **Room acoustics** — blind RT60, impulse-response EDT and clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render, bounded-memory clip streaming), `StreamingMasteringChain` / `StreamingEqualizer` / `StreamingRetune`, `RealtimeVoiceChanger`, and the AudioWorklet bridge. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
 - **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/wasm)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [API](https://libsonare.libraz.net/docs/wasm)
