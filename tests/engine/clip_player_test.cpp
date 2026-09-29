@@ -1305,3 +1305,53 @@ TEST_CASE("ClipPlayer time-stretch warp keeps the pitch of both channels of an u
     REQUIRE(std::abs(median_cents(out[ch], kPitches[ch])) <= 5.0);
   }
 }
+
+// Under warp the loop period is a timeline length (compiled from PPQ through the
+// tempo map), so it must never be clamped by the source buffer's sample count.
+TEST_CASE("ClipPlayer loops a warped clip at its compiled timeline length",
+          "[engine][clip_player]") {
+  std::array<float, 8> source{};
+  for (size_t i = 0; i < source.size(); ++i) source[i] = static_cast<float>(i) * 10.0f;
+  const float* channels[] = {source.data()};
+
+  SECTION("an expanding map: 16 timeline samples read the 8-sample source once") {
+    auto expanding = std::make_shared<std::vector<sonare::engine::WarpAnchor>>(
+        std::vector<sonare::engine::WarpAnchor>{{0.0, 0.0}, {16.0, 8.0}});
+    sonare::engine::ClipSchedule clip{1, {channels, 1, 8}, 0.0, 0, 0, 16, true, 1.0f, 0, 0};
+    clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+    clip.warp_anchors = expanding;
+    clip.loop_length_samples = 16;
+
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000.0, 16);
+    player.set_clips({clip});
+    std::array<float, 16> out_l{};
+    float* out[] = {out_l.data()};
+    player.process_at(out, 1, 16, 0);
+
+    // Timeline 10 maps to source 5; a period clamped to 8 would wrap to source 1.
+    REQUIRE_THAT(out_l[10], WithinAbs(50.0f, 1.0e-5f));
+    REQUIRE_THAT(out_l[14], WithinAbs(70.0f, 1.0e-5f));
+  }
+
+  SECTION("a compressing map: the period outlasts the source and is kept") {
+    auto compressing = std::make_shared<std::vector<sonare::engine::WarpAnchor>>(
+        std::vector<sonare::engine::WarpAnchor>{{0.0, 0.0}, {4.0, 8.0}});
+    sonare::engine::ClipSchedule clip{1, {channels, 1, 8}, 0.0, 0, 0, 12, true, 1.0f, 0, 0};
+    clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+    clip.warp_anchors = compressing;
+    clip.loop_length_samples = 12;
+
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000.0, 12);
+    player.set_clips({clip});
+    std::array<float, 12> out_l{};
+    float* out[] = {out_l.data()};
+    player.process_at(out, 1, 12, 0);
+
+    REQUIRE_THAT(out_l[2], WithinAbs(40.0f, 1.0e-5f));
+    // Timeline 9 maps to source 18, past the end: silent. A period clamped to the
+    // 8-sample source would wrap to timeline 1 and read source 2 (20).
+    REQUIRE_THAT(out_l[9], WithinAbs(0.0f, 1.0e-6f));
+  }
+}

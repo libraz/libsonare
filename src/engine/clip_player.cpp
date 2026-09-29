@@ -366,10 +366,12 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
   // Under active warp the source read is driven entirely by the warp map, so
   // clip_offset_samples is NOT consumed here — subtracting it (as the non-warp path
   // does) would wrongly drive source_len <= 0 and silence a comp part whose
-  // clip_offset_samples approaches the source length. The outer read guard
-  // (source_pos vs source_sample_count) still bounds the actual reads.
+  // clip_offset_samples approaches the source length. The source sample count is a
+  // source-domain length and the loop period a timeline-domain one, so under warp
+  // only the clip length bounds the period; the outer read guard (source_pos vs
+  // source_sample_count) still bounds the actual reads.
   const int64_t source_len =
-      warp_active ? std::min<int64_t>(clip.length_samples, source_sample_count(clip))
+      warp_active ? clip.length_samples
                   : std::min<int64_t>(clip.length_samples,
                                       source_sample_count(clip) - clip.clip_offset_samples);
   if (source_len <= 0) return read;
