@@ -19,7 +19,7 @@
 #include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 
@@ -229,16 +229,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
   DeserializeResult result;
 
   const auto& import_limits = resource::kDefaultProjectImportResourceLimits;
-  if (json_text.size() > import_limits.max_json_bytes) {
-    result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
-                                  "project JSON byte limit exceeded"});
-    return result;
-  }
 
   Value root;
   try {
-    root = json::parse_with_limits(json_text, 128,
-                                   {import_limits.max_json_nodes, import_limits.max_string_bytes});
+    // The project format tolerates duplicate keys, so admit rather than admit_strict.
+    root = json::admit(json_text, import_limits);
   } catch (const json::JsonResourceError& e) {
     result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded", e.what()});
     return result;

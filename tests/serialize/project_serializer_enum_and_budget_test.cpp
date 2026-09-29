@@ -307,6 +307,26 @@ TEST_CASE("serialization is refused when the encoded document exceeds the persis
   }
 }
 
+TEST_CASE("project_from_json refuses a document exceeding the JSON byte budget",
+          "[serialize][project][resource]") {
+  // One JSON string value past the 64 MiB project-import byte budget. The
+  // refusal has to come from the byte precheck, not from the parser walking a
+  // document this size into json::Value nodes first.
+  const auto& limits = sonare::resource::kDefaultProjectImportResourceLimits;
+  const std::string oversized =
+      "{\"pad\":\"" + std::string(limits.max_json_bytes + 1024u, 'a') + "\"}";
+  const sz::DeserializeResult result = sz::project_from_json(oversized);
+  REQUIRE_FALSE(result.ok());
+  REQUIRE_FALSE(result.diagnostics.empty());
+  CHECK(result.diagnostics[0].code == "resource_limit_exceeded");
+  CHECK(result.diagnostics[0].message.find("byte budget") != std::string::npos);
+
+  // An ordinary project document still loads, so the refusal above is the
+  // size and not some other change to project parsing.
+  Fixture f = make_fixture();
+  CHECK(sz::project_from_json(sz::project_to_json(f.project, f.midi)).ok());
+}
+
 TEST_CASE("the C ABI refuses to serialize a project the loader could not read back",
           "[project][serialize]") {
   BuiltProject built = build_project(make_stereo_sine(240));

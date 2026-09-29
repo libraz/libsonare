@@ -386,6 +386,47 @@ TEST_CASE("scene_from_json rejects out-of-range strip enums like the project wal
   REQUIRE(ok.strips[0].pan_mode == 2);
 }
 
+TEST_CASE("scene_from_json refuses a document exceeding the JSON byte budget",
+          "[mixing][routing][resource]") {
+  using Catch::Matchers::ContainsSubstring;
+  // One JSON string value past the 64 MiB scene budget. The refusal has to
+  // come from the byte precheck, not from the parser walking a document this
+  // size into json::Value nodes first.
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(oversized),
+                      ContainsSubstring("byte budget"));
+
+  // An ordinary scene still loads, so the refusal above is the size and not
+  // some other change to scene parsing.
+  const auto ok = sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a"}]})");
+  REQUIRE(ok.strips.size() == 1);
+}
+
+TEST_CASE("scene_to_json refuses an insert params_json exceeding the JSON byte budget",
+          "[mixing][routing][resource]") {
+  using Catch::Matchers::ContainsSubstring;
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "a";
+  sonare::mixing::api::Insert insert;
+  insert.processor_name = "eq.tilt";
+  // One JSON string value past the 64 MiB params budget, stored as the legacy
+  // raw-string params form (insert_from_value's "params_json" key), which
+  // insert_params_to_value() re-parses on every write.
+  insert.params_json = "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+  strip.inserts.push_back(insert);
+  scene.strips.push_back(strip);
+
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_to_json(scene), ContainsSubstring("byte budget"));
+
+  // An ordinary params_json still writes out, so the refusal above is the size
+  // and not some other change to insert params handling.
+  scene.strips[0].inserts[0].params_json = R"({"tiltDb":3})";
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("tiltDb") != std::string::npos);
+}
+
 TEST_CASE("Scene omits the layout fields when stereo (byte-compat)", "[mixing][routing]") {
   using sonare::ChannelLayout;
 

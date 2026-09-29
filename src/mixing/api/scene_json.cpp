@@ -10,7 +10,7 @@
 #include "mixing/stereo_width.h"
 #include "mixing/surround_panner.h"
 #include "util/exception.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mixing::api {
@@ -462,11 +462,12 @@ std::vector<Connection> connections_from_value(const JsonValue& array) {
 
 // The params bag is embedded as an object, so a blob that is not one is refused
 // here rather than travelling to insert construction as unparsed text.
+// Budgeted like every caller-supplied document; duplicate keys stay tolerated.
 JsonValue insert_params_to_value(const Insert& insert) {
   if (insert.params_json.empty()) return JsonValue(sonare::util::json::Object());
   JsonValue params;
   try {
-    params = sonare::util::json::parse(insert.params_json);
+    params = sonare::util::json::admit(insert.params_json);
   } catch (const sonare::util::json::JsonError& error) {
     throw SonareException(
         ErrorCode::InvalidParameter,
@@ -821,8 +822,9 @@ Scene scene_from_value(const JsonValue& root) {
   return scene;
 }
 
+// Budgeted like every caller-supplied document; duplicate keys stay tolerated.
 Scene scene_from_json(const std::string& json) {
-  return scene_from_value(sonare::util::json::parse(json));
+  return scene_from_value(sonare::util::json::admit(json));
 }
 
 }  // namespace sonare::mixing::api
