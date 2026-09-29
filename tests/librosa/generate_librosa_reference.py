@@ -536,6 +536,48 @@ def generate_cqt_reference():
     }
 
 
+def generate_cqt_family_reference():
+    """pseudo_cqt / hybrid_cqt / vqt magnitudes on a two-tone signal.
+
+    One tone sits in the full-CQT half of hybrid_cqt and one in its pseudo half,
+    so the stored magnitudes pin the level on both sides of the split.
+    """
+    sr = 22050
+    fmin = librosa.note_to_hz("C1")
+    n_bins = 84
+    bins_per_octave = 12
+    hop_length = 512
+    freqs = librosa.cqt_frequencies(
+        n_bins=n_bins, fmin=fmin, bins_per_octave=bins_per_octave
+    )
+    low_hz = float(freqs[33])  # A2, full-CQT half of hybrid_cqt
+    high_hz = float(freqs[69])  # A5, pseudo half of hybrid_cqt
+    t = np.arange(sr) / sr
+    y = (0.5 * np.sin(2 * np.pi * low_hz * t) + 0.5 * np.sin(2 * np.pi * high_hz * t)).astype(
+        np.float32
+    )
+    common = dict(
+        sr=sr, hop_length=hop_length, fmin=fmin, n_bins=n_bins, bins_per_octave=bins_per_octave
+    )
+    pseudo = np.abs(librosa.pseudo_cqt(y, **common))
+    hybrid = np.abs(librosa.hybrid_cqt(y, **common))
+    vqt = np.abs(librosa.vqt(y, **common))
+    return {
+        "signal": "0.5*sin(low_hz) + 0.5*sin(high_hz), 1 s",
+        "sr": sr,
+        "fmin": float(fmin),
+        "n_bins": n_bins,
+        "bins_per_octave": bins_per_octave,
+        "hop_length": hop_length,
+        "low_hz": low_hz,
+        "high_hz": high_hz,
+        "shape": list(pseudo.shape),
+        "pseudo_cqt": pseudo.flatten().tolist(),
+        "hybrid_cqt": hybrid.flatten().tolist(),
+        "vqt": vqt.flatten().tolist(),
+    }
+
+
 def generate_icqt_reference():
     """Inverse CQT reference for the deterministic one-octave path."""
     sr = 22050
@@ -2071,6 +2113,7 @@ def main():
         "chroma": generate_chroma_reference(),
         "cqt": generate_cqt_reference(),
         "icqt": generate_icqt_reference(),
+        "cqt_family": generate_cqt_family_reference(),
         "yin": generate_yin_reference(),
         "pyin": generate_pyin_reference(),
         "hpss": generate_hpss_reference(),

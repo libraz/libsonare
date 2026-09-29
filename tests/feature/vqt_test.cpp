@@ -1045,30 +1045,44 @@ TEST_CASE("ivqt respects requested output length", "[vqt][inverse]") {
 
 namespace {
 
-/// @brief griffinlim_vqt()'s inverse projection with the STFT-bin-major traversal it had.
-/// @details The same loop shape as griffinlim_cqt's, which vqt.cpp duplicates with the VQT
-///          bandwidth vector. gamma is supplied explicitly and positively by the caller, so
-///          this needs no copy of the automatic-gamma rule and does not take the gamma==0
-///          delegation into the CQT path.
+/// @brief griffinlim_vqt()'s inverse projection walked STFT-bin-major.
+/// @details gamma is supplied explicitly and positively by the caller, so this needs no copy
+///          of the automatic-gamma rule and does not take the gamma==0 delegation into the
+///          CQT path. The library walks the VQT bin outermost; this walks the STFT bin
+///          outermost with the VQT bin innermost, each cell still summed in ascending order.
 Audio oracle_griffinlim_vqt(const float* magnitude, int n_bins, int n_frames,
                             const VqtConfig& config, int sr, int n_iter) {
-  const std::vector<float> freqs = vqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
-  const CqtConfig cqt_config = config.to_cqt_config();
-  const int n_fft = detail::choose_pseudo_cqt_nfft(cqt_config, sr);
+  VqtConfig grid = config;
+  grid.n_bins = std::max(n_bins, 2);
+  const auto kernel = VqtKernel::create(sr, grid);
+  const int n_fft = kernel->fft_length();
   const int n_freq = n_fft / 2 + 1;
-  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
-  const std::vector<float> bandwidths = vqt_bandwidths(freqs, config.bins_per_octave, config.gamma);
-  const std::vector<float> projection =
-      detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
+  const std::vector<float> projection = detail::build_cqt_projection(kernel->kernel(), n_fft);
+  const std::vector<float>& lengths = kernel->raw_lengths();
+  const float hann_energy = std::sqrt(3.0f / 8.0f) * static_cast<float>(n_fft);
+  std::vector<float> gain(static_cast<size_t>(n_bins), 0.0f);
+  std::vector<float> peak(static_cast<size_t>(n_bins), 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    double row_energy = 0.0;
+    for (int b = 0; b < n_freq; ++b) {
+      row_energy += static_cast<double>(projection[k * n_freq + b]) * projection[k * n_freq + b];
+      peak[k] = std::max(peak[k], projection[k * n_freq + b]);
+    }
+    gain[k] = hann_energy / (std::sqrt(lengths[k]) * static_cast<float>(std::sqrt(row_energy)));
+  }
 
   std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
   for (int b = 0; b < n_freq; ++b) {
     for (int t = 0; t < n_frames; ++t) {
       float acc = 0.0f;
+      float cover = 0.0f;
       for (int k = 0; k < n_bins; ++k) {
-        acc += projection[k * n_freq + b] * magnitude[k * n_frames + t];
+        if (projection[k * n_freq + b] == 0.0f) continue;
+        const float shape = projection[k * n_freq + b] / peak[k];
+        cover += shape * shape;
+        acc += (projection[k * n_freq + b] * gain[k]) * magnitude[k * n_frames + t];
       }
-      stft_mag[b * n_frames + t] = acc;
+      stft_mag[b * n_frames + t] = cover > 1.0f ? acc / cover : acc;
     }
   }
 

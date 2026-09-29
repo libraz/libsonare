@@ -353,10 +353,9 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   // Create FFT processor
   FFT fft(fft_length);
 
-  // Temporary buffers (complex FFT for full spectrum)
+  // Temporary buffers
   std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> complex_frame(fft_length, {0.0f, 0.0f});
-  std::vector<std::complex<float>> frame_fft(fft_length);
+  std::vector<std::complex<float>> frame_fft(static_cast<size_t>(fft_length / 2 + 1));
 
   const float* data = padded_signal.data();
   // Per-bin 1/sqrt(L) factor for librosa's `scale=True` mode (the default).
@@ -388,18 +387,14 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
       std::copy(data + start, data + start + copy_length, frame.begin());
     }
 
-    // Copy real frame into complex buffer
-    for (int n = 0; n < fft_length; ++n) {
-      complex_frame[n] = {frame[n], 0.0f};
-    }
-
-    // Complex FFT of frame (full spectrum)
-    fft.forward_complex(complex_frame.data(), frame_fft.data());
+    // Real FFT: the half spectrum carries every bin the kernel reads.
+    fft.forward(frame.data(), frame_fft.data());
 
     // Copy to output (apply librosa-compatible /sqrt(length) scaling)
     for (int k = 0; k < n_bins; ++k) {
       output[k * n_frames + t] =
-          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data()) * inv_sqrt_lengths[k];
+          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data(), fft_length) *
+          inv_sqrt_lengths[k];
     }
 
     // Report progress
@@ -432,36 +427,18 @@ Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const Vqt
     return griffinlim_cqt(magnitude, n_bins, n_frames, resolved.to_cqt_config(), sr, n_iter);
   }
 
-  // VQT and CQT share the geometric frequency grid, but VQT's bandwidths are
-  // widened by gamma. Use the CQT projection FFT size while supplying the VQT
-  // bandwidth vector so the inverse follows the analysis transform.
-  const std::vector<float> freqs = vqt_frequencies(resolved.fmin, n_bins, resolved.bins_per_octave);
-  const CqtConfig cqt_config = resolved.to_cqt_config();
-  const int n_fft = detail::choose_pseudo_cqt_nfft(cqt_config, sr);
+  // Seed Griffin-Lim with the VQT magnitude laid back onto the STFT grid of the
+  // filter bank that produced it, gamma-widened bandwidths included.
+  // A bandwidth needs a neighbour to be measured against, so a lone bin is voiced
+  // as the first of two and only its row is used.
+  resolved.n_bins = std::max(n_bins, 2);
+  auto cached = get_cached_vqt_kernel(sr, resolved);
+  const VqtKernel& kernel = *cached.kernel;
+  const int n_fft = kernel.fft_length();
   const int n_freq = n_fft / 2 + 1;
-  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
-  const std::vector<float> bandwidths =
-      vqt_bandwidths(freqs, resolved.bins_per_octave, resolved.gamma);
-  const std::vector<float> projection =
-      detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
-
-  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
-  // Same traversal as griffinlim_cqt's inverse projection, which this duplicates with the
-  // VQT bandwidth vector: the VQT bin outermost gives a contiguous run of `projection` and
-  // one magnitude row reused across every STFT bin. Each output cell still sums k in
-  // ascending order from the zero it was constructed with, so the seed Griffin-Lim iterates
-  // on is unchanged bit for bit.
-  for (int k = 0; k < n_bins; ++k) {
-    const float* prow = projection.data() + static_cast<size_t>(k) * n_freq;
-    const float* mrow = magnitude + static_cast<size_t>(k) * n_frames;
-    for (int b = 0; b < n_freq; ++b) {
-      const float p = prow[b];
-      float* orow = stft_mag.data() + static_cast<size_t>(b) * n_frames;
-      for (int t = 0; t < n_frames; ++t) {
-        orow[t] += p * mrow[t];
-      }
-    }
-  }
+  const std::vector<float> stft_mag = detail::project_cqt_magnitude_to_stft(
+      detail::build_cqt_projection(kernel.kernel(), n_fft), kernel.raw_lengths(), n_fft, magnitude,
+      n_bins, n_frames);
 
   GriffinLimConfig gcfg;
   gcfg.n_iter = n_iter;

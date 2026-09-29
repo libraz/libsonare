@@ -38,14 +38,22 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
   out.row_offsets.push_back(static_cast<int>(out.values.size()));
 }
 
+/// @brief Dot of one kernel row with the spectrum of a REAL frame of @p n_fft samples.
+/// @param half_spectrum The n_fft / 2 + 1 bins a real FFT produces; a column above
+///        n_fft / 2 reads the conjugate of its mirror, which is what a full complex
+///        transform of the same frame would hold there.
 inline std::complex<float> sparse_kernel_row_dot(const SparseComplexKernel& kernel, int row,
-                                                 const std::complex<float>* vector) {
+                                                 const std::complex<float>* half_spectrum,
+                                                 int n_fft) {
   std::complex<float> result{};
+  const int half = n_fft / 2;
   const int begin = kernel.row_offsets[static_cast<size_t>(row)];
   const int end = kernel.row_offsets[static_cast<size_t>(row + 1)];
   for (int index = begin; index < end; ++index) {
-    result += kernel.values[static_cast<size_t>(index)] *
-              vector[kernel.column_indices[static_cast<size_t>(index)]];
+    const int column = kernel.column_indices[static_cast<size_t>(index)];
+    const std::complex<float> x =
+        column <= half ? half_spectrum[column] : std::conj(half_spectrum[n_fft - column]);
+    result += kernel.values[static_cast<size_t>(index)] * x;
   }
   return result;
 }

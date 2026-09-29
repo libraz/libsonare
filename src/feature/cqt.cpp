@@ -106,11 +106,6 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   });
 }
 
-/// @brief Computes Q factor for CQT.
-float compute_q(int bins_per_octave, float filter_scale) {
-  return filter_scale / (std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f);
-}
-
 }  // namespace
 
 // CqtResult implementation
@@ -314,10 +309,9 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   // Create FFT processor
   FFT fft(fft_length);
 
-  // Pre-allocate temporary buffers (complex FFT for full spectrum)
+  // Pre-allocate temporary buffers
   std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> complex_frame(fft_length, {0.0f, 0.0f});
-  std::vector<std::complex<float>> frame_fft(fft_length);
+  std::vector<std::complex<float>> frame_fft(static_cast<size_t>(fft_length / 2 + 1));
 
   const float* data = padded_signal.data();
 
@@ -344,18 +338,14 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
       std::copy(data + start, data + start + copy_length, frame.begin());
     }
 
-    // Copy real frame into complex buffer
-    for (int n = 0; n < fft_length; ++n) {
-      complex_frame[n] = {frame[n], 0.0f};
-    }
-
-    // Complex FFT of frame (full spectrum)
-    fft.forward_complex(complex_frame.data(), frame_fft.data());
+    // Real FFT: the half spectrum carries every bin the kernel reads.
+    fft.forward(frame.data(), frame_fft.data());
 
     // Apply per-bin /sqrt(length) (librosa.vqt with scale=True).
     for (int k = 0; k < n_bins; ++k) {
       output[k * n_frames + t] =
-          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data()) * inv_sqrt_len[k];
+          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data(), fft_length) *
+          inv_sqrt_len[k];
     }
 
     // Report progress
@@ -483,48 +473,36 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
 
   const int sr = audio.sample_rate();
-  std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
-
-  // Single STFT magnitude at an n_fft chosen to capture the lowest bin's Q.
-  const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);
+  // librosa.pseudo_cqt: |basis| . |Hann STFT| at the kernel's own FFT size,
+  // divided by sqrt(n_fft) (scale=True).
+  auto cached = get_cached_kernel(sr, config);
+  const CqtKernel& kernel = *cached.kernel;
+  const int n_fft = kernel.fft_length();
   StftConfig stft_cfg;
   stft_cfg.n_fft = n_fft;
   stft_cfg.hop_length = config.hop_length;
-  stft_cfg.window = config.window;
+  stft_cfg.window = WindowType::Hann;
   stft_cfg.center = true;
   Spectrogram spec = Spectrogram::compute(audio, stft_cfg);
   const std::vector<float>& mag = spec.magnitude();
   const int n_freq = spec.n_bins();
   const int n_frames = spec.n_frames();
+  const std::vector<float> P = detail::build_cqt_projection(kernel.kernel(), n_fft);
+  const float scale = 1.0f / std::sqrt(static_cast<float>(n_fft));
 
-  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
-  const float semitone_ratio =
-      std::pow(2.0f, 1.0f / static_cast<float>(std::max(config.bins_per_octave, 1)));
-  std::vector<float> bandwidths(freqs.size(), 0.0f);
-  for (size_t k = 0; k < freqs.size(); ++k) {
-    bandwidths[k] = freqs[k] * (semitone_ratio - 1.0f);
-  }
-  std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
-  const std::vector<float> lengths = wavelet_lengths(freqs, sr, config.filter_scale);
-
-  // C = P @ |STFT|. Phase is not estimated (pseudo CQT yields magnitudes only;
-  // we store the result in the real part of the CqtResult so magnitude()
-  // returns it).
+  // Phase is not estimated: the magnitude is stored in the real part so
+  // magnitude() returns it.
   std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
                                         std::complex<float>(0.0f, 0.0f));
-  // Per-frame accumulators with the STFT bin loop outside the frame loop: `mag` is row-major
-  // [n_freq x n_frames], so each projection bin now walks every row once and contiguously
-  // instead of re-striding all n_freq rows for every frame. Each acc[t] still sums b in
-  // ascending order, so the projection is unchanged bit for bit.
+  // `mag` is row-major [n_freq x n_frames], so each projection bin walks every
+  // row once and contiguously.
   std::vector<float> acc(static_cast<size_t>(n_frames), 0.0f);
   for (int k = 0; k < config.n_bins; ++k) {
-    const float scale = lengths[static_cast<size_t>(k)] > 0.0f
-                            ? 1.0f / std::sqrt(lengths[static_cast<size_t>(k)])
-                            : 1.0f;
     std::fill(acc.begin(), acc.end(), 0.0f);
     const float* prow = P.data() + static_cast<size_t>(k) * n_freq;
     for (int b = 0; b < n_freq; ++b) {
       const float p = prow[b];
+      if (p == 0.0f) continue;
       const float* mrow = mag.data() + static_cast<size_t>(b) * n_frames;
       for (int t = 0; t < n_frames; ++t) {
         acc[t] += p * mrow[t];
@@ -534,8 +512,8 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
       data[k * n_frames + t] = std::complex<float>(acc[t] * scale, 0.0f);
     }
   }
-  return CqtResult(std::move(data), config.n_bins, n_frames, std::move(freqs), config.hop_length,
-                   sr);
+  return CqtResult(std::move(data), config.n_bins, n_frames, kernel.frequencies(),
+                   config.hop_length, sr);
 }
 
 CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
@@ -546,18 +524,15 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
   SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
 
   const int sr = audio.sample_rate();
-  const float Q = compute_q(config.bins_per_octave, config.filter_scale);
   std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
 
-  // Split point: bins whose CQT filter is shorter than `short_threshold` use
-  // pseudo CQT (cheap STFT projection); longer-filter bins fall back to the
-  // full CQT (slow but accurate). librosa's threshold is roughly 2 * hop;
-  // 256 samples is a reasonable practical default.
-  const int short_threshold = std::max(256, 2 * config.hop_length);
+  // librosa.hybrid_cqt's split: a bin whose filter, rounded up to a power of two,
+  // is shorter than two hops takes the pseudo CQT; longer ones the full CQT.
+  const std::vector<float> lengths = wavelet_lengths(freqs, sr, config.filter_scale);
   int n_split = config.n_bins;
   for (int k = 0; k < config.n_bins; ++k) {
-    const int len = static_cast<int>(std::ceil(Q * sr / std::max(freqs[k], 1.0f)));
-    if (len <= short_threshold) {
+    if (std::exp2(std::ceil(std::log2(lengths[static_cast<size_t>(k)]))) <
+        2.0f * static_cast<float>(config.hop_length)) {
       n_split = k;
       break;
     }
@@ -603,52 +578,31 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
 Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
                      int sr, int n_iter) {
   if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
-  // The Gaussian projection smears one non-finite bin across the whole STFT
-  // magnitude grid, so a single NaN reaches every output sample. Rejected here
-  // rather than at each binding so the C ABI, the WASM bindings (which call this
-  // directly) and the in-process callers all inherit one rule.
+  // The projection smears one non-finite bin across the whole STFT magnitude
+  // grid, so a single NaN reaches every output sample. Rejected here rather than
+  // at each binding so the C ABI, the WASM bindings (which call this directly)
+  // and the in-process callers all inherit one rule.
   if (!numeric::all_finite(magnitude, n_bins, n_frames)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "griffinlim_cqt: magnitude contains a non-finite value");
   }
 
-  std::vector<float> freqs = cqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
-  const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);
-  const int n_freq = n_fft / 2 + 1;
-  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
-
-  // Build the same Gaussian projection as pseudo_cqt and use its transpose to
-  // smear CQT magnitudes back onto an STFT magnitude grid. This is a smoother
-  // seed for Griffin-Lim than the naive nearest-bin projection.
-  const float semitone_ratio =
-      std::pow(2.0f, 1.0f / static_cast<float>(std::max(config.bins_per_octave, 1)));
-  std::vector<float> bandwidths(freqs.size(), 0.0f);
-  for (size_t k = 0; k < freqs.size(); ++k) {
-    bandwidths[k] = freqs[k] * (semitone_ratio - 1.0f);
-  }
-  std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
-
-  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
-  // Accumulate P^T * magnitude with the CQT bin outermost. P is row-major [n_bins x n_freq]
-  // and `magnitude` row-major [n_bins x n_frames], so one CQT bin supplies a contiguous run
-  // of P and one magnitude row reused across every STFT bin, where the innermost k strided
-  // both. Each output cell still sums k in ascending order from the zero it was constructed
-  // with, so the seed Griffin-Lim iterates on is unchanged bit for bit.
-  for (int k = 0; k < n_bins; ++k) {
-    const float* prow = P.data() + static_cast<size_t>(k) * n_freq;
-    const float* mrow = magnitude + static_cast<size_t>(k) * n_frames;
-    for (int b = 0; b < n_freq; ++b) {
-      const float p = prow[b];
-      float* orow = stft_mag.data() + static_cast<size_t>(b) * n_frames;
-      for (int t = 0; t < n_frames; ++t) {
-        orow[t] += p * mrow[t];
-      }
-    }
-  }
+  // Seed Griffin-Lim with the CQT magnitude laid back onto the STFT grid of the
+  // filter bank that produced it.
+  // A bandwidth needs a neighbour to be measured against, so a lone bin is voiced
+  // as the first of two and only its row is used.
+  CqtConfig grid = config;
+  grid.n_bins = std::max(n_bins, 2);
+  auto cached = get_cached_kernel(sr, grid);
+  const CqtKernel& kernel = *cached.kernel;
+  const int n_fft = kernel.fft_length();
+  const std::vector<float> stft_mag = detail::project_cqt_magnitude_to_stft(
+      detail::build_cqt_projection(kernel.kernel(), n_fft), kernel.raw_lengths(), n_fft, magnitude,
+      n_bins, n_frames);
 
   GriffinLimConfig gcfg;
   gcfg.n_iter = n_iter;
-  return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
+  return griffin_lim(stft_mag.data(), n_fft / 2 + 1, n_frames, n_fft, config.hop_length, sr, gcfg);
 }
 
 int chroma_class_of_frequency(float hz, int n_chroma) {

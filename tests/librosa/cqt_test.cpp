@@ -1,6 +1,7 @@
 /// @file cqt_test.cpp
 /// @brief Reference compatibility tests for Constant-Q Transform.
-/// @details Reference values from: tests/librosa/reference/cqt.json
+/// @details Reference values from: tests/librosa/reference/cqt.json, icqt.json and
+///          cqt_family.json
 
 #include "feature/cqt.h"
 
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <vector>
 
+#include "feature/vqt.h"
 #include "util/json_reader.h"
 #include "util/math_utils.h"
 
@@ -221,3 +223,82 @@ TEST_CASE("iCQT reference compatibility", "[cqt][icqt][reference]") {
 #elif defined(_MSC_VER)
 #pragma warning(pop)
 #endif
+
+namespace {
+
+/// Mean over interior frames of @p mag at @p bin, for a row-major [n_bins x n_frames] grid.
+double interior_mean(const std::vector<float>& mag, int bin, int n_frames) {
+  double sum = 0.0;
+  int count = 0;
+  for (int t = 8; t < n_frames - 8; ++t) {
+    sum += mag[static_cast<size_t>(bin) * n_frames + t];
+    ++count;
+  }
+  return count > 0 ? sum / count : 0.0;
+}
+
+/// Relative L2 error of @p got against @p want over interior frames.
+double interior_rel_l2(const std::vector<float>& got, const std::vector<double>& want, int n_bins,
+                       int n_frames) {
+  double num = 0.0, den = 0.0;
+  for (int k = 0; k < n_bins; ++k) {
+    for (int t = 8; t < n_frames - 8; ++t) {
+      const size_t i = static_cast<size_t>(k) * n_frames + t;
+      num += (got[i] - want[i]) * (got[i] - want[i]);
+      den += want[i] * want[i];
+    }
+  }
+  return std::sqrt(num / std::max(den, 1e-30));
+}
+
+}  // namespace
+
+TEST_CASE("pseudo_cqt, hybrid_cqt and vqt reference compatibility", "[cqt][reference]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/cqt_family.json");
+  const auto& data = json["data"];
+  const int sr = data["sr"].as_int();
+  const int n_bins = data["n_bins"].as_int();
+  const double low_hz = data["low_hz"].as_number();
+  const double high_hz = data["high_hz"].as_number();
+
+  std::vector<float> samples(static_cast<size_t>(sr));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / sr;
+    samples[i] = static_cast<float>(0.5 * std::sin(kTwoPiD * low_hz * t) +
+                                    0.5 * std::sin(kTwoPiD * high_hz * t));
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sr);
+  CqtConfig config;
+  config.fmin = data["fmin"].as_float();
+  config.n_bins = n_bins;
+  config.bins_per_octave = data["bins_per_octave"].as_int();
+  config.hop_length = data["hop_length"].as_int();
+  VqtConfig vconfig;
+  vconfig.fmin = config.fmin;
+  vconfig.n_bins = config.n_bins;
+  vconfig.bins_per_octave = config.bins_per_octave;
+  vconfig.hop_length = config.hop_length;
+
+  const auto check = [&](const char* name, const CqtResult& result) {
+    const auto& ref = data[name].as_array();
+    std::vector<double> want(ref.size());
+    for (size_t i = 0; i < ref.size(); ++i) want[i] = ref[i].as_number();
+    const int n_frames = result.n_frames();
+    REQUIRE(result.n_bins() == n_bins);
+    REQUIRE(static_cast<size_t>(n_bins) * n_frames == want.size());
+    const std::vector<float>& got = result.magnitude();
+    const double rel_l2 = interior_rel_l2(got, want, n_bins, n_frames);
+    std::vector<float> want_f(want.begin(), want.end());
+    for (const int bin : {33, 69}) {
+      const double ratio_db = 20.0 * std::log10(interior_mean(got, bin, n_frames) /
+                                                interior_mean(want_f, bin, n_frames));
+      INFO(name << " bin " << bin << " level vs librosa " << ratio_db << " dB, rel L2 " << rel_l2);
+      CHECK(std::fabs(ratio_db) < 0.5);
+    }
+    INFO(name << " rel L2 " << rel_l2);
+    CHECK(rel_l2 < 0.1);
+  };
+  check("pseudo_cqt", pseudo_cqt(audio, config));
+  check("hybrid_cqt", hybrid_cqt(audio, config));
+  check("vqt", vqt(audio, vconfig));
+}
