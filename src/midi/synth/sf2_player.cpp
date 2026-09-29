@@ -28,6 +28,7 @@ constexpr float kResidualTauSeconds = 0.5f;
 }  // namespace
 
 Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
+  per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
   // An explicit 0 is silence; only a negative or non-finite gain is not a level.
   if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
@@ -119,6 +120,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   }
   pool_.prepare(config_.polyphony);
   fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
+  fallback_per_note_.assign(fallback_pool_.size(), Sf2PerNoteVoice{});
   // Plucked GM fallback programs are Karplus-Strong voices: give every
   // fallback slot its delay span here (the only allocation site; voices
   // attach their span at note-on).
@@ -224,6 +226,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
 void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
+  fallback_per_note_.assign(fallback_per_note_.size(), Sf2PerNoteVoice{});
+  per_note_pitch_.clear();
+  per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
+  skipped_events_ = 0;
   // The mix-bus DC blocker holds an IIR tail from whatever was sounding; a
   // reset means the next block starts from silence, so it goes with the voices.
   dc_x1_ = {};

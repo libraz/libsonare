@@ -233,13 +233,13 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
     ChannelState& st = channels_[w.part & 0x0Fu];
     switch (w.param) {
       case GsParam::kPartLevel:
-        st.volume = w.value;
+        st.volume = Control32::from7(w.value);
         break;
       case GsParam::kPartPanpot:
         // The manual's own "= CC#10, except RANDOM": 00 is RANDOM at this
         // address and hard left at the controller. Randomness has no place in a
         // bit-identical bounce, so it answers centre (docs/gs.md).
-        st.pan = w.value == 0 ? 0x40 : w.value;
+        st.pan = Control32::from7(w.value == 0 ? 0x40 : w.value);
         break;
       case GsParam::kPartToneNumber:
         // The same two storage locations CC0 and a program change write, so the
@@ -857,23 +857,22 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   Sf2ChannelMod& mod = channel_mods_[ch];
-  const float bend_cents =
-      (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
+  const float bend_cents = channel_bend_cents(st.pitch_bend, st.bend_range_cents);
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
   // The mod matrix's live sources. Filled here as well as in NativeSynth so the
   // same route reads the same controller whichever player owns the voice; poly
   // aftertouch has no position on this path, so the voice's own stays at rest.
   mod.breath01 = static_cast<float>(st.cc_position[2]) / 127.0f;
-  mod.aftertouch01 = static_cast<float>(st.channel_pressure) / 127.0f;
+  mod.aftertouch01 = st.channel_pressure.f7() / 127.0f;
   mod.expression01 = static_cast<float>(st.cc_position[11]) / 127.0f;
-  mod.pitch_bend01 = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f;
+  mod.pitch_bend01 = (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
   // Where each controller source presently sits, in the block's own order. The
   // bend and polyphonic aftertouch have no position here and stay at rest, so
   // the sum below is over six terms and four of them can move.
   std::array<float, kGsCtrlSourceCount> source01{};
   source01[static_cast<size_t>(GsCtrlSource::kModulation)] = mod.mod_wheel01;
   source01[static_cast<size_t>(GsCtrlSource::kChannelAftertouch)] =
-      static_cast<float>(st.channel_pressure) / 127.0f;
+      st.channel_pressure.f7() / 127.0f;
   // Read through the number rather than stored beside it, so pointing a source
   // at a controller that is already somewhere reads where it is: a file writes
   // the assignment and the controller in whichever order it likes.
@@ -923,7 +922,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   // Not clamped, unlike the two above it: a filter swing has no end of its own
   // to pass, and the cutoff it lands on is bounded where every other cutoff is.
   mod.lfo_cutoff_cents = tvf_lfo_cents;
-  mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
+  mod.pan_units = (st.pan.f7() - 64.0f) / 63.0f * 500.0f;
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;
   mod.delay_send = kCcSendDepth * static_cast<float>(st.delay_send) / 127.0f;

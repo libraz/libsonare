@@ -8,10 +8,13 @@
 #include <vector>
 
 #include "midi/builtin_synth.h"
+#include "midi/channel_voice_decode.h"
+#include "midi/per_note_state.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -97,6 +100,35 @@ float portamento_time_ms(uint8_t value) noexcept {
   return kPortamentoMaxMs * v * v;
 }
 
+// Note On attribute #3 carries Pitch 7.9 (M2-104-UM §7.4.15).
+constexpr uint8_t kAttributePitch79 = 0x03;
+// Registered Per-Note Controller #3 is Pitch 7.25 (M2-104-UM §7.4.12).
+constexpr uint8_t kRpncPitch725 = 3;
+// Registered Controller indices in bank 0 read straight from the message.
+constexpr uint8_t kRcPitchBendSensitivity = 0;
+constexpr uint8_t kRcFineTuning = 1;
+constexpr uint8_t kRcCoarseTuning = 2;
+constexpr uint8_t kRcPerNoteBendSensitivity = 7;
+
+/// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
+/// the 32-bit range rather than wrapping.
+Control32 add_saturating(Control32 current, Control32 delta) noexcept {
+  const int64_t sum =
+      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
+  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
+  return Control32::from_raw(static_cast<uint32_t>(clamped));
+}
+
+/// The pitch offset from the sample's zone key, in cents. Exactly 0 while the key carries no
+/// per-note pitch, so a MIDI 1.0 render is untouched.
+float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {
+  const double semitones = pitch.absolute
+                               ? static_cast<double>(state.binding.note) +
+                                     pitch.per_note_semitones - static_cast<double>(state.zone_key)
+                               : pitch.per_note_semitones;
+  return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * kCentsPerSemitone);
+}
+
 /// RPN Null (7F 7F): leaves nothing selected, so later data entry is discarded.
 /// Selecting an RPN already dropped a selected NRPN — this makes the neutral
 /// state explicit rather than an RPN number nothing happens to answer.
@@ -105,6 +137,59 @@ void deselect_on_rpn_null(ChannelParamState& params) noexcept {
 }
 
 }  // namespace
+
+void Sf2Player::bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note,
+                              uint8_t attribute_type, uint16_t attribute_data) const noexcept {
+  state.binding.bind(channel, note);
+  state.has_attribute_pitch = attribute_type == kAttributePitch79;
+  state.attribute_pitch_q7_9 = state.has_attribute_pitch ? attribute_data : uint16_t{0};
+  state.zone_key = note;
+  state.cents = 0.0f;
+}
+
+ComposedPitch Sf2Player::compose_per_note(const Sf2PerNoteVoice& state) const noexcept {
+  NotePitchRequest req;
+  req.note = state.binding.note;
+  req.has_attribute_pitch = state.has_attribute_pitch;
+  req.attribute_pitch_q7_9 = state.attribute_pitch_q7_9;
+  req.per_note = state.binding.pitch_inputs(per_note_pitch_);
+  req.per_note_bend_sensitivity = per_note_bend_sensitivity_[state.binding.channel & 0x0Fu];
+  // The channel terms stay on this player's own path; only the per-note share is taken.
+  return compose_note_pitch(req);
+}
+
+void Sf2Player::refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept {
+  state.cents = per_note_cents(state, compose_per_note(state));
+}
+
+void Sf2Player::refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const auto matches = [&](const Sf2PerNoteVoice& s) noexcept {
+    return s.binding.channel == ch && (all_notes || s.binding.note == note);
+  };
+  for (Sf2Voice& v : pool_) {
+    if (v.active && matches(v.per_note)) refresh_per_note_pitch(v.per_note);
+  }
+  for (size_t i = 0; i < fallback_per_note_.size(); ++i) {
+    if (fallback_pool_.data()[i].active && matches(fallback_per_note_[i])) {
+      refresh_per_note_pitch(fallback_per_note_[i]);
+    }
+  }
+}
+
+void Sf2Player::manage_per_note(uint8_t channel, uint8_t note, bool detach, bool reset) noexcept {
+  // Detach runs on both pools before the row is reset, so a sounding voice of either keeps its
+  // values and only later notes see the reset.
+  apply_per_note_management(per_note_pitch_, channel, note, detach, false, pool_.begin(),
+                            pool_.end(), [](Sf2Voice& v) noexcept -> PerNoteBinding* {
+                              return v.active ? &v.per_note.binding : nullptr;
+                            });
+  apply_per_note_management(
+      per_note_pitch_, channel, note, detach, reset, fallback_per_note_.begin(),
+      fallback_per_note_.end(),
+      [](Sf2PerNoteVoice& s) noexcept -> PerNoteBinding* { return &s.binding; });
+  refresh_per_note_voices(channel, note, false);
+}
 
 Sf2Player::Portamento Sf2Player::take_portamento(uint8_t channel, uint8_t note) noexcept {
   ChannelState& st = channels_[channel & 0x0Fu];
@@ -186,8 +271,8 @@ GsDrumNoteParams Sf2Player::drum_note_params(const ChannelState& ch, bool is_dru
   return gs_layer_drum_note_params(user_drum_params_[static_cast<size_t>(set)][note & 0x7Fu], live);
 }
 
-void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
-                        uint32_t source_track_id) noexcept {
+void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
+                        uint16_t attribute_data, uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const ChannelState& ch = channels_[channel & 0x0Fu];
   // GS KEY RANGE (40 1x 1D/1E): a key the part does not receive is not a silent
@@ -212,8 +297,15 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // The two per-note pitch offsets: a temperament indexed by the struck key,
   // and PITCH OFFSET FINE, whose Hertz become an interval only once there is a
   // note to work it out against.
-  const float note_pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
-                                 gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  // An absolute pitch (attribute 7.9 or Pitch 7.25) overrides tuning tables, so neither is added
+  // to it (M2-104-UM §7.4.15.2).
+  Sf2PerNoteVoice per_note;
+  bind_per_note(per_note, channel, note, attribute_type, attribute_data);
+  const ComposedPitch note_pitch = compose_per_note(per_note);
+  const float note_pitch_cents = note_pitch.absolute
+                                     ? 0.0f
+                                     : gs_scale_tuning_cents(ch.scale_tuning, note) +
+                                           gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
   const GsDrumNoteParams gd = drum_note_params(ch, is_drum, note);
   // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
   // sounded at all, so this precedes every choice of bank below — a note refused
@@ -221,7 +313,8 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   if ((gd.flags & GsDrumNoteParams::kRxNoteOn) != 0 && gd.rx_note_on == 0) return;
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
       gm_program_has_dedicated_model(bank, ch.program)) {
-    fallback_note_on(channel, note, velocity, source_track_id, porta);
+    fallback_note_on(channel, note, velocity, source_track_id, porta, attribute_type,
+                     attribute_data);
     return;
   }
   // GS user drum set (21 dn rr): rhythm programs 64 and 65 play a kit the file
@@ -241,7 +334,10 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // No SoundFont / uncovered program -> the data-free synth floor.
   const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, kit_program) : -1;
   if (preset_idx < 0) {
-    if (config_.synth_fallback) fallback_note_on(channel, note, velocity, source_track_id, porta);
+    if (config_.synth_fallback) {
+      fallback_note_on(channel, note, velocity, source_track_id, porta, attribute_type,
+                       attribute_data);
+    }
     return;
   }
   const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_idx)];
@@ -265,6 +361,15 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // ON TOP of the user set's source note, which is the stored kit it edits.
   uint8_t sound_note = gs_user_drum_sound_note(us, note);
   if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
+  // The sample zone follows the integer part of an absolute pitch (§7.4.15.3), so a far
+  // transposition does not stretch one recording across the keyboard.
+  if (note_pitch.absolute) {
+    sound_note = static_cast<uint8_t>(std::clamp(
+        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
+        127));
+  }
+  per_note.zone_key = sound_note;
+  per_note.cents = per_note_cents(per_note, note_pitch);
 
   bool has_renderable_zone = false;
   for (const Sf2Zone& pzone : preset.zones) {
@@ -327,15 +432,18 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
       voice->start(pool_data, params, sample_rate_, vel_gain);
       voice->glide_cents = porta.cents;
       voice->glide_coeff = porta.coeff;
+      voice->per_note = per_note;
     }
   }
   if (!has_renderable_zone && config_.synth_fallback) {
-    fallback_note_on(channel, note, velocity, source_track_id, porta);
+    fallback_note_on(channel, note, velocity, source_track_id, porta, attribute_type,
+                     attribute_data);
   }
 }
 
 void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
-                                 uint32_t source_track_id, Portamento porta) noexcept {
+                                 uint32_t source_track_id, Portamento porta, uint8_t attribute_type,
+                                 uint16_t attribute_data) noexcept {
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const uint16_t bank = effective_bank(channel);
   const GsToneMap tone_map = gs_effective_tone_map(ch.bank_msb, ch.bank_lsb);
@@ -472,8 +580,15 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   // SCALE TUNING and PITCH OFFSET FINE are per note where the other eight are
   // per part, so they are set on the way past rather than built with them; the
   // struck key indexes both, as it does on the SoundFont bank.
-  part_mod.pitch_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
-                         gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  Sf2PerNoteVoice per_note;
+  bind_per_note(per_note, channel, note, attribute_type, attribute_data);
+  const ComposedPitch note_pitch = compose_per_note(per_note);
+  per_note.cents = per_note_cents(per_note, note_pitch);
+  // An absolute pitch overrides tuning tables (M2-104-UM §7.4.15.2).
+  part_mod.pitch_cents = note_pitch.absolute
+                             ? 0.0f
+                             : gs_scale_tuning_cents(ch.scale_tuning, note) +
+                                   gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
   // Same reason the SoundFont bank engages its filter here: the offset itself
   // arrives per sample from the controller, so what the note-on has to settle
   // is only whether there is a filter for it to reach.
@@ -484,6 +599,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   // rest; the CC5/65/84 portamento is what drives it here.
   voice->glide_cents = porta.cents;
   voice->glide_coeff = porta.coeff;
+  if (voice_index < fallback_per_note_.size()) fallback_per_note_[voice_index] = per_note;
 
   // Pipe-organ patches share a per-part wind chest (tremulant / wind sag).
   // Re-prepare only when the parameters change so the tremulant phase stays
@@ -782,13 +898,13 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
   st.mod_wheel = 0;
-  st.expression = 127;
-  st.pitch_bend = 8192;
+  st.expression = Control32::from7(127);
+  st.pitch_bend = Bend32::center();
   // Channel aftertouch is an RP-015 performance controller and is the second
   // source the controller-destination block reads, so it is cleared here rather
   // than left latched: refresh_channel_mod below scales every destination by
   // where its source sits, and a stale pressure kept driving them after CC121.
-  st.channel_pressure = 0;
+  st.channel_pressure = Control32::from_raw(0);
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
@@ -801,7 +917,10 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   refresh_channel_mod(ch);
 }
 
-void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
+void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 value32) noexcept {
+  // Volume, expression and pan keep the full-width value for their float laws; every switch, the
+  // controller record and the parameter-number machinery read the 7-bit value.
+  const uint8_t value = value32.u7();
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
   // GS RX switches (40 1x 06, and 0B-12 for the eight named controllers): a part
@@ -893,15 +1012,15 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       // Master coarse tuning has no LSB: the manual defines it as MSB only.
       break;
     case 7:
-      st.volume = value;
+      st.volume = value32;
       refresh_channel_mod(ch);
       break;
     case 10:
-      st.pan = value;
+      st.pan = value32;
       refresh_channel_mod(ch);
       break;
     case 11:
-      st.expression = value;
+      st.expression = value32;
       refresh_channel_mod(ch);
       break;
     case 91:
@@ -992,6 +1111,78 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
   }
 }
 
+void Sf2Player::registered_controller(uint8_t ch, const Ump& ump,
+                                      const ChannelVoiceEvent& ev) noexcept {
+  ChannelState& st = channels_[ch];
+  if (ev.kind == ChannelVoiceKind::RegisteredController && ev.bank == 0) {
+    // The RPN gesture answers to the same two switches it does in MIDI 1.0 form.
+    const bool received = st.receives(GsRxSwitch::kControlChange) && st.receives(GsRxSwitch::kRpn);
+    if (ev.index == kRcPitchBendSensitivity) {
+      if (!received) return;
+      // Semitones in the top seven bits, cents below them: the RPN 0/0 data entry MSB and LSB.
+      const uint16_t v14 = ev.value.u14();
+      st.bend_range_cents = 100.0f * static_cast<float>(v14 >> 7) + static_cast<float>(v14 & 0x7Fu);
+      refresh_channel_mod(ch);
+      return;
+    }
+    if (ev.index == kRcPerNoteBendSensitivity) {
+      if (!received) return;
+      per_note_bend_sensitivity_[ch] = ev.value;
+      refresh_per_note_voices(ch, 0, true);
+      return;
+    }
+  }
+  // Every other RC / AC takes the path its four MIDI 1.0 messages do, so selection, data entry
+  // and the RX switches treat it the same.
+  const Midi1MessageList lowered = midi2_to_midi1_messages(ump);
+  for (uint8_t i = 0; i < lowered.count; ++i) {
+    control_change(ch, lowered.messages[i].note_number(),
+                   Control32::from7(lowered.messages[i].data2_7bit()));
+  }
+  return;
+}
+
+bool Sf2Player::relative_controller(uint8_t ch, const ChannelVoiceEvent& ev) noexcept {
+  if (ev.kind != ChannelVoiceKind::RelativeRegistered || ev.bank != 0) return false;
+  ChannelState& st = channels_[ch];
+  const bool received = st.receives(GsRxSwitch::kControlChange) && st.receives(GsRxSwitch::kRpn);
+  switch (ev.index) {
+    case kRcPitchBendSensitivity: {
+      if (!received) return true;
+      // The held range in RPN 0/0 form, moved and read back as the absolute message would be.
+      const int semitones = std::clamp(static_cast<int>(st.bend_range_cents / 100.0f), 0, 127);
+      const int cents = std::clamp(
+          static_cast<int>(st.bend_range_cents - 100.0f * static_cast<float>(semitones) + 0.5f), 0,
+          127);
+      const auto held = static_cast<uint32_t>((semitones << 7) | cents) << 18;
+      const uint16_t v14 = add_saturating(Control32::from_raw(held), ev.value).u14();
+      st.bend_range_cents = 100.0f * static_cast<float>(v14 >> 7) + static_cast<float>(v14 & 0x7Fu);
+      refresh_channel_mod(ch);
+      return true;
+    }
+    case kRcFineTuning: {
+      if (!received) return true;
+      const auto held = static_cast<uint32_t>(st.pitch_fine_tune) << 18;
+      st.pitch_fine_tune = add_saturating(Control32::from_raw(held), ev.value).u14();
+      return true;
+    }
+    case kRcCoarseTuning: {
+      if (!received) return true;
+      const auto held = static_cast<uint32_t>(st.pitch_coarse_tune + 64) << 25;
+      const int moved = static_cast<int>(add_saturating(Control32::from_raw(held), ev.value).u7());
+      st.pitch_coarse_tune = static_cast<int8_t>(std::clamp(moved - 64, -24, 24));
+      return true;
+    }
+    case kRcPerNoteBendSensitivity:
+      if (!received) return true;
+      per_note_bend_sensitivity_[ch] = add_saturating(per_note_bend_sensitivity_[ch], ev.value);
+      refresh_per_note_voices(ch, 0, true);
+      return true;
+    default:
+      return false;
+  }
+}
+
 void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) noexcept {
   if (!prepared_) return;
   const Ump& u = event.ump;
@@ -1005,6 +1196,11 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     }
     return;
   }
+  ChannelVoiceEvent ev;
+  if (!decode_channel_voice(u, &ev)) {
+    ++skipped_events_;  // Reserved status.
+    return;
+  }
   // GS RX CHANNEL (40 1x 02): which parts a channel message reaches. At the
   // power-on map this word carries the channel's own part and nothing else, so
   // the loop is a direct index until a file says otherwise. Several parts on one
@@ -1012,6 +1208,7 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
   // to RX CHANNEL OFF is in no word at all.
   uint16_t parts = rx_parts_[u.channel() & 0x0Fu];
   if (parts == 0) return;
+  bool skipped = false;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     if ((parts & (1u << ch)) == 0) continue;
     // GS RX switches (40 1x 03-12): whether the part receives this class of
@@ -1019,66 +1216,72 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     // received one left, which is not the same as receiving a neutral value.
     // Polyphonic pressure has no branch below, so its switch guards nothing.
     if (!receives_message(channels_[ch].rx_switches, u)) continue;
-    if (u.is_note_on()) {
-      const Velocity16 vel = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                                 ? Velocity16::from7(u.data2_7bit())
-                                 : Velocity16::from_raw(static_cast<uint16_t>(u.words[1] >> 16));
-      note_on(ch, u.note_number(), vel, event.source_track_id);
-    } else if (u.is_note_off()) {
-      note_off(ch, u.note_number(), event.source_track_id);
-    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
-      if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-        channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
+    switch (ev.kind) {
+      case ChannelVoiceKind::NoteOn:
+        note_on(ch, ev.note, ev.velocity, ev.index, ev.attribute_data, event.source_track_id);
+        break;
+      case ChannelVoiceKind::NoteOff:
+        note_off(ch, ev.note, event.source_track_id);
+        break;
+      case ChannelVoiceKind::ProgramChange:
+        channels_[ch].program = ev.program;
         // A MIDI 2.0 program change carries the bank inside itself, so the two
         // bank-select switches decide these fields as they decide CC0 and CC32:
         // one storage location, and a second transport to it does not get to
         // arrive past a switch that closed the first.
-        if ((u.words[0] & 0x01u) != 0 && channels_[ch].receives(GsRxSwitch::kBankSelect)) {
-          channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
-          channels_[ch].bank_lsb = channels_[ch].receives(GsRxSwitch::kBankSelectLsb)
-                                       ? static_cast<uint8_t>(u.words[1] & 0x7Fu)
-                                       : 0;
+        if (u.message_type() == UmpMessageType::kMidi2ChannelVoice && (ev.flags & 0x01u) != 0 &&
+            channels_[ch].receives(GsRxSwitch::kBankSelect)) {
+          channels_[ch].bank_msb = ev.bank_msb;
+          channels_[ch].bank_lsb =
+              channels_[ch].receives(GsRxSwitch::kBankSelectLsb) ? ev.bank_lsb : uint8_t{0};
         }
-      } else {
-        channels_[ch].program = u.note_number();
-      }
-      // The fallback ambience floor is program-keyed, and so is the rig the bank
-      // binds; keep both in step with the new program.
-      refresh_channel_mod(ch);
-      refresh_part_rig(ch);
-    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
-      if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
-        // MIDI 1.0: 14-bit value, LSB in data1 (bits 8..14), MSB in data2.
-        channels_[ch].pitch_bend =
-            static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number());
-      } else {
-        // MIDI 2.0: 32-bit value in word[1]; keep the top 14 bits.
-        channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
-      }
-      refresh_channel_mod(ch);
-    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
-      // MIDI 1.0 carries the pressure in the first data byte (there is only
-      // one); MIDI 2.0 gives a 32-bit value, narrowed the way a CC is.
-      channels_[ch].channel_pressure = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                                           ? u.note_number()
-                                           : scale_cc_32_to_7(u.words[1]);
-      refresh_channel_mod(ch);
-    } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
-      const uint8_t controller = u.note_number();
-      const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                                 ? u.data2_7bit()
-                                 : scale_cc_32_to_7(u.words[1]);
-      control_change(ch, controller, value7);
-    } else if (is_registered_or_assignable_controller(u)) {
-      // The RPN / NRPN gesture in its MIDI 2.0 form takes the path its four
-      // MIDI 1.0 messages do, so selection, data entry and the RX switches
-      // treat it the same.
-      const Midi1MessageList lowered = midi2_to_midi1_messages(u);
-      for (uint8_t i = 0; i < lowered.count; ++i) {
-        control_change(ch, lowered.messages[i].note_number(), lowered.messages[i].data2_7bit());
-      }
+        // The fallback ambience floor is program-keyed, and so is the rig the bank
+        // binds; keep both in step with the new program.
+        refresh_channel_mod(ch);
+        refresh_part_rig(ch);
+        break;
+      case ChannelVoiceKind::PitchBend:
+        channels_[ch].pitch_bend = ev.bend;
+        refresh_channel_mod(ch);
+        break;
+      case ChannelVoiceKind::ChannelPressure:
+        channels_[ch].channel_pressure = ev.value;
+        refresh_channel_mod(ch);
+        break;
+      case ChannelVoiceKind::ControlChange:
+        control_change(ch, ev.note, ev.value);
+        break;
+      case ChannelVoiceKind::PolyPressure:
+        break;  // Nothing here acts on it.
+      case ChannelVoiceKind::RegisteredController:
+      case ChannelVoiceKind::AssignableController:
+        registered_controller(ch, u, ev);
+        break;
+      case ChannelVoiceKind::RelativeRegistered:
+      case ChannelVoiceKind::RelativeAssignable:
+        skipped |= !relative_controller(ch, ev);  // A parameter this player does not hold.
+        break;
+      case ChannelVoiceKind::PerNotePitchBend:
+        per_note_pitch_.set_per_note_bend(ch, ev.note, ev.bend);
+        refresh_per_note_voices(ch, ev.note, false);
+        break;
+      case ChannelVoiceKind::RegisteredPerNote:
+        if (ev.index != kRpncPitch725) {
+          skipped = true;
+          break;
+        }
+        per_note_pitch_.set_pitch_7_25(ch, ev.note, ev.value);
+        refresh_per_note_voices(ch, ev.note, false);
+        break;
+      case ChannelVoiceKind::AssignablePerNote:
+        skipped = true;
+        break;
+      case ChannelVoiceKind::PerNoteManagement:
+        manage_per_note(ch, ev.note, (ev.flags & 0x02u) != 0, (ev.flags & 0x01u) != 0);
+        break;
     }
   }
+  if (skipped) ++skipped_events_;
 }
 
 }  // namespace sonare::midi::synth

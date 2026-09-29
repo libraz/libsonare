@@ -7,6 +7,7 @@
 
 #include "midi/synth/sf2_player.h"
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -14,11 +15,13 @@
 #include <memory>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/midi_event.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/audio_fixtures.h"
 #include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
@@ -663,4 +666,364 @@ TEST_CASE("Sf2Player keeps a ringing note on the body it was struck through", "[
     CAPTURE(same_part, other_part, delta_db);
     CHECK(std::abs(delta_db) < 0.1);
   }
+}
+
+namespace {
+
+using sonare::midi::Bend32;
+using sonare::midi::Control32;
+using sonare::midi::MidiInstrumentSourceOutput;
+using sonare::midi::Velocity16;
+
+constexpr int kFirst50Ms = 2400;  // at kOutRate
+
+/// Midpoint of two raw values, strictly between them for neighbouring upscale points.
+uint32_t midpoint(uint32_t lo, uint32_t hi) { return lo + (hi - lo) / 2; }
+
+const std::shared_ptr<Sf2File>& shared_fixture() {
+  static const std::shared_ptr<Sf2File> sf2 = make_fixture();
+  return sf2;
+}
+
+Sf2Player fixture_player() { return make_player(shared_fixture()); }
+
+void send(Sf2Player& p, const sonare::midi::Ump& ump) { p.on_event(0, event(ump)); }
+
+/// Absolute peak of the first 50 ms after @p setup.
+template <typename Setup>
+float first_50ms_peak(Setup setup) {
+  Sf2Player player = fixture_player();
+  setup(player);
+  const StereoRender out = render(player, kFirst50Ms);
+  return std::max(peak(out.left), peak(out.right));
+}
+
+/// Fundamental of a mono render in Hz: the span of all rising zero crossings, which resolves a
+/// pitch step far finer than one FFT bin.
+double crossing_hz(const std::vector<float>& buffer) {
+  double first = -1.0;
+  double last = 0.0;
+  int count = 0;
+  for (size_t i = 1; i < buffer.size(); ++i) {
+    const float a = buffer[i - 1];
+    const float b = buffer[i];
+    if (a <= 0.0f && b > 0.0f) {
+      const double t =
+          static_cast<double>(i - 1) + static_cast<double>(a) / static_cast<double>(a - b);
+      if (first < 0.0) first = t;
+      last = t;
+      ++count;
+    }
+  }
+  REQUIRE(count > 2);
+  return kOutRate * static_cast<double>(count - 1) / (last - first);
+}
+
+double cents_between(double hz, double reference_hz) {
+  return 1200.0 * std::log2(hz / reference_hz);
+}
+
+/// Left channel of one second, after the DC blocker has settled its first blocks.
+std::vector<float> render_one_second(Sf2Player& player) { return render(player, 48000).left; }
+
+/// Sounding pitch of a note 60 (a 1 kHz sine at that key) after @p setup, in cents from 1 kHz.
+template <typename Setup>
+double note_60_cents(Setup setup, uint8_t note = 60, uint8_t program_select = 0) {
+  Sf2Player player = fixture_player();
+  if (program_select != 0) {
+    send(player, sonare::midi::make_midi1_program_change(0, 0, program_select));
+  }
+  setup(player);
+  send(player, sonare::midi::make_midi2_note_on(0, 0, note, 0xC000));
+  return cents_between(crossing_hz(render_one_second(player)), 1000.0);
+}
+
+/// Renders @p player split by source track (ids 1 and 2) and returns both tracks.
+std::array<std::vector<float>, 2> render_tracks(Sf2Player& player, int num_samples) {
+  std::array<std::vector<float>, 2> tracks;
+  std::vector<float> fallback(static_cast<size_t>(num_samples), 0.0f);
+  for (auto& t : tracks) t.assign(static_cast<size_t>(num_samples), 0.0f);
+  float* fallback_channels[] = {fallback.data()};
+  float* one[] = {tracks[0].data()};
+  float* two[] = {tracks[1].data()};
+  const MidiInstrumentSourceOutput outputs[] = {{0, fallback_channels}, {1, one}, {2, two}};
+  REQUIRE(player.process_source_tracks(outputs, std::size(outputs), 1, num_samples));
+  return tracks;
+}
+
+MidiEvent on_track(const sonare::midi::Ump& ump, uint32_t track) {
+  MidiEvent e = event(ump);
+  e.source_track_id = track;
+  return e;
+}
+
+}  // namespace
+
+TEST_CASE("Sf2Player hears a MIDI 2.0 velocity between the 7-bit steps", "[midi][sf2][midi2]") {
+  constexpr uint8_t kV = 64;
+  const uint32_t lo = Velocity16::from7(kV).raw;
+  const uint32_t hi = Velocity16::from7(kV + 1).raw;
+  auto peak_at = [](uint32_t raw) {
+    return first_50ms_peak([raw](Sf2Player& p) {
+      send(p, sonare::midi::make_midi2_note_on(0, 0, 60, static_cast<uint16_t>(raw)));
+    });
+  };
+  const float p_lo = peak_at(lo);
+  const float p_mid = peak_at(midpoint(lo, hi));
+  const float p_hi = peak_at(hi);
+  CAPTURE(p_lo, p_mid, p_hi);
+  REQUIRE(p_lo < p_mid);
+  REQUIRE(p_mid < p_hi);
+}
+
+TEST_CASE("Sf2Player hears a 32-bit volume, expression and pressure between the 7-bit steps",
+          "[midi][sf2][midi2]") {
+  constexpr uint8_t kV = 100;
+  const uint32_t lo = Control32::from7(kV).raw;
+  const uint32_t hi = Control32::from7(kV + 1).raw;
+  // Channel pressure has no destination at power-on; route it to AMPLITUDE CONTROL at -100 %
+  // (40 21 22) so that more pressure means less level.
+  const std::vector<uint8_t> route = [] {
+    std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x21, 0x22, 0x00};
+    int sum = 0x40 + 0x21 + 0x22;
+    msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
+    msg.push_back(0xF7);
+    return msg;
+  }();
+  for (const int which : {7, 11, -1}) {
+    auto peak_at = [&](uint32_t raw) {
+      return first_50ms_peak([&](Sf2Player& p) {
+        if (which < 0) {
+          REQUIRE(p.handle_sysex(route.data(), route.size()));
+          send(p, sonare::midi::make_midi2_channel_pressure(0, 0, raw));
+        } else {
+          send(p, sonare::midi::make_midi2_control_change(0, 0, static_cast<uint8_t>(which), raw));
+        }
+        send(p, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+      });
+    };
+    const float p_lo = peak_at(lo);
+    const float p_mid = peak_at(midpoint(lo, hi));
+    const float p_hi = peak_at(hi);
+    CAPTURE(which, p_lo, p_mid, p_hi);
+    if (which < 0) {
+      REQUIRE(p_lo > p_mid);
+      REQUIRE(p_mid > p_hi);
+    } else {
+      REQUIRE(p_lo < p_mid);
+      REQUIRE(p_mid < p_hi);
+    }
+  }
+}
+
+TEST_CASE("Sf2Player hears a 32-bit bend between the 14-bit steps", "[midi][sf2][midi2]") {
+  // One 14-bit step at the default 2-semitone range is 0.024 cents; the pitch is read as the span
+  // of a second of rising zero crossings.
+  constexpr uint16_t kBend = 12000;
+  const uint32_t lo = Bend32::from14(kBend).raw;
+  const uint32_t hi = Bend32::from14(kBend + 1).raw;
+  auto cents_at = [](uint32_t raw) {
+    return note_60_cents(
+        [raw](Sf2Player& p) { send(p, sonare::midi::make_midi2_pitch_bend(0, 0, raw)); });
+  };
+  const double c_lo = cents_at(lo);
+  const double c_mid = cents_at(midpoint(lo, hi));
+  const double c_hi = cents_at(hi);
+  CAPTURE(c_lo, c_mid, c_hi);
+  REQUIRE(c_lo < c_mid);
+  REQUIRE(c_mid < c_hi);
+}
+
+TEST_CASE("Sf2Player per-note pitch bend moves only its own note", "[midi][sf2][midi2]") {
+  // Two notes on one channel. A per-note bend on 60 retunes 60 and leaves 67 exactly as if it
+  // sounded alone: the mix is linear, so pair == bent 60 alone + 67 alone.
+  constexpr int kLen = 16384;
+  constexpr uint32_t kUpOneSemitone = 0xC0000000u;  // half of the default 2 semitones
+  const auto strike = [&](bool n60, bool n67) {
+    Sf2Player player = fixture_player();
+    if (n60) send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+    if (n67) send(player, sonare::midi::make_midi2_note_on(0, 0, 67, 0xC000));
+    send(player, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kUpOneSemitone));
+    return render(player, kLen).left;
+  };
+  const std::vector<float> both = strike(true, true);
+  const std::vector<float> bent = strike(true, false);
+  const std::vector<float> alone = strike(false, true);
+  float worst = 0.0f;
+  for (size_t i = 0; i < both.size(); ++i) {
+    worst = std::max(worst, std::fabs(both[i] - (bent[i] + alone[i])));
+  }
+  CAPTURE(worst);
+  REQUIRE(worst < 1.0e-5f);
+  REQUIRE(peak(alone) > 0.1f);
+
+  const double cents = cents_between(crossing_hz(bent), 1000.0);
+  CAPTURE(cents);
+  REQUIRE(std::fabs(cents - 100.0) < 5.0);
+}
+
+TEST_CASE("Sf2Player detaches a voice on Per-Note Management D=1", "[midi][sf2][midi2]") {
+  constexpr int kLen = 16384;
+  constexpr uint32_t kUpOneSemitone = 0xC0000000u;
+  constexpr uint32_t kFullUp = 0xFFFFFFFFu;
+  auto render_60 = [&](bool detach_then_rebend) {
+    Sf2Player player = fixture_player();
+    player.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000), 1));
+    send(player, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kUpOneSemitone));
+    if (detach_then_rebend) {
+      send(player, sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false));
+      send(player, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kFullUp));
+    }
+    return render_tracks(player, kLen)[0];
+  };
+  // The detached voice keeps the bend it had when it was detached.
+  REQUIRE(render_60(true) == render_60(false));
+
+  // The row itself took the new bend, so the next note on the key sounds it.
+  const double next_note = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xC0000000u));
+    send(p, sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false));
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+  });
+  CAPTURE(next_note);
+  REQUIRE(std::fabs(next_note - 200.0) < 5.0);
+
+  // S=1 returns the row to unset, so the next note is in tune.
+  const double after_reset = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+    send(p, sonare::midi::make_midi2_per_note_management(0, 0, 60, false, true));
+  });
+  CAPTURE(after_reset);
+  REQUIRE(std::fabs(after_reset) < 5.0);
+}
+
+TEST_CASE("Sf2Player takes a note's absolute pitch from RPNC #3 and attribute #3",
+          "[midi][sf2][midi2]") {
+  // RPNC #3 Pitch 7.25 on key 60 makes it sound 72; attribute #3 Pitch 7.9 on the note-on
+  // outranks it (M2-104-UM §7.4.15).
+  const double rpnc = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
+  });
+  CAPTURE(rpnc);
+  REQUIRE(std::fabs(rpnc - 1200.0) < 5.0);
+
+  Sf2Player player = fixture_player();
+  send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
+  send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3, 67 * 512));
+  const double attribute = cents_between(crossing_hz(render_one_second(player)), 1000.0);
+  CAPTURE(attribute);
+  REQUIRE(std::fabs(attribute - 700.0) < 5.0);
+}
+
+TEST_CASE("Sf2Player picks the sample zone by the integer part of an absolute pitch",
+          "[midi][sf2][midi2]") {
+  // Preset 3 covers keys 0-48 only. Key 60 with Pitch 7.25 = 40 plays that preset's sample at
+  // key 40 (about 315 Hz); by the note number it would have fallen out of the zone.
+  const double cents = note_60_cents(
+      [](Sf2Player& p) {
+        send(p, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 40u << 25));
+      },
+      60, 3);
+  const double expect = 100.0 * (40 - 60);
+  CAPTURE(cents, expect);
+  REQUIRE(std::fabs(cents - expect) < 5.0);
+}
+
+TEST_CASE("Sf2Player scales per-note bend by RC 0/7, absolute and relative", "[midi][sf2][midi2]") {
+  const double absolute = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 12u << 25));
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+  });
+  // Relative +10 semitones on the default 2.
+  const double relative = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 7, 10u << 25));
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+  });
+  // A delta far below zero saturates at 0 semitones instead of wrapping.
+  const double saturated = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 7, 0x80000000u));
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+  });
+  CAPTURE(absolute, relative, saturated);
+  REQUIRE(std::fabs(absolute - 1200.0) < 5.0);
+  REQUIRE(std::fabs(relative - 1200.0) < 5.0);
+  REQUIRE(std::fabs(saturated) < 5.0);
+}
+
+TEST_CASE("Sf2Player keeps per-note pitch across Reset All Controllers", "[midi][sf2][midi2]") {
+  const double cents = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xC0000000u));
+    send(p, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+  });
+  CAPTURE(cents);
+  REQUIRE(std::fabs(cents - 100.0) < 5.0);
+}
+
+TEST_CASE("Sf2Player takes the channel bend range from a MIDI 2.0 Registered Controller",
+          "[midi][sf2][midi2]") {
+  // RC 0/0 carries RPN 0/0 as one message with the semitones in the top seven bits.
+  const double absolute = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_registered_controller(0, 0, 0, 0, 12u << 25));
+    send(p, sonare::midi::make_midi1_pitch_bend(0, 0, 16383));
+  });
+  // +10 semitones on the default 2.
+  const double relative = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 0, 10u << 25));
+    send(p, sonare::midi::make_midi1_pitch_bend(0, 0, 16383));
+  });
+  const double untouched = note_60_cents(
+      [](Sf2Player& p) { send(p, sonare::midi::make_midi1_pitch_bend(0, 0, 16383)); });
+  CAPTURE(absolute, relative, untouched);
+  REQUIRE(std::fabs(absolute - 1200.0) < 5.0);
+  REQUIRE(std::fabs(relative - 1200.0) < 5.0);
+  REQUIRE(std::fabs(untouched - 200.0) < 5.0);
+}
+
+TEST_CASE("Sf2Player moves the master tuning by a relative RC 0/1 and 0/2", "[midi][sf2][midi2]") {
+  Sf2Player player = fixture_player();
+  // Coarse tuning: +3 semitones on the centre.
+  send(player, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 2, 3u << 25));
+  REQUIRE(player.pitch_coarse_tune(0) == 3);
+  // Fine tuning: half of the 14-bit range up from the centre, saturating at full scale.
+  send(player, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 1, 0x7FFFFFFFu));
+  REQUIRE(player.pitch_fine_tune(0) == 16383);
+}
+
+TEST_CASE("Sf2Player bends a synth-fallback voice per note", "[midi][sf2][midi2]") {
+  // No SoundFont: the note plays the data-free model. The bend must reach it as well.
+  auto fundamental = [](bool bend) {
+    Sf2Player player = make_fallback_player();
+    send(player, sonare::midi::make_midi1_program_change(0, 0, 80));
+    if (bend) send(player, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 69, 0xFFFFFFFFu));
+    send(player, sonare::midi::make_midi2_note_on(0, 0, 69, 0xC000));
+    const double hint = bend ? 493.88 : 440.0;
+    return sonare::test::fft_fundamental(render_one_second(player), 4096, hint);
+  };
+  const double bent = cents_between(fundamental(true), fundamental(false));
+  CAPTURE(bent);
+  REQUIRE(std::fabs(bent - 200.0) < 10.0);
+}
+
+TEST_CASE("Sf2Player counts what it decodes and does not realise", "[midi][sf2][midi2]") {
+  Sf2Player player = fixture_player();
+  REQUIRE(player.skipped_event_count() == 0);
+  // Reserved MIDI 2.0 status 0x7.
+  sonare::midi::Ump reserved = sonare::midi::make_midi2_channel_pressure(0, 0, 0);
+  reserved.words[0] = (reserved.words[0] & 0xFF0FFFFFu) | 0x00700000u;
+  send(player, reserved);
+  // A per-note controller other than pitch, and an assignable one.
+  send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 7, 0x80000000u));
+  send(player, sonare::midi::make_midi2_assignable_per_note_controller(0, 0, 60, 1, 0));
+  // Relative on a parameter this player does not hold.
+  send(player, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 3, 1u << 25));
+  send(player, sonare::midi::make_midi2_relative_assignable_controller(0, 0, 3, 4, 1u << 25));
+  REQUIRE(player.skipped_event_count() == 5);
+  // Pitch per-note and the held controllers are realised, not counted.
+  send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 60u << 25));
+  send(player, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0x80000000u));
+  send(player, sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 2u << 25));
+  send(player, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 0, 1u << 25));
+  REQUIRE(player.skipped_event_count() == 5);
+  player.reset();
+  REQUIRE(player.skipped_event_count() == 0);
 }

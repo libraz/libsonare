@@ -32,6 +32,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/per_note_state.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/sample_reader.h"
 #include "midi/synth/sf2_file.h"
@@ -277,6 +278,19 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
 float sf2_velocity_gain(Velocity16 velocity) noexcept;
 /// Same law for CC7 volume / CC11 expression.
 float sf2_cc_gain(uint8_t value) noexcept;
+/// The same law read through Control32::f7(), so a 32-bit value lands between the 7-bit steps.
+float sf2_cc_gain(Control32 value) noexcept;
+
+/// The per-note pitch state one sounding voice carries, whichever pool it lives in.
+struct Sf2PerNoteVoice {
+  PerNoteBinding binding;
+  bool has_attribute_pitch = false;  ///< Note On attribute #3, captured at note-on.
+  uint16_t attribute_pitch_q7_9 = 0;
+  /// The key the sample was selected and tuned at. An absolute pitch is measured from it.
+  uint8_t zone_key = 0;
+  /// Pitch offset from the zone key in cents; exactly 0 while the key carries no per-note pitch.
+  float cents = 0.0f;
+};
 
 /// One playing SF2 voice (lives in a VoicePool inside Sf2Player).
 struct Sf2Voice : VoiceState {
@@ -298,6 +312,8 @@ struct Sf2Voice : VoiceState {
   /// whichever host plays it. Both zero = not gliding.
   float glide_cents = 0.0f;
   float glide_coeff = 0.0f;
+  /// Per-note pitch (Per-Note Pitch Bend, Pitch 7.25, attribute 7.9); set by the player.
+  Sf2PerNoteVoice per_note;
   // Cached stereo gains for (zone pan + channel pan); recomputed on change.
   // Seeded centred, which under the constant-power law is 1/sqrt(2) a side.
   float cached_pan_units = 1.0e9f;

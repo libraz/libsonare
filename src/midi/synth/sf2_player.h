@@ -40,8 +40,10 @@
 #include <string_view>
 #include <vector>
 
+#include "midi/channel_voice_decode.h"
 #include "midi/control_value.h"
 #include "midi/instrument.h"
+#include "midi/per_note_state.h"
 #include "midi/source_residual.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_layer.h"
@@ -207,6 +209,11 @@ class Sf2Player final : public MidiInstrument {
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
 
+  /// Channel-voice messages received but not acted on: reserved statuses, per-note controllers
+  /// other than pitch, and relative controllers on a parameter this player does not hold. Cleared
+  /// by reset().
+  uint64_t skipped_event_count() const noexcept { return skipped_events_; }
+
   /// Feeds a SysEx payload (with or without F0/F7 framing) to the GS layer:
   /// GM System On, GS Reset and "use for rhythm part" are recognised. Hosts
   /// that own the SysEx store call this when a SysEx event is due. Safe on
@@ -351,14 +358,15 @@ class Sf2Player final : public MidiInstrument {
     /// from this rather than restating them.
     std::array<uint8_t, 128> cc_position = gs_default_cc_positions();
     // Default-modulator controller state.
-    uint8_t volume = gs_default_cc_positions()[7];       // CC7
-    uint8_t expression = gs_default_cc_positions()[11];  // CC11
-    uint8_t pan = gs_default_cc_positions()[10];         // CC10
-    uint8_t mod_wheel = 0;                               // CC1
+    // Held at MIDI 2.0 width; a MIDI 1.0 value widens exactly and reads back as float(v).
+    Control32 volume = Control32::from7(gs_default_cc_positions()[7]);       // CC7
+    Control32 expression = Control32::from7(gs_default_cc_positions()[11]);  // CC11
+    Control32 pan = Control32::from7(gs_default_cc_positions()[10]);         // CC10
+    uint8_t mod_wheel = 0;                                                   // CC1
     uint8_t reverb_send = 0;  // CC91 (the GS layer's GS reset sets the GS power-on 40)
     uint8_t chorus_send = 0;  // CC93
     uint8_t delay_send = 0;   // CC94 (GS delay send; no SF2 generator)
-    uint16_t pitch_bend = 8192;
+    Bend32 pitch_bend = Bend32::center();
     // RPN/NRPN state: CC101/100 select an RPN, CC99/98 select a GS NRPN; the
     // data entry CCs (6/38) route to whichever was selected last.
     ChannelParamState params;
@@ -370,7 +378,7 @@ class Sf2Player final : public MidiInstrument {
     /// Channel aftertouch, the second source the block's positions come from.
     /// The modulation wheel's is mod_wheel above; the other four sources have
     /// no controller yet and stay at rest.
-    uint8_t channel_pressure = 0;
+    Control32 channel_pressure = Control32::from_raw(0);
     /// CC1 / CC2 CONTROLLER NUMBER (40 1x 1F/20): which MIDI controller drives
     /// each assignable source of the controller-destination block.
     std::array<uint8_t, 2> assignable_cc{{0x10, 0x11}};
@@ -480,11 +488,12 @@ class Sf2Player final : public MidiInstrument {
     float coeff = 0.0f;  ///< Per-sample one-pole decay (0 = no glide).
   };
 
-  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
-               uint32_t source_track_id) noexcept;
+  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
+               uint16_t attribute_data, uint32_t source_track_id) noexcept;
   /// Data-free floor: plays the note through the GM fallback synth bank.
   void fallback_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
-                        uint32_t source_track_id, Portamento porta) noexcept;
+                        uint32_t source_track_id, Portamento porta, uint8_t attribute_type,
+                        uint16_t attribute_data) noexcept;
   /// Resolves the glide a note-on on @p note inherits, consuming the channel's
   /// CC84 arming and recording @p note as the next glide source. Called exactly
   /// once per note-on, before the SoundFont / fallback split.
@@ -507,7 +516,25 @@ class Sf2Player final : public MidiInstrument {
   ///   so the comparison is written twice rather than through one accessor.
   void choke_exclusive_group(uint8_t part, uint8_t group, uint64_t sf2_age_gate) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
-  void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
+  void control_change(uint8_t channel, uint8_t controller, Control32 value) noexcept;
+  /// MIDI 2.0 Registered / Assignable Controllers, absolute and relative, on part @p ch. RC 0/0
+  /// and 0/7 are read from the message; every other one takes the MIDI 1.0 parameter-number path.
+  void registered_controller(uint8_t ch, const Ump& ump, const ChannelVoiceEvent& ev) noexcept;
+  /// Returns false when the message names a parameter this player does not hold.
+  bool relative_controller(uint8_t ch, const ChannelVoiceEvent& ev) noexcept;
+  /// Attaches @p state to the row of (@p channel, @p note) for a voice about to start, so values
+  /// already on the key apply, and captures the Note On attribute.
+  void bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note, uint8_t attribute_type,
+                     uint16_t attribute_data) const noexcept;
+  /// The per-note share of @p state's pitch (§7.4.15).
+  ComposedPitch compose_per_note(const Sf2PerNoteVoice& state) const noexcept;
+  /// Recomputes the pitch offset @p state carries from its binding and attribute.
+  void refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept;
+  /// Re-evaluates every sounding voice on (channel, note), or on the whole channel when
+  /// @p all_notes is set (a sensitivity change reaches every key of it).
+  void refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept;
+  /// Per-Note Management for one key across both voice pools.
+  void manage_per_note(uint8_t channel, uint8_t note, bool detach, bool reset) noexcept;
   /// CC64 with half-pedal semantics: 0 releases held notes, 127 holds them
   /// freely, 1..126 rests the partially raised damper on ringing piano
   /// fallback voices (piano.damp).
@@ -672,6 +699,13 @@ class Sf2Player final : public MidiInstrument {
   VoicePool<Sf2Voice> pool_;
   /// Synth-fallback voices (programs no SoundFont preset covers).
   VoicePool<NativeSynthVoice> fallback_pool_;
+  /// Per-note pitch state of each fallback voice, by slot (the voice type is shared with
+  /// NativeSynth and carries none); sized in prepare().
+  std::vector<Sf2PerNoteVoice> fallback_per_note_;
+  /// Per-note pitch rows (per key, surviving note-off) and RC 0/7 per part.
+  PerNotePitchTable per_note_pitch_{};
+  std::array<Control32, 16> per_note_bend_sensitivity_{};
+  uint64_t skipped_events_ = 0;
   /// KS delay slab for the fallback voices (plucked GM programs), one
   /// ks_slab_capacity() (three ks_buffer_capacity() spans — the primary string,
   /// the second-polarization line, and the octave-up 4' companion line) per

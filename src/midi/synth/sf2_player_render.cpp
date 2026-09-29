@@ -313,7 +313,18 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       // same as safe for it -- those states are feedback cells, so a large
       // enough finite sample still leaves float range. The same guard the
       // NativeSynth host applies to its own physical-model mix bus.
-      float s = v.render(mod, wind.pitch_ratio, wind.gain);
+      // A key carrying per-note pitch renders through a copy of the part's snapshot with its
+      // offset added; every other voice reads the snapshot itself.
+      Sf2ChannelMod tuned;
+      const Sf2ChannelMod* render_mod = &mod;
+      const float per_note_cents =
+          fallback_per_note_[static_cast<size_t>(&v - fallback_pool_.data())].cents;
+      if (per_note_cents != 0.0f) {
+        tuned = mod;
+        tuned.pitch_cents += per_note_cents;
+        render_mod = &tuned;
+      }
+      float s = v.render(*render_mod, wind.pitch_ratio, wind.gain);
       discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
       float l = s * v.gain_left;
       float r = s * v.gain_right;

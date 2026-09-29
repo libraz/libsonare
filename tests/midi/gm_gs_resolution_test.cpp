@@ -15,6 +15,7 @@
 #include <string_view>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/midi_event.h"
 #include "midi/program_map.h"
 #include "midi/synth/gm_fallback_map.h"
@@ -692,12 +693,10 @@ TEST_CASE("MIDI 2.0 note-on velocity uses the canonical 16-to-7-bit conversion",
     REQUIRE(sonare::midi::scale_note_on_velocity_16_to_7(velocity16) == canonical(velocity16));
   }
 
-  // The boundary cases that produce an audible note must also be bit-identical
-  // to the equivalent MIDI 1.0 event on both canonical consumers.
-  for (const uint16_t velocity16 : {uint16_t{1}, uint16_t{511}, uint16_t{512}, uint16_t{65535}}) {
-    INFO("velocity16 " << velocity16);
-    const uint8_t velocity7 = sonare::midi::scale_note_on_velocity_16_to_7(velocity16);
-
+  // A velocity16 that is an exact upscale point of a 7-bit velocity, and the clamp points at the
+  // ends of the range, sound as that MIDI 1.0 velocity on both canonical consumers.
+  const auto sounds_as = [](uint16_t velocity16, uint8_t velocity7) {
+    INFO("velocity16 " << velocity16 << " as velocity7 " << static_cast<int>(velocity7));
     NativeSynth gm_midi2 = make_gm_synth();
     NativeSynth gm_midi1 = make_gm_synth();
     gm_midi2.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, velocity16)));
@@ -709,6 +708,55 @@ TEST_CASE("MIDI 2.0 note-on velocity uses the canonical 16-to-7-bit conversion",
     sf2_midi2.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, velocity16)));
     sf2_midi1.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, velocity7)));
     REQUIRE(render(sf2_midi2, 2048) == render(sf2_midi1, 2048));
+  };
+  for (const uint8_t velocity7 :
+       {uint8_t{1}, uint8_t{40}, uint8_t{64}, uint8_t{100}, uint8_t{127}}) {
+    sounds_as(sonare::midi::Velocity16::from7(velocity7).raw, velocity7);
+  }
+  sounds_as(511, 1);
+  sounds_as(65535, 127);
+}
+
+TEST_CASE("MIDI 2.0 note-on velocity between two 7-bit steps sounds between them",
+          "[midi][synth][sf2][gm][midi2]") {
+  // Program 80 is voiced through the SoundFont velocity-to-amplitude curve, so the first 50 ms
+  // peak follows the velocity the note was struck with.
+  constexpr uint8_t kProgram = 80;
+  constexpr uint8_t kV = 64;
+  const uint32_t lo = sonare::midi::Velocity16::from7(kV).raw;
+  const uint32_t hi = sonare::midi::Velocity16::from7(kV + 1).raw;
+  const uint32_t mid = lo + (hi - lo) / 2;
+  REQUIRE(lo < mid);
+  REQUIRE(mid < hi);
+  constexpr int kFirst50Ms = 2400;
+
+  const auto strike = [&](auto& instrument, uint32_t velocity16) {
+    instrument.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, kProgram)));
+    instrument.on_event(
+        0, event(sonare::midi::make_midi2_note_on(0, 0, 60, static_cast<uint16_t>(velocity16))));
+    return peak(render(instrument, kFirst50Ms));
+  };
+  {
+    NativeSynth a = make_gm_synth();
+    NativeSynth b = make_gm_synth();
+    NativeSynth c = make_gm_synth();
+    const float p_lo = strike(a, lo);
+    const float p_mid = strike(b, mid);
+    const float p_hi = strike(c, hi);
+    CAPTURE(p_lo, p_mid, p_hi);
+    REQUIRE(p_lo < p_mid);
+    REQUIRE(p_mid < p_hi);
+  }
+  {
+    Sf2Player a = make_fallback_player();
+    Sf2Player b = make_fallback_player();
+    Sf2Player c = make_fallback_player();
+    const float p_lo = strike(a, lo);
+    const float p_mid = strike(b, mid);
+    const float p_hi = strike(c, hi);
+    CAPTURE(p_lo, p_mid, p_hi);
+    REQUIRE(p_lo < p_mid);
+    REQUIRE(p_mid < p_hi);
   }
 }
 
