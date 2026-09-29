@@ -20,6 +20,9 @@ import argparse
 import gzip
 import hashlib
 import json
+import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -73,6 +76,28 @@ def measure(path: Path) -> dict[str, int | str]:
     }
 
 
+def emsdk_version() -> str:
+    """Return the release number of the ``emcc`` on PATH, the one the build scripts invoke.
+
+    A ``-git`` suffix is dropped, so a development build of a release records
+    that release. Raises SystemExit rather than guessing when emcc is missing or
+    its banner has no version.
+    """
+    emcc = shutil.which("emcc")
+    if emcc is None:
+        raise SystemExit("cannot record a WASM size baseline: emcc is not on PATH")
+    try:
+        banner = subprocess.run(
+            [emcc, "--version"], capture_output=True, text=True, check=True
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise SystemExit(f"cannot record a WASM size baseline: {emcc} --version failed") from error
+    match = re.search(r"\)\s+(\d+\.\d+\.\d+)", banner.splitlines()[0] if banner else "")
+    if match is None:
+        raise SystemExit(f"cannot record a WASM size baseline: no version in {emcc} --version")
+    return match.group(1)
+
+
 def parse_artifact(value: str) -> tuple[str, Path]:
     name, separator, raw_path = value.partition("=")
     if not separator or not name or not raw_path:
@@ -112,7 +137,7 @@ def main() -> int:
     if args.write_baseline:
         payload = {
             "format": 1,
-            "toolchain": {"emsdk": "6.0.10"},
+            "toolchain": {"emsdk": emsdk_version()},
             "artifacts": current,
         }
         args.baseline.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
