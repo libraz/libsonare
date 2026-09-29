@@ -6,7 +6,6 @@ import argparse
 import math
 import statistics
 import sys
-import wave
 
 import numpy as np
 
@@ -56,20 +55,9 @@ def cmd_info(args: argparse.Namespace) -> int:
     values = np.asarray(samples, dtype=np.float64)
     n = int(values.size)
     dur = n / sr if sr else 0.0
-    try:
-        channels = Audio.file_channel_count(args.file)
-    except RuntimeError as exc:
-        # ``sonare_audio_file_channel_count`` is additive. Preserve the
-        # historical stdlib WAV metadata path when a same-ABI older library
-        # lacks that optional symbol; encoded formats still fail rather than
-        # reporting a successful but meaningless channels=0.
-        if "does not expose sonare_audio_file_channel_count" not in str(exc):
-            raise
-        try:
-            with wave.open(args.file, "rb") as wav:
-                channels = wav.getnchannels()
-        except (wave.Error, OSError) as wave_exc:
-            raise exc from wave_exc
+    # load_library's strict ABI-version equality check means any dylib that
+    # loads at all already exposes sonare_audio_file_channel_count.
+    channels = Audio.file_channel_count(args.file)
     if channels <= 0:
         raise RuntimeError("libsonare returned an invalid audio channel count")
     peak = float(np.max(np.abs(values))) if n else 0.0

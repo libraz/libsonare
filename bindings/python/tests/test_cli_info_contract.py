@@ -101,17 +101,14 @@ def test_info_rejects_successful_zero_channel_probe(monkeypatch):
         _cli_analysis.cmd_info(SimpleNamespace(file="broken.wav", json=True))
 
 
-def test_info_preserves_minus_200_db_silence_floor(monkeypatch, capsys):
-    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(4), 10))
-    monkeypatch.setattr(Audio, "file_channel_count", lambda path: 1)
-
-    assert _cli_analysis.cmd_info(SimpleNamespace(file="silence.wav", json=True)) == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["peak_db"] == -200.0
-    assert payload["rms_db"] == -200.0
-
-
-def test_info_keeps_legacy_wav_fallback_when_probe_symbol_is_missing(monkeypatch, tmp_path, capsys):
+def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
+    monkeypatch, tmp_path
+) -> None:
+    """cmd_info propagates file_channel_count's own failure rather than reading
+    the channel count via stdlib wave. A real, wave-readable file at
+    args.file is what makes that observable: a fallback would open it and
+    return a channel count instead of the real cause.
+    """
     source = tmp_path / "mono.wav"
     _write_wav(source, channels=1)
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(2), 10))
@@ -121,6 +118,15 @@ def test_info_keeps_legacy_wav_fallback_when_probe_symbol_is_missing(monkeypatch
 
     monkeypatch.setattr(Audio, "file_channel_count", missing_probe)
 
-    args = SimpleNamespace(file=str(source), json=True)
-    assert _cli_analysis.cmd_info(args) == 0
-    assert json.loads(capsys.readouterr().out)["channels"] == 1
+    with pytest.raises(RuntimeError, match="does not expose sonare_audio_file_channel_count"):
+        _cli_analysis.cmd_info(SimpleNamespace(file=str(source), json=True))
+
+
+def test_info_preserves_minus_200_db_silence_floor(monkeypatch, capsys):
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(4), 10))
+    monkeypatch.setattr(Audio, "file_channel_count", lambda path: 1)
+
+    assert _cli_analysis.cmd_info(SimpleNamespace(file="silence.wav", json=True)) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["peak_db"] == -200.0
+    assert payload["rms_db"] == -200.0
