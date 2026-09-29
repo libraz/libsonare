@@ -639,6 +639,7 @@ TEST_CASE("every effects-insert config field has a construction key", "[masterin
     float dry_wet;
     float feedback;
     modulation::PhaserMixMode mix_mode;
+    float depth;
     float never_read;
   };
   CHECK(insert_param_names("effects.modulation.phaser").size() !=

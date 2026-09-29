@@ -40,6 +40,9 @@ struct PhaserConfig {
   /// process(). Zero leaves the loop open and the cascade is then feed-forward.
   float feedback = 0.0f;
   PhaserMixMode mix_mode = PhaserMixMode::kCrossfade;
+  /// 0-1: the sweep runs from `min_hz` up to min_hz * (max_hz / min_hz)^depth, so
+  /// 1 sweeps the whole range and 0 holds the notches at `min_hz`.
+  float depth = 1.0f;
 };
 
 class Phaser : public rt::ProcessorBase {
@@ -56,6 +59,7 @@ class Phaser : public rt::ProcessorBase {
   //   2 = max_hz (sweep upper bound)
   //   3 = dry_wet
   //   4 = feedback (clamped to [-0.95, 0.95] in process())
+  //   5 = depth (clamped to [0, 1])
   // Note: `stages` is not automatable; changing it reallocates the allpass
   // state and requires prepare(). `mix_mode` is not automatable either: it
   // selects a structure rather than scaling one.
@@ -65,8 +69,8 @@ class Phaser : public rt::ProcessorBase {
 
  private:
   /// Allpass coefficient for one channel's current LFO value, mapping the
-  /// oscillator's [-1, 1] output onto the configured sweep range.
-  float sweep_coeff(float lfo_value) const noexcept;
+  /// oscillator's [-1, 1] output onto the sweep from `min_hz` to @p top_hz.
+  float sweep_coeff(float lfo_value, float top_hz) const noexcept;
   float process_channel(float input, int channel, float coeff, float feedback);
 
   /// Returns the allpass sections and the feedback loop's cells to rest once a

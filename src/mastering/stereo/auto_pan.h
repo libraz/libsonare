@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "effects/modulation/lfo.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
@@ -13,6 +14,8 @@ struct AutoPanConfig {
   float rate_hz = 1.0f;
   float depth = 1.0f;
   float phase = 0.0f;
+  /// LFO waveform; sine is the default.
+  effects::modulation::LfoShape shape = effects::modulation::LfoShape::kSine;
 };
 
 /// @brief Sweeps a stereo image left/right with an LFO.
@@ -35,8 +38,9 @@ class AutoPan : public rt::ProcessorBase {
   //   0 = rate_hz (clamped to >= 0)
   //   1 = depth (clamped to [0, 1])
   //   2 = phase
+  //   3 = shape (LfoShape; a fractional or unnamed value is refused)
   bool set_parameter(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=rateHz, 1=depth, 2=phase
+  // Automatable parameters: 0=rateHz, 1=depth, 2=phase, 3=shape
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

@@ -28,6 +28,7 @@
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/auto_wah.h"
 #include "effects/modulation/chorus.h"
+#include "effects/modulation/lfo.h"
 #include "effects/modulation/phaser.h"
 #include "effects/modulation/wah.h"
 #include "effects/reverb/dattorro_reverb.h"
@@ -43,6 +44,7 @@
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/cab_voicing.h"
 #include "mastering/saturation/waveshaper.h"
+#include "mastering/stereo/stereo_balance.h"
 #include "rt/aliasing_control.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -192,6 +194,32 @@ constexpr const char* enum_choice_name(sonare::effects::modulation::PhaserMixMod
       return "crossfade";
     case sonare::effects::modulation::PhaserMixMode::kDrySum:
       return "drySum";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::LfoShape value) {
+  switch (value) {
+    case sonare::effects::modulation::LfoShape::kSine:
+      return "sine";
+    case sonare::effects::modulation::LfoShape::kTriangle:
+      return "triangle";
+    case sonare::effects::modulation::LfoShape::kSquare:
+      return "square";
+    case sonare::effects::modulation::LfoShape::kSawUp:
+      return "sawUp";
+    case sonare::effects::modulation::LfoShape::kSawDown:
+      return "sawDown";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::stereo::StereoBalanceLaw value) {
+  switch (value) {
+    case sonare::mastering::stereo::StereoBalanceLaw::kNormalized:
+      return "normalized";
+    case sonare::mastering::stereo::StereoBalanceLaw::kRawConstantPower:
+      return "rawConstantPower";
   }
   return nullptr;
 }
@@ -939,7 +967,8 @@ inline double field_as_double(Enum value) {
 #define SONARE_FIELDS_AUTO_PAN(X) \
   X("rateHz", rate_hz)            \
   X("depth", depth)               \
-  X("phase", phase)
+  X("phase", phase)               \
+  X("shape", shape)
 
 #define SONARE_FIELDS_HAAS_ENHANCER(X) \
   X("delayMs", delay_ms)               \
@@ -965,7 +994,8 @@ inline double field_as_double(Enum value) {
 
 #define SONARE_FIELDS_STEREO_BALANCE(X) \
   X("balance", balance)                 \
-  X("constantPower", constant_power)
+  X("constantPower", constant_power)    \
+  X("law", law)
 
 // --- Utility ---
 

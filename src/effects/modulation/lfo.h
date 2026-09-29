@@ -10,6 +10,40 @@
 
 namespace sonare::effects::modulation {
 
+/// Waveform of a modulator, shared by every insert that offers a choice of shape.
+enum class LfoShape {
+  kSine,      ///< sin(2 pi t): the default everywhere.
+  kTriangle,  ///< 0 at t = 0, +1 at a quarter turn, -1 at three quarters.
+  kSquare,    ///< +1 for the first half turn, -1 for the second.
+  kSawUp,     ///< rises from -1 to +1 over the turn.
+  kSawDown,   ///< falls from +1 to -1 over the turn.
+};
+inline constexpr int kLfoShapeCount = 5;
+
+/// Value in [-1, 1] of @p shape at @p phase, in turns (any real; wrapped for the non-sine shapes).
+/// The sine branch is the exact expression the oscillators used before shapes existed.
+inline float lfo_shape_value(LfoShape shape, double phase) noexcept {
+  if (shape == LfoShape::kSine) {
+    return static_cast<float>(std::sin(phase * ::sonare::constants::kTwoPiD));
+  }
+  const float t = static_cast<float>(phase - std::floor(phase));
+  switch (shape) {
+    case LfoShape::kTriangle:
+      if (t < 0.25f) return 4.0f * t;
+      if (t < 0.75f) return 2.0f - 4.0f * t;
+      return 4.0f * t - 4.0f;
+    case LfoShape::kSquare:
+      return t < 0.5f ? 1.0f : -1.0f;
+    case LfoShape::kSawUp:
+      return 2.0f * t - 1.0f;
+    case LfoShape::kSawDown:
+      return 1.0f - 2.0f * t;
+    case LfoShape::kSine:
+      break;
+  }
+  return 0.0f;
+}
+
 class Lfo {
  public:
   void prepare(double sample_rate) noexcept {

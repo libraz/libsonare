@@ -893,6 +893,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     config.feedback = f(params, "feedback", config.feedback);
     detail::read_field(params, "mixMode", config.mix_mode);
+    config.depth = f(params, "depth", config.depth);
     return make<effects::modulation::Phaser>(config);
   }
   if (name == "effects.modulation.wah") {
@@ -947,6 +948,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     effects::modulation::RingModulatorConfig config;
     config.carrier_hz = f(params, "carrierHz", config.carrier_hz);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    detail::read_field(params, "shape", config.shape);
+    config.phase_deg = f(params, "phaseDeg", config.phase_deg);
+    config.stereo_spread = f(params, "stereoSpread", config.stereo_spread);
     return make<effects::modulation::RingModulator>(config);
   }
   if (name == "effects.modulation.pitchShifter") {

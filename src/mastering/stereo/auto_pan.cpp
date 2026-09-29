@@ -12,7 +12,6 @@ namespace sonare::mastering::stereo {
 
 namespace {
 
-using sonare::constants::kTwoPiD;
 using sonare::rt::compute_pan_gains;
 using sonare::rt::PanGains;
 using sonare::rt::PanLaw;
@@ -52,7 +51,7 @@ void AutoPan::process(float* const* channels, int num_channels, int num_samples)
   const double increment = config_.rate_hz / sample_rate_;
   for (int i = 0; i < num_samples; ++i) {
     const float pan =
-        static_cast<float>(std::sin((phase_ + config_.phase) * kTwoPiD)) * config_.depth;
+        effects::modulation::lfo_shape_value(config_.shape, phase_ + config_.phase) * config_.depth;
     const PanGains g = compute_pan_gains(pan, PanLaw::Const3dB, PanNormalization::CenterUnity);
     channels[0][i] *= g.left;
     channels[1][i] *= g.right;
@@ -79,13 +78,21 @@ bool AutoPan::set_parameter(unsigned int param_id, float value) {
     case 2:
       config_.phase = value;
       return true;
+    case 3:
+      // An unnamed value is refused rather than rounded onto a neighbour.
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(effects::modulation::kLfoShapeCount)) {
+        return false;
+      }
+      config_.shape = static_cast<effects::modulation::LfoShape>(static_cast<int>(value));
+      return true;
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> AutoPan::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"depth", 1}, {"phase", 2}};
+  return {{"rateHz", 0}, {"depth", 1}, {"phase", 2}, {"shape", 3}};
 }
 
 void AutoPan::validate_config(const AutoPanConfig& config) {

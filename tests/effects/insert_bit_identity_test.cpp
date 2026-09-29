@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "rt/pan_law.h"
 #include "support/audio_fixtures.h"
 
 namespace {
@@ -110,11 +111,44 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.phaser", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.phaser",
-        R"({"rateHz":0.4,"minHz":300.0,"maxHz":1600.0,"stages":4,"dryWet":0.5,"feedback":0.0,"mixMode":0})");
+        R"({"rateHz":0.4,"minHz":300.0,"maxHz":1600.0,"stages":4,"dryWet":0.5,"feedback":0.0,"mixMode":0,"depth":1.0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
     require_pinned(s, kPhaserRms, kPhaserCentroidHz);
+  }
+
+  SECTION("effects.modulation.ringModulator") {
+    const RenderResult empty = render("effects.modulation.ringModulator", "{}");
+    const RenderResult explicit_defaults =
+        render("effects.modulation.ringModulator",
+               R"({"carrierHz":200.0,"dryWet":1.0,"shape":0,"phaseDeg":0.0,"stereoSpread":0.0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+  }
+
+  SECTION("stereo.autoPan") {
+    const RenderResult empty = render("stereo.autoPan", "{}");
+    const RenderResult explicit_defaults =
+        render("stereo.autoPan", R"({"rateHz":1.0,"depth":1.0,"phase":0.0,"shape":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+  }
+
+  SECTION("stereo.stereoBalance") {
+    const RenderResult empty = render("stereo.stereoBalance", R"({"balance":0.5})");
+    const RenderResult explicit_defaults =
+        render("stereo.stereoBalance", R"({"balance":0.5,"constantPower":true,"law":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    // A balance that never changes is a fixed gain pair: the 5 ms glide is not in it.
+    const sonare::rt::PanGains g = sonare::rt::compute_pan_gains(
+        0.5f, sonare::rt::PanLaw::Const3dB, sonare::rt::PanNormalization::CenterUnity);
+    const std::vector<float> in = test_signal();
+    for (std::size_t i = 0; i < in.size(); ++i) {
+      REQUIRE(empty.left[i] == in[i] * g.left);
+      REQUIRE(empty.right[i] == in[i] * g.right);
+    }
   }
 
   SECTION("effects.modulation.ensemble") {

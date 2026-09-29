@@ -37,6 +37,7 @@
 /// - rotary fast horn speed, tremolo rate in Hz: the rate asked for.
 /// - auto-wah LFO, sweep rate in Hz: the rate asked for.
 /// - stereo delay tap 3, arrival time in ms: the time asked for.
+/// - stereo balance glide, settling time in ms: the 5 ms it is built for.
 /// - pitch shifter pre-delay, arrival time in ms: the time asked for.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
@@ -66,6 +67,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/saturation/bitcrusher.h"
+#include "mastering/stereo/stereo_balance.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 
@@ -97,6 +99,7 @@ using sonare::effects::reverb::DattorroReverbConfig;
 using sonare::mastering::saturation::BitCrusher;
 using sonare::mastering::saturation::BitCrusherConfig;
 using sonare::mastering::saturation::QuantizerMode;
+using sonare::mastering::stereo::StereoBalance;
 
 /// Counts every comparison it makes, so the case can report its own reach.
 class Tally {
@@ -967,6 +970,31 @@ double auto_wah_lfo_rate_hz(double sample_rate) {
   return crossings > 1 ? static_cast<double>(crossings - 1) / (last - first) : 0.0;
 }
 
+// --- stereo balance glide ---------------------------------------------------
+
+constexpr double kBalanceGlideMs = 5.0;
+constexpr double kBalanceGlideTolerance = 0.02;
+
+/// Settling time in ms of the left gain after the balance is moved hard right,
+/// read as the count of samples strictly between the old and the new gain.
+double balance_glide_ms(double sample_rate) {
+  StereoBalance balance;
+  balance.prepare(sample_rate, 4096);
+  const int samples = static_cast<int>(0.05 * sample_rate);
+  std::vector<float> left(static_cast<std::size_t>(samples), 1.0f);
+  std::vector<float> right = left;
+  sonare::test::process_stereo(balance, left, right);  // primes the gains at centre
+  balance.set_parameter(0, 1.0f);
+  std::fill(left.begin(), left.end(), 1.0f);
+  right = left;
+  sonare::test::process_stereo(balance, left, right);
+  int between = 0;
+  for (const float v : left) {
+    if (v > 1e-6f && v < 1.0f - 1e-6f) ++between;
+  }
+  return static_cast<double>(between + 1) / sample_rate * 1000.0;
+}
+
 // --- stereo delay tap 3 -----------------------------------------------------
 
 constexpr float kTap3Ms = 25.0f;
@@ -1484,6 +1512,22 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                  "the auto-wah's LFO is the same rate in hertz at both rates");
   }
 
+  // --- stereo balance: the glide's settling time, in ms ---------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = balance_glide_ms(rates[r]);
+      tally.at_least(measured[r], 1.0,
+                     "the balance glide" + at_rate(rates[r]) + ", is readable at all");
+      tally.within(measured[r], kBalanceGlideMs, kBalanceGlideTolerance,
+                   "the balance glide" + at_rate(rates[r]) + ", against the 5 ms it is built for");
+    }
+    tally.within(measured[0], measured[1], kBalanceGlideTolerance,
+                 "the balance glide is the same time in milliseconds at both rates");
+    WARN("balance glide: " << measured[0] << " ms at " << rates[0] << ", " << measured[1]
+                           << " ms at " << rates[1]);
+  }
+
   // --- parametric EQ: shelf half-gain points and a peak's centre, in hertz --
   for (const EqProbe& probe : kEqProbes) {
     const std::string asked = std::string(probe.what) + ", asked for " +
@@ -1512,5 +1556,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 110);
+  REQUIRE(tally.count() >= 113);
 }

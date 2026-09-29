@@ -73,8 +73,13 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   // where they arrive in phase; a crossfade splits one unit between them.
   const float dry = config_.mix_mode == PhaserMixMode::kDrySum ? 1.0f : 1.0f - wet;
   const float feedback = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
+  // Top of the sweep for this block; a full depth is max_hz itself, not its pow() image.
+  const float depth = std::clamp(config_.depth, 0.0f, 1.0f);
+  const float top_hz = depth >= 1.0f
+                           ? config_.max_hz
+                           : config_.min_hz * std::pow(config_.max_hz / config_.min_hz, depth);
   for (int i = 0; i < num_samples; ++i) {
-    const float coeff_l = sweep_coeff(lfos_[0].process());
+    const float coeff_l = sweep_coeff(lfos_[0].process(), top_hz);
     const float in_l = left[i];
     left[i] = dry * in_l + wet * process_channel(in_l, 0, coeff_l, feedback);
     if (stereo) {
@@ -82,7 +87,7 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
       // input so a mono buffer is not written twice and channel-1 state is left
       // untouched. The quarter-cycle offset between the two oscillators is what
       // keeps the notches from tracking each other across the pair.
-      const float coeff_r = sweep_coeff(lfos_[1].process());
+      const float coeff_r = sweep_coeff(lfos_[1].process(), top_hz);
       const float in_r = right[i];
       right[i] = dry * in_r + wet * process_channel(in_r, 1, coeff_r, feedback);
     }
@@ -141,6 +146,9 @@ bool Phaser::set_parameter(unsigned int param_id, float value) {
       // process() clamps feedback to [-0.95, 0.95]; store the raw target.
       config_.feedback = value;
       return true;
+    case 5:
+      config_.depth = std::clamp(value, 0.0f, 1.0f);
+      return true;
     default:
       return false;
   }
@@ -150,11 +158,11 @@ bool Phaser::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update (LFO
   // rate, sweep bounds, dry/wet, loop gain); none allocates or resets audio
   // state. Unknown ids are rejected by set_parameter.
-  return param_id <= 4;
+  return param_id <= 5;
 }
 
 std::vector<rt::ParamDescriptor> Phaser::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"minHz", 1}, {"maxHz", 2}, {"dryWet", 3}, {"feedback", 4}};
+  return {{"rateHz", 0}, {"minHz", 1}, {"maxHz", 2}, {"dryWet", 3}, {"feedback", 4}, {"depth", 5}};
 }
 
 void Phaser::reset() {
@@ -171,9 +179,9 @@ void Phaser::reset() {
   lfos_[1].reset(0.25);
 }
 
-float Phaser::sweep_coeff(float lfo_value) const noexcept {
+float Phaser::sweep_coeff(float lfo_value, float top_hz) const noexcept {
   const float sweep = 0.5f + 0.5f * lfo_value;
-  const float freq = config_.min_hz + (config_.max_hz - config_.min_hz) * sweep;
+  const float freq = config_.min_hz + (top_hz - config_.min_hz) * sweep;
   const float t = std::tan(kPi * freq / static_cast<float>(sample_rate_));
   return (1.0f - t) / (1.0f + t);
 }
