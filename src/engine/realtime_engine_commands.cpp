@@ -296,6 +296,9 @@ void RealtimeEngine::store_pending(const rt::Command& command, bool prefer_curre
       }
     }
     if (furthest < pending_.size()) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+      release_midi_ump_slot(pending_[furthest]);
+#endif
       pending_[furthest] = command;
       pending_active_[furthest] = true;
       // The displaced far-future command is dropped; report it so hosts can
@@ -305,6 +308,9 @@ void RealtimeEngine::store_pending(const rt::Command& command, bool prefer_curre
       return;
     }
   }
+#if defined(SONARE_WITH_ARRANGEMENT)
+  release_midi_ump_slot(command);
+#endif
   enqueue_error(TelemetryErrorCode::kPendingCommandOverflow, transport_.render_frame(),
                 transport_.sample_position(), 1);
 }
@@ -486,8 +492,35 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // happened to call. Every live entry point resolves through the one
       // kind-aware decoder now; a non-CC word resolves to nothing and falls
       // straight through to the sequencer as before.
-      observe_live_cc_for_automation(ump);
-      midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
+      deliver_live_ump(command.target_id, command.sample_time, ump);
+#endif
+      break;
+    }
+    case rt::CommandType::kMidiUmpSlotImmediate: {
+#if defined(SONARE_WITH_ARRANGEMENT)
+      // Resolve the slot reference push_midi_ump staged: the SysEx seqlock
+      // bracket, plus the requirement that the slot is still in flight, so a
+      // replayed or forged reference to a consumed slot delivers nothing.
+      const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+      const uint64_t slot_index = packed & 0xFFFFFFFFu;
+      const auto generation = static_cast<uint32_t>(packed >> 32);
+      if (slot_index < ump_slots_.size()) {
+        UmpSlot& slot = ump_slots_[slot_index];
+        const uint32_t seq_before = slot.generation.load(std::memory_order_acquire);
+        midi::Ump ump{};
+        for (size_t i = 0; i < slot.words.size(); ++i) {
+          ump.words[i] = slot.words[i].load(std::memory_order_relaxed);
+        }
+        std::atomic_thread_fence(std::memory_order_acquire);
+        const uint32_t seq_after = slot.generation.load(std::memory_order_relaxed);
+        if (seq_before == seq_after && (seq_before & 1u) == 0u && seq_before == generation &&
+            slot.released.load(std::memory_order_relaxed) != generation) {
+          slot.released.store(generation, std::memory_order_release);
+          ump.word_count = midi::ump_word_count_for_word0(ump.words[0]);
+          ump.group = midi::ump_group_from_word0(ump.words[0]);
+          deliver_live_ump(command.target_id, command.sample_time, ump);
+        }
+      }
 #endif
       break;
     }

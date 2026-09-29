@@ -573,8 +573,10 @@ TEST_CASE("CcMap param_to_cc round-trips every binding kind", "[midi]") {
   REQUIRE(out.status_nibble() ==
           static_cast<uint8_t>(sonare::midi::UmpStatus::kRegisteredController));
   REQUIRE(out.channel() == 0);
+  // RPN 0/1 is a structured registered controller, so its data is zero-extended.
+  REQUIRE(out.words[1] == static_cast<uint32_t>(4096u) << 18u);
   REQUIRE(sonare::midi::cc_normalized_value(out, &norm));
-  REQUIRE(std::fabs(norm - 0.25f) < 1.0e-4f);
+  REQUIRE(norm == 4096.0f / 16383.0f);
 
   REQUIRE(map.param_to_cc(91, 0.75f, 0, &out));
   REQUIRE(out.status_nibble() ==
@@ -704,6 +706,47 @@ TEST_CASE("CcMap param_to_cc up-scales 14-bit CC losslessly across the range", "
     REQUIRE(sonare::midi::scale_cc_32_to_14(out.words[1]) == static_cast<uint16_t>(step));
   }
   REQUIRE(worst <= 0.5f / 16384.0f + 1.0e-7f);
+}
+
+// Registered controllers 0-31 carry structured data, which M2-115-U 4.1 widens
+// by Zero-Extension rather than min-center-max, and which is read back by
+// truncation so a min-center-max sender reads back the same 14-bit value. A
+// learned RPN therefore round-trips exactly through param_to_cc in both
+// families; RPN 32 and above and every NRPN stay min-center-max.
+TEST_CASE("CcMap round-trips a learned RPN exactly in both up-scaling families", "[midi]") {
+  CcMap map;
+  map.begin_learn(95, 0.0f, 1.0f);
+  CcBinding learned;
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 1, 101, 0), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 1, 100, 2), &learned));
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 1, 6, 64), &learned));
+  REQUIRE(learned.kind == sonare::midi::CcBindingKind::kRpn);
+
+  CcBinding high = learned;
+  high.param_id = 96;
+  high.selector_lsb = 32;
+  REQUIRE(map.bind(high));
+
+  for (uint32_t step = 0; step <= 16383u; ++step) {
+    const float unit = static_cast<float>(step) / 16383.0f;
+    const auto v14 = static_cast<uint16_t>(step);
+    sonare::midi::Ump out;
+    float norm = -1.0f;
+
+    REQUIRE(map.param_to_cc(95, unit, 0, &out));
+    REQUIRE(out.words[1] == sonare::midi::scale_rpn_14_to_32_zero_extend(v14));
+    REQUIRE(sonare::midi::cc_normalized_value(out, &norm));
+    REQUIRE(norm == unit);
+
+    // The same controller as a min-center-max sender writes it reads back exactly.
+    const auto mcm = sonare::midi::make_midi2_registered_controller(
+        0, 1, 0, 2, sonare::midi::scale_cc_14_to_32(v14));
+    REQUIRE(sonare::midi::cc_normalized_value(mcm, &norm));
+    REQUIRE(norm == unit);
+
+    REQUIRE(map.param_to_cc(96, unit, 0, &out));
+    REQUIRE(out.words[1] == sonare::midi::scale_cc_14_to_32(v14));
+  }
 }
 
 // The kind is not part of a binding's address, so binding a controller a second

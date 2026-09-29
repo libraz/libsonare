@@ -1,5 +1,8 @@
 #include "midi/cc_map.h"
 
+#include "midi/channel_voice_decode.h"
+#include "midi/control_value.h"
+
 namespace sonare::midi {
 namespace {
 
@@ -11,6 +14,20 @@ constexpr uint8_t kNrpnLsb = 98;
 constexpr uint8_t kNrpnMsb = 99;
 constexpr uint8_t kRpnLsb = 100;
 constexpr uint8_t kRpnMsb = 101;
+
+// A control-change of either protocol, decoded to its controller number, channel
+// and value at MIDI 2.0 width.
+bool decode_control_change(const Ump& ump, uint8_t* cc, uint8_t* channel,
+                           Control32* value) noexcept {
+  ChannelVoiceEvent event;
+  if (!decode_channel_voice(ump, &event) || event.kind != ChannelVoiceKind::ControlChange) {
+    return false;
+  }
+  *cc = event.note;
+  *channel = event.channel;
+  *value = event.value;
+  return true;
+}
 
 bool is_control_change(const Ump& ump) noexcept {
   const UmpMessageType type = ump.message_type();
@@ -63,7 +80,16 @@ bool cc_normalized_value(const Ump& ump, float* out_norm) noexcept {
     return false;
   }
   if (is_registered_or_assignable_controller(ump)) {
-    *out_norm = static_cast<float>(ump.words[1]) / static_cast<float>(0xFFFFFFFFu);
+    // Registered controllers 0-31 carry structured data: truncating to 14 bits
+    // reads back the sender's value whether it was zero-extended or up-scaled
+    // by min-center-max (M2-115-U 4.1).
+    const uint8_t index = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
+    if (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kRegisteredController) &&
+        index < 32u) {
+      *out_norm = static_cast<float>(Control32::from_raw(ump.words[1]).u14()) / kCc14BitMax;
+    } else {
+      *out_norm = static_cast<float>(ump.words[1]) / static_cast<float>(0xFFFFFFFFu);
+    }
     return true;
   }
   if (!is_control_change(ump)) {
@@ -220,13 +246,12 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
     return false;
   }
   uint8_t cc = 0;
-  if (!cc_number_of(ump, &cc)) {
+  uint8_t channel = 0;
+  Control32 control{0};
+  if (!decode_control_change(ump, &cc, &channel, &control)) {
     return false;
   }
-  const uint8_t value = ump.message_type() == UmpMessageType::kMidi2ChannelVoice
-                            ? scale_cc_32_to_7(ump.words[1])
-                            : static_cast<uint8_t>(ump.words[0] & 0x7Fu);
-  const uint8_t channel = ump.channel();
+  const uint8_t value = control.u7();
 
   // Multi-message controllers (14-bit CC pairs, RPN, NRPN) are assembled from a
   // sequence of distinct CC numbers: a 14-bit pair sends its MSB on a CC < 32
@@ -416,11 +441,12 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   }
 
   uint8_t cc = 0;
-  if (!cc_number_of(ump, &cc)) {
+  uint8_t channel = 0;
+  Control32 control{0};
+  if (!decode_control_change(ump, &cc, &channel, &control)) {
     return false;
   }
-  const uint8_t channel = ump.channel();
-  const uint8_t value7 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
+  const uint8_t value7 = control.u7();
   LiveChannelState& st = live_->channels[channel & 0x0Fu];
 
   auto emit_from = [&](size_t idx, float norm) {
@@ -574,8 +600,11 @@ bool CcMap::param_to_cc(uint32_t param_id, float unit_value, uint8_t group,
       // selector as (bank, index) plus a 32-bit value. Emitting it is what closes
       // the cc_learn -> store -> param_to_cc round trip that used to dead-end
       // here on the very bindings cc_learn is documented to produce.
+      // Registered controllers 0-31 are zero-extended (M2-115-U 4.1), everything
+      // else min-center-max; cc_normalized_value reads either back exactly.
       const uint16_t value14 = static_cast<uint16_t>(norm * kCc14BitMax + 0.5f);
-      const uint32_t value32 = scale_cc_14_to_32(value14);
+      const uint32_t value32 =
+          scale_data_entry_14_to_32(b.kind == CcBindingKind::kRpn, b.selector_lsb, value14);
       *out_ump = b.kind == CcBindingKind::kRpn
                      ? make_midi2_registered_controller(group, channel, b.selector_msb,
                                                         b.selector_lsb, value32)

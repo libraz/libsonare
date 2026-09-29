@@ -103,6 +103,111 @@ bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* dat
   return true;
 }
 
+namespace {
+
+// Types that address the endpoint rather than a destination's instrument: the
+// live path accepts them and discards them at the destination.
+bool is_endpoint_ump_type(midi::UmpMessageType type) noexcept {
+  return type == midi::UmpMessageType::kUtility || type == midi::UmpMessageType::kFlexData ||
+         type == midi::UmpMessageType::kStream;
+}
+
+constexpr uint64_t discard_counter_key(uint32_t destination_id) noexcept {
+  return (uint64_t{1} << 32) | destination_id;
+}
+
+}  // namespace
+
+bool RealtimeEngine::is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept {
+  if (words == nullptr || count == 0 || count > 4) return false;
+  if (count != midi::ump_word_count_for_word0(words[0])) return false;
+  const auto type = static_cast<midi::UmpMessageType>((words[0] >> 28) & 0x0Fu);
+  return type != midi::UmpMessageType::kData64 && type != midi::UmpMessageType::kData128;
+}
+
+MidiUmpPushResult RealtimeEngine::push_midi_ump(uint32_t destination_id, const uint32_t* words,
+                                                size_t count, int64_t render_frame) noexcept {
+  // CONTROL thread.
+  if (!is_pushable_midi_ump(words, count)) return MidiUmpPushResult::kInvalidMessage;
+  rt::Command command{};
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  if (count == 1) {
+    command.type = rt::CommandType::kMidiUmpImmediate;
+    command.arg.i = static_cast<int64_t>(words[0]);
+    return push_command(command) ? MidiUmpPushResult::kQueued : MidiUmpPushResult::kQueueFull;
+  }
+  const uint32_t slot_index = ump_slot_cursor_ % kMidiUmpSlots;
+  UmpSlot& slot = ump_slots_[slot_index];
+  // The control thread is the sole writer of `generation`, so its own last
+  // (even) value reads back relaxed. The acquire on `released` orders the audio
+  // thread's reads of the previous payload before the rewrite below.
+  const uint32_t base = slot.generation.load(std::memory_order_relaxed);
+  if (slot.released.load(std::memory_order_acquire) != base) {
+    ump_slot_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+    return MidiUmpPushResult::kSlotsFull;
+  }
+  ump_slot_cursor_++;
+  const uint32_t generation = base + 2u;
+  slot.generation.store(base + 1u, std::memory_order_relaxed);
+  std::atomic_thread_fence(std::memory_order_release);
+  for (size_t i = 0; i < slot.words.size(); ++i) {
+    slot.words[i].store(i < count ? words[i] : 0u, std::memory_order_relaxed);
+  }
+  slot.generation.store(generation, std::memory_order_release);
+  command.type = rt::CommandType::kMidiUmpSlotImmediate;
+  command.arg.i =
+      static_cast<int64_t>((static_cast<uint64_t>(generation) << 32) | uint64_t{slot_index});
+  if (!push_command(command)) {
+    // Never queued, so the audio thread will never hand it back.
+    slot.released.store(generation, std::memory_order_release);
+    return MidiUmpPushResult::kQueueFull;
+  }
+  return MidiUmpPushResult::kQueued;
+}
+
+uint32_t RealtimeEngine::midi_ump_discarded_count(uint32_t destination_id) const noexcept {
+  const uint64_t key = discard_counter_key(destination_id);
+  for (const UmpDiscardCounter& counter : ump_discard_counters_) {
+    if (counter.key.load(std::memory_order_acquire) == key) {
+      return counter.count.load(std::memory_order_relaxed);
+    }
+  }
+  return 0;
+}
+
+void RealtimeEngine::deliver_live_ump(uint32_t destination_id, int64_t render_frame,
+                                      const midi::Ump& ump) noexcept {
+  if (is_endpoint_ump_type(ump.message_type())) {
+    ump_discarded_total_.fetch_add(1, std::memory_order_relaxed);
+    const uint64_t key = discard_counter_key(destination_id);
+    for (UmpDiscardCounter& counter : ump_discard_counters_) {
+      const uint64_t current = counter.key.load(std::memory_order_relaxed);
+      if (current == 0) counter.key.store(key, std::memory_order_release);
+      if (current == 0 || current == key) {
+        counter.count.fetch_add(1, std::memory_order_relaxed);
+        break;
+      }
+    }
+    return;
+  }
+  observe_live_cc_for_automation(ump);
+  midi_sequencer_.inject_event(destination_id, render_frame, ump);
+}
+
+void RealtimeEngine::release_midi_ump_slot(const rt::Command& command) noexcept {
+  if (command.type != rt::CommandType::kMidiUmpSlotImmediate) return;
+  const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+  const uint64_t slot_index = packed & 0xFFFFFFFFu;
+  const auto generation = static_cast<uint32_t>(packed >> 32);
+  if (slot_index >= ump_slots_.size()) return;
+  UmpSlot& slot = ump_slots_[slot_index];
+  // Only the command that owns the slot's current payload may hand it back.
+  if (slot.generation.load(std::memory_order_acquire) != generation) return;
+  if (slot.released.load(std::memory_order_relaxed) == generation) return;
+  slot.released.store(generation, std::memory_order_release);
+}
+
 bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {
   return midi_sequencer_.set_midi_fx(destination_id, chain, transport_.render_frame());
 }
@@ -192,8 +297,7 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
     const midi::MidiEvent& event = live_midi_input_events_[i];
     if (event.render_frame < render_start_frame) continue;
     if (event.render_frame >= render_end_frame) break;
-    observe_live_cc_for_automation(event.ump);
-    midi_sequencer_.inject_event(live_midi_input_destination_id_, event.render_frame, event.ump);
+    deliver_live_ump(live_midi_input_destination_id_, event.render_frame, event.ump);
   }
 }
 

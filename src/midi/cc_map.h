@@ -79,7 +79,8 @@ bool cc_number_of(const Ump& ump, uint8_t* out_cc) noexcept;
 /// Extracts the normalized (0..1) control value from a controller UMP.
 /// MIDI 1.0 control-change uses the 7-bit value; MIDI 2.0 control-change and the
 /// one-word Registered / Assignable Controller (RPN / NRPN) forms use the 32-bit
-/// value. Returns false for any other message.
+/// value, except Registered Controllers 0-31, whose structured data reads back
+/// by truncation to 14 bits (value / 16383). Returns false for any other message.
 ///
 /// The RPN / NRPN forms are accepted so that every message param_to_cc can emit
 /// reads back through this function: without them the round trip closed for
@@ -220,7 +221,8 @@ class CcMap {
   ///
   /// The scaling is min-center-max (scale_cc_14_to_32), the default family of
   /// M2-115-U 3, which keeps minimum, center and maximum exact; down-scaling by
-  /// truncation returns the 14-bit value.
+  /// truncation returns the 14-bit value. Registered Controllers 0-31 carry
+  /// structured data and are zero-extended instead (M2-115-U 4.1).
   ///
   /// Returns false ONLY when no binding targets `param_id`; a supported binding
   /// never fails here, so the caller can report the two apart. Every emitted

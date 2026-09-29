@@ -61,6 +61,17 @@ enum class InsertParamSetResult : uint8_t {
   kQueueFull,
 };
 
+/// Result of @ref RealtimeEngine::push_midi_ump.
+///
+/// A malformed or unsupported message is a permanent caller error; a full slot
+/// ring or command queue is temporary back-pressure that callers can retry.
+enum class MidiUmpPushResult : uint8_t {
+  kQueued,
+  kInvalidMessage,
+  kSlotsFull,
+  kQueueFull,
+};
+
 enum class CaptureSource {
   kOutput = 0,
   kInput = 1,
@@ -145,6 +156,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// copies into, so it is also the ceiling the C ABI rejects against rather
   /// than a second hand-copied limit.
   static constexpr size_t kMaxSysExPayloadBytes = 512;
+  /// @brief Depth of the slot ring @ref push_midi_ump stages multi-word UMPs in.
+  static constexpr size_t kMidiUmpSlots = 256;
   /// @brief Upper bound @ref set_warp_voice_capacity accepts.
   static constexpr uint32_t kMaxWarpVoices = 64;
 
@@ -382,6 +395,41 @@ class RealtimeEngine : private ClipPageRequestSink {
   // command queue is full. render_frame < 0 fires at the block head.
   bool push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
                        int64_t render_frame) noexcept;
+  /// @brief Whether @p words / @p count form a UMP the live path accepts.
+  /// @details @p count must equal the word count the message type of
+  ///   `words[0]` fixes, and the type must not be Data (MT 0x3 SysEx7, MT 0x5
+  ///   128-bit data): those arrive as payloads (@ref push_midi_sysex), never as
+  ///   raw packets. Utility (0x0), Flex Data (0xD) and UMP Stream (0xF) are
+  ///   accepted here and discarded at the destination, see
+  ///   @ref midi_ump_discarded_count.
+  static bool is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept;
+  /// @brief Control-thread: enqueue one live UMP of 1 to 4 words for
+  ///   @p destination_id.
+  /// @details A single-word message rides kMidiUmpImmediate inline. A longer
+  ///   one is copied into the bounded slot ring (@ref kMidiUmpSlots) and a
+  ///   kMidiUmpSlotImmediate command carrying only the slot reference is
+  ///   queued, so no pointer crosses the command queue and nothing allocates.
+  ///   A slot is reused only after the audio thread has consumed it; when the
+  ///   next one is still in flight the push fails with kSlotsFull and
+  ///   @ref midi_ump_slot_overflow_count grows. render_frame < 0 fires at the
+  ///   block head.
+  MidiUmpPushResult push_midi_ump(uint32_t destination_id, const uint32_t* words, size_t count,
+                                  int64_t render_frame) noexcept;
+  /// @brief Pushes refused because the next UMP slot was still in flight.
+  uint32_t midi_ump_slot_overflow_count() const noexcept {
+    return ump_slot_overflow_count_.load(std::memory_order_relaxed);
+  }
+  /// @brief Live Utility, Flex Data and UMP Stream messages discarded at
+  ///   @p destination_id, from every live path (queued UMP and input source).
+  /// @details Tracked for the first InstrumentRack::kMaxInstruments distinct
+  ///   destinations that discard anything; later ones count only toward
+  ///   @ref midi_ump_discarded_total. Cumulative for the engine's lifetime.
+  uint32_t midi_ump_discarded_count(uint32_t destination_id) const noexcept;
+  /// @brief Live Utility, Flex Data and UMP Stream messages discarded at any
+  ///   destination.
+  uint32_t midi_ump_discarded_total() const noexcept {
+    return ump_discarded_total_.load(std::memory_order_relaxed);
+  }
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
                     float max_value) noexcept;
   bool bind_midi_cc(const midi::CcBinding& binding) noexcept;
@@ -856,6 +904,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   // live CC entry point routes through this, so the queued and engine-owned
   // input paths cannot drift apart.
   void observe_live_cc_for_automation(const midi::Ump& ump) noexcept;
+  // AUDIO thread: the single live UMP delivery. Utility, Flex Data and UMP
+  // Stream messages are counted against the destination and dropped; anything
+  // else runs the live CC decode and is injected into the sequencer.
+  void deliver_live_ump(uint32_t destination_id, int64_t render_frame,
+                        const midi::Ump& ump) noexcept;
+  // AUDIO thread: returns the slot a kMidiUmpSlotImmediate command references to
+  // the control thread when the command is dropped rather than applied.
+  void release_midi_ump_slot(const rt::Command& command) noexcept;
   void emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept;
   void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
                              int num_frames) noexcept;
@@ -1063,6 +1119,28 @@ class RealtimeEngine : private ClipPageRequestSink {
   };
   std::array<SysExPayloadSlot, kSysExPayloadSlots> sysex_payload_slots_{};
   uint32_t sysex_payload_cursor_ = 0;  // control-thread only
+  // Slot ring for live multi-word UMPs (push_midi_ump). Same seqlock as the
+  // SysEx store, plus a hand-back: the audio thread stores the generation it
+  // consumed (or dropped) into `released`, and the control thread writes a slot
+  // only when `released` has caught up with `generation`. A full ring therefore
+  // refuses the push instead of recycling a slot still in flight. A consumed
+  // reference no longer matches, so a replayed command delivers nothing.
+  struct UmpSlot {
+    std::array<std::atomic<uint32_t>, 4> words{};
+    std::atomic<uint32_t> generation{0};
+    std::atomic<uint32_t> released{0};
+  };
+  std::array<UmpSlot, kMidiUmpSlots> ump_slots_{};
+  uint32_t ump_slot_cursor_ = 0;  // control-thread only
+  std::atomic<uint32_t> ump_slot_overflow_count_{0};
+  // Per-destination discard counters, written by the audio thread only. A key is
+  // 0 (unclaimed) or (1 << 32) | destination_id.
+  struct UmpDiscardCounter {
+    std::atomic<uint64_t> key{0};
+    std::atomic<uint32_t> count{0};
+  };
+  std::array<UmpDiscardCounter, InstrumentRack::kMaxInstruments> ump_discard_counters_{};
+  std::atomic<uint32_t> ump_discarded_total_{0};
   // Per-destination host-instrument rack (default empty / opt-in). It is the
   // sequencer's dispatch sink (so routed MIDI reaches the instrument bound to
   // each clip's destination) and the engine sums every bound instrument's audio

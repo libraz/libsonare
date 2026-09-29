@@ -1660,3 +1660,259 @@ TEST_CASE("a failed rebind leaves the destination's automation slots assigned",
 
   engine.set_midi_instrument(kDestination, nullptr);
 }
+
+namespace {
+
+using sonare::engine::MidiUmpPushResult;
+
+// Records every UMP it receives in a fixed array, so it performs no allocation
+// on the audio thread and a test can compare delivered words exactly.
+class UmpRecordingInstrument final : public MidiInstrument {
+ public:
+  static constexpr size_t kCapacity = 512;
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override { count_ = 0; }
+  void on_event(uint32_t, const MidiEvent& event) noexcept override {
+    if (count_ < kCapacity) received_[count_] = event.ump;
+    ++count_;
+  }
+  size_t count_ = 0;
+  std::array<sonare::midi::Ump, kCapacity> received_{};
+};
+
+void process_block(RealtimeEngine& engine) {
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, 64);
+}
+
+MidiUmpPushResult push_ump(RealtimeEngine& engine, uint32_t destination_id,
+                           const sonare::midi::Ump& ump) {
+  return engine.push_midi_ump(destination_id, ump.words, ump.word_count, -1);
+}
+
+// A 4-word message the live path neither rejects nor discards: MT 0xE is a
+// reserved 128-bit type, forwarded as-is like any other unhandled type.
+sonare::midi::Ump reserved_128_bit_ump() {
+  sonare::midi::Ump ump{};
+  ump.words[0] = 0xE3123456u;
+  ump.words[1] = 0x89ABCDEFu;
+  ump.words[2] = 0x01234567u;
+  ump.words[3] = 0xFEDCBA98u;
+  ump.word_count = 4;
+  return ump;
+}
+
+}  // namespace
+
+TEST_CASE("push_midi_ump delivers 2-word and 4-word UMPs to the destination", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  UmpRecordingInstrument target;
+  UmpRecordingInstrument other;
+  REQUIRE(engine.set_midi_instrument(3, &target));
+  REQUIRE(engine.set_midi_instrument(5, &other));
+
+  const auto note_on = sonare::midi::make_midi2_note_on(2, 9, 61, 0x1234u, 3, 0xBEEFu);
+  const auto four_word = reserved_128_bit_ump();
+  const auto one_word = sonare::midi::make_midi1_control_change(2, 9, 7, 99);
+  REQUIRE(push_ump(engine, 3, note_on) == MidiUmpPushResult::kQueued);
+  REQUIRE(push_ump(engine, 3, four_word) == MidiUmpPushResult::kQueued);
+  REQUIRE(push_ump(engine, 3, one_word) == MidiUmpPushResult::kQueued);
+  process_block(engine);
+
+  REQUIRE(other.count_ == 0);
+  REQUIRE(target.count_ == 3);
+  for (size_t w = 0; w < 4; ++w) {
+    CHECK(target.received_[0].words[w] == note_on.words[w]);
+    CHECK(target.received_[1].words[w] == four_word.words[w]);
+  }
+  CHECK(target.received_[0].word_count == 2);
+  CHECK(target.received_[0].group == 2);
+  CHECK(target.received_[1].word_count == 4);
+  CHECK(target.received_[2].words[0] == one_word.words[0]);
+  CHECK(target.received_[2].word_count == 1);
+}
+
+TEST_CASE("push_midi_ump delivers without allocating on the audio thread", "[engine][midi][rt]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  UmpRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, 64);  // warm-up
+
+  REQUIRE(push_ump(engine, 0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u)) ==
+          MidiUmpPushResult::kQueued);
+  REQUIRE(push_ump(engine, 0, reserved_128_bit_ump()) == MidiUmpPushResult::kQueued);
+  sonare::midi::Ump stream{};
+  stream.words[0] = 0xF0000000u;
+  stream.word_count = 4;
+  REQUIRE(push_ump(engine, 0, stream) == MidiUmpPushResult::kQueued);
+  {
+    sonare::test::AllocationGuard guard;
+    engine.process(io, 2, 64);
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(target.count_ == 2);
+}
+
+TEST_CASE("push_midi_ump rejects data messages and malformed word counts", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  UmpRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  const uint32_t sysex7[2] = {0x30160102u, 0x03040506u};
+  const uint32_t data128[4] = {0x50000000u, 0u, 0u, 0u};
+  REQUIRE(engine.push_midi_ump(0, sysex7, 2, -1) == MidiUmpPushResult::kInvalidMessage);
+  REQUIRE(engine.push_midi_ump(0, data128, 4, -1) == MidiUmpPushResult::kInvalidMessage);
+
+  const auto note_on = sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u);
+  REQUIRE(engine.push_midi_ump(0, note_on.words, 1, -1) == MidiUmpPushResult::kInvalidMessage);
+  REQUIRE(engine.push_midi_ump(0, note_on.words, 4, -1) == MidiUmpPushResult::kInvalidMessage);
+  REQUIRE(engine.push_midi_ump(0, note_on.words, 0, -1) == MidiUmpPushResult::kInvalidMessage);
+  REQUIRE(engine.push_midi_ump(0, note_on.words, 5, -1) == MidiUmpPushResult::kInvalidMessage);
+  REQUIRE(engine.push_midi_ump(0, nullptr, 2, -1) == MidiUmpPushResult::kInvalidMessage);
+  const auto cc = sonare::midi::make_midi1_control_change(0, 0, 7, 1);
+  REQUIRE(engine.push_midi_ump(0, cc.words, 2, -1) == MidiUmpPushResult::kInvalidMessage);
+
+  REQUIRE(RealtimeEngine::is_pushable_midi_ump(note_on.words, 2));
+  REQUIRE_FALSE(RealtimeEngine::is_pushable_midi_ump(sysex7, 2));
+  REQUIRE_FALSE(RealtimeEngine::is_pushable_midi_ump(data128, 4));
+
+  process_block(engine);
+  REQUIRE(target.count_ == 0);
+}
+
+TEST_CASE("live Utility, Flex Data and UMP Stream messages are counted, not delivered",
+          "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  UmpRecordingInstrument target;
+  UmpRecordingInstrument other;
+  REQUIRE(engine.set_midi_instrument(3, &target));
+  REQUIRE(engine.set_midi_instrument(5, &other));
+
+  const uint32_t noop[1] = {0x00000000u};
+  const uint32_t jr_timestamp[1] = {0x00201234u};
+  const uint32_t flex_tempo[4] = {0xD0100000u, 0x02FAF080u, 0u, 0u};
+  const uint32_t stream_endpoint[4] = {0xF0000101u, 0u, 0u, 0u};
+  REQUIRE(engine.push_midi_ump(3, noop, 1, -1) == MidiUmpPushResult::kQueued);
+  REQUIRE(engine.push_midi_ump(3, jr_timestamp, 1, -1) == MidiUmpPushResult::kQueued);
+  REQUIRE(engine.push_midi_ump(3, flex_tempo, 4, -1) == MidiUmpPushResult::kQueued);
+  REQUIRE(engine.push_midi_ump(3, stream_endpoint, 4, -1) == MidiUmpPushResult::kQueued);
+  REQUIRE(engine.push_midi_ump(5, stream_endpoint, 4, -1) == MidiUmpPushResult::kQueued);
+  // A channel-voice message on the same destination still arrives.
+  REQUIRE(push_ump(engine, 3, sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u)) ==
+          MidiUmpPushResult::kQueued);
+  process_block(engine);
+
+  REQUIRE(target.count_ == 1);
+  REQUIRE(target.received_[0].message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(other.count_ == 0);
+  REQUIRE(engine.midi_ump_discarded_count(3) == 4);
+  REQUIRE(engine.midi_ump_discarded_count(5) == 1);
+  REQUIRE(engine.midi_ump_discarded_count(7) == 0);
+  REQUIRE(engine.midi_ump_discarded_total() == 5);
+
+  // The engine-owned live input path applies the same rule.
+  sonare::host::FixedMidiInputSource<8> input;
+  engine.set_midi_input_source(&input, 5);
+  sonare::midi::Ump flex{};
+  std::copy(std::begin(flex_tempo), std::end(flex_tempo), flex.words);
+  flex.word_count = 4;
+  REQUIRE(input.push_event(flex, 0));
+  REQUIRE(input.push_event(sonare::midi::make_midi2_note_on(0, 1, 62, 0x8000u), 0));
+  process_block(engine);
+  REQUIRE(other.count_ == 1);
+  REQUIRE(engine.midi_ump_discarded_count(5) == 2);
+  REQUIRE(engine.midi_ump_discarded_total() == 6);
+}
+
+TEST_CASE("push_midi_ump fails and counts when the slot ring is full", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4096);
+  UmpRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  // A controller rather than a note-on, so the sequencer's active-note table
+  // cannot be what limits delivery.
+  const auto wide_cc = sonare::midi::make_midi2_control_change(0, 0, 74, 0x12345678u);
+  for (size_t i = 0; i < RealtimeEngine::kMidiUmpSlots; ++i) {
+    REQUIRE(push_ump(engine, 0, wide_cc) == MidiUmpPushResult::kQueued);
+  }
+  REQUIRE(engine.midi_ump_slot_overflow_count() == 0);
+  REQUIRE(push_ump(engine, 0, wide_cc) == MidiUmpPushResult::kSlotsFull);
+  REQUIRE(engine.midi_ump_slot_overflow_count() == 1);
+  // A single-word message does not need a slot.
+  REQUIRE(push_ump(engine, 0, sonare::midi::make_midi1_control_change(0, 0, 7, 1)) ==
+          MidiUmpPushResult::kQueued);
+
+  // The audio thread releases slots as it consumes them. The per-block command
+  // cap spreads the backlog over several blocks.
+  for (int block = 0; block < 8; ++block) process_block(engine);
+  REQUIRE(target.count_ == RealtimeEngine::kMidiUmpSlots + 1);
+  REQUIRE(push_ump(engine, 0, wide_cc) == MidiUmpPushResult::kQueued);
+  process_block(engine);
+  REQUIRE(target.count_ == RealtimeEngine::kMidiUmpSlots + 2);
+}
+
+TEST_CASE("prepare returns the UMP slots held by discarded commands", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4096);
+  UmpRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  const auto wide_cc = sonare::midi::make_midi2_control_change(0, 0, 74, 0x12345678u);
+  for (size_t i = 0; i < RealtimeEngine::kMidiUmpSlots; ++i) {
+    REQUIRE(push_ump(engine, 0, wide_cc) == MidiUmpPushResult::kQueued);
+  }
+  REQUIRE(push_ump(engine, 0, wide_cc) == MidiUmpPushResult::kSlotsFull);
+
+  // Re-preparing drops the queued commands; their slots must come back with them.
+  engine.prepare(48000.0, 64, /*command_capacity=*/4096);
+  REQUIRE(push_ump(engine, 0, wide_cc) == MidiUmpPushResult::kQueued);
+  process_block(engine);
+  REQUIRE(target.count_ == 1);
+}
+
+TEST_CASE("a UMP slot command whose generation does not match is ignored", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  UmpRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  const auto forge = [&](uint64_t slot, uint64_t generation) {
+    sonare::rt::Command c{};
+    c.type = sonare::rt::CommandType::kMidiUmpSlotImmediate;
+    c.sample_time = -1;
+    c.arg.i = static_cast<int64_t>(slot | (generation << 32));
+    REQUIRE(engine.push_command(c));
+  };
+
+  // Never-written slots, including the initial generation.
+  forge(0, 0);
+  forge(1, 2);
+  forge(uint64_t{0xFFFFFFFFu}, 2);
+  process_block(engine);
+  REQUIRE(target.count_ == 0);
+
+  // The first push lands in slot 0 at generation 2 and is delivered once.
+  REQUIRE(push_ump(engine, 0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u)) ==
+          MidiUmpPushResult::kQueued);
+  process_block(engine);
+  REQUIRE(target.count_ == 1);
+
+  // Replaying the consumed reference, or naming a generation not yet written,
+  // delivers nothing.
+  forge(0, 2);
+  forge(0, 4);
+  forge(0, 3);
+  process_block(engine);
+  REQUIRE(target.count_ == 1);
+}

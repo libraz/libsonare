@@ -108,9 +108,19 @@ enum class CommandType : uint16_t {
   kMidiUmpImmediate,
   // Queueable lane monitor-mode transition. target_id is the lane index,
   // sample_time is the requested render frame, and arg.i is the mode ordinal
-  // (0=off, 1=PFL, 2=AFL). This is deliberately terminal (ordinal 26) so the
-  // H6 command ids remain unchanged.
+  // (0=off, 1=PFL, 2=AFL). Ordinal 26; appended so every earlier command id
+  // stays unchanged.
   kSetTrackMonitorMode,
+  // Immediate (live) 2-, 3- or 4-word UMP routed to a destination. A POD Command
+  // holds one word inline, so the control thread copies the words into the
+  // engine's bounded UMP slot ring (see RealtimeEngine::push_midi_ump) and this
+  // command carries a scalar slot reference, the kMidiSysExImmediate scheme:
+  //   target_id   = MIDI destination id.
+  //   sample_time = render frame to fire at (<0 / past => block head).
+  //   arg.i       = bits[0..31]=slot index, bits[32..63]=slot generation.
+  // Ordinal 27. New values are appended here so existing ids, kEngineAbiVersion
+  // and the SharedArrayBuffer command record layout stay unchanged.
+  kMidiUmpSlotImmediate,
 };
 
 union CommandArg {

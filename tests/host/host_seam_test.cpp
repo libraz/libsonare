@@ -1288,6 +1288,38 @@ TEST_CASE("engine routes MIDI to the instrument bound to each destination", "[ho
   REQUIRE(engine.midi_instrument_count() == 0);
 }
 
+// A MIDI 2.0 device reaches the engine as multi-word UMP through the input seam.
+// The channel-voice message arrives whole; endpoint-level messages (UMP Stream,
+// Flex Data, Utility) are accepted and counted at the destination instead.
+TEST_CASE("engine input seam delivers MIDI 2.0 UMP and counts endpoint messages", "[host]") {
+  constexpr int kBlock = 256;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  MockInstrument inst(0);
+  REQUIRE(engine.set_midi_instrument(4u, &inst));
+  FixedMidiInputSource<8> input;
+  engine.set_midi_input_source(&input, 4u);
+
+  REQUIRE(input.push_event(sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u), 0));
+  Ump stream{};
+  stream.words[0] = 0xF0000101u;
+  stream.word_count = 4;
+  REQUIRE(input.push_event(stream, 0));
+  Ump jr_clock{};
+  jr_clock.words[0] = 0x00101234u;
+  jr_clock.word_count = 1;
+  REQUIRE(input.push_event(jr_clock, 0));
+
+  std::vector<float> l(kBlock, 0.0f), r(kBlock, 0.0f);
+  float* io[] = {l.data(), r.data()};
+  engine.process(io, 2, kBlock);
+
+  REQUIRE(inst.received_events_ == 1);
+  REQUIRE(inst.note_on_count_ == 1);
+  REQUIRE(engine.midi_ump_discarded_count(4u) == 2);
+  engine.set_midi_instrument(4u, nullptr);
+}
+
 // ===========================================================================
 // Swapping/clearing an instrument releases its sounding notes (no hang).
 // ===========================================================================
