@@ -829,6 +829,8 @@ if(BUILD_ARRANGEMENT)
   # (rt/transport <- midi <- engine <- arrangement; arrangement -> midi too).
   add_library(sonare_midi STATIC
     midi/ump.cpp
+    midi/channel_voice_decode.cpp
+    midi/per_note_state.cpp
     midi/midi_clip.cpp
     midi/note_targets.cpp
     midi/sequencer.cpp

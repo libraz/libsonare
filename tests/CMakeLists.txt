@@ -536,6 +536,14 @@ if(BUILD_ARRANGEMENT)
     arrangement/shared_strip_midi_controls_test.cpp
     arrangement/c_abi_edit_ops_test.cpp
     midi/midi_ump_test.cpp
+    midi/control_value_test.cpp
+    midi/channel_voice_decode_test.cpp
+    midi/per_note_state_test.cpp
+    midi/midi2_invariance_test.cpp
+    midi/midi2_resolution_a_test.cpp
+    midi/midi2_resolution_b_test.cpp
+    midi/midi2_resolution_c_test.cpp
+    midi/midi1_control_golden_test.cpp
     midi/builtin_synth_test.cpp
     midi/native_synth_test.cpp
     midi/retrigger_test.cpp
