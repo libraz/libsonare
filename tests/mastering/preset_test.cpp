@@ -397,6 +397,28 @@ TEST_CASE("chain config JSON rejects duplicate top-level keys", "[mastering][pre
                     sonare::SonareException);
 }
 
+TEST_CASE("chain config JSON rejects a document exceeding the JSON byte budget",
+          "[mastering][preset][json][resource]") {
+  // One JSON string value past the 1 MiB chain-config byte budget. The
+  // refusal has to come from the byte precheck, not from the parser walking a
+  // document this size into json::Value nodes first.
+  const std::string oversized = "{\"pad\":\"" + std::string(1024u * 1024u + 1024u, 'a') + "\"}";
+  try {
+    chain_config_from_json(oversized);
+    FAIL("an over-budget chain config document was accepted");
+  } catch (const sonare::SonareException& error) {
+    const std::string message = error.what();
+    INFO(message);
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(message.find("byte budget") != std::string::npos);
+  }
+
+  // An ordinary chain config document still round-trips, so the refusal above
+  // is the size and not some other change to chain config parsing.
+  const std::string ordinary = chain_config_to_json(MasteringChainConfig{});
+  REQUIRE(chain_config_to_json(chain_config_from_json(ordinary)) == ordinary);
+}
+
 TEST_CASE("preset_config(Pop) has expected enabled stages", "[mastering][preset]") {
   auto config = preset_config(Preset::Pop);
   REQUIRE(config.dynamics.compressor.enabled);

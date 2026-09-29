@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include "util/json.h"
+#include "util/json_budget.h"
 
 namespace sonare::midi::assist::modules {
 
@@ -47,13 +47,14 @@ bool read_clip_id(const json::Value& root, const char* key, arrangement::ClipId*
 }  // namespace
 
 bool read_generator_params(const std::string& params_json, GeneratorParams* out,
-                           std::string* out_error) {
+                           std::string* out_error,
+                           const resource::ProjectImportResourceLimits& limits) {
   if (out == nullptr || out_error == nullptr) return false;
   if (params_json.empty()) return true;
 
   json::Value root;
   try {
-    root = json::parse_strict(params_json);
+    root = json::admit_strict(params_json, limits);
   } catch (const json::JsonError& error) {
     *out_error = std::string("params_json is not valid JSON: ") + error.what();
     return false;

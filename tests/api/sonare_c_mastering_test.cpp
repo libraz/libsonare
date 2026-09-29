@@ -1,6 +1,8 @@
 /// @file sonare_c_mastering_test.cpp
 /// @brief Mastering C API tests.
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "c_api/eq_band_json.h"
 #include "c_api/sonare_c_mastering_helpers.h"
 #include "core/audio.h"
@@ -870,6 +872,24 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
       sonare_free_string(json);
     }
   }
+}
+
+TEST_CASE("band_json exceeding the JSON byte budget is refused, not parsed",
+          "[c_api][mastering][eq][resource]") {
+  using sonare::c_api::parse_eq_band_json;
+
+  // One JSON string value past the 64 MiB band_json budget. The refusal has to
+  // come from the byte precheck, not from the parser walking a document this
+  // size into json::Value nodes first.
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+  REQUIRE_THROWS_WITH(parse_eq_band_json(oversized.c_str()),
+                      Catch::Matchers::ContainsSubstring("byte budget"));
+
+  // An ordinary band still parses, so the refusal above is the size and not
+  // some other change to band_json handling.
+  const auto ordinary = parse_eq_band_json(R"({"type":"Peak","frequencyHz":1000})");
+  REQUIRE(ordinary.frequency_hz == Catch::Approx(1000.0));
 }
 
 TEST_CASE("sonare_eq_set_band accepts detectorDelayMs and its former lookaheadMs spelling",

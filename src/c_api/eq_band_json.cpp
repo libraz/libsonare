@@ -4,7 +4,7 @@
 
 #include "mastering/eq/eq_band_value.h"
 #include "sonare_c_internal.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 
 namespace {
 
@@ -29,7 +29,7 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   if (!band_json) invalid_eq_json("band_json must not be null");
   sonare::util::json::Value json;
   try {
-    json = sonare::util::json::parse_strict(std::string(band_json));
+    json = sonare::util::json::admit_strict(band_json);
   } catch (const sonare::util::json::JsonError& ex) {
     malformed_eq_json(std::string("invalid JSON: ") + ex.what());
   }

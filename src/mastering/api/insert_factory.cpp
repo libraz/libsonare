@@ -73,7 +73,7 @@
 #include "mastering/utility/gain.h"
 #include "util/base64.h"
 #include "util/exception.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/resource_limits.h"
 
 #ifdef SONARE_HAVE_FX
@@ -116,68 +116,35 @@ using detail::ParamKind;
 using detail::ParamMap;
 using sonare::util::json::Value;
 
-// Matches util::json::parse_strict's own default.
-constexpr std::size_t kJsonMaxDepth = 128;
-
-// The JSON budget for one make_insert call. Insert params arrive as a string
-// lifted out of an already-admitted project document, so the fragment is parsed
-// under that document's own budget rather than none — a string inside a
-// document cannot be larger than the document. The budget is a call-local
-// total: an admission deducts what it read, so the readers that used to
-// re-parse the same text cannot spend the ceiling a second time.
-class ParseBudget {
- public:
-  explicit ParseBudget(const sonare::resource::ProjectImportResourceLimits& limits)
-      : bytes_(limits.max_json_bytes),
-        nodes_(limits.max_json_nodes),
-        string_bytes_(limits.max_string_bytes) {}
-
-  // Parses @p text as a JSON object under what is left of the budget. Empty
-  // text is an absent document (the processor's own defaults): it allocates
-  // nothing, so it costs nothing and leaves the budget untouched.
-  bool admit(const std::string& text, Value* out_root) {
-    if (text.empty()) return false;
-    if (text.size() > bytes_) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "make_insert: json_params exceeds the JSON byte budget");
-    }
-    try {
-      // Strict parse: insert params are a flat map of `{name: value}` and a
-      // duplicate key would silently shadow the earlier value, which is almost
-      // certainly a caller bug worth surfacing.
-      *out_root =
-          sonare::util::json::Parser(text, kJsonMaxDepth, /*reject_duplicate_keys=*/true,
-                                     sonare::util::json::ParseResourceLimits{nodes_, string_bytes_})
-              .parse_document();
-    } catch (const sonare::util::json::JsonResourceError& e) {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          std::string("make_insert: json_params exceeds the JSON parse budget (") + e.what() + ")");
-    } catch (const sonare::util::json::JsonError& e) {
-      throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
-    } catch (const std::invalid_argument& e) {
-      throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
-    }
-    if (!out_root->is_object()) {
-      throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
-    }
-    // A parse of N bytes cannot have produced more than N nodes or N string
-    // bytes, so one deduction bounds all three axes without a second walk.
-    deduct(text.size());
-    return true;
+// Admits @p json_params as a JSON object under @p limits, or returns nullptr
+// into @p out_root for an empty (absent) document -- the processor's own
+// defaults apply and nothing was allocated to admit it. Insert params arrive
+// as a string lifted out of an already-admitted project document, so the
+// fragment is parsed under that document's own budget rather than none: a
+// string inside a document cannot be larger than the document.
+const Value* admit_insert_params(const std::string& json_params,
+                                 const sonare::resource::ProjectImportResourceLimits& limits,
+                                 Value* out_root) {
+  if (json_params.empty()) return nullptr;
+  try {
+    // Strict: insert params are a flat map of `{name: value}` and a duplicate
+    // key would silently shadow the earlier value, which is almost certainly a
+    // caller bug worth surfacing.
+    *out_root = sonare::util::json::admit_strict(json_params, limits);
+  } catch (const sonare::util::json::JsonResourceError& e) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        std::string("make_insert: json_params exceeds the JSON parse budget (") + e.what() + ")");
+  } catch (const sonare::util::json::JsonError& e) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
+  } catch (const std::invalid_argument& e) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string("make_insert: ") + e.what());
   }
-
- private:
-  void deduct(std::size_t consumed) {
-    bytes_ -= std::min(bytes_, consumed);
-    nodes_ -= std::min(nodes_, consumed);
-    string_bytes_ -= std::min(string_bytes_, consumed);
+  if (!out_root->is_object()) {
+    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
   }
-
-  std::size_t bytes_;
-  std::size_t nodes_;
-  std::size_t string_bytes_;
-};
+  return out_root;
+}
 
 // Decodes a little-endian f32 array carried as base64 under @p key. Two inserts
 // take an IR this way (the convolution reverb and the amp sim's cabinet), so the
@@ -1015,11 +982,10 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
     const std::string& name, const std::string& json_params,
     std::vector<std::string>* out_unknown_keys,
     const sonare::resource::ProjectImportResourceLimits& limits) {
-  // One budget, one admission, one document: every reader below works off the
-  // same parsed value, so the call's parse cost is the cost of this admission.
-  ParseBudget budget(limits);
+  // One admission, one document: every reader below works off the same parsed
+  // value, so the call's parse cost is the cost of this admission.
   Value root;
-  const Value* json_root = budget.admit(json_params, &root) ? &root : nullptr;
+  const Value* json_root = admit_insert_params(json_params, limits, &root);
   const std::vector<Param> param_list = insert_params_from_root(json_root, name);
   const ParamMap params = detail::make_map(param_list);
   auto processor = build_insert(name, params, json_root);
@@ -1053,9 +1019,8 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
     // Validate params for malformed JSON parity with make_insert(), then build a
     // real, IR-loaded convolution insert. load_ir() stores the IR and is safe to
     // call before prepare(); prepare() reapplies it to the FFT convolvers.
-    ParseBudget budget(limits);
     Value root;
-    const Value* json_root = budget.admit(json_params, &root) ? &root : nullptr;
+    const Value* json_root = admit_insert_params(json_params, limits, &root);
     const std::vector<Param> param_list = insert_params_from_root(json_root, name);
     const ParamMap params = detail::make_map(param_list);
     effects::reverb::ConvolutionReverbConfig config;

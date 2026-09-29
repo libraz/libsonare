@@ -44,6 +44,9 @@ struct ParseResourceLimits {
   std::size_t max_string_bytes = std::numeric_limits<std::size_t>::max();
 };
 
+/// Recursion depth every parse entry point in this file defaults to.
+inline constexpr std::size_t kDefaultMaxDepth = 128;
+
 class Value;
 using Array = std::vector<Value>;
 using Object = std::map<std::string, Value>;
@@ -165,7 +168,7 @@ inline std::string escape_string(const std::string& value) {
 
 class Parser {
  public:
-  explicit Parser(const std::string& text, std::size_t max_depth = 128,
+  explicit Parser(const std::string& text, std::size_t max_depth = kDefaultMaxDepth,
                   bool reject_duplicate_keys = false,
                   ParseResourceLimits resource_limits = ParseResourceLimits())
       : text_(text),
@@ -419,14 +422,14 @@ class Parser {
 
   const std::string& text_;
   std::size_t pos_ = 0;
-  std::size_t max_depth_ = 128;
+  std::size_t max_depth_ = kDefaultMaxDepth;
   bool reject_duplicate_keys_ = false;
   ParseResourceLimits resource_limits_;
   std::size_t node_count_ = 0;
   std::size_t string_bytes_ = 0;
 };
 
-inline Value parse(const std::string& text, std::size_t max_depth = 128) {
+inline Value parse(const std::string& text, std::size_t max_depth = kDefaultMaxDepth) {
   return Parser(text, max_depth, /*reject_duplicate_keys=*/false).parse_document();
 }
 
@@ -435,7 +438,7 @@ inline Value parse(const std::string& text, std::size_t max_depth = 128) {
 ///          with two `"type"` entries is almost certainly malformed input
 ///          that the caller should be told about, rather than silently
 ///          taking the last value).
-inline Value parse_strict(const std::string& text, std::size_t max_depth = 128) {
+inline Value parse_strict(const std::string& text, std::size_t max_depth = kDefaultMaxDepth) {
   return Parser(text, max_depth, /*reject_duplicate_keys=*/true).parse_document();
 }
 

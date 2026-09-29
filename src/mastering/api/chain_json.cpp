@@ -14,8 +14,9 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/param_field_tables.h"
 #include "util/exception.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/json_schema.h"
+#include "util/resource_limits.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -255,6 +256,17 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
 // tree.  This keeps the existing strict parser/API intact while ensuring a
 // caller cannot make this convenience API retain an arbitrarily large string.
 constexpr std::size_t kMaxChainJsonBytes = 1u * 1024u * 1024u;
+
+// Node and string-byte axes take the project-import ceiling; the byte axis
+// stays kMaxChainJsonBytes.
+constexpr sonare::resource::ProjectImportResourceLimits kChainJsonLimits{
+    kMaxChainJsonBytes,
+    sonare::resource::kDefaultProjectImportResourceLimits.max_json_nodes,
+    sonare::resource::kDefaultProjectImportResourceLimits.max_entities,
+    sonare::resource::kDefaultProjectImportResourceLimits.max_string_bytes,
+    sonare::resource::kDefaultProjectImportResourceLimits.max_decoded_payload_bytes,
+};
+
 constexpr std::size_t kMaxMultibandBands = 64u;
 constexpr int kMaxFirKernelSize = 65'535;
 
@@ -552,15 +564,11 @@ class JsonParamParser {
 
   ParsedChainJson parse() {
     try {
-      if (text_.size() > kMaxChainJsonBytes) {
-        throw_invalid_json("chain config JSON exceeds resource limit");
-      }
-      // Strict parse: duplicate top-level keys (e.g. two `"version"` entries)
-      // are caller bugs, not "last-write-wins" inputs. Combined with the
-      // `has_allowed_keys` allowlist below, the chain config JSON now behaves
-      // like an `additionalProperties: false` schema and rejects both unknown
-      // and ambiguous fields up front.
-      const auto root = sonare::util::json::parse_strict(text_);
+      // Strict parse under kChainJsonLimits: duplicate top-level keys (e.g. two
+      // `"version"` entries) are caller bugs, not "last-write-wins" inputs.
+      // With the `has_allowed_keys` allowlist below, unknown and ambiguous
+      // fields are both rejected up front.
+      const auto root = sonare::util::json::admit_strict(text_, kChainJsonLimits);
       if (!root.is_object())
         throw SonareException(ErrorCode::InvalidParameter, "expected chain config JSON object");
       std::string allowed_keys_error;

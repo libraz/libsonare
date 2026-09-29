@@ -8,7 +8,7 @@
 
 #include "midi/midi_fx.h"
 #include "transport/tempo_map.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/numeric_validation.h"
 
 namespace sonare_c_detail {
@@ -63,7 +63,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   if (config_json == nullptr || chain == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   json::Value root;
   try {
-    root = json::parse_strict(config_json);
+    root = json::admit_strict(config_json);
   } catch (const json::JsonError&) {
     return SONARE_ERROR_INVALID_FORMAT;
   }

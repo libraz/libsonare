@@ -11,6 +11,7 @@
 #include "midi/assist/modules/dissonance_analyzer.h"
 #include "midi/assist/modules/harmony_context.h"
 #include "midi/assist/modules/placement_judge.h"
+#include "util/json_budget.h"
 #endif
 
 // ============================================================================
@@ -117,7 +118,7 @@ bool read_request(const char* request_json, assist::AssistRequest* out, bool* ou
     return false;
   }
   try {
-    root = json::parse_strict(request_json);
+    root = json::admit_strict(request_json);
   } catch (const json::JsonError& parse_error) {
     *error = std::string("request_json is not valid JSON: ") + parse_error.what();
     return false;

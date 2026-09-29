@@ -508,6 +508,32 @@ TEST_CASE("the assist entry points reject a malformed call", "[c_api][assist]") 
   CHECK(document.c_str() != nullptr);
 }
 
+TEST_CASE("request_json exceeding the JSON byte budget is refused, not parsed",
+          "[c_api][assist][resource]") {
+  ProjectFixture fixture;
+  make_project(&fixture);
+
+  // One JSON string value past the 64 MiB request_json budget. The refusal has
+  // to come from the byte precheck, not from json::parse walking a document
+  // this size into json::Value nodes first.
+  const std::string oversized_request =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+
+  Document document;
+  CHECK(sonare_project_assist_preview_json(fixture.project, oversized_request.c_str(),
+                                           document.out()) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(document.c_str() == nullptr);
+  CHECK(text_contains(std::string(sonare_last_error_message()), "byte budget"));
+
+  // The same project accepts an ordinary small request, so the refusal is the
+  // size and not some other change to request handling.
+  const std::string request = request_for(fixture.clip_id);
+  Document accepted;
+  CHECK(sonare_project_assist_preview_json(fixture.project, request.c_str(), accepted.out()) ==
+        SONARE_OK);
+  CHECK(accepted.c_str() != nullptr);
+}
+
 TEST_CASE("a params document naming no target clip is REFUSED with an error return",
           "[c_api][assist]") {
   ProjectFixture fixture;

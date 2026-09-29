@@ -18,6 +18,7 @@
 #include <string>
 
 #include "arrangement/edit_model.h"
+#include "util/resource_limits.h"
 
 namespace sonare::midi::assist::modules {
 
@@ -42,11 +43,18 @@ struct GeneratorParams {
 /// @brief Reads @p params_json into @p out, leaving unnamed fields alone.
 /// @param out_error Receives a message naming the offending field when the read
 ///        fails. Untouched on success.
-/// @return False on malformed JSON, a non-object document, or a field outside
-///         its domain. A field of the wrong TYPE is an error, not a default:
-///         a silently substituted default is indistinguishable downstream from
-///         a deliberate one.
+/// @param limits Budget @p params_json is parsed under. params_json is a string
+///        lifted out of the already-admitted AssistRequest, so the default
+///        matches the budget that admits it rather than inheriting nothing.
+///        Overridable so the exact boundary can be exercised without building
+///        a production-sized request.
+/// @return False on malformed JSON, a document exceeding @p limits, a
+///         non-object document, or a field outside its domain. A field of the
+///         wrong TYPE is an error, not a default: a silently substituted
+///         default is indistinguishable downstream from a deliberate one.
 bool read_generator_params(const std::string& params_json, GeneratorParams* out,
-                           std::string* out_error);
+                           std::string* out_error,
+                           const resource::ProjectImportResourceLimits& limits =
+                               resource::kDefaultProjectImportResourceLimits);
 
 }  // namespace sonare::midi::assist::modules

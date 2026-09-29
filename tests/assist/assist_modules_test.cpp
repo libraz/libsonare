@@ -727,6 +727,43 @@ TEST_CASE("read_generator_params refuses a wrong type instead of substituting a 
   CHECK(edge.high_note == 127);
 }
 
+TEST_CASE("read_generator_params refuses params_json that exceeds its resource budget",
+          "[assist][modules][resource]") {
+  GeneratorParams params;
+  std::string error;
+
+  // A tiny override exercises the boundary without building a production-sized
+  // document. Byte axis: the text itself is longer than the budget allows.
+  sonare::resource::ProjectImportResourceLimits tiny_bytes =
+      sonare::resource::kDefaultProjectImportResourceLimits;
+  tiny_bytes.max_json_bytes = 8;
+  const std::string small = "{\"low_note\": 40}";
+  REQUIRE(small.size() > tiny_bytes.max_json_bytes);
+  CHECK_FALSE(read_generator_params(small, &params, &error, tiny_bytes));
+  CHECK(reason_mentions(error, "byte budget"));
+
+  // Node axis: a flat array of six numbers is seven nodes (the array plus each
+  // element), one past a budget of six -- refused before the type check that
+  // would otherwise reject an array params_json for a different reason.
+  sonare::resource::ProjectImportResourceLimits tiny_nodes =
+      sonare::resource::kDefaultProjectImportResourceLimits;
+  tiny_nodes.max_json_nodes = 6;
+  CHECK_FALSE(read_generator_params("[1,2,3,4,5,6]", &params, &error, tiny_nodes));
+  CHECK(reason_mentions(error, "node limit exceeded"));
+
+  // An exactly-fitting document under the same tight node budget still reads:
+  // the refusal above is the budget, not an unrelated regression.
+  GeneratorParams fits;
+  CHECK(read_generator_params("{\"low_note\": 40}", &fits, &error, tiny_nodes));
+  CHECK(fits.low_note == 40);
+
+  // The production default admits an ordinary request untouched.
+  GeneratorParams normal;
+  CHECK(read_generator_params("{\"target_clip_id\": 3, \"low_note\": 48}", &normal, &error));
+  CHECK(normal.target_clip_id == 3u);
+  CHECK(normal.low_note == 48);
+}
+
 // ===========================================================================
 // DiatonicHarmonizer
 // ===========================================================================

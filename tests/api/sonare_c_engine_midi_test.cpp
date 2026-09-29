@@ -791,6 +791,26 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("config_json exceeding the JSON byte budget is refused, not parsed",
+          "[c_api][engine][resource]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+
+  // One JSON string value past the 64 MiB config_json budget. The refusal has
+  // to come from the byte precheck, not from the parser walking a document
+  // this size into json::Value nodes first.
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, oversized.c_str()) == SONARE_ERROR_INVALID_FORMAT);
+
+  // The same destination still accepts an ordinary config, so the refusal
+  // above is the size and not some other change to midi_fx_chain_from_json.
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") == SONARE_OK);
+  REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("a built-in synth field the core would replace in silence is refused", "[c_api][synth]") {
   // The core reads a non-positive or non-finite field as "use the built-in
   // default" and reports nothing, so such a request came back as a successful
