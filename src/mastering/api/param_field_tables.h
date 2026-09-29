@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/phaser.h"
 #include "mastering/dynamics/compressor.h"
@@ -161,6 +162,28 @@ constexpr const char* enum_choice_name(sonare::effects::modulation::PhaserMixMod
       return "crossfade";
     case sonare::effects::modulation::PhaserMixMode::kDrySum:
       return "drySum";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::delay::StereoDelayCrossMode value) {
+  switch (value) {
+    case sonare::effects::delay::StereoDelayCrossMode::kNormal:
+      return "normal";
+    case sonare::effects::delay::StereoDelayCrossMode::kPingPong:
+      return "pingPong";
+    case sonare::effects::delay::StereoDelayCrossMode::kCross:
+      return "cross";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::common::MixLaw value) {
+  switch (value) {
+    case sonare::effects::common::MixLaw::kCrossfade:
+      return "crossfade";
+    case sonare::effects::common::MixLaw::kTwoRamps:
+      return "twoRamps";
   }
   return nullptr;
 }

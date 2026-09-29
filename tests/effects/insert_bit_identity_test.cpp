@@ -162,7 +162,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.delay.stereo", "{}");
     const RenderResult explicit_defaults = render(
         "effects.delay.stereo",
-        R"({"delayTimeLMs":250.0,"delayTimeRMs":250.0,"feedback":0.25,"pingPong":0.0,"dryWet":0.5,"dampingHz":0.0})");
+        R"({"delayTimeLMs":250.0,"delayTimeRMs":250.0,"feedback":0.25,"pingPong":0.0,"dryWet":0.5,"dampingHz":0.0,"tap3Ms":0.0,"tap4Ms":0.0,"tap1LevelDb":0.0,"tap2LevelDb":0.0,"tap3LevelDb":0.0,"tap4LevelDb":0.0,"tap3Pan":0.0,"tap4Pan":0.0,"invertL":false,"invertR":false,"modRateHz":0.0,"modDepthMs":0.0,"modPhaseDeg":0.0,"glideMs":0.0,"crossMode":0,"mixLaw":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);

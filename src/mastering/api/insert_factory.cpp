@@ -951,6 +951,22 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.ping_pong = f(params, "pingPong", config.ping_pong);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     config.damping_hz = f(params, "dampingHz", config.damping_hz);
+    config.tap3_ms = f(params, "tap3Ms", config.tap3_ms);
+    config.tap4_ms = f(params, "tap4Ms", config.tap4_ms);
+    config.tap1_level_db = f(params, "tap1LevelDb", config.tap1_level_db);
+    config.tap2_level_db = f(params, "tap2LevelDb", config.tap2_level_db);
+    config.tap3_level_db = f(params, "tap3LevelDb", config.tap3_level_db);
+    config.tap4_level_db = f(params, "tap4LevelDb", config.tap4_level_db);
+    config.tap3_pan = f(params, "tap3Pan", config.tap3_pan);
+    config.tap4_pan = f(params, "tap4Pan", config.tap4_pan);
+    config.invert_l = b(params, "invertL", config.invert_l);
+    config.invert_r = b(params, "invertR", config.invert_r);
+    config.mod_rate_hz = f(params, "modRateHz", config.mod_rate_hz);
+    config.mod_depth_ms = f(params, "modDepthMs", config.mod_depth_ms);
+    config.mod_phase_deg = f(params, "modPhaseDeg", config.mod_phase_deg);
+    config.glide_ms = f(params, "glideMs", config.glide_ms);
+    detail::read_field(params, "crossMode", config.cross_mode);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<effects::delay::StereoDelay>(config);
   }
   return nullptr;

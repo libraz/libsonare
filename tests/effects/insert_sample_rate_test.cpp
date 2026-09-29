@@ -32,6 +32,7 @@
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
 /// - rotary, acceleration time constant in seconds: the time constant itself.
 /// - rotary fast horn speed, tremolo rate in Hz: the rate asked for.
+/// - stereo delay tap 3, arrival time in ms: the time asked for.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
 ///
@@ -796,6 +797,40 @@ double horn_fast_rate_hz(double sample_rate) {
   return crossings > 1 ? static_cast<double>(crossings - 1) / (last - first) : 0.0;
 }
 
+// --- stereo delay tap 3 -----------------------------------------------------
+
+constexpr float kTap3Ms = 25.0f;
+constexpr double kTap3Tolerance = 0.005;
+
+/// Arrival time in ms of tap 3, read as the centroid of its echo in the left
+/// channel of an impulse response, so a time between two samples is resolved.
+double tap3_arrival_ms(double sample_rate) {
+  StereoDelayConfig config;
+  config.delay_time_l_ms = 0.0f;
+  config.delay_time_r_ms = 0.0f;
+  config.feedback = 0.0f;
+  config.dry_wet = 1.0f;
+  config.tap3_ms = kTap3Ms;
+  config.tap3_pan = -1.0f;
+  StereoDelay delay(config);
+  const int samples = static_cast<int>(0.1 * sample_rate);
+  delay.prepare(sample_rate, samples);
+  std::vector<float> left(static_cast<std::size_t>(samples), 0.0f);
+  std::vector<float> right(left.size(), 0.0f);
+  left[0] = right[0] = 1.0f;
+  float* channels[2] = {left.data(), right.data()};
+  delay.process(channels, 2, samples);
+  double weight = 0.0;
+  double moment = 0.0;
+  // Past the untouched-line response at sample 0.
+  for (int i = 4; i < samples; ++i) {
+    const double h = std::fabs(static_cast<double>(left[static_cast<std::size_t>(i)]));
+    weight += h;
+    moment += h * i;
+  }
+  return weight > 0.0 ? 1000.0 * moment / weight / sample_rate : 0.0;
+}
+
 // --- parametric EQ ----------------------------------------------------------
 
 // Band-type selectors, in the order the insert's params decode them.
@@ -1149,6 +1184,21 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     }
     tally.within(measured[0], measured[1], kHornFastTolerance,
                  "the rotary's fast horn speed is the same rate in hertz at both rates");
+  }
+
+  // --- stereo delay tap 3: the arrival time, in ms --------------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = tap3_arrival_ms(rates[r]);
+      WARN("stereo delay tap 3" << at_rate(rates[r]) << ": " << measured[r] << " ms");
+      tally.at_least(measured[r], 1.0,
+                     "the stereo delay's tap 3" + at_rate(rates[r]) + ", is readable at all");
+      tally.within(measured[r], static_cast<double>(kTap3Ms), kTap3Tolerance,
+                   "the stereo delay's tap 3" + at_rate(rates[r]) + ", against the time asked");
+    }
+    tally.within(measured[0], measured[1], kTap3Tolerance,
+                 "the stereo delay's tap 3 arrives at the same time in ms at both rates");
   }
 
   // The glide reaches the audio and not only the rotor's own accessor: two
