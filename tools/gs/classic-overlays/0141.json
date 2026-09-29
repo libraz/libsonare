@@ -1,0 +1,181 @@
+{
+  "type": "01 41",
+  "what_this_is": "Trem Sep as a stereo spread over the two tremolo modulators.",
+  "entries": [
+    {
+      "node": {
+        "id": "trem_mid",
+        "kind": "mix",
+        "inputs": [
+          "trem_l",
+          "trem_r"
+        ],
+        "weights": {
+          "trem_l": {
+            "value": 0.5
+          },
+          "trem_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The two tremolo modulators as their mean and each side's difference from it, for Trem Sep to spread.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028"
+    },
+    {
+      "node": {
+        "id": "trem_side_l",
+        "kind": "mix",
+        "inputs": [
+          "trem_l",
+          "trem_r"
+        ],
+        "weights": {
+          "trem_l": {
+            "value": 0.5
+          },
+          "trem_r": {
+            "value": -0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The two tremolo modulators as their mean and each side's difference from it, for Trem Sep to spread.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028"
+    },
+    {
+      "node": {
+        "id": "trem_side_r",
+        "kind": "mix",
+        "inputs": [
+          "trem_l",
+          "trem_r"
+        ],
+        "weights": {
+          "trem_r": {
+            "value": 0.5
+          },
+          "trem_l": {
+            "value": -0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The two tremolo modulators as their mean and each side's difference from it, for Trem Sep to spread.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028"
+    },
+    {
+      "node": {
+        "id": "trem_spread_l",
+        "kind": "mix",
+        "inputs": [
+          "trem_mid",
+          "trem_side_l"
+        ],
+        "weights": {
+          "trem_mid": {
+            "value": 1.0
+          },
+          "trem_side_l": {
+            "byte": "40 03 08",
+            "law": "d.unit",
+            "anchor": "moved_l.weights.out_l"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Trem Sep as the stereo spread modern binds by d.unit to ringModulator `stereoSpread`: each side's tremolo moves from the mean of the two modulators toward its own. Anchored (D33) to the candidate's unit weight, so the power-on byte reads the candidate's own modulators.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028"
+    },
+    {
+      "node": {
+        "id": "trem_spread_r",
+        "kind": "mix",
+        "inputs": [
+          "trem_mid",
+          "trem_side_r"
+        ],
+        "weights": {
+          "trem_mid": {
+            "value": 1.0
+          },
+          "trem_side_r": {
+            "byte": "40 03 08",
+            "law": "d.unit",
+            "anchor": "moved_r.weights.out_r"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Trem Sep as the stereo spread modern binds by d.unit to ringModulator `stereoSpread`: each side's tremolo moves from the mean of the two modulators toward its own. Anchored (D33) to the candidate's unit weight, so the power-on byte reads the candidate's own modulators.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028"
+    },
+    {
+      "node": {
+        "id": "dip_l",
+        "kind": "vca",
+        "input": "out_l",
+        "control": "trem_spread_l"
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own tremolo, now driven by the spread modulator.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028",
+      "replaces": "dip_l"
+    },
+    {
+      "node": {
+        "id": "dip_r",
+        "kind": "vca",
+        "input": "out_r",
+        "control": "trem_spread_r"
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own tremolo, now driven by the spread modulator.",
+      "replaced_when": {
+        "model_binding": [
+          "01 41",
+          "40 03 08"
+        ]
+      },
+      "covers": "f4a63865d028",
+      "replaces": "dip_r"
+    }
+  ]
+}

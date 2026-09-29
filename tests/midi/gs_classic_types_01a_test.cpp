@@ -2,10 +2,10 @@
 /// @brief GS classic realization, MSB 01 types 01 00-01 31: every printed byte is heard.
 ///
 /// For each type and printed slot, the default configuration (p0 models with overlays) is
-/// drawn at 32 kHz from the power-on bytes with that slot at its lowest and at its highest
-/// accepted byte. The two drawings must differ by at least 0.1 dB in some band of the
+/// drawn at 32 kHz from the power-on bytes with that slot at the first and at the last byte
+/// of its printed range. The two drawings must differ by at least 0.1 dB in some band of the
 /// per-channel third-octave digest, or by a relative L2 of at least 1e-3. The printed
-/// slots and their accepted ends are the rows of `gs_classic_reference.tsv`, and the
+/// slots are the rows of `gs_classic_reference.tsv`, their printed ends the model's, and the
 /// stimulus and digest are the ones its header states. The default run draws each type's
 /// first printed slot; the full sweep is slow and runs under `[gs-classic-types-01a-all]`.
 ///
@@ -80,8 +80,11 @@ struct Printed {
   uint8_t hi = 0;
 };
 
-/// (type, slot) -> the lowest and highest accepted byte, from the reference TSV's rows.
+/// (type, slot) -> the first and last printed byte, for each printed slot the reference
+/// TSV lists. A byte outside the printed range is a protocol question, not the model's.
 std::map<std::pair<uint16_t, int>, Printed> printed_slots() {
+  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
+  REQUIRE(registry.valid());
   std::map<std::pair<uint16_t, int>, Printed> out;
   std::ifstream in(kReferencePath);
   REQUIRE(in.good());
@@ -89,10 +92,9 @@ std::map<std::pair<uint16_t, int>, Printed> printed_slots() {
   while (std::getline(in, line)) {
     if (line.empty() || line[0] == '#' || line.rfind("type", 0) == 0) continue;
     std::istringstream row(line);
-    std::string type, slot, byte;
+    std::string type, slot;
     std::getline(row, type, '\t');
     std::getline(row, slot, '\t');
-    std::getline(row, byte, '\t');
     if (slot == "-") continue;
     const auto number = static_cast<uint16_t>(std::stoi(type.substr(0, 2), nullptr, 16) << 8 |
                                               std::stoi(type.substr(3, 2), nullptr, 16));
@@ -100,12 +102,11 @@ std::map<std::pair<uint16_t, int>, Printed> printed_slots() {
     // 01 03 is left out until the vowel filter insert exists: its vowels and Accel have
     // nothing to bind to before then.
     if (number == kHumanizer) continue;
-    const auto value = static_cast<uint8_t>(std::stoi(byte));
-    auto [it, fresh] = out.try_emplace({number, std::stoi(slot)}, Printed{value, value});
-    if (!fresh) {
-      it->second.lo = std::min(it->second.lo, value);
-      it->second.hi = std::max(it->second.hi, value);
-    }
+    const gc::GsClassicType* model = registry.find(number);
+    REQUIRE(model != nullptr);
+    const auto at = static_cast<std::size_t>(std::stoi(slot));
+    out.emplace(std::make_pair(number, std::stoi(slot)),
+                Printed{model->printed_lo[at], model->printed_hi[at]});
   }
   return out;
 }

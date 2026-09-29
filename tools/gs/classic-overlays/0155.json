@@ -1,0 +1,198 @@
+{
+  "type": "01 55",
+  "what_this_is": "Type as the room's size over the candidate's loop and all-pass lengths.",
+  "entries": [
+    {
+      "node": {
+        "id": "line_0",
+        "kind": "delay",
+        "input": "damp_0",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "line_0"
+    },
+    {
+      "node": {
+        "id": "line_1",
+        "kind": "delay",
+        "input": "damp_1",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "line_1"
+    },
+    {
+      "node": {
+        "id": "line_2",
+        "kind": "delay",
+        "input": "damp_2",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "line_2"
+    },
+    {
+      "node": {
+        "id": "line_3",
+        "kind": "delay",
+        "input": "damp_3",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "line_3"
+    },
+    {
+      "node": {
+        "id": "ap0_l_line",
+        "kind": "delay",
+        "input": "ap0_l_in",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "ap0_l_line"
+    },
+    {
+      "node": {
+        "id": "ap1_l_line",
+        "kind": "delay",
+        "input": "ap1_l_in",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "ap1_l_line"
+    },
+    {
+      "node": {
+        "id": "ap0_r_line",
+        "kind": "delay",
+        "input": "ap0_r_in",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "ap0_r_line"
+    },
+    {
+      "node": {
+        "id": "ap1_r_line",
+        "kind": "delay",
+        "input": "ap1_r_in",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 03",
+          "law": "d.type_index6"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Type as the room's size: every loop and all-pass length scales with the type's place in the list (Room1 a quarter of Stage2, Hall2 one and a half times it), by d.type_index6, the law modern binds to dattorro `character`. Anchored (D33) to the fitted length at the power-on Stage2.",
+      "replaced_when": {
+        "model_binding": [
+          "01 55",
+          "40 03 03"
+        ]
+      },
+      "covers": "cd3bed7385b9",
+      "replaces": "ap1_r_line"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "770b920d3f5c",
+      "rationale": "The candidate carries the damping claim to the HF Damp byte, one pole on each line's input inside its loop; adopted as drawn.",
+      "replaced_when": {
+        "covers": "770b920d3f5c"
+      }
+    },
+    {
+      "covers": "228d51ebcbe5",
+      "rationale": "The candidate reads the Time byte by its one-anchor law; adopted as drawn.",
+      "replaced_when": {
+        "covers": "228d51ebcbe5"
+      }
+    }
+  ]
+}

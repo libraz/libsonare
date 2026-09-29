@@ -1,0 +1,27 @@
+{
+  "type": "01 54",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "354df0f3411f",
+      "rationale": "The candidate draws the delay at the time a setting lands on, with no glide; adopted as drawn.",
+      "replaced_when": {
+        "covers": "354df0f3411f"
+      }
+    },
+    {
+      "covers": "2d6d0515299a",
+      "rationale": "The candidate reads the Accel byte as halving the shortfall at its top nibble bit; adopted as drawn.",
+      "replaced_when": {
+        "covers": "2d6d0515299a"
+      }
+    },
+    {
+      "covers": "0b2bbab758c8",
+      "rationale": "The candidate carries the damping claim to the HF Damp byte, one pole on the line's input inside the loop; adopted as drawn.",
+      "replaced_when": {
+        "covers": "0b2bbab758c8"
+      }
+    }
+  ]
+}

@@ -1,0 +1,730 @@
+{
+  "type": "01 73",
+  "what_this_is": "Lo-Fi Type as the first Lo-Fi type's hold ladder, and the four noise generators.",
+  "entries": [
+    {
+      "node": {
+        "id": "hold_l",
+        "kind": "hold",
+        "input": "path_l",
+        "rate_hz": {
+          "byte": "40 03 03",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 16000.0,
+              "1": 10666.666666666668,
+              "2": 8000.0,
+              "3": 16000.0,
+              "4": 10666.666666666668,
+              "5": 8000.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "Lo-Fi Type state i as the first Lo-Fi type's ladder state i, as modern binds both types' Type to bitcrusher `typeLadder`; the first six states of the 01 72 candidate's hold rates, carried with its degrader claim. The rates are written here by hand, so a test holds each to that candidate's.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 03"
+        ]
+      },
+      "from": "0172-a-degrader-byte-is-a-rate-and-something-else",
+      "covers": "70b93269b13d"
+    },
+    {
+      "node": {
+        "id": "hold_r",
+        "kind": "hold",
+        "input": "path_r",
+        "rate_hz": {
+          "byte": "40 03 03",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 16000.0,
+              "1": 10666.666666666668,
+              "2": 8000.0,
+              "3": 16000.0,
+              "4": 10666.666666666668,
+              "5": 8000.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "Lo-Fi Type state i as the first Lo-Fi type's ladder state i, as modern binds both types' Type to bitcrusher `typeLadder`; the first six states of the 01 72 candidate's hold rates, carried with its degrader claim. The rates are written here by hand, so a test holds each to that candidate's.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 03"
+        ]
+      },
+      "from": "0172-a-degrader-byte-is-a-rate-and-something-else",
+      "covers": "70b93269b13d"
+    },
+    {
+      "node": {
+        "id": "lowpass_l",
+        "kind": "section",
+        "input": "hold_l",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "stepped-table",
+            "entries": [
+              250.0,
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0
+            ],
+            "per_entry": 8
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/freq-the-byte-indexes-a-third-octave-table.json",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Cutoff, 250-630-8k, column *9"
+          ],
+          "fitted_on": []
+        },
+        "sections": {
+          "byte": "40 03 04",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 1,
+              "2": 0,
+              "*": 0
+            }
+          },
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Fil Type, Off/LPF/HPF over 00/01/02",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own filter, now fed from the hold as the first Lo-Fi type orders them.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 03"
+        ]
+      },
+      "from": "0172-a-degrader-byte-is-a-rate-and-something-else",
+      "covers": "70b93269b13d",
+      "replaces": "lowpass_l"
+    },
+    {
+      "node": {
+        "id": "lowpass_r",
+        "kind": "section",
+        "input": "hold_r",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "stepped-table",
+            "entries": [
+              250.0,
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0
+            ],
+            "per_entry": 8
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/freq-the-byte-indexes-a-third-octave-table.json",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Cutoff, 250-630-8k, column *9"
+          ],
+          "fitted_on": []
+        },
+        "sections": {
+          "byte": "40 03 04",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 1,
+              "2": 0,
+              "*": 0
+            }
+          },
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Fil Type, Off/LPF/HPF over 00/01/02",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own filter, now fed from the hold as the first Lo-Fi type orders them.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 03"
+        ]
+      },
+      "from": "0172-a-degrader-byte-is-a-rate-and-something-else",
+      "covers": "70b93269b13d",
+      "replaces": "lowpass_r"
+    },
+    {
+      "node": {
+        "id": "radio_src",
+        "kind": "x-noise",
+        "noise": "radio",
+        "seed": 1,
+        "level": {
+          "byte": "40 03 07",
+          "law": "d.unit"
+        },
+        "parameter": {
+          "value": 16000.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "The radio generator: noise at R.Nz Lev, scaled by R.Detune, so an in-tune radio adds none -- the d.unit laws modern binds to bitcrusher `radioNoiseLevel` and `noiseDetune`. Its low-pass stands at the clock's half, where modern's `noiseLpfHz` powers up at Bypass.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 07"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "radio",
+        "kind": "gain",
+        "input": "radio_src",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 06",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "The radio generator: noise at R.Nz Lev, scaled by R.Detune, so an in-tune radio adds none -- the d.unit laws modern binds to bitcrusher `radioNoiseLevel` and `noiseDetune`. Its low-pass stands at the clock's half, where modern's `noiseLpfHz` powers up at Bypass.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 06"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "wp_white",
+        "kind": "x-noise",
+        "noise": "white",
+        "seed": 2,
+        "level": {
+          "byte": "40 03 0A",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "The white-or-pink generator at W/P Level, the d.unit law modern binds to `wpNoiseLevel`; W/P Sel moves from white to pink by d.enum2, the law modern binds to `wpNoisePink`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 0A"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "wp_pink",
+        "kind": "x-noise",
+        "noise": "pink",
+        "seed": 3,
+        "level": {
+          "byte": "40 03 0A",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "The white-or-pink generator at W/P Level, the d.unit law modern binds to `wpNoiseLevel`; W/P Sel moves from white to pink by d.enum2, the law modern binds to `wpNoisePink`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 0A"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "wp_step",
+        "kind": "mix",
+        "inputs": [
+          "wp_pink",
+          "wp_white"
+        ],
+        "weights": {
+          "wp_pink": {
+            "value": 1.0
+          },
+          "wp_white": {
+            "value": -1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The white-or-pink generator at W/P Level, the d.unit law modern binds to `wpNoiseLevel`; W/P Sel moves from white to pink by d.enum2, the law modern binds to `wpNoisePink`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 08"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "wp_sel",
+        "kind": "mix",
+        "inputs": [
+          "wp_white",
+          "wp_step"
+        ],
+        "weights": {
+          "wp_white": {
+            "value": 1.0
+          },
+          "wp_step": {
+            "byte": "40 03 08",
+            "law": "d.enum2"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The white-or-pink generator at W/P Level, the d.unit law modern binds to `wpNoiseLevel`; W/P Sel moves from white to pink by d.enum2, the law modern binds to `wpNoisePink`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 08"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "wp",
+        "kind": "section",
+        "input": "wp_sel",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 09",
+          "law": "d.cutoff_hz"
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "Each generator's own low-pass, one pole at the d.cutoff_hz law modern binds to the source's `*LpfHz`; its top is the clock's half, where the pole passes everything.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 09"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "disc_src",
+        "kind": "x-noise",
+        "noise": "disc",
+        "seed": 4,
+        "level": {
+          "byte": "40 03 0D",
+          "law": "d.unit"
+        },
+        "parameter": {
+          "byte": "40 03 0B",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 4.0,
+              "1": 8.0,
+              "2": 16.0,
+              "3": 32.0
+            }
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The disc generator: clicks at Disc Nz Lev, the d.unit law modern binds to `discNoiseLevel`. Disc Type sets the clicks' density, doubling from 4 to 32 a second across the four types; modern's `discType` has no rates of its own yet, so these are invented here.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 0B"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "disc",
+        "kind": "section",
+        "input": "disc_src",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 0C",
+          "law": "d.cutoff_hz"
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "Each generator's own low-pass, one pole at the d.cutoff_hz law modern binds to the source's `*LpfHz`; its top is the clock's half, where the pole passes everything.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 0C"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "hum_src",
+        "kind": "x-noise",
+        "noise": "hum",
+        "seed": 5,
+        "level": {
+          "byte": "40 03 10",
+          "law": "d.unit"
+        },
+        "parameter": {
+          "byte": "40 03 0E",
+          "law": "d.hum_hz"
+        }
+      },
+      "basis": "invented",
+      "rationale": "The hum generator at Hum Level, the d.unit law modern binds to `humLevel`, at the mains frequency Hum Type names by d.hum_hz, the law modern binds to `humHz`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 0E"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "hum",
+        "kind": "section",
+        "input": "hum_src",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 0F",
+          "law": "d.cutoff_hz"
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "Each generator's own low-pass, one pole at the d.cutoff_hz law modern binds to the source's `*LpfHz`; its top is the clock's half, where the pole passes everything.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 0F"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "noise",
+        "kind": "mix",
+        "inputs": [
+          "radio",
+          "wp",
+          "disc",
+          "hum"
+        ],
+        "weights": {
+          "radio": {
+            "value": 1.0
+          },
+          "wp": {
+            "value": 1.0
+          },
+          "disc": {
+            "value": 1.0
+          },
+          "hum": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The four generators sound together and join the effect path after its filter, ahead of the balance.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 07"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "filtered_l",
+        "kind": "section",
+        "input": "lowpass_l",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "stepped-table",
+            "entries": [
+              250.0,
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0
+            ],
+            "per_entry": 8
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/freq-the-byte-indexes-a-third-octave-table.json",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Cutoff, 250-630-8k, column *9"
+          ],
+          "fitted_on": []
+        },
+        "sections": {
+          "byte": "40 03 04",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 0,
+              "2": 1,
+              "*": 0
+            }
+          },
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Fil Type, Off/LPF/HPF over 00/01/02",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's filter, under a new id so the generators can join the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 07"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "highpass_l",
+        "kind": "mix",
+        "inputs": [
+          "filtered_l",
+          "noise"
+        ],
+        "weights": {
+          "filtered_l": {
+            "value": 1.0
+          },
+          "noise": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The four generators sound together and join the effect path after its filter, ahead of the balance.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 07"
+        ]
+      },
+      "covers": "7784c17377d8",
+      "replaces": "highpass_l"
+    },
+    {
+      "node": {
+        "id": "filtered_r",
+        "kind": "section",
+        "input": "lowpass_r",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "stepped-table",
+            "entries": [
+              250.0,
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0
+            ],
+            "per_entry": 8
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/freq-the-byte-indexes-a-third-octave-table.json",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Cutoff, 250-630-8k, column *9"
+          ],
+          "fitted_on": []
+        },
+        "sections": {
+          "byte": "40 03 04",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 0,
+              "2": 1,
+              "*": 0
+            }
+          },
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 219: Lo-Fi 2 Fil Type, Off/LPF/HPF over 00/01/02",
+            "inferences/roland-sc8850-01/0142-a-filter-byte-sits-on-one-pole.json",
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's filter, under a new id so the generators can join the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 07"
+        ]
+      },
+      "covers": "7784c17377d8"
+    },
+    {
+      "node": {
+        "id": "highpass_r",
+        "kind": "mix",
+        "inputs": [
+          "filtered_r",
+          "noise"
+        ],
+        "weights": {
+          "filtered_r": {
+            "value": 1.0
+          },
+          "noise": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The four generators sound together and join the effect path after its filter, ahead of the balance.",
+      "replaced_when": {
+        "model_binding": [
+          "01 73",
+          "40 03 07"
+        ]
+      },
+      "covers": "7784c17377d8",
+      "replaces": "highpass_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "27526633ea61",
+      "rationale": "The candidate carries the Cutoff table from the stereo chorus's identically printed column; adopted as drawn.",
+      "replaced_when": {
+        "covers": "27526633ea61"
+      }
+    }
+  ]
+}

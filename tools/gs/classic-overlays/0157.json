@@ -1,0 +1,20 @@
+{
+  "type": "01 57",
+  "what_this_is": "Covers only; the Out slot waits for the binaural insert, every other printed slot is bound.",
+  "covers": [
+    {
+      "covers": "3eaaee41fa11",
+      "rationale": "The candidate reads each tap level through the output level's stored curve; adopted as drawn.",
+      "replaced_when": {
+        "covers": "3eaaee41fa11"
+      }
+    },
+    {
+      "covers": "0b2bbab758c8",
+      "rationale": "The candidate carries the damping claim to the HF Damp byte, one pole on the line's input inside the loop; adopted as drawn.",
+      "replaced_when": {
+        "covers": "0b2bbab758c8"
+      }
+    }
+  ]
+}

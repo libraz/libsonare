@@ -1,0 +1,13 @@
+{
+  "type": "01 42",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "509ad1bfebf3",
+      "rationale": "The candidate holds the Phase byte above 5A at half a cycle; adopted as drawn.",
+      "replaced_when": {
+        "covers": "509ad1bfebf3"
+      }
+    }
+  ]
+}

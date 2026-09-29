@@ -1,0 +1,27 @@
+{
+  "type": "01 61",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "9fd5b46d890c",
+      "rationale": "The candidate returns the input a sample late at unison; adopted as drawn.",
+      "replaced_when": {
+        "covers": "9fd5b46d890c"
+      }
+    },
+    {
+      "covers": "b18252f342ee",
+      "rationale": "The candidate draws coarse and fine as two shifters in series, each over its printed range only; adopted as drawn.",
+      "replaced_when": {
+        "covers": "b18252f342ee"
+      }
+    },
+    {
+      "covers": "1326f5990171",
+      "rationale": "The candidate feeds back the shifter's own output, before the pan; adopted as drawn.",
+      "replaced_when": {
+        "covers": "1326f5990171"
+      }
+    }
+  ]
+}

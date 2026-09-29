@@ -1,0 +1,20 @@
+{
+  "type": "01 72",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "8dd237816c40",
+      "rationale": "The candidate draws the pre filter's entry 0 by its level alone; adopted as drawn.",
+      "replaced_when": {
+        "covers": "8dd237816c40"
+      }
+    },
+    {
+      "covers": "8f787c37a8cc",
+      "rationale": "The candidate draws the field's first two values as the one value the degrader claim reads; adopted as drawn.",
+      "replaced_when": {
+        "covers": "8f787c37a8cc"
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "type": "01 44",
+  "what_this_is": "Covers only; the Out slot waits for the binaural insert, every other printed slot is bound.",
+  "covers": [
+    {
+      "covers": "6b268e3ba72f",
+      "rationale": "The candidate reads the Depth byte through the stereo chorus's depth curve; adopted as drawn.",
+      "replaced_when": {
+        "covers": "6b268e3ba72f"
+      }
+    }
+  ]
+}

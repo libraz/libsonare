@@ -1304,8 +1304,19 @@ def bound_slots(ctx: Context, model: dict) -> set[int]:
 # ---------------------------------------------------------------- building a set
 
 
+def printed_ranges(coverage, slots: dict[int, str]) -> tuple[list[int], list[int]]:
+    """Each slot's first and last printed byte; an unprinted slot reads 0 and 0."""
+    lo, hi = [0] * SLOTS, [0] * SLOTS
+    for slot, values in slots.items():
+        lo[slot], hi[slot] = coverage.byte_domain(values)
+    return lo, hi
+
+
 def build_set(
-    ctx: Context, types: list[dict], overlays: dict[int, list[dict]] | None
+    ctx: Context,
+    types: list[dict],
+    overlays: dict[int, list[dict]] | None,
+    printed: dict[str, dict[int, str]],
 ) -> tuple[Pools, dict]:
     pools = Pools()
     facts = {}
@@ -1317,6 +1328,9 @@ def build_set(
         converter = Converter(ctx, pools, t["number"], model, t["laws"])
         ranges = converter.convert()
         topo = topology(ctx, t["number"], model)
+        printed_lo, printed_hi = printed_ranges(
+            ctx.archive.coverage, printed.get(type_key(t["number"]), {})
+        )
         pools.types.append(
             {
                 **ranges,
@@ -1324,6 +1338,8 @@ def build_set(
                 "topology": topo,
                 "sha256": t["sha256"],
                 "gross": t["gross"],
+                "printed_lo": printed_lo,
+                "printed_hi": printed_hi,
             }
         )
         facts[t["number"]] = {
@@ -1406,7 +1422,8 @@ def emit_set(pools: Pools, revision: dict, what: str) -> str:
             f"{{0x{t['type']:04X}, {t['node_begin']}, {t['node_end']}, {t['comp_begin']}, "
             f"{t['comp_end']}, {t['out_l']}, {t['out_r']}, {t['max_delay_samples']}u, "
             f'GsClassicTopology::{TOPOLOGY_NAME[t["topology"]]}, "{t["sha256"]}", '
-            f"{float_lit(t['gross'])}}}"
+            f"{float_lit(t['gross'])}, {{{', '.join(map(str, t['printed_lo']))}}}, "
+            f"{{{', '.join(map(str, t['printed_hi']))}}}}}"
             for t in pools.types
         ],
     )
@@ -1647,6 +1664,8 @@ class _Type(ctypes.Structure):
         ("topology", ctypes.c_uint8),
         ("sha", ctypes.c_char * 65),
         ("gross", ctypes.c_float),
+        ("printed_lo", ctypes.c_uint8 * SLOTS),
+        ("printed_hi", ctypes.c_uint8 * SLOTS),
     ]
 
 
@@ -1696,6 +1715,8 @@ def shipping_sizes(pools: Pools) -> dict[str, tuple[int, int]]:
                 t["topology"],
                 t["sha256"].encode(),
                 t["gross"],
+                (ctypes.c_uint8 * SLOTS)(*t["printed_lo"]),
+                (ctypes.c_uint8 * SLOTS)(*t["printed_hi"]),
             )
             for t in pools.types
         ]
@@ -1997,8 +2018,8 @@ def main() -> int:
     resolve_overlay_laws(
         archive.coverage, overlays, printed, ctx.power_on, {t["number"]: t["model"] for t in types}
     )
-    raw_pools, raw_facts = build_set(ctx, types, None)
-    default_pools, default_facts = build_set(ctx, types, overlays)
+    raw_pools, raw_facts = build_set(ctx, types, None, printed)
+    default_pools, default_facts = build_set(ctx, types, overlays, printed)
     check_pool_limits(raw_pools, "raw")
     check_pool_limits(default_pools, "default")
 

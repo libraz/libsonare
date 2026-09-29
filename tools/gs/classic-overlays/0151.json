@@ -1,0 +1,27 @@
+{
+  "type": "01 51",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "3986f84c57d8",
+      "rationale": "The candidate reads the Mod Depth byte through the stereo chorus's pitch excursion; adopted as drawn.",
+      "replaced_when": {
+        "covers": "3986f84c57d8"
+      }
+    },
+    {
+      "covers": "99a2885cafc3",
+      "rationale": "The candidate reads an Fb Mode value past 01 as keeping the state 00; adopted as drawn.",
+      "replaced_when": {
+        "covers": "99a2885cafc3"
+      }
+    },
+    {
+      "covers": "0b2bbab758c8",
+      "rationale": "The candidate carries the damping claim to the HF Damp byte, one pole on the line's input inside the loop; adopted as drawn.",
+      "replaced_when": {
+        "covers": "0b2bbab758c8"
+      }
+    }
+  ]
+}

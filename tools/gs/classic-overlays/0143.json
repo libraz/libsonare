@@ -1,0 +1,20 @@
+{
+  "type": "01 43",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "a132d98e7483",
+      "rationale": "The candidate reads the Depth byte through the stereo chorus's depth curve; adopted as drawn.",
+      "replaced_when": {
+        "covers": "a132d98e7483"
+      }
+    },
+    {
+      "covers": "509ad1bfebf3",
+      "rationale": "The candidate holds the Phase byte above 5A at half a cycle; adopted as drawn.",
+      "replaced_when": {
+        "covers": "509ad1bfebf3"
+      }
+    }
+  ]
+}

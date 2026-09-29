@@ -32,6 +32,10 @@ The generator stops on a `source: document` value that is none of the four docum
 
 Two kinds of setting are refused by the archive's renderer and drawn by the engine anyway: a byte a `states` map names no state for, which the engine gives the nearest named state's value when the protocol accepts the byte (the lower on a tie) and the power-on byte's value when it does not; and a loop whose delay falls under one sample, which the engine draws at one sample. Both are the engine's own reading, and the reference records such states as `unrenderable` rather than comparing them.
 
+## Invented behaviour that changes the power-on sound
+
+An overlay that replaces a constant `p0` fitted is anchored so the power-on byte still reads that constant. An overlay that adds structure `p0` has no path for is not, and it sounds at power-on whenever the power-on bytes turn it on. `01 73` (Lo-Fi 2) is one such case: its Lo-Fi Type powers up at state 1, which the overlay draws as the first Lo-Fi type's hold of three samples (10.7 kHz), so the default configuration's power-on drawing differs from `p0`'s. This is invented, not measured. Its noise generators stay silent at power-on, because R.Detune, W/P Level, Disc Nz Lev and Hum Level all power up at 0.
+
 ## Reference digests
 
 The stimulus, digest and state list are stated in the header lines of `tests/midi/gs_classic_reference.tsv`, which is the definition the conformance test follows. The states are the power-on state and each printed slot at its lowest and highest accepted byte; a slot no raw-model node reads is recorded as `unbound`, and a byte equal to the power-on byte as `same-as-power-on`, instead of being drawn again.
@@ -70,7 +74,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `01 30` | peak-branching | 0 | - | 7 | 0 | 0 | 0.929 |
 | `01 31` | peak-branching | 0 | - | 8 | 0 | 0 | 2.200 |
 | `01 40` | triangle-pre-delay-dev-in-ladder-steps | 0 | - | 10 | 0 | 0 | 0.283 |
-| `01 41` | triangle-tremolo-after-the-balance | 0 | - | 10 | 1 | 0 | 0.198 |
+| `01 41` | triangle-tremolo-after-the-balance | 0 | - | 10 | 0 | 0 | 0.198 |
 | `01 42` | triangle-filter-before-the-split | 0 | - | 10 | 0 | 0 | 0.134 |
 | `01 43` | raised-sine-both-voices-crossed | 0 | - | 8 | 0 | 0 | 0.105 |
 | `01 44` | triangle-one-modulator | 0 | - | 8 | 1 | 0 | 0.298 |
@@ -87,7 +91,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `01 70` | head-shadow-and-a-rear-cue-each-side-less-the-other | 0 | - | 6 | 0 | 0 | 0.001 |
 | `01 71` | head-shadow-alone-the-mid-restored | 0 | - | 3 | 0 | 0 | 1.526 |
 | `01 72` | hold-of-two-at-rest-quantiser-after-the-pre-filter | 0 | - | 8 | 0 | 0 | 1.000 |
-| `01 73` | one-pole-pan-places-only-the-mono-sum | 0 | - | 20 | 12 | 0 | 1.319 |
+| `01 73` | one-pole-pan-places-only-the-mono-sum | 0 | - | 20 | 0 | 0 | 1.319 |
 | `02 00` | dry-after-the-drive-tone-first | 0 | - | 11 | 2 | 0 | 0.810 |
 | `02 01` | dry-after-the-drive-tone-first | 0 | - | 12 | 2 | 1 | 1.000 |
 | `02 02` | dry-after-the-drive-tone-last | 0 | - | 11 | 2 | 0 | 0.983 |
@@ -119,7 +123,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `11 07` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 20 | 3 | 0 | 0.164 |
 | `11 08` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 17 | 1 | 0 | 2.011 |
 
-Unbound printed slots: 80 of 770 in 29 types.
+Unbound printed slots: 67 of 770 in 27 types.
 
 ### Document values
 
@@ -127,15 +131,15 @@ Unbound printed slots: 80 of 770 in 29 types.
 
 ### Shipping size
 
-The default configuration ships 194 de-duplicated map specs (183 in the raw configuration), 27 control curves, 1858 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
+The default configuration ships 206 de-duplicated map specs (183 in the raw configuration), 27 control curves, 1879 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
 
 | pool | raw bytes | gzip bytes |
 |---|---|---|
-| map specs | 76477 | 27986 |
+| map specs | 86999 | 28968 |
 | control curves | 27864 | 21274 |
-| node tables | 101076 | 29459 |
-| total | 205417 | 79848 |
+| node tables | 104720 | 30405 |
+| total | 219583 | 81681 |
 
-Expanding the specs at registry construction puts 99328 bytes of LUTs on the heap per configuration.
+Expanding the specs at registry construction puts 105472 bytes of LUTs on the heap per configuration.
 
 <!-- END GENERATED: tools/gs/classic_models.py -->

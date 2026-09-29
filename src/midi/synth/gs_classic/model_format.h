@@ -252,6 +252,10 @@ struct GsClassicType {
   GsClassicTopology topology;
   char model_sha256[65];
   float gross_residual;
+  /// First and last printed byte of each slot (a state list's ends, a range's ends, a
+  /// column pointer's whole byte); both 0 for a slot the type does not print.
+  uint8_t printed_lo[kGsClassicByteSlots];
+  uint8_t printed_hi[kGsClassicByteSlots];
 };
 
 /// A view over one configuration's pools. `luts` holds one expansion per map spec and

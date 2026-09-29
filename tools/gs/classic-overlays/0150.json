@@ -1,0 +1,20 @@
+{
+  "type": "01 50",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "6e518bfc4d70",
+      "rationale": "The candidate reads a Phase or Fb Mode value past 01 as keeping the state 00; adopted as drawn.",
+      "replaced_when": {
+        "covers": "6e518bfc4d70"
+      }
+    },
+    {
+      "covers": "0b2bbab758c8",
+      "rationale": "The candidate carries the damping claim to the HF Damp byte, one pole on the line's input inside the loop; adopted as drawn.",
+      "replaced_when": {
+        "covers": "0b2bbab758c8"
+      }
+    }
+  ]
+}

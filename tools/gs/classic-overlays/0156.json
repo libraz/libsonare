@@ -1,0 +1,27 @@
+{
+  "type": "01 56",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "75eafe774f6c",
+      "rationale": "The candidate draws the gate as sixteen reads, alike for Norm and rising in a straight line for Reverse; adopted as drawn.",
+      "replaced_when": {
+        "covers": "75eafe774f6c"
+      }
+    },
+    {
+      "covers": "c9452d855352",
+      "rationale": "The candidate draws Gate Time over its printed states only; adopted as drawn.",
+      "replaced_when": {
+        "covers": "c9452d855352"
+      }
+    },
+    {
+      "covers": "7d5818e1134b",
+      "rationale": "The candidate walks a Sweep's reads across the pan claim's law; adopted as drawn.",
+      "replaced_when": {
+        "covers": "7d5818e1134b"
+      }
+    }
+  ]
+}

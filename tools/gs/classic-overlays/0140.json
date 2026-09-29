@@ -1,0 +1,20 @@
+{
+  "type": "01 40",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "0db350fc06cc",
+      "rationale": "The candidate reads Depth Dev in steps of the depth byte at the depth curve's mean slope and Pan Dev as a spread to the ends of the pan law; adopted as drawn.",
+      "replaced_when": {
+        "covers": "0db350fc06cc"
+      }
+    },
+    {
+      "covers": "71f81ba1220a",
+      "rationale": "The candidate spreads the six voices evenly by the deviation bytes; adopted as drawn.",
+      "replaced_when": {
+        "covers": "71f81ba1220a"
+      }
+    }
+  ]
+}

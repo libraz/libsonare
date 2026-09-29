@@ -1,0 +1,34 @@
+{
+  "type": "01 60",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "7c04991591b1",
+      "rationale": "The candidate returns the input a sample late at unison; adopted as drawn.",
+      "replaced_when": {
+        "covers": "7c04991591b1"
+      }
+    },
+    {
+      "covers": "26afc553cc98",
+      "rationale": "The candidate draws coarse and fine as two shifters in series; adopted as drawn.",
+      "replaced_when": {
+        "covers": "26afc553cc98"
+      }
+    },
+    {
+      "covers": "d6ba5ba08448",
+      "rationale": "The candidate draws each pitch byte over its printed range only; adopted as drawn.",
+      "replaced_when": {
+        "covers": "d6ba5ba08448"
+      }
+    },
+    {
+      "covers": "82fe9b7a1837",
+      "rationale": "The candidate draws L.Bal as the balance byte's two ramps; adopted as drawn.",
+      "replaced_when": {
+        "covers": "82fe9b7a1837"
+      }
+    }
+  ]
+}
