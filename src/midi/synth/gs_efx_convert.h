@@ -192,7 +192,8 @@ float gs_efx_drive_db(uint8_t value) noexcept;
 /// Equals law.lo at byte_lo and law.hi at byte_hi and is monotone between; bytes
 /// outside the domain clamp. db returns the linear multiplier of the dB line,
 /// bipolar runs -hi..+hi through the domain centre, enum returns the state index
-/// clamped to n_states - 1.
+/// clamped to n_states - 1. A linear or log law with n_states > 1 is stepped: the byte is
+/// a state index, state i sits at i / (n_states - 1) between lo and hi.
 float gs_efx_designed_value(const GsEfxDesignedLaw& law, uint8_t byte, uint8_t byte_lo,
                             uint8_t byte_hi) noexcept;
 

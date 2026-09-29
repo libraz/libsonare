@@ -295,3 +295,21 @@ TEST_CASE("enable_on reads an on-state mask and a selector", "[gs-efx-designed]"
     CHECK(synth::gs_efx_enable_on(pick, 127, stage) == (stage == 0));
   }
 }
+
+TEST_CASE("designed stepped laws place each state evenly between the printed ends",
+          "[gs-efx-designed]") {
+  const auto hum = law_of(synth::kGsEfxFormLinear, 50.0f, 60.0f, 2);
+  CHECK(synth::gs_efx_designed_value(hum, 0, 0, 1) == 50.0f);
+  CHECK(synth::gs_efx_designed_value(hum, 1, 0, 1) == 60.0f);
+  CHECK(synth::gs_efx_designed_value(hum, 9, 0, 1) == 60.0f);
+  const auto ratio = law_of(synth::kGsEfxFormLog, 1.5f, 100.0f, 4);
+  CHECK(synth::gs_efx_designed_value(ratio, 0, 0, 3) == 1.5f);
+  CHECK(synth::gs_efx_designed_value(ratio, 3, 0, 3) == 100.0f);
+  const double step = std::cbrt(100.0 / 1.5);
+  CHECK(synth::gs_efx_designed_value(ratio, 1, 0, 3) == Approx(1.5 * step).epsilon(1e-6));
+  CHECK(synth::gs_efx_designed_value(ratio, 2, 0, 3) == Approx(1.5 * step * step).epsilon(1e-6));
+  const auto ladder = law_of(synth::kGsEfxFormLinear, 1.0f, 9.0f, 9);
+  for (uint8_t i = 0; i < 9; ++i) {
+    CHECK(synth::gs_efx_designed_value(ladder, i, 0, 8) == Approx(1.0 + i).margin(1e-6));
+  }
+}

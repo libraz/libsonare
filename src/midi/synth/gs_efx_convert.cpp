@@ -214,6 +214,11 @@ float gs_efx_designed_value(const GsEfxDesignedLaw& law, uint8_t byte, uint8_t b
     assert(law.n_states > 0);
     return static_cast<float>(std::min<int>(byte, law.n_states - 1));
   }
+  // A stepped law reads the byte as a state index and places state i at i / (n - 1).
+  if (law.n_states > 1 && (law.form == kGsEfxFormLinear || law.form == kGsEfxFormLog)) {
+    const GsEfxDesignedLaw continuous{law.form, law.lo, law.hi, 0};
+    return gs_efx_designed_value(continuous, byte, 0, static_cast<uint8_t>(law.n_states - 1));
+  }
   assert(byte_hi > byte_lo);
   const int inside = std::clamp<int>(byte, byte_lo, byte_hi);
   // Endpoints are returned as written so a law meets its printed ends exactly.
