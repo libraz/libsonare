@@ -1,0 +1,885 @@
+{
+  "type": "01 23",
+  "what_this_is": "Pre Filter and Cutoff as the chorus candidate's pre-filter in front of the split.",
+  "entries": [
+    {
+      "node": {
+        "id": "pre_lowpass_l",
+        "kind": "section",
+        "input": "in_l",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 04",
+          "law": "freq.pre_filter"
+        },
+        "sections": {
+          "byte": "40 03 03",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 1,
+              "2": 0,
+              "*": 0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The pre-filter the chorus candidate (01 42) draws, one pole low or high in front of the split, carried because the archive's claim says the flanger and the chorus share a front end. Pre Filter picks the pole as the chorus's candidate reads its own byte; Cutoff reads the measured pre-filter table (freq.pre_filter), which modern binds to flanger `preFilterHz`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04"
+    },
+    {
+      "node": {
+        "id": "pre_highpass_l",
+        "kind": "section",
+        "input": "pre_lowpass_l",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 04",
+          "law": "freq.pre_filter"
+        },
+        "sections": {
+          "byte": "40 03 03",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 0,
+              "2": 1,
+              "*": 0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The pre-filter the chorus candidate (01 42) draws, one pole low or high in front of the split, carried because the archive's claim says the flanger and the chorus share a front end. Pre Filter picks the pole as the chorus's candidate reads its own byte; Cutoff reads the measured pre-filter table (freq.pre_filter), which modern binds to flanger `preFilterHz`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04"
+    },
+    {
+      "node": {
+        "id": "loop_l",
+        "kind": "mix",
+        "inputs": [
+          "pre_highpass_l",
+          "line_l"
+        ],
+        "weights": {
+          "pre_highpass_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0123-the-flanger-and-the-chorus-share-a-front-end.json"
+            ],
+            "fitted_on": []
+          },
+          "line_l": {
+            "byte": "40 03 08",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  15,
+                  -0.98
+                ],
+                [
+                  64,
+                  0.0
+                ],
+                [
+                  113,
+                  0.98
+                ]
+              ]
+            },
+            "source": "document",
+            "rests_on": [
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Stereo Flanger Feedback, -98%-+98% over 0F-71"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own node, now fed from the pre-filter in front of the split as the chorus candidate draws it.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04",
+      "replaces": "loop_l"
+    },
+    {
+      "node": {
+        "id": "out_l",
+        "kind": "mix",
+        "inputs": [
+          "pre_highpass_l",
+          "line_l"
+        ],
+        "weights": {
+          "pre_highpass_l": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          },
+          "line_l": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own node, now fed from the pre-filter in front of the split as the chorus candidate draws it.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04",
+      "replaces": "out_l"
+    },
+    {
+      "node": {
+        "id": "pre_lowpass_r",
+        "kind": "section",
+        "input": "in_r",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 04",
+          "law": "freq.pre_filter"
+        },
+        "sections": {
+          "byte": "40 03 03",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 1,
+              "2": 0,
+              "*": 0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The pre-filter the chorus candidate (01 42) draws, one pole low or high in front of the split, carried because the archive's claim says the flanger and the chorus share a front end. Pre Filter picks the pole as the chorus's candidate reads its own byte; Cutoff reads the measured pre-filter table (freq.pre_filter), which modern binds to flanger `preFilterHz`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04"
+    },
+    {
+      "node": {
+        "id": "pre_highpass_r",
+        "kind": "section",
+        "input": "pre_lowpass_r",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "byte": "40 03 04",
+          "law": "freq.pre_filter"
+        },
+        "sections": {
+          "byte": "40 03 03",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 0,
+              "1": 0,
+              "2": 1,
+              "*": 0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The pre-filter the chorus candidate (01 42) draws, one pole low or high in front of the split, carried because the archive's claim says the flanger and the chorus share a front end. Pre Filter picks the pole as the chorus's candidate reads its own byte; Cutoff reads the measured pre-filter table (freq.pre_filter), which modern binds to flanger `preFilterHz`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04"
+    },
+    {
+      "node": {
+        "id": "loop_r",
+        "kind": "mix",
+        "inputs": [
+          "pre_highpass_r",
+          "line_r"
+        ],
+        "weights": {
+          "pre_highpass_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0123-the-flanger-and-the-chorus-share-a-front-end.json"
+            ],
+            "fitted_on": []
+          },
+          "line_r": {
+            "byte": "40 03 08",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  15,
+                  -0.98
+                ],
+                [
+                  64,
+                  0.0
+                ],
+                [
+                  113,
+                  0.98
+                ]
+              ]
+            },
+            "source": "document",
+            "rests_on": [
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Stereo Flanger Feedback, -98%-+98% over 0F-71"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own node, now fed from the pre-filter in front of the split as the chorus candidate draws it.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04",
+      "replaces": "loop_r"
+    },
+    {
+      "node": {
+        "id": "out_r",
+        "kind": "mix",
+        "inputs": [
+          "pre_highpass_r",
+          "line_r"
+        ],
+        "weights": {
+          "pre_highpass_r": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          },
+          "line_r": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own node, now fed from the pre-filter in front of the split as the chorus candidate draws it.",
+      "replaced_when": {
+        "model_binding": [
+          "01 23",
+          "40 03 03"
+        ]
+      },
+      "from": "0123-the-flanger-and-the-chorus-share-a-front-end",
+      "covers": "8c87aa6a4b04",
+      "replaces": "out_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "3d9408b1904f",
+      "rationale": "The candidate takes the feedback from the delay's own output; adopted as drawn.",
+      "replaced_when": {
+        "covers": "3d9408b1904f"
+      }
+    }
+  ]
+}

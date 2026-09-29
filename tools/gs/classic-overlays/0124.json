@@ -1,0 +1,20 @@
+{
+  "type": "01 24",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "4ff421f368bf",
+      "rationale": "The candidate takes the feedback from the delay's own output; adopted as drawn.",
+      "replaced_when": {
+        "covers": "4ff421f368bf"
+      }
+    },
+    {
+      "covers": "1437e57d3717",
+      "rationale": "The candidate holds the modulator's output, which the step claim records as equivalent to holding the delay's control; adopted as drawn.",
+      "replaced_when": {
+        "covers": "1437e57d3717"
+      }
+    }
+  ]
+}

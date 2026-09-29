@@ -1,0 +1,13 @@
+{
+  "type": "01 20",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "c47460abc519",
+      "rationale": "The candidate carries Depth by proportion between the fitted setting and its ends; adopted as drawn.",
+      "replaced_when": {
+        "covers": "c47460abc519"
+      }
+    }
+  ]
+}

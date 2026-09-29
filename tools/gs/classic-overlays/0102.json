@@ -1,0 +1,600 @@
+{
+  "type": "01 02",
+  "what_this_is": "The enhancer path the candidate does not draw, as spectral.presenceEnhancer's structure: band-pass, drive, tanh, added to the dry signal.",
+  "entries": [
+    {
+      "node": {
+        "id": "enh_peak_l",
+        "kind": "section",
+        "input": "in_l",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_band_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_l",
+          "in_l"
+        ],
+        "weights": {
+          "enh_peak_l": {
+            "value": 0.1111111111111111
+          },
+          "in_l": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_sens_l",
+        "kind": "gain",
+        "input": "enh_band_l",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_curve_l",
+        "kind": "shaper",
+        "input": "enh_sens_l",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_l",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "enh_curve_l"
+        ],
+        "weights": {
+          "in_l": {
+            "value": 1.0
+          },
+          "enh_curve_l": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 04"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "low_l",
+        "kind": "section",
+        "input": "enh_l",
+        "stage": "shelf",
+        "side": "low",
+        "order": 1,
+        "corner_hz": {
+          "value": 160.5968987248378,
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/tone-a-pair-of-fixed-first-order-shelves.json"
+          ],
+          "fitted_on": []
+        },
+        "gain_db": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "window",
+            "low": 52,
+            "high": 76,
+            "at_low": -12.0,
+            "at_high": 12.0,
+            "from": "data/units/roland-sc8850-01/efx-bands/01-00-04-how-much-is-twelve-db-fine-in-twelfths.json",
+            "why": "The window the gain class closed on, taken as it stands rather than refitted here. What is being asked is the section and not the law on the byte, and a gain refitted per type would let a first-order shelf borrow a second-order one's steepness by claiming more decibels."
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/tone-a-pair-of-fixed-first-order-shelves.json",
+            "inferences/roland-sc8850-01/gain-the-byte-is-a-decibel-a-step.json",
+            "data/units/roland-sc8850-01/efx-bands/01-00-04-how-much-is-twelve-db-fine-in-twelfths.json"
+          ],
+          "fitted_on": [
+            [
+              "how-much-is-twelve-db-fine",
+              48
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              49
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              50
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              51
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              52
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              53
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              54
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              55
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              56
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              57
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              58
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              59
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              60
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              61
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              62
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              63
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              64
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              65
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              66
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              67
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              68
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              69
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              70
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              71
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              72
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              73
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              74
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              75
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              76
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              77
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              78
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              79
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              80
+            ]
+          ]
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own tone shelf, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the tone section as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      },
+      "replaces": "low_l"
+    },
+    {
+      "node": {
+        "id": "enh_peak_r",
+        "kind": "section",
+        "input": "in_r",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_band_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_r",
+          "in_r"
+        ],
+        "weights": {
+          "enh_peak_r": {
+            "value": 0.1111111111111111
+          },
+          "in_r": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_sens_r",
+        "kind": "gain",
+        "input": "enh_band_r",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_curve_r",
+        "kind": "shaper",
+        "input": "enh_sens_r",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_r",
+        "kind": "mix",
+        "inputs": [
+          "in_r",
+          "enh_curve_r"
+        ],
+        "weights": {
+          "in_r": {
+            "value": 1.0
+          },
+          "enh_curve_r": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 04"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "low_r",
+        "kind": "section",
+        "input": "enh_r",
+        "stage": "shelf",
+        "side": "low",
+        "order": 1,
+        "corner_hz": {
+          "value": 160.5968987248378,
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/tone-a-pair-of-fixed-first-order-shelves.json"
+          ],
+          "fitted_on": []
+        },
+        "gain_db": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "window",
+            "low": 52,
+            "high": 76,
+            "at_low": -12.0,
+            "at_high": 12.0,
+            "from": "data/units/roland-sc8850-01/efx-bands/01-00-04-how-much-is-twelve-db-fine-in-twelfths.json",
+            "why": "The window the gain class closed on, taken as it stands rather than refitted here. What is being asked is the section and not the law on the byte, and a gain refitted per type would let a first-order shelf borrow a second-order one's steepness by claiming more decibels."
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/tone-a-pair-of-fixed-first-order-shelves.json",
+            "inferences/roland-sc8850-01/gain-the-byte-is-a-decibel-a-step.json",
+            "data/units/roland-sc8850-01/efx-bands/01-00-04-how-much-is-twelve-db-fine-in-twelfths.json"
+          ],
+          "fitted_on": [
+            [
+              "how-much-is-twelve-db-fine",
+              48
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              49
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              50
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              51
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              52
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              53
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              54
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              55
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              56
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              57
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              58
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              59
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              60
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              61
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              62
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              63
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              64
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              65
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              66
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              67
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              68
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              69
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              70
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              71
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              72
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              73
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              74
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              75
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              76
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              77
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              78
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              79
+            ],
+            [
+              "how-much-is-twelve-db-fine",
+              80
+            ]
+          ]
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own tone shelf, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the tone section as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "01 02",
+          "40 03 03"
+        ]
+      },
+      "replaces": "low_r"
+    }
+  ]
+}

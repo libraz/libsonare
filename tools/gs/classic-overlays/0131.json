@@ -1,0 +1,107 @@
+{
+  "type": "01 31",
+  "what_this_is": "The detector's times from the designed laws.",
+  "entries": [
+    {
+      "node": {
+        "id": "detect_l",
+        "kind": "envelope",
+        "input": "in_l",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "value": 0.5,
+          "source": "measured",
+          "rests_on": [
+            "data/units/roland-sc8850-01/efx-orders/01-31-03-the-threshold-byte-at-the-fourth-of-four-ratio-settings.json",
+            "data/units/roland-sc8850-01/efx-orders/01-31-03-the-threshold-byte-at-the-second-of-four-ratio-settings.json"
+          ],
+          "fitted_on": [
+            [
+              "what-a-limiters-ratio-byte-is-the-ratio-of/limiter-ratio-3",
+              0
+            ],
+            [
+              "what-a-limiters-ratio-byte-is-the-ratio-of/limiter-ratio-3",
+              42
+            ],
+            [
+              "what-a-limiters-ratio-byte-is-the-ratio-of/limiter-ratio-1",
+              0
+            ]
+          ]
+        },
+        "release_ms": {
+          "byte": "40 03 05",
+          "law": "d.release_ms"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Release as the detector's fall, the law modern binds to limiter `releaseMs`, anchored (D33) to the fitted fall at the power-on byte; the fitted rise is kept.",
+      "replaced_when": {
+        "model_binding": [
+          "01 31",
+          "40 03 05"
+        ]
+      },
+      "covers": "98a4ccad6af2",
+      "replaces": "detect_l"
+    },
+    {
+      "node": {
+        "id": "detect_r",
+        "kind": "envelope",
+        "input": "in_r",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "value": 0.5,
+          "source": "measured",
+          "rests_on": [
+            "data/units/roland-sc8850-01/efx-orders/01-31-03-the-threshold-byte-at-the-fourth-of-four-ratio-settings.json",
+            "data/units/roland-sc8850-01/efx-orders/01-31-03-the-threshold-byte-at-the-second-of-four-ratio-settings.json"
+          ],
+          "fitted_on": [
+            [
+              "what-a-limiters-ratio-byte-is-the-ratio-of/limiter-ratio-3",
+              0
+            ],
+            [
+              "what-a-limiters-ratio-byte-is-the-ratio-of/limiter-ratio-3",
+              42
+            ],
+            [
+              "what-a-limiters-ratio-byte-is-the-ratio-of/limiter-ratio-1",
+              0
+            ]
+          ]
+        },
+        "release_ms": {
+          "byte": "40 03 05",
+          "law": "d.release_ms"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Release as the detector's fall, the law modern binds to limiter `releaseMs`, anchored (D33) to the fitted fall at the power-on byte; the fitted rise is kept.",
+      "replaced_when": {
+        "model_binding": [
+          "01 31",
+          "40 03 05"
+        ]
+      },
+      "covers": "98a4ccad6af2",
+      "replaces": "detect_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "1a3c0353fac6",
+      "rationale": "The candidate draws the ratio states with no knee width; adopted as drawn.",
+      "replaced_when": {
+        "covers": "1a3c0353fac6"
+      }
+    }
+  ]
+}

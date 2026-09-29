@@ -1,0 +1,71 @@
+{
+  "type": "01 30",
+  "what_this_is": "The detector's times from the designed laws.",
+  "entries": [
+    {
+      "node": {
+        "id": "detect_l",
+        "kind": "envelope",
+        "input": "in_l",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "byte": "40 03 03",
+          "law": "d.attack_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 04",
+          "law": "d.sustain_ms"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Attack and Sustain as the detector's rise and fall, the laws modern binds to compressor `attackMs` and `releaseMs`, anchored (D33) to the fitted times at the power-on bytes.",
+      "replaced_when": {
+        "model_binding": [
+          "01 30",
+          "40 03 03"
+        ]
+      },
+      "covers": "2e5460f5e521",
+      "replaces": "detect_l"
+    },
+    {
+      "node": {
+        "id": "detect_r",
+        "kind": "envelope",
+        "input": "in_r",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "byte": "40 03 03",
+          "law": "d.attack_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 04",
+          "law": "d.sustain_ms"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Attack and Sustain as the detector's rise and fall, the laws modern binds to compressor `attackMs` and `releaseMs`, anchored (D33) to the fitted times at the power-on bytes.",
+      "replaced_when": {
+        "model_binding": [
+          "01 30",
+          "40 03 03"
+        ]
+      },
+      "covers": "2e5460f5e521",
+      "replaces": "detect_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "3b3ae46ab98f",
+      "rationale": "The candidate draws the tone shelves after the detector's gain; adopted as drawn.",
+      "replaced_when": {
+        "covers": "3b3ae46ab98f"
+      }
+    }
+  ]
+}

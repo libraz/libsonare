@@ -1,0 +1,20 @@
+{
+  "type": "01 03",
+  "what_this_is": "Covers only; the vowels past the first and the Accel byte have no designed source yet.",
+  "covers": [
+    {
+      "covers": "64e1db9df54c",
+      "rationale": "The candidate draws the drive through tanh; adopted as drawn.",
+      "replaced_when": {
+        "covers": "64e1db9df54c"
+      }
+    },
+    {
+      "covers": "b1c60ba8da26",
+      "rationale": "The candidate draws the vowel peaks fixed against the drive byte; adopted as drawn.",
+      "replaced_when": {
+        "covers": "b1c60ba8da26"
+      }
+    }
+  ]
+}

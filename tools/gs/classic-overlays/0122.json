@@ -1,0 +1,236 @@
+{
+  "type": "01 22",
+  "what_this_is": "Separate as a stereo spread over the two rotor sums.",
+  "entries": [
+    {
+      "node": {
+        "id": "rotor_l",
+        "kind": "mix",
+        "inputs": [
+          "low_level_l",
+          "high_level_l"
+        ],
+        "weights": {
+          "low_level_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "high_level_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's rotor sum, under a new id so the spread can take the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b"
+    },
+    {
+      "node": {
+        "id": "rotor_r",
+        "kind": "mix",
+        "inputs": [
+          "low_level_r",
+          "high_level_r"
+        ],
+        "weights": {
+          "low_level_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "high_level_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's rotor sum, under a new id so the spread can take the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b"
+    },
+    {
+      "node": {
+        "id": "rotor_mid",
+        "kind": "mix",
+        "inputs": [
+          "rotor_l",
+          "rotor_r"
+        ],
+        "weights": {
+          "rotor_l": {
+            "value": 0.5
+          },
+          "rotor_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b"
+    },
+    {
+      "node": {
+        "id": "rotor_side_l",
+        "kind": "mix",
+        "inputs": [
+          "rotor_l",
+          "rotor_r"
+        ],
+        "weights": {
+          "rotor_l": {
+            "value": 0.5
+          },
+          "rotor_r": {
+            "value": -0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b"
+    },
+    {
+      "node": {
+        "id": "rotor_side_r",
+        "kind": "mix",
+        "inputs": [
+          "rotor_l",
+          "rotor_r"
+        ],
+        "weights": {
+          "rotor_l": {
+            "value": -0.5
+          },
+          "rotor_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b"
+    },
+    {
+      "node": {
+        "id": "sum_l",
+        "kind": "mix",
+        "inputs": [
+          "rotor_mid",
+          "rotor_side_l"
+        ],
+        "weights": {
+          "rotor_mid": {
+            "value": 1.0
+          },
+          "rotor_side_l": {
+            "byte": "40 03 0B",
+            "law": "d.unit",
+            "anchor": "sum_l.weights.low_level_l"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b",
+      "replaces": "sum_l"
+    },
+    {
+      "node": {
+        "id": "sum_r",
+        "kind": "mix",
+        "inputs": [
+          "rotor_mid",
+          "rotor_side_r"
+        ],
+        "weights": {
+          "rotor_mid": {
+            "value": 1.0
+          },
+          "rotor_side_r": {
+            "byte": "40 03 0B",
+            "law": "d.unit",
+            "anchor": "sum_r.weights.low_level_r"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "01 22",
+          "40 03 0B"
+        ]
+      },
+      "covers": "64308e247d2b",
+      "replaces": "sum_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "c3c7e2e53e3c",
+      "rationale": "The candidate draws each rotor at its settled rate with no slew; adopted as drawn.",
+      "replaced_when": {
+        "covers": "c3c7e2e53e3c"
+      }
+    },
+    {
+      "covers": "99a357e8ed22",
+      "rationale": "The candidate draws each Level byte straight from nothing to the fitted gain; adopted as drawn.",
+      "replaced_when": {
+        "covers": "99a357e8ed22"
+      }
+    },
+    {
+      "covers": "ab31c0dcc445",
+      "rationale": "The candidate draws the low rotor's fast byte the way it reads the high rotor's; adopted as drawn.",
+      "replaced_when": {
+        "covers": "ab31c0dcc445"
+      }
+    }
+  ]
+}

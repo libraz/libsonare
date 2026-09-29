@@ -44,7 +44,7 @@ The section below is written by the generator.
 
 ### Archive revision
 
-- `archive_revision`: `96f3b408fa99cb1f13d62c5a313ae6641ab7a409`
+- `archive_revision`: `fcef26df0d03d05725e39747e6cfd8e0a817fbcc`
 - `archive_revision_source`: git rev-parse HEAD
 - `archive_inputs_dirty`: false
 
@@ -56,19 +56,19 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 |---|---|---|---|---|---|---|---|
 | `01 00` | built-at-the-gain | 0 | - | 11 | 0 | 0 | 0.006 |
 | `01 01` | blended-with-the-dry | 0 | - | 11 | 0 | 0 | 0.899 |
-| `01 02` | first-order-tone-pair | 0 | - | 5 | 2 | 0 | 1.000 |
+| `01 02` | first-order-tone-pair | 0 | - | 5 | 0 | 0 | 1.000 |
 | `01 03` | band-passes-in-parallel-drive-before | 0 | - | 8 | 1 | 1 | 0.850 |
-| `01 10` | tanh | 0 | - | 7 | 2 | 0 | 1.000 |
-| `01 11` | tanh | 0 | - | 7 | 2 | 0 | 0.937 |
+| `01 10` | tanh | 0 | - | 7 | 0 | 0 | 1.000 |
+| `01 11` | tanh | 0 | - | 7 | 0 | 0 | 0.937 |
 | `01 20` | raised-sine-in-octaves | 0 | - | 8 | 0 | 0 | 0.019 |
-| `01 21` | one-sided-raised-sine | 0 | - | 11 | 1 | 0 | 0.110 |
-| `01 22` | doppler-and-amplitude-stops-short | 0 | - | 13 | 1 | 0 | 0.001 |
-| `01 23` | triangle | 0 | - | 11 | 2 | 1 | 1.000 |
+| `01 21` | one-sided-raised-sine | 0 | - | 11 | 0 | 0 | 0.110 |
+| `01 22` | doppler-and-amplitude-stops-short | 0 | - | 13 | 0 | 0 | 0.001 |
+| `01 23` | triangle | 0 | - | 11 | 0 | 1 | 1.000 |
 | `01 24` | raised-sine-held-at-twice | 0 | - | 10 | 0 | 1 | 0.263 |
 | `01 25` | a-multiplier-about-unity | 0 | - | 6 | 0 | 0 | 0.019 |
 | `01 26` | a-crossfade-on-the-amplitudes | 0 | - | 6 | 0 | 0 | 0.021 |
-| `01 30` | peak-branching | 0 | - | 7 | 2 | 0 | 0.929 |
-| `01 31` | peak-branching | 0 | - | 8 | 1 | 0 | 2.200 |
+| `01 30` | peak-branching | 0 | - | 7 | 0 | 0 | 0.929 |
+| `01 31` | peak-branching | 0 | - | 8 | 0 | 0 | 2.200 |
 | `01 40` | triangle-pre-delay-dev-in-ladder-steps | 0 | - | 10 | 0 | 0 | 0.283 |
 | `01 41` | triangle-tremolo-after-the-balance | 0 | - | 10 | 1 | 0 | 0.198 |
 | `01 42` | triangle-filter-before-the-split | 0 | - | 10 | 0 | 0 | 0.134 |
@@ -119,7 +119,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `11 07` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 20 | 3 | 0 | 0.164 |
 | `11 08` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 17 | 1 | 0 | 2.011 |
 
-Unbound printed slots: 93 of 770 in 37 types.
+Unbound printed slots: 80 of 770 in 29 types.
 
 ### Document values
 
@@ -127,15 +127,15 @@ Unbound printed slots: 93 of 770 in 37 types.
 
 ### Shipping size
 
-The default configuration ships 183 de-duplicated map specs (183 in the raw configuration), 26 control curves, 1813 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
+The default configuration ships 194 de-duplicated map specs (183 in the raw configuration), 27 control curves, 1858 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
 
 | pool | raw bytes | gzip bytes |
 |---|---|---|
-| map specs | 69061 | 23841 |
-| control curves | 26832 | 20143 |
-| node tables | 98320 | 28772 |
-| total | 194213 | 74098 |
+| map specs | 76477 | 27986 |
+| control curves | 27864 | 21274 |
+| node tables | 101076 | 29459 |
+| total | 205417 | 79848 |
 
-Expanding the specs at registry construction puts 93696 bytes of LUTs on the heap per configuration.
+Expanding the specs at registry construction puts 99328 bytes of LUTs on the heap per configuration.
 
 <!-- END GENERATED: tools/gs/classic_models.py -->

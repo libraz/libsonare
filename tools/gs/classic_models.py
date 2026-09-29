@@ -287,7 +287,9 @@ def address_of(slot: int) -> str:
 
 def is_value(item) -> bool:
     return isinstance(item, dict) and (
-        "value" in item or ("byte" in item and "map" in item) or "control" in item
+        "value" in item
+        or ("byte" in item and ("map" in item or "law" in item))
+        or "control" in item
     )
 
 
@@ -444,16 +446,29 @@ def check_references(model: dict, models_dir: Path, where: str) -> list[str]:
 
 
 OVERLAY_ENTRY_KEYS = ("node", "basis", "rationale", "replaced_when")
+OVERLAY_COVER_KEYS = ("covers", "rationale", "replaced_when")
 BASES = ("invented", "carried")
+COVERS_ID = re.compile(r"^[0-9a-f]{12}$")
 
 
-def load_overlays(directory: Path) -> dict[int, list[dict]]:
+def load_overlays(directory: Path) -> tuple[dict[int, list[dict]], dict[int, list[dict]]]:
+    """Each type's overlay entries, and the file-level `covers` that change no node."""
     by_type: dict[int, list[dict]] = {}
+    covers: dict[int, list[dict]] = {}
     if not directory.is_dir():
-        return by_type
+        return by_type, covers
     for path in sorted(directory.glob("*.json")):
         data = json.loads(path.read_text())
         number = type_number(data["type"])
+        for i, cover in enumerate(data.get("covers", [])):
+            where = f"{path.name} covers[{i}]"
+            for key in OVERLAY_COVER_KEYS:
+                if key not in cover:
+                    stop(f"{where} has no `{key}`")
+            if cover["replaced_when"] != {"covers": cover["covers"]}:
+                stop(f"{where} is replaced when its own item changes, and names otherwise")
+            cover["_where"] = where
+            covers.setdefault(number, []).append(cover)
         entries = data.get("entries", [])
         for i, entry in enumerate(entries):
             where = f"{path.name}[{i}]"
@@ -464,12 +479,168 @@ def load_overlays(directory: Path) -> dict[int, list[dict]]:
                 stop(f"{where} has basis {entry['basis']!r}, not one of {BASES}")
             if entry["basis"] == "carried" and "from" not in entry:
                 stop(f"{where} is carried and names no `from`")
-            for _, value in node_values(entry["node"]):
-                if isinstance(value, dict) and "law" in value:
-                    stop(f"{where} names a law by reference, which this generator does not resolve")
+            for field, value in node_values(entry["node"]):
+                if "law" in value and "map" in value:
+                    stop(f"{where} {field} names a law and writes a map of its own")
             entry["_where"] = where
         by_type.setdefault(number, []).extend(entries)
-    return by_type
+    return by_type, covers
+
+
+def check_covers(
+    archive, types: list[dict], overlays: dict[int, list[dict]], covers: dict[int, list[dict]]
+) -> None:
+    """Every `covers`, on an entry or on a file, names an item no candidate predicts.
+
+    The id is the first twelve hex digits of the sha1 of the item's text in the type's
+    ``inferences/candidates/whole-<MMLL>.json`` ``what_no_candidate_here_predicts``.
+    """
+    archive_key = {t["number"]: t["archive_key"] for t in types}
+    for number in sorted(set(overlays) | set(covers)):
+        claimed = [(e["_where"], e["covers"]) for e in overlays.get(number, []) if "covers" in e]
+        filed = [(c["_where"], c["covers"]) for c in covers.get(number, [])]
+        if not claimed and not filed:
+            continue
+        key = archive_key[number].replace(" ", "")
+        record = archive.json(Path("inferences") / "candidates" / f"whole-{key}.json")
+        items = {
+            hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+            for text in record.get("what_no_candidate_here_predicts", [])
+        }
+        seen: set[str] = set()
+        for where, item in filed:
+            if item in seen:
+                stop(f"{where} covers {item} a second time")
+            seen.add(item)
+        for where, item in claimed + filed:
+            if not isinstance(item, str) or not COVERS_ID.match(item):
+                stop(f"{where} covers {item!r}, which is not twelve hex digits of a sha1")
+            if item not in items:
+                stop(f"{where} covers {item}, which no item of whole-{key}.json hashes to")
+
+
+def _designed_value(law: dict, byte: int, byte_lo: int, byte_hi: int) -> float:
+    """``gs_efx_designed_value`` over one byte: the modern evaluator's reading of a law."""
+    form, n_states = law["form"], law.get("n_states", 0)
+    lo, hi = f32(law["lo"]), f32(law["hi"])
+    if form == "enum":
+        return float(min(byte, n_states - 1))
+    if n_states > 1 and form in ("linear", "log"):
+        return _designed_value({**law, "n_states": 0}, byte, 0, n_states - 1)
+    inside = min(max(byte, byte_lo), byte_hi)
+    if inside in (byte_lo, byte_hi) and form not in ("bipolar", "db"):
+        return lo if inside == byte_lo else hi
+    along = (inside - byte_lo) / (byte_hi - byte_lo)
+    if form == "linear":
+        return f32(lo + (hi - lo) * along)
+    if form == "log":
+        return f32(lo * (hi / lo) ** along)
+    if form == "db":
+        return f32(10.0 ** ((lo + (hi - lo) * along) / 20.0))
+    if form == "bipolar":
+        return f32((2.0 * along - 1.0) * hi)
+    stop(f"a designed law has form {form!r}, which no evaluator reads")
+    return 0.0
+
+
+def _law_table(coverage, laws: dict, tables: dict, law_id: str, values: str, where: str) -> list:
+    """A law named by id as the value of each byte 0..127.
+
+    A ``d.`` id is a designed law of ``efx-designed-laws.json`` over the slot's printed
+    byte range; any other id is a measured ``class.table`` of ``efx-tables.json`` whose
+    entries place a frequency over a run of bytes.
+    """
+    if law_id.startswith("d."):
+        law = coverage.designed_law(laws, law_id)
+        if law is None:
+            stop(f"{where} names {law_id}, which is not in the designed-law file")
+        byte_lo, byte_hi = coverage.byte_domain(values)
+        return [_designed_value(law, b, byte_lo, byte_hi) for b in range(LUT_SIZE)]
+    gs_class, _, table = law_id.partition(".")
+    body = tables["classes"].get(gs_class, {}).get("tables", {}).get(table)
+    if body is None or body.get("kind") != "entries":
+        stop(f"{where} names {law_id}, which is neither a designed law nor a measured table")
+    out: list[float | None] = [None] * LUT_SIZE
+    for entry in body["entries"]:
+        if "hz" not in entry:
+            stop(f"{where} names {law_id}, whose entries place no frequency")
+        first, last = entry["settings"]
+        for b in range(first, last + 1):
+            out[b] = float(entry["hz"])
+    if any(v is None for v in out):
+        stop(f"{where} names {law_id}, whose entries leave a byte unplaced")
+    return out
+
+
+def _fitted_constant(model: dict, path: str) -> float | None:
+    """The constant p0 holds at ``node.field`` (``weights.<ref>`` included), or None."""
+    node_id, _, field = path.partition(".")
+    nodes = {n["id"]: n for n in model["nodes"]}
+    if node_id not in nodes:
+        return None
+    value = dict(node_values(nodes[node_id])).get(field)
+    if value is None or "value" not in value:
+        return None
+    return float(value["value"])
+
+
+def _anchored(lut: list[float], fitted: float, at: int, field: str, where: str) -> list[float]:
+    """D33: shift a law so the power-on byte reads p0's fitted constant.
+
+    A decibel field moves by the difference; any other quantity (a time, a frequency, a
+    linear multiplier) scales by the ratio.
+    """
+    if field.split(".")[-1].endswith("_db"):
+        shift = fitted - lut[at]
+        out = [v + shift for v in lut]
+    else:
+        if lut[at] == 0.0:
+            stop(f"{where}: the law is 0 at the power-on byte, so no ratio anchors it")
+        scale = fitted / lut[at]
+        out = [v * scale for v in lut]
+    out[at] = fitted
+    return out
+
+
+def resolve_overlay_laws(
+    coverage,
+    overlays: dict[int, list[dict]],
+    printed: dict[str, dict[int, str]],
+    power_on: dict[int, list[int]],
+    models: dict[int, dict],
+) -> None:
+    """Turn every ``{"byte", "law"}`` value of an overlay into a 128-entry table map.
+
+    Where the law stands in for a constant p0 fitted -- the same field of the node the
+    entry replaces, or the ``node.field`` an ``anchor`` names -- it is anchored to that
+    constant at the power-on byte (D33).
+    """
+    laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+    tables = json.loads(TABLES.read_text())
+    for number, entries in overlays.items():
+        slots = printed.get(type_key(number), {})
+        for entry in entries:
+            node = entry["node"]
+            for field, value in list(node_values(node)):
+                if "law" not in value:
+                    continue
+                where = f"{entry['_where']} {node['id']}.{field}"
+                slot = slot_of(value["byte"], where)
+                if slot not in slots:
+                    stop(f"{where} reads {value['byte']}, which {type_key(number)} does not print")
+                lut = _law_table(coverage, laws, tables, value["law"], slots[slot], where)
+                if "anchor" in value:
+                    fitted = _fitted_constant(models[number], value["anchor"])
+                    if fitted is None:
+                        stop(f"{where} anchors to {value['anchor']}, which p0 holds no constant at")
+                elif "replaces" in entry:
+                    fitted = _fitted_constant(models[number], f"{entry['replaces']}.{field}")
+                else:
+                    fitted = None
+                if fitted is not None:
+                    lut = _anchored(lut, fitted, power_on[number][slot], field, where)
+                spec = {"kind": "table", "entries": lut, "out_of_range": LUT_SIZE - 1}
+                replace_value(node, field, {**value, "map": spec})
 
 
 def apply_overlay(model: dict, entries: list[dict]) -> dict:
@@ -1821,7 +1992,11 @@ def main() -> int:
             f"the archive prints {total} (type, slot) parameters, not {archive.coverage.EXPECTED_PRINTED}"
         )
 
-    overlays = load_overlays(Path(args.overlays))
+    overlays, file_covers = load_overlays(Path(args.overlays))
+    check_covers(archive, types, overlays, file_covers)
+    resolve_overlay_laws(
+        archive.coverage, overlays, printed, ctx.power_on, {t["number"]: t["model"] for t in types}
+    )
     raw_pools, raw_facts = build_set(ctx, types, None)
     default_pools, default_facts = build_set(ctx, types, overlays)
     check_pool_limits(raw_pools, "raw")

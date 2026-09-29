@@ -1,0 +1,13 @@
+{
+  "type": "01 26",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "df4b98919b6f",
+      "rationale": "The candidate runs Depth straight in position between its fitted settings; adopted as drawn.",
+      "replaced_when": {
+        "covers": "df4b98919b6f"
+      }
+    }
+  ]
+}

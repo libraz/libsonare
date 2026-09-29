@@ -1,0 +1,20 @@
+{
+  "type": "01 25",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "e3decbf1cb7f",
+      "rationale": "The candidate runs Depth straight in each of its two domains; adopted as drawn.",
+      "replaced_when": {
+        "covers": "e3decbf1cb7f"
+      }
+    },
+    {
+      "covers": "97bfa784ec38",
+      "rationale": "The candidate draws the Sin entry's shape as the wave claim describes the cycle; adopted as drawn.",
+      "replaced_when": {
+        "covers": "97bfa784ec38"
+      }
+    }
+  ]
+}
