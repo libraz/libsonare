@@ -110,7 +110,8 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 ///                    dependent observation mass, not a confidence) leaves the
 ///                    result identical to omitting it.
 /// @param voiced      Per-frame voiced flags (non-zero = voiced; @p n_frames
-///                    entries), or NULL to treat every frame as voiced.
+///                    entries), or NULL to fall back to @p voiced_prob (see
+///                    above); with both NULL, every frame is treated as voiced.
 /// @param hop_length  F0 hop in samples (> 0; frame i covers sample i*hop_length).
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
@@ -159,10 +160,12 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
 ///                    Unvoiced frames may contain NaN when @p voiced is zero;
 ///                    finite values must be in [0, sample_rate/2].
 /// @param voiced_prob Per-frame voicing probability [0,1], or NULL. Used only
-///                    to derive voicing when @p voiced is NULL; never a weight
-///                    on the correction amount (see
+///                    to derive voicing when @p voiced is NULL (>= 0.5 is
+///                    voiced); never a weight on the correction amount (see
 ///                    @ref sonare_pitch_correct_to_midi_timevarying).
-/// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL.
+/// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL to
+///                    fall back to @p voiced_prob; with both NULL, every
+///                    frame is treated as voiced.
 /// @param hop_length  F0 hop in samples (> 0).
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.

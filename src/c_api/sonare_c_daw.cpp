@@ -100,6 +100,17 @@ bool valid_pitch_track_f0(float f0_hz, bool voiced, int sample_rate) {
   return f0_hz >= 0.0f && f0_hz <= 0.5f * static_cast<float>(sample_rate);
 }
 
+/// Explicit voiced flags win; absent those, voiced_prob decides (>= 0.5 is
+/// voiced, matching sonare_note_segments' own voiced_threshold default in
+/// features_spectral_pitch.cpp); with both absent, every frame defaults to
+/// voiced. include/sonare/sonare_c_effects.h documents voiced_prob as the
+/// NULL-voiced fallback, not a value the flags-present path also consults.
+bool is_voiced_frame(const int32_t* voiced, const float* voiced_prob, size_t i) {
+  if (voiced) return voiced[i] != 0;
+  if (voiced_prob) return voiced_prob[i] >= 0.5f;
+  return true;
+}
+
 /// Resolves a versioned note-extractor config onto the core defaults. Every
 /// float takes its default at 0, matching sonare_note_segments.
 SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
@@ -409,7 +420,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
   // only when the matching voiced flag is false; reject infinities, negative
   // frequencies, and pitches above Nyquist.
   for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+    const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
     if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -425,7 +436,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
     track.voiced.resize(n_frames);
     track.voiced_prob.resize(n_frames);
     for (size_t i = 0; i < n_frames; ++i) {
-      const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+      const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
       track.voiced[i] = is_voiced;
       track.voiced_prob[i] = voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
     }
@@ -507,7 +518,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
 
   // Match the fixed-target entry point's pYIN/Nyquist contract.
   for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+    const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
     if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -523,7 +534,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
     track.voiced.resize(n_frames);
     track.voiced_prob.resize(n_frames);
     for (size_t i = 0; i < n_frames; ++i) {
-      const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+      const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
       track.voiced[i] = is_voiced;
       track.voiced_prob[i] = voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
     }

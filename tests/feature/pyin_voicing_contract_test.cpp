@@ -7,6 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "util/constants.h"
@@ -141,5 +142,62 @@ TEST_CASE("Time-varying pitch correction ignores voiced_prob", "[feature][pitch]
   REQUIRE_FALSE(omitted.empty());
   for (size_t i = 0; i < omitted.size(); ++i) {
     REQUIRE(omitted[i] == with_prob[i]);
+  }
+}
+
+// When `voiced` is NULL, voiced_prob has to take over deriving the per-frame
+// voicing decision (>= 0.5 is voiced) -- the same rule sonare_note_segments
+// applies -- rather than every frame defaulting to voiced regardless of what
+// voiced_prob says. Driven through acceptance of pYIN's own NaN-for-unvoiced
+// convention: valid_pitch_track_f0 accepts a NaN frame only when that frame is
+// NOT treated as voiced, so whether a low- or high-probability NaN frame is
+// accepted is a direct, deterministic readout of the voicing decision the
+// implementation actually made -- no need to inspect internal state.
+TEST_CASE("Pitch correction derives voicing from voiced_prob when voiced is NULL",
+          "[feature][pitch][pyin]") {
+  constexpr size_t kFrames = 8;
+  const std::vector<float> samples = harmonic_tone(60.0f, 1.0f);
+  const std::vector<float> nan_f0(kFrames, std::numeric_limits<float>::quiet_NaN());
+
+  SECTION("sonare_pitch_correct_to_midi_timevarying") {
+    const auto correct = [&](const std::vector<float>& prob) {
+      float* out = nullptr;
+      size_t out_length = 0;
+      const SonareError err = sonare_pitch_correct_to_midi_timevarying(
+          samples.data(), samples.size(), kSampleRate, nan_f0.data(), prob.data(),
+          /*voiced=*/nullptr, kFrames, kHopLength, 69.0f, &out, &out_length);
+      if (err == SONARE_OK) sonare_free_floats(out);
+      return err;
+    };
+    // Below 0.5: every frame reads as unvoiced, so the canonical unvoiced NaN
+    // representation is accepted -- this used to fail with voiced forced true.
+    REQUIRE(correct(std::vector<float>(kFrames, 0.1f)) == SONARE_OK);
+    // At/above 0.5: every frame reads as voiced, so a voiced frame carrying
+    // NaN (no measured pitch) is rejected, the same as an explicit voiced=1.
+    REQUIRE(correct(std::vector<float>(kFrames, 0.9f)) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(correct(std::vector<float>(kFrames, 0.5f)) == SONARE_ERROR_INVALID_PARAMETER);
+    // voiced_prob absent too: every frame defaults to voiced, so NaN is
+    // rejected exactly like the all-voiced case above.
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_pitch_correct_to_midi_timevarying(
+                samples.data(), samples.size(), kSampleRate, nan_f0.data(), /*voiced_prob=*/nullptr,
+                /*voiced=*/nullptr, kFrames, kHopLength, 69.0f, &out,
+                &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("sonare_pitch_correct_timevarying") {
+    const auto correct = [&](const std::vector<float>& prob) {
+      float* out = nullptr;
+      size_t out_length = 0;
+      const SonareError err = sonare_pitch_correct_timevarying(
+          samples.data(), samples.size(), kSampleRate, nan_f0.data(), prob.data(),
+          /*voiced=*/nullptr, kFrames, kHopLength, /*config=*/nullptr, &out, &out_length);
+      if (err == SONARE_OK) sonare_free_floats(out);
+      return err;
+    };
+    REQUIRE(correct(std::vector<float>(kFrames, 0.1f)) == SONARE_OK);
+    REQUIRE(correct(std::vector<float>(kFrames, 0.9f)) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(correct(std::vector<float>(kFrames, 0.5f)) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
