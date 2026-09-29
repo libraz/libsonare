@@ -43,6 +43,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "rt/biquad_design.h"
 
 namespace sonare::midi::synth {
@@ -171,7 +172,7 @@ class PianoVoiceCore {
   /// @param una_corda soft-pedal (CC67) engaged at strike: the action shifts
   ///        onto a softer, less-grooved patch of felt, so the attack is
   ///        darker and a touch quieter (una corda voicing).
-  void start(const PianoPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
+  void start(const PianoPatchParams& params, double sample_rate, uint8_t note, Velocity16 velocity,
              uint64_t seed, bool una_corda = false) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor.
   float render(float pitch_ratio) noexcept;

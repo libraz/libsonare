@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
@@ -176,8 +177,8 @@ class PipeOrganVoiceCore {
 
   /// Configures the registration for @p note / @p velocity and pre-fills each
   /// rank's bore with its seeded onset seed. Zeroes the used spans first.
-  void start(const PipeOrganPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
-             uint64_t seed) noexcept;
+  void start(const PipeOrganPatchParams& params, double sample_rate, uint8_t note,
+             Velocity16 velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / tremulant / wind sag), 1 = on pitch.
   float render(float pitch_ratio) noexcept;

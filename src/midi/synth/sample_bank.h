@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/synth/sample_reader.h"
 
 namespace sonare::midi::synth {
@@ -101,13 +102,13 @@ class SampleBank {
 
   /// AUDIO thread: the first zone of @p set covering (@p key, @p velocity), or
   /// nullptr when the set does not exist or nothing covers the note.
-  const SampleZone* find(int32_t set, uint8_t key, uint8_t velocity) const noexcept;
+  const SampleZone* find(int32_t set, uint8_t key, Velocity16 velocity) const noexcept;
 
   /// AUDIO thread: the first two zones of @p set covering (@p key,
   /// @p velocity), ordered and weighted for a velocity crossfade. Only the
   /// first two are considered, so a third overlapping zone is ignored rather
   /// than blended.
-  SampleZoneMix find_mix(int32_t set, uint8_t key, uint8_t velocity) const noexcept;
+  SampleZoneMix find_mix(int32_t set, uint8_t key, Velocity16 velocity) const noexcept;
 
  private:
   /// Pool region and header of one added sample.

@@ -883,7 +883,7 @@ BrassVoiceCore::BellCoefficients bell_coefficients(const BrassPatchParams& param
   std::vector<float> slab(16384, 0.0f);
   BrassVoiceCore core;
   core.attach(slab.data(), static_cast<int>(slab.size()));
-  core.start(params, sr, note, 100, 1u);
+  core.start(params, sr, note, sonare::midi::Velocity16::from7(100), 1u);
   if (cc74 >= 0.0f) {
     ExcitationAxes axes;
     axes.brightness = cc74;

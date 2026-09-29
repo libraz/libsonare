@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/fdn_plate.h"
 #include "midi/synth/filter_models.h"
@@ -395,7 +396,7 @@ struct PercussionPatchParams {
 class PercussionVoiceCore {
  public:
   void start(const PercussionPatchParams& params, double sample_rate, uint8_t note,
-             uint8_t velocity, uint64_t seed) noexcept;
+             Velocity16 velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (multiplied with the internal descending pitch envelope).
   float render(float pitch_ratio) noexcept;

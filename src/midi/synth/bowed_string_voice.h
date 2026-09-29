@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
@@ -170,7 +171,7 @@ class BowedStringVoiceCore {
   /// Configures the string for @p note / @p velocity and zeroes the attached spans.
   /// @p seed drives the deterministic rosin texture (unused when rosin == 0).
   void start(const BowedStringPatchParams& params, double sample_rate, uint8_t note,
-             uint8_t velocity, uint64_t seed) noexcept;
+             Velocity16 velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift), 1 = on pitch.
   float render(float pitch_ratio) noexcept;

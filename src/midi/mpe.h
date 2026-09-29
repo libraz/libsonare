@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/note_tracking.h"
 
 namespace sonare::midi {
@@ -128,9 +129,9 @@ class MpeState {
   /// Records a dimension's new value on @p channel, which is kept even while the
   /// channel is silent: a receiver "shall continue to track" these so the next
   /// note on that channel takes them as its initial state (2.2.6 - 2.2.8).
-  void track_bend(uint8_t channel, uint16_t bend14) noexcept;
-  void track_pressure(uint8_t channel, uint8_t value) noexcept;
-  void track_timbre(uint8_t channel, uint8_t value) noexcept;
+  void track_bend(uint8_t channel, Bend32 bend) noexcept;
+  void track_pressure(uint8_t channel, Control32 value) noexcept;
+  void track_timbre(uint8_t channel, Control32 value) noexcept;
 
   /// Returns every channel to its post-MCM state without changing the zones --
   /// what 2.2.3 asks of the controls while the caller stops the notes.

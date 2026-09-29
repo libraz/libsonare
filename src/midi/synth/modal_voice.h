@@ -26,6 +26,8 @@
 #include <array>
 #include <cstdint>
 
+#include "midi/control_value.h"
+
 namespace sonare::midi::synth {
 
 inline constexpr int kMaxModalModes = 8;
@@ -60,7 +62,7 @@ struct ModalPatchParams {
 /// Per-voice modal state, embedded in NativeSynthVoice.
 class ModalVoiceCore {
  public:
-  void start(const ModalPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
+  void start(const ModalPatchParams& params, double sample_rate, uint8_t note, Velocity16 velocity,
              uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (coefficients are re-derived only when it changes).

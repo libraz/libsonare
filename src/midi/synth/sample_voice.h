@@ -16,6 +16,7 @@
 
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/sample_bank.h"
 #include "midi/synth/sample_reader.h"
 
@@ -44,7 +45,7 @@ class SampleVoiceCore {
   /// Resolves (@p note, @p velocity) against the patch's keymap set. False when
   /// nothing covers the note, which leaves the voice silent.
   bool start(const SamplePatchParams& p, double sample_rate, uint8_t note,
-             uint8_t velocity) noexcept;
+             Velocity16 velocity) noexcept;
 
   /// True once every layer ran out; a looping zone never reports it while held.
   bool finished() const noexcept { return finished_; }

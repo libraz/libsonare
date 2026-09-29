@@ -27,6 +27,7 @@
 #include <array>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/envelope.h"
 
 namespace sonare::midi::synth {
@@ -74,7 +75,7 @@ class FmVoiceCore {
  public:
   /// Configures the operators for @p note / @p velocity at @p sample_rate.
   void start(const FmPatchParams& params, double sample_rate, uint8_t note,
-             uint8_t velocity) noexcept;
+             Velocity16 velocity) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / glide), 1 = on pitch.
   float render(float pitch_ratio) noexcept;

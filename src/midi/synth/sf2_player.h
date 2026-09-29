@@ -40,6 +40,7 @@
 #include <string_view>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/instrument.h"
 #include "midi/source_residual.h"
 #include "midi/synth/channel_param_state.h"
@@ -479,10 +480,11 @@ class Sf2Player final : public MidiInstrument {
     float coeff = 0.0f;  ///< Per-sample one-pole decay (0 = no glide).
   };
 
-  void note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id) noexcept;
+  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+               uint32_t source_track_id) noexcept;
   /// Data-free floor: plays the note through the GM fallback synth bank.
-  void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id,
-                        Portamento porta) noexcept;
+  void fallback_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+                        uint32_t source_track_id, Portamento porta) noexcept;
   /// Resolves the glide a note-on on @p note inherits, consuming the channel's
   /// CC84 arming and recording @p note as the next glide source. Called exactly
   /// once per note-on, before the SoundFont / fallback split.

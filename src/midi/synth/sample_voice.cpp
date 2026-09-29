@@ -39,7 +39,7 @@ bool SampleVoiceCore::start_layer(Layer& layer, const SampleZone& zone, const Sa
 }
 
 bool SampleVoiceCore::start(const SamplePatchParams& p, double sample_rate, uint8_t note,
-                            uint8_t velocity) noexcept {
+                            Velocity16 velocity) noexcept {
   // Cleared before the lookup so a failed start cannot leave a reused slot
   // placed and levelled by the note that last played through it.
   finished_ = true;

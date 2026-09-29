@@ -348,14 +348,14 @@ NativeSynthVoice* NativeSynth::find_sounding(uint8_t ch, uint8_t note,
   return nullptr;
 }
 
-void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                           uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   // A profile that calls velocity meaningless takes every note at full scale,
   // so the bound axes carry the dynamics on their own. 127 rather than some
   // mid value because it is the scale's identity: nothing is attenuated here
   // that a controller is not asking for.
-  if (!controller_profile_.velocity_meaningful) velocity = 127;
+  if (!controller_profile_.velocity_meaningful) velocity = Velocity16::from7(127);
   const uint8_t ch = channel & 0x0Fu;
   // Generic MIDI rendering resolves every channel through the shared GM/GS bank
   // rule, so a rhythm part (channel 10, a GM2 percussion bank, or a GS-assigned
@@ -873,11 +873,10 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
   // note's.
   apply_controller_input(u);
   if (u.is_note_on()) {
-    const uint8_t vel7 =
-        u.message_type() == UmpMessageType::kMidi1ChannelVoice
-            ? u.data2_7bit()
-            : scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
-    note_on(u.channel(), u.note_number(), vel7, event.source_track_id);
+    const Velocity16 vel = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                               ? Velocity16::from7(u.data2_7bit())
+                               : Velocity16::from_raw(static_cast<uint16_t>(u.words[1] >> 16));
+    note_on(u.channel(), u.note_number(), vel, event.source_track_id);
   } else if (u.is_note_off()) {
     note_off(u.channel(), u.note_number(), event.source_track_id);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
@@ -885,10 +884,11 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
     if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
       channels_[ch].pitch_bend =
           static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number());
+      mpe_.track_bend(ch, Bend32::from14(channels_[ch].pitch_bend));
     } else {
       channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
+      mpe_.track_bend(ch, Bend32::from_raw(u.words[1]));
     }
-    mpe_.track_bend(ch, channels_[ch].pitch_bend);
     // A manager's bend applies to every sounding note in its zone (2.2.6), so
     // like its pressure it reaches past the channel it arrived on.
     if (mpe_.role(ch) == MpeChannelRole::kManager) {

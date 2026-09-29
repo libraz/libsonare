@@ -128,7 +128,7 @@ TEST_CASE("SampleBank drops a loop mode whose loop is empty", "[midi][sample]") 
   zone.sample_index = index;
   REQUIRE(bank.add_zone(0, zone));
 
-  const auto* resolved = bank.find(0, 60, 100);
+  const auto* resolved = bank.find(0, 60, sonare::midi::Velocity16::from7(100));
   REQUIRE(resolved != nullptr);
   CHECK(resolved->region.loop_mode == 0);
 }
@@ -146,7 +146,7 @@ TEST_CASE("SampleBank clamps a loop past the end of its sample", "[midi][sample]
   zone.sample_index = index;
   REQUIRE(bank.add_zone(0, zone));
 
-  const auto* resolved = bank.find(0, 60, 100);
+  const auto* resolved = bank.find(0, 60, sonare::midi::Velocity16::from7(100));
   REQUIRE(resolved != nullptr);
   CHECK(resolved->region.loop_end == resolved->region.end);
   CHECK(resolved->region.loop_mode == 1);
@@ -175,31 +175,33 @@ TEST_CASE("SampleBank selects a zone by key and velocity", "[midi][sample]") {
   loud_zone.key_hi = 72;
   REQUIRE(bank.add_zone(0, loud_zone));
 
-  CHECK(bank.find(0, 64, 30) != nullptr);
-  CHECK(bank.find(0, 64, 100) != nullptr);
-  CHECK(bank.find(0, 64, 30) != bank.find(0, 64, 100));
+  CHECK(bank.find(0, 64, sonare::midi::Velocity16::from7(30)) != nullptr);
+  CHECK(bank.find(0, 64, sonare::midi::Velocity16::from7(100)) != nullptr);
+  CHECK(bank.find(0, 64, sonare::midi::Velocity16::from7(30)) !=
+        bank.find(0, 64, sonare::midi::Velocity16::from7(100)));
   // Above the loud zone's key range the soft zone still covers a soft note,
   // but a loud one falls through every rectangle and gets nothing.
-  CHECK(bank.find(0, 90, 30) != nullptr);
-  CHECK(bank.find(0, 90, 100) == nullptr);
-  CHECK(bank.find(1, 64, 100) == nullptr);   // no such set
-  CHECK(bank.find(-1, 64, 100) == nullptr);  // the no-keymap sentinel
+  CHECK(bank.find(0, 90, sonare::midi::Velocity16::from7(30)) != nullptr);
+  CHECK(bank.find(0, 90, sonare::midi::Velocity16::from7(100)) == nullptr);
+  CHECK(bank.find(1, 64, sonare::midi::Velocity16::from7(100)) == nullptr);  // no such set
+  CHECK(bank.find(-1, 64, sonare::midi::Velocity16::from7(100)) ==
+        nullptr);  // the no-keymap sentinel
 }
 
 TEST_CASE("SampleVoiceCore is silent without a bank or a covering zone", "[midi][sample]") {
   SamplePatchParams params;
   SampleVoiceCore core;
-  CHECK_FALSE(core.start(params, kOutRate, 60, 100));
+  CHECK_FALSE(core.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   CHECK(core.finished());
   CHECK(core.render(1.0f, true) == 0.0f);
 
   SampleBank bank = one_shot_bank(16);
   core.attach(&bank);
   params.set_index = 7;  // no such set
-  CHECK_FALSE(core.start(params, kOutRate, 60, 100));
+  CHECK_FALSE(core.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
 
   params.set_index = 0;
-  CHECK(core.start(params, kOutRate, 60, 100));
+  CHECK(core.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   CHECK_FALSE(core.finished());
 }
 
@@ -208,7 +210,7 @@ TEST_CASE("A one-shot region ends after its own length", "[midi][sample]") {
   SamplePatchParams params;
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(params, kOutRate, 60, 100));
+  REQUIRE(core.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
 
   const std::vector<float> out = pull(core, 40);
   CHECK(core.finished());
@@ -224,13 +226,13 @@ TEST_CASE("Key tracking steps the region at the played note", "[midi][sample]") 
 
   SampleVoiceCore at_root;
   at_root.attach(&bank);
-  REQUIRE(at_root.start(params, kOutRate, 60, 100));
+  REQUIRE(at_root.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   pull(at_root, 33);
   CHECK_FALSE(at_root.finished());
 
   SampleVoiceCore octave_up;
   octave_up.attach(&bank);
-  REQUIRE(octave_up.start(params, kOutRate, 72, 100));
+  REQUIRE(octave_up.start(params, kOutRate, 72, sonare::midi::Velocity16::from7(100)));
   pull(octave_up, 33);
   CHECK(octave_up.finished());
 }
@@ -242,7 +244,7 @@ TEST_CASE("Key tracking off plays every key at the recorded pitch", "[midi][samp
 
   SampleVoiceCore high;
   high.attach(&bank);
-  REQUIRE(high.start(params, kOutRate, 96, 100));
+  REQUIRE(high.start(params, kOutRate, 96, sonare::midi::Velocity16::from7(100)));
   pull(high, 33);
   CHECK_FALSE(high.finished());
 }
@@ -262,7 +264,7 @@ TEST_CASE("A sample carries its own rate into the increment", "[midi][sample]") 
 
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(SamplePatchParams{}, kOutRate, 60, 100));
+  REQUIRE(core.start(SamplePatchParams{}, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   pull(core, 100);
   CHECK_FALSE(core.finished());
   pull(core, 40);
@@ -284,7 +286,7 @@ TEST_CASE("A continuous loop outlives its region", "[midi][sample]") {
 
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(SamplePatchParams{}, kOutRate, 60, 100));
+  REQUIRE(core.start(SamplePatchParams{}, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   pull(core, 4096);
   CHECK_FALSE(core.finished());
 }
@@ -304,7 +306,7 @@ TEST_CASE("A key-down loop runs out once the key lifts", "[midi][sample]") {
 
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(SamplePatchParams{}, kOutRate, 60, 100));
+  REQUIRE(core.start(SamplePatchParams{}, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   pull(core, 256, /*key_down=*/true);
   CHECK_FALSE(core.finished());
   pull(core, 64, /*key_down=*/false);
@@ -328,7 +330,7 @@ TEST_CASE("A loop override replaces what the bank recorded", "[midi][sample]") {
   params.loop_override = 0;
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(params, kOutRate, 60, 100));
+  REQUIRE(core.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
   pull(core, 64);
   CHECK(core.finished());
 }
@@ -339,7 +341,7 @@ TEST_CASE("A start offset skips into the region", "[midi][sample]") {
   params.start_offset01 = 0.5f;
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(params, kOutRate, 60, 100));
+  REQUIRE(core.start(params, kOutRate, 60, sonare::midi::Velocity16::from7(100)));
 
   pull(core, 31);
   CHECK_FALSE(core.finished());
@@ -565,32 +567,34 @@ SampleBank crossfade_bank(size_t a_frames = 1000, size_t b_frames = 1000) {
 
 TEST_CASE("A single covering zone resolves without a crossfade partner", "[midi][sample]") {
   const SampleBank bank = one_shot_bank(100);
-  const auto mix = bank.find_mix(0, 60, 100);
+  const auto mix = bank.find_mix(0, 60, sonare::midi::Velocity16::from7(100));
   REQUIRE(mix.low != nullptr);
   CHECK(mix.high == nullptr);
   CHECK(mix.high_weight == 0.0f);
   // A set that does not exist stays empty rather than resolving to anything.
-  CHECK(bank.find_mix(1, 60, 100).low == nullptr);
-  CHECK(bank.find_mix(-1, 60, 100).low == nullptr);
+  CHECK(bank.find_mix(1, 60, sonare::midi::Velocity16::from7(100)).low == nullptr);
+  CHECK(bank.find_mix(-1, 60, sonare::midi::Velocity16::from7(100)).low == nullptr);
 }
 
 TEST_CASE("Overlapping velocity zones resolve to a weighted pair", "[midi][sample]") {
   const SampleBank bank = crossfade_bank();
 
   // Below the overlap only the lower zone covers the note.
-  const auto under = bank.find_mix(0, 60, 20);
+  const auto under = bank.find_mix(0, 60, sonare::midi::Velocity16::from7(20));
   REQUIRE(under.low != nullptr);
   CHECK(under.high == nullptr);
 
   // Across the overlap the upper zone fades in linearly.
-  const auto at_floor = bank.find_mix(0, 60, 40);
+  const auto at_floor = bank.find_mix(0, 60, sonare::midi::Velocity16::from7(40));
   REQUIRE(at_floor.high != nullptr);
   CHECK(at_floor.high_weight == Catch::Approx(0.0f));
-  CHECK(bank.find_mix(0, 60, 60).high_weight == Catch::Approx(0.5f));
-  CHECK(bank.find_mix(0, 60, 80).high_weight == Catch::Approx(1.0f));
+  CHECK(bank.find_mix(0, 60, sonare::midi::Velocity16::from7(60)).high_weight ==
+        Catch::Approx(0.5f));
+  CHECK(bank.find_mix(0, 60, sonare::midi::Velocity16::from7(80)).high_weight ==
+        Catch::Approx(1.0f));
 
   // Above the overlap only the upper zone covers the note.
-  const auto over = bank.find_mix(0, 60, 120);
+  const auto over = bank.find_mix(0, 60, sonare::midi::Velocity16::from7(120));
   REQUIRE(over.low != nullptr);
   CHECK(over.high == nullptr);
 }
@@ -602,7 +606,7 @@ TEST_CASE("A velocity crossfade blends both zones into one voice", "[midi][sampl
   auto level_at = [&](uint8_t velocity) {
     SampleVoiceCore core;
     core.attach(&bank);
-    REQUIRE(core.start(p, kOutRate, 60, velocity));
+    REQUIRE(core.start(p, kOutRate, 60, sonare::midi::Velocity16::from7(velocity)));
     return pull(core, 8).back();
   };
 
@@ -621,7 +625,7 @@ TEST_CASE("An end of the crossfade travel plays one layer, not two", "[midi][sam
   auto layers_at = [&](uint8_t velocity) {
     SampleVoiceCore core;
     core.attach(&bank);
-    REQUIRE(core.start(p, kOutRate, 60, velocity));
+    REQUIRE(core.start(p, kOutRate, 60, sonare::midi::Velocity16::from7(velocity)));
     return core.layer_count();
   };
   // A layer at a weight of zero would still step its region and end the voice
@@ -639,7 +643,7 @@ TEST_CASE("A crossfade lives until its longer region ends", "[midi][sample]") {
   SamplePatchParams p;
   SampleVoiceCore core;
   core.attach(&bank);
-  REQUIRE(core.start(p, kOutRate, 60, 60));
+  REQUIRE(core.start(p, kOutRate, 60, sonare::midi::Velocity16::from7(60)));
   REQUIRE(core.layer_count() == 2);
 
   const std::vector<float> early = pull(core, 200);

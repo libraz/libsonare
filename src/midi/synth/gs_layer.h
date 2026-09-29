@@ -27,12 +27,14 @@
 /// rather than a guide.
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/sf2_voice.h"
@@ -260,12 +262,11 @@ float gs_pitch_offset_fine_cents(uint8_t value, uint8_t note) noexcept;
 ///
 /// The result is clamped to 1-127: a shaped 0 is a note-off on the wire and this
 /// is a note that was struck.
-constexpr uint8_t gs_velocity_sense(uint8_t depth, uint8_t offset, uint8_t velocity) noexcept {
-  if (depth == 0x40 && offset == 0x40) return velocity;
-  const int shaped =
-      static_cast<int>((static_cast<float>(velocity) - 64.0f) * static_cast<float>(depth) / 64.0f) +
-      static_cast<int>(offset);
-  return static_cast<uint8_t>(shaped < 1 ? 1 : (shaped > 127 ? 127 : shaped));
+inline Velocity16 gs_velocity_sense(uint8_t depth, uint8_t offset, Velocity16 v) noexcept {
+  if (depth == 0x40 && offset == 0x40) return v;
+  const float shaped =
+      std::trunc((v.f7() - 64.0f) * static_cast<float>(depth) / 64.0f) + static_cast<float>(offset);
+  return Velocity16::from_f7(shaped < 1.0f ? 1.0f : (shaped > 127.0f ? 127.0f : shaped));
 }
 
 /// The GS system parameters at 40 00 xx that are not the effect block. Every

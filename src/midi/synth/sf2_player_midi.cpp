@@ -186,7 +186,7 @@ GsDrumNoteParams Sf2Player::drum_note_params(const ChannelState& ch, bool is_dru
   return gs_layer_drum_note_params(user_drum_params_[static_cast<size_t>(set)][note & 0x7Fu], live);
 }
 
-void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const ChannelState& ch = channels_[channel & 0x0Fu];
@@ -334,7 +334,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
 }
 
-void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                                  uint32_t source_track_id, Portamento porta) noexcept {
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const uint16_t bank = effective_bank(channel);
@@ -1020,11 +1020,10 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     // Polyphonic pressure has no branch below, so its switch guards nothing.
     if (!receives_message(channels_[ch].rx_switches, u)) continue;
     if (u.is_note_on()) {
-      const uint8_t vel7 =
-          u.message_type() == UmpMessageType::kMidi1ChannelVoice
-              ? u.data2_7bit()
-              : scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
-      note_on(ch, u.note_number(), vel7, event.source_track_id);
+      const Velocity16 vel = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                                 ? Velocity16::from7(u.data2_7bit())
+                                 : Velocity16::from_raw(static_cast<uint16_t>(u.words[1] >> 16));
+      note_on(ch, u.note_number(), vel, event.source_track_id);
     } else if (u.is_note_off()) {
       note_off(ch, u.note_number(), event.source_track_id);
     } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {

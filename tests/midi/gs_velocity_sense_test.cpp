@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
@@ -36,6 +37,7 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::Velocity16;
 using sonare::midi::synth::gs_velocity_sense;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
@@ -50,6 +52,20 @@ constexpr uint8_t kChannel = 0;
 constexpr uint8_t kPartBlock = 0x11;
 constexpr uint8_t kDepth = 0x1A;
 constexpr uint8_t kOffset = 0x1B;
+
+/// The 7-bit reading of the curve for a MIDI 1.0 velocity.
+uint8_t sense7(uint8_t depth, uint8_t offset, uint8_t velocity) {
+  return gs_velocity_sense(depth, offset, Velocity16::from7(velocity)).u7();
+}
+
+/// Independent copy of the integer curve the Velocity16 form has to reproduce.
+uint8_t reference_sense(uint8_t depth, uint8_t offset, uint8_t velocity) {
+  if (depth == 0x40 && offset == 0x40) return velocity;
+  const int shaped =
+      static_cast<int>((static_cast<float>(velocity) - 64.0f) * static_cast<float>(depth) / 64.0f) +
+      static_cast<int>(offset);
+  return static_cast<uint8_t>(shaped < 1 ? 1 : (shaped > 127 ? 127 : shaped));
+}
 
 enum class Bank : uint8_t { kSoundFont, kModel };
 
@@ -140,9 +156,9 @@ TEST_CASE("the velocity sense curve is the identity at its power-on values", "[m
   // untouched one does — not merely something close to it. A curve applied
   // unconditionally would round the same velocity to a neighbouring one and
   // move every render that never asked for this parameter.
-  REQUIRE(gs_velocity_sense(0x40, 0x40, 1) == 1);
-  REQUIRE(gs_velocity_sense(0x40, 0x40, 64) == 64);
-  REQUIRE(gs_velocity_sense(0x40, 0x40, 127) == 127);
+  REQUIRE(sense7(0x40, 0x40, 1) == 1);
+  REQUIRE(sense7(0x40, 0x40, 64) == 64);
+  REQUIRE(sense7(0x40, 0x40, 127) == 127);
 
   for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {
     const Render untouched = render(bank, nullptr, 100);
@@ -155,14 +171,14 @@ TEST_CASE("velocity sense depth is a slope through the centre", "[midi][gs][vel]
   // A depth of zero flattens the axis onto the offset rather than onto silence:
   // every key sounds alike, which is what "no velocity sensitivity" means and
   // what separates this from a multiply that runs to zero.
-  REQUIRE(gs_velocity_sense(0x00, 0x40, 1) == 64);
-  REQUIRE(gs_velocity_sense(0x00, 0x40, 127) == 64);
+  REQUIRE(sense7(0x00, 0x40, 1) == 64);
+  REQUIRE(sense7(0x00, 0x40, 127) == 64);
   // Above the centre the slope steepens, below it flattens, and both keep the
   // pivot: a velocity of 64 is unmoved whatever the depth.
-  REQUIRE(gs_velocity_sense(0x00, 0x40, 64) == 64);
-  REQUIRE(gs_velocity_sense(0x7F, 0x40, 64) == 64);
-  REQUIRE(gs_velocity_sense(0x7F, 0x40, 100) > gs_velocity_sense(0x40, 0x40, 100));
-  REQUIRE(gs_velocity_sense(0x20, 0x40, 100) < gs_velocity_sense(0x40, 0x40, 100));
+  REQUIRE(sense7(0x00, 0x40, 64) == 64);
+  REQUIRE(sense7(0x7F, 0x40, 64) == 64);
+  REQUIRE(sense7(0x7F, 0x40, 100) > sense7(0x40, 0x40, 100));
+  REQUIRE(sense7(0x20, 0x40, 100) < sense7(0x40, 0x40, 100));
 
   for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {
     // A soft strike and a hard one on a part made insensitive land on the same
@@ -176,12 +192,12 @@ TEST_CASE("velocity sense depth is a slope through the centre", "[midi][gs][vel]
 }
 
 TEST_CASE("velocity sense offset moves the whole curve", "[midi][gs][vel]") {
-  REQUIRE(gs_velocity_sense(0x40, 0x50, 60) == 76);
-  REQUIRE(gs_velocity_sense(0x40, 0x30, 60) == 44);
+  REQUIRE(sense7(0x40, 0x50, 60) == 76);
+  REQUIRE(sense7(0x40, 0x30, 60) == 44);
   // Clamped to a velocity a struck note can carry: a shaped 0 is a note-off on
   // the wire, and 127 is the top of the axis.
-  REQUIRE(gs_velocity_sense(0x40, 0x00, 1) == 1);
-  REQUIRE(gs_velocity_sense(0x40, 0x7F, 127) == 127);
+  REQUIRE(sense7(0x40, 0x00, 1) == 1);
+  REQUIRE(sense7(0x40, 0x7F, 127) == 127);
 
   for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {
     const double quiet = level(render(bank, write(kOffset, 0x20), 64));
@@ -200,5 +216,19 @@ TEST_CASE("velocity sense is out of range or in it, never clamped", "[midi][gs][
     const Render depth_only = render(bank, write(kDepth, 0x20), 100);
     const Render offset_only = render(bank, write(kOffset, 0x20), 100);
     REQUIRE_FALSE(depth_only == offset_only);
+  }
+}
+
+TEST_CASE("velocity sense reproduces the integer curve for every MIDI 1.0 input",
+          "[midi][gs][vel]") {
+  for (int depth = 0; depth < 128; ++depth) {
+    for (int offset = 0; offset < 128; ++offset) {
+      for (int v = 1; v < 128; ++v) {
+        const auto d = static_cast<uint8_t>(depth);
+        const auto o = static_cast<uint8_t>(offset);
+        const auto in = static_cast<uint8_t>(v);
+        REQUIRE(sense7(d, o, in) == reference_sense(d, o, in));
+      }
+    }
   }
 }

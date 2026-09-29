@@ -31,6 +31,7 @@
 #include <memory>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
 #include "midi/mpe.h"
@@ -409,9 +410,9 @@ struct NativeSynthVoice : VoiceState {
   /// organ's single-shot on this note (additive mode only; the channel decides which note gets it).
   /// @p part_mod carries the GS melodic part edits (TONE MODIFY / the part NRPNs); default is a
   /// no-op.
-  void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
-             float glide_from_hz = 0.0f, bool una_corda = false, uint8_t drum_kit = 0,
-             DrumVoiceMod drum_mod = {}, bool organ_percussion = false,
+  void start(const NativeSynthPatch& p, double sample_rate, Velocity16 velocity,
+             uint32_t voice_index, float glide_from_hz = 0.0f, bool una_corda = false,
+             uint8_t drum_kit = 0, DrumVoiceMod drum_mod = {}, bool organ_percussion = false,
              GsPartMod part_mod = {}) noexcept;
   /// True when the patch's filter stage cannot colour this voice: a wide-open
   /// static SVF lowpass, no resonance, no envelope depth and no negative
@@ -703,7 +704,8 @@ class NativeSynth final : public MidiInstrument {
   /// place, because a legato continuation moves `note` to the new key and every
   /// reader of it has to agree on that.
   NativeSynthVoice* find_sounding(uint8_t ch, uint8_t note, uint32_t source_track_id) noexcept;
-  void note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id) noexcept;
+  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+               uint32_t source_track_id) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;

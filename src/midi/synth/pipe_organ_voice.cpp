@@ -212,7 +212,7 @@ float jet_table(float x, float asym) noexcept {
 }  // namespace
 
 void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample_rate, uint8_t note,
-                               uint8_t velocity, uint64_t seed) noexcept {
+                               Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
@@ -257,7 +257,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
       std::max(0.0f, (static_cast<float>(note & 0x7Fu) - kKeytrackRefNote) * (1.0f / 12.0f));
   const float octaves_below =
       std::max(0.0f, (kKeytrackRefNote - static_cast<float>(note & 0x7Fu)) * (1.0f / 12.0f));
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   // Mouth pressure: the patch breath sets the dynamic, velocity opens it a touch.
   const float level =
       std::clamp(0.7f * std::clamp(params.breath, 0.0f, 1.0f) + 0.3f * vel01, 0.0f, 1.0f);

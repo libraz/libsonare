@@ -80,7 +80,7 @@ float flow_hump(float phase, float centre, float width) noexcept {
 }  // namespace
 
 void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
-                              uint8_t velocity, uint64_t seed) noexcept {
+                              Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
@@ -112,7 +112,7 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   }
 
   // Bellows drive level: steady pressure blended with the struck velocity.
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
   const float level = std::clamp(
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);

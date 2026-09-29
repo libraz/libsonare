@@ -31,6 +31,7 @@
 
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
@@ -90,8 +91,8 @@ class FreeReedVoiceCore {
  public:
   /// Configures the tongue oscillators for @p note / @p velocity and seeds the
   /// breath noise. @p seed drives the deterministic air hiss.
-  void start(const FreeReedPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
-             uint64_t seed) noexcept;
+  void start(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
+             Velocity16 velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / drift / glide), 1 = on pitch.
   float render(float pitch_ratio) noexcept;

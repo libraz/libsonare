@@ -400,7 +400,7 @@ TEST_CASE("unison detune is seeded deterministically per voice", "[midi][synth]"
     voice.channel = 0;
     voice.age = age;
     voice.active = true;
-    voice.start(clamped, kRate, 100, voice_index);
+    voice.start(clamped, kRate, sonare::midi::Velocity16::from7(100), voice_index);
     std::vector<float> out(512);
     for (float& s : out) s = voice.render(mod);
     return out;

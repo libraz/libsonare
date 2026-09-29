@@ -158,7 +158,8 @@ std::vector<float> render_core(const BowedStringPatchParams& params, int samples
   std::vector<float> slab(
       static_cast<std::size_t>(sonare::midi::synth::bowed_string_slab_capacity(kSr)), 0.0f);
   core.attach(slab.data(), per_line);
-  core.start(params, kSr, kControlNote, kControlVelocity, kControlSeed);
+  core.start(params, kSr, kControlNote, sonare::midi::Velocity16::from7(kControlVelocity),
+             kControlSeed);
   std::vector<float> out(static_cast<std::size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<std::size_t>(i)] = core.render(1.0f);
   return out;

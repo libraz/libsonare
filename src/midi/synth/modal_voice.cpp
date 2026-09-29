@@ -22,12 +22,12 @@ float radius_for(double sample_rate, float t60_s) noexcept {
 }  // namespace
 
 void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, uint8_t note,
-                           uint8_t velocity, uint64_t seed) noexcept {
+                           Velocity16 velocity, uint64_t seed) noexcept {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float f0 = note_to_hz(note);
 
   // Mallet hardness: velocity opens the upper-mode excitation.
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   const float vel_amount = std::clamp(params.vel_to_brightness, 0.0f, 1.0f);
   const float hardness =
       std::clamp(params.strike_brightness, 0.0f, 1.0f) * ((1.0f - vel_amount) + vel_amount * vel01);

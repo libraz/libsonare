@@ -112,10 +112,10 @@ float centibels_to_gain(float centibels) noexcept {
 
 float abs_cents_to_hz(float cents) noexcept { return 8.176f * std::exp2(cents / 1200.0f); }
 
-float sf2_velocity_gain(uint8_t velocity) noexcept {
+float sf2_velocity_gain(Velocity16 velocity) noexcept {
   // The spec's concave 960 cB velocity->attenuation modulator reduces to
   // exactly (vel/127)^2 in linear gain.
-  const float v = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float v = static_cast<float>(velocity.u7()) / 127.0f;
   return v * v;
 }
 
@@ -125,7 +125,7 @@ float sf2_cc_gain(uint8_t value) noexcept {
 }
 
 Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& sample, uint8_t key,
-                                    uint8_t velocity, double output_sample_rate) noexcept {
+                                    Velocity16 velocity, double output_sample_rate) noexcept {
   Sf2VoiceParams p;
 
   // --- sample addressing (header + fine/coarse offsets) ---
@@ -179,8 +179,7 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
   p.mod_env_to_filter_fc = static_cast<float>(gens.get(kGenModEnvToFilterFc));
 
   // --- filter: velocity darkening (default modulator) on top of the zone Fc ---
-  const float vel_offset =
-      kVelToFilterCents * (1.0f - static_cast<float>(velocity & 0x7Fu) / 127.0f);
+  const float vel_offset = kVelToFilterCents * (1.0f - static_cast<float>(velocity.u7()) / 127.0f);
   p.filter_fc_cents = static_cast<float>(gens.get(kGenInitialFilterFc)) + vel_offset;
   // initialFilterQ is the resonance peak height in centibels: Q = 10^(cB/200).
   const float q_cb = static_cast<float>(gens.get(kGenInitialFilterQ));

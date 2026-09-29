@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+#include "midi/control_value.h"
+
 namespace sonare::midi::synth {
 
 /// SoundFont 2.04 shdr sample-rate range. Terminal EOS records are excluded.
@@ -124,8 +126,8 @@ struct Sf2Zone {
   int32_t sample = -1;
 
   bool is_global() const noexcept { return instrument < 0 && sample < 0; }
-  bool matches(uint8_t key, uint8_t velocity) const noexcept {
-    return key >= key_lo && key <= key_hi && velocity >= vel_lo && velocity <= vel_hi;
+  bool matches(uint8_t key, Velocity16 velocity) const noexcept {
+    return key >= key_lo && key <= key_hi && velocity.u7() >= vel_lo && velocity.u7() <= vel_hi;
   }
   /// Last occurrence of @p oper in this zone, or nullptr.
   const Sf2Gen* find_gen(uint16_t oper) const noexcept;

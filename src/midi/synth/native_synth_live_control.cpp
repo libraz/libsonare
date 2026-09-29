@@ -189,9 +189,11 @@ void NativeSynth::track_mpe_input(const Ump& ump) noexcept {
   const bool midi1 = ump.message_type() == UmpMessageType::kMidi1ChannelVoice;
   const uint8_t ch = ump.channel() & 0x0Fu;
   if (dimension == MpeDimension::kPressure) {
-    mpe_.track_pressure(ch, midi1 ? ump.note_number() : scale_cc_32_to_7(ump.words[1]));
+    mpe_.track_pressure(
+        ch, midi1 ? Control32::from7(ump.note_number()) : Control32::from_raw(ump.words[1]));
   } else {
-    mpe_.track_timbre(ch, midi1 ? ump.data2_7bit() : scale_cc_32_to_7(ump.words[1]));
+    mpe_.track_timbre(
+        ch, midi1 ? Control32::from7(ump.data2_7bit()) : Control32::from_raw(ump.words[1]));
   }
 }
 

@@ -134,10 +134,10 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
 /// The curve at @p exponent. The spec's exponent keeps the spec's own squaring
 /// rather than reaching `pow` for it, so a build that never moves the knob is
 /// bit-identical to one compiled before it existed.
-float sampler_velocity_gain(uint8_t velocity, float exponent) noexcept {
+float sampler_velocity_gain(Velocity16 velocity, float exponent) noexcept {
   if (exponent <= 0.0f) return 1.0f;
   if (exponent == 2.0f) return sf2_velocity_gain(velocity);
-  return std::pow(static_cast<float>(velocity & 0x7Fu) / 127.0f, exponent);
+  return std::pow(static_cast<float>(velocity.u7()) / 127.0f, exponent);
 }
 
 }  // namespace
@@ -146,7 +146,7 @@ float sampler_velocity_gain(uint8_t velocity, float exponent) noexcept {
 // NativeSynthVoice
 // ---------------------------------------------------------------------------
 
-void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
+void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velocity16 velocity,
                              uint32_t voice_index, float glide_from_hz, bool una_corda,
                              uint8_t drum_kit, DrumVoiceMod drum_mod, bool organ_percussion,
                              GsPartMod part_mod) noexcept {
@@ -273,7 +273,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
-      p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
+      p.vel_to_cutoff_cents * (static_cast<float>(velocity.u7()) / 127.0f - 1.0f) +
       p.key_track * 100.0f * (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) +
       part_mod.cutoff_cents;
   if (p.drive > 0.0f) {
@@ -329,7 +329,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   has_engine_control_routes = has_matrix && p.mod_matrix.has_engine_control_route();
   // A reused slot must not inherit the previous note's LFO rate.
   matrix_lfo1_rate_scale = 1.0f;
-  velocity01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  velocity01 = static_cast<float>(velocity.u7()) / 127.0f;
   poly_pressure01 = 0.0f;
   key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);

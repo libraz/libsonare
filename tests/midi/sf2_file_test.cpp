@@ -225,8 +225,8 @@ TEST_CASE("Sf2File parses presets, instruments, zones and samples", "[midi][sf2]
   REQUIRE(drums.zones.size() == 1);
   REQUIRE(drums.zones[0].key_lo == 35);
   REQUIRE(drums.zones[0].key_hi == 45);
-  REQUIRE(drums.zones[0].matches(40, 100));
-  REQUIRE_FALSE(drums.zones[0].matches(60, 100));
+  REQUIRE(drums.zones[0].matches(40, sonare::midi::Velocity16::from7(100)));
+  REQUIRE_FALSE(drums.zones[0].matches(60, sonare::midi::Velocity16::from7(100)));
 
   // Sample headers index the pool; loop points sit inside the sample.
   const auto& sine = sf2.samples()[0];
@@ -270,9 +270,9 @@ TEST_CASE("Sf2File velocity/key zone matching helper", "[midi][sf2]") {
   Sf2File sf2;
   REQUIRE(sf2.parse(bytes.data(), bytes.size(), nullptr));
   const auto& melodic = sf2.instruments()[0];
-  REQUIRE(melodic.zones[0].matches(60, 30));
-  REQUIRE_FALSE(melodic.zones[0].matches(60, 100));
-  REQUIRE(melodic.zones[1].matches(60, 100));
+  REQUIRE(melodic.zones[0].matches(60, sonare::midi::Velocity16::from7(30)));
+  REQUIRE_FALSE(melodic.zones[0].matches(60, sonare::midi::Velocity16::from7(100)));
+  REQUIRE(melodic.zones[1].matches(60, sonare::midi::Velocity16::from7(100)));
 }
 
 TEST_CASE("Sf2File clamps extreme tuning generators while parsing", "[midi][sf2]") {

@@ -227,7 +227,7 @@ void BuiltinSynth::pitch_bend(uint8_t channel, uint16_t bend14) noexcept {
   // 14-bit unsigned, center 8192 -> [-1, +1] -> semitones.
   const float norm = (static_cast<float>(bend14) - 8192.0f) / 8192.0f;
   channel_bend_semitones_[ch] = clampf(norm, -1.0f, 1.0f) * kPitchBendRangeSemitones;
-  mpe_.track_bend(ch, bend14);
+  mpe_.track_bend(ch, Bend32::from14(bend14));
   refresh_channel_expression(ch);
 }
 
@@ -235,7 +235,7 @@ void BuiltinSynth::channel_pressure(uint8_t channel, uint8_t pressure7) noexcept
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   channel_pressure_[ch] = clampf(static_cast<float>(pressure7) / 127.0f, 0.0f, 1.0f);
-  mpe_.track_pressure(ch, pressure7 & 0x7Fu);
+  mpe_.track_pressure(ch, Control32::from7(pressure7 & 0x7Fu));
   refresh_channel_expression(ch);
 }
 

@@ -97,7 +97,7 @@ constexpr float kCtrlSettle = 1.0e-6f;
 }  // namespace
 
 void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, uint8_t note,
-                           uint8_t velocity, uint64_t seed) noexcept {
+                           Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
@@ -168,7 +168,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
 
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   output_scale_ = kOutputScale * (kVelFloor + (1.0f - kVelFloor) * vel01);
 }
 

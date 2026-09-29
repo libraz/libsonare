@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
@@ -158,7 +159,7 @@ class FluteVoiceCore {
 
   /// Configures the bore / jet for @p note / @p velocity and zeroes / seeds the
   /// used spans. @p seed drives the deterministic jet turbulence and onset chiff.
-  void start(const FlutePatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
+  void start(const FlutePatchParams& params, double sample_rate, uint8_t note, Velocity16 velocity,
              uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / drift), 1 = on pitch.

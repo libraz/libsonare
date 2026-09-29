@@ -197,7 +197,8 @@ TEST_CASE("the delay line length is what bounds the descent", "[midi][synth][wav
     std::vector<float> buffer(static_cast<size_t>(slab), 0.0f);
     PluckedStringVoiceCore core;
     core.attach(buffer.data(), capacity);
-    core.start(PluckedStringPatchParams{}, kRate, kNote, kVelocity, 1u);
+    core.start(PluckedStringPatchParams{}, kRate, kNote, sonare::midi::Velocity16::from7(kVelocity),
+               1u);
     std::vector<float> out(static_cast<size_t>(kSettleFrames + kWindowFrames));
     for (float& sample : out) sample = core.render(static_cast<float>(ratio));
     const double hint = kNoteHz * ratio;

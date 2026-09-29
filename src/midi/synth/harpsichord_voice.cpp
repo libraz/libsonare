@@ -116,9 +116,9 @@ float speaking_length_mm(const HarpsichordPatchParams& params, uint8_t note) noe
 
 /// The plectrum's release displacement for a key speed, in dB relative to its
 /// own peak (so never above 0).
-float plectrum_release_db(const HarpsichordPatchParams& params, uint8_t velocity) noexcept {
+float plectrum_release_db(const HarpsichordPatchParams& params, Velocity16 velocity) noexcept {
   constexpr float kSoftest = 1.0f / 127.0f;
-  const float v = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float v = static_cast<float>(velocity.u7()) / 127.0f;
   const float peak = std::max(kSoftest, static_cast<float>(params.peak_velocity & 0x7Fu) / 127.0f);
   const float range = std::max(0.0f, params.velocity_range_db);
   if (v <= peak) {
@@ -163,7 +163,7 @@ float onepole_alpha(float cutoff_hz, double sample_rate) noexcept {
 }  // namespace
 
 void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sample_rate,
-                                 uint8_t note, uint8_t velocity, uint64_t seed) noexcept {
+                                 uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
 

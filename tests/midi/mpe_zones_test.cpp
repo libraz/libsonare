@@ -20,10 +20,13 @@
 #include <cstdint>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/mpe.h"
 
 namespace {
 
+using sonare::midi::Bend32;
+using sonare::midi::Control32;
 using sonare::midi::kMpeManagerBendSemitones;
 using sonare::midi::kMpeMemberBendSemitones;
 using sonare::midi::kMpeUpperManagerChannel;
@@ -66,8 +69,8 @@ TEST_CASE("without an MCM no channel is under MPE control", "[midi][mpe]") {
   }
   // Tracking a value without a zone is harmless and still reads as nothing,
   // which is what keeps a project that sends bend but no MCM unchanged.
-  state.track_bend(3, 16383);
-  state.track_pressure(3, 100);
+  state.track_bend(3, Bend32::from14(16383));
+  state.track_pressure(3, Control32::from7(100));
   REQUIRE(state.bend_semitones(3) == 0.0f);
   REQUIRE_FALSE(state.has(3, MpeDimension::kPressure));
 }
@@ -115,7 +118,7 @@ TEST_CASE("an MCM on any other channel changes nothing", "[midi][mpe]") {
 
 TEST_CASE("reconfiguring a zone names the channels the caller must silence", "[midi][mpe]") {
   MpeState state = lower_zone(4);  // channels 0..4
-  state.track_pressure(2, 90);
+  state.track_pressure(2, Control32::from7(90));
   REQUIRE(state.pressure(2) == 90);
 
   uint16_t moved = 0;
@@ -198,8 +201,8 @@ TEST_CASE("manager and member bend combine to the specification's own example", 
   // 0.0009 semitones here, far inside this tolerance. That divisor is the
   // spec's and is kept for it, not because anything could measure it.
   MpeState state = lower_zone(4);
-  state.track_bend(0, 16383);
-  state.track_bend(2, 9387);
+  state.track_bend(0, Bend32::from14(16383));
+  state.track_bend(2, Bend32::from14(9387));
 
   REQUIRE(std::fabs(state.manager_bend_semitones(2) - 2.0f) < 0.01f);
   REQUIRE(std::fabs(state.bend_semitones(2) - 9.0f) < 0.01f);
@@ -211,9 +214,9 @@ TEST_CASE("manager and member bend combine to the specification's own example", 
 
 TEST_CASE("an untouched manager is the identity of the combination", "[midi][mpe]") {
   MpeState state = lower_zone(4);
-  state.track_pressure(2, 100);
-  state.track_timbre(2, 30);
-  state.track_bend(2, 9387);
+  state.track_pressure(2, Control32::from7(100));
+  state.track_timbre(2, Control32::from7(30));
+  state.track_bend(2, Bend32::from14(9387));
 
   // Nothing has reached the manager, so the member's values stand unchanged.
   // A manager defaulting to a value instead -- 0 for pressure, the 0x40 centre
@@ -224,18 +227,18 @@ TEST_CASE("an untouched manager is the identity of the combination", "[midi][mpe
   REQUIRE(std::fabs(state.bend_semitones(2) - 7.0f) < 0.01f);
 
   // Once the manager does send, it biases them, and the sum keeps the domain.
-  state.track_pressure(0, 20);
-  state.track_timbre(0, 40);
+  state.track_pressure(0, Control32::from7(20));
+  state.track_timbre(0, Control32::from7(40));
   REQUIRE(state.pressure(2) == 120);
   REQUIRE(state.timbre(2) == 70);
-  state.track_pressure(0, 127);
+  state.track_pressure(0, Control32::from7(127));
   REQUIRE(state.pressure(2) == 127);
 
   // And presence is separate from value: a manager that sent an explicit zero
   // has reached the dimension even though it changed nothing.
   MpeState quiet = lower_zone(4);
   REQUIRE_FALSE(quiet.has(2, MpeDimension::kPressure));
-  quiet.track_pressure(0, 0);
+  quiet.track_pressure(0, Control32::from7(0));
   REQUIRE(quiet.has(2, MpeDimension::kPressure));
   REQUIRE(quiet.pressure(2) == 0);
 
@@ -243,7 +246,7 @@ TEST_CASE("an untouched manager is the identity of the combination", "[midi][mpe
   // and no bend are the same number of semitones, so presence has to be set by
   // the message arriving rather than by the value differing from the default.
   REQUIRE_FALSE(quiet.has(2, MpeDimension::kBend));
-  quiet.track_bend(2, 8192);
+  quiet.track_bend(2, Bend32::from14(8192));
   REQUIRE(quiet.has(2, MpeDimension::kBend));
   REQUIRE(quiet.bend_semitones(2) == 0.0f);
 }
@@ -253,8 +256,8 @@ TEST_CASE("a value tracked while the channel is silent is the next note's state"
   // even when no note is playing, because the value at Note On is the note's
   // initial state. Nothing here has ever seen a note, which is the point.
   MpeState state = lower_zone(4);
-  state.track_timbre(3, 90);
-  state.track_pressure(3, 55);
+  state.track_timbre(3, Control32::from7(90));
+  state.track_pressure(3, Control32::from7(55));
   REQUIRE(state.timbre(3) == 90);
   REQUIRE(state.pressure(3) == 55);
   REQUIRE(state.has(3, MpeDimension::kTimbre));

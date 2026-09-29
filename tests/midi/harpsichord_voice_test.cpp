@@ -47,7 +47,7 @@ std::vector<float> render_held(const HarpsichordPatchParams& params, uint8_t not
                                double seconds, Slab& slab) {
   HarpsichordVoiceCore core;
   core.attach(slab.data.data(), slab.per_line);
-  core.start(params, kSr, note, velocity, 0x51D5u + note);
+  core.start(params, kSr, note, sonare::midi::Velocity16::from7(velocity), 0x51D5u + note);
   const int n = static_cast<int>(seconds * kSr);
   std::vector<float> out(static_cast<size_t>(n));
   for (int i = 0; i < n; ++i) out[static_cast<size_t>(i)] = core.render(1.0f);
@@ -274,7 +274,7 @@ TEST_CASE("harpsichord damper stops a released string and the undamped 4' top do
   auto tail_after_release = [&](const HarpsichordPatchParams& p, uint8_t note) {
     HarpsichordVoiceCore core;
     core.attach(slab.data.data(), slab.per_line);
-    core.start(p, kSr, note, 88, 0x51D5u);
+    core.start(p, kSr, note, sonare::midi::Velocity16::from7(88), 0x51D5u);
     std::vector<float> out(static_cast<size_t>(2.0 * kSr));
     const int release_at = static_cast<int>(1.0 * kSr);
     for (size_t i = 0; i < out.size(); ++i) {
@@ -314,7 +314,7 @@ TEST_CASE("harpsichord render is allocation-free and deterministic", "[midi][syn
   std::vector<float> first(4096);
   {
     sonare::test::AllocationGuard guard;
-    core.start(params, kSr, 60, 88, 0x51D5u);
+    core.start(params, kSr, 60, sonare::midi::Velocity16::from7(88), 0x51D5u);
     for (size_t i = 0; i < first.size(); ++i) {
       if (i == 3000) core.release();
       first[i] = core.render(1.0f);
@@ -326,7 +326,7 @@ TEST_CASE("harpsichord render is allocation-free and deterministic", "[midi][syn
   // Same events, same seed, same samples: the plectrum is not a noise source
   // and the mechanism bursts draw from the counter-based per-voice stream.
   std::vector<float> second(first.size());
-  core.start(params, kSr, 60, 88, 0x51D5u);
+  core.start(params, kSr, 60, sonare::midi::Velocity16::from7(88), 0x51D5u);
   for (size_t i = 0; i < second.size(); ++i) {
     if (i == 3000) core.release();
     second[i] = core.render(1.0f);

@@ -28,6 +28,7 @@
 #include <array>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
@@ -75,8 +76,8 @@ struct AdditivePatchParams {
 class AdditiveVoiceCore {
  public:
   /// @p percussion fires the single-shot on this note; the channel decides.
-  void start(const AdditivePatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
-             uint64_t seed, bool percussion = false) noexcept;
+  void start(const AdditivePatchParams& params, double sample_rate, uint8_t note,
+             Velocity16 velocity, uint64_t seed, bool percussion = false) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor.
   float render(float pitch_ratio) noexcept;
   // --- live continuous control. The tonewheels are not excited, so the only

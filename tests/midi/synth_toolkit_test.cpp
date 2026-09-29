@@ -199,7 +199,7 @@ TEST_CASE("NativeSynthVoice steal retriggers from residual envelope level", "[mi
   voice.channel = 0;
   voice.note = 60;
   voice.age = 1;
-  voice.start(patch, kSampleRate, 127, 0);
+  voice.start(patch, kSampleRate, sonare::midi::Velocity16::from7(127), 0);
 
   Sf2ChannelMod mod;
   for (int i = 0; i < 480; ++i) {
@@ -212,7 +212,7 @@ TEST_CASE("NativeSynthVoice steal retriggers from residual envelope level", "[mi
 
   voice.note = 67;
   voice.age = 2;
-  voice.start(patch, kSampleRate, 127, 0);
+  voice.start(patch, kSampleRate, sonare::midi::Velocity16::from7(127), 0);
 
   REQUIRE(voice.amp_env.level() == Approx(amp_before).margin(1.0e-6f));
   REQUIRE(voice.filter_env.level() == Approx(filter_before).margin(1.0e-6f));

@@ -148,7 +148,7 @@ std::vector<float> render_flute_dark(uint8_t note, double sr, int samples) {
   const int per_span = flute_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(flute_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), per_span);
-  core.start(p, sr, note, 100, 0x5011ADE5ull);
+  core.start(p, sr, note, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> out(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<size_t>(i)] = core.render(1.0f);
   return out;
@@ -167,7 +167,7 @@ std::vector<float> render_bowed_dark(uint8_t note, double sr, int samples) {
   const int per_line = bowed_string_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(bowed_string_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), per_line);
-  core.start(p, sr, note, 100, 0x5011ADE5ull);
+  core.start(p, sr, note, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> out(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<size_t>(i)] = core.render(1.0f);
   return out;
@@ -184,7 +184,7 @@ std::vector<float> render_plucked_dark(uint8_t note, double sr, int samples) {
   const int per_line = plucked_string_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(plucked_string_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), per_line);
-  core.start(p, sr, note, 100, 0x5011ADE5ull);
+  core.start(p, sr, note, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> out(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<size_t>(i)] = core.render(1.0f);
   return out;
@@ -203,7 +203,7 @@ std::vector<float> render_reed_dark(uint8_t note, double sr, int samples) {
   const int capacity = reed_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(reed_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), capacity);
-  core.start(p, sr, note, 100, 0x5011ADE5ull);
+  core.start(p, sr, note, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> out(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<size_t>(i)] = core.render(1.0f);
   return out;
@@ -214,7 +214,7 @@ std::vector<float> render_ks(const KsPatchParams& params, uint8_t note, double s
   const int per_line = ks_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(ks_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), per_line);
-  core.start(params, sr, note, 100, 0x5011ADE5ull);
+  core.start(params, sr, note, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> out(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<size_t>(i)] = core.render(1.0f);
   return out;
@@ -387,7 +387,7 @@ TEST_CASE("the rendered flute engine's loss corner does not move with note",
   const int per_span = flute_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(flute_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), per_span);
-  core.start(bright, sr, 60, 100, 0x5011ADE5ull);
+  core.start(bright, sr, 60, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> bright_tone(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) bright_tone[static_cast<size_t>(i)] = core.render(1.0f);
   const BandTilt dark60 = octave_band_tilt(render_flute_dark(60, sr, samples), 200.0, 6400.0, sr);
@@ -440,7 +440,7 @@ TEST_CASE("the rendered bowed-string engine's loss corner does not move with not
   const int per_line = bowed_string_buffer_capacity(sr);
   std::vector<float> slab(static_cast<size_t>(bowed_string_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), per_line);
-  core.start(bright, sr, 60, 100, 0x5011ADE5ull);
+  core.start(bright, sr, 60, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> bright_tone(static_cast<size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) bright_tone[static_cast<size_t>(i)] = core.render(1.0f);
   const BandTilt dark60 = octave_band_tilt(render_bowed_dark(60, sr, samples), 200.0, 6400.0, sr);
@@ -564,7 +564,7 @@ std::vector<float> render_piano(const sonare::midi::synth::PianoPatchParams& par
   sonare::midi::synth::PianoVoiceCore core;
   std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(sr)), 0.0f);
   core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(sr));
-  core.start(params, sr, note, 100, 0x5011ADE5ull);
+  core.start(params, sr, note, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
   std::vector<float> out(static_cast<size_t>(samples));
   for (float& v : out) v = core.render(1.0f);
   return out;
@@ -674,7 +674,7 @@ TEST_CASE("the pipe-organ reflection floor keeps its corner across rates",
         std::vector<float> slab(
             static_cast<size_t>(sonare::midi::synth::pipe_organ_slab_capacity(sr)), 0.0f);
         core.attach(slab.data(), sonare::midi::synth::pipe_organ_buffer_capacity(sr));
-        core.start(stopped, sr, 48, 100, 0x5011ADE5ull);
+        core.start(stopped, sr, 48, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
         for (int i = 0; i < samples / 2; ++i) core.render(1.0f);  // let it settle
         std::vector<float> tone(static_cast<size_t>(samples));
         for (float& v : tone) v = core.render(1.0f);

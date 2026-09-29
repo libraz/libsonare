@@ -178,7 +178,7 @@ float reed_natural_hz(float resonance01, float srf) noexcept {
 }  // namespace
 
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
-                          uint8_t velocity, uint64_t seed) noexcept {
+                          Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
   sample_rate_ = sr;
@@ -204,7 +204,7 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
     sign_ = -1.0f;
   }
 
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   // Mouth pressure = the dynamic level: the patch breath blended with the struck
   // velocity by vel_to_breath.
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);

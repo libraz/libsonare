@@ -45,7 +45,7 @@ uint16_t effective_scan_bank(const ScanChannelState& state) noexcept {
 /// Sf2Player::note_on, without allocating a voice: a preset can exist while a
 /// key- or velocity-limited zone leaves a particular note to the synth fallback.
 bool has_renderable_zone(const synth::Sf2File& soundfont, int preset_index, uint8_t note,
-                         uint8_t velocity) noexcept {
+                         sonare::midi::Velocity16 velocity) noexcept {
   if (preset_index < 0 || static_cast<size_t>(preset_index) >= soundfont.presets().size()) {
     return false;
   }
@@ -167,10 +167,10 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
     } else if (u.is_note_on()) {
       const uint16_t bank = effective_scan_bank(state);
       const auto key = std::make_tuple(channel, bank, state.program);
-      const uint8_t velocity = u.message_type() == UmpMessageType::kMidi2ChannelVoice
-                                   ? sonare::midi::scale_note_on_velocity_16_to_7(
-                                         static_cast<uint16_t>(u.words[1] >> 16))
-                                   : u.data2_7bit();
+      const sonare::midi::Velocity16 velocity =
+          u.message_type() == UmpMessageType::kMidi2ChannelVoice
+              ? sonare::midi::Velocity16::from_raw(static_cast<uint16_t>(u.words[1] >> 16))
+              : sonare::midi::Velocity16::from7(u.data2_7bit());
       int preset = -1;
       bool sf2_renders_note = false;
       if (soundfont != nullptr) {

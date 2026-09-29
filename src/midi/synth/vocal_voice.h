@@ -27,6 +27,7 @@
 
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
@@ -72,7 +73,7 @@ class VocalVoiceCore {
  public:
   /// Configures the source / formant bank for @p note / @p velocity and seeds
   /// the aspiration noise. @p seed drives the deterministic breath.
-  void start(const VocalPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
+  void start(const VocalPatchParams& params, double sample_rate, uint8_t note, Velocity16 velocity,
              uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / drift / glide), 1 = on pitch.

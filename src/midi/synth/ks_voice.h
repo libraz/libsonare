@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 
@@ -217,7 +218,7 @@ class KsVoiceCore {
 
   /// Configures the string for @p note / @p velocity and injects the seeded
   /// excitation burst state. Zeroes the attached span.
-  void start(const KsPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
+  void start(const KsPatchParams& params, double sample_rate, uint8_t note, Velocity16 velocity,
              uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / glide), 1 = on pitch.

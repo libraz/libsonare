@@ -191,7 +191,7 @@ SONARE_TUNABLE(kLip2Couple, 1.5f);
 }  // namespace
 
 void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, uint8_t note,
-                           uint8_t velocity, uint64_t seed) noexcept {
+                           Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
@@ -218,7 +218,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   bore_.period = period * kPitchCorrect;
   sign_ = 1.0f;
 
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
   const float level = std::clamp(
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);

@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "rt/biquad_design.h"
@@ -241,7 +242,7 @@ class HarpsichordVoiceCore {
   /// Voices the note: works out the plectrum's release displacement for
   /// @p velocity, solves each drawn choir's loss filter, and loads the pluck.
   void start(const HarpsichordPatchParams& params, double sample_rate, uint8_t note,
-             uint8_t velocity, uint64_t seed) noexcept;
+             Velocity16 velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / glide), 1 = on pitch.
   float render(float pitch_ratio) noexcept;

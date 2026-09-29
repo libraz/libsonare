@@ -32,7 +32,7 @@ SONARE_TUNABLE(kPluckedOutputScale, 0.85f);
 }  // namespace
 
 void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, double sample_rate,
-                                   uint8_t note, uint8_t velocity, uint64_t seed) noexcept {
+                                   uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
 
@@ -76,7 +76,7 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
   exc_pos_ = 0;
   pick_delay_ =
       static_cast<int>(std::clamp(params.pick_position, 0.0f, 0.5f) * base_period_ + 0.5f);
-  const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
   const float vel_amount = std::clamp(params.vel_to_brightness, 0.0f, 1.0f);
   const float bright =
       std::clamp(params.exc_brightness, 0.0f, 1.0f) * ((1.0f - vel_amount) + vel_amount * vel01);

@@ -403,7 +403,7 @@ TEST_CASE("shipped steel guitar never grows on a held treble note", "[midi][synt
   for (uint8_t note = 76; note <= 100; note += 8) {
     sonare::midi::synth::KsVoiceCore core;
     core.attach(slab.data(), sonare::midi::synth::ks_buffer_capacity(kRate));
-    core.start(steel.ks, kRate, note, 100, 0x25u + note);
+    core.start(steel.ks, kRate, note, sonare::midi::Velocity16::from7(100), 0x25u + note);
     std::vector<float> tone(kSeconds * sr);
     for (float& s : tone) s = core.render(1.0f);
     const float early = window_peak(tone, sr / 2, 3 * sr / 2);

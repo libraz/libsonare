@@ -31,6 +31,7 @@
 
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/sample_reader.h"
 #include "midi/synth/sf2_file.h"
@@ -269,11 +270,11 @@ struct Sf2VoiceParams {
 /// filter darkening; the velocity GAIN is returned separately by
 /// sf2_velocity_gain().
 Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& sample, uint8_t key,
-                                    uint8_t velocity, double output_sample_rate) noexcept;
+                                    Velocity16 velocity, double output_sample_rate) noexcept;
 
 /// Spec default modulator: velocity -> attenuation concave 960 cB curve,
 /// equivalent to (vel/127)^2 linear gain.
-float sf2_velocity_gain(uint8_t velocity) noexcept;
+float sf2_velocity_gain(Velocity16 velocity) noexcept;
 /// Same law for CC7 volume / CC11 expression.
 float sf2_cc_gain(uint8_t value) noexcept;
 

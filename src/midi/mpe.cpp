@@ -161,21 +161,21 @@ bool MpeState::apply_midi_mode(uint8_t channel, MpeMidiMode mode) noexcept {
   return true;
 }
 
-void MpeState::track_bend(uint8_t channel, uint16_t bend14) noexcept {
+void MpeState::track_bend(uint8_t channel, Bend32 bend) noexcept {
   Channel& state = channels_[channel & 0x0Fu];
-  state.bend14 = bend14;
+  state.bend14 = bend.u14();
   state.present |= present_bit(MpeDimension::kBend);
 }
 
-void MpeState::track_pressure(uint8_t channel, uint8_t value) noexcept {
+void MpeState::track_pressure(uint8_t channel, Control32 value) noexcept {
   Channel& state = channels_[channel & 0x0Fu];
-  state.pressure = value;
+  state.pressure = value.u7();
   state.present |= present_bit(MpeDimension::kPressure);
 }
 
-void MpeState::track_timbre(uint8_t channel, uint8_t value) noexcept {
+void MpeState::track_timbre(uint8_t channel, Control32 value) noexcept {
   Channel& state = channels_[channel & 0x0Fu];
-  state.timbre = value;
+  state.timbre = value.u7();
   state.present |= present_bit(MpeDimension::kTimbre);
 }
 
