@@ -114,24 +114,22 @@ float RhythmAnalyzer::calculate_swing_ratio() const {
   int straight_count = 0;
 
   for (float pos : eighth_note_positions) {
-    // Check swing positions [0.33, 0.67]
-    bool matched_swing = false;
+    // The two grids lie closer together than the tolerance (0.25 and 0.75 are
+    // 0.08 from 0.33 and 0.67), so an onset takes the class of its nearest grid
+    // point rather than of whichever grid is tested first.
+    float swing_dist = 1.0f;
     for (float swing_pos : rhythm_constants::kSwingPositions) {
-      if (std::abs(pos - swing_pos) < rhythm_constants::kSwingTolerance) {
-        swing_count++;
-        matched_swing = true;
-        break;
-      }
+      swing_dist = std::min(swing_dist, std::abs(pos - swing_pos));
     }
-
-    if (!matched_swing) {
-      // Check straight positions [0.25, 0.5, 0.75]
-      for (float straight_pos : rhythm_constants::kStraightPositions) {
-        if (std::abs(pos - straight_pos) < rhythm_constants::kSwingTolerance) {
-          straight_count++;
-          break;
-        }
-      }
+    float straight_dist = 1.0f;
+    for (float straight_pos : rhythm_constants::kStraightPositions) {
+      straight_dist = std::min(straight_dist, std::abs(pos - straight_pos));
+    }
+    if (std::min(swing_dist, straight_dist) >= rhythm_constants::kSwingTolerance) continue;
+    if (swing_dist < straight_dist) {
+      swing_count++;
+    } else {
+      straight_count++;
     }
   }
 

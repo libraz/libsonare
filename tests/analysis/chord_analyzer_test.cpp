@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/beat_analyzer.h"
 #include "core/resample.h"
 #include "util/constants.h"
 
@@ -498,7 +499,10 @@ TEST_CASE("ChordAnalyzer Chord::to_string", "[chord_analyzer]") {
 TEST_CASE("ChordAnalyzer frame chords", "[chord_analyzer]") {
   Audio audio = create_c_major(22050, 1.0f);
 
-  ChordAnalyzer analyzer(audio);
+  // Per-frame chords are the frame-level path's; beat sync does not produce them.
+  ChordConfig config;
+  config.use_beat_sync = false;
+  ChordAnalyzer analyzer(audio, config);
 
   const auto& frame_chords = analyzer.frame_chords();
 
@@ -718,6 +722,7 @@ TEST_CASE("ChordAnalyzer STFT chroma keeps a triad turnaround across sample rate
     ChordConfig config;
     config.use_triads_only = true;
     config.min_duration = 0.3f;
+    config.use_beat_sync = false;  // the frame-level STFT chroma path is the subject
     const auto chords = detect_chords(audio, config);
 
     std::vector<std::string> names;
@@ -728,5 +733,82 @@ TEST_CASE("ChordAnalyzer STFT chroma keeps a triad turnaround across sample rate
       CAPTURE(i, chords[i].start);
       CHECK(std::abs(chords[i].start - starts[i]) <= boundary_tolerance);
     }
+  }
+}
+
+TEST_CASE("Roman numerals keep a sus2 or sus4 chord apart from the plain triad",
+          "[chord_analyzer]") {
+  const auto numeral = [](ChordQuality quality) {
+    const Chord c{PitchClass::C, quality, 0.0f, 1.0f, 1.0f, PitchClass::C};
+    return ChordAnalyzer::chord_to_roman_numeral(c, PitchClass::C, Mode::Major);
+  };
+  CHECK(numeral(ChordQuality::Major) == "I");
+  CHECK(numeral(ChordQuality::Sus2) == "Isus2");
+  CHECK(numeral(ChordQuality::Sus4) == "Isus4");
+}
+
+TEST_CASE("detect_chords from audio honours use_beat_sync", "[chord_analyzer]") {
+  // C, G, Am, F under a 120 BPM click, each change a quarter of a beat past a
+  // beat, so beat-synchronised boundaries and frame boundaries fall apart.
+  const int sr = 22050;
+  const std::vector<std::vector<float>> progression = {
+      {60, 64, 67}, {55, 59, 62}, {57, 60, 64}, {53, 57, 60}};
+  const float beat = 0.5f;
+  const float segment = 4.0f * beat;
+  std::vector<float> samples;
+  for (size_t c = 0; c < progression.size(); ++c) {
+    const float length = c == 0 ? segment + 0.25f * beat : segment;
+    const Audio part = create_chord(progression[c], sr, length);
+    samples.insert(samples.end(), part.data(), part.data() + part.size());
+  }
+  const int click = sr / 100;
+  for (size_t start = 0; start < samples.size(); start += static_cast<size_t>(beat * sr)) {
+    for (int i = 0; i < click && start + static_cast<size_t>(i) < samples.size(); ++i) {
+      samples[start + static_cast<size_t>(i)] += 1.5f * (1.0f - static_cast<float>(i) / click);
+    }
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+  const std::vector<float> beats = BeatAnalyzer(audio).beat_times();
+  REQUIRE(beats.size() >= 8);
+  const auto on_beat_grid = [&](float t) {
+    for (float b : beats) {
+      if (std::abs(b - t) < 0.03f) return true;
+    }
+    return false;
+  };
+
+  ChordConfig config;
+  config.use_beat_sync = true;
+  const auto synced = detect_chords(audio, config);
+  config.use_beat_sync = false;
+  const auto framed = detect_chords(audio, config);
+  REQUIRE(synced.size() >= 2);
+  REQUIRE(framed.size() >= 2);
+  for (size_t i = 1; i < synced.size(); ++i) {
+    INFO("beat-synced boundary " << synced[i].start);
+    CHECK(on_beat_grid(synced[i].start));
+  }
+  bool framed_off_grid = false;
+  for (size_t i = 1; i < framed.size(); ++i) framed_off_grid |= !on_beat_grid(framed[i].start);
+  CHECK(framed_off_grid);
+}
+
+TEST_CASE("beat-synchronised detection keeps the opening chord of a triad turnaround",
+          "[chord_analyzer]") {
+  const Audio source = create_triad_turnaround(32000);
+  const std::vector<std::string> expected = {"C", "Am", "F", "G"};
+  for (int sr : {32000, 44100, 48000}) {
+    CAPTURE(sr);
+    const Audio audio = sr == source.sample_rate() ? source : resample(source, sr);
+    ChordConfig config;
+    config.use_triads_only = true;
+    config.min_duration = 0.3f;
+    config.use_beat_sync = true;
+    const auto chords = detect_chords(audio, config);
+    std::vector<std::string> names;
+    for (const auto& chord : chords) names.push_back(chord.to_string());
+    std::vector<float> beats = BeatAnalyzer(audio).beat_times();
+    CAPTURE(names, beats);
+    CHECK(names == expected);
   }
 }

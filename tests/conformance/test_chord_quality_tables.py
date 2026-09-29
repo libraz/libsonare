@@ -651,7 +651,6 @@ class SuffixExceptionTest(_CopiedTree):
             raised = " ".join(heading for heading, _ in failures)
             self.assertIn("spelled differently by two chord-symbol tables", raised)
             self.assertIn("diverges from the chord symbols", raised)
-            self.assertIn("Roman-numeral table has no arm", raised)
         finally:
             check.SUFFIX_EXCEPTIONS.update(saved)
         self.assertEqual(check.evaluate(), [])

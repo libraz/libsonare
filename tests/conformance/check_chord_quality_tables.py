@@ -327,14 +327,6 @@ SUFFIX_EXCEPTIONS: dict[tuple[str, int], SuffixException] = {
         "labels, while a chord symbol leaves major implied -- stated on "
         "`chord_quality_to_string` in src/analysis/chord_templates.h"
     ),
-    ("numeral-coverage", 7): SuffixException(
-        "Sus2: the numeral builder appends no sus marker, so a sus2 chord renders as "
-        "the bare degree, indistinguishable from the plain triad built on it"
-    ),
-    ("numeral-coverage", 8): SuffixException(
-        "Sus4: the numeral builder appends no sus marker, so a sus4 chord renders as "
-        "the bare degree, indistinguishable from the plain triad built on it"
-    ),
 }
 
 # Independent of the tuples above: deleting a table entry must not lower the bar.

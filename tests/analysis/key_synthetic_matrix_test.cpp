@@ -227,3 +227,35 @@ TEST_CASE("KeyAnalyzer modal synthetic matrix is opt-in", "[key_analyzer][synthe
     }
   }
 }
+
+TEST_CASE("N.C. segments carry no key evidence in the chord-based estimate",
+          "[key_analyzer][synthetic_matrix]") {
+  // N.C. is ChordQuality::Unknown with a placeholder root of C.
+  const auto nc = [](float start, float end) {
+    return chord(PitchClass::C, ChordQuality::Unknown, start, end);
+  };
+  const PitchClass g = PitchClass::G;
+  const std::vector<Chord> progression = {
+      chord(g, ChordQuality::Major, 1.0f, 2.0f),
+      chord(transpose(g, 5), ChordQuality::Major, 2.0f, 3.0f),
+      chord(transpose(g, 7), ChordQuality::Major, 3.0f, 4.0f),
+      chord(g, ChordQuality::Major, 4.0f, 5.0f),
+  };
+  std::vector<Chord> bracketed = {nc(0.0f, 1.0f)};
+  bracketed.insert(bracketed.end(), progression.begin(), progression.end());
+  bracketed.push_back(nc(5.0f, 9.0f));
+
+  const Key plain = estimate_key_from_chords(progression);
+  const Key with_nc = estimate_key_from_chords(bracketed);
+  REQUIRE(plain.root == g);
+  CHECK(with_nc.root == plain.root);
+  CHECK(with_nc.mode == plain.mode);
+  CHECK(with_nc.confidence == plain.confidence);
+
+  // A timeline of nothing but N.C. leaves the chroma estimate as it was.
+  const Key chroma{PitchClass::F, Mode::Major, 0.5f};
+  const Key refined = refine_key_with_chords(chroma, {nc(0.0f, 4.0f), nc(4.0f, 8.0f)});
+  CHECK(refined.root == chroma.root);
+  CHECK(refined.mode == chroma.mode);
+  CHECK(refined.confidence == chroma.confidence);
+}

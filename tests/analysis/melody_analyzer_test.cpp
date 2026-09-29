@@ -264,3 +264,11 @@ TEST_CASE("MelodyAnalyzer has_melody", "[melody_analyzer]") {
   // (Note: may vary based on threshold)
   REQUIRE(analyzer.count() > 0);
 }
+
+TEST_CASE("MelodyAnalyzer reports no vibrato on a steady tone", "[melody_analyzer]") {
+  // Frame-to-frame tracker jitter reverses direction constantly on a held tone;
+  // none of it is a pitch oscillation.
+  MelodyAnalyzer analyzer(generate_sine_audio(440.0f, 22050, 3.0f, 0.5f));
+  REQUIRE(analyzer.has_melody());
+  CHECK(analyzer.contour().vibrato_rate < 1.0f);
+}

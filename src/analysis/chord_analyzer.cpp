@@ -7,6 +7,7 @@
 #include <limits>
 #include <map>
 
+#include "analysis/beat_analyzer.h"
 #include "core/convert.h"
 #include "feature/nnls_chroma.h"
 #include "util/constants.h"
@@ -160,7 +161,19 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
     templates_ = generate_all_chord_templates();
   }
 
-  analyze_chords();
+  // Beat-synchronised when asked and a beat grid is found; frame-level otherwise,
+  // the same rule the chroma + beat-times constructor applies.
+  std::vector<float> beat_times;
+  if (config.use_beat_sync) {
+    BeatConfig beat_config;
+    beat_config.hop_length = config.hop_length;
+    beat_times = BeatAnalyzer(audio, beat_config).beat_times();
+  }
+  if (!beat_times.empty()) {
+    analyze_chords_beat_sync(beat_times);
+  } else {
+    analyze_chords();
+  }
 }
 
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const ChordConfig& config)
@@ -624,10 +637,43 @@ void ChordAnalyzer::analyze_chords() {
   merge_short_segments();
 }
 
-void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_times) {
-  if (chroma_.empty() || beat_times.empty()) {
+namespace {
+
+/// @brief The tracked beats extended at their median period to cover [0, duration).
+/// @details A tracker trims leading and trailing beats, and a chord sounding
+///          before the first tracked beat would otherwise be read at that beat.
+std::vector<float> extend_beat_grid(const std::vector<float>& beats, float duration) {
+  std::vector<float> intervals;
+  intervals.reserve(beats.size());
+  for (size_t i = 1; i < beats.size(); ++i) {
+    if (beats[i] > beats[i - 1]) intervals.push_back(beats[i] - beats[i - 1]);
+  }
+  if (intervals.empty()) return beats;
+  std::nth_element(intervals.begin(), intervals.begin() + intervals.size() / 2, intervals.end());
+  const float period = intervals[intervals.size() / 2];
+  std::vector<float> head;
+  for (float t = beats.front() - period; t >= 0.0f; t -= period) head.push_back(t);
+  std::vector<float> grid(head.rbegin(), head.rend());
+  grid.insert(grid.end(), beats.begin(), beats.end());
+  for (float t = beats.back() + period; t < duration; t += period) grid.push_back(t);
+  return grid;
+}
+
+}  // namespace
+
+void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_beats) {
+  if (chroma_.empty() || tracked_beats.empty()) {
     return;
   }
+  // A grid without a period cannot be extended over the signal, so a single
+  // beat is treated like none.
+  if (tracked_beats.size() < 2) {
+    analyze_chords();
+    return;
+  }
+  const std::vector<float> beat_times = extend_beat_grid(
+      tracked_beats, static_cast<float>(chroma_.n_frames() * chroma_.hop_length()) /
+                         static_cast<float>(std::max(chroma_.sample_rate(), 1)));
 
   // The per-beat chroma buffer is fixed at 12 pitch classes; clamp iteration so
   // a chromagram with more than 12 bins cannot overrun it.
@@ -978,6 +1024,12 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
       break;
     case ChordQuality::Dominant9:
       numeral += "9";
+      break;
+    case ChordQuality::Sus2:
+      numeral += "sus2";
+      break;
+    case ChordQuality::Sus4:
+      numeral += "sus4";
       break;
     case ChordQuality::Sus2Add4:
       numeral += "sus2add4";

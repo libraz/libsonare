@@ -88,7 +88,10 @@ struct ChordConfig {
   int n_fft = 2048;
   int hop_length = 512;                             ///< Hop length for STFT
   ChromaMethod chroma_method = ChromaMethod::STFT;  ///< Chroma extraction method
-  bool use_beat_sync = true;                        ///< Use beat-synchronized chord detection
+  /// @brief Use beat-synchronized chord detection.
+  /// @details The audio constructor tracks beats itself (one extra onset/beat pass) and
+  /// falls back to frame-level detection when none are found.
+  bool use_beat_sync = true;
   bool use_hmm = false;          ///< Use Viterbi HMM smoothing over chord candidates
   int hmm_beam_width = 24;       ///< Candidate beam width for HMM smoothing
   bool use_key_context = false;  ///< Bias HMM transitions by key context
@@ -174,6 +177,7 @@ class ChordAnalyzer {
   /// @brief Returns frame-level chord sequence.
   /// @return Vector of chord-template indices for each frame; @c -1 denotes
   ///   N.C. (the final selected template correlation was below @c threshold).
+  ///   Empty when the chords were detected beat-synchronised.
   const std::vector<int>& frame_chords() const { return frame_chords_; }
 
   /// @brief Returns the chord templates used.

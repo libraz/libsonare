@@ -341,8 +341,10 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       hpss_config.margin_harmonic = 3.0f;
       hpss_config.margin_percussive = 3.0f;
 
-      harmonic_audio = harmonic(analysis_audio, hpss_config,
-                                make_stft_config(config_->n_fft, config_->hop_length));
+      // Separated on the cached analysis STFT (same audio, n_fft and hop) rather
+      // than a second one.
+      harmonic_audio =
+          harmonic(spectrogram(), hpss_config).to_audio(static_cast<int>(analysis_audio.size()));
     }
 
     // Step 2: Apply 4th order Butterworth high-pass filter

@@ -509,7 +509,30 @@ bool is_diatonic_major(PitchClass chord_root, ChordQuality chord_quality, PitchC
 
 }  // namespace
 
-Key estimate_key_from_chords(const std::vector<Chord>& chords) {
+namespace {
+
+/// The chords that name a harmony: N.C. (Unknown, with a placeholder root)
+/// carries no evidence for or against any key.
+std::vector<Chord> recognized_chords(const std::vector<Chord>& chords) {
+  std::vector<Chord> out;
+  out.reserve(chords.size());
+  for (const Chord& chord : chords) {
+    if (chord.quality != ChordQuality::Unknown) out.push_back(chord);
+  }
+  return out;
+}
+
+Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords);
+
+}  // namespace
+
+Key estimate_key_from_chords(const std::vector<Chord>& all_chords) {
+  return estimate_key_from_recognized_chords(recognized_chords(all_chords));
+}
+
+namespace {
+
+Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords) {
   if (chords.empty()) {
     return Key{PitchClass::C, Mode::Major, 0.0f};
   }
@@ -711,12 +734,15 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
   return Key{best_root, best_mode, confidence};
 }
 
-Key refine_key_with_chords(const Key& chroma_key, const std::vector<Chord>& chords) {
+}  // namespace
+
+Key refine_key_with_chords(const Key& chroma_key, const std::vector<Chord>& all_chords) {
+  const std::vector<Chord> chords = recognized_chords(all_chords);
   if (chords.empty()) {
     return chroma_key;
   }
 
-  Key chord_key = estimate_key_from_chords(chords);
+  Key chord_key = estimate_key_from_recognized_chords(chords);
 
   // If both methods agree, use that key with boosted confidence
   if (chroma_key.root == chord_key.root && chroma_key.mode == chord_key.mode) {

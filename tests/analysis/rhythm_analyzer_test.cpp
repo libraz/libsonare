@@ -539,3 +539,38 @@ TEST_CASE("RhythmAnalyzer applies the numerator and beat-unit settings together"
   REQUIRE(analyzer.features().time_signature.numerator == 5);
   REQUIRE(analyzer.features().time_signature.denominator == 8);
 }
+
+namespace {
+
+/// @brief A click on each beat plus softer clicks at the given beat fractions.
+Audio create_subdivided_clicks(float bpm, const std::vector<float>& fractions, int sr = 22050,
+                               float duration = 8.0f) {
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  const float beat_interval = 60.0f / bpm;
+  const int click_length = sr / 100;
+  const auto place = [&](float t, float amplitude) {
+    const int start = static_cast<int>(t * sr);
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      const float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[static_cast<size_t>(start + i)] += envelope * amplitude;
+    }
+  };
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    place(t, 0.8f);
+    for (const float f : fractions) place(t + f * beat_interval, 0.5f);
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+}  // namespace
+
+TEST_CASE("a straight 16th click track reads as straight and a triplet shuffle does not",
+          "[rhythm_analyzer]") {
+  // The 16th grid points 0.25 and 0.75 sit 0.08 from the triplet points 0.33
+  // and 0.67, inside the matching tolerance of both.
+  const RhythmAnalyzer straight(create_subdivided_clicks(100.0f, {0.25f, 0.5f, 0.75f}));
+  CHECK(straight.groove_type() == "straight");
+  const RhythmAnalyzer shuffle(create_subdivided_clicks(100.0f, {2.0f / 3.0f}));
+  CHECK(shuffle.groove_type() != "straight");
+}

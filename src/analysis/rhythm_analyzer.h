@@ -42,12 +42,11 @@ struct RhythmFeatures {
 
 /// @brief Configuration for rhythm analysis.
 struct RhythmConfig {
-  float start_bpm = 120.0f;       ///< Prior estimate for tempo
-  float bpm_min = 60.0f;          ///< Minimum BPM to consider
-  float bpm_max = 200.0f;         ///< Maximum BPM to consider
-  int n_fft = 2048;               ///< FFT size
-  int hop_length = 512;           ///< Hop length
-  float swing_threshold = 0.15f;  ///< Threshold for detecting swing
+  float start_bpm = 120.0f;  ///< Prior estimate for tempo
+  float bpm_min = 60.0f;     ///< Minimum BPM to consider
+  float bpm_max = 200.0f;    ///< Maximum BPM to consider
+  int n_fft = 2048;          ///< FFT size
+  int hop_length = 512;      ///< Hop length
   /// @brief Meter numerators handed to the meter estimator.
   /// @details Must be kept in step with BeatConfig's copy: this analyzer runs
   ///          its own meter estimate for RhythmFeatures::time_signature, so a

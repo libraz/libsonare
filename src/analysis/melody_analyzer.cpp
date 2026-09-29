@@ -4,14 +4,19 @@
 #include <cmath>
 
 #include "feature/pitch.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
+
+using sonare::constants::kCentsPerOctave;
+
 namespace {
 
-bool crosses_zero(float current, float previous) noexcept {
-  return (current >= 0.0f && previous < 0.0f) || (current < 0.0f && previous >= 0.0f);
-}
+/// How far the pitch must travel back from its last extreme, in cents, before
+/// the reversal counts as half a vibrato cycle. Well under the ~20 cents peak to
+/// peak of a shallow vibrato and above the few cents a tracker jitters by.
+constexpr float kVibratoReversalCents = 10.0f;
 
 }  // namespace
 
@@ -132,18 +137,22 @@ void MelodyAnalyzer::compute_contour_features() {
   // Typical variance range is 0 to 1 octave^2
   contour_.pitch_stability = std::max(0.0f, 1.0f - std::sqrt(var_log));
 
-  // Estimate vibrato rate from pitch-difference zero crossings. Work on each
-  // continuous voiced run independently so unvoiced gaps neither create a
-  // spurious cross-gap pitch difference nor dilute the denominator.
+  // Estimate vibrato rate from direction reversals of the pitch contour, two per
+  // cycle. A reversal counts only once the pitch has travelled
+  // kVibratoReversalCents back from its last extreme, so tracker jitter on a held
+  // note is not an oscillation. Each continuous voiced run is handled
+  // independently so unvoiced gaps neither create a spurious cross-gap movement
+  // nor dilute the denominator.
   if (voiced_frequencies.size() >= 8) {
     int zero_crossings = 0;
     float voiced_run_duration = 0.0f;
     bool in_run = false;
-    bool have_previous_diff = false;
     float run_start_time = 0.0f;
     float last_voiced_time = 0.0f;
-    float previous_frequency = 0.0f;
-    float previous_diff = 0.0f;
+    float extreme_cents = 0.0f;
+    float low_cents = 0.0f;
+    float high_cents = 0.0f;
+    int direction = 0;  // +1 rising, -1 falling, 0 not yet moved far enough
     size_t run_frames = 0;
 
     const auto finish_run = [&]() {
@@ -151,7 +160,7 @@ void MelodyAnalyzer::compute_contour_features() {
         voiced_run_duration += std::max(0.0f, last_voiced_time - run_start_time);
       }
       in_run = false;
-      have_previous_diff = false;
+      direction = 0;
       run_frames = 0;
     };
 
@@ -161,22 +170,41 @@ void MelodyAnalyzer::compute_contour_features() {
         continue;
       }
 
+      const float cents = kCentsPerOctave * std::log2(point.frequency);
       if (!in_run) {
         in_run = true;
         run_start_time = point.time;
         last_voiced_time = point.time;
-        previous_frequency = point.frequency;
+        low_cents = high_cents = cents;
         run_frames = 1;
         continue;
       }
 
-      const float diff = point.frequency - previous_frequency;
-      if (have_previous_diff && crosses_zero(diff, previous_diff)) {
+      if (direction == 0) {
+        low_cents = std::min(low_cents, cents);
+        high_cents = std::max(high_cents, cents);
+        if (cents - low_cents >= kVibratoReversalCents) {
+          direction = 1;
+          extreme_cents = cents;
+        } else if (high_cents - cents >= kVibratoReversalCents) {
+          direction = -1;
+          extreme_cents = cents;
+        }
+      } else if (direction > 0) {
+        if (cents > extreme_cents) {
+          extreme_cents = cents;
+        } else if (extreme_cents - cents >= kVibratoReversalCents) {
+          ++zero_crossings;
+          direction = -1;
+          extreme_cents = cents;
+        }
+      } else if (cents < extreme_cents) {
+        extreme_cents = cents;
+      } else if (cents - extreme_cents >= kVibratoReversalCents) {
         ++zero_crossings;
+        direction = 1;
+        extreme_cents = cents;
       }
-      previous_diff = diff;
-      have_previous_diff = true;
-      previous_frequency = point.frequency;
       last_voiced_time = point.time;
       ++run_frames;
     }
