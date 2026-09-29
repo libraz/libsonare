@@ -171,6 +171,23 @@ The cross-surface CLI contract reads that descriptor and no longer demands comma
 
 
 **A synth patch can restart its per-voice randomness at each note.** `retrigger: 'note'` derives every per-voice seed — oscillator start phases, unison jitter, noise, drift, the random mod source, pan scatter and each engine's own seed — from the note alone, so a note repeated after the first has ended renders the same samples and a looped pattern can be compared sample for sample. The default, `'free'`, keeps the running seeds. State shared at instrument level is not restarted and is documented on the field: the piano soundboard, the plucked strings' sympathetic halo, the organ tremulant and the drum kit's per-note patches. On the C ABI it is `SonareSynthPatch.retrigger`, struct version 7.
+
+### MIDI 2.0 input
+
+**MIDI 2.0 channel voice messages are received at full resolution.** NativeSynth, Sf2Player and BuiltinSynth decode every channel voice message through one decoder and hold velocity, controllers, pressure and bend at MIDI 2.0 width: a 16-bit velocity and 32-bit controller, pressure and bend values land between the 7-bit steps, while zone selection, velocity sense and switches keep the 7-bit value. A MIDI 1.0 performance renders exactly as before, and a MIDI 1.0 performance and its MIDI 2.0 translations render identically. Registered controllers 0/0 (bend range) and 0/7 (per-note bend range) are read directly, and relative controllers add to and saturate on the value the synth holds.
+
+**Per-note pitch.** Per-note pitch bend, Pitch 7.25 and the Pitch 7.9 note attribute are applied per voice on all three synths, and per-note management detaches or resets them. MPE bend, pressure and timbre are held at full width as well.
+
+**MIDI 1.0 values are scaled up the way the MIDI 2.0 translation rules specify.** Velocity, controller and 14-bit data scale min-center-max rather than by bit replication, so CC 64 becomes `0x80000000` and velocity 64 becomes `0x8000`; registered controller data for index 0-31 is zero-extended. A MIDI 1.0 note-on with velocity 0 becomes a note-off with velocity `0x8000`. Bank select and RPN / NRPN data entry go through a stateful default translator. Relative controllers, per-note pitch bend and per-note management have message builders and are dropped when down-converting to MIDI 1.0. Controller profiles normalize a MIDI 1.0 message and its MIDI 2.0 equivalent to the same input.
+
+**The live MIDI path takes multi-word UMP messages.** `pushMidiUmp` and `pushMidiInputUmp` (`push_midi_ump`, `push_midi_input_ump`) accept one to four words; data messages and word counts that do not match the message type are refused, and a full queue is reported. Messages the destination does not consume (utility, flex data, stream) are counted as skipped. `Project.midi2*` (`Project.midi2_*` on Python) builds note on/off with attributes, controllers, pressure, bend, program with bank, registered / assignable and relative controllers, per-note controllers, per-note bend and per-note management with the C argument order and defaults. The C ABI gains `sonare_engine_push_midi_ump`, `sonare_engine_push_midi_input_ump` and fifteen `sonare_midi2_*` builders.
+
+**Behaviour change: a MIDI 2.0 Note On with velocity 0 plays at velocity 1.** MIDI 2.0 does not treat velocity 0 as a note-off; a MIDI 1.0 note-on with velocity 0 is still a note-off.
+
+**Behaviour change: WASM `pushMidiUmp` takes a word array.** A bare number is still accepted as a one-word message.
+
+**Fixes.** A MIDI 2.0 registered controller 0/0 was ignored by BuiltinSynth; it now sets the bend range. Parameter feedback for registered controllers 0-31 zero-extends the value and reads it back by truncation.
+
 ### Synthesizer expression and sample playback
 
 **A realtime NativeSynth follows GM program changes when asked.** `setSynthInstrument` on Node, WASM and Python now honours `useGmPrograms` / `use_gm_programs`, as the project bounce already did; it was accepted by the patch types and silently dropped, so live playback ignored the bank and program changes an export of the same patch followed. The C ABI gains `sonare_engine_set_synth_instrument_binding`, taking the `SonareSynthInstrumentBinding` the bounce uses.

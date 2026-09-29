@@ -86,7 +86,8 @@ the browser to see what libsonare can power.
   JSON, and offline bounce through the built-in instruments.
 - **Realtime engine** — a sample-accurate, allocation-free playback engine:
   transport, clip playback with warp (repitching or pitch-preserving), paged
-  streaming for huge clips with look-ahead page requests, live MIDI input,
+  streaming for huge clips with look-ahead page requests, live MIDI input
+  (MIDI 1.0 and MIDI 2.0 UMP, received at full resolution),
   lock-free automation down to individual instrument parameters, and
   capture/recording. The same engine runs in the browser through an
   AudioWorklet.
