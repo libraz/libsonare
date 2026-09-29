@@ -13,6 +13,7 @@
 /// manual's printed curves — see gs_efx_tables.h for the generated data and
 /// docs/gs.md for what "measured" means for this address space.
 
+#include <cstddef>
 #include <cstdint>
 
 namespace sonare::midi::synth {
@@ -111,5 +112,98 @@ bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_u
 /// taken (gs_efx_parameter_takes), so this is the answer only where no write
 /// rule stands in front of it.
 int gs_efx_enum_index(uint8_t value, int count) noexcept;
+
+/// @name Row vocabulary
+/// The generated binding rows carry these as plain integers. Measured classes
+/// 0-13 are numbered by gs_efx_tables.h; the two below continue that run, and
+/// gs_efx_bindings.h names the ratio one kGsEfxClassRatio (14).
+/// @{
+inline constexpr uint8_t kGsEfxRowTranslated = 0;  ///< Row reads a measured table or ratio.
+inline constexpr uint8_t kGsEfxRowDesigned = 1;    ///< Row reads a carried class or a designed law.
+inline constexpr uint8_t kGsEfxRowClassRatio = 14;  ///< Printed endpoints, one unit step per byte.
+inline constexpr uint8_t kGsEfxRowClassDrive = 15;  ///< gs_efx_drive_db.
+
+inline constexpr uint8_t kGsEfxFormNone = 0;  ///< No designed law; the row reads a class.
+inline constexpr uint8_t kGsEfxFormLinear = 1;
+inline constexpr uint8_t kGsEfxFormLog = 2;
+inline constexpr uint8_t kGsEfxFormDb = 3;
+inline constexpr uint8_t kGsEfxFormBipolar = 4;
+inline constexpr uint8_t kGsEfxFormEnum = 5;
+
+inline constexpr uint8_t kGsEfxEnableStages = 0;  ///< Stages on at the bytes in on_mask.
+inline constexpr uint8_t kGsEfxEnableSelect = 1;  ///< The byte's state picks one stage.
+/// @}
+
+/// A designed law, held by value in the row that uses it. @p form is one of the
+/// kGsEfxForm* values; @p lo and @p hi are the output endpoints (dB for db, the
+/// bipolar magnitude is @p hi); @p n_states is the state count of an enum law.
+struct GsEfxDesignedLaw {
+  uint8_t form;
+  float lo, hi;
+  uint8_t n_states;
+};
+
+/// Which quantity an accel-class row reads out of the shared divisor table.
+/// Both time-constant outputs read the same table as a time: the rotary's
+/// accelTauS and decelTauS keys are both time constants, and only the
+/// drum/horn undershoot keys (suffix Hz) are frequencies.
+enum class GsEfxOut : uint8_t { kValue, kAccelTau, kDecelTau, kUndershootHz };
+
+/// One binding row: a wire (type, slot) and how its byte becomes a control value.
+struct GsEfxBindingRow {
+  uint16_t type;
+  uint8_t slot;
+  uint8_t kind;               ///< kGsEfxRowTranslated / kGsEfxRowDesigned.
+  uint8_t conv_class, table;  ///< Measured or carried class, and which of its tables.
+  GsEfxDesignedLaw law;       ///< Invented rows only (form != none).
+  uint8_t byte_lo, byte_hi;   ///< Printed byte range: a designed law's domain, a ratio's endpoints.
+  int16_t unit_lo, unit_hi;   ///< A ratio row's printed unit endpoints.
+  GsEfxOut out;
+  uint16_t stage;
+  uint8_t ordinal;
+  uint16_t key;          ///< Indices into the generated name tables.
+  uint8_t printed_mark;  ///< 0, '+' or '#'.
+};
+
+/// A switch or selector row: which stages a byte turns on.
+struct GsEfxEnable {
+  uint16_t type;
+  uint8_t slot;
+  uint8_t mode;  ///< kGsEfxEnableStages / kGsEfxEnableSelect.
+  uint16_t stages[4];
+  uint8_t ordinals[4];
+  uint8_t n_stages;
+  uint32_t on_mask[4];  ///< Bit b of the 128-bit mask: byte b turns the stages on.
+};
+
+/// The rows and enables one lookup runs over. No std::span in C++17.
+struct GsEfxRowView {
+  const GsEfxBindingRow* rows;
+  std::size_t n_rows;
+  const GsEfxEnable* enables;
+  std::size_t n_enables;
+};
+
+/// DRIVE byte -> gain in dB in front of a fixed curve: 20 log10(v / 48), with
+/// bytes 0 and 2 measured as one state.
+float gs_efx_drive_db(uint8_t value) noexcept;
+
+/// A byte read through a designed law over the printed domain [byte_lo, byte_hi].
+/// Equals law.lo at byte_lo and law.hi at byte_hi and is monotone between; bytes
+/// outside the domain clamp. db returns the linear multiplier of the dB line,
+/// bipolar runs -hi..+hi through the domain centre, enum returns the state index
+/// clamped to n_states - 1.
+float gs_efx_designed_value(const GsEfxDesignedLaw& law, uint8_t byte, uint8_t byte_lo,
+                            uint8_t byte_hi) noexcept;
+
+/// The control value a row gives a byte: the one place class, table, law and
+/// out are dispatched. A row no generator emits (unknown class, table past its
+/// class) asserts.
+float gs_efx_binding_value(const GsEfxBindingRow& row, uint8_t byte) noexcept;
+
+/// Whether an enable row turns the rule's @p stage_index_in_rule-th stage on at
+/// @p byte. In select mode a byte past the stage count reads as state 0.
+bool gs_efx_enable_on(const GsEfxEnable& enable, uint8_t byte,
+                      uint8_t stage_index_in_rule) noexcept;
 
 }  // namespace sonare::midi::synth

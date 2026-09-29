@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 
@@ -10,6 +11,14 @@
 namespace sonare::midi::synth {
 
 namespace {
+
+/// Drive bytes 0 and 2 are one measured state, and 48 is unity gain.
+constexpr int kDriveFloorByte = 2;
+constexpr float kDriveUnityByte = 48.0f;
+/// dB per decade of amplitude.
+constexpr float kDbPerDecade = 20.0f;
+/// The output-level floor, dB.
+constexpr float kLevelFloorDb = -24.0f;
 
 /// Keeps a ladder knot that lands on a whole sample from falling one ulp short of it.
 constexpr double kSampleCutGuard = 1e-6;
@@ -64,6 +73,12 @@ std::size_t top_four_bits(uint8_t value) noexcept {
 /// this, so neither can carry a constant the other does not.
 double accel_step_hz() noexcept {
   return static_cast<double>(kGsEfxUnitClockHz) / static_cast<double>(kGsEfxAccelShift);
+}
+
+/// An output-level byte as dB over the level floor, from the measured multiplier.
+float level_db(uint8_t value) noexcept {
+  // std::max returns its first argument for the silent byte's -inf.
+  return std::max(kLevelFloorDb, kDbPerDecade * std::log10(gs_efx_level_mul(value)));
 }
 
 }  // namespace
@@ -186,6 +201,111 @@ bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_u
 
 int gs_efx_enum_index(uint8_t value, int count) noexcept {
   return (count > 0 && static_cast<int>(value) < count) ? static_cast<int>(value) : 0;
+}
+
+float gs_efx_drive_db(uint8_t value) noexcept {
+  return kDbPerDecade *
+         std::log10(static_cast<float>(std::max<int>(value, kDriveFloorByte)) / kDriveUnityByte);
+}
+
+float gs_efx_designed_value(const GsEfxDesignedLaw& law, uint8_t byte, uint8_t byte_lo,
+                            uint8_t byte_hi) noexcept {
+  if (law.form == kGsEfxFormEnum) {
+    assert(law.n_states > 0);
+    return static_cast<float>(std::min<int>(byte, law.n_states - 1));
+  }
+  assert(byte_hi > byte_lo);
+  const int inside = std::clamp<int>(byte, byte_lo, byte_hi);
+  // Endpoints are returned as written so a law meets its printed ends exactly.
+  if (inside == byte_lo && law.form != kGsEfxFormBipolar && law.form != kGsEfxFormDb) {
+    return law.lo;
+  }
+  if (inside == byte_hi && law.form != kGsEfxFormBipolar && law.form != kGsEfxFormDb) {
+    return law.hi;
+  }
+  const double along =
+      static_cast<double>(inside - byte_lo) / static_cast<double>(byte_hi - byte_lo);
+  switch (law.form) {
+    case kGsEfxFormLinear:
+      return static_cast<float>(law.lo + (static_cast<double>(law.hi) - law.lo) * along);
+    case kGsEfxFormLog:
+      assert(law.lo > 0.0f && law.hi > 0.0f);
+      return static_cast<float>(law.lo * std::pow(static_cast<double>(law.hi) / law.lo, along));
+    case kGsEfxFormDb: {
+      const double db = law.lo + (static_cast<double>(law.hi) - law.lo) * along;
+      return static_cast<float>(std::pow(10.0, db / kDbPerDecade));
+    }
+    case kGsEfxFormBipolar:
+      return static_cast<float>((2.0 * along - 1.0) * law.hi);
+    default:
+      break;
+  }
+  assert(false && "designed law with no form");
+  return 0.0f;
+}
+
+float gs_efx_binding_value(const GsEfxBindingRow& row, uint8_t byte) noexcept {
+  if (row.law.form != kGsEfxFormNone) {
+    return gs_efx_designed_value(row.law, byte, row.byte_lo, row.byte_hi);
+  }
+  switch (row.conv_class) {
+    case kGsEfxClassRate:
+      return gs_efx_rate_hz(byte, row.table == 1 ? GsRateRange::kWide : GsRateRange::kNarrow);
+    case kGsEfxClassDelayTime: {
+      constexpr std::array<GsTimeLadder, 5> kLadders = {
+          GsTimeLadder::kLadder0, GsTimeLadder::kLadder1, GsTimeLadder::kLadder2,
+          GsTimeLadder::kLadder3, GsTimeLadder::kLadder4};
+      assert(row.table < kLadders.size());
+      return gs_efx_delay_ms(byte, kLadders[row.table]);
+    }
+    case kGsEfxClassFreq: {
+      constexpr std::array<GsFreqColumn, 3> kColumns = {
+          GsFreqColumn::kColumn0, GsFreqColumn::kColumn1, GsFreqColumn::kColumn2};
+      assert(row.table < kColumns.size());
+      return gs_efx_freq_hz(byte, kColumns[row.table]);
+    }
+    case kGsEfxClassGain:
+      return gs_efx_gain_db(byte);
+    case kGsEfxClassLevel:
+      return level_db(byte);
+    case kGsEfxClassWidth:
+      return gs_efx_width_q(byte);
+    case kGsEfxClassAccel:
+      // One divisor table, two quantities: only the undershoot is a frequency.
+      return row.out == GsEfxOut::kUndershootHz ? gs_efx_accel_undershoot_hz(byte)
+                                                : gs_efx_accel_tau_s(byte);
+    case kGsEfxClassPostGain:
+      return gs_efx_post_gain_db(byte);
+    case kGsEfxClassWindow:
+      return gs_efx_window_ms(byte);
+    case kGsEfxClassCorner:
+      return gs_efx_corner_hz(byte, row.table == 1 ? GsShelfSide::kHigh : GsShelfSide::kLow);
+    case kGsEfxRowClassRatio: {
+      float units = 0.0f;
+      const bool whole =
+          gs_efx_ratio(byte, row.byte_lo, row.byte_hi, row.unit_lo, row.unit_hi, &units);
+      assert(whole);
+      (void)whole;
+      // Table 0 is printed in percent and the controls take the fraction;
+      // table 1 is printed in semitones, which is what they take.
+      return row.table == 0 ? units / 100.0f : units;
+    }
+    case kGsEfxRowClassDrive:
+      return gs_efx_drive_db(byte);
+    default:
+      break;
+  }
+  assert(false && "binding row with no reader");
+  return 0.0f;
+}
+
+bool gs_efx_enable_on(const GsEfxEnable& enable, uint8_t byte,
+                      uint8_t stage_index_in_rule) noexcept {
+  if (enable.mode == kGsEfxEnableSelect) {
+    return gs_efx_enum_index(byte, enable.n_stages) == stage_index_in_rule;
+  }
+  const uint8_t bit = byte & 0x7Fu;
+  return ((enable.on_mask[bit >> 5] >> (bit & 31u)) & 1u) != 0;
 }
 
 }  // namespace sonare::midi::synth
