@@ -94,6 +94,30 @@ describe('SonarePlaybackWorkletProcessor', () => {
     }
   });
 
+  it('renders silence correctly as the very first block, before any real block establishes a layout', () => {
+    const port = capturePort();
+    const processor = new SonarePlaybackWorkletProcessor(
+      { config: SPEAKERS_5_1_AUTO, sampleRate: 48000 },
+      port,
+    );
+    try {
+      const output = outputBlock(6);
+      // An empty inputs[0] (no channels connected yet) maps to
+      // processPreparedSilence -- exercised here as the processor's very
+      // first call, before any processPrepared call has cached an input
+      // channel count, so it must fall back to the same default the C ABI
+      // documents (2 channels) rather than reading uninitialized state.
+      expect(processor.process([[]], [output])).toBe(true);
+      for (const plane of output) {
+        expect(plane.every((v) => v === 0)).toBe(true);
+      }
+      const diagnostics = requestDiagnostics(processor, port);
+      expect(diagnostics.layout_switches).toBe(0);
+    } finally {
+      processor.destroy();
+    }
+  });
+
   it('renders an unsupported block as silence without shifting the timeline', () => {
     const port = capturePort();
     const processor = new SonarePlaybackWorkletProcessor(

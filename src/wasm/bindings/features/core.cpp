@@ -252,7 +252,7 @@ val js_tone(const val& frequency_val, const val& sample_rate, const val& duratio
   const float amplitude = checkedFloatFromVal(amplitude_val, "amplitude");
   const Audio audio =
       tone(frequency, checkedIntFromVal(sample_rate, "sampleRate"), duration, phase, amplitude);
-  return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
+  return vectorToFloat32Array(audio.data(), audio.size());
 }
 
 val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate,
@@ -262,7 +262,7 @@ val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate,
   const float duration = checkedFloatFromVal(duration_val, "duration");
   const Audio audio =
       chirp(fmin, fmax, checkedIntFromVal(sample_rate, "sampleRate"), duration, linear);
-  return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
+  return vectorToFloat32Array(audio.data(), audio.size());
 }
 
 val js_clicks(val times, const val& sample_rate_val, const val& length_val,
@@ -274,7 +274,7 @@ val js_clicks(val times, const val& sample_rate_val, const val& length_val,
   std::vector<float> values = float32ArrayToVector(times);
   validateFiniteVector(values, "clicks");
   const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
-  return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
+  return vectorToFloat32Array(audio.data(), audio.size());
 }
 
 val js_pad_center(val values, const val& size_val, const val& pad_value_val) {

@@ -75,6 +75,20 @@ void validateKey(int key_root, int key_mode) {
   }
 }
 
+// Rejects a non-positive smoothingWindow or a negative hmmBeamWidth, mirroring
+// the C ABI's sonare_detect_chords_ex / sonare_chord_functional_analysis range
+// checks instead of passing either through to the DSP layer unchecked.
+void validateChordConfig(float smoothing_window, int hmm_beam_width) {
+  if (smoothing_window <= 0.0f) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "smoothingWindow must be positive");
+  }
+  if (hmm_beam_width < 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "hmmBeamWidth must not be negative");
+  }
+}
+
 // Module-local mono/stereo runners. They delegate to the shared latency-
 // compensating helpers in `mastering::api::internal` so the WASM bridge,
 // `MasteringChain`, and `apply_named_processor` all go through the same
@@ -409,8 +423,11 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
 // the reader guarantees the value survived the conversion unchanged, and -1
 // survives it. Nothing downstream asks whether a negative frame count means
 // anything, so the peak picker returned a normal onset list for one.
+// typedIntProperty, not intProperty: these are peak-picking window widths with
+// no "unspecified" spelling, matching threshold/delta's typedFloatProperty on
+// the same call and the addon's IntProperty on the same six keys.
 int onsetWindowFrames(val options, const char* key, int default_value) {
-  const int frames = intProperty(options, key, default_value);
+  const int frames = typedIntProperty(options, key, default_value);
   if (frames < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " must be a non-negative frame count");
@@ -434,7 +451,7 @@ val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   config.post_avg = onsetWindowFrames(options, "postAvg", config.post_avg);
   config.delta = typedFloatProperty(options, "delta", config.delta);
   config.wait = onsetWindowFrames(options, "wait", config.wait);
-  config.backtrack = !options["backtrack"].isUndefined() && options["backtrack"].as<bool>();
+  config.backtrack = typedBoolProperty(options, "backtrack", config.backtrack);
   config.backtrack_range = onsetWindowFrames(options, "backtrackRange", config.backtrack_range);
   // Through quick:: for the same reason the C ABI does: the peak-picking fields
   // are frame counts, and a frame is hop_length over the rate in force.
@@ -481,6 +498,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
   if (use_key_context) {
     validateKey(key_root, key_mode);
   }
+  validateChordConfig(smoothing_window, hmm_beam_width);
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
@@ -531,6 +549,7 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   // the chord-detection key context, which share the same parameters here.
   validateChromaMethod(chroma_method);
   validateKey(key_root, key_mode);
+  validateChordConfig(smoothing_window, hmm_beam_width);
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
 

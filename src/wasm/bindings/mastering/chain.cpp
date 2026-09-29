@@ -34,10 +34,9 @@ val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs
   config.apply_gain_at_input_rate = apply_gain_at_input_rate;
 
   auto result = mastering::maximizer::loudness_optimize(audio, config);
-  std::vector<float> out_vec(result.audio.data(), result.audio.data() + result.audio.size());
 
   val out = val::object();
-  out.set("samples", vectorToFloat32Array(out_vec));
+  out.set("samples", vectorToFloat32Array(result.audio.data(), result.audio.size()));
   out.set("sampleRate", result.audio.sample_rate());
   out.set("inputLufs", result.input_lufs);
   out.set("outputLufs", result.output_lufs);

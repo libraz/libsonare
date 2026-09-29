@@ -486,6 +486,29 @@ describe('renderNotes', () => {
     );
     expect(() => renderNotes({ samples, sampleRate: 7999, notes })).toThrow(RangeError);
   });
+
+  // note_val.h::noteEditFromVal used to static_cast<int64_t> a raw double for
+  // timeOffsetSamples: a fraction silently truncated instead of being refused,
+  // and a finite-but-unrepresentable value (well past 2^63) invoked undefined
+  // behavior on the cast rather than being rejected. int64Property replaces
+  // that with the same fraction/range refusal onsetSample and offsetSample
+  // already get.
+  it('refuses a fractional or out-of-int64-range timeOffsetSamples instead of truncating it', () => {
+    expectInvalidParameter(() =>
+      renderNotes({
+        samples,
+        sampleRate,
+        notes: [{ onsetSample: 0, offsetSample: 8192, edit: { timeOffsetSamples: 0.5 } }],
+      }),
+    );
+    expectInvalidParameter(() =>
+      renderNotes({
+        samples,
+        sampleRate,
+        notes: [{ onsetSample: 0, offsetSample: 8192, edit: { timeOffsetSamples: 1e300 } }],
+      }),
+    );
+  });
 });
 
 describe('renderNotes refuses a note that omits a sample bound', () => {
@@ -531,7 +554,22 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
     [
       'offsetSample NaN',
       { onsetSample: 4096, offsetSample: Number.NaN },
-      'offsetSample must be finite',
+      'offsetSample must be a finite number within the 64-bit integer range',
+    ],
+    // renderableNoteFromVal (notes.cpp) reads these through requireInt64Property,
+    // not a raw static_cast<int64_t> of a double: a fraction must be refused
+    // rather than silently truncated, and 1e300 rather than cast into undefined
+    // behavior. The string case above already proves the type check; these two
+    // prove the fraction/range check the type check alone cannot.
+    [
+      'onsetSample a fraction',
+      { onsetSample: 4096.5, offsetSample: 8192 },
+      'onsetSample must be an integer',
+    ],
+    [
+      'offsetSample out of int64 range',
+      { onsetSample: 4096, offsetSample: 1e300 },
+      'offsetSample must be a finite number within the 64-bit integer range',
     ],
   ];
 

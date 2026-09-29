@@ -108,6 +108,7 @@ const EQ_PHASE_MODES: Record<string, number> = {
  */
 export class StreamingMasteringChain {
   private chain: import('./sonare.js').WasmStreamingMasteringChain;
+  private released = false;
 
   constructor(config: StreamingMasteringChainConfig) {
     const module = getSonareModule();
@@ -239,8 +240,12 @@ export class StreamingMasteringChain {
     return this.chain.nonFiniteDiscardCount();
   }
 
-  /** Release the underlying WASM object. Safe to call only once. */
+  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.chain.delete();
   }
 
@@ -277,6 +282,7 @@ export class StreamingMasteringChain {
  */
 export class StreamingEqualizer {
   private eq: import('./sonare.js').WasmStreamingEqualizer;
+  private released = false;
 
   constructor(config: StreamingEqualizerConfig = {}) {
     const module = getSonareModule();
@@ -458,8 +464,12 @@ export class StreamingEqualizer {
     this.eq.match(source, reference, options as Record<string, unknown>);
   }
 
-  /** Release the underlying WASM object. Safe to call only once. */
+  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.eq.delete();
   }
 
@@ -482,6 +492,7 @@ export class StreamingEqualizer {
  */
 export class StreamingRetune {
   private retune: import('./sonare.js').WasmStreamingRetune;
+  private released = false;
 
   constructor(config: StreamingRetuneConfig = {}) {
     const module = getSonareModule();
@@ -531,8 +542,12 @@ export class StreamingRetune {
     return this.retune.processMono(samples);
   }
 
-  /** Release the underlying WASM object. Safe to call only once. */
+  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.retune.delete();
   }
 

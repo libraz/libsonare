@@ -17,11 +17,8 @@ exports[`WASM binding sources budget every caller-supplied array length > has no
 
 exports[`WASM binding sources stay on the shared common.h field readers > has no new bare literal-key field reads beyond the tracked baseline (snapshot ratchet) 1`] = `
 [
-  "analysis/quick.cpp options["backtrack"].as<bool>() #1",
   "effects/offline_dynamics_editing.cpp options["autoMakeup"].as<bool>() #1",
   "effects/offline_dynamics_editing.cpp options["sidechainHpfEnabled"].as<bool>() #1",
-  "effects/spectral_edit.cpp op["endSample"].as<double>() #1",
-  "effects/spectral_edit.cpp op["startSample"].as<double>() #1",
   "metering/metering.cpp options["applyOctaveSmoothing"].as<bool>() #1",
   "metering/metering.cpp options["applyOctaveSmoothing"].as<bool>() #2",
   "metering/metering.cpp options["dbAmin"].as<float>() #1",
@@ -48,7 +45,6 @@ exports[`WASM binding sources stay on the shared common.h field readers > has no
   "project/project_bounce.cpp desc["preferModelForModeledFamilies"].as<bool>() #1",
   "project/project_bounce.cpp desc["releaseMs"].as<float>() #1",
   "project/project_bounce.cpp desc["sustain"].as<float>() #1",
-  "project/project_bounce.cpp options["totalFrames"].as<double>() #1",
   "project/project_edit.cpp desc["lengthPpq"].as<double>() #1",
   "project/project_edit.cpp entry["endPpq"].as<double>() #1",
   "project/project_edit.cpp entry["name"].as<std::string>() #1",

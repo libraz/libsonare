@@ -179,27 +179,74 @@ describe('playback renderer (WASM)', () => {
     }
   });
 
-  it('validates planar input and counts non-finite interleaved samples', () => {
+  it('rejects a structurally invalid block while still counting non-finite samples it accepts', () => {
     const renderer = new PlaybackRenderer({
       config: SPEAKERS_5_1,
       sampleRate: SR,
       maxBlockSize: 128,
     });
     try {
+      // A non-finite sample is the renderer's own content policy (replace and
+      // count via the C ABI), not a structural error the WASM binding should
+      // front-run: it must be accepted on both the planar and interleaved
+      // paths, exactly like the C ABI, Node and Python.
       const bad = noisePlanes(6, 128);
       bad[1][5] = Number.NaN;
-      expect(() => renderer.processPlanar(bad)).toThrow(SonareError);
+      const planarOut = renderer.processPlanar(bad);
+      expect(planarOut.every((plane) => plane.every(Number.isFinite))).toBe(true);
+      const afterPlanar = renderer.nonFiniteDiscardCount();
+      expect(afterPlanar).toBeGreaterThan(0);
+
       expect(() => renderer.processPlanar(noisePlanes(2, 128))).toThrow(
         /rejected 2 input channels/,
       );
       expect(() => renderer.processPlanar(noisePlanes(6, 129))).toThrow(/maxBlockSize/);
+
       const samples = interleave(noisePlanes(6, 128));
       samples[7] = Number.POSITIVE_INFINITY;
       renderer.processInterleaved(samples, 6);
-      expect(renderer.nonFiniteDiscardCount()).toBe(1);
+      expect(renderer.nonFiniteDiscardCount()).toBeGreaterThan(afterPlanar);
     } finally {
       renderer.delete();
     }
+  });
+
+  it('treats a 0-frame planar block and a 0-frame offline render as a no-op', () => {
+    const renderer = new PlaybackRenderer({
+      config: SPEAKERS_5_1,
+      sampleRate: SR,
+      maxBlockSize: 128,
+    });
+    try {
+      const empty = Array.from({ length: 6 }, () => new Float32Array(0));
+      const out = renderer.processPlanar(empty);
+      expect(out).toHaveLength(6);
+      expect(out.every((plane) => plane.length === 0)).toBe(true);
+    } finally {
+      renderer.delete();
+    }
+    const result = renderPlayback({
+      samples: new Float32Array(0),
+      channels: 6,
+      sampleRate: SR,
+      config: SPEAKERS_5_1,
+    });
+    expect(result.channels).toBe(6);
+    expect(result.samples).toHaveLength(0);
+  });
+
+  it('accepts non-finite samples in an offline render, matching processPlanar/processInterleaved', () => {
+    const planes = noisePlanes(6, 512);
+    planes[3][100] = Number.NaN;
+    const result = renderPlayback({
+      samples: interleave(planes),
+      channels: 6,
+      sampleRate: SR,
+      config: SPEAKERS_5_1,
+    });
+    expect(result.channels).toBe(6);
+    expect(result.samples).toHaveLength(512 * 6);
+    expect(result.samples.every(Number.isFinite)).toBe(true);
   });
 
   it('follows the input channel count under "auto" and reports it as plain data', () => {

@@ -33,9 +33,8 @@ inline void setMasteringReport(emscripten::val& out,
   report_out.set("appliedGainDb", report.applied_gain_db);
   report_out.set("maxGainReductionDb", report.max_gain_reduction_db);
   report_out.set("loudnessTargetLimited", report.loudness_target_limited);
-  std::vector<float> band_energy(report.band_energy_delta_db.begin(),
-                                 report.band_energy_delta_db.end());
-  report_out.set("bandEnergyDeltaDb", vectorToFloat32Array(band_energy));
+  report_out.set("bandEnergyDeltaDb", vectorToFloat32Array(report.band_energy_delta_db.data(),
+                                                           report.band_energy_delta_db.size()));
   out.set("report", report_out);
 }
 

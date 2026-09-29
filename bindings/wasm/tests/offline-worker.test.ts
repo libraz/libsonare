@@ -1,7 +1,11 @@
 import { Worker as NodeWorker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, isSonareError, OfflineWorkerClient } from '../dist/index.js';
-import { installOfflineWorkerEndpoint } from '../dist/worker.js';
+import { installOfflineWorkerEndpoint, type OfflineWorkerEndpoint } from '../dist/worker.js';
+import type {
+  OfflineWorkerRequestMessage,
+  OfflineWorkerResponseMessage,
+} from '../src/worker_protocol';
 
 type MessageListener = (event: MessageEvent) => void;
 
@@ -79,6 +83,45 @@ function clientWith(worker: LoopbackWorker): OfflineWorkerClient {
   return new OfflineWorkerClient({
     workerFactory: () => worker as unknown as Worker,
   });
+}
+
+/**
+ * Drives `installOfflineWorkerEndpoint`'s protocol directly, with hand-picked
+ * message IDs -- unlike `OfflineWorkerClient`, whose IDs never repeat within a
+ * client's lifetime. Reusing an ID is exactly what exposes a leaked
+ * `cancelled`-Set entry: id-reuse isn't reachable through the real client, but
+ * the protocol itself doesn't forbid it, and a stale entry from an earlier ID
+ * would otherwise cancel a later, unrelated run that happens to share it.
+ */
+function directEndpoint(): {
+  dispatch: (message: OfflineWorkerRequestMessage) => void;
+  nextMessage: () => Promise<OfflineWorkerResponseMessage>;
+} {
+  const queue: OfflineWorkerResponseMessage[] = [];
+  const waiters: Array<(message: OfflineWorkerResponseMessage) => void> = [];
+  let listener: ((event: MessageEvent<OfflineWorkerRequestMessage>) => void) | undefined;
+  const endpoint: OfflineWorkerEndpoint = {
+    postMessage: (message) => {
+      const waiter = waiters.shift();
+      if (waiter) {
+        waiter(message);
+      } else {
+        queue.push(message);
+      }
+    },
+    addEventListener: (_type, l) => {
+      listener = l;
+    },
+  };
+  installOfflineWorkerEndpoint(endpoint);
+  return {
+    dispatch: (message) =>
+      listener?.({ data: message } as MessageEvent<OfflineWorkerRequestMessage>),
+    nextMessage: () =>
+      queue.length > 0
+        ? Promise.resolve(queue.shift() as OfflineWorkerResponseMessage)
+        : new Promise((resolve) => waiters.push(resolve)),
+  };
 }
 
 describe('OfflineWorkerClient', () => {
@@ -201,5 +244,39 @@ describe('OfflineWorkerClient', () => {
     expect(samples.byteLength).toBe(0);
     expect(bpm).toBeGreaterThan(0);
     client.dispose();
+  });
+
+  it('does not leak a cancelled-set entry when a cancel crosses an already-settled result', async () => {
+    // worker.ts added `id` to its `cancelled` Set unconditionally on every
+    // offline-cancel message, and the only removal was run()'s own finally
+    // block. A cancel that lost the race to a fast-completing run -- arriving
+    // after that finally already ran -- left a permanent orphan entry.
+    const { dispatch, nextMessage } = directEndpoint();
+    const id = 101;
+    const samples = () => makeTone(1);
+
+    dispatch({
+      type: 'sonare:offline-run',
+      id,
+      operation: 'detectBpm',
+      request: { samples: samples() },
+    });
+    const first = await nextMessage();
+    expect(first.type).toBe('sonare:offline-result');
+
+    // Crosses the settled result: run()'s finally has already cleared its own
+    // bookkeeping by the time this arrives.
+    dispatch({ type: 'sonare:offline-cancel', id });
+
+    // If the cancel above leaked into `cancelled`, a later run reusing the
+    // same ID would read as already-cancelled before doing any work.
+    dispatch({
+      type: 'sonare:offline-run',
+      id,
+      operation: 'detectBpm',
+      request: { samples: samples() },
+    });
+    const second = await nextMessage();
+    expect(second.type).toBe('sonare:offline-result');
   });
 });

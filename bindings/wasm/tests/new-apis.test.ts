@@ -386,6 +386,56 @@ describe('v1.2 feature additions (WASM)', () => {
       ).toThrow();
     });
 
+    it('pitchCorrectToMidiTimevarying derives voicing from voicedProb when voiced is omitted', () => {
+      // voicedProb below 0.5 must behave exactly like an explicit all-unvoiced
+      // array, and at/above 0.5 exactly like an explicit all-voiced one --
+      // never like "every frame voiced" regardless of what voicedProb says.
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const lowProb = new Float32Array(nFrames).fill(0.1);
+      const highProb = new Float32Array(nFrames).fill(0.9);
+      const allUnvoiced = new Int32Array(nFrames).fill(0);
+      const allVoiced = new Int32Array(nFrames).fill(1);
+
+      const viaLowProb = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, undefined, lowProb);
+      const viaExplicitUnvoiced = pitchCorrectToMidiTimevarying(
+        signal,
+        f0,
+        60,
+        SR,
+        hop,
+        allUnvoiced,
+      );
+      expect(Array.from(viaLowProb)).toEqual(Array.from(viaExplicitUnvoiced));
+
+      const viaHighProb = pitchCorrectToMidiTimevarying(
+        signal,
+        f0,
+        60,
+        SR,
+        hop,
+        undefined,
+        highProb,
+      );
+      const viaExplicitVoiced = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, allVoiced);
+      expect(Array.from(viaHighProb)).toEqual(Array.from(viaExplicitVoiced));
+
+      // The two derived answers must actually differ, or this proves nothing.
+      expect(viaLowProb.some((x, i) => Math.abs(x - viaHighProb[i]) > 1e-6)).toBe(true);
+
+      // The options-object form (pitchCorrectTimevarying) must agree.
+      const optLow = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 60,
+        voicedProb: lowProb,
+      });
+      const optUnvoiced = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 60,
+        voiced: allUnvoiced,
+      });
+      expect(Array.from(optLow)).toEqual(Array.from(optUnvoiced));
+    });
+
     it('noteStretch lengthens the buffer by the stretch ratio', () => {
       const out = noteStretch(signal, SR, {
         onsetSample: 0,
@@ -850,6 +900,20 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
       // Out-of-range layout is rejected like the C ABI is_valid_channel_layout.
       expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 9 }])).toThrow();
+      // 257 narrows to 1 (Stereo, valid) if the full-range bound is checked
+      // AFTER truncating to uint8_t instead of before -- the wrap this guards.
+      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 257 }])).toThrow();
+      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: -255 }])).toThrow();
+      engine.destroy();
+    });
+
+    it('accepts a bus channelLayout and rejects an out-of-range or wrapping one', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 2 }])).not.toThrow();
+      expect(() => engine.setTrackBuses([{ busId: 1 }])).not.toThrow();
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 9 }])).toThrow();
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 257 }])).toThrow();
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: -255 }])).toThrow();
       engine.destroy();
     });
 

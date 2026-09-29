@@ -296,8 +296,7 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   config.htk = htk;
 
   Audio result = mel_to_audio(data.data(), n_mels, n_frames, config, n_iter, sample_rate);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val,
@@ -325,7 +324,7 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
   config.momentum = momentum;
   const Audio result =
       griffin_lim(data.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, config);
-  return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 // Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram.
@@ -382,8 +381,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   config.htk = htk;
 
   Audio result = mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate, lifter);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
@@ -411,7 +409,7 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   config.n_bins = n_bins;
   config.bins_per_octave = bins_per_octave;
   const Audio result = griffinlim_cqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
-  return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
@@ -441,7 +439,7 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   config.bins_per_octave = bins_per_octave;
   config.gamma = gamma;
   const Audio result = griffinlim_vqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
-  return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 void registerFeatureSpectrogramBindings() {

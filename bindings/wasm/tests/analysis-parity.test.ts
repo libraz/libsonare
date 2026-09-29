@@ -182,6 +182,17 @@ describe('WASM wave3 analysis parity', () => {
         ),
       ).toThrow();
     });
+
+    // Mirrors the C-ABI's sonare_detect_chords_ex range checks: a non-positive
+    // smoothingWindow and a negative hmmBeamWidth are rejected on every
+    // surface, not just passed through to the DSP layer.
+    it('throws on a non-positive smoothingWindow', () => {
+      expect(() => detectChords(samples, SR, { smoothingWindow: 0 })).toThrow();
+    });
+
+    it('throws on a negative hmmBeamWidth', () => {
+      expect(() => detectChords(samples, SR, { useHmm: true, hmmBeamWidth: -1 })).toThrow();
+    });
   });
 
   describe('chordFunctionalAnalysis enum-range validation', () => {
@@ -222,6 +233,21 @@ describe('WASM wave3 analysis parity', () => {
           2,
           0,
         ),
+      ).toThrow();
+    });
+
+    it('throws on a non-positive smoothingWindow', () => {
+      expect(() =>
+        chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR, { smoothingWindow: 0 }),
+      ).toThrow();
+    });
+
+    it('throws on a negative hmmBeamWidth', () => {
+      expect(() =>
+        chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR, {
+          useHmm: true,
+          hmmBeamWidth: -1,
+        }),
       ).toThrow();
     });
   });

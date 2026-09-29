@@ -147,6 +147,7 @@ function validateAssistSidecarModuleId(value: unknown): string {
  */
 export class Project {
   private native: WasmProject;
+  private released = false;
 
   constructor() {
     this.native = new (projectModule().Project)();
@@ -1260,8 +1261,12 @@ export class Project {
     return this.native.lastBounceCompileResult();
   }
 
-  /** Release the underlying WASM object. Safe to call only once. */
+  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.native.delete();
   }
 

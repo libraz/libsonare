@@ -6,12 +6,15 @@ import { assertSampleRate, assertSamples } from './validation';
  * Canonical request form for {@link transcribe}.
  *
  * Deliberately does NOT extend `ValidateOptions`. That option's contract is
- * that skipping the JS-side scan is safe because the native layer re-validates,
- * and the transcription C ABI does not: it checks the pointer, the length and
- * the rate, and nothing about the sample values. A `{ validate: false }` here
- * would push a non-finite buffer into the tracker, which answers with note
- * counts rather than an error. The scan is also nearly free against this
- * pipeline, which already reads every sample several times.
+ * that skipping the JS-side scan is safe because the native layer re-validates
+ * with an equivalent result -- and here it would not be equivalent: the
+ * transcription C ABI (`sonare_transcribe`) does re-validate the buffer,
+ * including a non-finite scan, but a rejection there surfaces as a
+ * `SonareError` `InvalidParameter`, not the `RangeError` this function
+ * documents and every other empty/non-finite/rate check on this surface
+ * raises. A `{ validate: false }` here would silently change the thrown error
+ * class instead of skipping a redundant check. The scan is also nearly free
+ * against this pipeline, which already reads every sample several times.
  */
 export interface TranscribeRequest extends TranscribeOptions {
   /** Mono source audio. Must be non-empty and all-finite. */
@@ -70,7 +73,7 @@ export interface TranscribeRequest extends TranscribeOptions {
  * ```typescript
  * const { events, noteCount, tempoBpm } = transcribe({ samples, sampleRate, tempoBpm: 120 });
  * const project = new Project();
- * const { clipId } = project.addMidiClip(0, 4 * 960);
+ * const { clipId } = project.addMidiClip(0, 16); // 4 bars at 4/4, in quarter notes (PPQ)
  * project.setMidiEvents(clipId, events);
  * ```
  */

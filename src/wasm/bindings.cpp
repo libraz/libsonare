@@ -7,6 +7,7 @@
 #include <emscripten/emscripten.h>
 
 #include "bindings/common/common.h"
+#include "util/error_classification.h"
 
 // Pulled in for the compile-time SONARE_ABI_VERSION macro only. The macro packs
 // the per-subsystem ABI versions into one 32-bit value with no link dependency
@@ -260,6 +261,24 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
         case sonare::ErrorCode::EncodeFailed:
           code = 9;
           code_name = "EncodeFailed";
+          break;
+      }
+    } else {
+      // Not a SonareException: classify by RTTI the same way the C-ABI catch
+      // chain does, via the shared classifier.
+      code = sonare::error_code_for_std_exception(*base);
+      switch (code) {
+        case 4:
+          code_name = "InvalidParameter";
+          break;
+        case 5:
+          code_name = "OutOfMemory";
+          break;
+        case 7:
+          code_name = "InvalidState";
+          break;
+        default:
+          code_name = "Unknown";
           break;
       }
     }

@@ -29,9 +29,7 @@ val js_chroma(val samples, const val& sample_rate, const val& n_fft, const val& 
   out.set("sampleRate", chroma.sample_rate());
   out.set("hopLength", chroma.hop_length());
 
-  std::vector<float> features_vec(chroma.data(),
-                                  chroma.data() + chroma.n_chroma() * chroma.n_frames());
-  out.set("features", vectorToFloat32Array(features_vec));
+  out.set("features", vectorToFloat32Array(chroma.data(), chroma.n_chroma() * chroma.n_frames()));
 
   // Mean energy per pitch class
   auto mean = chroma.mean_energy();
@@ -51,9 +49,7 @@ val chromaToVal(const Chroma& chroma) {
   out.set("sampleRate", chroma.sample_rate());
   out.set("hopLength", chroma.hop_length());
 
-  std::vector<float> features_vec(chroma.data(),
-                                  chroma.data() + chroma.n_chroma() * chroma.n_frames());
-  out.set("features", vectorToFloat32Array(features_vec));
+  out.set("features", vectorToFloat32Array(chroma.data(), chroma.n_chroma() * chroma.n_frames()));
 
   auto mean = chroma.mean_energy();
   val mean_arr = val::array();
@@ -121,8 +117,7 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
   out.set("nChroma", chroma.n_chroma());
   out.set("nFrames", chroma.n_frames());
 
-  std::vector<float> data_vec(chroma.data(), chroma.data() + chroma.n_chroma() * chroma.n_frames());
-  out.set("data", vectorToFloat32Array(data_vec));
+  out.set("data", vectorToFloat32Array(chroma.data(), chroma.n_chroma() * chroma.n_frames()));
   return out;
 }
 

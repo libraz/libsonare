@@ -55,11 +55,9 @@ val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
   out.set("candidates", cands);
 
   const auto& autocorr = analyzer.autocorrelation();
-  out.set("autocorrelation",
-          vectorToFloat32Array(std::vector<float>(autocorr.begin(), autocorr.end())));
+  out.set("autocorrelation", vectorToFloat32Array(autocorr.data(), autocorr.size()));
   const auto& tempogram = analyzer.tempogram();
-  out.set("tempogram",
-          vectorToFloat32Array(std::vector<float>(tempogram.begin(), tempogram.end())));
+  out.set("tempogram", vectorToFloat32Array(tempogram.data(), tempogram.size()));
   return out;
 }
 

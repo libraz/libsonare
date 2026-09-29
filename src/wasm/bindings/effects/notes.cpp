@@ -138,10 +138,8 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
                                                       float frame_rate, bool has_track,
                                                       std::size_t* cumulative_count) {
   editing::note_model::NoteObject note;
-  note.onset_sample =
-      static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "renderNotes note"));
-  note.offset_sample =
-      static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "renderNotes note"));
+  note.onset_sample = requireInt64Property(row, "onsetSample", "renderNotes note");
+  note.offset_sample = requireInt64Property(row, "offsetSample", "renderNotes note");
   note.edit = noteRowEditFromVal(row, "renderNotes", cumulative_count);
 
   if (has_track) {
@@ -308,8 +306,7 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
 
   Audio audio = loadValidatedAudio(samples, rate);
   Audio result = editing::note_model::render_notes(audio, core_notes, config);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_decompose_note_pitch(val f0_hz, const val& frame_rate_val, const val& median_hz_val,
@@ -488,10 +485,8 @@ std::vector<NoteTarget> noteTargetsFromVal(const val& targets, const char* entry
 // with the edit it arrived with rather than a zeroed one.
 editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
   editing::note_model::NoteObject note;
-  note.onset_sample =
-      static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "assignNoteTargets note"));
-  note.offset_sample =
-      static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "assignNoteTargets note"));
+  note.onset_sample = requireInt64Property(row, "onsetSample", "assignNoteTargets note");
+  note.offset_sample = requireInt64Property(row, "offsetSample", "assignNoteTargets note");
   // floatOption, not floatProperty: a note carrying no measured pitch spells it
   // 0 or non-finite and the rule reads both the same way, so a NaN here is the
   // caller's own "unvoiced" rather than a bad argument (note_target.h). 0 is

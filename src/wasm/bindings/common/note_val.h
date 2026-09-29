@@ -42,8 +42,14 @@ inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, co
                                                              std::size_t* cumulative_count) {
   sonare::editing::note_model::NoteEdit out;
   if (hasProperty(edit, "timeOffsetSamples")) {
-    out.time_offset_samples =
-        static_cast<int64_t>(requireNumberProperty(edit, "timeOffsetSamples", subject));
+    // requireInt64Property refuses a fraction or a value outside the int64
+    // range by name instead of truncating or casting a finite-but-
+    // unrepresentable double, matching the onset_sample/offset_sample
+    // narrowing on this same surface and the C ABI's int64_t field. The
+    // hasProperty guard above is what keeps an absent field the edit's own
+    // identity (0) rather than required -- requireInt64Property itself
+    // throws on absence, which a partial edit must not trigger.
+    out.time_offset_samples = requireInt64Property(edit, "timeOffsetSamples", subject);
   }
   out.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
   out.gain_db = floatProperty(edit, "gainDb", 0.0f);

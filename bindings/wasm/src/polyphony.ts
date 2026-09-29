@@ -218,11 +218,15 @@ export class PolyphonicAnalysis {
   }
 
   /**
-   * Releases the underlying WASM object and everything it holds. A second call
-   * throws `InvalidState` rather than freeing twice.
+   * Releases the underlying WASM object and everything it holds. Idempotent,
+   * as the Node facade is; any other method called after this one still
+   * throws `InvalidState` rather than reaching a freed native object.
    */
   delete(): void {
-    const native = this.handle();
+    if (this.native === null) {
+      return;
+    }
+    const native = this.native;
     this.native = null;
     native.delete();
   }

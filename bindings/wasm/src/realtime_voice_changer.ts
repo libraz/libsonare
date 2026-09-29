@@ -48,6 +48,7 @@ export interface RealtimeVoiceChangerPlanarBuffer {
 
 export class RealtimeVoiceChanger {
   private changer: import('./sonare.js').WasmRealtimeVoiceChanger;
+  private released = false;
 
   /**
    * Creates a voice changer. Supplying `sampleRate` prepares it immediately,
@@ -346,7 +347,12 @@ export class RealtimeVoiceChanger {
     };
   }
 
+  /** Releases the native handle. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.changer.delete();
   }
 

@@ -38,39 +38,48 @@ val stringVectorToVal(const std::vector<std::string>& names) {
   return out;
 }
 
-val vectorToFloat32Array(const std::vector<float>& vec) {
-  const size_t n = vec.size();
+val vectorToFloat32Array(const float* data, size_t n) {
   val result = val::global("Float32Array").new_(n);
   if (n == 0) return result;
-  // Wrap the C++ vector data as a Float32Array view onto the WASM heap and
-  // use JS-side TypedArray.set for a single bulk memcpy across the boundary.
-  // The view is non-owning; ownership stays with `vec`. Because `result` is a
+  // Wrap the caller's buffer as a Float32Array view onto the WASM heap and use
+  // JS-side TypedArray.set for a single bulk memcpy across the boundary. The
+  // view is non-owning; ownership stays with the caller. Because `result` is a
   // freshly-allocated, independent Float32Array, the caller owns the copy and
   // we drop the view immediately after the set() call.
-  val view = val(typed_memory_view(n, vec.data()));
+  val view = val(typed_memory_view(n, data));
+  result.call<void>("set", view);
+  return result;
+}
+
+val vectorToFloat32Array(const std::vector<float>& vec) {
+  return vectorToFloat32Array(vec.data(), vec.size());
+}
+
+val vectorToInt32Array(const int* data, size_t n) {
+  val result = val::global("Int32Array").new_(n);
+  if (n == 0) return result;
+  val view = val(typed_memory_view(n, data));
   result.call<void>("set", view);
   return result;
 }
 
 val vectorToInt32Array(const std::vector<int>& vec) {
-  const size_t n = vec.size();
-  val result = val::global("Int32Array").new_(n);
-  if (n == 0) return result;
-  val view = val(typed_memory_view(n, vec.data()));
-  result.call<void>("set", view);
-  return result;
+  return vectorToInt32Array(vec.data(), vec.size());
 }
 
 // Uint8 sibling, declared in common.h. Defined here with the other
 // vectorTo*Array helpers (it used to live in stream_analyzer.cpp, leaving
 // project.cpp linking against another TU's definition).
-val vectorToUint8Array(const std::vector<uint8_t>& vec) {
-  const size_t n = vec.size();
+val vectorToUint8Array(const uint8_t* data, size_t n) {
   val result = val::global("Uint8Array").new_(n);
   if (n == 0) return result;
-  val view = val(typed_memory_view(n, vec.data()));
+  val view = val(typed_memory_view(n, data));
   result.call<void>("set", view);
   return result;
+}
+
+val vectorToUint8Array(const std::vector<uint8_t>& vec) {
+  return vectorToUint8Array(vec.data(), vec.size());
 }
 
 std::size_t wasmCountArg(double value, const char* subject) {

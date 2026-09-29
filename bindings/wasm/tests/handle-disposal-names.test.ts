@@ -6,14 +6,23 @@
  * every class to answer to the same name. Each handle class therefore accepts
  * both spellings; `StreamAnalyzer` additionally keeps its historical
  * `dispose()`.
+ *
+ * Every class is also idempotent under repeated disposal: embind's own
+ * `delete()` throws a raw BindingError on a second call, and the generic
+ * cross-surface cleanup path (`finally { h.destroy() }` running twice, a React
+ * effect cleanup firing twice) must not surface that raw error on any class.
  */
 
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyzePolyphonic,
+  HrtfSet,
   init,
   Mixer,
   mixingScenePresetJson,
+  PlaybackLoudnessMeter,
+  PlaybackRenderer,
   Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
@@ -31,6 +40,11 @@ function tone(): Float32Array {
     out[i] = 0.3 * Math.sin((2 * Math.PI * 220 * i) / 22050);
   }
   return out;
+}
+
+const packageRoot = new URL('../', import.meta.url);
+function hrtfBytes(): Uint8Array {
+  return new Uint8Array(readFileSync(new URL('dist/hrtf/default.shrf', packageRoot)));
 }
 
 interface Disposable {
@@ -54,6 +68,12 @@ describe('WASM handle disposal names', () => {
     ['SampleBank', () => new SampleBank()],
     ['Mixer', () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512)],
     ['PolyphonicAnalysis', () => analyzePolyphonic({ samples: tone(), sampleRate: 22050 })],
+    ['HrtfSet', () => HrtfSet.fromBytes(hrtfBytes())],
+    [
+      'PlaybackRenderer',
+      () => new PlaybackRenderer({ config: {}, hrtf: HrtfSet.fromBytes(hrtfBytes()) }),
+    ],
+    ['PlaybackLoudnessMeter', () => new PlaybackLoudnessMeter(2, 48000)],
   ];
 
   for (const [name, create] of handles) {
@@ -61,9 +81,21 @@ describe('WASM handle disposal names', () => {
       const handle = create();
       expect(typeof handle.delete).toBe('function');
       expect(typeof handle.destroy).toBe('function');
-      // The generic cross-surface cleanup path: one `destroy()` call frees the
-      // native object, so a following `delete()` would double-free.
       handle.destroy();
+    });
+
+    it(`${name} is idempotent under a second delete()/destroy() in either order`, () => {
+      // Two independent handles, driven through both name orderings: embind's
+      // own delete() throws a raw BindingError on a second call, which is
+      // exactly the defect this test is written to catch.
+      const first = create();
+      first.delete();
+      expect(() => first.delete()).not.toThrow();
+
+      const second = create();
+      second.destroy();
+      expect(() => second.destroy()).not.toThrow();
+      expect(() => second.delete()).not.toThrow();
     });
   }
 
@@ -71,5 +103,8 @@ describe('WASM handle disposal names', () => {
     const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
     expect(typeof analyzer.dispose).toBe('function');
     analyzer.dispose();
+    // dispose() is also delete(), so it must be idempotent through every name.
+    expect(() => analyzer.dispose()).not.toThrow();
+    expect(() => analyzer.destroy()).not.toThrow();
   });
 });

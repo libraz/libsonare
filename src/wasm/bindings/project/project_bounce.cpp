@@ -170,8 +170,11 @@ val ProjectWasm::compile() {
 SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
   SonareProjectBounceOptions opts{};
   if (!options.isUndefined() && !options.isNull()) {
+    // requireInt64Property, not a raw static_cast<int64_t> of a double:
+    // refuses a fraction and an out-of-int64-range value by name instead of
+    // truncating the one and casting the other into undefined behavior.
     if (hasProperty(options, "totalFrames")) {
-      opts.total_frames = static_cast<int64_t>(options["totalFrames"].as<double>());
+      opts.total_frames = requireInt64Property(options, "totalFrames", "Project.bounce options");
     }
     if (hasProperty(options, "blockSize")) {
       opts.block_size = checkedIntFromVal(options["blockSize"], "blockSize");

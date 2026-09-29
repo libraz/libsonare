@@ -937,6 +937,20 @@ describe('renderPercussiveEvents', () => {
     );
     expectInvalidParameter(() => render(undefined as unknown as readonly PercussiveEventInput[]));
 
+    // renderablePercussiveEventFromVal (percussive_events.cpp) reads onsetSample,
+    // offsetSample and edit.timeOffsetSamples through requireInt64Property, not a
+    // raw static_cast<int64_t> of a double: a fraction like 0.5 must be refused
+    // rather than silently truncated, and 1e300 rather than cast into undefined
+    // behavior.
+    expectInvalidParameter(() => render([edited(4410.5, 8192)]));
+    expectInvalidParameter(() => render([edited(0, 1e300)]));
+    expectInvalidParameter(() =>
+      render([{ ...edited(0, 8192), edit: { timeOffsetSamples: 0.5 } }]),
+    );
+    expectInvalidParameter(() =>
+      render([{ ...edited(0, 8192), edit: { timeOffsetSamples: 1e300 } }]),
+    );
+
     // An empty span has nothing to lift, a reversed one is not a span, and
     // neither end may sit outside the audio.
     expectInvalidParameter(() => render([edited(4410, 4410)]));

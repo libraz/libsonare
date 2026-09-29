@@ -44,7 +44,7 @@ import { assertSampleRate, assertSamples } from './validation';
  * const { anchors } = alignTakeToReference({ reference: guide, take, sampleRate });
  * const project = new Project();
  * const trackId = project.addTrack({ kind: 'audio' });
- * const clipId = project.addClip({ trackId, lengthPpq: 4 * 960, audio: take, audioSampleRate: sampleRate });
+ * const clipId = project.addClip({ trackId, lengthPpq: 64, audio: take, audioSampleRate: sampleRate }); // 16 bars at 4/4, in quarter notes (PPQ)
  * project.setWarpMap({ id: 1, anchors });
  * project.setClipWarpRef(clipId, 1);
  * ```

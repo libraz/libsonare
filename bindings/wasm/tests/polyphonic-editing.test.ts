@@ -273,6 +273,21 @@ describe('PolyphonicAnalysis curves', () => {
     }
   });
 
+  it('refuses a fractional or out-of-int64-range timeOffsetSamples instead of truncating it', () => {
+    // setNoteEdit reaches noteEditFromVal (note_val.h) through the same
+    // requireInt64Property path renderNotes uses; this exercises that shared
+    // function through the polyphonic-editing entry point specifically, since
+    // it is a separate call site from renderNotes'.
+    expectSonareError(
+      () => analysis.setNoteEdit(0, { timeOffsetSamples: 0.5 }),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareError(
+      () => analysis.setNoteEdit(0, { timeOffsetSamples: 1e300 }),
+      ErrorCode.InvalidParameter,
+    );
+  });
+
   it('rejects a note index outside the set', () => {
     for (const index of [analysis.noteCount, analysis.noteCount + 4, -1, 1.5]) {
       expectSonareError(() => analysis.noteF0(index), ErrorCode.InvalidParameter);
@@ -436,7 +451,10 @@ describe('PolyphonicAnalysis disposal', () => {
     expectSonareError(() => handle.noteEnvelope(0), ErrorCode.InvalidState);
     expectSonareError(() => handle.setNoteEdit(0, {}), ErrorCode.InvalidState);
     expectSonareError(() => handle.render(), ErrorCode.InvalidState);
-    // A second release would be a double free, so it is refused rather than run.
-    expectSonareError(() => handle.destroy(), ErrorCode.InvalidState);
+    // A second release is a no-op, not a double free: idempotent disposal is
+    // the cross-binding contract (Node's destroy() and every other WASM
+    // handle class agree), so a caller running a generic cleanup path twice
+    // must not see a throw here even though every other method above does.
+    expect(() => handle.destroy()).not.toThrow();
   });
 });

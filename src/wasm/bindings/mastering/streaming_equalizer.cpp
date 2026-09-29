@@ -261,16 +261,15 @@ class EqualizerWrapper {
       post_left[i] = snapshot.post[i].left;
       post_right[i] = snapshot.post[i].right;
     }
-    std::vector<float> band_gain_db(snapshot.band_gain_db.begin(), snapshot.band_gain_db.end());
-    std::vector<float> profile_db(snapshot.profile_db.begin(), snapshot.profile_db.end());
-
     val out = val::object();
     out.set("preLeft", vectorToFloat32Array(pre_left));
     out.set("preRight", vectorToFloat32Array(pre_right));
     out.set("postLeft", vectorToFloat32Array(post_left));
     out.set("postRight", vectorToFloat32Array(post_right));
-    out.set("bandGainDb", vectorToFloat32Array(band_gain_db));
-    out.set("profileDb", vectorToFloat32Array(profile_db));
+    out.set("bandGainDb",
+            vectorToFloat32Array(snapshot.band_gain_db.data(), snapshot.band_gain_db.size()));
+    out.set("profileDb",
+            vectorToFloat32Array(snapshot.profile_db.data(), snapshot.profile_db.size()));
     out.set("lastAutoGainDb", processor_.last_auto_gain_db());
     out.set("seq", static_cast<double>(snapshot.seq));
     return out;

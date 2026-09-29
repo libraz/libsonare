@@ -256,6 +256,7 @@ export function engineCapabilities(): EngineCapabilities {
 
 export class RealtimeEngine {
   private native: WasmRealtimeEngine;
+  private released = false;
 
   constructor(
     sampleRate = 48000,
@@ -1761,8 +1762,12 @@ export class RealtimeEngine {
     return this.native.scopeScratchPointRight(index);
   }
 
-  /** Release the underlying WASM object. Safe to call only once. */
+  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
   destroy(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.native.delete();
   }
 

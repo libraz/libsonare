@@ -26,6 +26,8 @@ import {
   mastering,
   masteringChain,
   masteringChainStereo,
+  masteringChainStereoWithProgress,
+  masteringChainWithProgress,
   masteringProcess,
   masteringProcessStereo,
   PitchClass,
@@ -239,6 +241,86 @@ describe('WASM analyzer coverage parity', () => {
       expect(() => masterAudio({ samples, sampleRate: SR, cancel: () => true })).toThrow(
         expect.objectContaining({ code: ErrorCode.Cancelled }),
       );
+    });
+
+    // The remaining mono/stereo x chain/preset x with/without-progress
+    // combinations, mirroring masterAudio's own case above: each forwards
+    // `cancel` through its own C-ABI call, and a forwarding regression on any
+    // one of them would ship green everywhere else while that one variant ran
+    // to completion instead of aborting -- see tests-017.
+    it('masteringChain cancels through the canonical request callback', () => {
+      const samples = makeSine(2, 440);
+      expect(() => masteringChain({ samples, sampleRate: SR, cancel: () => true })).toThrow(
+        expect.objectContaining({ code: ErrorCode.Cancelled }),
+      );
+    });
+
+    it('masteringChainStereo cancels through the canonical request callback', () => {
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      expect(() =>
+        masteringChainStereo({ left, right, sampleRate: SR, cancel: () => true }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
+    });
+
+    it('masterAudioStereo cancels through the canonical request callback', () => {
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      expect(() => masterAudioStereo({ left, right, sampleRate: SR, cancel: () => true })).toThrow(
+        expect.objectContaining({ code: ErrorCode.Cancelled }),
+      );
+    });
+
+    it('masteringChainWithProgress cancels through the canonical request callback', () => {
+      const samples = makeSine(2, 440);
+      expect(() =>
+        masteringChainWithProgress({
+          samples,
+          sampleRate: SR,
+          onProgress: () => {},
+          cancel: () => true,
+        }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
+    });
+
+    it('masteringChainStereoWithProgress cancels through the canonical request callback', () => {
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      expect(() =>
+        masteringChainStereoWithProgress({
+          left,
+          right,
+          sampleRate: SR,
+          onProgress: () => {},
+          cancel: () => true,
+        }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
+    });
+
+    it('masterAudioWithProgress cancels through the canonical request callback', () => {
+      const samples = makeSine(2, 440);
+      expect(() =>
+        masterAudioWithProgress({
+          samples,
+          sampleRate: SR,
+          onProgress: () => {},
+          cancel: () => true,
+        }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
+    });
+
+    it('masterAudioStereoWithProgress cancels through the canonical request callback', () => {
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      expect(() =>
+        masterAudioStereoWithProgress({
+          left,
+          right,
+          sampleRate: SR,
+          onProgress: () => {},
+          cancel: () => true,
+        }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
     });
 
     it('uses onProgress from a canonical request object', () => {

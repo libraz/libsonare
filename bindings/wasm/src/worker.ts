@@ -98,8 +98,16 @@ function cancelledError(): SonareError {
  */
 export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): void {
   const cancelled = new Set<number>();
+  // IDs with a run() in flight, from message dispatch to its finally block.
+  // A cancel naming an ID outside this set has nothing left to cancel -- the
+  // run already settled, or never started -- and must not be recorded, or it
+  // leaks a Set entry no later message ever clears.
+  const inFlight = new Set<number>();
 
   const run = async (message: OfflineWorkerRunMessage): Promise<void> => {
+    // Synchronous: runs before this async function's first `await`, so it is
+    // visible to the listener below before any other message can be handled.
+    inFlight.add(message.id);
     const cancelFlag = message.cancelBuffer ? new Int32Array(message.cancelBuffer) : undefined;
     const isCancelled = (): boolean =>
       cancelled.has(message.id) || (cancelFlag !== undefined && Atomics.load(cancelFlag, 0) !== 0);
@@ -164,13 +172,16 @@ export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): v
       });
     } finally {
       cancelled.delete(message.id);
+      inFlight.delete(message.id);
     }
   };
 
   endpoint.addEventListener('message', (event) => {
     const message = event.data;
     if (message.type === 'sonare:offline-cancel') {
-      cancelled.add(message.id);
+      if (inFlight.has(message.id)) {
+        cancelled.add(message.id);
+      }
       return;
     }
     void run(message);

@@ -66,10 +66,13 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     if (lane_val.typeOf().as<std::string>() == "object") {
       config.output_bus_id = static_cast<uint32_t>(intProperty(lane_val, "outputBusId", 0));
       // Absent defaults to stereo, matching the C ABI / Node surfaces. An
-      // out-of-range layout is rejected like the C ABI's is_valid check.
+      // out-of-range layout is rejected like the C ABI's is_valid check. The
+      // full-range bound is checked BEFORE narrowing to uint8_t: narrowing
+      // first would let e.g. 257 wrap to 1 (a valid Stereo) and pass.
       const int raw_layout = intProperty(lane_val, "sourceChannelLayout",
                                          static_cast<int>(sonare::ChannelLayout::Stereo));
-      if (raw_layout < 0 || !sonare::is_valid_channel_layout(static_cast<uint8_t>(raw_layout))) {
+      if (raw_layout < 0 || raw_layout > 255 ||
+          !sonare::is_valid_channel_layout(static_cast<uint8_t>(raw_layout))) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "invalid source channel layout");
       }
@@ -119,7 +122,12 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
   for (int i = 0; i < count; ++i) {
     val bus = buses[i];
     const int layout_value = intProperty(bus, "channelLayout", 1);
-    if (!sonare::is_valid_channel_layout(static_cast<uint8_t>(layout_value))) {
+    // The full-range bound is checked BEFORE narrowing to uint8_t, the same
+    // way the lane sourceChannelLayout check above does: narrowing first
+    // would let an out-of-range value (or a negative one) wrap into a valid
+    // ChannelLayout and pass silently.
+    if (layout_value < 0 || layout_value > 255 ||
+        !sonare::is_valid_channel_layout(static_cast<uint8_t>(layout_value))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "invalid bus channel layout");
     }

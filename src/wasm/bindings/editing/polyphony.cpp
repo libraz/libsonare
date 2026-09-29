@@ -234,8 +234,7 @@ class PolyphonicAnalysisWasm {
     if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
 
     const Audio rendered = editing::polyphony::render_polyphonic(analysis_, config);
-    const std::vector<float> out(rendered.data(), rendered.data() + rendered.size());
-    return vectorToFloat32Array(out);
+    return vectorToFloat32Array(rendered.data(), rendered.size());
   }
 
  private:

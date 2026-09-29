@@ -136,8 +136,19 @@ using namespace sonare;
 /// @details One owner for a loop nine binding entry points had written out for
 ///          themselves; each copy carried its own inlined embind push sequence.
 val stringVectorToVal(const std::vector<std::string>& names);
+/// @brief Copies @p n elements starting at @p data into a fresh JS
+///        Float32Array/Int32Array/Uint8Array via one bulk memcpy.
+/// @details The pointer+length overload is the one every call site that
+///          already owns a contiguous buffer (an Audio, a result struct's own
+///          storage) should reach for; the `std::vector` overload exists for a
+///          caller that built one anyway and forwards to this one, so there is
+///          exactly one copy across the boundary rather than a throwaway
+///          std::vector construction ahead of it.
+val vectorToFloat32Array(const float* data, std::size_t n);
 val vectorToFloat32Array(const std::vector<float>& vec);
+val vectorToInt32Array(const int* data, std::size_t n);
 val vectorToInt32Array(const std::vector<int>& vec);
+val vectorToUint8Array(const uint8_t* data, std::size_t n);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
 /// Conservative wasm32 budget for caller-owned Float32Array data copied into
 /// the linear-memory heap. Keeping this below the native offline ceiling leaves
@@ -472,6 +483,24 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
                           std::string(subject) + "." + key + " must be finite");
   }
   return number;
+}
+
+/// @brief The int64 sibling of @ref requireNumberProperty: required, refused by
+///        name for a non-number type (not just coerced through it, the way
+///        @ref checkedInt64FromVal's val::as<double>() would), and refused by
+///        name again for a fraction or a value outside the 64-bit integer
+///        range rather than truncated or cast into undefined behavior.
+inline int64_t requireInt64Property(const val& object, const char* key, const char* subject) {
+  if (!hasProperty(object, key)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " is required");
+  }
+  const val value = object[key];
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " must be a number");
+  }
+  return checkedInt64FromVal(value, (std::string(subject) + "." + key).c_str());
 }
 
 inline bool requireBoolProperty(const val& object, const char* key, const char* subject) {

@@ -98,6 +98,7 @@ export interface MixerRealtimeBuffer {
  */
 export class Mixer {
   private mixer: import('./sonare.js').WasmMixer;
+  private released = false;
   private readonly blockSize: number;
 
   private constructor(mixer: import('./sonare.js').WasmMixer, blockSize: number) {
@@ -763,8 +764,12 @@ export class Mixer {
     return this.mixer.drainTailStereo(numSamples);
   }
 
-  /** Release the underlying WASM object. Safe to call only once. */
+  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.mixer.delete();
   }
 

@@ -108,13 +108,15 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
       // which would otherwise make an omitted endSample a silent no-op here while
       // Node processes the full region.
       region.end_sample = static_cast<int64_t>(audio.size());
-      // Sample positions arrive as plain JS numbers; read as double and cast to
-      // int64 (mirrors project.cpp's totalFrames) so callers need not pass BigInt.
+      // Sample positions arrive as plain JS numbers; requireInt64Property
+      // refuses a fraction or an out-of-int64-range value by name instead of
+      // truncating or casting into undefined behavior. Callers need not pass
+      // BigInt -- a plain number is required.
       if (hasProperty(op, "startSample")) {
-        region.start_sample = static_cast<int64_t>(op["startSample"].as<double>());
+        region.start_sample = requireInt64Property(op, "startSample", "spectralEdit region");
       }
       if (hasProperty(op, "endSample")) {
-        region.end_sample = static_cast<int64_t>(op["endSample"].as<double>());
+        region.end_sample = requireInt64Property(op, "endSample", "spectralEdit region");
       }
       if (hasProperty(op, "lowHz")) region.low_hz = checkedFloatFromVal(op["lowHz"], "lowHz");
       if (hasProperty(op, "highHz")) region.high_hz = checkedFloatFromVal(op["highHz"], "highHz");
@@ -126,8 +128,7 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
   }
 
   Audio result = spectral_edit(audio, config, region_ops.data(), region_ops.size());
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 void registerEffectsSpectralEditBindings() { function("spectralEdit", &js_spectral_edit); }

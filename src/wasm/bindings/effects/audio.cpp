@@ -39,14 +39,10 @@ val js_hpss_ex(val samples, const val& sample_rate, const val& kernel_harmonic,
   val out = val::object();
 
   // Harmonic audio
-  std::vector<float> harmonic_vec(result.harmonic.data(),
-                                  result.harmonic.data() + result.harmonic.size());
-  out.set("harmonic", vectorToFloat32Array(harmonic_vec));
+  out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
 
   // Percussive audio
-  std::vector<float> percussive_vec(result.percussive.data(),
-                                    result.percussive.data() + result.percussive.size());
-  out.set("percussive", vectorToFloat32Array(percussive_vec));
+  out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
 
   out.set("sampleRate", result.harmonic.sample_rate());
 
@@ -63,16 +59,14 @@ val js_hpss(val samples, const val& sample_rate, const val& kernel_harmonic,
 val js_harmonic(val samples, const val& sample_rate) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result = harmonic(audio);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 // Get percussive component only
 val js_percussive(val samples, const val& sample_rate) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result = percussive(audio);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 // Time stretch
@@ -85,8 +79,7 @@ val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val,
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.backend = StretchBackend::NativeSpectral;
   Audio result = time_stretch(audio, rate, config);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_time_stretch(val samples, const val& sample_rate, const val& rate) {
@@ -109,8 +102,7 @@ val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semito
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
   config.backend = StretchBackend::NativeSpectral;
   Audio result = pitch_shift(audio, semitones, config);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_pitch_shift(val samples, const val& sample_rate, const val& semitones) {
@@ -135,8 +127,7 @@ val js_pitch_correct_to_midi(val samples, const val& sample_rate, const val& cur
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::pitch_editor::PitchCorrector corrector;
   Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 // Per-frame ("time-varying") correction toward target_midi following a
@@ -181,7 +172,10 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   track.voiced.resize(n_frames);
   track.voiced_prob.resize(n_frames);
   for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = has_voiced ? (voiced_vec[i] != 0.0f) : true;
+    // Absent both voiced and voicedProb, every frame defaults to voiced,
+    // matching the C ABI's is_voiced_frame fallback chain.
+    const bool is_voiced =
+        has_voiced ? (voiced_vec[i] != 0.0f) : (has_prob ? (prob_vec[i] >= 0.5f) : true);
     track.voiced[i] = is_voiced;
     track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
   }
@@ -190,8 +184,7 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   editing::pitch_editor::PitchCorrector corrector;
   Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0_hz,
@@ -278,7 +271,10 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   track.voiced.resize(n_frames);
   track.voiced_prob.resize(n_frames);
   for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = has_voiced ? (voiced_vec[i] != 0.0f) : true;
+    // Absent both voiced and voicedProb, every frame defaults to voiced,
+    // matching the C ABI's is_voiced_frame fallback chain.
+    const bool is_voiced =
+        has_voiced ? (voiced_vec[i] != 0.0f) : (has_prob ? (prob_vec[i] >= 0.5f) : true);
     track.voiced[i] = is_voiced;
     track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
   }
@@ -288,8 +284,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   editing::pitch_editor::PitchCorrector corrector(config);
   Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)
                             : corrector.correct_to_midi_timevarying(audio, track, target_midi);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_note_stretch(val samples, const val& sample_rate, const val& onset_sample,
@@ -301,8 +296,7 @@ val js_note_stretch(val samples, const val& sample_rate, const val& onset_sample
   region.offset_sample = checkedIntFromVal(offset_sample, "offsetSample");
   editing::pitch_editor::NoteEditor editor;
   Audio result = editor.stretch_note(audio, region, stretch_ratio);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_note_move(val samples, const val& sample_rate, const val& onset_sample,
@@ -314,8 +308,7 @@ val js_note_move(val samples, const val& sample_rate, const val& onset_sample,
   editing::pitch_editor::NoteEditor editor;
   Audio result =
       editor.move_note(audio, region, checkedIntFromVal(target_onset_sample, "targetOnsetSample"));
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_voice_change(val samples, const val& sample_rate, const val& pitch_semitones_val,
@@ -328,8 +321,7 @@ val js_voice_change(val samples, const val& sample_rate, const val& pitch_semito
   config.formant_factor = formant_factor;
   editing::voice_changer::VoiceChanger changer(config);
   Audio result = changer.process(audio);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_voice_change_realtime(val samples, const val& sample_rate, std::string preset,
@@ -377,17 +369,10 @@ val js_hpss_with_residual_ex(val samples, const val& sample_rate, const val& ker
 
   HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
 
-  std::vector<float> harmonic_vec(result.harmonic.data(),
-                                  result.harmonic.data() + result.harmonic.size());
-  std::vector<float> percussive_vec(result.percussive.data(),
-                                    result.percussive.data() + result.percussive.size());
-  std::vector<float> residual_vec(result.residual.data(),
-                                  result.residual.data() + result.residual.size());
-
   val out = val::object();
-  out.set("harmonic", vectorToFloat32Array(harmonic_vec));
-  out.set("percussive", vectorToFloat32Array(percussive_vec));
-  out.set("residual", vectorToFloat32Array(residual_vec));
+  out.set("harmonic", vectorToFloat32Array(result.harmonic.data(), result.harmonic.size()));
+  out.set("percussive", vectorToFloat32Array(result.percussive.data(), result.percussive.size()));
+  out.set("residual", vectorToFloat32Array(result.residual.data(), result.residual.size()));
   out.set("sampleRate", result.harmonic.sample_rate());
   return out;
 }
@@ -427,8 +412,7 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
 
   const int expected_length = static_cast<int>(std::ceil(static_cast<float>(audio.size()) / rate));
   Audio result = stretched.to_audio(expected_length);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 // Normalize
@@ -441,8 +425,7 @@ val js_normalize_ex(val samples, const val& sample_rate, const val& target_db_va
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result =
       mode == "rms" ? normalize_rms(audio, target_db, true) : normalize(audio, target_db);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_normalize(val samples, const val& sample_rate, const val& target_db) {
@@ -468,12 +451,9 @@ val js_normalize_stereo(val left_samples, val right_samples, const val& sample_r
   const NormalizeStereoResult result = mode == "rms"
                                            ? normalize_rms_stereo(left, right, target_db, true)
                                            : normalize_stereo(left, right, target_db);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("appliedGainDb", result.applied_gain_db);
   return out;
 }
@@ -485,8 +465,7 @@ val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
   Audio result = trim_absolute(audio, checkedFloatFromVal(threshold_db, "thresholdDb"),
                                checkedIntFromVal(frame_length, "frameLength"),
                                checkedIntFromVal(hop_length, "hopLength"));
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 val js_trim(val samples, const val& sample_rate, const val& threshold_db) {

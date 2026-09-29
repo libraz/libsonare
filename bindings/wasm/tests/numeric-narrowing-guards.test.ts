@@ -25,6 +25,7 @@ import {
   Project,
   RealtimeEngine,
   type SonareError,
+  spectralEdit,
 } from '../dist/index.js';
 
 beforeAll(async () => {
@@ -390,6 +391,52 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     for (const value of [1.5, ...NON_FINITE, -1, 0]) {
       expectInvalidParameter(() => bounce(value));
     }
+  });
+
+  // A sibling of the RealtimeEngine case above but through Project.bounce's own
+  // reader (project_bounce.cpp), which used to reach totalFrames through a raw
+  // static_cast<int64_t> of a double: a fraction was truncated silently and a
+  // value outside the int64 range invoked undefined behavior on the cast,
+  // rather than either being refused.
+  it('bounces a project only at a whole, in-range frame count', () => {
+    const bounceAt = (totalFrames: number): number => {
+      const project = new Project();
+      try {
+        return project.bounce({ totalFrames, numChannels: 1, sampleRate: 48000 }).length;
+      } finally {
+        project.destroy();
+      }
+    };
+    expect(bounceAt(256)).toBe(256);
+    expect(bounceAt(512)).toBe(512);
+    for (const value of [1.5, ...NON_FINITE, 1e300]) {
+      expectInvalidParameter(() => bounceAt(value));
+    }
+    // A numeric string differentiates requireInt64Property from int64Property:
+    // both refuse a fraction or an out-of-range value equally, but only the
+    // former refuses a wrong JS type instead of coercing it through as<double>().
+    // @ts-expect-error deliberately wrong type
+    expect(() => bounceAt('256')).toThrow(/must be a number/);
+  });
+
+  // spectralEdit's region bounds (spectral_edit.cpp) had the same raw-cast
+  // shape as the bounce case above, on startSample/endSample instead of
+  // totalFrames.
+  it("spectralEdit reads a region's sample bounds only at a whole, in-range position", () => {
+    const samples = new Float32Array(4096).fill(0.1);
+    const editWithStart = (startSample: number): Float32Array =>
+      spectralEdit(samples, 22050, [{ startSample, endSample: 4096, gainDb: -60 }]);
+    // The control: two legal starts both process without throwing.
+    expect(editWithStart(0)).toHaveLength(samples.length);
+    expect(editWithStart(2048)).toHaveLength(samples.length);
+    for (const value of [1.5, ...NON_FINITE, 1e300]) {
+      expectInvalidParameter(() => editWithStart(value));
+    }
+    // Same differentiation as Project.bounce's totalFrames above: a numeric
+    // string is the one input requireInt64Property refuses that int64Property
+    // would silently coerce.
+    // @ts-expect-error deliberately wrong type
+    expect(() => editWithStart('2048')).toThrow(/must be a number/);
   });
 });
 

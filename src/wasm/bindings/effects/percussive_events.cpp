@@ -64,14 +64,12 @@ val percussiveEventToVal(const PercussiveEvent& event) {
 // is its own identity spelling.
 PercussiveEvent renderablePercussiveEventFromVal(const val& row) {
   PercussiveEvent event;
-  event.onset_sample = static_cast<int64_t>(
-      requireNumberProperty(row, "onsetSample", "renderPercussiveEvents event"));
-  event.offset_sample = static_cast<int64_t>(
-      requireNumberProperty(row, "offsetSample", "renderPercussiveEvents event"));
+  event.onset_sample = requireInt64Property(row, "onsetSample", "renderPercussiveEvents event");
+  event.offset_sample = requireInt64Property(row, "offsetSample", "renderPercussiveEvents event");
   const val edit = objectProperty(row, "edit");
   if (hasProperty(edit, "timeOffsetSamples")) {
-    event.edit.time_offset_samples = static_cast<int64_t>(
-        requireNumberProperty(edit, "timeOffsetSamples", "renderPercussiveEvents event.edit"));
+    event.edit.time_offset_samples =
+        requireInt64Property(edit, "timeOffsetSamples", "renderPercussiveEvents event.edit");
   }
   event.edit.gain_db = floatProperty(edit, "gainDb", 0.0f);
   event.edit.muted = boolProperty(edit, "muted", false);
@@ -140,8 +138,7 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
 
   Audio audio = loadValidatedAudio(samples, rate);
   Audio result = editing::event_model::render_percussive_events(audio, core_events, config);
-  std::vector<float> out_vec(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out_vec);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 void registerEffectsPercussiveEventBindings() {

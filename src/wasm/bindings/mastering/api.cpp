@@ -368,8 +368,7 @@ val js_mastering_ab_match_loudness(val source_samples, val reference_samples,
   const auto matched = mastering::match::ab_match_loudness(reference, source);
 
   val out = val::object();
-  out.set("samples", vectorToFloat32Array(std::vector<float>(matched.b.data(),
-                                                             matched.b.data() + matched.b.size())));
+  out.set("samples", vectorToFloat32Array(matched.b.data(), matched.b.size()));
   out.set("sampleRate", matched.b.sample_rate());
   out.set("referenceLufs", matched.reference_lufs);
   out.set("sourceLufs", matched.source_lufs);

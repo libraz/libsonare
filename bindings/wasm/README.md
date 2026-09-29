@@ -364,7 +364,7 @@ Every area below has runnable examples and the full API in the
 [documentation](https://libsonare.libraz.net/docs/wasm).
 
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (true-peak, LUFS, correlation, vectorscope, waveform peaks). → [API](https://libsonare.libraz.net/docs/wasm)
-- **Mastering** — 89 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 89 named DSP processors, the configurable `masteringChain`, 30 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Mixing assistant** — `suggestMixScene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
@@ -372,7 +372,7 @@ Every area below has runnable examples and the full API in the
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render, bounded-memory clip streaming), `StreamingMasteringChain` / `StreamingEqualizer` / `StreamingRetune`, `RealtimeVoiceChanger`, and the AudioWorklet bridge. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
 - **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/wasm)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [API](https://libsonare.libraz.net/docs/wasm)
-- **Playback** — `PlaybackRenderer` renders decoded mono / stereo / 5.1 / 7.1 PCM to speakers or HRTF binaural headphones: channel conversion, loudness matching, night-mode dynamics, speaker calibration and bass management, head tracking, and a reportable fixed latency; `renderPlayback` is the one-shot form. WASM takes an HRTF set from caller-supplied bytes; it ships no embedded default. → [API](https://libsonare.libraz.net/docs/wasm)
+- **Playback** — `PlaybackRenderer` renders decoded mono / stereo / 5.1 / 7.1 PCM to speakers or HRTF binaural headphones: channel conversion, loudness matching, night-mode dynamics, speaker calibration and bass management, head tracking, and a reportable fixed latency; `renderPlayback` is the one-shot form. This build embeds no HRTF data; a default set (SADIE II subset, credited in NOTICE) ships as the separate package asset `@libraz/libsonare/hrtf/default.shrf` and can be fetched and passed to the renderer, or a caller may supply its own HRTF bytes. → [API](https://libsonare.libraz.net/docs/wasm)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
 Native failures throw a `SonareError` carrying a numeric `code` (an `ErrorCode`

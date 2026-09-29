@@ -335,3 +335,32 @@ describe('a compiled-out WASM feature reports NotSupported, not InvalidState', (
     expect(wrong).toEqual([]);
   });
 });
+
+/**
+ * js_sonare_exception_info only classified sonare::SonareException; a raw
+ * std::bad_alloc/invalid_argument/logic_error escaping the core fell through
+ * to code 99 (Unknown) instead of the OutOfMemory/InvalidParameter/
+ * InvalidState the C-ABI catch chain assigns the same exception types. The
+ * fallback now delegates to the single shared classifier
+ * (src/util/error_classification.h) the Node addon's SONARE_NODE_CATCH also
+ * calls -- see bindings/node/tests/errors.test.ts for that half.
+ */
+describe('js_sonare_exception_info classifies a non-SonareException through the shared classifier', () => {
+  it('calls error_code_for_std_exception exactly once, outside the SonareException switch', () => {
+    const text = repoFile('src/wasm/bindings.cpp');
+    const fn = text.indexOf('val js_sonare_exception_info(');
+    expect(fn).toBeGreaterThan(-1);
+    const end = text.indexOf('\n  return info;', fn);
+    expect(end).toBeGreaterThan(fn);
+    const body = text.slice(fn, end);
+    const hits = (body.match(/error_code_for_std_exception/g) ?? []).length;
+    expect(hits).toBe(1);
+    // Not inside the case sonare::ErrorCode::... switch itself, which classifies
+    // a SonareException by its own carried code, never by RTTI.
+    expect(wasmExceptionSwitchBody()).not.toContain('error_code_for_std_exception');
+  });
+
+  it('includes the header defining the shared classifier', () => {
+    expect(repoFile('src/wasm/bindings.cpp')).toContain('util/error_classification.h');
+  });
+});

@@ -132,6 +132,21 @@ describe('WASM note targets', () => {
       }
     });
 
+    it('refuses a fractional or out-of-int64-range onsetSample/offsetSample instead of truncating it', () => {
+      // assignableNoteFromVal (notes.cpp) reads these through requireInt64Property,
+      // not a raw static_cast<int64_t> of a double: a fraction like 0.5 must be
+      // refused rather than silently truncated to a boundary nobody asked for, and
+      // 1e300 must be refused rather than cast into undefined behavior.
+      const runWith = (onsetSample: unknown, offsetSample: unknown) =>
+        assignNoteTargets({
+          notes: [{ ...note(0, 1), onsetSample, offsetSample } as unknown as NoteObject],
+          sampleRate,
+          targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
+        });
+      expectSonareError(() => runWith(0.5, note(0, 1).offsetSample), ErrorCode.InvalidParameter);
+      expectSonareError(() => runWith(note(0, 1).onsetSample, 1e300), ErrorCode.InvalidParameter);
+    });
+
     it('saturates the shift at maxCorrectionSemitones, and an explicit 0 survives', () => {
       // 84 - 69 = +15, past the default bound of 12.
       const targets = [{ startSec: 0, endSec: 1, targetMidi: 84 }];

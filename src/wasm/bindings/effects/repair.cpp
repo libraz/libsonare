@@ -84,8 +84,7 @@ std::vector<const Audio*> channelSetPointers(const std::vector<Audio>& channels)
 val channelSetToVal(const std::vector<Audio>& channels) {
   val out = val::array();
   for (const Audio& channel : channels) {
-    out.call<void>("push", vectorToFloat32Array(std::vector<float>(
-                               channel.data(), channel.data() + channel.size())));
+    out.call<void>("push", vectorToFloat32Array(channel.data(), channel.size()));
   }
   return out;
 }
@@ -111,8 +110,7 @@ val js_mastering_repair_declick(val samples, const val& sample_rate, val options
     cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
   }
   Audio result = mastering::repair::declick(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -172,12 +170,9 @@ val js_mastering_repair_declick_stereo(val left_samples, val right_samples,
   }
   mastering::repair::DeclickStereoResult result =
       mastering::repair::declick_stereo(left, right, cfg);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("leftReport", declickReportToVal(result.left_report));
   out.set("rightReport", declickReportToVal(result.right_report));
   return out;
@@ -273,8 +268,7 @@ val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, v
                                   "masteringRepairDenoiseClassical: hopLength must be positive");
   }
   Audio result = mastering::repair::denoise_classical(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -331,12 +325,9 @@ val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_sam
   }
   mastering::repair::DenoiseStereoResult result =
       mastering::repair::denoise_classical_stereo(left, right, cfg);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("report", denoiseReportToVal(result.report));
   return out;
 }
@@ -390,8 +381,7 @@ val js_mastering_repair_declip(val samples, const val& sample_rate, val options)
     cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
   }
   Audio result = mastering::repair::declip(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -444,12 +434,9 @@ val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
     cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
   }
   mastering::repair::DeclipStereoResult result = mastering::repair::declip_stereo(left, right, cfg);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("leftReport", declipReportToVal(result.left_report));
   out.set("rightReport", declipReportToVal(result.right_report));
   return out;
@@ -526,8 +513,7 @@ val js_mastering_repair_decrackle(val samples, const val& sample_rate, val optio
     cfg.levels = repairIntOption(options, "levels", cfg.levels);
   }
   Audio result = mastering::repair::decrackle(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -579,12 +565,9 @@ val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
   }
   mastering::repair::DecrackleStereoResult result =
       mastering::repair::decrackle_stereo(left, right, cfg);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("leftReport", decrackleReportToVal(result.left_report));
   out.set("rightReport", decrackleReportToVal(result.right_report));
   return out;
@@ -610,8 +593,7 @@ val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) 
     }
   }
   Audio result = mastering::repair::dehum(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -673,12 +655,9 @@ val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
     }
   }
   mastering::repair::DehumStereoResult result = mastering::repair::dehum_stereo(left, right, cfg);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("leftReport", dehumReportToVal(result.left_report));
   out.set("rightReport", dehumReportToVal(result.right_report));
   return out;
@@ -701,8 +680,7 @@ val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, 
         "masteringRepairDereverbClassical: hopLength must be in (0, nFft]");
   }
   Audio result = mastering::repair::dereverb_classical(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -757,12 +735,9 @@ val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_sa
   }
   mastering::repair::DereverbStereoResult result =
       mastering::repair::dereverb_classical_stereo(left, right, cfg);
-  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
-  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
-
   val out = val::object();
-  out.set("left", vectorToFloat32Array(left_out));
-  out.set("right", vectorToFloat32Array(right_out));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("report", dereverbReportToVal(result.report));
   return out;
 }
@@ -853,8 +828,7 @@ val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val op
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilence");
   Audio result = mastering::repair::trim_silence(audio, cfg);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return vectorToFloat32Array(out);
+  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -874,12 +848,11 @@ val trimReportToVal(const mastering::repair::TrimReport& report) {
   return out;
 }
 
-// A trimmed channel can be empty, which no other repair stereo entry produces,
-// and data() on an empty one may be null, so the emptiness is tested rather
-// than the pointer arithmetic being left to define itself.
+// A trimmed channel can be empty, which no other repair stereo entry produces;
+// the pointer overload never dereferences channel.data() when size() is 0, so
+// a possibly-null pointer on an empty channel is safe without a special case.
 val trimmedChannelToVal(const Audio& channel) {
-  if (channel.empty()) return vectorToFloat32Array({});
-  return vectorToFloat32Array(std::vector<float>(channel.data(), channel.data() + channel.size()));
+  return vectorToFloat32Array(channel.data(), channel.size());
 }
 
 }  // namespace

@@ -47,6 +47,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
  */
 export class HrtfSet {
   private native: WasmHrtfSet;
+  private released = false;
 
   private constructor(native: WasmHrtfSet) {
     this.native = native;
@@ -57,8 +58,12 @@ export class HrtfSet {
     return new HrtfSet(getSonareModule().createHrtfSet(bytes));
   }
 
-  /** Releases the native handle. */
+  /** Releases the native handle. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.native.delete();
   }
 
@@ -77,12 +82,14 @@ export class HrtfSet {
  * `config` follows `schemas/playback-renderer-config.schema.json`; see
  * {@link PlaybackRendererConfig}. A headphones target requires `hrtf`.
  *
- * `processPlanar` validates every plane (a non-finite sample is refused) and
- * copies through the embind boundary, so it suits the main thread. The
- * AudioWorklet path is `SonarePlaybackWorkletProcessor` in the worklet bundle.
+ * `processPlanar` copies every plane through the embind boundary, so it suits
+ * the main thread; like `processInterleaved`, a non-finite sample is replaced
+ * with 0 and counted rather than refused. The AudioWorklet path is
+ * `SonarePlaybackWorkletProcessor` in the worklet bundle.
  */
 export class PlaybackRenderer {
   private native: WasmPlaybackRenderer;
+  private released = false;
 
   constructor(options: PlaybackRendererOptions) {
     this.native = getSonareModule().createPlaybackRenderer(
@@ -95,9 +102,11 @@ export class PlaybackRenderer {
 
   /**
    * Renders one planar block; every plane must carry the same frame count, at
-   * most `maxBlockSize`. With a fixed input layout the plane count must equal
-   * {@link inputChannels}; with `input.layout: "auto"` it must be 1, 2, 6 or
-   * 8, and a change switches the input layout without changing the latency.
+   * most `maxBlockSize` (0 is a no-op). With a fixed input layout the plane
+   * count must equal {@link inputChannels}; with `input.layout: "auto"` it
+   * must be 1, 2, 6 or 8, and a change switches the input layout without
+   * changing the latency. Non-finite input samples are replaced with 0 and
+   * counted ({@link nonFiniteDiscardCount}).
    */
   processPlanar(planes: Float32Array[]): Float32Array[] {
     return this.native.processPlanar(planes);
@@ -173,8 +182,12 @@ export class PlaybackRenderer {
     return this.native.nonFiniteDiscardCount();
   }
 
-  /** Releases the native handle. */
+  /** Releases the native handle. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.native.delete();
   }
 
@@ -191,6 +204,7 @@ export class PlaybackRenderer {
  */
 export class PlaybackLoudnessMeter {
   private native: WasmPlaybackLoudnessMeter;
+  private released = false;
 
   constructor(channels: number, sampleRate: number) {
     this.native = getSonareModule().createPlaybackLoudnessMeter(channels, sampleRate);
@@ -206,8 +220,12 @@ export class PlaybackLoudnessMeter {
     return this.native.integratedLufs();
   }
 
-  /** Releases the native handle. */
+  /** Releases the native handle. Idempotent, as the Node facade is. */
   delete(): void {
+    if (this.released) {
+      return;
+    }
+    this.released = true;
     this.native.delete();
   }
 
