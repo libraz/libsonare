@@ -31,6 +31,7 @@
 /// - lofi, first aperture null in Hz: the hold rate itself.
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
 /// - rotary, acceleration time constant in seconds: the time constant itself.
+/// - rotary fast horn speed, tremolo rate in Hz: the rate asked for.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
 ///
@@ -752,6 +753,49 @@ double glide_tau_s(float tau_s, double sample_rate) {
   return 0.0;
 }
 
+// The fast horn speed, read off the tremolo it imprints on a tone above the crossover.
+constexpr float kHornFastHz = 7.0f;
+constexpr float kHornProbeHz = 3000.0f;
+constexpr double kHornFastTolerance = 0.02;
+
+/// Tremolo rate in Hz from the first-to-last mean crossing of the 1 ms peak envelope.
+double horn_fast_rate_hz(double sample_rate) {
+  RotaryConfig config;
+  config.depth_ms = 0.0f;
+  config.tremolo = 1.0f;
+  config.horn_fast_hz = kHornFastHz;
+  config.speed = 1.0f;
+  Rotary rotary(config);
+  rotary.prepare(sample_rate, 4096);
+  const int samples = static_cast<int>(4.0 * sample_rate);
+  std::vector<float> left =
+      sonare::test::generate_sine(samples, kHornProbeHz, static_cast<int>(sample_rate), 0.5f);
+  std::vector<float> right = left;
+  sonare::test::process_stereo(rotary, left, right);
+  const int window = static_cast<int>(0.001 * sample_rate);
+  std::vector<double> env;
+  for (int start = static_cast<int>(0.3 * sample_rate); start + window <= samples;
+       start += window) {
+    double peak = 0.0;
+    for (int i = start; i < start + window; ++i) {
+      peak = std::max(peak, static_cast<double>(std::fabs(left[static_cast<std::size_t>(i)])));
+    }
+    env.push_back(peak);
+  }
+  const double mid =
+      0.5 * (*std::min_element(env.begin(), env.end()) + *std::max_element(env.begin(), env.end()));
+  double first = -1.0;
+  double last = -1.0;
+  int crossings = 0;
+  for (std::size_t i = 1; i < env.size(); ++i) {
+    if (env[i - 1] < mid && env[i] >= mid) {
+      last = (static_cast<double>(i - 1) + (mid - env[i - 1]) / (env[i] - env[i - 1])) * 0.001;
+      if (crossings++ == 0) first = last;
+    }
+  }
+  return crossings > 1 ? static_cast<double>(crossings - 1) / (last - first) : 0.0;
+}
+
 // --- parametric EQ ----------------------------------------------------------
 
 // Band-type selectors, in the order the insert's params decode them.
@@ -1091,6 +1135,20 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     }
     tally.within(measured[0], measured[1], kGlideTolerance,
                  "the rotary's acceleration time constant lasts as long at both rates, " + asked);
+  }
+
+  // --- rotary fast horn speed: the tremolo rate, in Hz ----------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = horn_fast_rate_hz(rates[r]);
+      tally.at_least(measured[r], 1.0,
+                     "the rotary's fast horn speed" + at_rate(rates[r]) + ", is readable at all");
+      tally.within(measured[r], static_cast<double>(kHornFastHz), kHornFastTolerance,
+                   "the rotary's fast horn speed" + at_rate(rates[r]) + ", against the rate asked");
+    }
+    tally.within(measured[0], measured[1], kHornFastTolerance,
+                 "the rotary's fast horn speed is the same rate in hertz at both rates");
   }
 
   // The glide reaches the audio and not only the rotor's own accessor: two

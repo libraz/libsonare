@@ -921,6 +921,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.decel_tau_s = f(params, "decelTauS", config.decel_tau_s);
     config.undershoot_hz = f(params, "undershootHz", config.undershoot_hz);
     config.drum_undershoot_hz = f(params, "drumUndershootHz", config.drum_undershoot_hz);
+    config.horn_slow_hz = f(params, "hornSlowHz", config.horn_slow_hz);
+    config.horn_fast_hz = f(params, "hornFastHz", config.horn_fast_hz);
+    config.drum_slow_hz = f(params, "drumSlowHz", config.drum_slow_hz);
+    config.drum_fast_hz = f(params, "drumFastHz", config.drum_fast_hz);
+    config.speed = f(params, "speed", config.speed);
+    config.horn_level_db = f(params, "hornLevelDb", config.horn_level_db);
+    config.drum_level_db = f(params, "drumLevelDb", config.drum_level_db);
     return make<effects::modulation::Rotary>(config);
   }
   if (name == "effects.modulation.ringModulator") {

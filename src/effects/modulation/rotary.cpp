@@ -5,6 +5,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
@@ -32,6 +33,21 @@ Rotary::Rotary(RotaryConfig config) : config_(config) {
   config_.decel_tau_s = std::max(0.0f, config_.decel_tau_s);
   config_.undershoot_hz = std::max(0.0f, config_.undershoot_hz);
   config_.drum_undershoot_hz = std::max(0.0f, config_.drum_undershoot_hz);
+  config_.horn_slow_hz = std::max(0.0f, config_.horn_slow_hz);
+  config_.horn_fast_hz = std::max(0.0f, config_.horn_fast_hz);
+  config_.drum_slow_hz = std::max(0.0f, config_.drum_slow_hz);
+  config_.drum_fast_hz = std::max(0.0f, config_.drum_fast_hz);
+  config_.speed = std::clamp(config_.speed, -1.0f, 1.0f);
+}
+
+float Rotary::horn_target_hz() const noexcept {
+  if (config_.speed < 0.0f) return config_.rate_hz;
+  return config_.speed >= 0.5f ? config_.horn_fast_hz : config_.horn_slow_hz;
+}
+
+float Rotary::drum_target_hz() const noexcept {
+  if (config_.speed < 0.0f) return config_.drum_rate_hz;
+  return config_.speed >= 0.5f ? config_.drum_fast_hz : config_.drum_slow_hz;
 }
 
 void Rotary::prepare(double sample_rate, int) {
@@ -75,14 +91,17 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
   const float base = config_.depth_ms;
   const float swing = config_.depth_ms;
   const float ms_to_samp = 0.001f * static_cast<float>(sample_rate_);
+  const float horn_target = horn_target_hz();
+  const float drum_target = drum_target_hz();
+  const float horn_level = db_to_linear(config_.horn_level_db);
+  const float drum_level = db_to_linear(config_.drum_level_db);
   // Stereo-pair processor: the horn/drum rotor state exists for two planes only,
   // so planes beyond the pair pass through dry (see the registry's
   // stereoPairOnly classification).
   const int active = std::min(num_channels, 2);
   for (int i = 0; i < num_samples; ++i) {
-    const float horn_rate = advance_rotor(horn_rate_, config_.rate_hz, config_.undershoot_hz);
-    const float drum_rate =
-        advance_rotor(drum_rate_, config_.drum_rate_hz, config_.drum_undershoot_hz);
+    const float horn_rate = advance_rotor(horn_rate_, horn_target, config_.undershoot_hz);
+    const float drum_rate = advance_rotor(drum_rate_, drum_target, config_.drum_undershoot_hz);
     for (int ch = 0; ch < 2; ++ch) {
       horn_lfo_[ch].set_rate_hz(horn_rate);
       drum_lfo_[ch].set_rate_hz(drum_rate);
@@ -106,8 +125,8 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
       const float horn_gain = 1.0f - trem * 0.5f * (1.0f - horn_mod);
       // The bass rotor's tremolo is shallower (the drum baffle throws less).
       const float drum_gain = 1.0f - 0.6f * trem * 0.5f * (1.0f - drum_mod);
-      const float horn = horn_delay_[ch].process(horn_in, horn_delay) * horn_gain;
-      const float drum = drum_delay_[ch].process(drum_in, drum_delay) * drum_gain;
+      const float horn = horn_delay_[ch].process(horn_in, horn_delay) * horn_gain * horn_level;
+      const float drum = drum_delay_[ch].process(drum_in, drum_delay) * drum_gain * drum_level;
       channels[ch][i] = dry * in + wet * (horn + drum);
     }
   }
@@ -125,8 +144,8 @@ void Rotary::discard_non_finite() noexcept {
 void Rotary::reset() {
   lp_state_ = {0.0f, 0.0f};
   // A rotor comes back up to speed rather than spinning from rest, so no glide is in flight here.
-  horn_rate_ = config_.rate_hz;
-  drum_rate_ = config_.drum_rate_hz;
+  horn_rate_ = horn_target_hz();
+  drum_rate_ = drum_target_hz();
   // Anti-phase L/R (scaled by the stereo spread) gives the swirling image.
   const double offset = 0.5 * static_cast<double>(config_.stereo_spread);
   horn_lfo_[0].reset(0.0);
@@ -158,13 +177,36 @@ bool Rotary::set_parameter(unsigned int param_id, float value) {
     case 4:
       config_.drum_rate_hz = std::max(0.0f, value);
       return true;
+    case 5:
+      config_.horn_slow_hz = std::max(0.0f, value);
+      return true;
+    case 6:
+      config_.horn_fast_hz = std::max(0.0f, value);
+      return true;
+    case 7:
+      config_.drum_slow_hz = std::max(0.0f, value);
+      return true;
+    case 8:
+      config_.drum_fast_hz = std::max(0.0f, value);
+      return true;
+    case 9:
+      config_.speed = std::clamp(value, -1.0f, 1.0f);
+      return true;
+    case 10:
+      config_.horn_level_db = value;
+      return true;
+    case 11:
+      config_.drum_level_db = value;
+      return true;
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> Rotary::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"depthMs", 1}, {"tremolo", 2}, {"dryWet", 3}, {"drumRateHz", 4}};
+  return {{"rateHz", 0},     {"depthMs", 1},    {"tremolo", 2},      {"dryWet", 3},
+          {"drumRateHz", 4}, {"hornSlowHz", 5}, {"hornFastHz", 6},   {"drumSlowHz", 7},
+          {"drumFastHz", 8}, {"speed", 9},      {"hornLevelDb", 10}, {"drumLevelDb", 11}};
 }
 
 }  // namespace sonare::effects::modulation

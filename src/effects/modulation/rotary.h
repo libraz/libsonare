@@ -50,6 +50,16 @@ struct RotaryConfig {
   /// down arrives exactly. Zero: both directions arrive on the target.
   float undershoot_hz = 0.0f;       ///< horn rotor.
   float drum_undershoot_hz = 0.0f;  ///< drum rotor.
+  /// The two speeds of the speed switch, per rotor. Used only while `speed` >= 0.
+  float horn_slow_hz = 0.8f;
+  float horn_fast_hz = 6.0f;
+  float drum_slow_hz = 0.6f;
+  float drum_fast_hz = 4.44f;
+  /// Speed switch: 0 slow, 1 fast (a value from 0.5 up is fast). Each rotor's target is then its
+  /// slow or fast rate and `rate_hz` / `drum_rate_hz` are not read. Below zero the switch is off.
+  float speed = -1.0f;
+  float horn_level_db = 0.0f;  ///< horn rotor output level.
+  float drum_level_db = 0.0f;  ///< drum rotor output level.
 };
 
 /// A two-rotor rotary-speaker model: the signal is split by a crossover into a
@@ -71,6 +81,9 @@ class Rotary : public rt::ProcessorBase {
   //   2 = tremolo
   //   3 = dry_wet
   //   4 = drum_rate_hz (the drum rotor's target; it glides there)
+  //   5..8 = horn_slow_hz, horn_fast_hz, drum_slow_hz, drum_fast_hz
+  //   9 = speed (-1 off, 0 slow, 1 fast)
+  //   10 = horn_level_db, 11 = drum_level_db
   bool set_parameter(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
@@ -84,6 +97,9 @@ class Rotary : public rt::ProcessorBase {
   /// Returns the crossover filter to rest once a non-finite value has reached
   /// it, once per block (see util/non_finite_state.h).
   void discard_non_finite() noexcept;
+
+  float horn_target_hz() const noexcept;
+  float drum_target_hz() const noexcept;
 
   /// Moves one rotor a sample closer to `target` and returns its new rate.
   float advance_rotor(float& rate, float target, float undershoot) const noexcept;
