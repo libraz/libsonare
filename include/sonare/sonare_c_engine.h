@@ -1426,10 +1426,11 @@ SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engi
 ///   program change with bank select), so the engine only consumes a queue record
 ///   when its lowered messages all fit in the remaining output capacity; the rest
 ///   stay queued for the next call. UMP types that do not lower to MIDI 1.0
-///   (SysEx/Data, Utility, MIDI-2-only controllers) are skipped. Writes the number
-///   of output events to @p out_count. @p max_events must be at least 3 (the most
-///   one record can lower to); call repeatedly until @p out_count is 0 to fully
-///   drain. Host/control-thread only.
+///   (SysEx/Data, Utility, per-note controllers) are skipped. Writes the number
+///   of output events to @p out_count. @p max_events must be at least 4 (the most
+///   one record can lower to: a MIDI 2.0 registered or assignable controller
+///   becomes CC 101/100 or 99/98 plus Data Entry 6/38); call repeatedly until
+///   @p out_count is 0 to fully drain. Host/control-thread only.
 SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
                                               SonareExternalMidiEvent* out, size_t max_events,
                                               size_t* out_count);

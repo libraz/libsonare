@@ -622,9 +622,11 @@ export class RealtimeEngine {
    * returned — the shared unit across every surface. Events past the cap stay
    * queued for the next call (lossless); call again to drain the rest.
    *
-   * One queued record lowers to at most 3 MIDI 1.0 messages, so a positive
-   * `maxRecords` below 3 could never consume a record and is rejected with an
-   * `InvalidParameter` `SonareError` instead of returning nothing forever.
+   * One queued record lowers to at most 4 MIDI 1.0 messages (a MIDI 2.0
+   * registered or assignable controller becomes CC 101/100 or 99/98 plus Data
+   * Entry 6/38), so a positive `maxRecords` below 4 could never consume a record
+   * and is rejected with an `InvalidParameter` `SonareError` instead of
+   * returning nothing forever.
    */
   drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);

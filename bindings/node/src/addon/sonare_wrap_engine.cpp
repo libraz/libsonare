@@ -1815,9 +1815,10 @@ Napi::Value RealtimeEngineWrap::WarpVoiceCapacity(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  // The most MIDI-1 messages one queue record can lower to, and hence the
-  // smallest capacity the C ABI accepts.
-  constexpr size_t kMaxLoweredMessages = 3;
+  // The most MIDI-1 messages one queue record can lower to (a MIDI 2.0
+  // registered / assignable controller's four RPN / NRPN messages), and hence
+  // the smallest capacity the C ABI accepts.
+  constexpr size_t kMaxLoweredMessages = 4;
   constexpr uint32_t kMaxBytes =
       static_cast<uint32_t>(std::extent<decltype(SonareExternalMidiEvent::bytes)>::value);
   size_t max_records = 1024;

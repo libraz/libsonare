@@ -1222,11 +1222,16 @@ export const CASES: AbortGuardCase[] = [
     badTransportArguments: [
       { argument: 'maxRecords', call: (e) => e.drainExternalMidi('16') },
       { argument: 'negative maxRecords', call: (e) => e.drainExternalMidi(-1), error: RangeError },
-      // Below the worst-case 3 messages one queued event lowers to, so the
+      // Below the worst-case 4 messages one queued event lowers to, so the
       // drain could never make progress: rejected rather than silently empty.
       {
         argument: 'maxRecords below the forward-progress minimum',
         call: (e) => e.drainExternalMidi(1),
+        error: RangeError,
+      },
+      {
+        argument: 'maxRecords one short of the forward-progress minimum',
+        call: (e) => e.drainExternalMidi(3),
         error: RangeError,
       },
     ],

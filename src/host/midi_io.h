@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <type_traits>
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
@@ -462,9 +463,12 @@ struct ExternalMidi1Message {
 
 /// The MIDI 1.0 messages a single drained ExternalMidiRecord lowers to. A
 /// channel-voice UMP yields 1 message, except a MIDI 2.0 program change with
-/// bank select which yields up to 3 (two bank-select CCs + the program change).
+/// bank select (3: two bank-select CCs + the program change) and a MIDI 2.0
+/// registered / assignable controller (4: the RPN / NRPN selector pair + Data
+/// Entry MSB / LSB). The array extent is the smallest drain budget any surface
+/// accepts.
 struct ExternalMidi1Lowered {
-  ExternalMidi1Message messages[3] = {};
+  ExternalMidi1Message messages[4] = {};
   uint8_t count = 0;
 };
 
@@ -472,8 +476,8 @@ struct ExternalMidi1Lowered {
 /// @details Shared by every host surface (WASM / Node / Python / C ABI) so the
 ///   lowering rules stay identical. Transport/clock records (destination ==
 ///   kTransportDestination) yield one single-byte system message. Channel-voice
-///   UMPs yield 1..3 messages. UMP types that do not lower to MIDI 1.0 (SysEx /
-///   Data, Utility, MIDI-2-only controllers) yield count == 0.
+///   UMPs yield 1..4 messages. UMP types that do not lower to MIDI 1.0 (SysEx /
+///   Data, Utility, per-note controllers) yield count == 0.
 inline ExternalMidi1Lowered lower_external_midi_record(const ExternalMidiRecord& rec) noexcept {
   ExternalMidi1Lowered out{};
   if (rec.destination_id == kTransportDestination) {
@@ -495,7 +499,9 @@ inline ExternalMidi1Lowered lower_external_midi_record(const ExternalMidiRecord&
     default:
       return out;  // not lowerable to MIDI 1.0
   }
-  for (uint8_t m = 0; m < list.count && out.count < 3; ++m) {
+  constexpr uint8_t kCapacity =
+      static_cast<uint8_t>(std::extent<decltype(ExternalMidi1Lowered::messages)>::value);
+  for (uint8_t m = 0; m < list.count && out.count < kCapacity; ++m) {
     ExternalMidi1Message& msg = out.messages[out.count];
     const size_t n = midi::ump_to_midi1_bytes(list.messages[m], msg.bytes, sizeof(msg.bytes));
     if (n == 0) continue;

@@ -1590,8 +1590,10 @@ export class RealtimeEngine {
    * events returned — the shared unit across every surface. Events past the cap
    * stay queued for the next call (lossless); call again to drain the rest.
    *
-   * `maxRecords` must be 0 (drain nothing) or at least 3, the most MIDI 1.0
-   * messages a single queued event can lower to: a smaller budget could never
+   * `maxRecords` must be 0 (drain nothing) or at least 4, the most MIDI 1.0
+   * messages a single queued event can lower to (a MIDI 2.0 registered or
+   * assignable controller becomes CC 101/100 or 99/98 plus Data Entry 6/38):
+   * a smaller budget could never
    * consume a record, so it is rejected with a `RangeError` rather than
    * returning an empty array while the queue keeps growing. A negative or
    * fractional value is likewise a `RangeError`, a non-number a `TypeError`.

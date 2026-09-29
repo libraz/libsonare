@@ -1,6 +1,7 @@
 /// @file sonare_c_engine_midi_test.cpp
 /// @brief Engine C ABI MIDI input, built-in instrument and per-note dimensions.
 
+#include "midi/ump.h"
 #include "sonare_c_engine_test_helpers.h"
 
 TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engine]") {
@@ -241,6 +242,49 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine drains a MIDI 2.0 RPN as its four-message MIDI 1.0 sequence",
+          "[c_api][engine]") {
+  // A Registered Controller lowers to CC 101 / 100 / 6 / 38, so one record needs
+  // a budget of four and a budget of three can never consume it.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
+  const sonare::midi::Ump rpn =
+      sonare::midi::make_midi2_registered_controller(0, 1, 0, 0, (uint32_t{12} << 25));
+  const SonareEngineMidiEvent events[] = {{0, rpn.words[0], rpn.words[1], 0, 0, 2, 0, 0, 0}};
+  SonareEngineMidiClipSchedule clip{};
+  clip.gain = 1.0f;
+  clip.id = 7;
+  clip.track_id = 5;
+  clip.length_samples = 256;
+  clip.destination_id = 5;
+  clip.events = events;
+  clip.event_count = 1;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+
+  std::array<SonareExternalMidiEvent, 4> drained{};
+  size_t count = 0;
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), 3, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), 4, &count) == SONARE_OK);
+  REQUIRE(count == 4);
+  const uint8_t expected[4][2] = {{101, 0}, {100, 0}, {6, 12}, {38, 0}};
+  for (size_t i = 0; i < 4; ++i) {
+    INFO("message " << i);
+    REQUIRE(drained[i].byte_count == 3);
+    REQUIRE(drained[i].bytes[0] == 0xB1u);
+    REQUIRE(drained[i].bytes[1] == expected[i][0]);
+    REQUIRE(drained[i].bytes[2] == expected[i][1]);
+  }
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
@@ -287,6 +331,8 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
   REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) == SONARE_OK);
   REQUIRE(dropped == 0);
   REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), 2, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), 3, &count) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   // Argument guards.

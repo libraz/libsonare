@@ -166,8 +166,35 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   });
 });
 
+describe('drainExternalMidi lowers a MIDI 2.0 RPN to four MIDI 1.0 messages', () => {
+  it('delivers CC 101, 100, 6 and 38 with a budget of 4', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setMidiDestinationExternal(5, true);
+    const rpnWord0 = ((0x4 << 28) | (0x2 << 20) | (1 << 16)) >>> 0;
+    engine.setMidiClips([
+      {
+        id: 1,
+        trackId: 5,
+        destinationId: 5,
+        lengthSamples: 256,
+        events: [{ renderFrame: 0, word0: rpnWord0, word1: (12 << 25) >>> 0, wordCount: 2 }],
+      },
+    ]);
+    engine.play();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+    const drained = engine.drainExternalMidi(4);
+    expect(drained.map((e) => Array.from(e.bytes))).toEqual([
+      [0xb1, 101, 0],
+      [0xb1, 100, 0],
+      [0xb1, 6, 12],
+      [0xb1, 38, 0],
+    ]);
+    engine.destroy();
+  });
+});
+
 describe('drainExternalMidi reports a budget it can never make progress on', () => {
-  // One queue record lowers to at most 3 MIDI 1.0 messages, so a smaller
+  // One queue record lowers to at most 4 MIDI 1.0 messages, so a smaller
   // budget consumed nothing and returned an empty array forever while the
   // queue grew and started dropping events.
   function engineWithPendingExternalMidi(): RealtimeEngine {
@@ -193,12 +220,12 @@ describe('drainExternalMidi reports a budget it can never make progress on', () 
     return engine;
   }
 
-  for (const maxRecords of [1, 2]) {
+  for (const maxRecords of [1, 2, 3]) {
     it(`rejects maxRecords = ${maxRecords}`, () => {
       const engine = engineWithPendingExternalMidi();
       expectInvalidParameter(() => engine.drainExternalMidi(maxRecords));
       // The queue is untouched, so a caller with a workable budget still drains.
-      expect(engine.drainExternalMidi(3).length).toBeGreaterThan(0);
+      expect(engine.drainExternalMidi(4).length).toBeGreaterThan(0);
       engine.destroy();
     });
   }

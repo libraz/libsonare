@@ -112,7 +112,7 @@ EXPECTED_ENGINE_ABI_VERSION = 3
 # therefore the smallest drain budget that can consume a record at all. Mirrors
 # sonare::host::ExternalMidi1Lowered::messages, which the C ABI reads for the
 # same guard (src/c_api/sonare_c_engine_midi.cpp).
-_MAX_LOWERED_MIDI1_MESSAGES = 3
+_MAX_LOWERED_MIDI1_MESSAGES = 4
 
 
 class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):

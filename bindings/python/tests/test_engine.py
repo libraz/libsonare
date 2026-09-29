@@ -2260,14 +2260,14 @@ def test_engine_telemetry_error_parameter_base_overflow_ordinal() -> None:
     assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.name == "PARAMETER_BASE_OVERFLOW"
 
 
-@pytest.mark.parametrize("max_records", [1, 2])
+@pytest.mark.parametrize("max_records", [1, 2, 3])
 def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
     max_records,
 ) -> None:
     """A budget too small to consume a record is refused, not silently ignored.
 
-    One queued record lowers to at most three MIDI 1.0 messages, so a budget of
-    1 or 2 can never consume one. It used to take neither the empty-budget early
+    One queued record lowers to at most four MIDI 1.0 messages (a registered
+    controller's RPN sequence), so a budget of 1 to 3 can never consume one. It used to take neither the empty-budget early
     return nor a drain: the loop broke on its first iteration and returned an
     empty list with the events still queued, on every repeated call. The C ABI
     and the other bindings refuse the same budget.
@@ -2295,7 +2295,7 @@ def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
         engine.play()
         engine.process([[0.0] * 128, [0.0] * 128])
 
-        with pytest.raises(SonareValueError, match="at least 3"):
+        with pytest.raises(SonareValueError, match="at least 4"):
             engine.drain_external_midi(max_records)
         # A refusal is also caught by the plain argument-validation style.
         with pytest.raises(ValueError):
@@ -2376,3 +2376,32 @@ def test_engine_set_midi_clips_omitted_destination_id_falls_back_to_track_id() -
         engine.play()
         out = np.asarray(engine.process([[0.0] * 128, [0.0] * 128]))
         assert float(np.max(np.abs(out))) > 0.0
+
+
+def test_engine_drain_external_midi_delivers_a_midi2_rpn_as_four_cc_messages() -> None:
+    """A MIDI 2.0 Registered Controller reaches a MIDI 1.0 port as CC 101/100/6/38."""
+    rpn_word0 = (0x4 << 28) | (0x2 << 20) | (1 << 16)  # group 0, channel 1, RPN 0/0
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_midi_destination_external(5, True)
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=7,
+                    track_id=5,
+                    destination_id=5,
+                    length_samples=256,
+                    events=[EngineMidiEvent(0, word0=rpn_word0, word1=12 << 25, word_count=2)],
+                )
+            ]
+        )
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+        drained = engine.drain_external_midi(4)
+        assert [list(e.bytes) for e in drained] == [
+            [0xB1, 101, 0],
+            [0xB1, 100, 0],
+            [0xB1, 6, 12],
+            [0xB1, 38, 0],
+        ]

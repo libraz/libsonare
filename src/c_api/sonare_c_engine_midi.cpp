@@ -4,9 +4,11 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "engine/realtime_engine.h"
+#include "host/midi_io.h"
 #include "rt/command.h"
 #include "sonare_c_internal.h"
 #include "util/resource_limits.h"
@@ -961,19 +963,22 @@ SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
   // Initialise the count before any early error return so a defensive consumer
   // never reads an uninitialised value on the rejected-buffer path.
   *out_count = 0;
-  // A single queue record lowers to at most 3 MIDI-1 messages, so the buffer
-  // must hold at least 3 to guarantee forward progress without losing a record.
-  if (max_events < 3) return SONARE_ERROR_INVALID_PARAMETER;
+  // A single queue record lowers to at most this many MIDI-1 messages, so the
+  // buffer must hold that many to guarantee forward progress without losing a
+  // record. Read from the shared lowering type so it cannot drift from it.
+  constexpr size_t kMaxLoweredMessages =
+      std::extent<decltype(sonare::host::ExternalMidi1Lowered::messages)>::value;
+  if (max_events < kMaxLoweredMessages) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)max_events;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
   size_t written = 0;
-  // Lower one queue record at a time, consuming it only when its (up to 3)
-  // lowered MIDI-1 messages all fit in the remaining output capacity, so the
-  // destructive drain never loses a record that could not be emitted.
-  while (written + 3 <= max_events) {
+  // Lower one queue record at a time, consuming it only when its lowered MIDI-1
+  // messages all fit in the remaining output capacity, so the destructive drain
+  // never loses a record that could not be emitted.
+  while (written + kMaxLoweredMessages <= max_events) {
     sonare::host::ExternalMidiRecord record{};
     if (engine->engine.drain_external_midi(&record, 1) == 0) break;
     const sonare::host::ExternalMidi1Lowered lowered =

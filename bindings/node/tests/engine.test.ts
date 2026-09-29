@@ -2257,6 +2257,33 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('drains a MIDI 2.0 RPN as its four MIDI 1.0 CC messages', () => {
+    // RPN 0/0 on channel 1, Data Entry MSB 12: CC 101, 100, 6, 38.
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setMidiDestinationExternal(5, true);
+    const rpnWord0 = ((0x4 << 28) | (0x2 << 20) | (1 << 16)) >>> 0;
+    engine.setMidiClips([
+      {
+        id: 7,
+        trackId: 5,
+        destinationId: 5,
+        lengthSamples: 256,
+        events: [{ renderFrame: 0, word0: rpnWord0, word1: (12 << 25) >>> 0, wordCount: 2 }],
+      },
+    ]);
+    engine.play();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+    expect(() => engine.drainExternalMidi(3)).toThrow(RangeError);
+    const drained = engine.drainExternalMidi(4);
+    expect(drained.map((e) => Array.from(e.bytes))).toEqual([
+      [0xb1, 101, 0],
+      [0xb1, 100, 0],
+      [0xb1, 6, 12],
+      [0xb1, 38, 0],
+    ]);
+    engine.destroy();
+  });
+
   it('reports external-destination table overflow instead of silently routing internally', () => {
     const engine = new RealtimeEngine(48000, 128);
     for (let id = 0; id < 16; id++) {
@@ -2434,8 +2461,9 @@ describe('RealtimeEngine native binding', () => {
     { label: 'past MAX_SAFE_INTEGER', value: 2 ** 53, outcome: RangeError },
     { label: '1', value: 1, outcome: RangeError },
     { label: '2', value: 2, outcome: RangeError },
+    { label: '3', value: 3, outcome: RangeError },
     { label: '0', value: 0, outcome: 'empty' },
-    { label: '3', value: 3, outcome: 'drains' },
+    { label: '4', value: 4, outcome: 'drains' },
     { label: '1024', value: 1024, outcome: 'drains' },
     { label: 'undefined', value: undefined, outcome: 'drains' },
     { label: 'null', value: null, outcome: 'drains' },

@@ -135,7 +135,7 @@ TEST_CASE("engine MIDI getters define their out-parameter on every exit path",
   // The rejected-buffer path writes the count before it validates max_events.
   size_t drained = 789;
   SonareExternalMidiEvent events[3] = {};
-  REQUIRE(sonare_engine_drain_external_midi(engine, events, 2, &drained) ==
+  REQUIRE(sonare_engine_drain_external_midi(engine, events, 3, &drained) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(drained == 0);
 
