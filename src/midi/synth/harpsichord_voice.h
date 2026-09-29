@@ -25,6 +25,7 @@
 /// allocation-free. Determinism: every noise source is the counter-based
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 
@@ -52,6 +53,15 @@ inline int harpsichord_buffer_capacity(double sample_rate) noexcept {
 inline int harpsichord_slab_capacity(double sample_rate) noexcept {
   const int full = harpsichord_buffer_capacity(sample_rate);
   return 2 * full + full / 2 + full / 8;
+}
+
+/// Where a note's HF decay is quoted: @p requested_hz kept clear of the
+/// fundamental (at least 2 * @p f0_hz) and of Nyquist (at most 0.45 * rate).
+/// At the top of the compass, where 2 * f0 no longer fits, Nyquist wins.
+inline float harpsichord_damping_ref_hz(float requested_hz, float f0_hz,
+                                        double sample_rate) noexcept {
+  const float hi = 0.45f * static_cast<float>(sample_rate);
+  return std::clamp(requested_hz, std::min(2.0f * f0_hz, hi), hi);
 }
 
 /// Harpsichord section of a NativeSynthPatch (used when mode == kHarpsichord).

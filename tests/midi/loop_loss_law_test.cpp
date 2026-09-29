@@ -32,6 +32,8 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/ks_voice.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/piano_voice.h"
+#include "midi/synth/pipe_organ_voice.h"
 #include "midi/synth/pitch.h"
 #include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/reed_voice.h"
@@ -530,4 +532,174 @@ TEST_CASE("the rendered engines' sr-discriminator, with ks_voice as the control"
     // not "the metric cannot move".
     CHECK(std::fabs(engine_reading[0] - engine_reading[1]) > 1.0);
   }
+}
+
+// --- Struck and blown loops that apply the same law ---
+
+namespace {
+
+/// Spread (max - min) of @p reading across the 24 / 48 / 96 kHz grid.
+template <typename Reading>
+double spread_across_rates(Reading reading, std::ostringstream& report) {
+  double lo = 0.0, hi = 0.0;
+  bool first = true;
+  for (double sr : {24000.0, 48000.0, 96000.0}) {
+    const double v = reading(sr);
+    report << "sr " << sr << " reading " << v << "\n";
+    lo = first ? v : std::min(lo, v);
+    hi = first ? v : std::max(hi, v);
+    first = false;
+  }
+  return hi - lo;
+}
+
+double tilt_of(const std::vector<float>& tone, double sr) {
+  const BandTilt tilt = octave_band_tilt(tone, 200.0, 6400.0, sr);
+  REQUIRE(tilt.bands >= 2);
+  return tilt.db_per_octave;
+}
+
+std::vector<float> render_piano(const sonare::midi::synth::PianoPatchParams& params, uint8_t note,
+                                double sr, int samples) {
+  sonare::midi::synth::PianoVoiceCore core;
+  std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(sr)), 0.0f);
+  core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(sr));
+  core.start(params, sr, note, 100, 0x5011ADE5ull);
+  std::vector<float> out(static_cast<size_t>(samples));
+  for (float& v : out) v = core.render(1.0f);
+  return out;
+}
+
+/// Mean power (dB) at 0.3 / 0.5 / 0.7 of each harmonic gap of @p f0 inside
+/// [lo_hz, hi_hz], Hann-windowed over the whole of @p x.
+double gap_floor_db(const std::vector<float>& x, double f0, double sr, double lo_hz, double hi_hz) {
+  const size_t n = x.size();
+  double acc = 0.0;
+  int count = 0;
+  for (int k = 1; (k + 0.3) * f0 <= hi_hz; ++k) {
+    for (const double frac : {0.3, 0.5, 0.7}) {
+      const double f = (k + frac) * f0;
+      if (f < lo_hz || f > hi_hz) continue;
+      const double w = kTwoPiD * f / sr;
+      const double coeff = 2.0 * std::cos(w);
+      double s1 = 0.0, s2 = 0.0;
+      for (size_t i = 0; i < n; ++i) {
+        const double hann = 0.5 - 0.5 * std::cos(kTwoPiD * static_cast<double>(i) / n);
+        const double s0 = hann * x[i] + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+      }
+      const double re = s1 - s2 * std::cos(w);
+      const double im = s2 * std::sin(w);
+      const double mag = std::sqrt(re * re + im * im) / (static_cast<double>(n) / 4.0);
+      acc += mag * mag;
+      ++count;
+    }
+  }
+  REQUIRE(count >= 18);
+  return 10.0 * std::log10(std::max(1.0e-24, acc / count));
+}
+
+}  // namespace
+
+TEST_CASE("the KS brightness pole keeps its corner across rates where no HF target is solved",
+          "[midi][synth][ks][loss_law]") {
+  // hf_decay_s == 0 leaves the brightness knob's own pole as the only loop
+  // loss. Measured spread: 4.34 dB/oct with the pole unmapped, 0.31 mapped.
+  KsPatchParams dark;
+  dark.brightness = 0.0f;
+  dark.hf_decay_s = 0.0f;
+  dark.decay_s = 3.0f;
+  std::ostringstream report;
+  const double spread = spread_across_rates(
+      [&](double sr) {
+        const int samples = window_samples(sr);
+        return tilt_of(render_ks(dark, 48, sr, samples), sr);
+      },
+      report);
+  INFO(report.str());
+  CHECK(spread < 1.5);
+}
+
+TEST_CASE("the piano string-loop pole keeps its corner across rates", "[midi][synth][loss_law]") {
+  // The dark end of the shipped grand at A0, where the pole is strongest, read
+  // after the strike noise has died so only the loop filter shapes the tilt.
+  // Measured spread: 8.64 dB/oct with the pole unmapped, 0.28 mapped.
+  sonare::midi::synth::PianoPatchParams dark = gm_fallback_patch(0, 0).piano;
+  dark.brightness = 0.0f;
+  std::ostringstream report;
+  const double spread = spread_across_rates(
+      [&](double sr) {
+        const int samples = window_samples(sr);
+        const int skip = static_cast<int>(0.5 * sr);
+        const std::vector<float> tone = render_piano(dark, 28, sr, skip + samples);
+        return tilt_of(std::vector<float>(tone.begin() + skip, tone.end()), sr);
+      },
+      report);
+  INFO(report.str());
+  CHECK(spread < 1.5);
+}
+
+TEST_CASE("the piano strike noise keeps its power per Hz across rates", "[midi][synth][loss_law]") {
+  // The first 50 ms of C4, read between the harmonics where the strike and
+  // scrub noise sit. Measured spread: 8.5 dB unscaled, 2.3 dB scaled.
+  const sonare::midi::synth::PianoPatchParams& grand = gm_fallback_patch(0, 0).piano;
+  const double f0 = note_to_hz(uint8_t{60});
+  std::ostringstream report;
+  const double spread = spread_across_rates(
+      [&](double sr) {
+        const int samples = static_cast<int>(0.05 * sr);
+        return gap_floor_db(render_piano(grand, 60, sr, samples), f0, sr, 1000.0, 6000.0);
+      },
+      report);
+  INFO(report.str());
+  CHECK(spread < 4.5);
+}
+
+TEST_CASE("the pipe-organ reflection floor keeps its corner across rates",
+          "[midi][synth][loss_law]") {
+  // A dark stopped rank at C3, whose reflection corner sits on the floor.
+  // Breath and chiff off so the settled tone is deterministic. Measured
+  // spread: 1.20 dB/oct with the floor held as a coefficient, 0.55 in Hz.
+  sonare::midi::synth::PipeOrganPatchParams stopped;
+  stopped.stopped = true;
+  stopped.brightness = 0.0f;
+  stopped.breath = 0.0f;
+  stopped.chiff = 0.0f;
+  std::ostringstream report;
+  const double spread = spread_across_rates(
+      [&](double sr) {
+        const int samples = window_samples(sr);
+        sonare::midi::synth::PipeOrganVoiceCore core;
+        std::vector<float> slab(
+            static_cast<size_t>(sonare::midi::synth::pipe_organ_slab_capacity(sr)), 0.0f);
+        core.attach(slab.data(), sonare::midi::synth::pipe_organ_buffer_capacity(sr));
+        core.start(stopped, sr, 48, 100, 0x5011ADE5ull);
+        for (int i = 0; i < samples / 2; ++i) core.render(1.0f);  // let it settle
+        std::vector<float> tone(static_cast<size_t>(samples));
+        for (float& v : tone) v = core.render(1.0f);
+        return tilt_of(tone, sr);
+      },
+      report);
+  INFO(report.str());
+  CHECK(spread < 0.9);
+}
+
+TEST_CASE("loss_alpha_at_rate is the loss law in alpha form, exact at the voiced rate",
+          "[midi][synth][loss_law]") {
+  using sonare::midi::synth::loss_alpha_at_rate;
+  for (const float alpha : {0.01f, 0.05f, 0.3f, 0.9f}) {
+    INFO("alpha " << alpha);
+    // Bit for bit at the voiced rate, which 1 - loss_pole_at_rate(1 - alpha) is not.
+    REQUIRE(loss_alpha_at_rate(alpha, kLossVoicedSr) == alpha);
+    // The corner in Hz, -ln(1 - alpha) * sr / (2 pi), holds at every other rate.
+    const double corner_voiced = -std::log(1.0 - alpha) * kLossVoicedSr;
+    for (const double sr : {22050.0, 44100.0, 96000.0, 192000.0}) {
+      const double mapped = loss_alpha_at_rate(alpha, sr);
+      CHECK(-std::log(1.0 - mapped) * sr == Catch::Approx(corner_voiced).epsilon(1.0e-5));
+      CHECK(1.0f - loss_alpha_at_rate(alpha, sr) ==
+            Catch::Approx(loss_pole_at_rate(1.0f - alpha, sr)).epsilon(1.0e-5));
+    }
+  }
+  REQUIRE(loss_alpha_at_rate(1.0f, 96000.0) == 1.0f);  // a transparent filter stays transparent
 }

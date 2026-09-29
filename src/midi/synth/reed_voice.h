@@ -257,6 +257,8 @@ class ReedVoiceCore {
  private:
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
+  // Re-solves bore_.comp from the pole lp_alpha_ now holds.
+  void retune_loop_comp() noexcept;
 
   // Bore delay line (host-owned): the travelling-wave air column. period is
   // the loop period (samples); comp the delay not carried in the line
@@ -278,6 +280,14 @@ class ReedVoiceCore {
   // frequency-referenced pair (see loss_gain_ship_ below) rather than set
   // independently, so both live-ramp toward their CC74 targets.
   float lp_alpha_ = 1.0f;
+  // What retune_loop_comp() needs besides the pole: the fundamental in radians
+  // per sample, the highpass phase lead and its scale, the valve lag, and the
+  // lp_alpha_ bore_.comp was last solved for.
+  float comp_omega_ = 0.0f;
+  float comp_lead_scale_ = 0.0f;
+  float comp_lead_ = 0.0f;
+  float comp_valve_ = 0.0f;
+  float comp_alpha_ = -1.0f;
   float lp_state_ = 0.0f;
   float loss_gain_ = 0.95f;
   // The shipped flat loss gain from damping (damping is not CC-live, so this is

@@ -198,6 +198,8 @@ class FluteVoiceCore {
  private:
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
+  // Re-solves bore_.comp and jet_comp_ from the pole lp_alpha_ now holds.
+  void retune_loop_comp() noexcept;
 
   // Bore + jet delay lines (host-owned): the travelling-wave air column and the
   // air-jet convection line.
@@ -214,11 +216,13 @@ class FluteVoiceCore {
   // jet-convection length).
   float jet_comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
-  /// The played fundamental (Hz) and the sample rate, held for the bell-loop
-  /// loss-law solve (refresh_excitation_targets()), which must be re-run on
-  /// every live brightness write (a CC74-live axis), not only at note-on.
+  /// The played fundamental (Hz) and the sample rate, held for the pole
+  /// mapping and for retune_loop_comp(), which follows the smoothed pole on
+  /// every live brightness move (a CC74-live axis), not only at note-on.
   float f0_ = 0.0f;
   float srf_ = 48000.0f;
+  /// The lp_alpha_ bore_.comp and jet_comp_ were last solved for.
+  float comp_alpha_ = -1.0f;
 
   // Open-end reflection: one-pole loss lowpass y += alpha*(x - y) (the frequency-
   // dependent radiation loss), an overall loss gain, and the inverting reflection
@@ -263,9 +267,6 @@ class FluteVoiceCore {
   float ctrl_coeff_ = 1.0f;
   float breath_ctrl_target_ = 0.55f;
   float lp_alpha_target_ = 1.0f;
-  /// lp_alpha_target_ as it is at kLossVoicedSr, for the jet delay's own
-  /// compensation.
-  float lp_alpha_voiced_ = 1.0f;
   float loss_gain_target_ = 1.0f;
   // The normalized bases behind those two targets, and the matrix offsets on
   // them; the targets are always the composed pair. force01_base/bright01_base

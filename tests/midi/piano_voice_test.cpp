@@ -607,3 +607,31 @@ TEST_CASE("piano rendering is deterministic", "[midi][synth][piano]") {
   REQUIRE(peak > 0.01f);
   REQUIRE(first == second);
 }
+
+TEST_CASE("a half pedal damps by its position, not by how many CC64 messages sent it",
+          "[midi][synth][piano]") {
+  // A real continuous pedal repeats CC64 at the same or nearby positions; each
+  // message must re-state the contact, never add another one on top.
+  const auto render_with_repeats = [](int repeats) {
+    NativeSynthConfig cfg;
+    cfg.patch = gm_fallback_patch(0, 0);
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    render_left(synth, 4800);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    render_left(synth, 4800);
+    for (int i = 0; i < repeats; ++i) {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 90)));
+    }
+    return render_left(synth, 96000);
+  };
+  const std::vector<float> once = render_with_repeats(1);
+  const std::vector<float> twenty = render_with_repeats(20);
+  const float once_tail = rms(once, 72000, 96000);
+  const float twenty_tail = rms(twenty, 72000, 96000);
+  INFO("tail rms once " << once_tail << " twenty " << twenty_tail);
+  REQUIRE(once_tail > 1.0e-5f);  // non-vacuity: the half-pedalled note still rings
+  REQUIRE(twenty_tail == once_tail);
+}

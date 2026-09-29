@@ -38,6 +38,7 @@
 /// per-string detune jitter derives from the (voice_index, note, age)
 /// stream; the hammer pulse is analytic.
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -206,6 +207,9 @@ class PianoVoiceCore {
     float ap_a = 0.0f;  // shared first-order allpass coefficient
     float g_slow = 0.0f;
     float g_fast = 0.0f;
+    // The two gains as start() set them: what a partial damper interpolates from.
+    float g_slow_natural = 0.0f;
+    float g_fast_natural = 0.0f;
   };
 
   float* slab_ = nullptr;
@@ -510,6 +514,9 @@ class PianoSoundboard {
   /// Tunes the mode bank for @p sample_rate and stores the patch @p mix in
   /// [0,1] (the soundboard return level); clears the resonator state.
   void prepare(double sample_rate, float mix) noexcept;
+  /// Re-states the return level @p mix in [0,1] without touching the resonator
+  /// state, so notes still sounding through the board keep their ring.
+  void set_mix(float mix) noexcept { out_gain_ = std::clamp(mix, 0.0f, 1.0f); }
   /// Clears the resonator state.
   void reset() noexcept;
   /// Radiates one summed input sample: returns the phase-diffused complement

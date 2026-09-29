@@ -178,9 +178,7 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
   const float hf = std::clamp(params.hf_damping, 0.05f, 1.0f);
   const float damper_t60 = std::max(0.005f, params.damper_s);
-  // The frequency the HF decay is quoted at, kept clear of the fundamental (a
-  // reference at or below it has no tilt to describe) and of Nyquist.
-  const float ref_hz = std::clamp(params.damping_ref_hz, 2.0f * f0, 0.45f * static_cast<float>(sr));
+  const float ref_hz = harpsichord_damping_ref_hz(params.damping_ref_hz, f0, sr);
   const float omega_ref = kTwoPi * ref_hz / static_cast<float>(sr);
 
   const float detune_8b =

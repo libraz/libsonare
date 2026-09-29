@@ -126,9 +126,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   vib_phase_ = 0.0f;
 
   const float f0 = note_to_hz(note);
-  // Held for the bell-loop loss-law solve, which is re-run wherever the pole is
-  // refreshed today (refresh_excitation_targets(), called both here and on
-  // every live CC74 write) rather than only once at note-on.
+  // Held for retune_loop_comp(), which follows the pole wherever it moves.
   f0_ = f0;
   srf_ = srf;
   // The flute is open at both ends: the bore is a POSITIVE-feedback comb of one
@@ -178,17 +176,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   even_hp_alpha_ =
       std::clamp(1.0f - std::exp(-kTwoPi * kEvenPumpDcHz / static_cast<float>(sr)), 0.0f, 1.0f);
 
-  // Tuning compensation: one feedback register (bore_.out is consumed one sample
-  // after it is produced) plus the reflection lowpass's phase delay at f0.
-  const float omega = kTwoPi * f0 / srf;
-  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
-  bore_.comp = 1.0f + tau_lp;
-  // The jet's compensation is taken at the voiced rate: a sample count's
-  // duration halves as the rate doubles, and the jet delay is a duration.
-  const float voiced_srf = static_cast<float>(kLossVoicedSr);
-  const float tau_voiced =
-      onepole_group_delay_samples(1.0f - lp_alpha_voiced_, kTwoPi * f0 / voiced_srf);
-  jet_comp_ = (1.0f + tau_voiced) * (srf / voiced_srf);
+  retune_loop_comp();
 
   // Both lines span the whole slab, because the line length is what bounds a
   // downward bend and the clamp enforcing it saturates silently -- a glide
@@ -256,6 +244,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   // zipper).
   breath_target_ += ctrl_coeff_ * (breath_ctrl_target_ - breath_target_);
   lp_alpha_ += ctrl_coeff_ * (lp_alpha_target_ - lp_alpha_);
+  if (lp_alpha_ != comp_alpha_) retune_loop_comp();
   loss_gain_ += ctrl_coeff_ * (loss_gain_target_ - loss_gain_);
   vib_depth_ += ctrl_coeff_ * (vib_depth_target_ - vib_depth_);
 
@@ -376,10 +365,23 @@ void FluteVoiceCore::refresh_excitation_targets() noexcept {
   // kept only to reproduce the shipped formula exactly.
   const float a_voiced = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
   lp_alpha_target_ = 1.0f - loss_pole_at_rate(a_voiced, srf_);
-  lp_alpha_voiced_ = 1.0f - loss_pole_at_rate(a_voiced, kLossVoicedSr);
   // The per-traversal gain needs no mapping: the loop is traversed f0 times a
   // second whatever the rate, so `damping_gain_` already means the same thing.
   loss_gain_target_ = damping_gain_;
+}
+
+void FluteVoiceCore::retune_loop_comp() noexcept {
+  // One feedback register (bore_.out is consumed one sample after it is
+  // produced) plus the reflection lowpass's phase delay at f0.
+  const float a = 1.0f - lp_alpha_;
+  bore_.comp = 1.0f + onepole_group_delay_samples(a, kTwoPi * f0_ / srf_);
+  // The jet's compensation is taken at the voiced rate: a sample count's
+  // duration halves as the rate doubles, and the jet delay is a duration.
+  const float voiced_srf = static_cast<float>(kLossVoicedSr);
+  const float tau_voiced =
+      onepole_group_delay_samples(loss_pole_at_voiced_rate(a, srf_), kTwoPi * f0_ / voiced_srf);
+  jet_comp_ = (1.0f + tau_voiced) * (srf_ / voiced_srf);
+  comp_alpha_ = lp_alpha_;
 }
 
 void FluteVoiceCore::set_vibrato(float depth01) noexcept {

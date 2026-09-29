@@ -385,6 +385,36 @@ TEST_CASE("bridge coupling stays bounded at the near-degenerate detune across th
   }
 }
 
+TEST_CASE("shipped steel guitar never grows on a held treble note", "[midi][synth][ks]") {
+  // GM 25 couples its two planes through the bridge with a tilted loop filter,
+  // whose sub-fundamental gain sits above the decay target. The runaway parks at
+  // DC, where the host's DC blocker hides it, so the loop is read directly.
+  const NativeSynthPatch& steel = gm_fallback_patch(0, 25);
+  REQUIRE(steel.ks.body_coupling > 0.0f);
+  REQUIRE(steel.ks.polarization > 0.0f);
+  constexpr size_t kSeconds = 30;
+  const size_t sr = static_cast<size_t>(kRate);
+  const auto window_peak = [](const std::vector<float>& x, size_t from, size_t to) {
+    float m = 0.0f;
+    for (size_t i = from; i < to && i < x.size(); ++i) m = std::max(m, std::fabs(x[i]));
+    return m;
+  };
+  std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::ks_slab_capacity(kRate)));
+  for (uint8_t note = 76; note <= 100; note += 8) {
+    sonare::midi::synth::KsVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::ks_buffer_capacity(kRate));
+    core.start(steel.ks, kRate, note, 100, 0x25u + note);
+    std::vector<float> tone(kSeconds * sr);
+    for (float& s : tone) s = core.render(1.0f);
+    const float early = window_peak(tone, sr / 2, 3 * sr / 2);
+    const float late = window_peak(tone, (kSeconds - 1) * sr, kSeconds * sr);
+    INFO("note " << static_cast<int>(note) << " early peak " << early << " late peak " << late);
+    REQUIRE(std::isfinite(late));
+    REQUIRE(early > 1.0e-4f);  // non-vacuity: the note sounded
+    REQUIRE(late <= early);
+  }
+}
+
 TEST_CASE("sympathetic bank rings, stays bounded, off by default", "[midi][synth][ks]") {
   NativeSynthPatch dry = ks_base_patch();
   dry.ks.decay_s = 3.0f;

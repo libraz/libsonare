@@ -63,6 +63,23 @@ inline float loss_pole_at_rate(float a_voiced, double sample_rate) noexcept {
   return static_cast<float>(std::pow(static_cast<double>(a_voiced), kLossVoicedSr / sample_rate));
 }
 
+/// The inverse of loss_pole_at_rate(): the pole at @ref kLossVoicedSr that
+/// @p a_at_rate re-expresses at @p sample_rate.
+inline float loss_pole_at_voiced_rate(float a_at_rate, double sample_rate) noexcept {
+  if (!(sample_rate > 0.0) || a_at_rate <= 0.0f) return a_at_rate;
+  return static_cast<float>(std::pow(static_cast<double>(a_at_rate), sample_rate / kLossVoicedSr));
+}
+
+/// loss_pole_at_rate() for a loss one-pole written `y += alpha*(x-y)`, taking
+/// and returning `alpha = 1 - a`. Computed in double so the voiced rate returns
+/// @p alpha_voiced bit for bit, which `1 - loss_pole_at_rate(1 - alpha)` in
+/// float does not.
+inline float loss_alpha_at_rate(float alpha_voiced, double sample_rate) noexcept {
+  if (!(sample_rate > 0.0) || !(alpha_voiced < 1.0f)) return alpha_voiced;
+  const double a = 1.0 - static_cast<double>(alpha_voiced);
+  return static_cast<float>(1.0 - std::pow(a, kLossVoicedSr / sample_rate));
+}
+
 /// Re-expresses a per-sample noise level voiced at @ref kLossVoicedSr so it
 /// keeps its power per Hz at @p sample_rate.
 ///

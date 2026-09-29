@@ -342,10 +342,11 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     float bright = std::clamp(ranks[r].brightness + 0.3f * reed, 0.0f, 1.0f);
     if (stopped) bright = std::min(bright, 0.35f);
     const float corner = (kReflectCornerBase + kReflectCornerSpan * bright) * f0;
-    // The 0.05 floor is a fixed 392 Hz at 48 kHz, so the tracking above stops at
-    // the bottom of the compass: a stopped 16' is pinned over its whole brightness
-    // range at and below C#4, which is the register that rank is played in.
-    const float alpha = std::clamp(1.0f - std::exp(-kTwoPi * corner / srf), 0.05f, 1.0f);
+    // The floor is 392 Hz (alpha 0.05 at kLossVoicedSr), so the tracking above
+    // stops at the bottom of the compass: a stopped 16' is pinned over its whole
+    // brightness range at and below C#4, which is the register that rank is played in.
+    const float alpha =
+        std::clamp(1.0f - std::exp(-kTwoPi * corner / srf), loss_alpha_at_rate(0.05f, sr), 1.0f);
     const float a = 1.0f - alpha;
     pipe.lp_alpha = alpha;
     pipe.lp_state = 0.0f;
@@ -395,7 +396,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     pipe.chiff_coeff = std::exp(
         -1.0f / std::max(1.0f, static_cast<float>(std::max(0.5f, params.chiff_ms) * 0.001 * sr)));
     const float chiff_corner = std::min(kChiffCornerMult * base_f0, kChiffCornerMaxHz);
-    pipe.chiff_lp_alpha = std::clamp(1.0f - std::exp(-kTwoPi * chiff_corner / srf), 0.01f, 1.0f);
+    pipe.chiff_lp_alpha = std::clamp(1.0f - std::exp(-kTwoPi * chiff_corner / srf),
+                                     loss_alpha_at_rate(0.01f, sr), 1.0f);
     pipe.chiff_lp_state = 0.0f;
     // Keep the burst's energy roughly constant as the band narrows (one-pole
     // filtered unit noise has RMS ~ sqrt(alpha / (2 - alpha))): the low pipes'
@@ -429,7 +431,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // Jet turbulence band: the wind hiss lives around this pipe's speaking
     // partials.
     const float turb_corner = std::min(kTurbCornerMult * f0, kTurbCornerMaxHz);
-    pipe.turb_alpha = std::clamp(1.0f - std::exp(-kTwoPi * turb_corner / srf), 0.01f, 1.0f);
+    pipe.turb_alpha = std::clamp(1.0f - std::exp(-kTwoPi * turb_corner / srf),
+                                 loss_alpha_at_rate(0.01f, sr), 1.0f);
     pipe.turb_state = 0.0f;
 
     // Post-loop tone filter: this pipe radiates a fairly pure tone; the top

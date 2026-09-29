@@ -1322,7 +1322,8 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // reference frequency is the note left untouched.
   const float rate_norm =
       std::pow(kLoopDampRefHz / std::max(f0, 1.0f), std::clamp(kLoopDampRateNorm, 0.0f, 1.0f));
-  float lp_a = std::clamp((1.0f - bright_eff) * 0.6f * rate_norm, 0.0f, 0.95f);
+  float lp_a =
+      loss_pole_at_rate(std::clamp((1.0f - bright_eff) * 0.6f * rate_norm, 0.0f, 0.95f), sr);
   // Solve the pole from what the string has to DO instead of from a tone knob.
   //
   // The rate normalization above takes the register dependence out of the
@@ -1444,6 +1445,8 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
     const float lp_comp = std::min(1.0f / std::max(1.0e-3f, lp_h1_gain), 1.0f / 0.9f);
     s.g_slow = std::min(0.99997f, loop_gain_for(s.base_period, sr, t60_slow) * lp_comp);
     s.g_fast = std::min(s.g_slow, loop_gain_for(s.base_period, sr, t60_fast) * lp_comp);
+    s.g_slow_natural = s.g_slow;
+    s.g_fast_natural = s.g_fast;
     // The line spans the whole slab rather than this note's period: the line
     // length is what bounds a downward bend, and the clamp that enforces it
     // saturates silently rather than breaking.
@@ -1735,9 +1738,11 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // The impact noise is part of the same blow — it rides the injection tilt
   // and the dynamics-gated felt compression (a compressed crown scrubs
   // louder, a soft blow on open felt barely rustles).
+  // Scales the direct tap and the string-injected scrub alike, both read off it.
   noise_env_ = kStrikeNoiseGain * hammer_amp_ * dyn_bright * (una_corda ? 0.35f : 1.0f) *
                std::exp2(-kNoiseTrebleTaperOct * std::max(0.0f, octaves_from_c4) +
-                         kInjTiltDbOct * std::clamp(octaves_from_c4, -1.25f, 1.25f) / 6.0206f);
+                         kInjTiltDbOct * std::clamp(octaves_from_c4, -1.25f, 1.25f) / 6.0206f) *
+               noise_gain_at_rate(sr);
   knock_gain_ = kKnockGain * std::pow(std::max(vel01, 1.0e-4f), kKnockVelExp) *
                 std::exp2(kKnockBassBoostOct * std::max(0.0f, -octaves_from_c4) -
                           kKnockTrebleTaperOct * std::max(0.0f, octaves_from_c4));
@@ -2138,8 +2143,8 @@ void PianoVoiceCore::damp(float strength) noexcept {
   }
   for (int i = 0; i < num_strings_; ++i) {
     String& s = strings_[static_cast<size_t>(i)];
-    s.g_slow = std::min(s.g_slow, partial_damp_gain(s.g_slow, release_gain_, strength));
-    s.g_fast = std::min(s.g_fast, partial_damp_gain(s.g_fast, release_gain_, strength));
+    s.g_slow = std::min(s.g_slow, partial_damp_gain(s.g_slow_natural, release_gain_, strength));
+    s.g_fast = std::min(s.g_fast, partial_damp_gain(s.g_fast_natural, release_gain_, strength));
   }
   // Partial contact scales the ADDED rate, so a half-resting damper removes
   // half the energy per second the full one does. partial_damp_gain's

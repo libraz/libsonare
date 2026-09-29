@@ -270,12 +270,13 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // it and would otherwise sharpen the low range). The lag and lead enter comp
   // with opposite signs.
   const float omega = kTwoPi / std::max(1.0f, bore_.period);
-  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
-  bore_.comp = 1.0f + tau_lp - kDcCompScale * tau_hp;
+  comp_omega_ = omega;
+  comp_lead_ = tau_hp;
+  retune_loop_comp();
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
@@ -454,6 +455,7 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
   // targets (control-rate host updates, audio-rate smoothing -> no zipper).
   breath_target_ += ctrl_coeff_ * (breath_ctrl_target_ - breath_target_);
   lp_alpha_ += ctrl_coeff_ * (lp_alpha_target_ - lp_alpha_);
+  if (lp_alpha_ != comp_alpha_) retune_loop_comp();
 
   // Mouth pressure contour: ramp toward the target (1 while blowing, 0 once the
   // player tongues off), then the steady breath plus its turbulence and the
@@ -672,6 +674,12 @@ float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
   // is masked rather than absent — and a masked pole still moves its corner with
   // the rate, which is what the mapping removes.
   return 1.0f - loss_pole_at_rate(a, lip_srf_);
+}
+
+void BrassVoiceCore::retune_loop_comp() noexcept {
+  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+  bore_.comp = 1.0f + tau_lp - kDcCompScale * comp_lead_;
+  comp_alpha_ = lp_alpha_;
 }
 
 void BrassVoiceCore::snap_excitation() noexcept {

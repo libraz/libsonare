@@ -19,6 +19,7 @@
 
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pitch.h"
 #include "support/alloc_guard.h"
 
 namespace {
@@ -343,5 +344,34 @@ TEST_CASE("GM harpsichord banks are voiced by the harpsichord engine",
     // The instrument's defining number survives clamping on every bank.
     REQUIRE(patch.harpsichord.velocity_range_db > 0.0f);
     REQUIRE(patch.harpsichord.velocity_range_db <= 8.0f);
+  }
+}
+
+TEST_CASE("harpsichord HF damping reference stays below Nyquist across the compass",
+          "[midi][synth][harpsichord]") {
+  using sonare::midi::synth::harpsichord_damping_ref_hz;
+  using sonare::midi::synth::note_to_hz;
+  for (double sr : {22050.0, 44100.0, 48000.0, 96000.0}) {
+    const float hi = 0.45f * static_cast<float>(sr);
+    for (int note = 0; note <= 127; ++note) {
+      const float f0 = note_to_hz(static_cast<uint8_t>(note));
+      for (float requested : {0.0f, 3000.0f, 1.0e6f}) {
+        const float ref = harpsichord_damping_ref_hz(requested, f0, sr);
+        INFO("sr " << sr << " note " << note << " requested " << requested << " ref " << ref);
+        REQUIRE(ref <= hi);
+        REQUIRE(ref >= std::min(2.0f * f0, hi));
+      }
+    }
+  }
+}
+
+TEST_CASE("harpsichord top notes render finite and bounded", "[midi][synth][harpsichord]") {
+  const HarpsichordPatchParams& params = gm_fallback_patch(0, 6).harpsichord;
+  Slab slab;
+  for (uint8_t note : {123, 125, 127}) {
+    const std::vector<float> out = render_held(params, note, 100, 0.5, slab);
+    INFO("note " << static_cast<int>(note));
+    REQUIRE(std::isfinite(peak(out)));
+    REQUIRE(peak(out) < 4.0f);
   }
 }

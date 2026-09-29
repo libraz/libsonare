@@ -233,3 +233,36 @@ TEST_CASE("every engine's legato floor is a pitch its delay line can hold",
   INFO("engines checked: " << checked);
   REQUIRE(checked == std::size(rows));
 }
+
+TEST_CASE("a panic clears the legato key stack, so the next release silences the voice",
+          "[midi][synth][articulation]") {
+  // Hold a key, panic, then play and release another: with the panicked key
+  // left in the stack the release retunes the new voice back to it instead.
+  for (const uint8_t controller : {uint8_t{120}, uint8_t{123}}) {
+    NativeSynthConfig cfg;
+    cfg.patch.mode = SynthEngineMode::kSubtractive;
+    cfg.patch.cutoff_hz = 20000.0f;
+    cfg.patch.amp_env.sustain = 1.0f;
+    cfg.patch.amp_env.release_ms = 50.0f;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, kBlock);
+    synth.set_articulation(0, ArticulationMode::kMonoLegato);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kFirst, kVelocity)));
+    render_left(synth, 4800);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, controller, 0)));
+    render_left(synth, 9600);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kSecond, kVelocity)));
+    const std::vector<float> held = render_left(synth, 4800);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, kSecond, 0)));
+    const std::vector<float> after = render_left(synth, 24000);
+    float held_peak = 0.0f;
+    for (float s : held) held_peak = std::max(held_peak, std::fabs(s));
+    float tail_peak = 0.0f;
+    for (size_t i = after.size() / 2; i < after.size(); ++i) {
+      tail_peak = std::max(tail_peak, std::fabs(after[i]));
+    }
+    INFO("CC" << int{controller} << " held peak " << held_peak << " tail peak " << tail_peak);
+    REQUIRE(held_peak > 1.0e-3f);  // non-vacuity: the second note sounded
+    REQUIRE(tail_peak < 1.0e-5f);
+  }
+}

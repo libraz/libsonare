@@ -292,16 +292,18 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // loop and the highpass lead shortens it, so they enter comp with opposite
   // signs. Subtract comp from the loop delay.
   const float omega = kTwoPi / std::max(1.0f, bore_.period);
-  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
   const float hp_scale = closing_pressure_ > 0.0f ? kHpCompScaleValve : kHpCompScale;
-  bore_.comp = 1.0f + tau_lp - hp_scale * tau_hp;
+  comp_omega_ = omega;
+  comp_lead_scale_ = hp_scale;
+  comp_lead_ = tau_hp;
   // The dynamic valve's lag lengthens the driven loop the way the bell lowpass
   // does, so it enters comp with the same sign.
-  if (valve_tau > 0.0f) bore_.comp += valve_tau;
+  comp_valve_ = valve_tau;
+  retune_loop_comp();
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
@@ -406,6 +408,7 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // targets()) — brightness alone now moves both.
   breath_target_ += ctrl_coeff_ * (breath_ctrl_target_ - breath_target_);
   lp_alpha_ += ctrl_coeff_ * (lp_alpha_target_ - lp_alpha_);
+  if (lp_alpha_ != comp_alpha_) retune_loop_comp();
   loss_gain_ += ctrl_coeff_ * (loss_gain_target_ - loss_gain_);
 
   // Mouth pressure contour: ramp toward the target (1 while blowing, 0 once the
@@ -572,6 +575,13 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
   const float br = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   lp_alpha_target_ = 1.0f - loss_pole_at_rate((1.0f - br) * kBellPoleSpan, sample_rate_);
   loss_gain_target_ = loss_gain_ship_;
+}
+
+void ReedVoiceCore::retune_loop_comp() noexcept {
+  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+  bore_.comp = 1.0f + tau_lp - comp_lead_scale_ * comp_lead_;
+  if (comp_valve_ > 0.0f) bore_.comp += comp_valve_;
+  comp_alpha_ = lp_alpha_;
 }
 
 void ReedVoiceCore::snap_excitation() noexcept {

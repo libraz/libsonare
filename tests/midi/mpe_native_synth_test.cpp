@@ -369,3 +369,15 @@ TEST_CASE("a mode message sent to the manager channel is ignored", "[midi][synth
   CAPTURE(peak, silenced_peak);
   REQUIRE(silenced_peak < peak);
 }
+
+TEST_CASE("an MCM sent as a MIDI 2.0 Registered Controller configures the zone",
+          "[midi][synth][mpe]") {
+  // RPN 00 06 in its MIDI 2.0 form: one Registered Controller message whose
+  // data MSB is the member count, the same gesture as the three CCs above.
+  NativeSynth zoned = make_synth();
+  zoned.prepare(kRate, kBlock);
+  send(zoned, sonare::midi::make_midi2_registered_controller(0, 0, 0, 6, uint32_t{7} << 25));
+  const double with_zone = bent_cents(zoned, 2, kBendUp, 1200.0);
+  CAPTURE(with_zone);
+  REQUIRE(std::fabs(with_zone - 1200.0) < 60.0);
+}

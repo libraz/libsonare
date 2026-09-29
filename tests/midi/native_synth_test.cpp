@@ -33,6 +33,7 @@
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
 #include "support/sf2_builder.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/math_utils.h"
 
@@ -1376,6 +1377,44 @@ TEST_CASE(
   }
 }
 
+TEST_CASE("NativeSynth source-track render fans a mono fold-down to every channel past two",
+          "[midi][synth]") {
+  // Longer than kResidualChunk (256) so both residual flush paths reach the
+  // channels past two.
+  constexpr int kSamples = 600;
+  constexpr int kChannels = 4;
+  const auto render = [&](bool source_render) {
+    NativeSynth synth(residual_test_config());
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    std::vector<std::vector<float>> bufs(kChannels,
+                                         std::vector<float>(static_cast<size_t>(kSamples), 0.0f));
+    float* target[kChannels];
+    for (int ch = 0; ch < kChannels; ++ch) target[ch] = bufs[static_cast<size_t>(ch)].data();
+    if (source_render) {
+      const MidiInstrumentSourceOutput outputs[] = {{0, target}};
+      REQUIRE(synth.process_source_tracks(outputs, std::size(outputs), kChannels, kSamples));
+    } else {
+      synth.process(target, kChannels, kSamples);
+    }
+    return bufs;
+  };
+  const std::vector<std::vector<float>> laned = render(true);
+  const std::vector<std::vector<float>> direct = render(false);
+
+  const float scale = peak(direct[0]);
+  REQUIRE(scale > 0.0f);  // non-vacuity: there is something to fan out
+  const float tol = 1.0e-5f * scale;
+  for (size_t ch = 2; ch < static_cast<size_t>(kChannels); ++ch) {
+    for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+      // Each contribution reaches the extra channel exactly once, as the fold-down.
+      const float fold = sonare::constants::kInvSqrt2 * (laned[0][i] + laned[1][i]);
+      REQUIRE(std::fabs(laned[ch][i] - fold) <= tol);
+      REQUIRE(std::fabs(laned[ch][i] - direct[ch][i]) <= tol);
+    }
+  }
+}
+
 TEST_CASE(
     "NativeSynth and Sf2Player source-track residual: muting a single lane attenuates the "
     "whole render by 90 dB",
@@ -2191,5 +2230,97 @@ TEST_CASE("SourceResidualSplitter reuses decayed slots across many track ids", "
     // its weight decayed to nothing, on the default target.
     REQUIRE(lane_l[0] == 1.0f);
     REQUIRE(fallback_l[0] == 1.0f);
+  }
+}
+
+TEST_CASE("NativeSynth and Sf2Player keep a ringing piano board when a note asks for another mix",
+          "[midi][synth][piano]") {
+  // A held GM 0 note, then a barely audible note from a piano program with a
+  // different board mix: the board the held note rings through must not be
+  // cleared under it. Program 0 is the control, whose mix matches. The return
+  // level does follow the newer mix, so GM 2's x0.06 board still costs the held
+  // note its modal colour: measured 0.57-0.88 of the level kept, against
+  // 0.23-0.49 when the board was cleared.
+  constexpr int kHeld = 24000;
+  constexpr int kWindow = 960;  // 20 ms after the second note-on
+  const auto exercise = [](auto make_host) {
+    const auto render = [&](int other_program, bool strike_other) {
+      auto host = make_host();
+      host->on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+      host->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+      std::vector<float> out = sonare::test::render_left(*host, kHeld);
+      if (strike_other) {
+        host->on_event(0, event(sonare::midi::make_midi1_program_change(
+                              0, 0, static_cast<uint8_t>(other_program))));
+        host->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 96, 1)));
+      }
+      const std::vector<float> tail = sonare::test::render_left(*host, kWindow);
+      out.insert(out.end(), tail.begin(), tail.end());
+      return out;
+    };
+    const std::vector<float> alone = render(0, false);
+    const float alone_rms = rms(std::vector<float>(alone.begin() + kHeld, alone.end()));
+    REQUIRE(alone_rms > 1.0e-3f);  // non-vacuity: the held note is ringing
+    for (const int other : {0, 2, 3}) {
+      const std::vector<float> both = render(other, true);
+      const float both_rms = rms(std::vector<float>(both.begin() + kHeld, both.end()));
+      INFO("other program " << other << " alone rms " << alone_rms << " with the new note "
+                            << both_rms);
+      CHECK(both_rms > 0.53f * alone_rms);
+    }
+  };
+  SECTION("NativeSynth") {
+    exercise([] {
+      NativeSynthConfig cfg;
+      cfg.use_gm_programs = true;
+      auto synth = std::make_unique<NativeSynth>(cfg);
+      synth->prepare(kOutRate, 256);
+      return synth;
+    });
+  }
+  SECTION("Sf2Player") {
+    exercise([] {
+      Sf2PlayerConfig cfg;
+      cfg.gain = 1.0f;
+      auto player = std::make_unique<Sf2Player>(cfg);
+      player->prepare(kOutRate, 256);
+      return player;
+    });
+  }
+}
+
+TEST_CASE("Sf2Player takes an RPN sent as a MIDI 2.0 Registered Controller", "[midi][synth]") {
+  // RPN 00 02 Master Coarse Tuning, data MSB 64 + 5: five semitones up.
+  Sf2Player player = make_fallback_player();
+  player.on_event(
+      0, event(sonare::midi::make_midi2_registered_controller(0, 3, 0, 2, uint32_t{69} << 25)));
+  REQUIRE(player.pitch_coarse_tune(3) == 5);
+}
+
+TEST_CASE("CC11 attenuates a bowed string exactly as it does every other engine", "[midi][synth]") {
+  // Expression reaches every engine through one shared VCA; a second path
+  // through the bow speed would make strings swell harder than winds.
+  const auto level_db = [](uint8_t program, uint8_t note, uint8_t cc11) {
+    NativeSynthConfig cfg;
+    cfg.use_gm_programs = true;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, program)));
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 11, cc11)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+    const std::vector<float> out = sonare::test::render_left(synth, 48000);
+    return 20.0 * std::log10(std::max(1.0e-12, static_cast<double>(rms(out, 24000))));
+  };
+  const auto attenuation = [&](uint8_t program, uint8_t note, uint8_t cc11) {
+    return level_db(program, note, cc11) - level_db(program, note, 127);
+  };
+  for (const uint8_t cc11 : {uint8_t{64}, uint8_t{32}}) {
+    const double flute = attenuation(73, 72, cc11);
+    for (const uint8_t program : {uint8_t{40}, uint8_t{42}}) {
+      const double string = attenuation(program, program == 40 ? 67 : 48, cc11);
+      INFO("CC11=" << int{cc11} << " program " << int{program} << " string " << string
+                   << " dB, flute " << flute << " dB");
+      CHECK(std::fabs(string - flute) < 1.0);
+    }
   }
 }

@@ -479,9 +479,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // glide on the first sample) so a note struck mid-phrase starts at the live
   // breath / brightness rather than gliding in from the preset. An engine reads
   // only the axes it declares, and one that declares none is untouched.
-  if (patch->mode == SynthEngineMode::kBowedString) {
-    voice->bowed_string.set_bow_speed_scale(static_cast<float>(st.expression) / 127.0f);
-  }
   {
     uint32_t present = kAxisNone;
     const ExcitationAxes base = channel_excitation(st.axes, present);
@@ -490,15 +487,17 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // Bus-level piano body (the direct-share attenuation, the modal soundboard
   // and the pedal-gated sympathetic bank). In GM mode the engine is resolved
   // per program, so the body is tuned at the first piano note-on rather than in
-  // prepare(); re-tuned only when the resolved patch asks for a different board
-  // so the bank keeps its state across notes. Allocation-free, like the lazy
-  // per-part prepare on the Sf2Player fallback path.
+  // prepare(); a later program asking for a different board mix only re-states
+  // the return level, since other notes may still be ringing through the bank.
+  // Allocation-free, like the lazy per-part prepare on the Sf2Player fallback path.
   if (patch->mode == SynthEngineMode::kPiano) {
-    if (piano_body_soundboard_ != patch->piano.soundboard) {
-      piano_body_soundboard_ = patch->piano.soundboard;
+    if (piano_body_soundboard_ < 0.0f) {
       soundboard_.prepare(sample_rate_, patch->piano.soundboard);
       resonance_.prepare(sample_rate_);
+    } else if (piano_body_soundboard_ != patch->piano.soundboard) {
+      soundboard_.set_mix(patch->piano.soundboard);
     }
+    piano_body_soundboard_ = patch->piano.soundboard;
     piano_body_active_ = true;
     // The blow into the structure, which the board is struck with once rather
     // than driven by. After any prepare() above, which clears the network.
@@ -631,6 +630,8 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
   channels_[ch].sustain_level = 0;
+  // A released key left in the legato stack would be retuned back to later.
+  channels_[ch].held_count = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
@@ -646,6 +647,7 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
   channels_[ch].sustain_level = 0;
+  channels_[ch].held_count = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch) v.kill();
   }
@@ -762,10 +764,7 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       break;
     case 11:
       st.expression = value;
-      refresh_channel_mod(ch);
-      push_excitation_control(ch);  // expression scales bowed-string bow speed
-                                    // (every other engine's loudness rides the
-                                    // shared expression VCA)
+      refresh_channel_mod(ch);  // every engine's loudness rides the expression VCA
       break;
     case 32:
       if (mpe_.ignores(ch, MpeIgnorable::kBankSelect)) break;
@@ -912,6 +911,14 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
                                ? u.data2_7bit()
                                : scale_cc_32_to_7(u.words[1]);
     control_change(u.channel(), u.note_number(), value7);
+  } else if (is_registered_or_assignable_controller(u)) {
+    // The RPN / NRPN gesture in its MIDI 2.0 form takes the path its four MIDI
+    // 1.0 messages do, so parameter selection and data entry treat it the same.
+    const Midi1MessageList lowered = midi2_to_midi1_messages(u);
+    for (uint8_t i = 0; i < lowered.count; ++i) {
+      control_change(u.channel(), lowered.messages[i].note_number(),
+                     lowered.messages[i].data2_7bit());
+    }
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
     // GS drum-kit select: in gm_kit mode the drum channel's program picks the
     // kit variation (Room/Power/808/...). Melodic patches ignore it.
@@ -1192,15 +1199,17 @@ void NativeSynth::process_impl(float* const* channels,
                                         offset, add_output);
         residual_pos_ = 0;
       }
-    } else if (left != nullptr) {
-      // Mono host: fold both pan legs so centre-panned voices keep level.
-      left[i] += mono ? constants::kInvSqrt2 * (mix_l + mix_r) : mix_l;
-    }
-    if (right != nullptr) right[i] += mix_r;
-    // Fan a mono fold-down to any additional channels.
-    for (int ch = 2; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) {
-        channels[ch][i] += constants::kInvSqrt2 * (mix_l + mix_r);
+    } else {
+      if (left != nullptr) {
+        // Mono host: fold both pan legs so centre-panned voices keep level.
+        left[i] += mono ? constants::kInvSqrt2 * (mix_l + mix_r) : mix_l;
+      }
+      if (right != nullptr) right[i] += mix_r;
+      // Fan a mono fold-down to any additional channels.
+      for (int ch = 2; ch < num_channels; ++ch) {
+        if (channels[ch] != nullptr) {
+          channels[ch][i] += constants::kInvSqrt2 * (mix_l + mix_r);
+        }
       }
     }
   }

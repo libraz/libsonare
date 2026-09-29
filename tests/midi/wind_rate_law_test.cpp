@@ -20,9 +20,11 @@
 #include <cmath>
 #include <cstdint>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
@@ -343,5 +345,62 @@ TEST_CASE("a seeded breath-noise level voiced at 48 kHz keeps its power per Hz a
     }
     INFO(report.str() << s.name << " floor spread " << (hi - lo) << " dB");
     CHECK(hi - lo < kMaxFloorSpreadDb);
+  }
+}
+
+TEST_CASE("a live brightness move keeps each wind voice on the pitch a fresh note would sound",
+          "[midi][synth][rate_law]") {
+  // CC74 moves the bell pole under a sounding note; the loop's tuning
+  // compensation has to follow it, or the note drifts off the pitch a note
+  // voiced at that brightness from the start sounds.
+  constexpr double kSr = 48000.0;
+  constexpr double kMaxCents = 5.0;
+  const auto brightness_of = [](NativeSynthPatch& p) -> float& {
+    switch (p.mode) {
+      case SynthEngineMode::kFlute:
+        return p.flute.brightness;
+      case SynthEngineMode::kReed:
+        return p.reed.brightness;
+      default:
+        return p.brass.brightness;
+    }
+  };
+  const std::pair<const char*, std::pair<uint8_t, uint8_t>> voices[] = {
+      {"flute", {73, 84}}, {"clarinet", {71, 72}}, {"alto sax", {65, 72}}, {"trumpet", {56, 72}}};
+  // The returned tail is 1.5 s; tone_mag reads 0.5-1.5 s of it.
+  const auto render = [&](NativeSynthPatch patch, uint8_t note, int cc74) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.prepare(kSr, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+    std::vector<float> l(static_cast<size_t>(0.5 * kSr)), r(l.size());
+    float* head[2] = {l.data(), r.data()};
+    synth.process(head, 2, static_cast<int>(l.size()));
+    if (cc74 >= 0) {
+      synth.on_event(
+          0, event(sonare::midi::make_midi1_control_change(0, 0, 74, static_cast<uint8_t>(cc74))));
+    }
+    std::vector<float> tail_l(static_cast<size_t>(kRenderSeconds * kSr)), tail_r(tail_l.size());
+    float* tail[2] = {tail_l.data(), tail_r.data()};
+    synth.process(tail, 2, static_cast<int>(tail_l.size()));
+    return tail_l;
+  };
+  std::ostringstream report;
+  for (const auto& [name, pn] : voices) {
+    const auto [program, note] = pn;
+    const NativeSynthPatch base = sonare::midi::synth::gm_fallback_patch(0, program);
+    const double f0 = static_cast<double>(note_to_hz(note));
+    for (const int cc74 : {0, 127}) {
+      NativeSynthPatch voiced = base;
+      brightness_of(voiced) = static_cast<float>(cc74) / 127.0f;
+      const double fresh = sounding_f0(render(voiced, note, -1), f0, kSr);
+      const double moved = sounding_f0(render(base, note, cc74), f0, kSr);
+      const double cents = 1200.0 * std::log2(moved / fresh);
+      report << name << " CC74=" << cc74 << " fresh " << fresh << " Hz, moved " << moved << " Hz, "
+             << cents << " cents\n";
+      INFO(report.str());
+      CHECK(std::fabs(cents) < kMaxCents);
+    }
   }
 }

@@ -80,6 +80,18 @@ SONARE_TUNABLE(kKsMidQuoteHz, 1000.0f);
 /// break at the fourth partial and drops it from 18 dB/s to 68.
 SONARE_TUNABLE(kKsMuteDecayRatio, 3.8f);
 
+/// Peak |H| of the loss one-pole over the band: DC for a lowpass pole, Nyquist
+/// for a negative one.
+float onepole_peak_gain(float a) noexcept {
+  return std::max(onepole_magnitude(a, 0.0f), onepole_magnitude(a, kPi));
+}
+
+/// The largest gain one traversal of @p loop applies at any frequency.
+float loop_peak_gain(const StringLoop& loop) noexcept {
+  const float second = loop.loop2_active ? onepole_peak_gain(1.0f - loop.alpha2) : 1.0f;
+  return loop.gain * onepole_peak_gain(1.0f - loop.alpha) * second;
+}
+
 }  // namespace
 
 void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t note,
@@ -102,14 +114,15 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
   const float damped_t60 = std::max(0.01f, params.release_damp_s);
 
-  // Loop lowpass: brightness -> feedback coefficient a (y += (1-a)(x-y)).
+  // Loop lowpass: brightness -> feedback coefficient a (y += (1-a)(x-y)), voiced
+  // at kLossVoicedSr.
   const float tone_a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
   const float fixed_quote_w = kTwoPi * kKsHfQuoteHz / static_cast<float>(sr);
   const float mute = std::clamp(params.mute_harmonic, 0.0f, 16.0f);
   // Sets one loop up from its t60, quote-frequency ring and optional mid anchor.
   auto voice_loop = [&](StringLoop& loop, float* span, float period, float t60_s, float hf_t60_s,
                         float mid_t60_s = 0.0f, float tone_a_offset = 0.0f) noexcept {
-    float a = std::min(0.97f, tone_a + tone_a_offset);
+    float a = loss_pole_at_rate(std::min(0.97f, tone_a + tone_a_offset), sr);
     float g = string_loop_gain_for(period, sr, t60_s);
     float release_g = string_loop_gain_for(period, sr, damped_t60);
     const float w0 = kTwoPi / period;
@@ -241,7 +254,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     // the period makes the comb delay between the two taps pickup * period: a
     // pickup near the bridge (small pickup) combs at a short delay (its first
     // peak high = bright), a neck pickup at a longer delay (rounder).
-    const float offset = std::clamp((1.0f - pickup) * loop_period, 4.0f, loop_period);
+    const float offset = std::max(4.0f, (1.0f - pickup) * loop_period);
     pickup_delay_q8_ = static_cast<int>(offset * 256.0f);
     pickup_depth_ = 0.85f;  // near-full comb notch depth
     pickup_mag_ = 0.18f;    // gentle even-harmonic nonlinearity
@@ -288,27 +301,27 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     pol_couple_ = polarization;
 
     // Bridge coupling (off unless body_coupling > 0). The two loops close a
-    // symmetric 2x2 system [[g1, eps], [eps, g2]] once they exchange energy
-    // through the bridge; its spectral radius is max_eig = mean + sqrt(halfdiff^2
-    // + eps^2), NOT max(g1, g2). Near the degenerate detune (g1 ~= g2) even a
-    // small eps can push a plane over unity, so solve for the largest eps that
-    // keeps max_eig <= kLambdaMax and scale body_coupling within that envelope.
+    // 2x2 system once they exchange energy through the bridge. Its entries are
+    // bounded at every frequency by [[g1, eps*c2], [eps*c1, g2]] -- g the plane's
+    // peak traversal gain, c the peak of the first pole the coupling taps -- so
+    // keeping that majorant's spectral radius, mean + sqrt(halfdiff^2 +
+    // eps^2*c1*c2), under kLambdaMax holds the loop inside the unit circle.
     const float bc = std::clamp(params.body_coupling, 0.0f, 1.0f);
     if (bc > 0.0f) {
       constexpr float kLambdaMax = 0.999f;
-      // What a traversal actually keeps, which is the decay target rather than
-      // the gain sitting in front of the solved pole: the solver scales that
-      // gain up by exactly the pole's own loss at the fundamental, so reading it
-      // here reports a loop hotter than it is and the bridge silently shuts.
-      const float g1 = string_loop_gain_for(loop_period, sr, t60);
-      const float g2 = string_loop_gain_for(pol_period, sr, kPolT60Fraction * t60);
+      // The peak, not the decay target: a tilted loop's gain in front of the
+      // pole rings its sub-fundamental band above the fundamental's target.
+      const float g1 = loop_peak_gain(string_);
+      const float g2 = loop_peak_gain(pol_);
+      const float c1c2 =
+          onepole_peak_gain(1.0f - string_.alpha) * onepole_peak_gain(1.0f - pol_.alpha);
       const float mean = 0.5f * (g1 + g2);
       const float half_diff = 0.5f * (g1 - g2);
       const float room = kLambdaMax - mean;
       float eps_max = 0.0f;
       if (room > 0.0f) {
         const float r2 = room * room - half_diff * half_diff;
-        if (r2 > 0.0f) eps_max = std::sqrt(r2);
+        if (r2 > 0.0f) eps_max = std::sqrt(r2 / c1c2);
       }
       couple_gain_ = bc * eps_max;
     } else {

@@ -184,14 +184,6 @@ class BowedStringVoiceCore {
   // Each sets a smoothing TARGET the render ramps toward (no zipper); call
   // snap_excitation() to jump to the targets without a glide. ---
 
-  /// Bow speed / dynamic level as a scale in [0, ~2] of the note-on bow speed
-  /// (1 = the struck level). The expression pedal's crescendo/swell. Not an
-  /// excitation axis: it is the loudness every engine takes through the shared
-  /// expression VCA, which on a bowed string happens to be the bow's own speed.
-  void set_bow_speed_scale(float scale) noexcept {
-    const float s = scale < 0.0f ? 0.0f : (scale > 2.0f ? 2.0f : scale);
-    bow_speed_target_ = base_bow_velocity_ * s;
-  }
   /// Base axis positions in [0,1] from the patch or a CC. @p present names the
   /// fields the caller filled (ExcitationAxisMask); an axis it does not name
   /// keeps the value the note started with. Force is downward bow pressure

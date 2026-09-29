@@ -503,15 +503,18 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // Bus-level body resonators (the components the NativeSynth host folds in):
   // the piano's modal soundboard + pedal-gated sympathetic bank, and the
   // plucked-string open-string halo. Re-prepared only when the part's patch
-  // kind or soundboard mix changes.
+  // kind changes; a different soundboard mix only re-states the return level,
+  // since the part's earlier notes may still be ringing through the board.
   FallbackBodyState& body = fallback_body_[part];
   if (patch.mode == SynthEngineMode::kPiano) {
-    if (body.kind != FallbackBodyKind::kPiano || body.soundboard_mix != patch.piano.soundboard) {
+    if (body.kind != FallbackBodyKind::kPiano) {
       body.kind = FallbackBodyKind::kPiano;
-      body.soundboard_mix = patch.piano.soundboard;
       fallback_board_[part].prepare(sample_rate_, patch.piano.soundboard);
       fallback_reso_[part].prepare(sample_rate_);
+    } else if (body.soundboard_mix != patch.piano.soundboard) {
+      fallback_board_[part].set_mix(patch.piano.soundboard);
     }
+    body.soundboard_mix = patch.piano.soundboard;
     // The blow into the structure, which the board is struck with once rather
     // than driven by. After any prepare() above, which clears the network.
     fallback_board_[part].strike(voice->piano.case_strike());
@@ -1059,6 +1062,14 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
                                  ? u.data2_7bit()
                                  : scale_cc_32_to_7(u.words[1]);
       control_change(ch, controller, value7);
+    } else if (is_registered_or_assignable_controller(u)) {
+      // The RPN / NRPN gesture in its MIDI 2.0 form takes the path its four
+      // MIDI 1.0 messages do, so selection, data entry and the RX switches
+      // treat it the same.
+      const Midi1MessageList lowered = midi2_to_midi1_messages(u);
+      for (uint8_t i = 0; i < lowered.count; ++i) {
+        control_change(ch, lowered.messages[i].note_number(), lowered.messages[i].data2_7bit());
+      }
     }
   }
 }

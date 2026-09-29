@@ -38,14 +38,8 @@ void NativeSynth::push_excitation_control(uint8_t channel) noexcept {
   const ChannelState& st = channels_[ch];
   uint32_t present = kAxisNone;
   const ExcitationAxes base = channel_excitation(st.axes, present);
-  const float speed_scale = static_cast<float>(st.expression) / 127.0f;
   for (NativeSynthVoice& v : pool_) {
     if (!v.active || v.channel != ch || v.patch == nullptr) continue;
-    // Expression scales the bow speed (identity at CC11 == 127); every other
-    // engine takes loudness through the shared expression VCA instead.
-    if (v.patch->mode == SynthEngineMode::kBowedString) {
-      v.bowed_string.set_bow_speed_scale(speed_scale);
-    }
     // The axes override the preset only once a controller has reached them, so
     // a channel nothing has bound leaves every voice on its own voicing.
     if (present != kAxisNone) v.push_excitation(base, present);
