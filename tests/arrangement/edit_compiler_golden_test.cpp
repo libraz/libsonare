@@ -1082,6 +1082,76 @@ TEST_CASE("compiler bakes tempo-sync warp maps with segment rates", "[arrangemen
   REQUIRE(energy > 0.0);
 }
 
+// Tempo-sync segments carry durations only, so the bake must still place
+// anchors[0].source_sample at anchors[0].warp_sample; a dropped lead-in shows as a
+// buffer that many samples short of the clip's span.
+TEST_CASE("compiler pads a tempo-sync bake's lead-in when the first anchor is not (0, 0)",
+          "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+  // First anchor (warp_sample=4800, source_sample=2400): a 4800-sample lead-in
+  // stretched at 2:1 from a 2400-sample source pre-roll, followed by one 1:1
+  // segment covering the rest of the clip's 48000-sample span.
+  REQUIRE(f.project.set_warp_map(
+      {77, "tempo sync", {{4800.0, 2400.0}, {48000.0, 45600.0}}}));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.warp_mode == sonare::engine::WarpMode::kOff);
+  // Without the lead-in this came out 4800 samples short (43200): the bug's
+  // signature, not merely its consequence.
+  REQUIRE(sched.buffer.num_samples == 48000);
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels[0].size() == 48000);
+  double lead_in_energy = 0.0;
+  for (size_t i = 0; i < 4800; ++i) {
+    const float sample = sched.storage->channels[0][i];
+    REQUIRE(std::isfinite(sample));
+    lead_in_energy += static_cast<double>(sample) * static_cast<double>(sample);
+  }
+  // The lead-in is stretched from real source content, not silence.
+  REQUIRE(lead_in_energy > 0.0);
+}
+
+// The other half of the same fix: when anchors[0].source_sample is 0 (a take
+// that starts recording at its own beginning, the common case), there is no
+// source pre-roll to stretch, so the lead-in must be silence rather than
+// missing entirely.
+TEST_CASE("compiler pads a tempo-sync bake's lead-in with silence when the source has none to "
+          "stretch",
+          "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+  REQUIRE(f.project.set_warp_map({77, "tempo sync", {{4800.0, 0.0}, {48000.0, 43200.0}}}));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.buffer.num_samples == 48000);
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels[0].size() == 48000);
+  for (size_t i = 0; i < 4800; ++i) {
+    REQUIRE(sched.storage->channels[0][i] == 0.0f);
+  }
+  // Past the lead-in, the main segment carries real content again.
+  double main_energy = 0.0;
+  for (size_t i = 4800; i < 48000; ++i) {
+    main_energy += static_cast<double>(sched.storage->channels[0][i]) *
+                   static_cast<double>(sched.storage->channels[0][i]);
+  }
+  REQUIRE(main_energy > 0.0);
+}
+
 TEST_CASE("apply_to_engine installs full tempo and time-signature maps", "[arrangement]") {
   arr::CompiledTimeline timeline;
   timeline.tempo_segments = {{0.0, 120.0, 0.0}, {1.0, 60.0, 0.0}};

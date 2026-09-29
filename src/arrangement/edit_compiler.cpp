@@ -859,6 +859,25 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           }
           const int project_sample_rate = static_cast<int>(std::lround(project_sr));
           bake_config.sample_rate = project_sample_rate;
+          // Segments carry durations only; lead in to anchors[0].warp_sample as
+          // map_warp_to_source does, from the source's pre-roll or with silence.
+          const size_t leading_pad_samples =
+              rounded_nonnegative_sample(rt_warp_map->anchors[0].warp_sample);
+          const size_t leading_source_samples =
+              rounded_nonnegative_sample(rt_warp_map->anchors[0].source_sample);
+          size_t silence_pad_samples = 0;
+          if (leading_pad_samples > 0) {
+            if (leading_source_samples >= static_cast<size_t>(bake_config.hop_length)) {
+              engine::TempoSyncWarpSegment lead_in;
+              lead_in.source_offset = 0;
+              lead_in.source_samples = leading_source_samples;
+              lead_in.target_samples = leading_pad_samples;
+              segments.insert(segments.begin(), lead_in);
+              total_target_samples += leading_pad_samples;
+            } else {
+              silence_pad_samples = leading_pad_samples;
+            }
+          }
           bool span_exceeds_source = false;
           for (const auto& ch : built->channels) {
             for (const engine::TempoSyncWarpSegment& segment : segments) {
@@ -882,6 +901,11 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           }
           std::vector<std::vector<float>> stretched = engine::bake_tempo_sync_warp_channels(
               source_channels, built->channels[0].size(), segments, bake_config);
+          if (silence_pad_samples > 0) {
+            for (auto& ch : stretched) {
+              ch.insert(ch.begin(), silence_pad_samples, 0.0f);
+            }
+          }
           built->channels = std::move(stretched);
         }
         built->channel_ptrs.reserve(built->channels.size());
