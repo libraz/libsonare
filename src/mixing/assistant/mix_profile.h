@@ -116,7 +116,9 @@ struct MixProfile {
   /// @brief Pairwise band dominance, `[(masker * track_count + maskee) *
   ///        kBandCount + band]`.
   /// @details Both `(i, j)` and `(j, i)` are filled. The diagonal is left at its
-  ///          default; a track does not mask itself.
+  ///          default; a track does not mask itself. Measured at the levels the
+  ///          gain stage trims each track to, since the EQ carve and the
+  ///          sidechain duck that read it act on the trimmed signal.
   std::vector<BandDominance> dominance;
 
   /// @brief One entry per unordered track pair, reference index first.

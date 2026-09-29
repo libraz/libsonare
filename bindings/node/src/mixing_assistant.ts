@@ -7,28 +7,6 @@ import type {
 } from './types.js';
 import { assertPositiveInteger, assertSampleRate } from './validation.js';
 
-/**
- * Assistant tunables, in the order the native config declares them. Only keys
- * the caller actually set are forwarded, so an omitted field keeps the native
- * default instead of this file having to restate it.
- */
-const OPTION_KEYS = [
-  'targetTrackLufs',
-  'suggestionStrength',
-  'eqMaxCutDb',
-  'mixBusHeadroomDbtp',
-  'tempoBpm',
-  'enableStructure',
-  'enableGain',
-  'enableBalance',
-  'enableEq',
-  'enableDynamics',
-  'enableImage',
-  'enableHighPass',
-  'nFft',
-  'hopLength',
-] as const satisfies ReadonlyArray<keyof MixAssistantOptions>;
-
 /** Planar parallel arrays in the shape the addon entry points take. */
 interface NativeTrackArrays {
   left: Float32Array[];
@@ -93,11 +71,13 @@ function normalizeOptions(
   fnName: string,
   options: MixAssistantOptions = {},
 ): Record<string, number | boolean> {
+  // Every supplied key is forwarded, so the core refuses a misspelt key or a
+  // wrongly typed value exactly as it does on every other surface. An undefined
+  // value is an omitted key: the native default then stands.
   const params: Record<string, number | boolean> = {};
-  for (const key of OPTION_KEYS) {
-    const value = options[key];
+  for (const [key, value] of Object.entries(options)) {
     if (value !== undefined) {
-      params[key] = value;
+      params[key] = value as number | boolean;
     }
   }
   // Only what the caller supplied: an omitted key never reaches the param list,

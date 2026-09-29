@@ -12,8 +12,10 @@
 ///          from the keys that processor reads. No new DSP is introduced.
 ///
 /// @details Every parameter derives from the track's own measurements rather
-///          than an absolute. A threshold is an offset from measured integrated
-///          loudness, so the same part 10 dB quieter gets the same treatment;
+///          than an absolute. A threshold is an offset from the loudness the
+///          insert receives — measured integrated loudness plus the input trim
+///          the scene applies ahead of it — so the same part 10 dB quieter,
+///          staged up by 10 dB, gets the same treatment;
 ///          timings follow the measured crest factor and sustain ratio, so a
 ///          spiky part and a sustained one get different envelopes.
 ///
@@ -50,17 +52,22 @@ namespace sonare::mixing::assistant {
 ///          one landed at that index.
 ///
 /// @details Degenerate input never throws: no tracks, all excluded, a disabled
-///          domain, a wrong-sized mix profile or a non-finite configuration all
-///          yield an empty vector.
+///          domain, a wrong-sized mix profile or trim vector, or a non-finite
+///          configuration all yield an empty vector.
 ///
 /// @param profiles Per-track profiles, in the caller's order.
 /// @param mix Cross-track measurements built from the same tracks in the same
 ///        order; only the low-band dominance entries are read.
 /// @param config Assistant configuration; the loudness target, the suggestion
 ///        strength and the dynamics domain switch are read.
+/// @param input_trim_db Final clamped input trim of each strip, index-parallel to
+///        @p profiles; every level parameter is shifted by it. Empty means no
+///        trim runs ahead of the inserts. A wrong size or a non-finite entry
+///        yields an empty vector.
 /// @return Deltas in @ref DeltaDomain::Dynamics, in track order, with the
 ///         sidechain decisions last.
 std::vector<SceneDelta> decide_dynamics(const std::vector<TrackProfile>& profiles,
-                                        const MixProfile& mix, const MixAssistantConfig& config);
+                                        const MixProfile& mix, const MixAssistantConfig& config,
+                                        const std::vector<float>& input_trim_db);
 
 }  // namespace sonare::mixing::assistant

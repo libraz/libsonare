@@ -44,20 +44,23 @@ namespace sonare::mixing::assistant {
 ///             domain applies last and an earlier domain's pan would otherwise
 ///             survive as a decision nobody made here. A spreadable class
 ///             alternates left, right, left, … stepping inwards every pair.
-///          2. **Polarity.** A polarity-opposed pair inverts the **target**,
-///             never the reference — @ref PairAlignment::reference_index is
-///             always the lower of the two, so no track is flipped twice.
-///          3. **Delay.** A non-zero @ref PairAlignment::lag_samples delays
-///             whichever side arrives first. A pair already in time gets no
+///          2. **Polarity.** Solved per connected group of related tracks: the
+///             group's lowest index is never inverted, and every member whose
+///             polarity class differs from it is, so no related pair is left
+///             opposed that one assignment could reconcile.
+///          3. **Delay.** Solved per group too: every member is delayed to the
+///             group's latest arrival, so applying all delays together lines
+///             the whole group up. A member already at that arrival gets no
 ///             delta rather than one carrying zero samples.
 ///          4. **Mono fold.** A track @ref analyze_mono_risks flagged has its
 ///             width pulled in, and a wide low end additionally gets a
 ///             `stereo.monoMaker` insert at a fixed crossover.
 ///
-/// @details **One delay and one polarity decision per track**, since a track
-///          appears in as many pairs as it has neighbours and these are
-///          last-writer-wins fields. The largest `|correlation|` wins; ties keep
-///          the earlier entry in @ref MixProfile::alignment.
+/// @details **One delay and one polarity decision per track**, since these are
+///          last-writer-wins fields. Both come from a maximum spanning tree of
+///          each group over `|correlation|` (ties keep the earlier entry in
+///          @ref MixProfile::alignment), so where pairs disagree the weaker
+///          side is the one dropped.
 ///
 /// @details **Alignment does not depend on classification** — a cancellation is
 ///          measured, so @ref SourceClass::Unknown and low-confidence tracks

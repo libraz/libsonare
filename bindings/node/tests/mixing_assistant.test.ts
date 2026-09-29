@@ -223,8 +223,19 @@ describe('mixing assistant options', () => {
         options: { [domain]: false },
       });
       expect(off.explanation.length, domain).toBeLessThan(all.explanation.length);
-      for (const line of off.explanation) {
-        expect(all.explanation, domain).toContain(line);
+      // With structure off there is no master bus, so the headroom trim it would
+      // carry is reported instead: the one line a switched-off domain adds.
+      // The dynamics levels are set against the staged trim, so with gain off the
+      // same decisions come back with different dB figures; compare their wording.
+      const shape = (line: string) =>
+        domain === 'enableGain' ? line.replace(/-?\d+(\.\d+)?/g, '#') : line;
+      const allShapes = all.explanation.map(shape);
+      const added = off.explanation.filter((line) => !allShapes.includes(shape(line)));
+      if (domain === 'enableStructure') {
+        expect(added, domain).toHaveLength(1);
+        expect(added[0], domain).toMatch(/no master bus was suggested to carry that trim/);
+      } else {
+        expect(added, domain).toEqual([]);
       }
     }
   });
@@ -256,6 +267,45 @@ describe('mixing assistant options', () => {
     });
 
     expect(explicit).toEqual(omitted);
+  });
+});
+
+describe('mixing assistant option keys reach the core', () => {
+  it('refuses a misspelt key rather than dropping it', () => {
+    expect(() =>
+      suggestMixScene({
+        tracks: baseTracks(),
+        sampleRate: SR,
+        options: { suggestionStrenght: 0.5 } as never,
+      }),
+    ).toThrow(/unknown mixing assistant param: suggestionStrenght/);
+  });
+
+  it('forwards a snake_case alias the core accepts', () => {
+    const camel = suggestMixScene({
+      tracks: baseTracks(),
+      sampleRate: SR,
+      options: { suggestionStrength: 0 },
+    });
+    const snake = suggestMixScene({
+      tracks: baseTracks(),
+      sampleRate: SR,
+      options: { suggestion_strength: 0 } as never,
+    });
+    const defaults = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
+    // Non-vacuity: the value changes the result, so equality means it arrived.
+    expect(camel).not.toEqual(defaults);
+    expect(snake).toEqual(camel);
+  });
+
+  it('refuses a wrongly typed value', () => {
+    expect(() =>
+      suggestMixScene({
+        tracks: baseTracks(),
+        sampleRate: SR,
+        options: { suggestionStrength: 'strong' } as never,
+      }),
+    ).toThrow(/suggestionStrength/);
   });
 });
 

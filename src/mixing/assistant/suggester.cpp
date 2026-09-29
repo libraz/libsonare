@@ -17,8 +17,10 @@
 #include "mixing/assistant/image_occupancy.h"
 #include "mixing/assistant/masking.h"
 #include "mixing/assistant/phase_alignment.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/number_format.h"
 
 namespace sonare::mixing::assistant {
 namespace {
@@ -35,6 +37,18 @@ api::Scene empty_scene_for(const std::vector<TrackProfile>& profiles) {
     scene.strips.push_back(std::move(strip));
   }
   return scene;
+}
+
+// Final clamped input trim of each strip under @p deltas, index-parallel to
+// @p profiles: what the dynamics inserts, which run after the trim, receive.
+std::vector<float> staged_input_trims(const std::vector<TrackProfile>& profiles,
+                                      const std::vector<SceneDelta>& deltas) {
+  const api::Scene staged = apply_deltas(empty_scene_for(profiles), deltas, nullptr);
+  std::vector<float> trims(profiles.size(), 0.0f);
+  for (std::size_t index = 0; index < profiles.size() && index < staged.strips.size(); ++index) {
+    trims[index] = staged.strips[index].input_trim_db;
+  }
+  return trims;
 }
 
 void append(std::vector<SceneDelta>& into, std::vector<SceneDelta> from) {
@@ -173,15 +187,29 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
   // dominance is the one measurement two domains share; everything else here
   // exists for the image domain alone, and the pairwise alignment inside it is
   // the most expensive thing the assistant does.
+  // Cross-track energy comparisons are taken at the levels the gain stage trims
+  // each track to, since every decision reading them acts after the trim.
+  const std::vector<float> trims =
+      staged_input_trims(profiles, config.enable_gain ? decide_gain_staging(profiles, config)
+                                                      : std::vector<SceneDelta>{});
   if (config.enable_eq || config.enable_dynamics) {
-    mix.dominance = analyze_band_dominance(profiles);
+    mix.dominance = analyze_band_dominance(profiles, trims);
   }
   if (config.enable_image) {
     mix.alignment = analyze_phase_alignment(tracks, profiles);
     // Both image passes read the same per-channel band energies, so they are
     // measured once and handed to each rather than transformed twice.
     const std::vector<TrackChannelEnergy> energy = measure_track_channel_energy(tracks, profiles);
-    mix.image = analyze_image_occupancy(energy);
+    std::vector<TrackChannelEnergy> staged = energy;
+    for (std::size_t index = 0; index < staged.size() && index < trims.size(); ++index) {
+      const double gain = static_cast<double>(db_to_power_scalar(trims[index]));
+      for (auto* plane :
+           {&staged[index].left, &staged[index].right, &staged[index].mid, &staged[index].side}) {
+        for (double& value : *plane) value *= gain;
+      }
+    }
+    mix.image = analyze_image_occupancy(staged);
+    // Mono risk reads each track's own channel ratios, which a gain does not move.
     mix.mono_risks = analyze_mono_risks(tracks, profiles, energy);
   }
   return mix;
@@ -225,7 +253,9 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
   if (config.enable_gain) append(deltas, decide_gain_staging(profiles, config));
   if (config.enable_balance) append(deltas, decide_balance(profiles, config));
   if (config.enable_eq) append(deltas, decide_eq(profiles, mix, config));
-  if (config.enable_dynamics) append(deltas, decide_dynamics(profiles, mix, config));
+  if (config.enable_dynamics) {
+    append(deltas, decide_dynamics(profiles, mix, config, staged_input_trims(profiles, deltas)));
+  }
   if (config.enable_image) append(deltas, decide_image(profiles, mix, config));
 
   api::Scene base = empty_scene_for(profiles);
@@ -241,11 +271,16 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
   if (config.enable_gain) {
     const float headroom_db = decide_master_headroom_db(profiles, result.scene, config);
     if (headroom_db < 0.0f) {
-      for (auto& bus : result.scene.buses) {
-        if (bus.role != "master") continue;
-        bus.input_trim_db += headroom_db;
+      const auto master = std::find_if(result.scene.buses.begin(), result.scene.buses.end(),
+                                       [](const api::Bus& bus) { return bus.role == "master"; });
+      if (master != result.scene.buses.end()) {
+        master->input_trim_db += headroom_db;
         notes.push_back("pulled the master bus down to leave the summed mix its headroom");
-        break;
+      } else {
+        // The master bus is a structure decision; without one there is nowhere to put the trim.
+        notes.push_back("the summed mix needs " + util::format_fixed(-headroom_db, 1) +
+                        " dB less level to keep its headroom, but no master bus was suggested to "
+                        "carry that trim because the structure domain is switched off");
       }
     }
   }

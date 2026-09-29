@@ -437,6 +437,16 @@ TEST_CASE("an unrelated pair is left alone entirely", "[mixing][assistant]") {
   CHECK(deltas.empty());
 }
 
+// Delay and inversion each track receives, read back out of the deltas.
+int delay_of(const std::vector<SceneDelta>& deltas, const std::string& strip_id) {
+  const SceneDelta* delta = find_delay(deltas, strip_id);
+  return delta != nullptr ? *delta->channel_delay_samples : 0;
+}
+
+bool inverted(const std::vector<SceneDelta>& deltas, const std::string& strip_id) {
+  return find_polarity(deltas, strip_id) != nullptr;
+}
+
 TEST_CASE("a track appearing in several pairs gets one delay and one polarity decision",
           "[mixing][assistant]") {
   const std::vector<TrackProfile> profiles = {
@@ -446,27 +456,91 @@ TEST_CASE("a track appearing in several pairs gets one delay and one polarity de
   };
   MixProfile mix = make_mix(profiles.size());
   mix.alignment = {
-      // Delays the reference t0 by 10 on the weaker evidence.
+      // t1 arrives 10 after t0, on the weaker evidence.
       make_pair(0, 1, 10, kWeakerCorrelation, false),
-      // Delays the reference t0 by 30 on the stronger evidence, and inverts t2.
+      // t2 arrives 30 after t0 and is opposed to it, on the stronger evidence.
       make_pair(0, 2, 30, kStrongCorrelation, true),
-      // Delays the target t2 by 20, and would invert t2 as well.
+      // Disagrees with the two above (it puts t2 before t1), so the group
+      // solve keeps the stronger edges and drops this one.
       make_pair(1, 2, -20, kWeakerCorrelation, true),
   };
 
   const std::vector<SceneDelta> deltas = decide_image(profiles, mix, MixAssistantConfig{});
 
   REQUIRE(count_delays(deltas, "t0") == 1);
-  CHECK(*find_delay(deltas, "t0")->channel_delay_samples == 30);
-  CHECK(count_delays(deltas, "t1") == 0);
-  REQUIRE(count_delays(deltas, "t2") == 1);
-  CHECK(*find_delay(deltas, "t2")->channel_delay_samples == 20);
+  REQUIRE(count_delays(deltas, "t1") == 1);
+  CHECK(count_delays(deltas, "t2") == 0);
+  // Everything waits for t2, the latest arrival on the kept edges.
+  CHECK(delay_of(deltas, "t0") == 30);
+  CHECK(delay_of(deltas, "t1") == 20);
+  CHECK(find_delay(deltas, "t0")->reason.find("t2") != std::string::npos);
 
   CHECK(count_polarities(deltas, "t0") == 0);
   CHECK(count_polarities(deltas, "t1") == 0);
   REQUIRE(count_polarities(deltas, "t2") == 1);
-  // The strongest pair is the one that wins, so the reason names its reference.
   CHECK(find_polarity(deltas, "t2")->reason.find("t0") != std::string::npos);
+}
+
+TEST_CASE("a chain of related tracks is delayed to one common arrival", "[mixing][assistant]") {
+  const std::vector<TrackProfile> profiles = {
+      make_profile("close", SourceClass::Unknown),
+      make_profile("mid", SourceClass::Unknown),
+      make_profile("room", SourceClass::Unknown),
+  };
+  MixProfile mix = make_mix(profiles.size());
+  // mid arrives 10 after close, room 10 after mid; no direct close-room pair.
+  mix.alignment = {
+      make_pair(0, 1, 10, kStrongCorrelation, false),
+      make_pair(1, 2, 10, kStrongCorrelation, false),
+  };
+
+  const std::vector<SceneDelta> deltas = decide_image(profiles, mix, MixAssistantConfig{});
+
+  // Every related pair must land in time once all delays apply together.
+  for (const PairAlignment& pair : mix.alignment) {
+    const std::string& reference =
+        profiles[static_cast<std::size_t>(pair.reference_index)].strip_id;
+    const std::string& target = profiles[static_cast<std::size_t>(pair.target_index)].strip_id;
+    INFO(reference << " -> " << target);
+    CHECK(pair.lag_samples + delay_of(deltas, target) - delay_of(deltas, reference) == 0);
+  }
+  CHECK(delay_of(deltas, "close") == 20);
+  CHECK(delay_of(deltas, "mid") == 10);
+  CHECK(count_delays(deltas, "room") == 0);
+  // The named partner is the track the delayed one really lines up with afterwards.
+  CHECK(find_delay(deltas, "close")->reason.find("room") != std::string::npos);
+  CHECK(find_delay(deltas, "mid")->reason.find("room") != std::string::npos);
+}
+
+TEST_CASE("polarity is solved per related group and never opens a new cancellation",
+          "[mixing][assistant]") {
+  const std::vector<TrackProfile> profiles = {
+      make_profile("m0", SourceClass::Unknown),
+      make_profile("m1", SourceClass::Unknown),
+      make_profile("m2", SourceClass::Unknown),
+  };
+  MixProfile mix = make_mix(profiles.size());
+  // m0 = +x, m1 = -x, m2 = +x: only m1 is out of polarity with the rest.
+  mix.alignment = {
+      make_pair(0, 1, 0, -kStrongCorrelation, true),
+      make_pair(1, 2, 0, -kStrongCorrelation, true),
+      make_pair(0, 2, 0, kStrongCorrelation, false),
+  };
+
+  const std::vector<SceneDelta> deltas = decide_image(profiles, mix, MixAssistantConfig{});
+
+  for (const PairAlignment& pair : mix.alignment) {
+    const std::string& reference =
+        profiles[static_cast<std::size_t>(pair.reference_index)].strip_id;
+    const std::string& target = profiles[static_cast<std::size_t>(pair.target_index)].strip_id;
+    INFO(reference << " -> " << target);
+    const bool opposed_after =
+        pair.polarity_opposed != (inverted(deltas, reference) != inverted(deltas, target));
+    CHECK_FALSE(opposed_after);
+  }
+  CHECK_FALSE(inverted(deltas, "m0"));
+  CHECK(inverted(deltas, "m1"));
+  CHECK_FALSE(inverted(deltas, "m2"));
 }
 
 TEST_CASE("a wide low end gets a mono maker the insert factory can build", "[mixing][assistant]") {

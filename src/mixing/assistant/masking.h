@@ -44,11 +44,20 @@ namespace sonare::mixing::assistant {
 ///
 ///          Tracks need not be the same length. A frame past a track's end
 ///          reads as silence and simply fails the floor test.
+///
+///          Each track's energy is scaled by its @p gain_db before the shares
+///          are taken, so the matrix describes the tracks at the level they are
+///          staged to. The floors are relative to a track's own peaks and do not
+///          move with the gain.
 /// @param profiles Per-track profiles from @ref analyze_track_profiles.
+/// @param gain_db Gain applied to each track, index-parallel to @p profiles.
+///        Empty measures at the recorded levels. A wrong size or a non-finite
+///        entry yields an all-default matrix.
 /// @return A flat matrix of `profiles.size() * profiles.size() * kBandCount`
 ///         entries, indexed `(masker * n + maskee) * kBandCount + band`, which
 ///         is exactly what @ref MixProfile::dominance_at reads. Empty for an
 ///         empty input.
-std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile>& profiles);
+std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile>& profiles,
+                                                  const std::vector<float>& gain_db);
 
 }  // namespace sonare::mixing::assistant

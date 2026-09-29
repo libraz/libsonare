@@ -3,6 +3,7 @@
 
 #include "mixing/assistant/masking.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -10,7 +11,9 @@
 #include <string>
 #include <vector>
 
+#include "mixing/assistant/image_occupancy.h"
 #include "mixing/assistant/mix_profile.h"
+#include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 #include "util/constants.h"
 
@@ -82,7 +85,7 @@ float band_energy_sum(const TrackProfile& profile, int band) {
 MixProfile measure(const std::vector<TrackProfile>& profiles) {
   MixProfile mix;
   mix.track_count = static_cast<int>(profiles.size());
-  mix.dominance = analyze_band_dominance(profiles);
+  mix.dominance = analyze_band_dominance(profiles, {});
   return mix;
 }
 
@@ -299,7 +302,7 @@ TEST_CASE("analyze_band_dominance leaves the diagonal default-constructed", "[mi
   set_band_energy(profiles[0], kMidBand, 0, kFrames - 1, kEnergy);
   set_band_energy(profiles[1], kMidBand, 0, kFrames - 1, kEnergy);
 
-  const std::vector<BandDominance> dominance = analyze_band_dominance(profiles);
+  const std::vector<BandDominance> dominance = analyze_band_dominance(profiles, {});
   REQUIRE(dominance.size() == profiles.size() * profiles.size() * kBandCount);
 
   // Read the matrix directly: dominance_at() answers the diagonal from its own
@@ -348,8 +351,22 @@ TEST_CASE("analyze_band_dominance leaves an unusable track's row and column empt
 TEST_CASE("analyze_band_dominance accepts degenerate track counts", "[mixing][assistant]") {
   SECTION("no tracks") {
     std::vector<BandDominance> dominance;
-    REQUIRE_NOTHROW(dominance = analyze_band_dominance({}));
+    REQUIRE_NOTHROW(dominance = analyze_band_dominance({}, {}));
     CHECK(dominance.empty());
+  }
+
+  SECTION("a gain vector that does not describe the tracks") {
+    constexpr int kFrames = 8;
+    std::vector<TrackProfile> profiles{make_track("a", kFrames), make_track("b", kFrames)};
+    set_band_energy(profiles[0], kMidBand, 0, kFrames - 1, 1.0f);
+    set_band_energy(profiles[1], kMidBand, 0, kFrames - 1, 1.0f);
+    REQUIRE(measure(profiles).dominance_at(0, 1, kMidBand).valid_frames == kFrames);
+    for (const std::vector<float>& gain :
+         {std::vector<float>{0.0f}, std::vector<float>{0.0f, std::nanf("")}}) {
+      for (const BandDominance& entry : analyze_band_dominance(profiles, gain)) {
+        CHECK(entry.valid_frames == 0);
+      }
+    }
   }
 
   SECTION("one track") {
@@ -358,7 +375,7 @@ TEST_CASE("analyze_band_dominance accepts degenerate track counts", "[mixing][as
     set_band_energy(profiles[0], kMidBand, 0, kFrames - 1, 1.0f);
 
     std::vector<BandDominance> dominance;
-    REQUIRE_NOTHROW(dominance = analyze_band_dominance(profiles));
+    REQUIRE_NOTHROW(dominance = analyze_band_dominance(profiles, {}));
     REQUIRE(dominance.size() == kBandCount);
     for (const BandDominance& entry : dominance) {
       CHECK(entry.valid_frames == 0);
@@ -420,4 +437,84 @@ TEST_CASE("analyze_band_dominance finds no contest between separated sources in 
   CHECK((in_low.valid_frames == 0 || in_low.ratio > 0.9f));
   const BandDominance in_high = mix.dominance_at(0, 1, kHighBand);
   CHECK((in_high.valid_frames == 0 || in_high.ratio < 0.1f));
+}
+
+// Dominance feeds the EQ carve and the sidechain duck, both of which act after
+// the input trim, so it is measured at staged levels: recording one part 10 dB
+// quieter only changes its trim, never who owns the band.
+TEST_CASE("analyze_mix_profile measures band dominance at staged levels", "[mixing][assistant]") {
+  constexpr float kStagedDurationSec = 1.0f;
+  const int frame_count =
+      static_cast<int>(static_cast<float>(kTestSampleRate) * kStagedDurationSec);
+  TrackProfileConfig profile_config;
+  profile_config.n_fft = kTestNfft;
+  profile_config.hop_length = kTestHop;
+  sonare::mixing::assistant::MixAssistantConfig config;
+  config.enable_image = false;
+
+  const auto measure_at = [&](float second_amplitude) {
+    const std::vector<float> first = band_noise(600.0f, 1800.0f, 0.2f, frame_count);
+    const std::vector<float> second = band_noise(600.0f, 1800.0f, second_amplitude, frame_count);
+    const std::vector<TrackInput> inputs{make_input("first", first), make_input("second", second)};
+    const std::vector<TrackProfile> profiles = analyze_track_profiles(inputs, profile_config);
+    REQUIRE(profiles.size() == 2);
+    REQUIRE(profiles[0].usable);
+    REQUIRE(profiles[1].usable);
+    return sonare::mixing::assistant::analyze_mix_profile(inputs, profiles, config);
+  };
+
+  const MixProfile level = measure_at(0.2f);
+  const MixProfile quieter = measure_at(0.2f * 0.316f);
+  const BandDominance reference = level.dominance_at(0, 1, kMidBand);
+  const BandDominance moved = quieter.dominance_at(0, 1, kMidBand);
+  REQUIRE(reference.valid_frames > 0);
+  CHECK(moved.valid_frames == reference.valid_frames);
+  CHECK_THAT(moved.ratio, WithinAbs(reference.ratio, 1e-3));
+}
+
+// The same holds for the image histogram the placement crowding reads: a centred
+// part recorded 10 dB quieter must not change how crowded the centre looks once
+// both parts are staged.
+TEST_CASE("analyze_mix_profile measures image occupancy at staged levels", "[mixing][assistant]") {
+  constexpr float kStagedDurationSec = 1.0f;
+  const int frame_count =
+      static_cast<int>(static_cast<float>(kTestSampleRate) * kStagedDurationSec);
+  TrackProfileConfig profile_config;
+  profile_config.n_fft = kTestNfft;
+  profile_config.hop_length = kTestHop;
+  sonare::mixing::assistant::MixAssistantConfig config;
+  config.enable_eq = false;
+  config.enable_dynamics = false;
+
+  const std::vector<float> side = band_noise(600.0f, 1800.0f, 0.2f, frame_count);
+  const std::vector<float> silent(side.size(), 0.0f);
+  struct Measured {
+    MixProfile mix;
+    sonare::mixing::assistant::ImageOccupancy raw;
+  };
+  const auto measure_at = [&](float centre_amplitude) {
+    const std::vector<float> centre = band_noise(600.0f, 1800.0f, centre_amplitude, frame_count);
+    TrackInput left_only = make_input("left", side);
+    left_only.right = silent.data();
+    const std::vector<TrackInput> inputs{left_only, make_input("centre", centre)};
+    const std::vector<TrackProfile> profiles = analyze_track_profiles(inputs, profile_config);
+    REQUIRE(profiles.size() == 2);
+    REQUIRE(profiles[0].usable);
+    REQUIRE(profiles[1].usable);
+    return Measured{sonare::mixing::assistant::analyze_mix_profile(inputs, profiles, config),
+                    sonare::mixing::assistant::analyze_image_occupancy(inputs, profiles)};
+  };
+
+  const Measured level = measure_at(0.2f);
+  const Measured quieter = measure_at(0.2f * 0.316f);
+  REQUIRE(level.mix.image.histogram.size() == quieter.mix.image.histogram.size());
+  float raw_shift = 0.0f;
+  for (std::size_t slot = 0; slot < level.mix.image.histogram.size(); ++slot) {
+    INFO("slot " << slot);
+    CHECK_THAT(quieter.mix.image.histogram[slot], WithinAbs(level.mix.image.histogram[slot], 1e-3));
+    raw_shift =
+        std::max(raw_shift, std::fabs(quieter.raw.histogram[slot] - level.raw.histogram[slot]));
+  }
+  // Non-vacuity: unstaged, the same two inputs do give different histograms.
+  CHECK(raw_shift > 0.1f);
 }

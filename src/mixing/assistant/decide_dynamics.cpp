@@ -552,8 +552,16 @@ SceneDelta make_insert_delta(const TrackProfile& profile, api::InsertSlot slot,
 
 // --- Per-track decisions ---------------------------------------------------
 
-void decide_compressor(const TrackProfile& profile, float strength, InsertLedger& ledger,
-                       std::vector<SceneDelta>& deltas) {
+// Loudness a PreFader insert of track @p index receives: the measured level
+// plus the input trim the scene applies ahead of the inserts.
+float received_lufs(const TrackProfile& profile, const std::vector<float>& input_trim_db,
+                    std::size_t index) noexcept {
+  const float trim = input_trim_db.empty() ? 0.0f : input_trim_db[index];
+  return profile.base.loudness.integrated_lufs + trim;
+}
+
+void decide_compressor(const TrackProfile& profile, float level_lufs, float strength,
+                       InsertLedger& ledger, std::vector<SceneDelta>& deltas) {
   const CompressionRow* row = compression_row(profile.source);
   if (row == nullptr) return;
   if (!ledger.claim(profile.strip_id, api::InsertSlot::PreFader, "dynamics.compressor")) return;
@@ -564,8 +572,7 @@ void decide_compressor(const TrackProfile& profile, float strength, InsertLedger
   const float ratio = scale_ratio(
       std::clamp(row->ratio + crest * kRatioPerCrestDb, kMinSuggestedRatio, kMaxSuggestedRatio),
       strength);
-  const float threshold_db = profile.base.loudness.integrated_lufs + row->threshold_offset_db +
-                             crest * kThresholdPerCrestDb;
+  const float threshold_db = level_lufs + row->threshold_offset_db + crest * kThresholdPerCrestDb;
   const float attack_ms =
       std::max(kMinAttackMs, row->attack_ms * (1.0f + crest * kAttackScalePerCrestDb));
   // The sustain lengthening runs first and the measured cap last. The
@@ -621,25 +628,24 @@ void decide_transient_shaper(const TrackProfile& profile, float strength, Insert
                                      std::move(params), reason));
 }
 
-void decide_vocal_rider(const TrackProfile& profile, const MixAssistantConfig& config,
-                        float strength, InsertLedger& ledger, std::vector<SceneDelta>& deltas) {
+void decide_vocal_rider(const TrackProfile& profile, float level_lufs,
+                        const MixAssistantConfig& config, float strength, InsertLedger& ledger,
+                        std::vector<SceneDelta>& deltas) {
   if (!contains_source(kVoiceSources, profile.source)) return;
   if (!ledger.claim(profile.strip_id, api::InsertSlot::PreFader, "dynamics.vocalRider")) return;
 
   // The rider aims at the same absolute level the gain stage staged towards, so
   // the two agree on where the track belongs. A configuration without a real
-  // target leaves the rider holding the track at its own measured level.
-  const float target_db = std::isfinite(config.target_track_lufs)
-                              ? config.target_track_lufs
-                              : profile.base.loudness.integrated_lufs;
+  // target leaves the rider holding the track at the level it arrives at.
+  const float target_db =
+      std::isfinite(config.target_track_lufs) ? config.target_track_lufs : level_lufs;
   const float max_move_db = kRiderMaxMoveDb * strength;
 
   json::Object params;
   put_number(params, "targetDb", target_db);
   put_number(params, "maxBoostDb", max_move_db);
   put_number(params, "maxCutDb", max_move_db);
-  put_number(params, "noiseFloorDb",
-             profile.base.loudness.integrated_lufs + kRiderNoiseFloorOffsetDb);
+  put_number(params, "noiseFloorDb", level_lufs + kRiderNoiseFloorOffsetDb);
   // A stereo voice detected channel by channel would be ridden by two
   // independent gains, which pulls its image apart as it moves.
   put_bool(params, "linkedDetection", true);
@@ -652,15 +658,15 @@ void decide_vocal_rider(const TrackProfile& profile, const MixAssistantConfig& c
                                      std::move(params), reason));
 }
 
-void decide_deesser(const TrackProfile& profile, float strength, InsertLedger& ledger,
-                    std::vector<SceneDelta>& deltas) {
+void decide_deesser(const TrackProfile& profile, float level_lufs, float strength,
+                    InsertLedger& ledger, std::vector<SceneDelta>& deltas) {
   if (!contains_source(kVoiceSources, profile.source)) return;
   const float sibilance = sibilant_occupancy(profile);
   if (sibilance < kSibilanceOccupancyThreshold) return;
   if (!ledger.claim(profile.strip_id, api::InsertSlot::PreFader, "dynamics.deesser")) return;
 
   const float ratio = scale_ratio(kDeEsserRatio, strength);
-  const float threshold_db = profile.base.loudness.integrated_lufs + kDeEsserThresholdOffsetDb;
+  const float threshold_db = level_lufs + kDeEsserThresholdOffsetDb;
   const float range_db = kDeEsserMaxReductionDb * strength;
 
   json::Object params;
@@ -677,8 +683,8 @@ void decide_deesser(const TrackProfile& profile, float strength, InsertLedger& l
                                      std::move(params), reason));
 }
 
-void decide_gate(const TrackProfile& profile, float strength, InsertLedger& ledger,
-                 std::vector<SceneDelta>& deltas) {
+void decide_gate(const TrackProfile& profile, float level_lufs, float strength,
+                 InsertLedger& ledger, std::vector<SceneDelta>& deltas) {
   if (!contains_source(kGateableSources, profile.source)) return;
   if (profile.source_confidence < kGateMinMatchShare * source_base_confidence(profile.source)) {
     return;
@@ -690,7 +696,7 @@ void decide_gate(const TrackProfile& profile, float strength, InsertLedger& ledg
   if (!std::isfinite(attack_density) || attack_density < kGateMinOnsetsPerSec) return;
   if (!ledger.claim(profile.strip_id, api::InsertSlot::PreFader, "dynamics.gate")) return;
 
-  const float threshold_db = profile.base.loudness.integrated_lufs + kGateThresholdOffsetDb;
+  const float threshold_db = level_lufs + kGateThresholdOffsetDb;
   // The gate's range is an attenuation, so it is negative; scaling it towards
   // zero is what a weaker suggestion means here.
   const float range_db = -kGateMaxAttenuationDb * strength;
@@ -730,7 +736,8 @@ int contended_low_band(const MixProfile& mix, int key_index, int target_index) n
 }
 
 void decide_sidechain(const std::vector<TrackProfile>& profiles, const MixProfile& mix,
-                      float strength, InsertLedger& ledger, std::vector<SceneDelta>& deltas) {
+                      const std::vector<float>& input_trim_db, float strength, InsertLedger& ledger,
+                      std::vector<SceneDelta>& deltas) {
   // The dominance matrix is indexed by position in the profile vector, so a mix
   // profile describing a different number of tracks describes different tracks.
   if (mix.track_count != static_cast<int>(profiles.size())) return;
@@ -772,8 +779,10 @@ void decide_sidechain(const std::vector<TrackProfile>& profiles, const MixProfil
     const float release_ms = cap_release_to_onset_rate(keying, kDuckingReleaseMs);
 
     json::Object params;
+    // The detector hears the key after the key strip's own input trim.
     put_number(params, "thresholdDb",
-               keying.base.loudness.integrated_lufs + kDuckingThresholdOffsetDb);
+               received_lufs(keying, input_trim_db, static_cast<std::size_t>(best_key)) +
+                   kDuckingThresholdOffsetDb);
     put_number(params, "ratio", ratio);
     put_number(params, "attackMs", kDuckingAttackMs);
     put_number(params, "releaseMs", release_ms);
@@ -792,26 +801,34 @@ void decide_sidechain(const std::vector<TrackProfile>& profiles, const MixProfil
 }  // namespace
 
 std::vector<SceneDelta> decide_dynamics(const std::vector<TrackProfile>& profiles,
-                                        const MixProfile& mix, const MixAssistantConfig& config) {
+                                        const MixProfile& mix, const MixAssistantConfig& config,
+                                        const std::vector<float>& input_trim_db) {
   std::vector<SceneDelta> deltas;
   if (!config.enable_dynamics) return deltas;
+  if (!input_trim_db.empty() && input_trim_db.size() != profiles.size()) return deltas;
+  if (!std::all_of(input_trim_db.begin(), input_trim_db.end(),
+                   [](float trim) { return std::isfinite(trim); })) {
+    return deltas;
+  }
 
   const float strength =
       std::clamp(config.suggestion_strength, kMinSuggestionStrength, kMaxSuggestionStrength);
   InsertLedger ledger;
 
-  for (const TrackProfile& profile : profiles) {
+  for (std::size_t index = 0; index < profiles.size(); ++index) {
+    const TrackProfile& profile = profiles[index];
     if (!is_treatable(profile)) continue;
-    decide_compressor(profile, strength, ledger, deltas);
+    const float level_lufs = received_lufs(profile, input_trim_db, index);
+    decide_compressor(profile, level_lufs, strength, ledger, deltas);
     decide_transient_shaper(profile, strength, ledger, deltas);
-    decide_vocal_rider(profile, config, strength, ledger, deltas);
-    decide_deesser(profile, strength, ledger, deltas);
-    decide_gate(profile, strength, ledger, deltas);
+    decide_vocal_rider(profile, level_lufs, config, strength, ledger, deltas);
+    decide_deesser(profile, level_lufs, strength, ledger, deltas);
+    decide_gate(profile, level_lufs, strength, ledger, deltas);
   }
 
   // Last, so a duck is read against a chain whose per-track decisions are
   // already in place.
-  decide_sidechain(profiles, mix, strength, ledger, deltas);
+  decide_sidechain(profiles, mix, input_trim_db, strength, ledger, deltas);
 
   return deltas;
 }

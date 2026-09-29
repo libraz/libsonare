@@ -75,7 +75,9 @@ struct MixAssistantConfig {
   ///          estimated peak down to this level. Well below full scale on
   ///          purpose: a mix is handed on to a mastering stage, and the estimate
   ///          cannot see effect returns or insert make-up gain, so the margin is
-  ///          where the unmodelled part goes.
+  ///          where the unmodelled part goes. With @ref enable_structure off no
+  ///          master bus is suggested, so the needed trim is reported in the
+  ///          explanation instead of applied.
   float mix_bus_headroom_dbtp = -6.0f;
 
   /// @brief Tempo the suggested delay times are voiced against, in BPM.

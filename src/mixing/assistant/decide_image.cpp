@@ -7,7 +7,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <cstdlib>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -234,27 +234,43 @@ int crowded_dominant_band(const TrackProfile& profile, const MixProfile& mix) {
   return mix.image.crowded[static_cast<std::size_t>(dominant)] ? dominant : -1;
 }
 
-// The single delay and the single polarity decision kept for one track while
-// its pairs are scanned. Both fields are last-writer-wins in the scene, so a
-// delta per pair would leave whichever pair was enumerated last in charge; the
-// strongest evidence decides instead.
+// The single delay and the single polarity decision for one track. Both are
+// last-writer-wins fields in the scene, so each track gets at most one of each.
 struct AlignmentChoice {
   bool has_delay = false;
   int delay_samples = 0;
-  float delay_evidence = 0.0f;
   std::string delay_partner;
   bool invert = false;
-  float invert_evidence = 0.0f;
   std::string invert_partner;
 };
 
-// The pair with the largest |correlation| wins a track's delay and its polarity
-// independently. Ties keep the entry already held, so the earlier pair in
-// MixProfile::alignment decides and the outcome never depends on how a
-// comparison happens to round.
+// One related pair that survived the usability checks.
+struct AlignmentEdge {
+  std::size_t reference = 0;
+  std::size_t target = 0;
+  int lag_samples = 0;
+  bool opposed = false;
+  float evidence = 0.0f;
+};
+
+std::size_t find_root(std::vector<std::size_t>& parent, std::size_t index) {
+  while (parent[index] != index) {
+    parent[index] = parent[parent[index]];
+    index = parent[index];
+  }
+  return index;
+}
+
+// Solves delay and polarity once per connected group of related tracks. A
+// maximum spanning tree over |correlation| (ties keep the earlier pair) fixes
+// every member's arrival and polarity relative to the group's lowest index;
+// every member then waits for the latest arrival, and members of the other
+// polarity class from that lowest index are inverted. Edges the tree leaves out
+// are the weaker side of any disagreement.
 std::vector<AlignmentChoice> collect_alignment(const std::vector<TrackProfile>& profiles,
                                                const MixProfile& mix) {
-  std::vector<AlignmentChoice> choices(profiles.size());
+  const std::size_t count = profiles.size();
+  std::vector<AlignmentEdge> edges;
   for (const PairAlignment& pair : mix.alignment) {
     // An unrelated pair is two tracks that happen to be playing at once.
     // Aligning them does nothing useful and can do harm.
@@ -262,46 +278,79 @@ std::vector<AlignmentChoice> collect_alignment(const std::vector<TrackProfile>& 
     if (pair.reference_index < 0 || pair.target_index < 0) continue;
     const std::size_t reference = static_cast<std::size_t>(pair.reference_index);
     const std::size_t target = static_cast<std::size_t>(pair.target_index);
-    if (reference >= profiles.size() || target >= profiles.size()) continue;
+    if (reference >= count || target >= count) continue;
     if (reference == target) continue;
     // Aligning against a track the profiler rejected corrects nothing: the
     // correlation it came from describes silence or an unmeasurable fragment.
     if (!profiles[reference].usable || !profiles[target].usable) continue;
-
     // A polarity-opposed pair peaks at a negative correlation, so the strength
     // of the evidence is the magnitude either way.
-    const float evidence = std::fabs(pair.correlation);
+    edges.push_back(AlignmentEdge{reference, target, pair.lag_samples, pair.polarity_opposed,
+                                  std::fabs(pair.correlation)});
+  }
+  std::stable_sort(edges.begin(), edges.end(), [](const AlignmentEdge& a, const AlignmentEdge& b) {
+    return a.evidence > b.evidence;
+  });
 
-    if (pair.polarity_opposed) {
-      // The target is inverted, never the reference. reference_index is always
-      // the lower of the two, so one side of every pair is fixed in advance and
-      // no track can be flipped twice by two different pairs agreeing.
-      AlignmentChoice& choice = choices[target];
-      if (!choice.invert || evidence > choice.invert_evidence) {
-        choice.invert = true;
-        choice.invert_evidence = evidence;
-        choice.invert_partner = profiles[reference].strip_id;
+  // Kruskal: keep an edge only when it joins two groups.
+  std::vector<std::size_t> parent(count);
+  for (std::size_t i = 0; i < count; ++i) parent[i] = i;
+  std::vector<std::vector<const AlignmentEdge*>> tree(count);
+  for (const AlignmentEdge& edge : edges) {
+    const std::size_t a = find_root(parent, edge.reference);
+    const std::size_t b = find_root(parent, edge.target);
+    if (a == b) continue;
+    parent[std::max(a, b)] = std::min(a, b);
+    tree[edge.reference].push_back(&edge);
+    tree[edge.target].push_back(&edge);
+  }
+
+  // Arrival (in samples, relative to the group's lowest index) and polarity
+  // class of every member, walked out from that lowest index.
+  std::vector<AlignmentChoice> choices(count);
+  std::vector<bool> visited(count, false);
+  std::vector<long long> arrival(count, 0);
+  std::vector<bool> flipped(count, false);
+  for (std::size_t anchor = 0; anchor < count; ++anchor) {
+    if (visited[anchor] || tree[anchor].empty()) continue;
+    std::vector<std::size_t> members{anchor};
+    visited[anchor] = true;
+    for (std::size_t next = 0; next < members.size(); ++next) {
+      const std::size_t from = members[next];
+      for (const AlignmentEdge* edge : tree[from]) {
+        const bool forward = edge->reference == from;
+        const std::size_t to = forward ? edge->target : edge->reference;
+        if (visited[to]) continue;
+        visited[to] = true;
+        // lag_samples > 0 means the target arrives that many samples after the reference.
+        arrival[to] = arrival[from] + (forward ? edge->lag_samples : -edge->lag_samples);
+        flipped[to] = flipped[from] != edge->opposed;
+        members.push_back(to);
       }
     }
 
-    // A pair already in time gets no delta at all. A delta carrying zero
-    // samples would read as a decision to align something that never needed it,
-    // and would add a line to the explanation saying nothing.
-    if (pair.lag_samples != 0) {
-      // lag_samples is the lag that aligns the target onto the reference:
-      // positive means the target arrives later, so the reference is the side
-      // that has to wait; negative is the mirror case. channel_delay_samples
-      // cannot be negative, which is exactly why the side has to be resolved
-      // here rather than passed through as a signed number.
-      const bool delay_reference = pair.lag_samples > 0;
-      const std::size_t delayed = delay_reference ? reference : target;
-      const std::size_t partner = delay_reference ? target : reference;
-      AlignmentChoice& choice = choices[delayed];
-      if (!choice.has_delay || evidence > choice.delay_evidence) {
+    // The latest arrival is the one nothing has to wait for; ties keep the lowest index.
+    std::size_t latest = anchor;
+    for (const std::size_t member : members) {
+      if (arrival[member] > arrival[latest] ||
+          (arrival[member] == arrival[latest] && member < latest)) {
+        latest = member;
+      }
+    }
+    for (const std::size_t member : members) {
+      AlignmentChoice& choice = choices[member];
+      // A member already in time gets no delta: one carrying zero samples would
+      // read as a decision to align something that never needed it.
+      const long long wait = arrival[latest] - arrival[member];
+      if (wait > 0) {
         choice.has_delay = true;
-        choice.delay_samples = std::abs(pair.lag_samples);
-        choice.delay_evidence = evidence;
-        choice.delay_partner = profiles[partner].strip_id;
+        choice.delay_samples =
+            static_cast<int>(std::min<long long>(wait, std::numeric_limits<int>::max()));
+        choice.delay_partner = profiles[latest].strip_id;
+      }
+      if (flipped[member]) {
+        choice.invert = true;
+        choice.invert_partner = profiles[anchor].strip_id;
       }
     }
   }
@@ -396,7 +445,7 @@ void append_alignment(const std::vector<TrackProfile>& profiles,
       delta.polarity_invert_right = true;
       delta.reason = "inverted the polarity of both channels of " + strip_id +
                      " because it is opposed to " + choice.invert_partner +
-                     ", the reference side of the pair";
+                     ", the reference of its related group";
       deltas.push_back(std::move(delta));
     }
 

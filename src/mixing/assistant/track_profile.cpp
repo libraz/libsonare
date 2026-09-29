@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 #include "core/spectrum.h"
@@ -231,6 +232,8 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   TrackProfile profile;
   profile.strip_id = track.id;
   profile.name = track.name;
+  // Unmeasured until BS.1770 runs: reads like a silent track (null in JSON), never a finite 0.
+  profile.base.loudness.integrated_lufs = -std::numeric_limits<float>::infinity();
 
   // Degenerate input is reported as an unusable track rather than thrown, so a
   // batch call needs no per-track error handling.

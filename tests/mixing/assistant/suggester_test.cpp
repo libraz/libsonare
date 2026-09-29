@@ -665,3 +665,88 @@ TEST_CASE("the mixing assistant param builders refuse an unknown key", "[mixing]
   CHECK_THROWS_AS(assistant::track_profile_config_from_params(misspelt, 1),
                   sonare::SonareException);
 }
+
+// A track excluded before BS.1770 ever ran has no loudness, and reports it the
+// way a measured-silent track does: integratedLufs is null, never a finite 0.
+TEST_CASE("an unmeasured track reports its integrated loudness as null", "[mixing][assistant]") {
+  std::vector<float> samples(4800, 0.1f);
+  std::vector<float> poisoned = samples;
+  poisoned[100] = std::numeric_limits<float>::quiet_NaN();
+  const auto make_track = [](const std::string& id, const float* data, std::size_t frames,
+                             int sample_rate) {
+    TrackInput track;
+    track.id = id;
+    track.left = data;
+    track.frame_count = frames;
+    track.sample_rate = sample_rate;
+    return track;
+  };
+  const std::vector<TrackInput> tracks = {
+      make_track("empty", nullptr, 0, 48000),
+      make_track("norate", samples.data(), samples.size(), 0),
+      make_track("nonfinite", poisoned.data(), poisoned.size(), 48000),
+  };
+  const auto result = sonare::mixing::assistant::suggest_scene(tracks);
+  REQUIRE(result.tracks.size() == tracks.size());
+  const sonare::util::json::Value parsed =
+      sonare::util::json::parse(sonare::mixing::assistant::mix_assistant_result_to_json(result));
+  const sonare::util::json::Value* rows = parsed.find("tracks");
+  REQUIRE(rows != nullptr);
+  REQUIRE(rows->is_array());
+  REQUIRE(rows->as_array().size() == tracks.size());
+  for (const sonare::util::json::Value& row : rows->as_array()) {
+    const sonare::util::json::Value* id = row.find("stripId");
+    REQUIRE(id != nullptr);
+    INFO(id->as_string());
+    const sonare::util::json::Value* reason = row.find("exclusionReason");
+    REQUIRE(reason != nullptr);
+    CHECK_FALSE(reason->as_string().empty());
+    const sonare::util::json::Value* lufs = row.find("integratedLufs");
+    REQUIRE(lufs != nullptr);
+    CHECK(lufs->is_null());
+  }
+}
+
+// Zero is the only sentinel for the transport fallback; a negative tempo is a
+// mistake to name, not a second spelling of zero.
+TEST_CASE("the mixing assistant param builder refuses a negative tempo", "[mixing][assistant]") {
+  namespace assistant = sonare::mixing::assistant;
+  const sonare::mastering::api::Param fallback[] = {{"tempoBpm", 0.0}};
+  CHECK(assistant::mix_assistant_config_from_params(fallback, 1).tempo_bpm == 0.0f);
+  const sonare::mastering::api::Param stated[] = {{"tempoBpm", 120.0}};
+  CHECK(assistant::mix_assistant_config_from_params(stated, 1).tempo_bpm == 120.0f);
+  for (const double tempo : {-120.0, -0.5}) {
+    INFO(tempo);
+    const sonare::mastering::api::Param negative[] = {{"tempoBpm", tempo}};
+    try {
+      (void)assistant::mix_assistant_config_from_params(negative, 1);
+      FAIL("negative tempo accepted");
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()).find("tempoBpm") != std::string::npos);
+    }
+  }
+}
+
+// The master is a structure decision, so with structure off there is no bus to
+// carry the headroom trim; the correction must then be reported, not dropped.
+TEST_CASE("a headroom correction with no master bus is reported", "[mixing][assistant]") {
+  const auto fixture = make_demo_tracks(48000, 0.5f);
+  const auto tracks = fixture.inputs();
+  const auto mentions = [](const MixAssistantResult& result, const std::string& text) {
+    return std::any_of(
+        result.explanation.begin(), result.explanation.end(),
+        [&text](const std::string& line) { return line.find(text) != std::string::npos; });
+  };
+
+  // Non-vacuity: with a master bus the same tracks do need pulling down.
+  const auto with_master = sonare::mixing::assistant::suggest_scene(tracks);
+  REQUIRE(mentions(with_master, "pulled the master bus down"));
+
+  MixAssistantConfig config;
+  config.enable_structure = false;
+  const auto without_master = sonare::mixing::assistant::suggest_scene(tracks, config);
+  REQUIRE(std::none_of(without_master.scene.buses.begin(), without_master.scene.buses.end(),
+                       [](const sonare::mixing::api::Bus& bus) { return bus.role == "master"; }));
+  CHECK(mentions(without_master, "headroom"));
+}

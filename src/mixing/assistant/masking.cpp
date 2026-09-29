@@ -4,6 +4,7 @@
 #include "mixing/assistant/masking.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -72,11 +73,21 @@ bool envelope_is_well_formed(const BandEnergyEnvelope& bands) noexcept {
 
 }  // namespace
 
-std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile>& profiles) {
+std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile>& profiles,
+                                                  const std::vector<float>& gain_db) {
   const std::size_t track_count = profiles.size();
   std::vector<BandDominance> dominance(track_count * track_count *
                                        static_cast<std::size_t>(kBandCount));
   if (track_count < 2) return dominance;
+  if (!gain_db.empty() && gain_db.size() != track_count) return dominance;
+  if (!std::all_of(gain_db.begin(), gain_db.end(), [](float g) { return std::isfinite(g); })) {
+    return dominance;
+  }
+  // Power scale per track; the floors below are relative, so only the shares see it.
+  std::vector<double> gain(track_count, 1.0);
+  for (std::size_t track = 0; track < gain_db.size(); ++track) {
+    gain[track] = static_cast<double>(db_to_power_scalar(gain_db[track]));
+  }
 
   // Which tracks take part, and the longest envelope among them. An unusable
   // track keeps its whole row and column default-constructed.
@@ -154,9 +165,11 @@ std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile
           if (first_energy <= first_floor) continue;
           const float second_energy = second_bands.at(band, frame);
           if (second_energy <= second_floor) continue;
-          const double total = static_cast<double>(first_energy) + second_energy;
-          first_sum += first_energy / total;
-          second_sum += second_energy / total;
+          const double first_staged = gain[first] * first_energy;
+          const double second_staged = gain[second] * second_energy;
+          const double total = first_staged + second_staged;
+          first_sum += first_staged / total;
+          second_sum += second_staged / total;
           ++valid_frames;
         }
         // Never sounding together in this band is an absence of interference,

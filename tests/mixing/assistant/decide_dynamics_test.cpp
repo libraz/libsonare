@@ -16,6 +16,7 @@
 
 #include "mastering/api/insert_factory.h"
 #include "mixing/assistant/source_classifier.h"
+#include "mixing/assistant/suggester.h"
 #include "util/constants.h"
 #include "util/json.h"
 
@@ -37,6 +38,8 @@ using sonare::mixing::assistant::TrackProfile;
 
 namespace {
 
+// No input trim ahead of the inserts, so every level reads as measured.
+const std::vector<float> kNoTrim;
 // Comfortably longer than the 400 ms gating block, so duration is never the
 // reason a hand-built profile is excluded.
 constexpr float kMeasurableDurationSec = 2.0f;
@@ -139,7 +142,7 @@ float param_number(const Insert& insert, const std::string& key) {
 float suggested_release_ms(const TrackProfile& profile) {
   const std::vector<TrackProfile> profiles{profile};
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
   const Insert* compressor = find_insert(deltas, profile.strip_id, "dynamics.compressor");
   REQUIRE(compressor != nullptr);
   return param_number(*compressor, "releaseMs");
@@ -187,7 +190,8 @@ TEST_CASE("every suggested processor is one the insert factory can build", "[mix
   // pair is present in this run too.
   set_dominance(mix, 0, 5, 1, 0.7f, 200);
 
-  const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas =
+      decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
   REQUIRE_FALSE(deltas.empty());
 
   const std::vector<std::string> known = insert_factory_names();
@@ -204,7 +208,8 @@ TEST_CASE("every suggested params object holds only numbers and booleans", "[mix
   MixProfile mix = make_mix(profiles.size());
   set_dominance(mix, 0, 5, 1, 0.7f, 200);
 
-  const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas =
+      decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
   REQUIRE_FALSE(deltas.empty());
 
   for (const SceneDelta& delta : deltas) {
@@ -228,7 +233,8 @@ TEST_CASE("every suggested params key is one its processor reads", "[mixing][ass
   MixProfile mix = make_mix(profiles.size());
   set_dominance(mix, 0, 5, 1, 0.7f, 200);
 
-  const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas =
+      decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
   REQUIRE_FALSE(deltas.empty());
 
   for (const SceneDelta& delta : deltas) {
@@ -251,7 +257,7 @@ TEST_CASE("a track with more crest factor gets a later compressor attack", "[mix
                                            make_profile("spiky", SourceClass::Vocal, kHighCrestDb)};
 
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
 
   const Insert* even = find_insert(deltas, "even", "dynamics.compressor");
   const Insert* spiky = find_insert(deltas, "spiky", "dynamics.compressor");
@@ -272,7 +278,7 @@ TEST_CASE("a more sustained track gets a longer compressor release", "[mixing][a
       make_profile("held", SourceClass::Keys, 10.0f, kSustainedSustain)};
 
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
 
   const Insert* plucked = find_insert(deltas, "plucked", "dynamics.compressor");
   const Insert* held = find_insert(deltas, "held", "dynamics.compressor");
@@ -362,7 +368,7 @@ TEST_CASE("a voice gets a rider or a de-esser", "[mixing][assistant]") {
                                            make_profile("bvox", SourceClass::Backing)};
 
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
 
   for (const TrackProfile& profile : profiles) {
     INFO("strip " << profile.strip_id);
@@ -381,7 +387,7 @@ TEST_CASE("a de-esser follows the sibilant bands rather than the class alone",
   profiles[1].band_occupancy[3] = 1.0f;
 
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
 
   CHECK(has_insert(deltas, "bright", "dynamics.deesser"));
   CHECK_FALSE(has_insert(deltas, "dark", "dynamics.deesser"));
@@ -393,7 +399,7 @@ TEST_CASE("a percussive track gets a transient shaper", "[mixing][assistant]") {
       make_profile("shaker", SourceClass::Percussion), make_profile("pad", SourceClass::Keys)};
 
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
 
   CHECK(has_insert(deltas, "kick", "dynamics.transientShaper"));
   CHECK(has_insert(deltas, "snare", "dynamics.transientShaper"));
@@ -410,7 +416,8 @@ TEST_CASE("a kick and a bass contending in the low end get a sidechain duck",
   // kBands[1] is 60-250 Hz, and the kick owns most of it whenever both sound.
   set_dominance(mix, 0, 1, 1, 0.72f, 400);
 
-  const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas =
+      decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
 
   const Insert* duck = find_insert(deltas, "bass", "dynamics.duckingProcessor");
   REQUIRE(duck != nullptr);
@@ -434,7 +441,8 @@ TEST_CASE("a duck recovers between the key's hits, not between the ducked part's
         make_profile("bass", SourceClass::Bass, 10.0f, kSustainedSustain, ducked_onsets_per_sec)};
     MixProfile mix = make_mix(profiles.size());
     set_dominance(mix, 0, 1, 1, 0.72f, 400);
-    const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+    const std::vector<SceneDelta> deltas =
+        decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
     const Insert* duck = find_insert(deltas, "bass", "dynamics.duckingProcessor");
     REQUIRE(duck != nullptr);
     return param_number(*duck, "releaseMs");
@@ -459,14 +467,16 @@ TEST_CASE("a pair that does not contend in the low end gets no sidechain duck",
   SECTION("the two never sound together in the band") {
     MixProfile mix = make_mix(profiles.size());
     set_dominance(mix, 0, 1, 1, 0.9f, 0);
-    const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+    const std::vector<SceneDelta> deltas =
+        decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "bass", "dynamics.duckingProcessor"));
   }
 
   SECTION("the key source is the quieter of the two in the band") {
     MixProfile mix = make_mix(profiles.size());
     set_dominance(mix, 0, 1, 1, 0.3f, 400);
-    const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+    const std::vector<SceneDelta> deltas =
+        decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "bass", "dynamics.duckingProcessor"));
   }
 
@@ -474,14 +484,16 @@ TEST_CASE("a pair that does not contend in the low end gets no sidechain duck",
     MixProfile mix = make_mix(profiles.size());
     // kBands[3] is 500-2000 Hz: shared harmonics, which is an EQ decision.
     set_dominance(mix, 0, 1, 3, 0.9f, 400);
-    const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+    const std::vector<SceneDelta> deltas =
+        decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "bass", "dynamics.duckingProcessor"));
   }
 
   SECTION("the mix profile describes a different set of tracks") {
     MixProfile mix = make_mix(profiles.size() + 1);
     set_dominance(mix, 0, 1, 1, 0.9f, 400);
-    const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+    const std::vector<SceneDelta> deltas =
+        decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "bass", "dynamics.duckingProcessor"));
   }
 }
@@ -493,7 +505,7 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
     const std::vector<TrackProfile> profiles{make_profile(
         "kick", SourceClass::Kick, kGateableCrestDb, kTransientSustain, kPlayedOnsetsPerSec)};
     const std::vector<SceneDelta> deltas =
-        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
     const Insert* gate = find_insert(deltas, "kick", "dynamics.gate");
     REQUIRE(gate != nullptr);
     // A partial attenuation, never a mute: a gate that fires on the wrong
@@ -509,7 +521,7 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
                                                           kGateableCrestDb, kTransientSustain,
                                                           kPlayedOnsetsPerSec, kUncertainClass)};
     const std::vector<SceneDelta> deltas =
-        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "kick", "dynamics.gate"));
     // The track is still treated; only the destructive decision is withheld.
     CHECK(has_insert(deltas, "kick", "dynamics.compressor"));
@@ -519,7 +531,7 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
     const std::vector<TrackProfile> profiles{make_profile(
         "kick", SourceClass::Kick, kGateableCrestDb, kSustainedSustain, kPlayedOnsetsPerSec)};
     const std::vector<SceneDelta> deltas =
-        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "kick", "dynamics.gate"));
   }
 
@@ -527,7 +539,7 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
     const std::vector<TrackProfile> profiles{make_profile("kick", SourceClass::Kick, kLowCrestDb,
                                                           kTransientSustain, kPlayedOnsetsPerSec)};
     const std::vector<SceneDelta> deltas =
-        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "kick", "dynamics.gate"));
   }
 
@@ -544,7 +556,7 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
       const std::vector<TrackProfile> profiles{make_profile(
           "kit", source, kGateableCrestDb, kTransientSustain, kPlayedOnsetsPerSec, ceiling)};
       const std::vector<SceneDelta> deltas =
-          decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+          decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
       REQUIRE(has_insert(deltas, "kit", "dynamics.gate"));
     }
   }
@@ -553,7 +565,7 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
     const std::vector<TrackProfile> profiles{make_profile(
         "vox", SourceClass::Vocal, kGateableCrestDb, kTransientSustain, kPlayedOnsetsPerSec)};
     const std::vector<SceneDelta> deltas =
-        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+        decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
     CHECK_FALSE(has_insert(deltas, "vox", "dynamics.gate"));
   }
 }
@@ -564,9 +576,9 @@ TEST_CASE("suggestion strength scales the ratios and ranges", "[mixing][assistan
   half.suggestion_strength = 0.5f;
 
   const std::vector<SceneDelta> full_deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
   const std::vector<SceneDelta> half_deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), half);
+      decide_dynamics(profiles, make_mix(profiles.size()), half, kNoTrim);
 
   const Insert* full = find_insert(full_deltas, "vox", "dynamics.compressor");
   const Insert* half_insert = find_insert(half_deltas, "vox", "dynamics.compressor");
@@ -592,7 +604,7 @@ TEST_CASE("an untreatable track gets no dynamics delta", "[mixing][assistant]") 
   profiles[3].source_confidence = 0.1f;
 
   const std::vector<SceneDelta> deltas =
-      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim);
 
   REQUIRE_FALSE(deltas.empty());
   for (const SceneDelta& delta : deltas) {
@@ -612,7 +624,8 @@ TEST_CASE("no strip is given the same processor twice in the same slot", "[mixin
   set_dominance(mix, 0, 5, 1, 0.72f, 400);
   set_dominance(mix, profiles.size() - 1, 5, 1, 0.80f, 400);
 
-  const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas =
+      decide_dynamics(profiles, mix, MixAssistantConfig{}, kNoTrim);
   REQUIRE_FALSE(deltas.empty());
 
   std::set<std::string> seen;
@@ -633,13 +646,23 @@ TEST_CASE("no strip is given the same processor twice in the same slot", "[mixin
 }
 
 TEST_CASE("degenerate dynamics input yields an empty suggestion", "[mixing][assistant]") {
-  SECTION("no tracks") { CHECK(decide_dynamics({}, MixProfile{}, MixAssistantConfig{}).empty()); }
+  SECTION("no tracks") {
+    CHECK(decide_dynamics({}, MixProfile{}, MixAssistantConfig{}, kNoTrim).empty());
+  }
+
+  SECTION("the trim vector describes different strips") {
+    const std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal)};
+    const std::vector<float> two_trims{0.0f, 0.0f};
+    const std::vector<float> non_finite{std::numeric_limits<float>::quiet_NaN()};
+    CHECK(decide_dynamics(profiles, make_mix(1), MixAssistantConfig{}, two_trims).empty());
+    CHECK(decide_dynamics(profiles, make_mix(1), MixAssistantConfig{}, non_finite).empty());
+  }
 
   SECTION("the dynamics domain is disabled") {
     const std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal)};
     MixAssistantConfig config;
     config.enable_dynamics = false;
-    CHECK(decide_dynamics(profiles, make_mix(profiles.size()), config).empty());
+    CHECK(decide_dynamics(profiles, make_mix(profiles.size()), config, kNoTrim).empty());
   }
 
   SECTION("every track is silent") {
@@ -648,6 +671,68 @@ TEST_CASE("degenerate dynamics input yields an empty suggestion", "[mixing][assi
     for (TrackProfile& profile : profiles) {
       profile.base.loudness.integrated_lufs = sonare::constants::kFloorDb;
     }
-    CHECK(decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}).empty());
+    CHECK(decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{}, kNoTrim)
+              .empty());
+  }
+}
+
+namespace {
+
+// Every level parameter of every dynamics insert in @p scene, keyed by strip,
+// processor and parameter.
+std::vector<std::pair<std::string, float>> dynamics_levels(
+    const sonare::mixing::api::Scene& scene) {
+  static const std::array<const char*, 4> kLevelKeys = {"thresholdDb", "closeThresholdDb",
+                                                        "noiseFloorDb", "targetDb"};
+  std::vector<std::pair<std::string, float>> levels;
+  for (const auto& strip : scene.strips) {
+    for (const Insert& insert : strip.inserts) {
+      const json::Value params = json::parse(insert.params_json);
+      for (const char* key : kLevelKeys) {
+        const json::Value* field = params.find(key);
+        if (field == nullptr || !field->is_number()) continue;
+        levels.emplace_back(strip.id + "/" + insert.processor_name + "/" + key, field->as_float());
+      }
+    }
+  }
+  return levels;
+}
+
+}  // namespace
+
+// The dynamics inserts sit after the input trim, so they are set against the
+// trimmed level: a part recorded 10 dB quieter is staged up by 10 dB and must
+// then get exactly the same thresholds.
+TEST_CASE("dynamics levels follow the trimmed signal rather than the recorded level",
+          "[mixing][assistant]") {
+  MixAssistantConfig config;
+  config.enable_structure = false;
+  config.enable_eq = false;
+  config.enable_image = false;
+  const auto build = [](float offset_db) {
+    std::vector<TrackProfile> profiles = {
+        make_profile("kick", SourceClass::Kick, kGateableCrestDb, kTransientSustain,
+                     kPlayedOnsetsPerSec),
+        make_profile("bass", SourceClass::Bass),
+        make_profile("vox", SourceClass::Vocal),
+    };
+    for (TrackProfile& profile : profiles) profile.base.loudness.integrated_lufs += offset_db;
+    return profiles;
+  };
+  MixProfile mix = make_mix(3);
+  set_dominance(mix, 0, 1, 1, 0.7f, 200);
+
+  const auto loud = sonare::mixing::assistant::suggest_scene(build(0.0f), mix, config);
+  const auto quiet = sonare::mixing::assistant::suggest_scene(build(-10.0f), mix, config);
+
+  const auto loud_levels = dynamics_levels(loud.scene);
+  const auto quiet_levels = dynamics_levels(quiet.scene);
+  // Non-vacuity: the compressor, gate, rider, de-esser and duck all carry a level.
+  REQUIRE(loud_levels.size() >= 6);
+  REQUIRE(loud_levels.size() == quiet_levels.size());
+  for (std::size_t i = 0; i < loud_levels.size(); ++i) {
+    INFO(loud_levels[i].first);
+    REQUIRE(loud_levels[i].first == quiet_levels[i].first);
+    CHECK(std::fabs(loud_levels[i].second - quiet_levels[i].second) < 1e-3f);
   }
 }
