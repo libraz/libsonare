@@ -48,6 +48,9 @@ export interface NativeEngine {
   setMarkers(markers: unknown): void;
   markerByIndex(index: unknown): unknown;
   setLoop(startPpq: unknown, endPpq?: unknown, enabled?: unknown): void;
+  setLoopFromMarkers(startMarkerId: unknown, endMarkerId: unknown): void;
+  sampleAtPpq(ppq: unknown): number;
+  marker(id: unknown): unknown;
   setAutomationLane(paramId: unknown, points?: unknown): void;
   parameterInfoByIndex(index: unknown): unknown;
   drainExternalMidi(maxRecords?: unknown): unknown[];
@@ -58,6 +61,24 @@ export interface NativeEngine {
   setSoloMute(laneIndex: unknown, solo: unknown, mute: unknown, renderFrame?: unknown): void;
   setTrackMonitorMode(laneIndex: unknown, mode: unknown, renderFrame?: unknown): void;
   setMidiInputSource(destinationId: unknown): void;
+  setBuiltinInstrument(destinationId: unknown, options?: unknown): void;
+  setSynthInstrument(destinationId: unknown, options?: unknown): void;
+  setSf2Instrument(destinationId: unknown, options?: unknown): void;
+  clearMidiInstrument(destinationId?: unknown): void;
+  setMidiFx(destinationId: unknown, configJson: unknown): void;
+  clearMidiFx(destinationId?: unknown): void;
+  setControllerProfile(destinationId: unknown, presetName: unknown): void;
+  bindController(destinationId: unknown, binding: unknown): void;
+  clearControllerBindings(destinationId: unknown): void;
+  controllerBindingCount(destinationId: unknown): number;
+  setControllerVelocityMeaningful(destinationId: unknown, meaningful: unknown): void;
+  controllerVelocityMeaningful(destinationId: unknown): boolean;
+  setControllerNoteTracking(destinationId: unknown, dimension: unknown, mode: unknown): void;
+  controllerNoteTracking(destinationId: unknown, dimension: unknown): unknown;
+  legatoFallbackCount(destinationId: unknown): number;
+  setMidiDestinationExternal(destinationId: unknown, external: unknown): void;
+  setExternalMidiClockEnabled(enabled: unknown): void;
+  setWarpVoiceCapacity(voices: unknown): void;
   midiInputPendingCount(): number;
   midiCcBindingCount(): number;
   bindMidiCc(
@@ -207,6 +228,42 @@ export interface NativeEngine {
     bypassed: unknown,
     resetOnBypass?: unknown,
   ): void;
+  applyTrackStripInsertParamByNameNow(
+    trackId: unknown,
+    insertIndex: unknown,
+    paramName: unknown,
+    value: unknown,
+  ): void;
+  restoreTrackStripInsertParamByName(
+    trackId: unknown,
+    insertIndex: unknown,
+    paramName: unknown,
+    value: unknown,
+  ): void;
+  applyMasterStripInsertParamByNameNow(
+    insertIndex: unknown,
+    paramName: unknown,
+    value: unknown,
+  ): void;
+  restoreMasterStripInsertParamByName(
+    insertIndex: unknown,
+    paramName: unknown,
+    value: unknown,
+  ): void;
+  applyBusStripInsertParamByNameNow(
+    busId: unknown,
+    insertIndex: unknown,
+    paramName: unknown,
+    value: unknown,
+  ): void;
+  restoreBusStripInsertParamByName(
+    busId: unknown,
+    insertIndex: unknown,
+    paramName: unknown,
+    value: unknown,
+  ): void;
+  clearTrackInsertParameterBases(trackId: unknown): void;
+  clearBusInsertParameterBases(busId: unknown): void;
   resolveTrackInsertAutomationId(
     trackId: unknown,
     insertIndex: unknown,

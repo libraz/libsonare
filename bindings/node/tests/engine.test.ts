@@ -588,9 +588,11 @@ describe('RealtimeEngine native binding', () => {
     // 257/-255 narrow to 1 (Stereo, valid) if the addon range-checks the
     // uint8_t C-ABI field's value AFTER narrowing to it instead of before --
     // the wrap this guards against on both the lane and the bus reader.
+    // @ts-expect-error deliberately out-of-range layout ordinal; the addon must reject it.
     expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 257 }])).toThrow(
       /\[0, 255\]/,
     );
+    // @ts-expect-error deliberately out-of-range layout ordinal; the addon must reject it.
     expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 257 }])).toThrow(
       /\[0, 255\]/,
     );

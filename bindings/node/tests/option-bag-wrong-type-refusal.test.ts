@@ -142,6 +142,7 @@ describe.each(CASES)('$bag refuses a wrong-typed $key', ({ key, wrongValue, run 
 describe('analyze meterCandidateNumerators refuses a non-array value', () => {
   it('throws naming the field for a present non-array value', () => {
     expect(() =>
+      // @ts-expect-error deliberately a non-array value; the addon must refuse it by name.
       analyze(tone, SAMPLE_RATE, { meterCandidateNumerators: 'meterCandidateNumerators' }),
     ).toThrowError(/meterCandidateNumerators/);
   });
