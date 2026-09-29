@@ -22,6 +22,7 @@
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/midi_render.h"
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace {
@@ -536,4 +537,38 @@ TEST_CASE(
                                                   std::max(static_cast<double>(rms_muted), 1e-12));
   INFO("lane-mute attenuation (dB): " << attenuation_db);
   REQUIRE(attenuation_db >= 90.0);  // S1(a)
+}
+
+TEST_CASE("LayeredInstrument fans a mono fold-down to every channel past two", "[midi][layered]") {
+  // The same fan-out every other built-in instrument gives a wider output, on
+  // both the destination render and the source-track render.
+  constexpr int kSamples = 256;
+  constexpr int kChannels = 4;
+  for (const bool source_render : {false, true}) {
+    auto layered = make_two_synth_layers(kRate, 256);
+    layered->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    std::vector<std::vector<float>> bufs(kChannels,
+                                         std::vector<float>(static_cast<size_t>(kSamples), 0.0f));
+    float* target[kChannels];
+    for (int ch = 0; ch < kChannels; ++ch) target[ch] = bufs[static_cast<size_t>(ch)].data();
+    if (source_render) {
+      const MidiInstrumentSourceOutput outputs[] = {{0, target}};
+      REQUIRE(layered->process_source_tracks(outputs, 1, kChannels, kSamples));
+    } else {
+      layered->process(target, kChannels, kSamples);
+    }
+    float peak = 0.0f;
+    for (float s : bufs[0]) peak = std::max(peak, std::fabs(s));
+    INFO("source render " << source_render);
+    REQUIRE(peak > 0.0f);  // non-vacuity: the layers sounded
+    for (size_t ch = 2; ch < static_cast<size_t>(kChannels); ++ch) {
+      for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+        const float fold = sonare::constants::kInvSqrt2 * (bufs[0][i] + bufs[1][i]);
+        REQUIRE(std::fabs(bufs[ch][i] - fold) <= 1.0e-5f * peak);
+      }
+    }
+    float extra_peak = 0.0f;
+    for (float s : bufs[2]) extra_peak = std::max(extra_peak, std::fabs(s));
+    REQUIRE(extra_peak > 0.0f);
+  }
 }

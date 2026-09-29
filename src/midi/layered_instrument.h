@@ -96,6 +96,10 @@ class LayeredInstrument final : public MidiInstrument {
   static Ump retune(const Ump& ump, uint8_t note) noexcept;
   void send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
                  uint32_t destination_id) noexcept;
+  /// Adds one layer's rendered legs to @p target at the layer's balance, with
+  /// the mono fold-down on every channel past two.
+  static void add_layer_output(float* const* target, int num_channels, int legs, const float* left,
+                               const float* right, const Layer& layer, int num_samples) noexcept;
 
   /// @brief Every layer's discard count added together, for the block delta in
   ///        process(). RT-safe: relaxed atomic loads only.

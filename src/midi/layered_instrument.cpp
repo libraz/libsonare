@@ -7,6 +7,7 @@
 #include "midi/source_residual.h"
 #include "midi/ump.h"
 #include "rt/pan_law.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::midi {
@@ -125,6 +126,26 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
   }
 }
 
+void LayeredInstrument::add_layer_output(float* const* target, int num_channels, int legs,
+                                         const float* left, const float* right, const Layer& layer,
+                                         int num_samples) noexcept {
+  if (target[0] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) target[0][i] += left[i] * layer.gain_left;
+  }
+  if (legs > 1 && target[1] != nullptr) {
+    for (int i = 0; i < num_samples; ++i) target[1][i] += right[i] * layer.gain_right;
+  }
+  // Anything past the stereo pair takes a mono fold-down, as every built-in
+  // instrument gives it.
+  for (int ch = 2; ch < num_channels; ++ch) {
+    if (target[ch] == nullptr) continue;
+    for (int i = 0; i < num_samples; ++i) {
+      target[ch][i] +=
+          constants::kInvSqrt2 * (left[i] * layer.gain_left + right[i] * layer.gain_right);
+    }
+  }
+}
+
 void LayeredInstrument::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "LayeredInstrument");
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
@@ -142,14 +163,7 @@ void LayeredInstrument::process(float* const* channels, int num_channels, int nu
     std::fill_n(scratch_left, num_samples, 0.0f);
     std::fill_n(scratch_right, num_samples, 0.0f);
     layer.instrument->process(scratch_chans, legs, num_samples);
-    for (int i = 0; i < num_samples; ++i) {
-      channels[0][i] += scratch_left[i] * layer.gain_left;
-    }
-    if (legs > 1) {
-      for (int i = 0; i < num_samples; ++i) {
-        channels[1][i] += scratch_right[i] * layer.gain_right;
-      }
-    }
+    add_layer_output(channels, num_channels, legs, scratch_left, scratch_right, layer, num_samples);
   }
   if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
 }
@@ -200,14 +214,8 @@ bool LayeredInstrument::process_source_tracks(const MidiInstrumentSourceOutput* 
     for (size_t s = 0; s < output_count; ++s) {
       float* const* target = outputs[s].channels;
       if (target == nullptr) continue;
-      if (target[0] != nullptr) {
-        const float* src = scratch_channel(s, 0);
-        for (int i = 0; i < num_samples; ++i) target[0][i] += src[i] * layer.gain_left;
-      }
-      if (legs > 1 && target[1] != nullptr) {
-        const float* src = scratch_channel(s, 1);
-        for (int i = 0; i < num_samples; ++i) target[1][i] += src[i] * layer.gain_right;
-      }
+      add_layer_output(target, num_channels, legs, scratch_channel(s, 0), scratch_channel(s, 1),
+                       layer, num_samples);
     }
   }
   if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
