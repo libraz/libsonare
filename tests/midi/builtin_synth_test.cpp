@@ -763,6 +763,48 @@ TEST_CASE("BuiltinSynth hears a 32-bit bend between the 14-bit steps", "[midi][s
   REQUIRE(c_mid > c_hi);
 }
 
+TEST_CASE("BuiltinSynth hears a 32-bit bend and pressure between the steps on an MPE member",
+          "[midi][synth][mpe][midi2]") {
+  // Inside a zone the member's bend and pressure are read back from the zone model, so its
+  // storage decides the resolution rather than the channel's own.
+  constexpr uint16_t kBend = 12000;
+  const uint32_t b_lo = Bend32::from14(kBend).raw;
+  const uint32_t b_hi = Bend32::from14(kBend + 1).raw;
+  auto crossing = [](uint32_t raw) {
+    BuiltinSynth synth = mpe_synth();
+    mpe_send_mcm(synth, 0, 7);
+    mpe_send(synth, sonare::midi::make_midi2_pitch_bend(0, 2, raw));
+    mpe_send(synth, sonare::midi::make_midi1_note_on(0, 2, 45, kMpeVelocity));
+    std::vector<float> buffer(48000, 0.0f);
+    float* channels[1] = {buffer.data()};
+    synth.process(channels, 1, static_cast<int>(buffer.size()));
+    return last_rising_crossing(buffer);
+  };
+  const double c_lo = crossing(b_lo);
+  const double c_mid = crossing(midpoint(b_lo, b_hi));
+  const double c_hi = crossing(b_hi);
+  CAPTURE(c_lo, c_mid, c_hi);
+  REQUIRE(c_lo > c_mid);
+  REQUIRE(c_mid > c_hi);
+
+  constexpr uint8_t kPressure = 100;
+  const uint32_t p_lo = Control32::from7(kPressure).raw;
+  const uint32_t p_hi = Control32::from7(kPressure + 1).raw;
+  auto peak = [](uint32_t raw) {
+    BuiltinSynth synth = mpe_synth();
+    mpe_send_mcm(synth, 0, 7);
+    mpe_send(synth, sonare::midi::make_midi2_channel_pressure(0, 2, raw));
+    mpe_send(synth, sonare::midi::make_midi1_note_on(0, 2, 60, kMpeVelocity));
+    return render_peak(&synth, kFirst50Ms);
+  };
+  const float a_lo = peak(p_lo);
+  const float a_mid = peak(midpoint(p_lo, p_hi));
+  const float a_hi = peak(p_hi);
+  CAPTURE(a_lo, a_mid, a_hi);
+  REQUIRE(a_lo < a_mid);
+  REQUIRE(a_mid < a_hi);
+}
+
 TEST_CASE("BuiltinSynth per-note pitch bend moves only its own note", "[midi][synth][midi2]") {
   // Note 60 on track 1, note 67 on track 2, one channel. A per-note bend on 60
   // must retune 60 and leave 67 sample-identical to 67 played alone.

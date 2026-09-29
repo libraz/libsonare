@@ -263,6 +263,52 @@ TEST_CASE("a value tracked while the channel is silent is the next note's state"
   REQUIRE(state.has(3, MpeDimension::kTimbre));
 }
 
+TEST_CASE("a MIDI 2.0 value between two MIDI 1.0 steps reads back between them",
+          "[midi][mpe][midi2]") {
+  MpeState state = lower_zone(4);
+  const auto bend_mid = [](uint16_t v14) {
+    const uint32_t lo = Bend32::from14(v14).raw;
+    const uint32_t hi = Bend32::from14(static_cast<uint16_t>(v14 + 1)).raw;
+    return Bend32::from_raw(lo + (hi - lo) / 2);
+  };
+  const auto control_mid = [](uint8_t v7) {
+    const uint32_t lo = Control32::from7(v7).raw;
+    const uint32_t hi = Control32::from7(static_cast<uint8_t>(v7 + 1)).raw;
+    return Control32::from_raw(lo + (hi - lo) / 2);
+  };
+
+  // Each step read at full width, and the MIDI 1.0 neighbours through the same accessor.
+  state.track_bend(2, Bend32::from14(9387));
+  const float bend_lo = state.bend_semitones(2);
+  state.track_bend(2, Bend32::from14(9388));
+  const float bend_hi = state.bend_semitones(2);
+  state.track_bend(2, bend_mid(9387));
+  const float bend_between = state.bend_semitones(2);
+  CAPTURE(bend_lo, bend_between, bend_hi);
+  REQUIRE(bend_lo < bend_between);
+  REQUIRE(bend_between < bend_hi);
+
+  state.track_pressure(2, control_mid(90));
+  state.track_timbre(2, control_mid(30));
+  CAPTURE(state.pressure(2), state.timbre(2));
+  REQUIRE(state.pressure(2) > 90.0f);
+  REQUIRE(state.pressure(2) < 91.0f);
+  REQUIRE(state.timbre(2) > 30.0f);
+  REQUIRE(state.timbre(2) < 31.0f);
+  // The 7-bit combination a MIDI 1.0 message is rebuilt from truncates each value first.
+  REQUIRE(state.pressure_u7(2) == 90);
+  REQUIRE(state.timbre_u7(2) == 30);
+
+  // The manager's bias adds at full width too, and still clamps at the top of the domain.
+  state.track_pressure(0, Control32::from7(20));
+  REQUIRE(state.pressure(2) > 110.0f);
+  REQUIRE(state.pressure(2) < 111.0f);
+  REQUIRE(state.pressure_u7(2) == 110);
+  state.track_pressure(0, control_mid(126));
+  REQUIRE(state.pressure(2) == 127.0f);
+  REQUIRE(state.pressure_u7(2) == 127);
+}
+
 TEST_CASE("the zone model refuses what its channel roles prohibit", "[midi][mpe]") {
   MpeState state = lower_zone(4);
 

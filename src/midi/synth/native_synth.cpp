@@ -24,16 +24,32 @@ constexpr float kKsSympatheticRingS = 1.5f;
 /// stops) decays toward the other live sources.
 constexpr float kResidualTauSeconds = 0.5f;
 
-/// The (v/127)^2 volume / expression law of sf2_cc_gain, read through f7() so a MIDI 2.0 value
-/// lands between the 7-bit steps; for a MIDI 1.0 value f7() is float(v) and the result is the
-/// same float.
-float cc_gain(Control32 value) noexcept {
-  const float v = value.f7() / 127.0f;
-  return v * v;
-}
-
 /// Registered Controller 0/0 in bank 0: pitch bend sensitivity.
 constexpr uint8_t kRcPitchBendSensitivity = 0;
+/// Registered Controller 0/7 in bank 0: per-note pitch bend sensitivity.
+constexpr uint8_t kRcPerNoteBendSensitivity = 7;
+/// Note On attribute #3 carries Pitch 7.9 (M2-104-UM §7.4.15).
+constexpr uint8_t kAttributePitch79 = 0x03;
+/// Registered Per-Note Controller #3 is Pitch 7.25 (M2-104-UM §7.4.12).
+constexpr uint8_t kRpncPitch725 = 3;
+
+/// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
+/// the 32-bit range rather than wrapping.
+Control32 add_saturating(Control32 current, Control32 delta) noexcept {
+  const int64_t sum =
+      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
+  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
+  return Control32::from_raw(static_cast<uint32_t>(clamped));
+}
+
+/// The pitch offset from the key the engine was started on, in cents. Exactly 0 while the key
+/// carries no per-note pitch, so a MIDI 1.0 render is untouched.
+float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {
+  const double semitones =
+      pitch.per_note_semitones +
+      static_cast<double>(static_cast<int>(state.binding.note) - static_cast<int>(state.zone_key));
+  return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * constants::kCentsPerSemitone);
+}
 
 }  // namespace
 
@@ -65,6 +81,9 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // is the only place the attribution scratch is sized.
   mpe_notes_.assign(pool_.size(), MpeNote{});
   mpe_note_ages_.assign(pool_.size(), 0);
+  per_note_.assign(pool_.size(), Sf2PerNoteVoice{});
+  per_note_pitch_.clear();
+  per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
   // GM mode resolves the engine per program at note-on, so any engine can be
   // selected regardless of the configured patch: every per-voice delay slab has
   // to exist up front or the waveguide engines render silence (their cores
@@ -266,6 +285,9 @@ void NativeSynth::reset() {
   channels_[kDrumChannelIndex].drums = true;
   mpe_.reset();
   skipped_events_ = 0;
+  per_note_.assign(per_note_.size(), Sf2PerNoteVoice{});
+  per_note_pitch_.clear();
+  per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
   refresh_all_channel_mods();
 }
 
@@ -279,14 +301,14 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   // sections 2.2.5 - 2.2.7). Outside one -- which is every channel until an MCM
   // arrives -- this is the arithmetic that was always here.
   const bool zoned = mpe_.role(ch) != MpeChannelRole::kUnassigned;
-  mod.pitch_cents = zoned ? zone_bend_semitones(ch) * 100.0f
+  mod.pitch_cents = zoned ? mpe_.bend_semitones(ch) * 100.0f
                           : (st.pitch_bend.f14() - 8192.0f) / 8192.0f * st.bend_range_cents;
-  mod.gain = cc_gain(st.volume) * cc_gain(st.expression);
+  mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
   mod.mod_wheel01 = st.mod_wheel.f7() / 127.0f;
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
   mod.pan_units = (st.pan.f7() - 64.0f) / 63.0f * 500.0f;
   mod.breath01 = st.breath.f7() / 127.0f;
-  mod.aftertouch01 = (zoned ? zone_pressure(ch) : st.pressure.f7()) / 127.0f;
+  mod.aftertouch01 = (zoned ? mpe_.pressure(ch) : st.pressure.f7()) / 127.0f;
   mod.expression01 = st.expression.f7() / 127.0f;
   mod.pitch_bend01 = (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
   // The three axes that land on the channel rather than inside an engine. Each
@@ -360,6 +382,7 @@ NativeSynthVoice* NativeSynth::find_sounding(uint8_t ch, uint8_t note,
 }
 
 void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+                          uint8_t attribute_type, uint16_t attribute_data,
                           uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   // A profile that calls velocity meaningless takes every note at full scale,
@@ -416,7 +439,9 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     if (held != nullptr) {
       if (live.articulation == ArticulationMode::kMonoLegato &&
           accepts_legato(patch->mode, held->note, note, lowest_pitch_mult(*patch))) {
+        const uint8_t from = held->note;
         held->retune(note, sample_rate_);
+        carry_per_note(*held, from, note, attribute_type, attribute_data);
         live.hold_key(note);
         live.last_freq_hz = synth_note_to_hz(static_cast<float>(note));
         return;
@@ -484,8 +509,23 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   const bool organ_percussion = patch->mode == SynthEngineMode::kAdditive &&
                                 patch->additive.percussion_harmonic >= 2 && st.percussion_armed;
   if (organ_percussion) channels_[ch].percussion_armed = false;
+  // Per-note pitch (M2-104-UM §7.4.15). An absolute pitch starts the engine on the key of its
+  // integer part, so a sample zone and a delay line are chosen for the pitch that sounds; the
+  // struck note stays the voice's own, which is what a note-off matches.
+  Sf2PerNoteVoice per_note;
+  bind_per_note(per_note, ch, note, attribute_type, attribute_data, note);
+  const ComposedPitch note_pitch = compose_per_note(per_note);
+  DrumVoiceMod voice_mod{};
+  if (note_pitch.absolute) {
+    per_note.zone_key = static_cast<uint8_t>(std::clamp(
+        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
+        127));
+    voice_mod.play_note = per_note.zone_key;
+  }
+  per_note.cents = per_note_cents(per_note, note_pitch);
   voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit,
-               DrumVoiceMod{}, organ_percussion);
+               voice_mod, organ_percussion);
+  per_note_[voice_index] = per_note;
   // Seed the engine's excitation axes at the channel's current controllers (no
   // glide on the first sample) so a note struck mid-phrase starts at the live
   // breath / brightness rather than gliding in from the preset. An engine reads
@@ -547,6 +587,7 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_
       if (accepts_legato(sounding->patch->mode, sounding->note, back,
                          lowest_pitch_mult(*sounding->patch))) {
         sounding->retune(back, sample_rate_);
+        carry_per_note(*sounding, note, back, 0, 0);
         st.last_freq_hz = synth_note_to_hz(static_cast<float>(back));
         return;
       }
@@ -905,7 +946,7 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
   const uint8_t ch = ev.channel & 0x0Fu;
   switch (ev.kind) {
     case ChannelVoiceKind::NoteOn:
-      note_on(ch, ev.note, ev.velocity, event.source_track_id);
+      note_on(ch, ev.note, ev.velocity, ev.index, ev.attribute_data, event.source_track_id);
       break;
     case ChannelVoiceKind::NoteOff:
       note_off(ch, ev.note, event.source_track_id);
@@ -951,11 +992,30 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
       break;
     case ChannelVoiceKind::RelativeRegistered:
     case ChannelVoiceKind::RelativeAssignable:
-    case ChannelVoiceKind::RegisteredPerNote:
-    case ChannelVoiceKind::AssignablePerNote:
+      if (!relative_controller(ev)) ++skipped_events_;  // A parameter this synth does not hold.
+      break;
     case ChannelVoiceKind::PerNotePitchBend:
-    case ChannelVoiceKind::PerNoteManagement:
+      per_note_pitch_.set_per_note_bend(ch, ev.note, ev.bend);
+      refresh_per_note_voices(ch, ev.note, false);
+      break;
+    case ChannelVoiceKind::RegisteredPerNote:
+      if (ev.index != kRpncPitch725) {
+        ++skipped_events_;
+        break;
+      }
+      per_note_pitch_.set_pitch_7_25(ch, ev.note, ev.value);
+      refresh_per_note_voices(ch, ev.note, false);
+      break;
+    case ChannelVoiceKind::AssignablePerNote:
       ++skipped_events_;
+      break;
+    case ChannelVoiceKind::PerNoteManagement:
+      apply_per_note_management(
+          per_note_pitch_, ch, ev.note, (ev.flags & 0x02u) != 0, (ev.flags & 0x01u) != 0,
+          pool_.begin(), pool_.end(), [this](NativeSynthVoice& v) noexcept -> PerNoteBinding* {
+            return v.active ? &per_note_[static_cast<size_t>(&v - pool_.data())].binding : nullptr;
+          });
+      refresh_per_note_voices(ch, ev.note, false);
       break;
   }
 }
@@ -971,6 +1031,12 @@ void NativeSynth::registered_controller(const Ump& ump, const ChannelVoiceEvent&
     bend_range_lsb(ch, static_cast<uint8_t>(range14 & 0x7Fu));
     return;
   }
+  if (ev.kind == ChannelVoiceKind::RegisteredController && ev.bank == 0 &&
+      ev.index == kRcPerNoteBendSensitivity) {
+    per_note_bend_sensitivity_[ch] = ev.value;
+    refresh_per_note_voices(ch, 0, true);
+    return;
+  }
   // The RPN / NRPN gesture in its MIDI 2.0 form takes the path its four MIDI
   // 1.0 messages do, so parameter selection and data entry treat it the same.
   const Midi1MessageList lowered = midi2_to_midi1_messages(ump);
@@ -978,6 +1044,86 @@ void NativeSynth::registered_controller(const Ump& ump, const ChannelVoiceEvent&
     control_change(ch, lowered.messages[i].note_number(),
                    Control32::from7(lowered.messages[i].data2_7bit()));
   }
+}
+
+bool NativeSynth::relative_controller(const ChannelVoiceEvent& ev) noexcept {
+  if (ev.kind != ChannelVoiceKind::RelativeRegistered || ev.bank != 0) return false;
+  const uint8_t ch = ev.channel & 0x0Fu;
+  switch (ev.index) {
+    case kRcPitchBendSensitivity: {
+      // The held range in RPN 0/0 form (semitones in the top seven bits, cents below them), moved
+      // and applied as the absolute message would be.
+      const bool zoned = mpe_.role(ch) != MpeChannelRole::kUnassigned;
+      const float held_cents = zoned ? mpe_.bend_sensitivity(ch) * constants::kCentsPerSemitone
+                                     : channels_[ch].bend_range_cents;
+      const int semitones =
+          std::clamp(static_cast<int>(held_cents / constants::kCentsPerSemitone), 0, 127);
+      const int cents = std::clamp(
+          static_cast<int>(held_cents -
+                           constants::kCentsPerSemitone * static_cast<float>(semitones) + 0.5f),
+          0, 127);
+      const auto held = static_cast<uint32_t>((semitones << 7) | cents) << 18;
+      const uint16_t range14 = add_saturating(Control32::from_raw(held), ev.value).u14();
+      bend_range_msb(ch, static_cast<uint8_t>(range14 >> 7));
+      bend_range_lsb(ch, static_cast<uint8_t>(range14 & 0x7Fu));
+      return true;
+    }
+    case kRcPerNoteBendSensitivity:
+      per_note_bend_sensitivity_[ch] = add_saturating(per_note_bend_sensitivity_[ch], ev.value);
+      refresh_per_note_voices(ch, 0, true);
+      return true;
+    default:
+      return false;
+  }
+}
+
+void NativeSynth::bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note,
+                                uint8_t attribute_type, uint16_t attribute_data,
+                                uint8_t zone_key) const noexcept {
+  state.binding.bind(channel, note);
+  state.has_attribute_pitch = attribute_type == kAttributePitch79;
+  state.attribute_pitch_q7_9 = state.has_attribute_pitch ? attribute_data : uint16_t{0};
+  state.zone_key = zone_key;
+  state.cents = 0.0f;
+}
+
+ComposedPitch NativeSynth::compose_per_note(const Sf2PerNoteVoice& state) const noexcept {
+  NotePitchRequest req;
+  req.note = state.binding.note;
+  req.has_attribute_pitch = state.has_attribute_pitch;
+  req.attribute_pitch_q7_9 = state.attribute_pitch_q7_9;
+  req.per_note = state.binding.pitch_inputs(per_note_pitch_);
+  req.per_note_bend_sensitivity = per_note_bend_sensitivity_[state.binding.channel & 0x0Fu];
+  // The channel terms stay on the channel mod; only the per-note share is taken.
+  return compose_note_pitch(req);
+}
+
+void NativeSynth::refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept {
+  state.cents = per_note_cents(state, compose_per_note(state));
+}
+
+void NativeSynth::refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  for (size_t i = 0; i < per_note_.size(); ++i) {
+    Sf2PerNoteVoice& state = per_note_[i];
+    if (pool_.data()[i].active && state.binding.channel == ch &&
+        (all_notes || state.binding.note == note)) {
+      refresh_per_note_pitch(state);
+    }
+  }
+}
+
+void NativeSynth::carry_per_note(const NativeSynthVoice& voice, uint8_t from_note, uint8_t to_note,
+                                 uint8_t attribute_type, uint16_t attribute_data) noexcept {
+  Sf2PerNoteVoice& state = per_note_[static_cast<size_t>(&voice - pool_.data())];
+  // retune() moves the engine by the interval between the keys, so the key it nominally sounds
+  // moves by the same interval from the one it was started on.
+  const int zone_key = std::clamp(
+      static_cast<int>(state.zone_key) + static_cast<int>(to_note) - static_cast<int>(from_note), 0,
+      127);
+  bind_per_note(state, voice.channel, to_note, attribute_type, attribute_data,
+                static_cast<uint8_t>(zone_key));
+  refresh_per_note_pitch(state);
 }
 
 void NativeSynth::process(float* const* channels, int num_channels, int num_samples) {
@@ -1097,8 +1243,19 @@ void NativeSynth::process_impl(float* const* channels,
       // The channel's, except on a member channel sounding more than one note,
       // where the voice carries the part of the channel's the note was
       // attributed (M1-100-UM v1.1 section 2.2.4.1).
-      const Sf2ChannelMod& mod = v.mpe_mod_active ? v.mpe_mod : channel_mods_[v.channel & 0x0Fu];
-      const float s = v.render(mod, wind.pitch_ratio, wind.gain);
+      const Sf2ChannelMod& channel_mod =
+          v.mpe_mod_active ? v.mpe_mod : channel_mods_[v.channel & 0x0Fu];
+      // A key carrying per-note pitch renders through a copy of that mod with its offset added;
+      // every other voice reads the mod itself.
+      const float per_note_offset = per_note_[static_cast<size_t>(&v - pool_.data())].cents;
+      float s = 0.0f;
+      if (per_note_offset == 0.0f) {
+        s = v.render(channel_mod, wind.pitch_ratio, wind.gain);
+      } else {
+        Sf2ChannelMod tuned = channel_mod;
+        tuned.pitch_cents += per_note_offset;
+        s = v.render(tuned, wind.pitch_ratio, wind.gain);
+      }
       const float voice_l = s * v.gain_left;
       const float voice_r = s * v.gain_right;
       if (piano_body_active_ && v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {

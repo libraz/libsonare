@@ -224,7 +224,7 @@ void BuiltinSynth::refresh_channel_expression(uint8_t channel) noexcept {
   // here.
   if (zoned) {
     channel_bend_semitones_[ch] = mpe_.bend_semitones(ch);
-    channel_pressure_[ch] = static_cast<float>(mpe_.pressure(ch)) / 127.0f;
+    channel_pressure_[ch] = mpe_.pressure(ch) / 127.0f;
   }
   const double ratio = bend_ratio(channel_bend_semitones_[ch]);
   for (auto& v : voices_) {

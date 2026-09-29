@@ -11,10 +11,11 @@ namespace {
 /// own and is kept rather than tidied: a receiver that normalizes by 8192
 /// instead lands a full-scale bend a fraction of a cent short of the semitone
 /// count the sender computed from the same table.
-constexpr uint16_t kBendCentre = 8192;
+constexpr float kBendCentre = 8192.0f;
 constexpr float kBendScale = 8191.0f;
 
 constexpr uint8_t kMaxCc = 127;
+constexpr float kMaxCcValue = 127.0f;
 
 constexpr uint8_t present_bit(MpeDimension dimension) noexcept {
   return static_cast<uint8_t>(1u << static_cast<uint8_t>(dimension));
@@ -163,19 +164,19 @@ bool MpeState::apply_midi_mode(uint8_t channel, MpeMidiMode mode) noexcept {
 
 void MpeState::track_bend(uint8_t channel, Bend32 bend) noexcept {
   Channel& state = channels_[channel & 0x0Fu];
-  state.bend14 = bend.u14();
+  state.bend = bend;
   state.present |= present_bit(MpeDimension::kBend);
 }
 
 void MpeState::track_pressure(uint8_t channel, Control32 value) noexcept {
   Channel& state = channels_[channel & 0x0Fu];
-  state.pressure = value.u7();
+  state.pressure = value;
   state.present |= present_bit(MpeDimension::kPressure);
 }
 
 void MpeState::track_timbre(uint8_t channel, Control32 value) noexcept {
   Channel& state = channels_[channel & 0x0Fu];
-  state.timbre = value.u7();
+  state.timbre = value;
   state.present |= present_bit(MpeDimension::kTimbre);
 }
 
@@ -252,7 +253,7 @@ float MpeState::manager_bend_semitones(uint8_t channel) const noexcept {
   const MpeZone zone = zone_of(channel);
   const Channel& state = channels_[manager_of(channel)];
   if ((state.present & present_bit(MpeDimension::kBend)) == 0) return 0.0f;
-  const float displacement = static_cast<float>(static_cast<int>(state.bend14) - kBendCentre);
+  const float displacement = state.bend.f14() - kBendCentre;
   return zones_[static_cast<size_t>(zone)].manager_bend * displacement / kBendScale;
 }
 
@@ -263,32 +264,56 @@ float MpeState::bend_semitones(uint8_t channel) const noexcept {
   const Channel& state = channels_[channel & 0x0Fu];
   float member = 0.0f;
   if ((state.present & present_bit(MpeDimension::kBend)) != 0) {
-    const float displacement = static_cast<float>(static_cast<int>(state.bend14) - kBendCentre);
+    const float displacement = state.bend.f14() - kBendCentre;
     member = bend_sensitivity(channel) * displacement / kBendScale;
   }
   return member + manager_bend_semitones(channel);
 }
 
-uint8_t MpeState::pressure(uint8_t channel) const noexcept {
+float MpeState::combined_f7(uint8_t channel, MpeDimension dimension) const noexcept {
   const MpeChannelRole channel_role = role(channel);
-  if (channel_role == MpeChannelRole::kUnassigned) return 0;
+  if (channel_role == MpeChannelRole::kUnassigned) return 0.0f;
+  const uint8_t bit = present_bit(dimension);
+  const auto value_of = [dimension](const Channel& c) noexcept {
+    return dimension == MpeDimension::kPressure ? c.pressure : c.timbre;
+  };
   const Channel& own = channels_[channel & 0x0Fu];
-  const uint8_t mine = (own.present & present_bit(MpeDimension::kPressure)) != 0 ? own.pressure : 0;
+  const float mine = (own.present & bit) != 0 ? value_of(own).f7() : 0.0f;
   if (channel_role == MpeChannelRole::kManager) return mine;
   const Channel& bias = channels_[manager_of(channel)];
-  if ((bias.present & present_bit(MpeDimension::kPressure)) == 0) return mine;
-  return add_cc(mine, bias.pressure);
+  if ((bias.present & bit) == 0) return mine;
+  return std::min(mine + value_of(bias).f7(), kMaxCcValue);
 }
 
-uint8_t MpeState::timbre(uint8_t channel) const noexcept {
+uint8_t MpeState::combined_u7(uint8_t channel, MpeDimension dimension) const noexcept {
   const MpeChannelRole channel_role = role(channel);
   if (channel_role == MpeChannelRole::kUnassigned) return 0;
+  const uint8_t bit = present_bit(dimension);
+  const auto value_of = [dimension](const Channel& c) noexcept {
+    return dimension == MpeDimension::kPressure ? c.pressure : c.timbre;
+  };
   const Channel& own = channels_[channel & 0x0Fu];
-  const uint8_t mine = (own.present & present_bit(MpeDimension::kTimbre)) != 0 ? own.timbre : 0;
+  const uint8_t mine = (own.present & bit) != 0 ? value_of(own).u7() : uint8_t{0};
   if (channel_role == MpeChannelRole::kManager) return mine;
   const Channel& bias = channels_[manager_of(channel)];
-  if ((bias.present & present_bit(MpeDimension::kTimbre)) == 0) return mine;
-  return add_cc(mine, bias.timbre);
+  if ((bias.present & bit) == 0) return mine;
+  return add_cc(mine, value_of(bias).u7());
+}
+
+float MpeState::pressure(uint8_t channel) const noexcept {
+  return combined_f7(channel, MpeDimension::kPressure);
+}
+
+float MpeState::timbre(uint8_t channel) const noexcept {
+  return combined_f7(channel, MpeDimension::kTimbre);
+}
+
+uint8_t MpeState::pressure_u7(uint8_t channel) const noexcept {
+  return combined_u7(channel, MpeDimension::kPressure);
+}
+
+uint8_t MpeState::timbre_u7(uint8_t channel) const noexcept {
+  return combined_u7(channel, MpeDimension::kTimbre);
 }
 
 bool MpeState::has(uint8_t channel, MpeDimension dimension) const noexcept {

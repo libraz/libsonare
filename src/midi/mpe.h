@@ -169,9 +169,18 @@ class MpeState {
   /// A manager value nothing has reached contributes nothing rather than
   /// contributing a zero or a centre, so a zone whose manager is silent leaves
   /// its members' values untouched.
+  ///
+  /// Values are read at full width: bend through Bend32::f14() and pressure / timbre through
+  /// Control32::f7() on the 0..127 scale, so a MIDI 2.0 value lands between the MIDI 1.0 steps
+  /// while a MIDI 1.0 value reads back as exactly the float it always did.
   float bend_semitones(uint8_t channel) const noexcept;
-  uint8_t pressure(uint8_t channel) const noexcept;
-  uint8_t timbre(uint8_t channel) const noexcept;
+  float pressure(uint8_t channel) const noexcept;
+  float timbre(uint8_t channel) const noexcept;
+
+  /// The same combinations in the 7-bit domain, for a caller that re-emits them as MIDI 1.0
+  /// messages: each value is truncated to 7 bits before the add and clamp.
+  uint8_t pressure_u7(uint8_t channel) const noexcept;
+  uint8_t timbre_u7(uint8_t channel) const noexcept;
 
   /// The manager's bend alone, in semitones. This is the one per-note dimension
   /// that keeps acting on a note after its Note Off: manager bend "applies to
@@ -195,9 +204,9 @@ class MpeState {
   };
 
   struct Channel {
-    uint16_t bend14 = 8192;
-    uint8_t pressure = 0;
-    uint8_t timbre = 0;
+    Bend32 bend = Bend32::center();
+    Control32 pressure = Control32::from_raw(0);
+    Control32 timbre = Control32::from_raw(0);
     uint8_t present = 0;
   };
 
@@ -209,6 +218,10 @@ class MpeState {
   uint16_t manager_mask() const noexcept;
   /// Manager channel of the zone @p channel belongs to. Ask role() first.
   uint8_t manager_of(uint8_t channel) const noexcept;
+  /// Member value plus manager bias of @p dimension, in the 0..127 float domain or the 7-bit
+  /// integer one.
+  float combined_f7(uint8_t channel, MpeDimension dimension) const noexcept;
+  uint8_t combined_u7(uint8_t channel, MpeDimension dimension) const noexcept;
 
   Zone zones_[kMpeZoneCount]{};
   Channel channels_[16]{};

@@ -36,6 +36,7 @@
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
 #include "midi/mpe.h"
+#include "midi/per_note_state.h"
 #include "midi/source_residual.h"
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
@@ -622,8 +623,9 @@ class NativeSynth final : public MidiInstrument {
     return true;
   }
 
-  /// Channel-voice messages received but not acted on: reserved statuses, per-note messages and
-  /// relative controllers. Cleared by reset().
+  /// Channel-voice messages received but not acted on: reserved statuses, per-note controllers
+  /// other than pitch, and relative controllers on a parameter this synth does not hold. Cleared
+  /// by reset().
   uint64_t skipped_event_count() const noexcept { return skipped_events_; }
 
  private:
@@ -710,8 +712,8 @@ class NativeSynth final : public MidiInstrument {
   /// place, because a legato continuation moves `note` to the new key and every
   /// reader of it has to agree on that.
   NativeSynthVoice* find_sounding(uint8_t ch, uint8_t note, uint32_t source_track_id) noexcept;
-  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
-               uint32_t source_track_id) noexcept;
+  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
+               uint16_t attribute_data, uint32_t source_track_id) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;
@@ -726,6 +728,21 @@ class NativeSynth final : public MidiInstrument {
   /// A MIDI 2.0 Registered / Assignable Controller: 0/0 is read straight from the message, every
   /// other one takes the path its four MIDI 1.0 messages do.
   void registered_controller(const Ump& ump, const ChannelVoiceEvent& ev) noexcept;
+  /// A MIDI 2.0 Relative Registered / Assignable Controller on a parameter this synth holds (RC
+  /// 0/0 and 0/7), added and saturated. False for any other, which the caller counts as skipped.
+  bool relative_controller(const ChannelVoiceEvent& ev) noexcept;
+  /// Binds @p state to (channel, note) at note-on with the Note On attribute, the engine starting
+  /// on @p zone_key.
+  void bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note, uint8_t attribute_type,
+                     uint16_t attribute_data, uint8_t zone_key) const noexcept;
+  ComposedPitch compose_per_note(const Sf2PerNoteVoice& state) const noexcept;
+  void refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept;
+  /// Re-evaluates every sounding voice on (channel, note), or on the whole channel when
+  /// @p all_notes is set (a sensitivity change reaches every key of it).
+  void refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept;
+  /// Moves a legato-carried voice's per-note binding to the key it now sounds.
+  void carry_per_note(const NativeSynthVoice& voice, uint8_t from_note, uint8_t to_note,
+                      uint8_t attribute_type, uint16_t attribute_data) noexcept;
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
@@ -763,20 +780,14 @@ class NativeSynth final : public MidiInstrument {
   /// bend and pressure a member channel carries reach the note they were
   /// attributed to and no other.
   void refresh_mpe_note_mods(uint8_t channel) noexcept;
-  /// The message a channel's combined value would arrive as. MIDI 1.0 because
-  /// the zone model's domain is 7-bit. Groupless, because the profile resolves
+  /// The message a channel's combined value would arrive as, in MIDI 1.0 from the
+  /// zone model's 7-bit combination. Groupless, because the profile resolves
   /// from the status, the controller number and the channel alone.
   Ump mpe_controller_message(uint8_t channel, MpeDimension dimension) const noexcept;
   /// Resolves @p channel's combined value through the profile, and every member
   /// of the zone as well when @p channel is the manager, whose value is a bias
   /// on each of them.
   void push_mpe_controller_axis(uint8_t channel, MpeDimension dimension) noexcept;
-  /// The zone model tracks bend at 14 bits and pressure at 7; these add back the fraction of a
-  /// step a MIDI 2.0 value carries, from the channel state that holds it at full width. For a
-  /// MIDI 1.0 value the fraction is zero and the zone model's own value is returned unchanged.
-  float zone_bend_semitones(uint8_t channel) const noexcept;
-  float zone_manager_bend_semitones(uint8_t channel) const noexcept;
-  float zone_pressure(uint8_t channel) const noexcept;
   /// Tracks the two combining dimensions ahead of the profile, so a value
   /// reaching an axis carries the manager's fold (2.2.7, 2.2.8).
   void track_mpe_input(const Ump& ump) noexcept;
@@ -805,6 +816,12 @@ class NativeSynth final : public MidiInstrument {
   std::vector<uint64_t> mpe_note_ages_;
   uint64_t legato_fallbacks_ = 0;
   uint64_t skipped_events_ = 0;
+  /// MIDI 2.0 per-note pitch: the rows per key (surviving note-off and Reset All Controllers),
+  /// RC 0/7 per channel, and each pool voice's binding, indexed like the pool and sized in
+  /// prepare().
+  PerNotePitchTable per_note_pitch_{};
+  std::array<Control32, 16> per_note_bend_sensitivity_{};
+  std::vector<Sf2PerNoteVoice> per_note_;
   double sample_rate_ = 0.0;
   bool prepared_ = false;
   int64_t tail_samples_ = 0;

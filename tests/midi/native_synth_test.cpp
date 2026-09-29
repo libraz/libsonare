@@ -2524,3 +2524,216 @@ TEST_CASE("NativeSynth takes a MIDI 2.0 Registered Controller 0/0 as the RPN 0/0
     CHECK(rc == rpn);
   }
 }
+
+namespace {
+
+constexpr int kPerNoteSamples = 16384;
+constexpr uint16_t kPerNoteVelocity = 0xC000;
+constexpr uint32_t kPerNoteBendUpOne = 0xC0000000u;  // half of the default 2 semitones
+constexpr uint32_t kPerNoteBendFullUp = 0xFFFFFFFFu;
+
+/// A sine with nothing on the mix bus, so a source track carries its own voice and nothing else,
+/// seeded from the note alone, so a note renders the same whichever slot it lands in.
+NativeSynthConfig per_note_config() {
+  NativeSynthConfig cfg = resolution_config();
+  cfg.dc_block = false;
+  cfg.patch.retrigger = sonare::midi::synth::SynthRetrigger::kNote;
+  return cfg;
+}
+
+NativeSynth prepared_per_note_synth() {
+  NativeSynth synth(per_note_config());
+  synth.prepare(kOutRate, 256);
+  return synth;
+}
+
+MidiEvent on_track(const sonare::midi::Ump& ump, uint32_t track) {
+  MidiEvent e = event(ump);
+  e.source_track_id = track;
+  return e;
+}
+
+/// Renders @p synth split by source track (ids 1 and 2) and returns both left legs.
+std::array<std::vector<float>, 2> render_tracks(NativeSynth& synth, int num_samples) {
+  const size_t n = static_cast<size_t>(num_samples);
+  std::vector<float> fallback_l(n, 0.0f);
+  std::vector<float> fallback_r(n, 0.0f);
+  std::array<std::vector<float>, 2> left{std::vector<float>(n, 0.0f), std::vector<float>(n, 0.0f)};
+  std::array<std::vector<float>, 2> right{std::vector<float>(n, 0.0f), std::vector<float>(n, 0.0f)};
+  float* fallback[] = {fallback_l.data(), fallback_r.data()};
+  float* one[] = {left[0].data(), right[0].data()};
+  float* two[] = {left[1].data(), right[1].data()};
+  const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, one}, {2, two}};
+  REQUIRE(synth.process_source_tracks(outputs, std::size(outputs), 2, num_samples));
+  return left;
+}
+
+/// Equal-tempered frequency of a (fractional) MIDI note.
+double note_hz(double note) { return 440.0 * std::pow(2.0, (note - 69.0) / 12.0); }
+
+bool near_hz(double measured, double expected) {
+  return std::fabs(measured / expected - 1.0) < 0.002;
+}
+
+/// Sounding frequency of one MIDI 2.0 note after @p setup.
+template <typename Setup>
+double per_note_hz(Setup setup, uint8_t note, uint8_t attribute_type = 0,
+                   uint16_t attribute_data = 0) {
+  NativeSynth synth = prepared_per_note_synth();
+  setup(synth);
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, note, kPerNoteVelocity,
+                                                           attribute_type, attribute_data)));
+  return estimate_frequency(render(synth, kPerNoteSamples).left, kOutRate, 1024);
+}
+
+}  // namespace
+
+TEST_CASE("NativeSynth per-note pitch bend moves only its own note", "[midi][synth][midi2]") {
+  NativeSynth pair = prepared_per_note_synth();
+  pair.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, kPerNoteVelocity), 1));
+  pair.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 67, kPerNoteVelocity), 2));
+  pair.on_event(0,
+                event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendUpOne)));
+  const auto both = render_tracks(pair, kPerNoteSamples);
+
+  NativeSynth solo = prepared_per_note_synth();
+  solo.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 67, kPerNoteVelocity), 2));
+  const auto alone = render_tracks(solo, kPerNoteSamples);
+
+  const double bent = estimate_frequency(both[0], kOutRate, 1024);
+  const double other = estimate_frequency(both[1], kOutRate, 1024);
+  INFO(bent << " Hz / " << other << " Hz");
+  CHECK(near_hz(bent, note_hz(61.0)));
+  CHECK(near_hz(other, note_hz(67.0)));
+  CHECK(peak(alone[1]) > 0.0f);
+  CHECK(both[1] == alone[1]);
+}
+
+TEST_CASE("NativeSynth detaches a voice on Per-Note Management D=1", "[midi][synth][midi2]") {
+  const auto render_60 = [](bool detach_then_rebend) {
+    NativeSynth synth = prepared_per_note_synth();
+    synth.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, kPerNoteVelocity), 1));
+    synth.on_event(
+        0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendUpOne)));
+    if (detach_then_rebend) {
+      synth.on_event(0, event(sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false)));
+      synth.on_event(
+          0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendFullUp)));
+    }
+    return render_tracks(synth, kPerNoteSamples)[0];
+  };
+  // The detached voice keeps the bend it had when it was detached.
+  const std::vector<float> detached = render_60(true);
+  CHECK(near_hz(estimate_frequency(detached, kOutRate, 1024), note_hz(61.0)));
+  CHECK(detached == render_60(false));
+
+  // The row itself took the new bend, so the next note on the key sounds it.
+  const double next_note = per_note_hz(
+      [](NativeSynth& s) {
+        s.on_event(
+            0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendUpOne)));
+        s.on_event(0, event(sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false)));
+        s.on_event(
+            0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendFullUp)));
+      },
+      60);
+  INFO(next_note << " Hz");
+  CHECK(near_hz(next_note, note_hz(62.0)));
+}
+
+TEST_CASE("NativeSynth takes a note's absolute pitch from RPNC #3 and attribute #3",
+          "[midi][synth][midi2]") {
+  // RPNC #3 Pitch 7.25 on key 60 makes it sound 72.5; attribute #3 Pitch 7.9 on the note-on
+  // outranks it (M2-104-UM §7.4.15).
+  constexpr uint32_t kPitch725 = (72u << 25) | (1u << 24);
+  const auto rpnc = [](NativeSynth& s) {
+    s.on_event(0, event(sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, kPitch725)));
+  };
+  const double from_rpnc = per_note_hz(rpnc, 60);
+  const double from_attribute = per_note_hz(rpnc, 60, 3, 67 * 512 + 256);
+  // Per-note bend offsets from the absolute pitch.
+  const double bent = per_note_hz(
+      [&](NativeSynth& s) {
+        rpnc(s);
+        s.on_event(
+            0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendUpOne)));
+      },
+      60);
+  INFO(from_rpnc << " / " << from_attribute << " / " << bent << " Hz");
+  CHECK(near_hz(from_rpnc, note_hz(72.5)));
+  CHECK(near_hz(from_attribute, note_hz(67.5)));
+  CHECK(near_hz(bent, note_hz(73.5)));
+}
+
+TEST_CASE("NativeSynth scales per-note bend by RC 0/7, absolute and relative",
+          "[midi][synth][midi2]") {
+  const auto full_bend_after = [](sonare::midi::Ump rc) {
+    return per_note_hz(
+        [rc](NativeSynth& s) {
+          s.on_event(0, event(rc));
+          s.on_event(
+              0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendFullUp)));
+        },
+        60);
+  };
+  const double absolute =
+      full_bend_after(sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 12u << 25));
+  // Relative +10 semitones on the default 2.
+  const double relative = full_bend_after(
+      sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 7, 10u << 25));
+  // A delta far below zero saturates at 0 semitones instead of wrapping.
+  const double saturated = full_bend_after(
+      sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 7, 0x80000000u));
+  INFO(absolute << " / " << relative << " / " << saturated << " Hz");
+  CHECK(near_hz(absolute, note_hz(72.0)));
+  CHECK(near_hz(relative, note_hz(72.0)));
+  CHECK(near_hz(saturated, note_hz(60.0)));
+}
+
+TEST_CASE("NativeSynth moves the channel bend range by a relative RC 0/0", "[midi][synth][midi2]") {
+  // +10 semitones on the default 2, then a full channel bend up.
+  const double hz = per_note_hz(
+      [](NativeSynth& s) {
+        s.on_event(0, event(sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 0,
+                                                                                    10u << 25)));
+        s.on_event(0, event(sonare::midi::make_midi2_pitch_bend(0, 0, 0xFFFFFFFFu)));
+      },
+      60);
+  INFO(hz << " Hz");
+  CHECK(near_hz(hz, note_hz(72.0)));
+}
+
+TEST_CASE("NativeSynth keeps per-note pitch across Reset All Controllers", "[midi][synth][midi2]") {
+  const double hz = per_note_hz(
+      [](NativeSynth& s) {
+        s.on_event(
+            0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kPerNoteBendUpOne)));
+        s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
+      },
+      60);
+  INFO(hz << " Hz");
+  CHECK(near_hz(hz, note_hz(61.0)));
+}
+
+TEST_CASE("NativeSynth counts the per-note and relative messages it does not realise",
+          "[midi][synth][midi2]") {
+  NativeSynth synth = prepared_per_note_synth();
+  REQUIRE(synth.skipped_event_count() == 0);
+  // A per-note controller other than pitch, and an assignable one.
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_controller(0, 0, 60, 7, 0x80000000u)));
+  synth.on_event(0, event(sonare::midi::make_midi2_assignable_per_note_controller(0, 0, 60, 1, 0)));
+  // Relative on a parameter this synth does not hold.
+  synth.on_event(
+      0, event(sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 1, 1u << 25)));
+  synth.on_event(
+      0, event(sonare::midi::make_midi2_relative_assignable_controller(0, 0, 3, 4, 1u << 25)));
+  CHECK(synth.skipped_event_count() == 4);
+  // Pitch per-note, management and RC 0/7 are realised, not counted.
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 60u << 25)));
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0x80000000u)));
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_management(0, 0, 60, true, true)));
+  synth.on_event(0, event(sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 2u << 25)));
+  CHECK(synth.skipped_event_count() == 4);
+  synth.reset();
+  CHECK(synth.skipped_event_count() == 0);
+}
