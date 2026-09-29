@@ -629,6 +629,7 @@ if(BUILD_ARRANGEMENT)
     midi/drum_exclusive_group_test.cpp
     midi/gs_efx_send_routing_test.cpp
     midi/gs_efx_convert_test.cpp
+    midi/gs_efx_binding_value_test.cpp
     midi/gs_efx_tables_reach_test.cpp
     midi/gs_efx_defaults_test.cpp
     midi/gs_efx_parallel_test.cpp
