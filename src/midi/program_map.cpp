@@ -536,6 +536,12 @@ constexpr std::array<std::string_view, 128> kPerNoteControllerNames = [] {
   n[76] = "Vibrato Rate";
   n[77] = "Vibrato Depth";
   n[78] = "Vibrato Delay";
+  n[79] = "Sound Controller 10";
+  n[91] = "Reverb Send Level";
+  n[92] = "Effects 2 Depth";
+  n[93] = "Chorus Send Level";
+  n[94] = "Effects 4 Depth";
+  n[95] = "Effects 5 Depth";
   return n;
 }();
 

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdlib>
 
+#include "midi/channel_voice_decode.h"
 #include "midi/source_residual.h"
 #include "midi/ump.h"
 #include "rt/pan_law.h"
@@ -14,10 +15,11 @@ namespace sonare::midi {
 
 namespace {
 
-/// 7-bit velocity of a note message in either protocol.
+/// 7-bit velocity of a note-on in either protocol.
 uint8_t velocity7(const Ump& u) noexcept {
-  if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) return u.data2_7bit();
-  return scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
+  ChannelVoiceEvent ev;
+  if (!decode_channel_voice(u, &ev)) return 0;
+  return ev.velocity.u7();
 }
 
 }  // namespace

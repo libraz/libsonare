@@ -660,3 +660,77 @@ TEST_CASE("MidiFx process performs no heap allocation after prepare", "[midi][rt
   fx.process(in.data(), in.size(), &out);
   REQUIRE(guard.count() == 0);
 }
+
+TEST_CASE("MidiFx MIDI 1.0 note messages round-trip byte-identically", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig t;
+  t.enabled = true;
+  t.semitones = 0;
+  fx.set_transpose(t);
+  ChordConfig c;
+  c.enabled = true;
+  c.count = 1;
+  c.intervals = {0};
+  fx.set_chord(c);
+
+  for (int vel = 1; vel < 128; ++vel) {
+    const MidiEvent in[] = {
+        note_on(10, 60, static_cast<uint8_t>(vel)),
+        {20, sonare::midi::make_midi1_note_off(0, 0, 60, static_cast<uint8_t>(vel))},
+        note_off(30, 60)};
+    MidiFxBuffer out;
+    fx.process(in, 3, &out);
+    REQUIRE(out.size == 3);
+    for (size_t i = 0; i < 3; ++i) {
+      REQUIRE(out.events[i].ump.words[0] == in[i].ump.words[0]);
+      REQUIRE(out.events[i].ump.words[1] == in[i].ump.words[1]);
+    }
+  }
+}
+
+TEST_CASE("MidiFx arpeggiator gates MIDI 1.0 and MIDI 2.0 notes off at velocity 0", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  ArpeggiatorConfig a;
+  a.enabled = true;
+  a.steps = 1;
+  a.intervals = {0};
+  a.step_frames = 100;
+  fx.set_arpeggiator(a);
+
+  const MidiEvent in1[] = {note_on(0, 60, 90)};
+  MidiFxBuffer out;
+  fx.process(in1, 1, &out);
+  REQUIRE(out.size == 2);
+  REQUIRE(out.events[1].ump.is_note_off());
+  REQUIRE(out.events[1].ump.data2_7bit() == 0);
+
+  const MidiEvent in2[] = {{0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x8123u)}};
+  fx.process(in2, 1, &out);
+  REQUIRE(out.size == 2);
+  REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) == 0x8123u);
+  REQUIRE(static_cast<uint16_t>(out.events[1].ump.words[1] >> 16u) == 0);
+}
+
+TEST_CASE("MidiFx MIDI 2.0 velocity keeps its low bits through a pass-through transform",
+          "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig t;
+  t.enabled = true;
+  t.semitones = 5;
+  fx.set_transpose(t);
+
+  const uint16_t velocities[] = {0x0001u, 0x01FFu, 0x8123u, 0xFFFEu, 0xFFFFu};
+  for (const uint16_t v : velocities) {
+    const MidiEvent in[] = {{10, sonare::midi::make_midi2_note_on(0, 0, 60, v)},
+                            {20, sonare::midi::make_midi2_note_off(0, 0, 60, v)}};
+    MidiFxBuffer out;
+    fx.process(in, 2, &out);
+    REQUIRE(out.size == 2);
+    REQUIRE(out.events[0].ump.note_number() == 65);
+    REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) == v);
+    REQUIRE(static_cast<uint16_t>(out.events[1].ump.words[1] >> 16u) == v);
+  }
+}

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "midi/control_value.h"
 #include "midi/midi_clip.h"
 
 namespace sonare::midi {
@@ -166,9 +167,9 @@ Ump make_midi2_note_on_velocity16(const Ump& src, uint8_t note, uint16_t velocit
   return make_midi2_note_on(src.group, src.channel(), note, velocity16, attr_type, attr_data);
 }
 
-Ump make_note(const Ump& src, bool note_on, uint8_t note, uint8_t velocity7) noexcept {
+Ump make_note(const Ump& src, bool note_on, uint8_t note, Velocity16 velocity) noexcept {
   if (src.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-    const uint16_t velocity16 = scale_velocity_7_to_16(velocity7);
+    const uint16_t velocity16 = velocity.raw;
     if (note_on) {
       const uint8_t attr_type = static_cast<uint8_t>(src.words[0] & 0xFFu);
       const uint16_t attr_data = static_cast<uint16_t>(src.words[1] & 0xFFFFu);
@@ -176,6 +177,8 @@ Ump make_note(const Ump& src, bool note_on, uint8_t note, uint8_t velocity7) noe
     }
     return make_midi2_note_off(src.group, src.channel(), note, velocity16);
   }
+  // u7() floors at 1, but a MIDI 1.0 note-off may carry velocity 0.
+  const uint8_t velocity7 = velocity.raw == 0 ? uint8_t{0} : velocity.u7();
   if (note_on) {
     return make_midi1_note_on(src.group, src.channel(), note, velocity7);
   }
@@ -192,7 +195,7 @@ Ump make_note_preserving_velocity(const Ump& src, bool note_on, uint8_t note) no
     }
     return make_midi2_note_off(src.group, src.channel(), note, velocity16);
   }
-  return make_note(src, note_on, note, midi1_velocity7(src));
+  return make_note(src, note_on, note, Velocity16::from7(midi1_velocity7(src)));
 }
 
 /// Rewrites the note a poly-pressure message addresses, preserving its pressure
@@ -313,7 +316,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
                                                static_cast<uint16_t>(mapped));
       } else {
         const int mapped = clamp_velocity_on(static_cast<int>(std::lround(shaped * 127.0f)));
-        ev.ump = make_note(ev.ump, true, ev.ump.note_number(), static_cast<uint8_t>(mapped));
+        ev.ump = make_note(ev.ump, true, ev.ump.note_number(),
+                           Velocity16::from7(static_cast<uint8_t>(mapped)));
       }
     }
 
@@ -391,8 +395,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
                                                        static_cast<uint16_t>(v16));
           } else {
             const int v = clamp_velocity_on(static_cast<int>(note_velocity7(shaped.ump)) + jitter7);
-            shaped.ump =
-                make_note(shaped.ump, true, shaped.ump.note_number(), static_cast<uint8_t>(v));
+            shaped.ump = make_note(shaped.ump, true, shaped.ump.note_number(),
+                                   Velocity16::from7(static_cast<uint8_t>(v)));
           }
         }
       }
@@ -435,7 +439,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
           MidiEvent off_ev;
           off_ev.render_frame = onset + gate;
           off_ev.source_track_id = ev.source_track_id;
-          off_ev.ump = make_note(ev.ump, false, static_cast<uint8_t>(arp_note), 0);
+          off_ev.ump =
+              make_note(ev.ump, false, static_cast<uint8_t>(arp_note), Velocity16::from_raw(0));
           shape_and_push(off_ev, note_ordinal);
         }
       }

@@ -4,9 +4,12 @@
 
 #include "midi/program_map.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "midi/sound_destination.h"
 #include "midi/ump.h"
@@ -344,6 +347,43 @@ TEST_CASE("Per-note controller names", "[midi]") {
   REQUIRE(per_note_controller_name(11) == "Expression");
   REQUIRE(per_note_controller_name(0).empty());
   REQUIRE(per_note_controller_name(4).empty());
+}
+
+TEST_CASE("Per-note controller names cover every defined number and no reserved one", "[midi]") {
+  const std::vector<std::pair<int, std::string_view>> defined = {
+      {1, "Modulation"},
+      {2, "Breath"},
+      {3, "Pitch 7.25"},
+      {7, "Volume"},
+      {8, "Balance"},
+      {10, "Pan"},
+      {11, "Expression"},
+      {70, "Sound Variation"},
+      {71, "Timbre / Harmonic Intensity"},
+      {72, "Release Time"},
+      {73, "Attack Time"},
+      {74, "Brightness"},
+      {75, "Decay Time"},
+      {76, "Vibrato Rate"},
+      {77, "Vibrato Depth"},
+      {78, "Vibrato Delay"},
+      {79, "Sound Controller 10"},
+      {91, "Reverb Send Level"},
+      {92, "Effects 2 Depth"},
+      {93, "Chorus Send Level"},
+      {94, "Effects 4 Depth"},
+      {95, "Effects 5 Depth"},
+  };
+  std::array<bool, 256> is_defined{};
+  for (const auto& [number, name] : defined) {
+    REQUIRE(per_note_controller_name(static_cast<uint8_t>(number)) == name);
+    is_defined[static_cast<size_t>(number)] = true;
+  }
+  for (int number = 0; number < 256; ++number) {
+    if (!is_defined[static_cast<size_t>(number)]) {
+      REQUIRE(per_note_controller_name(static_cast<uint8_t>(number)).empty());
+    }
+  }
 }
 
 TEST_CASE("Bank + program lowers to three messages and round-trips", "[midi]") {

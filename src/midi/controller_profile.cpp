@@ -3,15 +3,14 @@
 #include <cmath>
 #include <iterator>
 
+#include "midi/channel_voice_decode.h"
+
 namespace sonare::midi {
 namespace {
 
-// Full-scale denominators of the protocol fields a gesture arrives in. Local
-// rather than shared: these are message widths, not quantities.
-constexpr float kMidi1ControllerMax = 127.0f;
-constexpr float kMidi1BendMax = 16383.0f;
-constexpr float kMidi2VelocityMax = 65535.0f;
-constexpr float kMidi2FieldMax = 4294967295.0f;
+// Full-scale values of the 7- and 14-bit scales every protocol width is read on.
+constexpr float kControllerMax = 127.0f;
+constexpr float kBendMax = 16383.0f;
 
 constexpr uint8_t kBreathCc = 2;
 constexpr uint8_t kTimbreCc = 74;
@@ -83,35 +82,35 @@ constexpr PresetEntry kPresets[] = {
 
 bool controller_input_of(const Ump& ump, ControllerInputValue* out) noexcept {
   if (out == nullptr || !is_midi_channel_voice(ump)) return false;
-  const bool midi1 = ump.message_type() == UmpMessageType::kMidi1ChannelVoice;
+  ChannelVoiceEvent ev;
+  if (!decode_channel_voice(ump, &ev)) return false;
   ControllerInputValue value{};
-  value.channel = ump.channel();
-  if (ump.is_note_on()) {
-    value.input = ControllerInput::kVelocity;
-    value.norm = midi1 ? static_cast<float>(ump.data2_7bit()) / kMidi1ControllerMax
-                       : static_cast<float>(ump.words[1] >> 16) / kMidi2VelocityMax;
-  } else if (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
-    value.input = ControllerInput::kControlChange;
-    value.index = ump.note_number();
-    value.norm = midi1 ? static_cast<float>(ump.data2_7bit()) / kMidi1ControllerMax
-                       : static_cast<float>(ump.words[1]) / kMidi2FieldMax;
-  } else if (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
-    value.input = ControllerInput::kChannelPressure;
-    value.norm = midi1 ? static_cast<float>(ump.note_number()) / kMidi1ControllerMax
-                       : static_cast<float>(ump.words[1]) / kMidi2FieldMax;
-  } else if (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kPolyPressure)) {
-    value.input = ControllerInput::kPolyPressure;
-    value.note = ump.note_number();
-    value.norm = midi1 ? static_cast<float>(ump.data2_7bit()) / kMidi1ControllerMax
-                       : static_cast<float>(ump.words[1]) / kMidi2FieldMax;
-  } else if (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
-    value.input = ControllerInput::kPitchBend;
-    const uint32_t bend14 =
-        (static_cast<uint32_t>(ump.data2_7bit()) << 7) | static_cast<uint32_t>(ump.note_number());
-    value.norm = midi1 ? static_cast<float>(bend14) / kMidi1BendMax
-                       : static_cast<float>(ump.words[1]) / kMidi2FieldMax;
-  } else {
-    return false;
+  value.channel = ev.channel;
+  switch (ev.kind) {
+    case ChannelVoiceKind::NoteOn:
+      value.input = ControllerInput::kVelocity;
+      value.norm = ev.velocity.f7() / kControllerMax;
+      break;
+    case ChannelVoiceKind::ControlChange:
+      value.input = ControllerInput::kControlChange;
+      value.index = ev.note;
+      value.norm = ev.value.f7() / kControllerMax;
+      break;
+    case ChannelVoiceKind::ChannelPressure:
+      value.input = ControllerInput::kChannelPressure;
+      value.norm = ev.value.f7() / kControllerMax;
+      break;
+    case ChannelVoiceKind::PolyPressure:
+      value.input = ControllerInput::kPolyPressure;
+      value.note = ev.note;
+      value.norm = ev.value.f7() / kControllerMax;
+      break;
+    case ChannelVoiceKind::PitchBend:
+      value.input = ControllerInput::kPitchBend;
+      value.norm = ev.bend.f14() / kBendMax;
+      break;
+    default:
+      return false;
   }
   *out = value;
   return true;

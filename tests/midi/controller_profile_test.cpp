@@ -331,6 +331,75 @@ TEST_CASE("an input decodes to the gesture it carries", "[midi][synth][controlle
   REQUIRE_FALSE(controller_input_of(sonare::midi::make_midi1_program_change(0, 0, 40), &in));
 }
 
+TEST_CASE("MIDI 1.0 input normalizes exactly as the 7- and 14-bit fields always did",
+          "[midi][controller-profile]") {
+  ControllerInputValue in{};
+  for (int v = 0; v < 128; ++v) {
+    const float expected = static_cast<float>(v) / 127.0f;
+    const auto value = static_cast<uint8_t>(v);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_control_change(0, 0, 11, value), &in));
+    REQUIRE(in.norm == expected);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_channel_pressure(0, 0, value), &in));
+    REQUIRE(in.norm == expected);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_poly_pressure(0, 0, kNote, value), &in));
+    REQUIRE(in.norm == expected);
+    if (v > 0) {
+      REQUIRE(controller_input_of(sonare::midi::make_midi1_note_on(0, 0, kNote, value), &in));
+      REQUIRE(in.input == ControllerInput::kVelocity);
+      REQUIRE(in.norm == expected);
+    }
+  }
+  for (int v = 0; v < 16384; ++v) {
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_pitch_bend(0, 0, static_cast<uint16_t>(v)),
+                                &in));
+    REQUIRE(in.norm == static_cast<float>(v) / 16383.0f);
+  }
+}
+
+TEST_CASE("MIDI 2.0 input lands on the same scale as the equal MIDI 1.0 value",
+          "[midi][controller-profile]") {
+  ControllerInputValue in1{};
+  ControllerInputValue in2{};
+  for (int v = 1; v < 128; ++v) {
+    const auto v7 = static_cast<uint8_t>(v);
+    const uint32_t up32 = sonare::midi::scale_cc_7_to_32(v7);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_control_change(0, 0, 11, v7), &in1));
+    REQUIRE(controller_input_of(sonare::midi::make_midi2_control_change(0, 0, 11, up32), &in2));
+    REQUIRE(in2.norm == in1.norm);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_channel_pressure(0, 0, v7), &in1));
+    REQUIRE(controller_input_of(sonare::midi::make_midi2_channel_pressure(0, 0, up32), &in2));
+    REQUIRE(in2.norm == in1.norm);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_note_on(0, 0, kNote, v7), &in1));
+    REQUIRE(controller_input_of(
+        sonare::midi::make_midi2_note_on(0, 0, kNote, sonare::midi::scale_velocity_7_to_16(v7)),
+        &in2));
+    REQUIRE(in2.input == ControllerInput::kVelocity);
+    REQUIRE(in2.norm == in1.norm);
+  }
+  for (int v = 0; v < 16384; v += 37) {
+    const auto v14 = static_cast<uint16_t>(v);
+    REQUIRE(controller_input_of(sonare::midi::make_midi1_pitch_bend(0, 0, v14), &in1));
+    REQUIRE(controller_input_of(
+        sonare::midi::make_midi2_pitch_bend(0, 0, sonare::midi::scale_bend_14_to_32(v14)), &in2));
+    REQUIRE(in2.norm == in1.norm);
+  }
+}
+
+TEST_CASE("a MIDI 2.0 midpoint lies strictly between the neighbouring MIDI 1.0 values",
+          "[midi][controller-profile]") {
+  ControllerInputValue lo{};
+  ControllerInputValue mid{};
+  ControllerInputValue hi{};
+  const uint32_t a = sonare::midi::scale_cc_7_to_32(40);
+  const uint32_t b = sonare::midi::scale_cc_7_to_32(41);
+  REQUIRE(controller_input_of(sonare::midi::make_midi2_control_change(0, 0, 11, a), &lo));
+  REQUIRE(controller_input_of(sonare::midi::make_midi2_control_change(0, 0, 11, a + (b - a) / 2),
+                              &mid));
+  REQUIRE(controller_input_of(sonare::midi::make_midi2_control_change(0, 0, 11, b), &hi));
+  REQUIRE(lo.norm < mid.norm);
+  REQUIRE(mid.norm < hi.norm);
+}
+
 TEST_CASE("the three channel axes reach the sound", "[midi][synth][controller-profile]") {
   // Each is declared in the axis enumeration, so each needs a consumer: an axis
   // a caller can name and nothing reads is the failure mode this layer was
