@@ -9,6 +9,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/sliding_max.h"
+#include "rt/true_peak_fir.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -32,6 +33,65 @@ constexpr float kFastAttackMs = 0.1f;
 constexpr float kSlowAttackMs = 1.0f;
 
 }  // namespace
+
+void TruePeakOutputGuard::prepare(int factor, int max_channels, int max_block_size) {
+  fir_ = &sonare::rt::true_peak_fir_for(factor);
+  latency_ = std::max(0, fir_->taps_per_phase - 1);
+  work_.assign(
+      static_cast<size_t>(std::max(0, max_channels)),
+      std::vector<float>(static_cast<size_t>(latency_ + std::max(0, max_block_size)), 0.0f));
+}
+
+void TruePeakOutputGuard::reset() noexcept {
+  for (auto& channel : work_) std::fill(channel.begin(), channel.end(), 0.0f);
+}
+
+float TruePeakOutputGuard::process(float* const* channels, int num_channels, int num_samples,
+                                   int excluded_channel, float ceiling) {
+  const size_t pending = static_cast<size_t>(latency_);
+  const size_t count = static_cast<size_t>(num_samples);
+  const size_t length = pending + count;
+  for (int ch = 0; ch < num_channels; ++ch) {
+    std::copy_n(channels[ch], count,
+                work_[static_cast<size_t>(ch)].begin() + static_cast<std::ptrdiff_t>(pending));
+  }
+
+  // Interpolated position k reads base samples [k - lookbehind, k + half]; the
+  // previous block evaluated every position whose stencil it could complete.
+  const size_t half = static_cast<size_t>(fir_->taps_per_phase / 2);
+  const size_t lookbehind = static_cast<size_t>(fir_->taps_per_phase - 1) - half;
+  const size_t first = pending - half;
+  const size_t last = length - 1 - half;
+  float min_gain = 1.0f;
+  for (size_t k = first; k <= last; ++k) {
+    float linked = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      const float* data = work_[static_cast<size_t>(ch)].data();
+      linked = std::max(linked, std::abs(data[k]));
+      for (int phase = 0; phase < fir_->phases; ++phase) {
+        linked = std::max(linked, std::abs(sonare::rt::interpolate_polyphase_sample(data, length, k,
+                                                                                    phase, *fir_)));
+      }
+    }
+    if (linked > ceiling) {
+      const float gain = ceiling / linked;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        float* data = work_[static_cast<size_t>(ch)].data();
+        for (size_t s = k - lookbehind; s <= k + half; ++s) data[s] *= gain;
+      }
+      min_gain = std::min(min_gain, gain);
+    }
+  }
+
+  for (int ch = 0; ch < num_channels; ++ch) {
+    auto& work = work_[static_cast<size_t>(ch)];
+    std::copy_n(work.begin(), count, channels[ch]);
+    std::copy(work.begin() + static_cast<std::ptrdiff_t>(count),
+              work.begin() + static_cast<std::ptrdiff_t>(length), work.begin());
+  }
+  return min_gain;
+}
 
 TruePeakLimiter::TruePeakLimiter(TruePeakLimiterConfig config)
     : config_(config), true_peak_filter_(1, config.oversample_factor) {
@@ -89,6 +149,7 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
   for (auto& state : downsampler_states_) {
     downsampler_.prepare_streaming(&state, static_cast<size_t>(std::max(0, max_block_size_)));
   }
+  output_guard_.prepare(config_.oversample_factor, max_working_channels_, max_block_size_);
   linked_abs_.assign(max_oversampled_samples, 0.0f);
   input_rate_gain_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 1.0f);
   downsampled_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
@@ -255,29 +316,11 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     }
   }
 
-  // FIR decimation can ring above the bound the oversampled path already
-  // enforced, so the decimated block is pulled back under the ceiling here.
-  //
-  // The correction is per sample and channel-linked. It must NOT be derived
-  // from a whole-block maximum: `num_samples` is the host's buffer size, so a
-  // block-wide scalar gain makes the output a function of how the caller chose
-  // to chunk the stream, and drags every sample in a block down for a single
-  // ringing one. Every other stage here is sample-serial and carries its state
-  // across calls, so this is the one place that decision would leak out.
-  for (int i = 0; i < num_samples; ++i) {
-    float linked_peak = 0.0f;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (ch == excluded_channel) continue;
-      linked_peak = std::max(linked_peak, std::abs(channels[ch][i]));
-    }
-    if (linked_peak > ceiling && linked_peak > 0.0f) {
-      const float correction = ceiling / linked_peak;
-      for (int ch = 0; ch < num_channels; ++ch) {
-        channels[ch][i] *= correction;
-      }
-      min_gain = std::min(min_gain, correction);
-    }
-  }
+  // The decimation lowpass rings above the bound the oversampled path enforced,
+  // and its output re-interpolated by a meter rings again: the guard bounds
+  // what the meter reads, not what was decimated.
+  min_gain = std::min(min_gain, output_guard_.process(channels, num_channels, num_samples,
+                                                      excluded_channel, ceiling));
 
   // Once per block, not per sample: nothing downstream reads the count mid-block.
   non_finite_substitution_count_.add(substituted);
@@ -362,20 +405,12 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
       if (resolve_non_finite(SampleDestination::kIrreversibleOutput, limited)) ++substituted;
       channels[ch][i] = limited;
     }
-    // Channel-linked residual guard, matching the polyphase path.
-    float linked_output = 0.0f;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (ch == excluded_channel) continue;
-      linked_output = std::max(linked_output, std::abs(channels[ch][i]));
-    }
-    if (linked_output > ceiling && linked_output > 0.0f) {
-      const float hard_gain = ceiling / linked_output;
-      for (int ch = 0; ch < num_channels; ++ch) {
-        channels[ch][i] *= hard_gain;
-      }
-      min_gain = std::min(min_gain, gain * hard_gain);
-    }
   }
+
+  // A gain that steps between base samples reshapes the reconstruction between
+  // them; the guard bounds what a meter reads, as on the polyphase path.
+  min_gain = std::min(min_gain, output_guard_.process(channels, num_channels, num_samples,
+                                                      excluded_channel, ceiling));
 
   // Once per block, not per sample: nothing downstream reads the count mid-block.
   non_finite_substitution_count_.add(substituted);
@@ -415,6 +450,7 @@ void TruePeakLimiter::reset() {
     std::fill(history.begin(), history.end(), 0.0f);
   }
   for (auto& state : downsampler_states_) downsampler_.reset_streaming(&state);
+  output_guard_.reset();
   last_gain_reduction_db_ = 0.0f;
   minimum_gain_reduction_db_ = 0.0f;
 }
@@ -507,7 +543,7 @@ int TruePeakLimiter::latency_samples() const noexcept {
   const int oversampling_delay = config_.apply_gain_at_input_rate
                                      ? true_peak_filter_.latency_samples()
                                      : downsampler_.streaming_round_trip_latency_samples();
-  return limiter_.latency_samples() + oversampling_delay;
+  return limiter_.latency_samples() + oversampling_delay + output_guard_.latency_samples();
 }
 
 void TruePeakLimiter::prepare_buffers(int num_channels) {

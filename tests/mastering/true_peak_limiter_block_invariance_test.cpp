@@ -20,7 +20,7 @@ constexpr int kSampleRate = 24000;
 constexpr int kSignalSamples = 18000;
 // Reported latency of the default 4x polyphase configuration at this rate; the
 // tail the offline runners flush through the limiter.
-constexpr int kFlushSamples = 36;
+constexpr int kFlushSamples = 47;
 
 // Sustained low tone plus periodic transients, driven hard enough that the
 // limiter is working continuously and the decimation guard engages.

@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "mastering/api/internal_processor_runner.h"
@@ -17,7 +19,9 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
+#include "rt/true_peak_fir.h"
 #include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -166,53 +170,108 @@ TEST_CASE("TruePeakLimiter catches sinc-estimated inter-sample overs", "[masteri
   REQUIRE(metering::true_peak_db(limited, 8) <= -0.99f);
 }
 
-// mastering-008: the limiter's internal decimation filter (rt::Oversampler,
-// a generic Kaiser-windowed lowpass) is a different FIR design from the
-// canonical true-peak interpolation filter metering::true_peak_db uses, so
-// decimating the ceiling-bounded oversampled signal with one filter and
-// re-checking it with the other is not a lossless round trip -- even at
-// matching oversample factors. This is a bounded, measured residue (see
-// true_peak_limiter.h's ceiling_db doc), NOT a brickwall guarantee: reconciling
-// the two filter designs is a cross-module change (src/rt/oversampler.cpp)
-// outside this fix's scope, so this asserts the measured bound rather than
-// "always holds".
-TEST_CASE(
-    "TruePeakLimiter's decimation residue on broadband content stays within the "
-    "documented bound",
-    "[mastering][maximizer]") {
-  const int sample_rate = 48000;
-  const int total_samples = sample_rate * 2;
-  const int block_size = 512;
-  const float ceiling_db = -1.0f;
-  TruePeakLimiter limiter({ceiling_db, 1.0f, 50.0f, 4});
-  limiter.prepare(static_cast<double>(sample_rate), block_size);
+namespace {
 
-  // Full-scale white noise: broadband, sharp sample-to-sample transitions,
-  // the kind of content that most exercises the decimation filter's stopband
-  // (a steady tone, even near Nyquist, has no edges to ring on).
-  std::vector<float> signal(static_cast<size_t>(total_samples));
+// Full-scale white noise: every inter-sample position is a candidate peak and
+// the gain never rests, which is the content that rings the most through a
+// decimation filter.
+std::vector<float> white_noise(int samples) {
+  std::vector<float> signal(static_cast<size_t>(samples));
   std::mt19937 rng(99);
   std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
-  for (float& s : signal) {
-    s = dist(rng);
+  for (float& s : signal) s = dist(rng);
+  return signal;
+}
+
+// Amplitude-modulated tone at 0.45 fs: its true peak sits well above its
+// sample peak, and it lies inside a decimation filter's transition band.
+std::vector<float> near_nyquist_tone(int samples, int sample_rate) {
+  std::vector<float> signal(static_cast<size_t>(samples));
+  for (int i = 0; i < samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float carrier = std::sin(2.0f * sonare::constants::kPi * 0.45f * sample_rate * t);
+    const float envelope = 0.7f + 0.3f * std::sin(2.0f * sonare::constants::kPi * 3.0f * t);
+    signal[static_cast<size_t>(i)] = 0.99f * carrier * envelope;
   }
-  // Realistic streaming block size, not one giant call, matching how every
-  // real caller (and every other test in this file) drives the limiter; the
-  // residue measures identically either way (it is not a block-size artifact).
-  for (int offset = 0; offset < total_samples; offset += block_size) {
-    const int count = std::min(block_size, total_samples - offset);
+  return signal;
+}
+
+// Sustained low tone with periodic transients, driven 14 dB into the limiter.
+std::vector<float> transient_program(int samples, int sample_rate) {
+  std::vector<float> signal(static_cast<size_t>(samples));
+  for (int i = 0; i < samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    float value = 0.18f * std::sin(2.0f * sonare::constants::kPi * 110.0f * t);
+    const int local = i % (sample_rate / 4);
+    if (local < 96) value += 0.75f * (1.0f - static_cast<float>(local) / 96.0f);
+    signal[static_cast<size_t>(i)] = value * 5.0f;
+  }
+  return signal;
+}
+
+}  // namespace
+
+// The ceiling is a statement about the output's true peak as metering::true_peak
+// reads it at the limiter's own oversample factor, whatever the input, the block
+// size or the gain-application mode. The tolerance is float rounding of the
+// final correction, not a design residue.
+TEST_CASE("TruePeakLimiter holds the ceiling as metered at its own oversample factor",
+          "[mastering][maximizer]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate / 2;
+  constexpr float kCeilingDb = -1.0f;
+  constexpr float kToleranceDb = 0.01f;
+
+  const int factor = GENERATE(1, 2, 4, 8, 16);
+  const int block_size = GENERATE(1, 7, 512);
+  const bool apply_gain_at_input_rate = GENERATE(false, true);
+  const auto material =
+      GENERATE(as<std::string>{}, "white noise", "near-Nyquist tone", "transient program");
+  CAPTURE(factor, block_size, apply_gain_at_input_rate, material);
+
+  std::vector<float> signal = material == "white noise" ? white_noise(kSamples)
+                              : material == "near-Nyquist tone"
+                                  ? near_nyquist_tone(kSamples, kSampleRate)
+                                  : transient_program(kSamples, kSampleRate);
+
+  TruePeakLimiter limiter({kCeilingDb, 1.0f, 50.0f, factor, apply_gain_at_input_rate});
+  limiter.prepare(static_cast<double>(kSampleRate), block_size);
+  // Flush the reported latency so the meter sees the whole program.
+  signal.resize(signal.size() + static_cast<size_t>(limiter.latency_samples()), 0.0f);
+  const int total = static_cast<int>(signal.size());
+  for (int offset = 0; offset < total; offset += block_size) {
     float* block = signal.data() + offset;
-    limiter.process(&block, 1, count);
+    limiter.process(&block, 1, std::min(block_size, total - offset));
   }
 
-  const Audio limited = Audio::from_buffer(signal.data(), signal.size(), sample_rate);
-  // Measured at the limiter's own oversample factor, matching the header's
-  // "meter at the same oversampling" guidance -- and still not exact.
+  const Audio limited = Audio::from_buffer(signal.data(), signal.size(), kSampleRate);
+  const float measured = metering::true_peak_db(limited, factor);
+  CAPTURE(measured);
+  REQUIRE(measured <= kCeilingDb + kToleranceDb);
+}
+
+// The offline runner trims the reported latency off the front of the render,
+// and with it the pre-ring the limiter bounded its first samples against. A
+// meter reads silence there instead, so a program starting at full level can
+// read over within its first stencil; a program that starts from silence cannot.
+TEST_CASE("TruePeakLimiter offline render holds the ceiling past a full-level first sample",
+          "[mastering][maximizer]") {
+  constexpr int kSampleRate = 24000;
+  constexpr float kCeilingDb = -0.3f;
+  const int leading_silence = GENERATE(0, 6);
+  CAPTURE(leading_silence);
+
+  std::vector<float> signal(static_cast<size_t>(leading_silence), 0.0f);
+  const auto program = transient_program(kSampleRate / 2, kSampleRate);
+  signal.insert(signal.end(), program.begin(), program.end());
+
+  TruePeakLimiter limiter({kCeilingDb, 1.0f, 50.0f, 4});
+  sonare::mastering::api::internal::run_processor_mono(limiter, signal, kSampleRate);
+
+  const Audio limited = Audio::from_buffer(signal.data(), signal.size(), kSampleRate);
   const float measured = metering::true_peak_db(limited, 4);
-  // Measured ~0.47 dB over ceiling on this exact fixture; bounded to 0.6 dB
-  // (a real margin against FP/build variance, not "anything goes") rather
-  // than asserting the false brickwall measured <= ceiling_db.
-  REQUIRE(measured <= ceiling_db + 0.6f);
+  CAPTURE(measured);
+  REQUIRE(measured <= kCeilingDb + (leading_silence == 0 ? 0.1f : 0.01f));
 }
 
 TEST_CASE("TruePeakLimiter supports 4x detection with input-rate gain fallback",
@@ -237,12 +296,18 @@ TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][ma
   TruePeakLimiter limiter({-1.0f, 1.0f, 10.0f, 4});
   limiter.prepare(48000.0, 64);
 
-  // The delayed continuous polyphase path adds one FIR group delay while
-  // upsampling and another while decimating (6 + 6 at factor 4).
-  REQUIRE(limiter.latency_samples() == 60);
+  // Lookahead (1 ms), one FIR group delay while upsampling and another while
+  // decimating, and the output guard's stencil less one sample. The 2x and 4x
+  // designs share a taps-per-phase count, so the total is the same at both.
+  const int lookahead = 48;
+  const int stencil = rt::true_peak_fir_for(4).taps_per_phase;
+  const int expected = lookahead + 2 * (stencil / 2) + (stencil - 1);
+  REQUIRE(expected == 71);
+  REQUIRE(limiter.latency_samples() == expected);
 
   limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
-  REQUIRE(limiter.latency_samples() == 60);
+  REQUIRE(rt::true_peak_fir_for(2).taps_per_phase == stencil);
+  REQUIRE(limiter.latency_samples() == expected);
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
 
@@ -290,7 +355,9 @@ TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping runn
   // lookahead is reflected in the reported latency.
   limiter.set_config({-3.0f, 2.0f, 50.0f, 4});
   REQUIRE(limiter.last_gain_reduction_db() == 0.0f);
-  REQUIRE(limiter.latency_samples() == 108);
+  // 2 ms lookahead plus the fixed oversampling and guard delays (12 + 11).
+  const int stencil = rt::true_peak_fir_for(4).taps_per_phase;
+  REQUIRE(limiter.latency_samples() == 96 + 2 * (stencil / 2) + (stencil - 1));
 
   // The updated -3 dB ceiling (0.708) is in effect on subsequent processing:
   // the 0.95 sine is limited near the NEW ceiling — clearly above the stale

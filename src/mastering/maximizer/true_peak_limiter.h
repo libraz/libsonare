@@ -10,6 +10,7 @@
 #include "rt/lookahead_buffer.h"
 #include "rt/overflow_counter.h"
 #include "rt/oversampler.h"
+#include "rt/polyphase_fir.h"
 #include "rt/sliding_max.h"
 #include "rt/true_peak_filter.h"
 
@@ -17,30 +18,21 @@ namespace sonare::mastering::maximizer {
 
 struct TruePeakLimiterConfig {
   /// @brief Output true-peak ceiling in dBTP.
-  /// @details Enforced per sample at @ref oversample_factor, which is the
-  ///   resolution this limiter reconstructs the signal at. Two independent
-  ///   residues can put a meter above the ceiling, and only the first shrinks
-  ///   to nothing by matching the meter's oversampling to the limiter's:
-  ///
-  ///   1. A meter running at a HIGHER oversampling than the limiter
-  ///      interpolates points the limiter never evaluated: measured at +0.02
-  ///      dB for a -0.3 dBTP ceiling with the default 4x limiter read by an 8x
-  ///      meter, on transient program material, flat from 0 to +36 dB of
-  ///      drive. Bounded, does not grow with drive; raise @ref oversample_factor
-  ///      to push it down, or match the meter's factor to eliminate it.
-  ///   2. Even a meter at the SAME oversample_factor can read above the
-  ///      ceiling: the limiter's own internal decimation step (the polyphase
-  ///      lowpass that returns the oversampled, ceiling-bounded signal to the
-  ///      base rate) is a different FIR design from the canonical true-peak
-  ///      interpolation filter this class and every metering::true_peak_db
-  ///      caller use to CHECK the ceiling, so decimating with one filter and
-  ///      re-interpolating with the other is not a lossless round trip.
-  ///      Measured up to ~0.47 dB over a -1.0 dBTP ceiling on full-scale
-  ///      broadband noise (white noise, 48 kHz, 4x, release_ms=50); musical
-  ///      program material measures closer to the smaller end of this range.
-  ///      This residue does NOT shrink by raising the meter's oversampling,
-  ///      because it is not an interpolation-resolution gap -- it needs the
-  ///      two filters reconciled to close (tracked separately).
+  /// @details Holds as metering::true_peak reads the output at @ref
+  ///   oversample_factor, to within float rounding of the final correction: the
+  ///   last stage (@ref TruePeakOutputGuard) reconstructs the output with that
+  ///   meter's own interpolation filter and scales any stencil whose
+  ///   interpolated value exceeds the ceiling. A meter running at a HIGHER
+  ///   oversampling interpolates points the limiter never evaluated and can
+  ///   read above the ceiling: measured for the default 4x limiter read by a
+  ///   16x meter at +0.12 dB on full-scale white noise and below 0.001 dB on
+  ///   transient program material. Raise @ref oversample_factor to push that
+  ///   down, or match the meter's factor to eliminate it. An offline render
+  ///   trimmed to its input length drops the pre-ring ahead of its first
+  ///   sample, so a meter reading that render with silence in its place can
+  ///   exceed the ceiling within the first stencil of a program that starts at
+  ///   full level: measured +0.05 dB on a full-level step at sample 0, none
+  ///   once six samples of silence precede it.
   ///
   ///   The ceiling is applied sample by sample and never as a whole-block
   ///   rescale: a correction derived from a block's own maximum would make the
@@ -50,16 +42,40 @@ struct TruePeakLimiterConfig {
   float lookahead_ms = 1.0f;
   float release_ms = 50.0f;
   int oversample_factor = 4;
-  /// @brief Detect-only mode: when true the gain envelope is computed at the
-  ///        oversampled rate but applied to the base-rate signal (the per-base
-  ///        sample gain is the minimum over the oversampled subsamples of that
-  ///        base sample, so any inter-sample over forces the base sample down).
-  ///        This is a BEST-EFFORT mode: it does NOT guarantee the true (inter-
-  ///        sample) peak ceiling because the limited signal is never
-  ///        re-synthesised at the oversampled rate. Leave false (the default)
-  ///        to use the sample-accurate polyphase path that does guarantee the
-  ///        true-peak ceiling.
+  /// @brief Apply the gain at the base rate instead of reconstructing the
+  ///        limited signal at @ref oversample_factor and decimating it back.
+  /// @details The gain envelope is computed at the oversampled rate either way.
+  ///   Here each base sample takes the minimum gain over its own subsamples and
+  ///   the decimation stage is skipped, which shortens the latency by one
+  ///   decimation group delay. Both modes end in the same output guard, so the
+  ///   ceiling holds identically in each.
   bool apply_gain_at_input_rate = false;
+};
+
+/// @brief Final ceiling guard, evaluated with the interpolation a meter uses.
+/// @details Reconstructs the base-rate output with the canonical true-peak FIR
+///   for the limiter's factor (the one metering::true_peak reads with) and,
+///   where an interpolated value exceeds the ceiling, scales every base sample
+///   of that value's stencil, channel-linked, so it lands on the ceiling.
+///   Positions are visited in stream order and each reads every earlier
+///   correction. The output is delayed by one stencil less one sample so no
+///   sample leaves before every interpolation reading it has been evaluated;
+///   the block size plays no part in the result.
+class TruePeakOutputGuard {
+ public:
+  void prepare(int factor, int max_channels, int max_block_size);
+  void reset() noexcept;
+  int latency_samples() const noexcept { return latency_; }
+  /// @brief Bounds @p channels in place; returns the smallest gain it applied.
+  /// @param excluded_channel Channel left out of the linked detection (still
+  ///        scaled), or negative for none.
+  float process(float* const* channels, int num_channels, int num_samples, int excluded_channel,
+                float ceiling);
+
+ private:
+  const rt::PolyphaseFir* fir_ = nullptr;
+  std::vector<std::vector<float>> work_;
+  int latency_ = 0;
 };
 
 /// @brief Default depth (dB) the loudness stages may drive their post-gain
@@ -196,6 +212,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   std::vector<std::vector<float>> limited_oversampled_buffers_;
   std::vector<std::vector<float>> true_peak_scratch_;
   std::vector<sonare::rt::Oversampler::StreamingState> downsampler_states_;
+  TruePeakOutputGuard output_guard_;
   std::vector<float> linked_abs_;
   std::vector<float> input_rate_gain_;
   std::vector<float> downsampled_;
