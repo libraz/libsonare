@@ -254,6 +254,43 @@ std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 
 }  // namespace
 
+namespace {
+
+/// Whether @p data starts with an MPEG audio frame header: 11-bit sync and no
+/// reserved version, layer, bitrate or sample-rate field. Raw ADTS AAC shares
+/// the sync word but carries layer 0, so it does not pass.
+bool is_mpeg_audio_frame_header(const uint8_t* data, size_t size) {
+  if (size < 4 || data[0] != 0xFF || (data[1] & 0xE0) != 0xE0) return false;
+  const int version = (data[1] >> 3) & 0x03;
+  const int layer = (data[1] >> 1) & 0x03;
+  const int bitrate_index = (data[2] >> 4) & 0x0F;
+  const int rate_index = (data[2] >> 2) & 0x03;
+  return version != 1 && layer != 0 && bitrate_index != 15 && rate_index != 3;
+}
+
+/// Whether the stream behind any ID3v2 tags and zero padding is MPEG audio.
+/// A buffer ending before that stream stays MP3 so minimp3 reports it.
+bool id3_tagged_stream_is_mpeg(const uint8_t* data, size_t size) {
+  constexpr size_t kId3HeaderBytes = 10;
+  size_t pos = 0;
+  while (size - pos >= kId3HeaderBytes && data[pos] == 'I' && data[pos + 1] == 'D' &&
+         data[pos + 2] == '3') {
+    // Syncsafe 28-bit body size, plus a 10-byte footer when flag 0x10 is set.
+    const size_t body = (static_cast<size_t>(data[pos + 6] & 0x7F) << 21) |
+                        (static_cast<size_t>(data[pos + 7] & 0x7F) << 14) |
+                        (static_cast<size_t>(data[pos + 8] & 0x7F) << 7) |
+                        static_cast<size_t>(data[pos + 9] & 0x7F);
+    const size_t footer = (data[pos + 5] & 0x10) != 0 ? kId3HeaderBytes : 0;
+    if (body + footer > size - pos - kId3HeaderBytes) return true;
+    pos += kId3HeaderBytes + body + footer;
+  }
+  while (pos < size && data[pos] == 0) ++pos;
+  if (size - pos < 4) return true;
+  return is_mpeg_audio_frame_header(data + pos, size - pos);
+}
+
+}  // namespace
+
 AudioFormat detect_format(const uint8_t* data, size_t size) {
   if (size < 12) {
     return AudioFormat::Unknown;
@@ -265,10 +302,14 @@ AudioFormat detect_format(const uint8_t* data, size_t size) {
     return AudioFormat::WAV;
   }
 
-  // MP3: Frame sync (0xFF 0xFB/0xFA/0xF3/0xF2/0xE3/0xE2) or ID3 tag
-  if ((data[0] == 0xFF && (data[1] & 0xE0) == 0xE0) ||
-      (data[0] == 'I' && data[1] == 'D' && data[2] == '3')) {
+  // MP3: a valid MPEG audio frame header, or ID3v2 tags in front of one. A sync
+  // word or tag alone is not a codec claim: ADTS AAC and tagged FLAC/AAC carry
+  // them too and belong to FFmpeg, as a RIFF carrying a foreign codec does.
+  if (is_mpeg_audio_frame_header(data, size)) {
     return AudioFormat::MP3;
+  }
+  if (data[0] == 'I' && data[1] == 'D' && data[2] == '3') {
+    return id3_tagged_stream_is_mpeg(data, size) ? AudioFormat::MP3 : AudioFormat::Unknown;
   }
 
   return AudioFormat::Unknown;

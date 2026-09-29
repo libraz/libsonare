@@ -291,6 +291,37 @@ TEST_CASE("detect_format MP3 frame sync", "[audio_io]") {
   REQUIRE(detect_format(mp3_header.data(), mp3_header.size()) == AudioFormat::MP3);
 }
 
+TEST_CASE("detect_format leaves non-MPEG streams behind an MP3-like prefix to FFmpeg",
+          "[audio_io]") {
+  SECTION("raw ADTS AAC shares the 12-bit sync but carries layer 0") {
+    for (const uint8_t second : {uint8_t{0xF1}, uint8_t{0xF9}}) {
+      const std::vector<uint8_t> adts = {0xFF, second, 0x50, 0x80, 0x02, 0x1F, 0xFC, 0, 0, 0, 0, 0};
+      CHECK(detect_format(adts.data(), adts.size()) == AudioFormat::Unknown);
+    }
+  }
+  SECTION("an MPEG header with a reserved field is not a frame") {
+    const std::vector<uint8_t> bad_bitrate = {0xFF, 0xFB, 0xF0, 0x00, 0, 0, 0, 0, 0, 0, 0, 0};
+    const std::vector<uint8_t> bad_rate = {0xFF, 0xFB, 0x9C, 0x00, 0, 0, 0, 0, 0, 0, 0, 0};
+    const std::vector<uint8_t> bad_version = {0xFF, 0xEB, 0x90, 0x00, 0, 0, 0, 0, 0, 0, 0, 0};
+    CHECK(detect_format(bad_bitrate.data(), bad_bitrate.size()) == AudioFormat::Unknown);
+    CHECK(detect_format(bad_rate.data(), bad_rate.size()) == AudioFormat::Unknown);
+    CHECK(detect_format(bad_version.data(), bad_version.size()) == AudioFormat::Unknown);
+  }
+  SECTION("the stream behind an ID3v2 tag decides") {
+    // 10-byte header with a syncsafe size of 4, then 4 bytes of tag body.
+    const std::vector<uint8_t> tag = {'I', 'D', '3', 0x04, 0x00, 0x00, 0, 0, 0, 4, 1, 2, 3, 4};
+    std::vector<uint8_t> flac = tag;
+    flac.insert(flac.end(), {'f', 'L', 'a', 'C', 0, 0, 0, 0x22, 0, 0, 0, 0});
+    CHECK(detect_format(flac.data(), flac.size()) == AudioFormat::Unknown);
+    std::vector<uint8_t> aac = tag;
+    aac.insert(aac.end(), {0xFF, 0xF1, 0x50, 0x80, 0x02, 0x1F, 0xFC, 0, 0, 0, 0, 0});
+    CHECK(detect_format(aac.data(), aac.size()) == AudioFormat::Unknown);
+    std::vector<uint8_t> mp3 = tag;
+    mp3.insert(mp3.end(), {0, 0, 0xFF, 0xFB, 0x90, 0x00, 0, 0, 0, 0, 0, 0});
+    CHECK(detect_format(mp3.data(), mp3.size()) == AudioFormat::MP3);
+  }
+}
+
 TEST_CASE("detect_format unknown", "[audio_io]") {
   std::vector<uint8_t> unknown = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
                                   0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
@@ -739,8 +770,7 @@ TEST_CASE("a path load is bounded by its own max_file_size and nothing else",
   std::filesystem::resize_file(oversize, resource::kMaxAudioFileBytes + 1, ec);
   if (ec) {
     std::remove(oversize.c_str());
-    SUCCEED("filesystem cannot hold a sparse 500 MB file");
-    return;
+    SKIP("filesystem cannot hold a sparse 500 MB file");
   }
 
   const auto code_of = [](auto&& fn) {
@@ -783,8 +813,7 @@ TEST_CASE("a path load reads an input whose size cannot be probed", "[audio_io]"
   const std::filesystem::path fifo = dir / "unseekable.wav";
   if (::mkfifo(fifo.c_str(), 0600) != 0) {
     std::filesystem::remove_all(dir);
-    SUCCEED("platform cannot create a FIFO");
-    return;
+    SKIP("platform cannot create a FIFO");
   }
 
   // A FIFO reports no size at all, so the loader cannot derive an allocation
