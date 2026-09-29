@@ -488,6 +488,7 @@ if(BUILD_MASTERING)
     mastering/spectral/presence_enhancer.cpp
     mastering/spectral/spectral_shaper.cpp
     mastering/stereo/auto_pan.cpp
+    mastering/stereo/binaural_panner.cpp
     mastering/stereo/haas_enhancer.cpp
     mastering/stereo/imager.cpp
     mastering/stereo/mid_side.cpp
@@ -657,6 +658,7 @@ if(BUILD_FX)
   add_library(sonare_fx STATIC
     effects/common/dc_blocker.cpp
     effects/delay/stereo_delay.cpp
+    effects/filter/vowel_filter.cpp
     effects/modulation/auto_wah.cpp
     effects/modulation/chorus.cpp
     effects/modulation/ensemble.cpp
@@ -919,6 +921,19 @@ if(BUILD_ARRANGEMENT)
     # GS system effects (reverb/chorus/delay send-returns) reuse the FX suite;
     # without BUILD_FX the SF2 player renders dry (sends become no-ops).
     target_sources(sonare_midi PRIVATE midi/synth/gs_effects.cpp)
+    target_sources(sonare_midi PRIVATE
+      midi/synth/gs_classic/model_format.h
+      midi/synth/gs_classic/graph_engine.h
+      midi/synth/gs_classic/graph_engine.cpp
+      midi/synth/gs_classic/sections.h
+      midi/synth/gs_classic/sections.cpp
+      midi/synth/gs_classic/nodes_dynamics.cpp
+      midi/synth/gs_classic/nodes_pitch.cpp
+      midi/synth/gs_classic/classic_unit.h
+      midi/synth/gs_classic/classic_unit.cpp
+      midi/synth/gs_classic/model_registry.h
+      midi/synth/gs_classic/model_registry.cpp
+    )
     target_link_libraries(sonare_midi PUBLIC sonare_fx)
     target_compile_definitions(sonare_midi PUBLIC SONARE_MIDI_WITH_FX=1)
   endif()

@@ -279,6 +279,8 @@ if(BUILD_MASTERING)
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp
     mastering/stft_stream_test.cpp
+    mastering/limiter_ratio_test.cpp
+    mastering/amp_cab_models_test.cpp
   )
   if(NOT BUILD_MIXING)
     target_link_libraries(sonare_tests PRIVATE sonare_mastering)
@@ -387,6 +389,17 @@ if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/modulated_delay_structure_test.cpp)
   target_sources(sonare_tests PRIVATE effects/delay_damping_test.cpp)
   target_sources(sonare_tests PRIVATE effects/pitch_window_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/modulation_phase_feedback_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/ensemble_deviation_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/rotary_speed_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/stereo_delay_taps_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/pitch_shift_voices_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/reverb_character_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/lofi_extras_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/auto_wah_modes_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/modulator_shapes_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/vowel_filter_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/binaural_panner_test.cpp)
   if(NOT BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_fx)
   endif()
@@ -618,6 +631,10 @@ if(BUILD_ARRANGEMENT)
     midi/gs_efx_convert_test.cpp
     midi/gs_efx_tables_reach_test.cpp
     midi/gs_efx_defaults_test.cpp
+    midi/gs_efx_parallel_test.cpp
+    midi/gs_efx_realization_test.cpp
+    midi/gs_efx_control_test.cpp
+    midi/gs_layer_skeleton_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp
@@ -659,6 +676,17 @@ if(BUILD_ARRANGEMENT)
       mixing/graph_surround_test.cpp
       engine/mixer_routing_agreement_test.cpp
       api/sonare_c_engine_routing_test.cpp
+    )
+  endif()
+  if(BUILD_FX)
+    target_sources(sonare_tests PRIVATE
+      midi/gs_classic_engine_test.cpp
+      midi/gs_classic_nodes_test.cpp
+      midi/gs_classic_registry_test.cpp
+      midi/gs_classic_types_01a_test.cpp
+      midi/gs_classic_types_01b_test.cpp
+      midi/gs_classic_types_other_test.cpp
+      midi/gs_classic_conformance_test.cpp
     )
   endif()
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
