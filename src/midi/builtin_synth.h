@@ -14,6 +14,13 @@
 /// in RPN / NRPN stays with NativeSynth / Sf2Player, and outside a zone the
 /// bend range is the fixed one below rather than a configurable one.
 ///
+/// Both protocols go through decode_channel_voice(), and controller values stay
+/// at MIDI 2.0 width up to the float that consumes them, so a MIDI 2.0 velocity,
+/// CC or bend is heard between the 7-bit (14-bit) steps while MIDI 1.0 input
+/// renders exactly as before. MIDI 2.0 per-note pitch (Per-Note Pitch Bend,
+/// RPNC #3, Note On attribute #3, Per-Note Management, RC 0/7) retunes the
+/// addressed key only; the other per-note controllers are counted as skipped.
+///
 /// Volume, pan and expression follow the same laws as those two, so swapping the
 /// instrument keeps an arrangement's balance and image: volume x expression as a
 /// (v/127)^2 gain, and CC10 through the project's constant-power pan law, which
@@ -28,8 +35,11 @@
 #include <cstdint>
 #include <vector>
 
+#include "midi/channel_voice_decode.h"
+#include "midi/control_value.h"
 #include "midi/instrument.h"
 #include "midi/mpe.h"
+#include "midi/per_note_state.h"
 #include "midi/synth/channel_param_state.h"
 #include "rt/pan_law.h"
 
@@ -83,6 +93,11 @@ class BuiltinSynth final : public MidiInstrument {
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
 
+  /// Channel-voice messages received but not acted on: reserved statuses, per-note controllers
+  /// other than pitch, and relative controllers on a parameter this synth does not hold. Cleared
+  /// by reset().
+  uint64_t skipped_event_count() const noexcept { return skipped_events_; }
+
  private:
   enum class Stage : uint8_t { kIdle = 0, kAttack, kDecay, kSustain, kRelease };
 
@@ -93,25 +108,41 @@ class BuiltinSynth final : public MidiInstrument {
     uint32_t source_track_id = 0;
     double phase = 0.0;           // [0,1)
     double base_phase_inc = 0.0;  // cycles per sample at the note pitch (no bend)
-    double phase_inc = 0.0;       // effective increment incl. channel pitch bend
+    double phase_inc = 0.0;       // effective increment incl. channel and per-note pitch
     float velocity = 0.0f;        // [0,1]
     float poly_pressure = 0.0f;   // per-note (poly) pressure in [0,1]
     float env = 0.0f;             // current envelope level
     Stage stage = Stage::kIdle;
     bool key_down = false;
     uint64_t age = 0;  // start order, for deterministic voice stealing
+    PerNoteBinding per_note;
+    // 2^(per-note semitones / 12); exactly 1.0 while the key carries no per-note pitch.
+    double per_note_ratio = 1.0;
+    bool has_attribute_pitch = false;  // Note On attribute #3, captured at note-on.
+    uint16_t attribute_pitch_q7_9 = 0;
   };
 
-  void note_on(uint8_t channel, uint8_t note, float velocity, uint32_t source_track_id) noexcept;
+  void note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
+               uint16_t attribute_data, uint32_t source_track_id) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
   // Per-channel expression. Pitch bend is a 14-bit value (center 8192) mapped
   // through a fixed +/-2 semitone range, or through the zone's own range when
   // the channel is in one; channel pressure applies to every voice on the
   // channel, poly pressure to the single matching note.
-  void pitch_bend(uint8_t channel, uint16_t bend14) noexcept;
-  void channel_pressure(uint8_t channel, uint8_t pressure7) noexcept;
-  void poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept;
+  void pitch_bend(uint8_t channel, Bend32 bend) noexcept;
+  void channel_pressure(uint8_t channel, Control32 pressure) noexcept;
+  void poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept;
+  void control_change(uint8_t channel, uint8_t controller, Control32 value) noexcept;
+  // MIDI 2.0 Registered / Assignable Controllers, absolute and relative. RC 0/0 and 0/7 are read
+  // from the message; every other one is lowered onto the MIDI 1.0 parameter-number path.
+  void registered_controller(const Ump& ump, const ChannelVoiceEvent& ev) noexcept;
+  void relative_controller(const ChannelVoiceEvent& ev) noexcept;
+  // Recomputes the per-note share of @p v's pitch from its binding and attribute.
+  void refresh_per_note_pitch(Voice& v) noexcept;
+  // Re-evaluates every sounding voice on (channel, note), or on the whole channel when
+  // @p all_notes is set (a sensitivity change reaches every key of it).
+  void refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept;
   // Recomputes a channel's cached bend and pressure from the zone model, and
   // every channel of the zone when @p channel is its manager, whose values
   // reach all of them.
@@ -159,9 +190,9 @@ class BuiltinSynth final : public MidiInstrument {
   // refresh_channel_controls(); the raw values are kept so a change to one
   // controller does not lose the others.
   struct ChannelControls {
-    uint8_t volume = 100;      // CC7
-    uint8_t pan = 64;          // CC10 (centre)
-    uint8_t expression = 127;  // CC11
+    Control32 volume = Control32::from7(100);      // CC7
+    Control32 pan = Control32::from7(64);          // CC10 (centre)
+    Control32 expression = Control32::from7(127);  // CC11
     float gain = 1.0f;
     rt::PanGains pan_gains{};
   };
@@ -180,6 +211,10 @@ class BuiltinSynth final : public MidiInstrument {
   // Only ever asked about RPN 00 06 and RPN 00 00, the two a zone is configured
   // with. The full parameter-number machinery stays with the bigger synths.
   std::array<synth::ChannelParamState, 16> params_{};
+  // Per-note pitch rows (per key, surviving note-off) and RC 0/7 per channel.
+  PerNotePitchTable per_note_pitch_{};
+  std::array<Control32, 16> per_note_bend_sensitivity_{};
+  uint64_t skipped_events_ = 0;
   std::vector<Voice> voices_;
 };
 

@@ -595,3 +595,322 @@ TEST_CASE("BuiltinSynth renders a project that configures no zone unchanged",
   CAPTURE(hash);
   REQUIRE(hash == 0x1205b45ac235cd9dull);
 }
+
+TEST_CASE("BuiltinSynth takes bend sensitivity from a MIDI 2.0 Registered Controller",
+          "[midi][synth][mpe][midi2]") {
+  // RC 0/0 carries RPN 0/0 as one message; its semitones sit in the top seven
+  // bits (Zero-Extension, M2-115-U §4). The manager channel's range is the
+  // zone's own, 2 semitones by default, so a full bend moves the manager's note
+  // by 200 cents without the RC and by 1200 with 12 semitones installed.
+  constexpr uint32_t kTwelveSemitones = 12u << 25;
+  auto full_bend_cents = [](bool send_rc, double expect_cents) {
+    BuiltinSynth synth = mpe_synth();
+    mpe_send_mcm(synth, 0, 7);
+    if (send_rc) {
+      mpe_send(synth, sonare::midi::make_midi2_registered_controller(0, 0, 0, 0, kTwelveSemitones));
+    }
+    mpe_send(synth, sonare::midi::make_midi1_pitch_bend(0, 0, 16383));
+    return mpe_cents(synth, 0, expect_cents);
+  };
+  const double default_range = full_bend_cents(false, 200.0);
+  const double twelve = full_bend_cents(true, 1200.0);
+  CAPTURE(default_range, twelve);
+  REQUIRE(std::fabs(default_range - 200.0) < 5.0);
+  REQUIRE(std::fabs(twelve - 1200.0) < 5.0);
+}
+
+namespace {
+
+using sonare::midi::Bend32;
+using sonare::midi::Control32;
+using sonare::midi::Velocity16;
+
+constexpr int kFirst50Ms = 2400;  // at kMpeRate
+
+/// Absolute peak of the first 50 ms after @p setup and a note-on on channel 0.
+template <typename Setup>
+float first_50ms_peak(Setup setup) {
+  BuiltinSynth synth = mpe_synth();
+  setup(synth);
+  return render_peak(&synth, kFirst50Ms);
+}
+
+/// Midpoint of two raw values, strictly between them for neighbouring upscale points.
+uint32_t midpoint(uint32_t lo, uint32_t hi) { return lo + (hi - lo) / 2; }
+
+/// Interpolated position of the last rising zero crossing in one second of a
+/// sine voice: a pitch difference too small for a spectrum accumulates here as
+/// a phase difference.
+double last_rising_crossing(const std::vector<float>& buffer) {
+  double last = 0.0;
+  for (size_t i = 1; i < buffer.size(); ++i) {
+    const float a = buffer[i - 1];
+    const float b = buffer[i];
+    if (a <= 0.0f && b > 0.0f) {
+      last = static_cast<double>(i - 1) + static_cast<double>(a) / static_cast<double>(a - b);
+    }
+  }
+  return last;
+}
+
+/// Cents of the fundamental in @p buffer relative to note 60.
+double cents_from_c4(const std::vector<float>& buffer, double expect_cents) {
+  constexpr double kC4Hz = 261.6255653;
+  const double hz =
+      sonare::test::fft_fundamental(buffer, 4096, kC4Hz * std::pow(2.0, expect_cents / 1200.0));
+  return 1200.0 * std::log2(hz / kC4Hz);
+}
+
+/// Renders @p synth split by source track (ids 1 and 2) and returns both tracks.
+std::array<std::vector<float>, 2> render_tracks(BuiltinSynth& synth, int num_samples) {
+  std::array<std::vector<float>, 2> tracks;
+  std::vector<float> fallback(static_cast<size_t>(num_samples), 0.0f);
+  for (auto& t : tracks) t.assign(static_cast<size_t>(num_samples), 0.0f);
+  float* fallback_channels[] = {fallback.data()};
+  float* one[] = {tracks[0].data()};
+  float* two[] = {tracks[1].data()};
+  const MidiInstrumentSourceOutput outputs[] = {{0, fallback_channels}, {1, one}, {2, two}};
+  REQUIRE(synth.process_source_tracks(outputs, std::size(outputs), 1, num_samples));
+  return tracks;
+}
+
+MidiEvent on_track(const sonare::midi::Ump& ump, uint32_t track) {
+  MidiEvent e = event(ump);
+  e.source_track_id = track;
+  return e;
+}
+
+/// Sounding pitch of a single MIDI 2.0 note after @p setup, in cents from note 60.
+template <typename Setup>
+double midi2_note_cents(Setup setup, uint8_t note, double expect_cents) {
+  BuiltinSynth synth = mpe_synth();
+  setup(synth);
+  mpe_send(synth, sonare::midi::make_midi2_note_on(0, 0, note, 0xC000));
+  std::vector<float> buffer(16384, 0.0f);
+  float* channels[1] = {buffer.data()};
+  synth.process(channels, 1, static_cast<int>(buffer.size()));
+  return cents_from_c4(buffer, expect_cents);
+}
+
+}  // namespace
+
+TEST_CASE("BuiltinSynth hears a MIDI 2.0 velocity between the 7-bit steps",
+          "[midi][synth][midi2]") {
+  constexpr uint8_t kV = 64;
+  const uint32_t lo = Velocity16::from7(kV).raw;
+  const uint32_t hi = Velocity16::from7(kV + 1).raw;
+  auto peak = [](uint32_t raw) {
+    return first_50ms_peak([raw](BuiltinSynth& s) {
+      mpe_send(s, sonare::midi::make_midi2_note_on(0, 0, 60, static_cast<uint16_t>(raw)));
+    });
+  };
+  const float p_lo = peak(lo);
+  const float p_mid = peak(midpoint(lo, hi));
+  const float p_hi = peak(hi);
+  CAPTURE(p_lo, p_mid, p_hi);
+  REQUIRE(p_lo < p_mid);
+  REQUIRE(p_mid < p_hi);
+}
+
+TEST_CASE("BuiltinSynth hears a 32-bit volume, expression and pressure between the 7-bit steps",
+          "[midi][synth][midi2]") {
+  constexpr uint8_t kV = 100;
+  const uint32_t lo = Control32::from7(kV).raw;
+  const uint32_t hi = Control32::from7(kV + 1).raw;
+  for (const int which : {7, 11, -1}) {
+    auto peak = [which](uint32_t raw) {
+      return first_50ms_peak([which, raw](BuiltinSynth& s) {
+        if (which < 0) {
+          mpe_send(s, sonare::midi::make_midi2_channel_pressure(0, 0, raw));
+        } else {
+          mpe_send(s,
+                   sonare::midi::make_midi2_control_change(0, 0, static_cast<uint8_t>(which), raw));
+        }
+        mpe_send(s, sonare::midi::make_midi1_note_on(0, 0, 60, kMpeVelocity));
+      });
+    };
+    const float p_lo = peak(lo);
+    const float p_mid = peak(midpoint(lo, hi));
+    const float p_hi = peak(hi);
+    CAPTURE(which, p_lo, p_mid, p_hi);
+    REQUIRE(p_lo < p_mid);
+    REQUIRE(p_mid < p_hi);
+  }
+}
+
+TEST_CASE("BuiltinSynth hears a 32-bit bend between the 14-bit steps", "[midi][synth][midi2]") {
+  // A 14-bit step at the fixed 2-semitone range is 0.024 cents: no peak and no
+  // spectrum resolves it, so the pitch is read as the phase it accumulates over
+  // one second.
+  constexpr uint16_t kBend = 12000;
+  const uint32_t lo = Bend32::from14(kBend).raw;
+  const uint32_t hi = Bend32::from14(kBend + 1).raw;
+  auto crossing = [](uint32_t raw) {
+    BuiltinSynth synth = mpe_synth();
+    mpe_send(synth, sonare::midi::make_midi2_pitch_bend(0, 0, raw));
+    mpe_send(synth, sonare::midi::make_midi1_note_on(0, 0, 69, kMpeVelocity));
+    std::vector<float> buffer(48000, 0.0f);
+    float* channels[1] = {buffer.data()};
+    synth.process(channels, 1, static_cast<int>(buffer.size()));
+    return last_rising_crossing(buffer);
+  };
+  const double c_lo = crossing(lo);
+  const double c_mid = crossing(midpoint(lo, hi));
+  const double c_hi = crossing(hi);
+  CAPTURE(c_lo, c_mid, c_hi);
+  // Higher pitch, shorter period: the last crossing moves earlier.
+  REQUIRE(c_lo > c_mid);
+  REQUIRE(c_mid > c_hi);
+}
+
+TEST_CASE("BuiltinSynth per-note pitch bend moves only its own note", "[midi][synth][midi2]") {
+  // Note 60 on track 1, note 67 on track 2, one channel. A per-note bend on 60
+  // must retune 60 and leave 67 sample-identical to 67 played alone.
+  constexpr int kLen = 16384;
+  constexpr uint32_t kUpOneSemitone = 0xC0000000u;  // half of the default 2 semitones
+  BuiltinSynth pair = mpe_synth();
+  pair.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000), 1));
+  pair.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 67, 0xC000), 2));
+  pair.on_event(0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kUpOneSemitone)));
+  const auto both = render_tracks(pair, kLen);
+
+  BuiltinSynth solo = mpe_synth();
+  solo.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 67, 0xC000), 2));
+  const auto alone = render_tracks(solo, kLen);
+
+  const double bent = cents_from_c4(both[0], 100.0);
+  CAPTURE(bent);
+  REQUIRE(std::fabs(bent - 100.0) < 5.0);
+  REQUIRE(both[1] == alone[1]);
+}
+
+TEST_CASE("BuiltinSynth detaches a voice on Per-Note Management D=1", "[midi][synth][midi2]") {
+  constexpr int kLen = 16384;
+  constexpr uint32_t kUpOneSemitone = 0xC0000000u;
+  constexpr uint32_t kFullUp = 0xFFFFFFFFu;
+  auto render_60 = [&](bool detach_then_rebend) {
+    BuiltinSynth synth = mpe_synth();
+    synth.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000), 1));
+    synth.on_event(0,
+                   event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kUpOneSemitone)));
+    if (detach_then_rebend) {
+      synth.on_event(0, event(sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false)));
+      synth.on_event(0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kFullUp)));
+    }
+    return render_tracks(synth, kLen)[0];
+  };
+  // The detached voice keeps the bend it had when it was detached.
+  REQUIRE(render_60(true) == render_60(false));
+
+  // The row itself took the new bend, so the next note on the key sounds it.
+  BuiltinSynth synth = mpe_synth();
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kUpOneSemitone)));
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false)));
+  synth.on_event(0, event(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, kFullUp)));
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000)));
+  std::vector<float> buffer(kLen, 0.0f);
+  float* channels[1] = {buffer.data()};
+  synth.process(channels, 1, kLen);
+  const double next_note = cents_from_c4(buffer, 200.0);
+  CAPTURE(next_note);
+  REQUIRE(std::fabs(next_note - 200.0) < 5.0);
+}
+
+TEST_CASE("BuiltinSynth takes a note's absolute pitch from RPNC #3 and attribute #3",
+          "[midi][synth][midi2]") {
+  // RPNC #3 Pitch 7.25 on key 60 makes it sound 72; attribute #3 Pitch 7.9 on
+  // the note-on outranks it (M2-104-UM §7.4.15).
+  const double rpnc = midi2_note_cents(
+      [](BuiltinSynth& s) {
+        mpe_send(s, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
+      },
+      60, 1200.0);
+  CAPTURE(rpnc);
+  REQUIRE(std::fabs(rpnc - 1200.0) < 5.0);
+
+  BuiltinSynth synth = mpe_synth();
+  mpe_send(synth, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
+  mpe_send(synth, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3, 67 * 512));
+  std::vector<float> buffer(16384, 0.0f);
+  float* channels[1] = {buffer.data()};
+  synth.process(channels, 1, static_cast<int>(buffer.size()));
+  const double attribute = cents_from_c4(buffer, 700.0);
+  CAPTURE(attribute);
+  REQUIRE(std::fabs(attribute - 700.0) < 5.0);
+}
+
+TEST_CASE("BuiltinSynth scales per-note bend by RC 0/7, absolute and relative",
+          "[midi][synth][midi2]") {
+  const double absolute = midi2_note_cents(
+      [](BuiltinSynth& s) {
+        mpe_send(s, sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 12u << 25));
+        mpe_send(s, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+      },
+      60, 1200.0);
+  // Relative +10 semitones on the default 2.
+  const double relative = midi2_note_cents(
+      [](BuiltinSynth& s) {
+        mpe_send(s, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 7, 10u << 25));
+        mpe_send(s, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+      },
+      60, 1200.0);
+  // A delta far below zero saturates at 0 semitones instead of wrapping.
+  const double saturated = midi2_note_cents(
+      [](BuiltinSynth& s) {
+        mpe_send(s,
+                 sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 7, 0x80000000u));
+        mpe_send(s, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xFFFFFFFFu));
+      },
+      60, 0.0);
+  CAPTURE(absolute, relative, saturated);
+  REQUIRE(std::fabs(absolute - 1200.0) < 5.0);
+  REQUIRE(std::fabs(relative - 1200.0) < 5.0);
+  REQUIRE(std::fabs(saturated) < 5.0);
+}
+
+TEST_CASE("BuiltinSynth keeps per-note pitch across Reset All Controllers",
+          "[midi][synth][midi2]") {
+  const double cents = midi2_note_cents(
+      [](BuiltinSynth& s) {
+        mpe_send(s, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xC0000000u));
+        mpe_send(s, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+      },
+      60, 100.0);
+  CAPTURE(cents);
+  REQUIRE(std::fabs(cents - 100.0) < 5.0);
+}
+
+TEST_CASE("BuiltinSynth counts what it decodes and does not realise", "[midi][synth][midi2]") {
+  BuiltinSynth synth = mpe_synth();
+  REQUIRE(synth.skipped_event_count() == 0);
+  // Reserved MIDI 2.0 status 0x7.
+  sonare::midi::Ump reserved = sonare::midi::make_midi2_channel_pressure(0, 0, 0);
+  reserved.words[0] = (reserved.words[0] & 0xFF0FFFFFu) | 0x00700000u;
+  mpe_send(synth, reserved);
+  // A per-note controller other than pitch, and an assignable one.
+  mpe_send(synth, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 7, 0x80000000u));
+  mpe_send(synth, sonare::midi::make_midi2_assignable_per_note_controller(0, 0, 60, 1, 0));
+  // Relative on a parameter this synth does not hold.
+  mpe_send(synth, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 1, 1u << 25));
+  mpe_send(synth, sonare::midi::make_midi2_relative_assignable_controller(0, 0, 3, 4, 1u << 25));
+  REQUIRE(synth.skipped_event_count() == 5);
+  // Pitch per-note and RC 0/7 are realised, not counted.
+  mpe_send(synth, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 60u << 25));
+  mpe_send(synth, sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0x80000000u));
+  mpe_send(synth, sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 2u << 25));
+  REQUIRE(synth.skipped_event_count() == 5);
+  synth.reset();
+  REQUIRE(synth.skipped_event_count() == 0);
+}
+
+TEST_CASE("BuiltinSynth moves a zone's bend sensitivity by a relative RC 0/0",
+          "[midi][synth][mpe][midi2]") {
+  BuiltinSynth synth = mpe_synth();
+  mpe_send_mcm(synth, 0, 7);
+  // +10 semitones on the manager's default 2.
+  mpe_send(synth, sonare::midi::make_midi2_relative_registered_controller(0, 0, 0, 0, 10u << 25));
+  mpe_send(synth, sonare::midi::make_midi1_pitch_bend(0, 0, 16383));
+  const double cents = mpe_cents(synth, 0, 1200.0);
+  CAPTURE(cents);
+  REQUIRE(std::fabs(cents - 1200.0) < 5.0);
+}

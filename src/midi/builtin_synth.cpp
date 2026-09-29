@@ -41,6 +41,31 @@ double bend_ratio(float semitones) noexcept {
   return std::pow(2.0, static_cast<double>(semitones) / constants::kSemitonesPerOctave);
 }
 
+// The (v/127)^2 volume / expression law of synth::sf2_cc_gain, read through f7() so a MIDI 2.0
+// value lands between the 7-bit steps; for a MIDI 1.0 value f7() is float(v) and the result is
+// the same float.
+float cc_gain(Control32 value) noexcept {
+  const float v = value.f7() / 127.0f;
+  return v * v;
+}
+
+// Note On attribute #3 carries Pitch 7.9 (M2-104-UM §7.4.15).
+constexpr uint8_t kAttributePitch79 = 0x03;
+// Registered Per-Note Controller #3 is Pitch 7.25 (M2-104-UM §7.4.12).
+constexpr uint8_t kRpncPitch725 = 3;
+// Registered Controller indices in bank 0 read straight from the message.
+constexpr uint8_t kRcPitchBendSensitivity = 0;
+constexpr uint8_t kRcPerNoteBendSensitivity = 7;
+
+// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
+// the 32-bit range rather than wrapping.
+Control32 add_saturating(Control32 current, Control32 delta) noexcept {
+  const int64_t sum =
+      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
+  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
+  return Control32::from_raw(static_cast<uint32_t>(clamped));
+}
+
 }  // namespace
 
 namespace {
@@ -85,6 +110,7 @@ int64_t synth_tail_samples(const BuiltinSynthConfig& cfg, double sample_rate) no
 
 BuiltinSynth::BuiltinSynth(const BuiltinSynthConfig& config) noexcept
     : config_(clamp_synth_config(config)) {
+  per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_controls(ch);
 }
 
@@ -107,6 +133,9 @@ void BuiltinSynth::reset() {
   channel_controls_ = {};
   mpe_.reset();
   params_ = {};
+  per_note_pitch_.clear();
+  per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
+  skipped_events_ = 0;
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_controls(ch);
   next_age_ = 1;
 }
@@ -115,14 +144,15 @@ void BuiltinSynth::refresh_channel_controls(uint8_t channel) noexcept {
   ChannelControls& c = channel_controls_[channel & 0x0Fu];
   // Volume and expression multiply through the same concave (v/127)^2 curve the
   // SF2 / native voices use, so a part keeps its balance across instruments.
-  c.gain = synth::sf2_cc_gain(c.volume) * synth::sf2_cc_gain(c.expression);
+  c.gain = cc_gain(c.volume) * cc_gain(c.expression);
   // CC10 is 0..127 around a centre of 64, so the positive half spans 63 steps
   // and both 0 and 1 land hard left -- the GM mapping the other instruments use.
-  const float pan_units = (static_cast<float>(c.pan) - 64.0f) / 63.0f * synth::kPanUnitsFullScale;
+  const float pan_units = (c.pan.f7() - 64.0f) / 63.0f * synth::kPanUnitsFullScale;
   c.pan_gains = synth::voice_pan_gains(pan_units);
 }
 
-void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity,
+void BuiltinSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+                           uint8_t attribute_type, uint16_t attribute_data,
                            uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   if (voices_.empty()) return;
@@ -146,8 +176,11 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity,
   target->source_track_id = source_track_id;
   target->phase = 0.0;
   target->base_phase_inc = note_to_hz(note) / sample_rate_;
-  target->phase_inc = target->base_phase_inc * bend_ratio(channel_bend_semitones_[channel & 0x0Fu]);
-  target->velocity = clampf(velocity, 0.0f, 1.0f);
+  target->per_note.bind(channel, note);
+  target->has_attribute_pitch = attribute_type == kAttributePitch79;
+  target->attribute_pitch_q7_9 = target->has_attribute_pitch ? attribute_data : uint16_t{0};
+  refresh_per_note_pitch(*target);
+  target->velocity = clampf(velocity.f7() / 127.0f, 0.0f, 1.0f);
   target->poly_pressure = 0.0f;
   target->env = 0.0f;
   target->stage = Stage::kAttack;
@@ -195,7 +228,9 @@ void BuiltinSynth::refresh_channel_expression(uint8_t channel) noexcept {
   }
   const double ratio = bend_ratio(channel_bend_semitones_[ch]);
   for (auto& v : voices_) {
-    if (v.active && (v.channel & 0x0Fu) == ch) v.phase_inc = v.base_phase_inc * ratio;
+    if (v.active && (v.channel & 0x0Fu) == ch) {
+      v.phase_inc = v.base_phase_inc * ratio * v.per_note_ratio;
+    }
   }
   if (!zoned || mpe_.role(ch) != MpeChannelRole::kManager) return;
   // A manager's bend and pressure reach every note in its zone (2.2.6, 2.2.7),
@@ -221,31 +256,31 @@ void BuiltinSynth::apply_mcm(uint8_t manager_channel, uint8_t member_count) noex
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_expression(ch);
 }
 
-void BuiltinSynth::pitch_bend(uint8_t channel, uint16_t bend14) noexcept {
+void BuiltinSynth::pitch_bend(uint8_t channel, Bend32 bend) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
-  // 14-bit unsigned, center 8192 -> [-1, +1] -> semitones.
-  const float norm = (static_cast<float>(bend14) - 8192.0f) / 8192.0f;
+  // 14-bit scale, center 8192 -> [-1, +1] -> semitones; f14() keeps a MIDI 2.0 bend's fraction.
+  const float norm = (bend.f14() - 8192.0f) / 8192.0f;
   channel_bend_semitones_[ch] = clampf(norm, -1.0f, 1.0f) * kPitchBendRangeSemitones;
-  mpe_.track_bend(ch, Bend32::from14(bend14));
+  mpe_.track_bend(ch, bend);
   refresh_channel_expression(ch);
 }
 
-void BuiltinSynth::channel_pressure(uint8_t channel, uint8_t pressure7) noexcept {
+void BuiltinSynth::channel_pressure(uint8_t channel, Control32 pressure) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
-  channel_pressure_[ch] = clampf(static_cast<float>(pressure7) / 127.0f, 0.0f, 1.0f);
-  mpe_.track_pressure(ch, Control32::from7(pressure7 & 0x7Fu));
+  channel_pressure_[ch] = clampf(pressure.f7() / 127.0f, 0.0f, 1.0f);
+  mpe_.track_pressure(ch, pressure);
   refresh_channel_expression(ch);
 }
 
-void BuiltinSynth::poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept {
+void BuiltinSynth::poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   // Prohibited on a member channel, where pressure is the channel's and belongs
   // to the one note living on it (2.2.7).
   if (mpe_.ignores(ch, MpeIgnorable::kPolyKeyPressure)) return;
-  const float value = clampf(static_cast<float>(pressure7) / 127.0f, 0.0f, 1.0f);
+  const float value = clampf(pressure.f7() / 127.0f, 0.0f, 1.0f);
   for (auto& v : voices_) {
     if (v.active && v.note == note && (v.channel & 0x0Fu) == ch) {
       v.poly_pressure = value;
@@ -286,11 +321,12 @@ void BuiltinSynth::reset_all_controllers(uint8_t channel) noexcept {
   mpe_.reset_controls(static_cast<uint16_t>(uint16_t{1} << ch));
   params_[ch].reset();
   // RP-015: expression returns to full, volume and pan are left alone.
-  channel_controls_[ch].expression = 127;
+  channel_controls_[ch].expression = Control32::from7(127);
   refresh_channel_controls(ch);
+  // Per-note pitch survives: Reset All Controllers does not reach it (M2-104-UM B.2).
   for (auto& v : voices_) {
     if (v.active && (v.channel & 0x0Fu) == ch) {
-      v.phase_inc = v.base_phase_inc;
+      v.phase_inc = v.base_phase_inc * v.per_note_ratio;
       v.poly_pressure = 0.0f;
     }
   }
@@ -305,104 +341,201 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {
     return;
   }
-  const bool is_midi1 = u.message_type() == UmpMessageType::kMidi1ChannelVoice;
-  if (u.is_note_on()) {
-    // MIDI 1.0 velocity is 7-bit in data2; MIDI 2.0 carries 16-bit in word[1].
-    float vel = 0.0f;
-    if (is_midi1) {
-      vel = static_cast<float>(u.data2_7bit()) / 127.0f;
-    } else {
-      vel = static_cast<float>((u.words[1] >> 16) & 0xFFFFu) / 65535.0f;
-    }
-    note_on(u.channel(), u.note_number(), vel, event.source_track_id);
-  } else if (u.is_note_off()) {
-    note_off(u.channel(), u.note_number(), event.source_track_id);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
-    // MIDI 1.0 splits the 14-bit value across data1 (LSB) / data2 (MSB); MIDI 2.0
-    // carries a 32-bit value in word[1] that scales down to the same 14-bit form.
-    const uint16_t bend14 =
-        is_midi1
-            ? static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number())
-            : scale_bend_32_to_14(u.words[1]);
-    pitch_bend(u.channel(), bend14);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
-    // MIDI 1.0 carries the 7-bit pressure in data1 (the note-number slot); MIDI
-    // 2.0 in word[1].
-    const uint8_t pressure7 = is_midi1 ? u.note_number() : scale_cc_32_to_7(u.words[1]);
-    channel_pressure(u.channel(), pressure7);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPolyPressure)) {
-    const uint8_t pressure7 = is_midi1 ? u.data2_7bit() : scale_cc_32_to_7(u.words[1]);
-    poly_pressure(u.channel(), u.note_number(), pressure7);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
-    // Mix controllers and channel-mode messages. The controller index rides
-    // word[0] bits 8..14 for both protocols (same slot as a note number).
-    const uint8_t controller = u.note_number();
-    const uint8_t channel = u.channel();
-    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                               ? u.data2_7bit()
-                               : scale_cc_32_to_7(u.words[1]);
-    switch (controller) {
-      case 7:  // Channel Volume.
-        channel_controls_[channel & 0x0Fu].volume = value7;
-        refresh_channel_controls(channel);
+  ChannelVoiceEvent ev;
+  if (!decode_channel_voice(u, &ev)) {
+    ++skipped_events_;  // Reserved status.
+    return;
+  }
+  switch (ev.kind) {
+    case ChannelVoiceKind::NoteOn:
+      note_on(ev.channel, ev.note, ev.velocity, ev.index, ev.attribute_data, event.source_track_id);
+      break;
+    case ChannelVoiceKind::NoteOff:
+      note_off(ev.channel, ev.note, event.source_track_id);
+      break;
+    case ChannelVoiceKind::PitchBend:
+      pitch_bend(ev.channel, ev.bend);
+      break;
+    case ChannelVoiceKind::ChannelPressure:
+      channel_pressure(ev.channel, ev.value);
+      break;
+    case ChannelVoiceKind::PolyPressure:
+      poly_pressure(ev.channel, ev.note, ev.value);
+      break;
+    case ChannelVoiceKind::ControlChange:
+      control_change(ev.channel, ev.note, ev.value);
+      break;
+    case ChannelVoiceKind::ProgramChange:
+      break;  // One patch; programs select nothing here.
+    case ChannelVoiceKind::RegisteredController:
+    case ChannelVoiceKind::AssignableController:
+      registered_controller(u, ev);
+      break;
+    case ChannelVoiceKind::RelativeRegistered:
+    case ChannelVoiceKind::RelativeAssignable:
+      relative_controller(ev);
+      break;
+    case ChannelVoiceKind::PerNotePitchBend:
+      per_note_pitch_.set_per_note_bend(ev.channel, ev.note, ev.bend);
+      refresh_per_note_voices(ev.channel, ev.note, false);
+      break;
+    case ChannelVoiceKind::RegisteredPerNote:
+      if (ev.index != kRpncPitch725) {
+        ++skipped_events_;
         break;
-      case 10:  // Pan.
-        channel_controls_[channel & 0x0Fu].pan = value7;
-        refresh_channel_controls(channel);
-        break;
-      case 11:  // Expression.
-        channel_controls_[channel & 0x0Fu].expression = value7;
-        refresh_channel_controls(channel);
-        break;
-      case 6:  // Data Entry MSB, for the two parameter numbers below.
-        // RPN 00 06 is the MPE Configuration Message, which every MPE-compatible
-        // device shall support (2.2.1). It is tried first because it is the one
-        // that can turn the zone model on.
-        if (params_[channel & 0x0Fu].selected_rpn(0, 6)) {
-          apply_mcm(channel, value7);
-        } else if (params_[channel & 0x0Fu].selected_rpn(0, 0)) {
-          // Bend sensitivity, accepted only inside a zone: there it is the
-          // zone's own and a value sent to one member reaches every member of it
-          // (2.2.5), while outside one this synth keeps its fixed range.
-          if (mpe_.apply_bend_sensitivity(channel, static_cast<float>(value7))) {
-            for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_expression(ch);
-          }
+      }
+      per_note_pitch_.set_pitch_7_25(ev.channel, ev.note, ev.value);
+      refresh_per_note_voices(ev.channel, ev.note, false);
+      break;
+    case ChannelVoiceKind::AssignablePerNote:
+      ++skipped_events_;
+      break;
+    case ChannelVoiceKind::PerNoteManagement:
+      apply_per_note_management(
+          per_note_pitch_, ev.channel, ev.note, (ev.flags & 0x02u) != 0, (ev.flags & 0x01u) != 0,
+          voices_.begin(), voices_.end(),
+          [](Voice& v) noexcept -> PerNoteBinding* { return v.active ? &v.per_note : nullptr; });
+      refresh_per_note_voices(ev.channel, ev.note, false);
+      break;
+  }
+}
+
+void BuiltinSynth::control_change(uint8_t channel, uint8_t controller, Control32 value) noexcept {
+  // Mix controllers keep the full-width value for their float laws; the switches, the channel
+  // mode messages and the parameter-number machinery read the 7-bit value.
+  const uint8_t value7 = value.u7();
+  switch (controller) {
+    case 7:  // Channel Volume.
+      channel_controls_[channel & 0x0Fu].volume = value;
+      refresh_channel_controls(channel);
+      break;
+    case 10:  // Pan.
+      channel_controls_[channel & 0x0Fu].pan = value;
+      refresh_channel_controls(channel);
+      break;
+    case 11:  // Expression.
+      channel_controls_[channel & 0x0Fu].expression = value;
+      refresh_channel_controls(channel);
+      break;
+    case 6:  // Data Entry MSB, for the two parameter numbers below.
+      // RPN 00 06 is the MPE Configuration Message, which every MPE-compatible
+      // device shall support (2.2.1). It is tried first because it is the one
+      // that can turn the zone model on.
+      if (params_[channel & 0x0Fu].selected_rpn(0, 6)) {
+        apply_mcm(channel, value7);
+      } else if (params_[channel & 0x0Fu].selected_rpn(0, 0)) {
+        // Bend sensitivity, accepted only inside a zone: there it is the
+        // zone's own and a value sent to one member reaches every member of it
+        // (2.2.5), while outside one this synth keeps its fixed range.
+        if (mpe_.apply_bend_sensitivity(channel, static_cast<float>(value7))) {
+          for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_expression(ch);
         }
-        break;
-      case 100:
-        params_[channel & 0x0Fu].select_rpn_lsb(value7);
-        break;
-      case 101:
-        params_[channel & 0x0Fu].select_rpn_msb(value7);
-        break;
-      case 64:  // Damper/sustain pedal: >=64 holds released keys.
-        sustain_pedal(channel, value7 >= 64);
-        break;
-      case 120:  // All Sound Off — immediate silence.
-        all_sound_off(channel);
-        break;
-      case 121:  // Reset All Controllers — damper, bend, pressure, expression.
-        reset_all_controllers(channel);
-        break;
-      case 123:  // All Notes Off — graceful release.
-      case 124:  // Omni Off / On also imply notes-off.
-      case 125:
-        all_notes_off(channel);
-        break;
-      case 126:  // Mono / Poly mode, which also imply notes-off.
-      case 127:
-        // Prohibited on a manager channel, where they are ignored outright, and
-        // on a member channel they select the zone's mode (2.2.4.3). Outside a
-        // zone they keep the channel-mode meaning they have always had here,
-        // which is why the all-notes-off stays below them.
-        if (mpe_.ignores(channel, MpeIgnorable::kModeMessage)) break;
-        mpe_.apply_midi_mode(channel, controller == 126 ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
-        all_notes_off(channel);
-        break;
-      default:
-        // Other controllers (RPN/NRPN, etc.) have no effect on this deliberately
-        // minimal synth.
-        break;
+      }
+      break;
+    case 100:
+      params_[channel & 0x0Fu].select_rpn_lsb(value7);
+      break;
+    case 101:
+      params_[channel & 0x0Fu].select_rpn_msb(value7);
+      break;
+    case 64:  // Damper/sustain pedal: >=64 holds released keys.
+      sustain_pedal(channel, value7 >= 64);
+      break;
+    case 120:  // All Sound Off — immediate silence.
+      all_sound_off(channel);
+      break;
+    case 121:  // Reset All Controllers — damper, bend, pressure, expression.
+      reset_all_controllers(channel);
+      break;
+    case 123:  // All Notes Off — graceful release.
+    case 124:  // Omni Off / On also imply notes-off.
+    case 125:
+      all_notes_off(channel);
+      break;
+    case 126:  // Mono / Poly mode, which also imply notes-off.
+    case 127:
+      // Prohibited on a manager channel, where they are ignored outright, and
+      // on a member channel they select the zone's mode (2.2.4.3). Outside a
+      // zone they keep the channel-mode meaning they have always had here,
+      // which is why the all-notes-off stays below them.
+      if (mpe_.ignores(channel, MpeIgnorable::kModeMessage)) break;
+      mpe_.apply_midi_mode(channel, controller == 126 ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
+      all_notes_off(channel);
+      break;
+    default:
+      // Other controllers (RPN/NRPN, etc.) have no effect on this deliberately
+      // minimal synth.
+      break;
+  }
+}
+
+void BuiltinSynth::registered_controller(const Ump& ump, const ChannelVoiceEvent& ev) noexcept {
+  const uint8_t ch = static_cast<uint8_t>(ev.channel & 0x0Fu);
+  if (ev.kind == ChannelVoiceKind::RegisteredController && ev.bank == 0) {
+    if (ev.index == kRcPitchBendSensitivity) {
+      // The semitones of RPN 0/0, the Data Entry MSB the MIDI 1.0 path reads; only a zone holds a
+      // configurable range here.
+      if (mpe_.apply_bend_sensitivity(ch, static_cast<float>(ev.value.u14() >> 7))) {
+        for (uint8_t c = 0; c < 16; ++c) refresh_channel_expression(c);
+      }
+      return;
+    }
+    if (ev.index == kRcPerNoteBendSensitivity) {
+      per_note_bend_sensitivity_[ch] = ev.value;
+      refresh_per_note_voices(ch, 0, true);
+      return;
+    }
+  }
+  // Every other RC / AC takes the path its four MIDI 1.0 messages do.
+  const Midi1MessageList lowered = midi2_to_midi1_messages(ump);
+  for (uint8_t i = 0; i < lowered.count; ++i) {
+    control_change(ch, lowered.messages[i].note_number(),
+                   Control32::from7(lowered.messages[i].data2_7bit()));
+  }
+}
+
+void BuiltinSynth::relative_controller(const ChannelVoiceEvent& ev) noexcept {
+  const uint8_t ch = static_cast<uint8_t>(ev.channel & 0x0Fu);
+  if (ev.kind == ChannelVoiceKind::RelativeRegistered && ev.bank == 0) {
+    if (ev.index == kRcPitchBendSensitivity) {
+      // The held range in RPN 0/0 form (semitones in the top seven bits), moved and read back as
+      // the absolute message would be.
+      const auto held = static_cast<uint32_t>(mpe_.bend_sensitivity(ch)) << 25;
+      const Control32 moved = add_saturating(Control32::from_raw(held), ev.value);
+      if (mpe_.apply_bend_sensitivity(ch, static_cast<float>(moved.u14() >> 7))) {
+        for (uint8_t c = 0; c < 16; ++c) refresh_channel_expression(c);
+      }
+      return;
+    }
+    if (ev.index == kRcPerNoteBendSensitivity) {
+      per_note_bend_sensitivity_[ch] = add_saturating(per_note_bend_sensitivity_[ch], ev.value);
+      refresh_per_note_voices(ch, 0, true);
+      return;
+    }
+  }
+  ++skipped_events_;  // A parameter this synth does not hold.
+}
+
+void BuiltinSynth::refresh_per_note_pitch(Voice& v) noexcept {
+  const uint8_t ch = static_cast<uint8_t>(v.channel & 0x0Fu);
+  NotePitchRequest req;
+  req.note = v.note;
+  req.has_attribute_pitch = v.has_attribute_pitch;
+  req.attribute_pitch_q7_9 = v.attribute_pitch_q7_9;
+  req.per_note = v.per_note.pitch_inputs(per_note_pitch_);
+  req.per_note_bend_sensitivity = per_note_bend_sensitivity_[ch];
+  // The channel terms stay on this synth's own path below; only the per-note share is taken.
+  const double semitones = compose_note_pitch(req).per_note_semitones;
+  v.per_note_ratio =
+      semitones == 0.0 ? 1.0 : std::pow(2.0, semitones / constants::kSemitonesPerOctave);
+  v.phase_inc = v.base_phase_inc * bend_ratio(channel_bend_semitones_[ch]) * v.per_note_ratio;
+}
+
+void BuiltinSynth::refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept {
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
+  for (auto& v : voices_) {
+    if (v.active && (v.channel & 0x0Fu) == ch && (all_notes || v.note == note)) {
+      refresh_per_note_pitch(v);
     }
   }
 }
