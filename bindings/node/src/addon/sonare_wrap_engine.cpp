@@ -340,6 +340,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::PushMidiPolyPressure>("pushMidiPolyPressure"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiPanic>("pushMidiPanic"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiSysex>("pushMidiSysex"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiUmp>("pushMidiUmp"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputUmp>("pushMidiInputUmp"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiDestinationExternal>(
               "setMidiDestinationExternal"),
           InstanceMethod<&RealtimeEngineWrap::SetExternalMidiClockEnabled>(
@@ -1719,6 +1721,78 @@ Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
   int64_t deadline = -1;
   if (!OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline)) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_sysex(engine_, destination_id, bytes, len, deadline));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
+constexpr size_t kMaxUmpWords = 4;
+
+/// Reads a 1..4 word UMP message from a Uint32Array or a plain number array,
+/// refusing every other value by name and leaving one pending exception on false.
+bool ReadUmpWords(Napi::Env env, const Napi::Value& value, const char* name,
+                  std::array<uint32_t, kMaxUmpWords>* words, size_t* count) {
+  if (env.IsExceptionPending()) return false;
+  Napi::Object array;
+  size_t length = 0;
+  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_uint32_array) {
+    array = value.As<Napi::Object>();
+    length = value.As<Napi::TypedArray>().ElementLength();
+  } else if (value.IsArray()) {
+    array = value.As<Napi::Object>();
+    length = value.As<Napi::Array>().Length();
+  } else {
+    Napi::TypeError::New(env, std::string(name) + " must be a Uint32Array or a number array")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  if (length < 1 || length > kMaxUmpWords) {
+    Napi::RangeError::New(env, std::string(name) + " must hold 1 to 4 words")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  for (size_t i = 0; i < length; ++i) {
+    const std::string label = std::string(name) + "[" + std::to_string(i) + "]";
+    if (!RequiredWordValue(env, array.Get(static_cast<uint32_t>(i)), label, &(*words)[i])) {
+      return false;
+    }
+  }
+  *count = length;
+  return true;
+}
+
+}  // namespace
+
+Napi::Value RealtimeEngineWrap::PushMidiUmp(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t destination_id = 0;
+  std::array<uint32_t, kMaxUmpWords> words{};
+  size_t count = 0;
+  int64_t deadline = -1;
+  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
+      !ReadUmpWords(env, info[1], "words", &words, &count) ||
+      !OptionalInt64Arg(env, info, 2, "renderFrame", -1, &deadline)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env,
+               sonare_engine_push_midi_ump(engine_, destination_id, words.data(), count, deadline));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  std::array<uint32_t, kMaxUmpWords> words{};
+  size_t count = 0;
+  int64_t port_time = 0;
+  if (!ReadUmpWords(env, info[0], "words", &words, &count) ||
+      !OptionalInt64Arg(env, info, 1, "portTimeSamples", 0, &port_time)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_input_ump(engine_, words.data(), count, port_time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

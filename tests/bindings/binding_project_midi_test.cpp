@@ -1818,3 +1818,166 @@ TEST_CASE("SMF export keeps a representable delta exact", "[midi][smf][export]")
   CHECK(back.clips[0].events()[0].ppq == 0.0);
   CHECK(back.clips[0].events()[1].ppq == 4.0);
 }
+
+TEST_CASE("project C surface MIDI 2.0 builders pack the core UMP words", "[project][midi2]") {
+  namespace m = sonare::midi;
+  struct Case {
+    const char* name;
+    SonareError err;
+    SonareMidiEventPod pod;
+    m::Ump expected;
+  };
+  auto run = [](const char* name, SonareError (*build)(SonareMidiEventPod*),
+                const m::Ump& expected) {
+    SonareMidiEventPod pod{};
+    const SonareError err = build(&pod);
+    return Case{name, err, pod, expected};
+  };
+  // Every non-zero field differs from its neighbours so a swapped argument
+  // shows up as a word mismatch.
+  const Case cases[] = {
+      run(
+          "note_on",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_note_on(1.5, 2, 3, 60, 0x8123u, 3, 0x3C80u, o);
+          },
+          m::make_midi2_note_on(2, 3, 60, 0x8123u, 3, 0x3C80u)),
+      run(
+          "note_off",
+          [](SonareMidiEventPod* o) { return sonare_midi2_note_off(1.5, 2, 3, 61, 0x0001u, o); },
+          m::make_midi2_note_off(2, 3, 61, 0x0001u)),
+      run(
+          "cc",
+          [](SonareMidiEventPod* o) { return sonare_midi2_cc(1.5, 2, 3, 74, 0x89ABCDEFu, o); },
+          m::make_midi2_control_change(2, 3, 74, 0x89ABCDEFu)),
+      run(
+          "poly_pressure",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_poly_pressure(1.5, 2, 3, 62, 0x12345678u, o);
+          },
+          m::make_midi2_poly_pressure(2, 3, 62, 0x12345678u)),
+      run(
+          "channel_pressure",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_channel_pressure(1.5, 2, 3, 0xFEDCBA98u, o);
+          },
+          m::make_midi2_channel_pressure(2, 3, 0xFEDCBA98u)),
+      run(
+          "pitch_bend",
+          [](SonareMidiEventPod* o) { return sonare_midi2_pitch_bend(1.5, 2, 3, 0x80000001u, o); },
+          m::make_midi2_pitch_bend(2, 3, 0x80000001u)),
+      run(
+          "program",
+          [](SonareMidiEventPod* o) { return sonare_midi2_program(1.5, 2, 3, 40, 1, 121, 5, o); },
+          m::make_midi2_program_change(2, 3, 40, 121, 5, true)),
+      run(
+          "program without bank",
+          [](SonareMidiEventPod* o) { return sonare_midi2_program(1.5, 2, 3, 40, 0, 121, 5, o); },
+          m::make_midi2_program_change(2, 3, 40, 121, 5, false)),
+      run(
+          "registered_controller",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_registered_controller(1.5, 2, 3, 0, 7, 0x0C000000u, o);
+          },
+          m::make_midi2_registered_controller(2, 3, 0, 7, 0x0C000000u)),
+      run(
+          "assignable_controller",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_assignable_controller(1.5, 2, 3, 9, 17, 0x55AA55AAu, o);
+          },
+          m::make_midi2_assignable_controller(2, 3, 9, 17, 0x55AA55AAu)),
+      run(
+          "relative_registered_controller",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_relative_registered_controller(1.5, 2, 3, 0, 1, -5, o);
+          },
+          m::make_midi2_relative_registered_controller(2, 3, 0, 1, 0xFFFFFFFBu)),
+      run(
+          "relative_assignable_controller",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_relative_assignable_controller(1.5, 2, 3, 4, 8, 1000, o);
+          },
+          m::make_midi2_relative_assignable_controller(2, 3, 4, 8, 1000u)),
+      run(
+          "registered_per_note_controller",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_registered_per_note_controller(1.5, 2, 3, 63, 3, 0x40000000u, o);
+          },
+          m::make_midi2_per_note_controller(2, 3, 63, 3, 0x40000000u)),
+      run(
+          "assignable_per_note_controller",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_assignable_per_note_controller(1.5, 2, 3, 64, 200, 0x7u, o);
+          },
+          m::make_midi2_assignable_per_note_controller(2, 3, 64, 200, 0x7u)),
+      run(
+          "per_note_pitch_bend",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_per_note_pitch_bend(1.5, 2, 3, 65, 0x90000000u, o);
+          },
+          m::make_midi2_per_note_pitch_bend(2, 3, 65, 0x90000000u)),
+      run(
+          "per_note_management detach",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_per_note_management(1.5, 2, 3, 66, 1, 0, o);
+          },
+          m::make_midi2_per_note_management(2, 3, 66, true, false)),
+      run(
+          "per_note_management reset",
+          [](SonareMidiEventPod* o) {
+            return sonare_midi2_per_note_management(1.5, 2, 3, 66, 0, 1, o);
+          },
+          m::make_midi2_per_note_management(2, 3, 66, false, true)),
+  };
+  for (const Case& c : cases) {
+    INFO(c.name);
+#if defined(SONARE_WITH_ARRANGEMENT)
+    REQUIRE(c.err == SONARE_OK);
+    CHECK(c.pod.ppq == 1.5);
+    CHECK(c.pod.data0 == c.expected.words[0]);
+    CHECK(c.pod.data1 == c.expected.words[1]);
+    CHECK((c.pod.data0 >> 28) == 0x4u);
+#else
+    REQUIRE(c.err == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  }
+}
+
+TEST_CASE("project C surface MIDI 2.0 builders refuse out-of-range fields", "[project][midi2]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SonareMidiEventPod pod{};
+  REQUIRE(sonare_midi2_note_on(0.0, 0, 0, 60, 0x8000u, 0, 0, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_note_on(1.0e300, 0, 0, 60, 0x8000u, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_note_on(0.0, 16, 0, 60, 0x8000u, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_note_off(0.0, 0, 16, 60, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_note_on(0.0, 0, 0, 128, 0x8000u, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_cc(0.0, 0, 0, 128, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 128, 0, 0, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 1, 128, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 1, 0, 128, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_registered_controller(0.0, 0, 0, 128, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_assignable_controller(0.0, 0, 0, 0, 128, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_relative_registered_controller(0.0, 0, 0, 128, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_relative_assignable_controller(0.0, 0, 0, 0, 128, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_registered_per_note_controller(0.0, 0, 0, 128, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_assignable_per_note_controller(0.0, 0, 0, 128, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_per_note_pitch_bend(0.0, 0, 0, 128, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_per_note_management(0.0, 0, 0, 128, 0, 0, &pod) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_poly_pressure(0.0, 0, 0, 128, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_channel_pressure(0.0, 16, 0, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_pitch_bend(0.0, 0, 16, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+
+#endif
+}

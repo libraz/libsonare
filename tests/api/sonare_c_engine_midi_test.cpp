@@ -913,3 +913,140 @@ TEST_CASE("a built-in synth field the core would replace in silence is refused",
   }
 }
 #endif
+
+TEST_CASE("sonare_engine raw UMP push delivers a MIDI 2.0 note at full velocity width",
+          "[c_api][engine][midi]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // The built-in synth scales its output linearly with velocity, so a 16-bit
+  // velocity between two adjacent 7-bit steps must land strictly between their
+  // peaks; a push that truncated to 7 bits would equal one of them.
+  constexpr uint32_t kDestination = 3;
+  constexpr int kBlock = 256;
+  enum class Path { kDestination, kInputSource };
+  auto render = [](Path path, uint16_t velocity16) -> float {
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+    SonareEngineBuiltinSynthConfig synth{};
+    synth.gain = 0.4f;
+    REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);
+    const sonare::midi::Ump note = sonare::midi::make_midi2_note_on(0, 0, 60, velocity16);
+    if (path == Path::kDestination) {
+      REQUIRE(sonare_engine_push_midi_ump(engine, kDestination, note.words, 2, -1) == SONARE_OK);
+    } else {
+      REQUIRE(sonare_engine_set_midi_input_source(engine, kDestination) == SONARE_OK);
+      REQUIRE(sonare_engine_push_midi_input_ump(engine, note.words, 2, 0) == SONARE_OK);
+      size_t pending = 0;
+      REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending) == SONARE_OK);
+      REQUIRE(pending == 1);
+    }
+    std::vector<float> left(kBlock * 8, 0.0f);
+    std::vector<float> right(kBlock * 8, 0.0f);
+    for (size_t at = 0; at < left.size(); at += kBlock) {
+      float* channels[] = {left.data() + at, right.data() + at};
+      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+    }
+    sonare_engine_destroy(engine);
+    return peak_abs(left);
+  };
+
+  const uint16_t lo = sonare::midi::scale_velocity_7_to_16(64);
+  const uint16_t hi = sonare::midi::scale_velocity_7_to_16(65);
+  const auto mid = static_cast<uint16_t>((uint32_t{lo} + hi) / 2u);
+  for (const Path path : {Path::kDestination, Path::kInputSource}) {
+    INFO("path " << static_cast<int>(path));
+    const float lo_peak = render(path, lo);
+    const float mid_peak = render(path, mid);
+    const float hi_peak = render(path, hi);
+    REQUIRE(lo_peak > 0.01f);
+    REQUIRE(mid_peak > lo_peak);
+    REQUIRE(mid_peak < hi_peak);
+  }
+#else
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  const sonare::midi::Ump note = sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u);
+  REQUIRE(sonare_engine_push_midi_ump(engine, 3, note.words, 2, -1) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_input_ump(engine, note.words, 2, 0) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("sonare_engine raw UMP push refuses data messages and mismatched word counts",
+          "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
+#endif
+
+  const sonare::midi::Ump note = sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u);
+  const uint32_t sysex7[2] = {0x30000000u, 0u};
+  const uint32_t data128[4] = {0x50000000u, 0u, 0u, 0u};
+  struct Refused {
+    const char* what;
+    const uint32_t* words;
+    size_t count;
+  };
+  const Refused refused[] = {
+      {"null words", nullptr, 2},
+      {"zero words", note.words, 0},
+      {"MIDI 2.0 message sent as one word", note.words, 1},
+      {"MIDI 2.0 message sent as three words", note.words, 3},
+      {"five words", data128, 5},
+      {"SysEx7 (MT 0x3)", sysex7, 2},
+      {"128-bit data (MT 0x5)", data128, 4},
+  };
+  for (const Refused& r : refused) {
+    INFO(r.what);
+    REQUIRE(sonare_engine_push_midi_ump(engine, 3, r.words, r.count, -1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_push_midi_input_ump(engine, r.words, r.count, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+  REQUIRE(sonare_engine_push_midi_ump(nullptr, 3, note.words, 2, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_input_ump(nullptr, note.words, 2, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Endpoint-level messages are accepted and discarded at the destination.
+  const uint32_t stream[4] = {0xF0000101u, 0u, 0u, 0u};
+  const uint32_t jr_clock[1] = {0x00101234u};
+  REQUIRE(sonare_engine_push_midi_ump(engine, 3, stream, 4, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_ump(engine, 3, jr_clock, 1, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_ump(engine, stream, 4, 0) == SONARE_OK);
+
+  // An input-source push is refused once the source is cleared, like its
+  // scalar siblings.
+  REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_ump(engine, note.words, 2, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine raw UMP push reports a full queue as retryable back-pressure",
+          "[c_api][engine][midi]") {
+  // Without a process call nothing drains, so either the command queue or the
+  // slot ring fills; both surface as the same transient error the scalar pushes
+  // return for a full queue.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  const sonare::midi::Ump note = sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u);
+  size_t accepted = 0;
+  SonareError refused = SONARE_OK;
+  for (size_t i = 0; i < 1024 && refused == SONARE_OK; ++i) {
+    refused = sonare_engine_push_midi_ump(engine, 3, note.words, 2, -1);
+    if (refused == SONARE_OK) ++accepted;
+  }
+  REQUIRE(accepted > 0);
+  REQUIRE(refused == SONARE_ERROR_OUT_OF_MEMORY);
+  sonare_engine_destroy(engine);
+}
+#endif

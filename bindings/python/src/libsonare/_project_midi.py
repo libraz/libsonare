@@ -44,6 +44,7 @@ from ._runtime import (
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int32,
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint16,
@@ -478,6 +479,243 @@ class _ProjectMidiMixin:
             _to_c_uint8(group, "group"),
             _to_c_uint8(channel, "channel"),
             _to_c_uint16(bend, "bend"),
+        )
+
+    @staticmethod
+    def midi2_note_on(
+        ppq: float,
+        group: int,
+        channel: int,
+        note: int,
+        velocity16: int,
+        attribute_type: int = 0,
+        attribute_data: int = 0,
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 note-on event tuple (16-bit velocity; 0 still sounds)."""
+        return _midi_event_tuple(
+            "sonare_midi2_note_on",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint16(velocity16, "velocity16"),
+            _to_c_uint8(attribute_type, "attribute_type"),
+            _to_c_uint16(attribute_data, "attribute_data"),
+        )
+
+    @staticmethod
+    def midi2_note_off(
+        ppq: float, group: int, channel: int, note: int, velocity16: int = 0
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 note-off event tuple (16-bit release velocity)."""
+        return _midi_event_tuple(
+            "sonare_midi2_note_off",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint16(velocity16, "velocity16"),
+        )
+
+    @staticmethod
+    def midi2_cc(
+        ppq: float, group: int, channel: int, controller: int, value32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 control-change event tuple (32-bit value)."""
+        return _midi_event_tuple(
+            "sonare_midi2_cc",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(controller, "controller"),
+            _to_c_uint32(value32, "value32"),
+        )
+
+    @staticmethod
+    def midi2_poly_pressure(
+        ppq: float, group: int, channel: int, note: int, pressure32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 poly-pressure event tuple (32-bit pressure)."""
+        return _midi_event_tuple(
+            "sonare_midi2_poly_pressure",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint32(pressure32, "pressure32"),
+        )
+
+    @staticmethod
+    def midi2_channel_pressure(
+        ppq: float, group: int, channel: int, pressure32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 channel-pressure event tuple (32-bit pressure)."""
+        return _midi_event_tuple(
+            "sonare_midi2_channel_pressure",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint32(pressure32, "pressure32"),
+        )
+
+    @staticmethod
+    def midi2_pitch_bend(
+        ppq: float, group: int, channel: int, bend32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 pitch-bend event tuple (unsigned 32-bit)."""
+        return _midi_event_tuple(
+            "sonare_midi2_pitch_bend",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint32(bend32, "bend32"),
+        )
+
+    @staticmethod
+    def midi2_program(
+        ppq: float,
+        group: int,
+        channel: int,
+        program: int,
+        bank_valid: bool = False,
+        bank_msb: int = 0,
+        bank_lsb: int = 0,
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 program-change event tuple.
+
+        The bank travels in the same message and is applied only when
+        ``bank_valid`` is true."""
+        return _midi_event_tuple(
+            "sonare_midi2_program",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(program, "program"),
+            _to_c_int(1 if bank_valid else 0, "bank_valid"),
+            _to_c_uint8(bank_msb, "bank_msb"),
+            _to_c_uint8(bank_lsb, "bank_lsb"),
+        )
+
+    @staticmethod
+    def midi2_registered_controller(
+        ppq: float, group: int, channel: int, bank: int, index: int, value32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 registered controller (RPN) event tuple (32-bit value)."""
+        return _midi_event_tuple(
+            "sonare_midi2_registered_controller",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
+            _to_c_uint32(value32, "value32"),
+        )
+
+    @staticmethod
+    def midi2_assignable_controller(
+        ppq: float, group: int, channel: int, bank: int, index: int, value32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 assignable controller (NRPN) event tuple (32-bit value)."""
+        return _midi_event_tuple(
+            "sonare_midi2_assignable_controller",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
+            _to_c_uint32(value32, "value32"),
+        )
+
+    @staticmethod
+    def midi2_relative_registered_controller(
+        ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 relative registered controller event tuple (signed 32-bit delta)."""
+        return _midi_event_tuple(
+            "sonare_midi2_relative_registered_controller",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
+            _to_c_int32(delta32, "delta32"),
+        )
+
+    @staticmethod
+    def midi2_relative_assignable_controller(
+        ppq: float, group: int, channel: int, bank: int, index: int, delta32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 relative assignable controller event tuple (signed 32-bit delta)."""
+        return _midi_event_tuple(
+            "sonare_midi2_relative_assignable_controller",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(bank, "bank"),
+            _to_c_uint8(index, "index"),
+            _to_c_int32(delta32, "delta32"),
+        )
+
+    @staticmethod
+    def midi2_registered_per_note_controller(
+        ppq: float, group: int, channel: int, note: int, index: int, value32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 registered per-note controller event tuple (32-bit value)."""
+        return _midi_event_tuple(
+            "sonare_midi2_registered_per_note_controller",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(index, "index"),
+            _to_c_uint32(value32, "value32"),
+        )
+
+    @staticmethod
+    def midi2_assignable_per_note_controller(
+        ppq: float, group: int, channel: int, note: int, index: int, value32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 assignable per-note controller event tuple (32-bit value)."""
+        return _midi_event_tuple(
+            "sonare_midi2_assignable_per_note_controller",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint8(index, "index"),
+            _to_c_uint32(value32, "value32"),
+        )
+
+    @staticmethod
+    def midi2_per_note_pitch_bend(
+        ppq: float, group: int, channel: int, note: int, bend32: int
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 per-note pitch-bend event tuple (unsigned 32-bit)."""
+        return _midi_event_tuple(
+            "sonare_midi2_per_note_pitch_bend",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_uint32(bend32, "bend32"),
+        )
+
+    @staticmethod
+    def midi2_per_note_management(
+        ppq: float, group: int, channel: int, note: int, detach: bool = False, reset: bool = False
+    ) -> tuple[float, int, int]:
+        """Pack a MIDI 2.0 per-note management event tuple.
+
+        ``detach`` detaches per-note controllers from voices already sounding
+        on ``note``; ``reset`` resets the note's per-note controllers."""
+        return _midi_event_tuple(
+            "sonare_midi2_per_note_management",
+            _validate_midi_event_ppq(ppq, "ppq"),
+            _to_c_uint8(group, "group"),
+            _to_c_uint8(channel, "channel"),
+            _to_c_uint8(note, "note"),
+            _to_c_int(1 if detach else 0, "detach"),
+            _to_c_int(1 if reset else 0, "reset"),
         )
 
     # -- MIDI naming / GM tables (static-lifetime lookups) ------------------

@@ -16,7 +16,14 @@ import type {
   SynthPatch,
 } from './project';
 import { normalizeSynthInstrument } from './project_internal';
-import type { EqBand, PanLawInput, PanMode, SendTiming, SidechainSourceKind } from './public_types';
+import type {
+  EqBand,
+  PanLawInput,
+  PanMode,
+  SendTiming,
+  SidechainSourceKind,
+  UmpWords,
+} from './public_types';
 import type {
   WasmClipPageRequest,
   WasmEngineAutomationPoint,
@@ -205,6 +212,32 @@ export interface RenderOfflineRequest {
    * boundary. Audio stays continuous either way; only bit-identity is lost.
    */
   finalize?: boolean;
+}
+
+const UMP_WORD_MIN = -0x80000000;
+const UMP_WORD_MAX = 0xffffffff;
+
+// A word may be spelled `(0x4 << 28) | …`, which is a signed int once bit 31 is
+// set, so the signed 32-bit range is accepted alongside the unsigned one.
+function assertUmpWords(fnName: string, words: UmpWords): UmpWords {
+  if (!(words instanceof Uint32Array) && !Array.isArray(words)) {
+    throw new TypeError(`${fnName}: words must be a Uint32Array or a number array`);
+  }
+  if (words.length < 1 || words.length > 4) {
+    throw new RangeError(`${fnName}: words must hold 1 to 4 words`);
+  }
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (
+      typeof word !== 'number' ||
+      !Number.isInteger(word) ||
+      word < UMP_WORD_MIN ||
+      word > UMP_WORD_MAX
+    ) {
+      throw new RangeError(`${fnName}: words[${i}] must be an integer 32-bit word`);
+    }
+  }
+  return words;
 }
 
 /**
@@ -822,9 +855,28 @@ export class RealtimeEngine {
     this.native.pushMidiPolyPressure(destinationId, group, channel, note, pressure, renderFrame);
   }
 
-  /** Queue one immediate MIDI 1.0 channel-voice UMP word for a destination. */
-  pushMidiUmp(destinationId: number, word0: number, renderFrame = -1): void {
-    this.native.pushMidiUmp(destinationId, word0, renderFrame);
+  /**
+   * Queue an immediate (live) raw UMP message to a MIDI destination. `words` is
+   * 1 to 4 words, most significant first, and its length must match the message
+   * type of `words[0]`. MIDI 2.0 channel-voice messages (MT 0x4) arrive at full
+   * width; SysEx7 / data messages (MT 0x3 / 0x5) are refused, use
+   * {@link pushMidiSysex}. Throws when the slot ring or command queue is full
+   * (retry after a process block). `renderFrame` is the render-frame time to
+   * apply, or -1 for immediate. A bare number is accepted as a one-word
+   * message.
+   */
+  pushMidiUmp(destinationId: number, words: UmpWords | number, renderFrame = -1): void {
+    const list = typeof words === 'number' ? [words] : words;
+    this.native.pushMidiUmp(destinationId, assertUmpWords('pushMidiUmp', list), renderFrame);
+  }
+
+  /**
+   * Push one raw UMP message (1 to 4 words) to the engine-owned MIDI input
+   * source. The message rules match {@link pushMidiUmp}. `portTimeSamples` is
+   * the port timestamp in samples.
+   */
+  pushMidiInputUmp(words: UmpWords, portTimeSamples = 0): void {
+    this.native.pushMidiInputUmp(assertUmpWords('pushMidiInputUmp', words), portTimeSamples);
   }
 
   /**

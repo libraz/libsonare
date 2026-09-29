@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ctypes
+from typing import Any
 
 from ._ffi_types import *  # noqa: F403,F405
 
@@ -780,6 +781,48 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_push_midi_ump"):
+        lib.sonare_engine_push_midi_ump.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_ump.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.c_size_t,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_push_midi_input_ump"):
+        lib.sonare_engine_push_midi_input_ump.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_input_ump.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.c_size_t,
+            ctypes.c_int64,
+        ]
+    # MIDI 2.0 event-POD builders: each packs its UMP words into the POD.
+    _u8, _u32, _i32 = ctypes.c_uint8, ctypes.c_uint32, ctypes.c_int32
+    _head: list[Any] = [ctypes.c_double, _u8, _u8]
+    _tails: dict[str, list[Any]] = {
+        "sonare_midi2_note_on": [_u8, ctypes.c_uint16, _u8, ctypes.c_uint16],
+        "sonare_midi2_note_off": [_u8, ctypes.c_uint16],
+        "sonare_midi2_cc": [_u8, _u32],
+        "sonare_midi2_poly_pressure": [_u8, _u32],
+        "sonare_midi2_channel_pressure": [_u32],
+        "sonare_midi2_pitch_bend": [_u32],
+        "sonare_midi2_program": [_u8, ctypes.c_int, _u8, _u8],
+        "sonare_midi2_registered_controller": [_u8, _u8, _u32],
+        "sonare_midi2_assignable_controller": [_u8, _u8, _u32],
+        "sonare_midi2_relative_registered_controller": [_u8, _u8, _i32],
+        "sonare_midi2_relative_assignable_controller": [_u8, _u8, _i32],
+        "sonare_midi2_registered_per_note_controller": [_u8, _u8, _u32],
+        "sonare_midi2_assignable_per_note_controller": [_u8, _u8, _u32],
+        "sonare_midi2_per_note_pitch_bend": [_u8, _u32],
+        "sonare_midi2_per_note_management": [_u8, ctypes.c_int, ctypes.c_int],
+    }
+    for _name, _tail in _tails.items():
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [*_head, *_tail, ctypes.POINTER(SonareMidiEventPod)]
     if hasattr(lib, "sonare_engine_push_midi_panic"):
         lib.sonare_engine_push_midi_panic.restype = ctypes.c_int32
         lib.sonare_engine_push_midi_panic.argtypes = [

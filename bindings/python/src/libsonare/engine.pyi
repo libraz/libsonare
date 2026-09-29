@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, TypeAlias
 
 import numpy as np
@@ -294,6 +294,12 @@ class RealtimeEngine:
         data: bytes | bytearray | memoryview,
         render_frame: int = -1,
     ) -> None: ...
+    def push_midi_ump(
+        self,
+        destination_id: int,
+        words: Iterable[int],
+        render_frame: int = -1,
+    ) -> None: ...
     def push_midi_panic(self, render_frame: int = -1) -> None: ...
     def set_builtin_instrument(
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
@@ -399,6 +405,7 @@ class RealtimeEngine:
         pressure: int,
         port_time_samples: int = 0,
     ) -> None: ...
+    def push_midi_input_ump(self, words: Iterable[int], port_time_samples: int = 0) -> None: ...
     def push_midi_note_on(
         self,
         destination_id: int,

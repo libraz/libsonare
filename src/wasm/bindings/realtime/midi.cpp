@@ -1024,8 +1024,8 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-void RealtimeEngineWasm::pushMidiInputUmp(const sonare::midi::Ump& ump, int64_t port_time_samples,
-                                          const char* what) {
+void RealtimeEngineWasm::pushMidiInputUmpInternal(const sonare::midi::Ump& ump,
+                                                  int64_t port_time_samples, const char* what) {
   if (!midi_input_source_enabled_) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string(what) + ": the MIDI input source is not enabled");
@@ -1050,10 +1050,10 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
         "pushMidiInputPitchBend: group/channel in [0,15], bend14 in [0,16383]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
-  pushMidiInputUmp(sonare::midi::make_midi1_pitch_bend(static_cast<uint8_t>(group),
-                                                       static_cast<uint8_t>(channel),
-                                                       static_cast<uint16_t>(bend14)),
-                   port_time_samples, "pushMidiInputPitchBend");
+  pushMidiInputUmpInternal(sonare::midi::make_midi1_pitch_bend(static_cast<uint8_t>(group),
+                                                               static_cast<uint8_t>(channel),
+                                                               static_cast<uint16_t>(bend14)),
+                           port_time_samples, "pushMidiInputPitchBend");
 #else
   (void)group;
   (void)channel;
@@ -1076,10 +1076,10 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
         "pushMidiInputChannelPressure: group/channel in [0,15], pressure in [0,127]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
-  pushMidiInputUmp(sonare::midi::make_midi1_channel_pressure(static_cast<uint8_t>(group),
-                                                             static_cast<uint8_t>(channel),
-                                                             static_cast<uint8_t>(pressure)),
-                   port_time_samples, "pushMidiInputChannelPressure");
+  pushMidiInputUmpInternal(sonare::midi::make_midi1_channel_pressure(
+                               static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                               static_cast<uint8_t>(pressure)),
+                           port_time_samples, "pushMidiInputChannelPressure");
 #else
   (void)group;
   (void)channel;
@@ -1104,10 +1104,10 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
         "pushMidiInputPolyPressure: group/channel in [0,15], note/pressure in [0,127]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
-  pushMidiInputUmp(sonare::midi::make_midi1_poly_pressure(
-                       static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
-                       static_cast<uint8_t>(note), static_cast<uint8_t>(pressure)),
-                   port_time_samples, "pushMidiInputPolyPressure");
+  pushMidiInputUmpInternal(sonare::midi::make_midi1_poly_pressure(
+                               static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                               static_cast<uint8_t>(note), static_cast<uint8_t>(pressure)),
+                           port_time_samples, "pushMidiInputPolyPressure");
 #else
   (void)group;
   (void)channel;
@@ -1176,26 +1176,79 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
   }
 }
 
-// Queues one single-word MIDI 1.0 channel-voice UMP to a MIDI destination at
-// @p render_frame (-1 = immediate).
+// Reads 1 to 4 UMP words from a JS array or Uint32Array. A word is idiomatically
+// spelled `(0x4 << 28) | …` in JS, which is a signed int once bit 31 is set, so
+// the whole 32-bit range is legal per element.
+namespace {
+size_t umpWordsFromVal(const val& words_val, uint32_t (&words)[4], const char* what) {
+  const size_t count = wasmArrayLikeLength(words_val, "words");
+  if (count < 1 || count > 4) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(what) + ": words must contain 1..4 UMP words");
+  }
+  for (size_t i = 0; i < count; ++i) {
+    words[i] = checkedWordFromVal(words_val[i], "words[]");
+  }
+  return count;
+}
+}  // namespace
+
+// Queues one live UMP of 1 to 4 words to a MIDI destination at @p render_frame
+// (-1 = immediate). Mirrors the C ABI sonare_engine_push_midi_ump: malformed
+// messages and Data types (MT 0x3 / 0x5) are InvalidParameter, a full slot ring
+// or command queue is transient OutOfMemory back-pressure.
 //
 // A control-change word reaches the CC binding table exactly as it would through
 // pushMidiCc or a live input source: the engine resolves every live entry point
-// through one kind-aware decoder, so a controller bound to automation is driven
-// whichever call the host used. It used to reach the sequencer only, which made
-// this the one live path that silently skipped the CC -> automation mapping.
-void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& word0_val,
+// through one kind-aware decoder.
+void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& words_val,
                                      const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  // A UMP word is idiomatically spelled `(0x2 << 28) | …` in JS, which is a
-  // signed int once bit 31 is set, so the whole 32-bit range is legal here.
-  const uint32_t word0 = checkedWordFromVal(word0_val, "word0");
-  if (((word0 >> 28) & 0x0Fu) != 0x2u) {
+  uint32_t words[4] = {0, 0, 0, 0};
+  const size_t count = umpWordsFromVal(words_val, words, "pushMidiUmp");
+  switch (
+      engine_.push_midi_ump(destination_id, words, count, renderFrameFromVal(render_frame_val))) {
+    case sonare::engine::MidiUmpPushResult::kQueued:
+      return;
+    case sonare::engine::MidiUmpPushResult::kInvalidMessage:
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "pushMidiUmp: word count must match the message type and MT 0x3 / 0x5 are refused");
+    case sonare::engine::MidiUmpPushResult::kSlotsFull:
+    case sonare::engine::MidiUmpPushResult::kQueueFull:
+      break;
+  }
+  throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, "failed to queue MIDI UMP command");
+}
+
+// Pushes one raw UMP of 1 to 4 words to the engine-owned MIDI input source.
+// Mirrors the C ABI sonare_engine_push_midi_input_ump.
+void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t port_time_samples) {
+  uint32_t words[4] = {0, 0, 0, 0};
+  const size_t count = umpWordsFromVal(words_val, words, "pushMidiInputUmp");
+  if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, count)) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidParameter,
-        "pushMidiUmp: only single-word MIDI 1.0 channel-voice UMP messages are supported");
+        "pushMidiInputUmp: word count must match the message type and MT 0x3 / 0x5 are refused");
   }
-  queueMidiUmp(destination_id, word0, renderFrameFromVal(render_frame_val));
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!midi_input_source_enabled_) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "pushMidiInputUmp: the MIDI input source is not enabled");
+  }
+  sonare::midi::Ump ump{};
+  for (size_t i = 0; i < count; ++i) ump.words[i] = words[i];
+  ump.word_count = static_cast<uint8_t>(count);
+  ump.group = sonare::midi::ump_group_from_word0(words[0]);
+  if (!midi_input_source_.push_event(ump, port_time_samples)) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                  "failed to enqueue MIDI input UMP");
+  }
+#else
+  (void)port_time_samples;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
 }
 
 void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
@@ -1461,6 +1514,7 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("pushMidiChannelPressure", &RealtimeEngineWasm::pushMidiChannelPressure)
       .function("pushMidiPolyPressure", &RealtimeEngineWasm::pushMidiPolyPressure)
       .function("pushMidiUmp", &RealtimeEngineWasm::pushMidiUmp)
+      .function("pushMidiInputUmp", &RealtimeEngineWasm::pushMidiInputUmp)
       .function("pushMidiSysex", &RealtimeEngineWasm::pushMidiSysex)
       .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
       .function("setMidiDestinationExternal", &RealtimeEngineWasm::setMidiDestinationExternal)

@@ -60,7 +60,13 @@ import type {
   ProjectWarpMapDesc,
   ProjectWarpMode,
 } from './project_types';
-import { assertBoundedInteger, assertSampleRate, assertSamples } from './validation';
+import {
+  assertBoundedInteger,
+  assertNibble,
+  assertSampleRate,
+  assertSamples,
+  assertU7,
+} from './validation';
 
 /**
  * Folds the positional and request call forms of `bakeMidiFx` into one shape,
@@ -116,6 +122,52 @@ function validateAssistSidecarModuleId(value: unknown): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError('Project.setAssistSidecar: moduleId must be a non-empty string');
   }
+  return value;
+}
+
+const MIDI2_U16_MAX = 0xffff;
+const MIDI2_U32_MAX = 0xffffffff;
+
+// UMP MIDI-2.0 channel-voice packet (message type 0x4). Canonical layout is
+// sonare::midi::make_midi2_* (C-ABI sonare_midi2_*); the golden vectors in
+// midi2-ump.test.ts lock this copy against it.
+function midi2Event(
+  fnName: string,
+  ppq: number,
+  group: number,
+  opcode: number,
+  channel: number,
+  byte2: number,
+  byte3: number,
+  word1: number,
+): ProjectMidiEvent {
+  if (!Number.isFinite(ppq) || ppq < 0) {
+    throw new RangeError(`${fnName}: ppq must be a non-negative finite number`);
+  }
+  const g = assertNibble(fnName, group, 'group');
+  const ch = assertNibble(fnName, channel, 'channel');
+  const word0 =
+    ((0x4 << 28) | (g << 24) | (opcode << 20) | (ch << 16) | (byte2 << 8) | byte3) >>> 0;
+  return { ppq, data0: word0, data1: word1 >>> 0 };
+}
+
+function midi2U32(fnName: string, value: number, argName: string): number {
+  assertBoundedInteger(fnName, value, argName, 0, MIDI2_U32_MAX);
+  return value;
+}
+
+function midi2U16(fnName: string, value: number, argName: string): number {
+  assertBoundedInteger(fnName, value, argName, 0, MIDI2_U16_MAX);
+  return value;
+}
+
+function midi2I32(fnName: string, value: number, argName: string): number {
+  assertBoundedInteger(fnName, value, argName, -0x80000000, 0x7fffffff);
+  return value;
+}
+
+function midi2Byte(fnName: string, value: number, argName: string): number {
+  assertBoundedInteger(fnName, value, argName, 0, 0xff);
   return value;
 }
 
@@ -210,6 +262,233 @@ export class Project {
     program: number,
   ): ProjectMidiEvent {
     return projectMidi1Event('Project.midiProgram', ppq, group, 0xc, channel, program, 0);
+  }
+
+  /**
+   * Pack a MIDI 2.0 note-on event accepted by {@link setMidiEvents}.
+   * `velocity16` is the full 16-bit velocity (0 is a sounding note-on);
+   * `attributeType` 0 is none, 3 is pitch 7.9.
+   */
+  static midi2NoteOn(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity16: number,
+    attributeType = 0,
+    attributeData = 0,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2NoteOn';
+    const n = assertU7(fn, note, 'note');
+    const vel = midi2U16(fn, velocity16, 'velocity16');
+    const type = midi2Byte(fn, attributeType, 'attributeType');
+    const data = midi2U16(fn, attributeData, 'attributeData');
+    return midi2Event(fn, ppq, group, 0x9, channel, n, type, ((vel << 16) | data) >>> 0);
+  }
+
+  /** Pack a MIDI 2.0 note-off event (`velocity16` is the full 16-bit release velocity). */
+  static midi2NoteOff(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity16 = 0,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2NoteOff';
+    const n = assertU7(fn, note, 'note');
+    const vel = midi2U16(fn, velocity16, 'velocity16');
+    return midi2Event(fn, ppq, group, 0x8, channel, n, 0, (vel << 16) >>> 0);
+  }
+
+  /** Pack a MIDI 2.0 control-change event (`value32` is the full 32-bit value). */
+  static midi2Cc(
+    ppq: number,
+    group: number,
+    channel: number,
+    controller: number,
+    value32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2Cc';
+    const c = assertU7(fn, controller, 'controller');
+    return midi2Event(fn, ppq, group, 0xb, channel, c, 0, midi2U32(fn, value32, 'value32'));
+  }
+
+  /** Pack a MIDI 2.0 poly-pressure event (`pressure32` is the full 32-bit pressure). */
+  static midi2PolyPressure(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    pressure32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2PolyPressure';
+    const n = assertU7(fn, note, 'note');
+    return midi2Event(fn, ppq, group, 0xa, channel, n, 0, midi2U32(fn, pressure32, 'pressure32'));
+  }
+
+  /** Pack a MIDI 2.0 channel-pressure event (`pressure32` is the full 32-bit pressure). */
+  static midi2ChannelPressure(
+    ppq: number,
+    group: number,
+    channel: number,
+    pressure32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2ChannelPressure';
+    return midi2Event(fn, ppq, group, 0xd, channel, 0, 0, midi2U32(fn, pressure32, 'pressure32'));
+  }
+
+  /** Pack a MIDI 2.0 pitch-bend event (`bend32` is unsigned 32-bit, center = 0x80000000). */
+  static midi2PitchBend(
+    ppq: number,
+    group: number,
+    channel: number,
+    bend32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2PitchBend';
+    return midi2Event(fn, ppq, group, 0xe, channel, 0, 0, midi2U32(fn, bend32, 'bend32'));
+  }
+
+  /**
+   * Pack a MIDI 2.0 program-change event. The bank travels in the same message
+   * and is applied only when `bankValid` is true.
+   */
+  static midi2Program(
+    ppq: number,
+    group: number,
+    channel: number,
+    program: number,
+    bankValid = false,
+    bankMsb = 0,
+    bankLsb = 0,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2Program';
+    const p = assertU7(fn, program, 'program');
+    const msb = assertU7(fn, bankMsb, 'bankMsb');
+    const lsb = assertU7(fn, bankLsb, 'bankLsb');
+    const word1 = ((p << 24) | (msb << 8) | lsb) >>> 0;
+    return midi2Event(fn, ppq, group, 0xc, channel, 0, bankValid ? 1 : 0, word1);
+  }
+
+  /** Pack a MIDI 2.0 registered controller (RPN) event. */
+  static midi2RegisteredController(
+    ppq: number,
+    group: number,
+    channel: number,
+    bank: number,
+    index: number,
+    value32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2RegisteredController';
+    const b = assertU7(fn, bank, 'bank');
+    const i = assertU7(fn, index, 'index');
+    return midi2Event(fn, ppq, group, 0x2, channel, b, i, midi2U32(fn, value32, 'value32'));
+  }
+
+  /** Pack a MIDI 2.0 assignable controller (NRPN) event. */
+  static midi2AssignableController(
+    ppq: number,
+    group: number,
+    channel: number,
+    bank: number,
+    index: number,
+    value32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2AssignableController';
+    const b = assertU7(fn, bank, 'bank');
+    const i = assertU7(fn, index, 'index');
+    return midi2Event(fn, ppq, group, 0x3, channel, b, i, midi2U32(fn, value32, 'value32'));
+  }
+
+  /** Pack a MIDI 2.0 relative registered controller event (`delta32` is a signed change). */
+  static midi2RelativeRegisteredController(
+    ppq: number,
+    group: number,
+    channel: number,
+    bank: number,
+    index: number,
+    delta32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2RelativeRegisteredController';
+    const b = assertU7(fn, bank, 'bank');
+    const i = assertU7(fn, index, 'index');
+    return midi2Event(fn, ppq, group, 0x4, channel, b, i, midi2I32(fn, delta32, 'delta32'));
+  }
+
+  /** Pack a MIDI 2.0 relative assignable controller event (`delta32` is a signed change). */
+  static midi2RelativeAssignableController(
+    ppq: number,
+    group: number,
+    channel: number,
+    bank: number,
+    index: number,
+    delta32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2RelativeAssignableController';
+    const b = assertU7(fn, bank, 'bank');
+    const i = assertU7(fn, index, 'index');
+    return midi2Event(fn, ppq, group, 0x5, channel, b, i, midi2I32(fn, delta32, 'delta32'));
+  }
+
+  /** Pack a MIDI 2.0 registered per-note controller event (`index` is 0..255). */
+  static midi2RegisteredPerNoteController(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    index: number,
+    value32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2RegisteredPerNoteController';
+    const n = assertU7(fn, note, 'note');
+    const i = midi2Byte(fn, index, 'index');
+    return midi2Event(fn, ppq, group, 0x0, channel, n, i, midi2U32(fn, value32, 'value32'));
+  }
+
+  /** Pack a MIDI 2.0 assignable per-note controller event (`index` is 0..255). */
+  static midi2AssignablePerNoteController(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    index: number,
+    value32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2AssignablePerNoteController';
+    const n = assertU7(fn, note, 'note');
+    const i = midi2Byte(fn, index, 'index');
+    return midi2Event(fn, ppq, group, 0x1, channel, n, i, midi2U32(fn, value32, 'value32'));
+  }
+
+  /** Pack a MIDI 2.0 per-note pitch-bend event (`bend32` is unsigned 32-bit, center = 0x80000000). */
+  static midi2PerNotePitchBend(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    bend32: number,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2PerNotePitchBend';
+    const n = assertU7(fn, note, 'note');
+    return midi2Event(fn, ppq, group, 0x6, channel, n, 0, midi2U32(fn, bend32, 'bend32'));
+  }
+
+  /**
+   * Pack a MIDI 2.0 per-note management event. `detach` sets the D flag
+   * (detach per-note controllers from voices already sounding on `note`);
+   * `reset` sets the S flag (reset the note's per-note controllers).
+   */
+  static midi2PerNoteManagement(
+    ppq: number,
+    group: number,
+    channel: number,
+    note: number,
+    detach = false,
+    reset = false,
+  ): ProjectMidiEvent {
+    const fn = 'Project.midi2PerNoteManagement';
+    const n = assertU7(fn, note, 'note');
+    const flags = (detach ? 0x02 : 0) | (reset ? 0x01 : 0);
+    return midi2Event(fn, ppq, group, 0xf, channel, n, flags, 0);
   }
 
   /** Return the General MIDI instrument name for `program`, or `null` when out of range. */

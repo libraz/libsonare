@@ -508,7 +508,7 @@ export function pushMidiUmp(
   renderFrame: number,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
-  ctx.offlineEngine.pushMidiUmp(destinationId, word0, renderFrame);
+  ctx.offlineEngine.pushMidiUmp(destinationId, [word0], renderFrame);
   ctx.postSync({ type: 'syncMidiUmp', destinationId, word0, renderFrame });
 }
 

@@ -1400,6 +1400,41 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
 SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
                                           const uint8_t* data, size_t size, int64_t render_frame);
+/// @brief Queues one immediate (live) raw UMP message to a MIDI destination.
+/// @details Carries a MIDI 2.0 channel-voice message (MT 0x4) at its full width,
+///          as well as any other packet of 1 to 4 words. A multi-word message is
+///          copied into a bounded, allocation-free engine slot ring and a
+///          scalar-only command referencing the slot is enqueued. Utility (MT 0x0),
+///          Flex Data (MT 0xD) and UMP Stream (MT 0xF) messages are accepted and
+///          discarded at the destination. Data messages (MT 0x3 SysEx7, MT 0x5)
+///          are refused: SysEx goes through @ref sonare_engine_push_midi_sysex.
+/// @param destination_id MIDI destination id (clip/instrument destination).
+/// @param words UMP words, most significant word first. Must be non-NULL.
+/// @param word_count Must equal the word count the message type of `words[0]`
+///        fixes (1, 2, 3 or 4).
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL pointer, a word count that
+///         does not match the message type, or MT 0x3 / 0x5;
+///         SONARE_ERROR_OUT_OF_MEMORY when the slot ring or command queue is
+///         full (transient back-pressure; retry after a process block).
+SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                        const uint32_t* words, size_t word_count,
+                                        int64_t render_frame);
+/// @brief Pushes one raw UMP message to the engine-owned MIDI input source.
+/// @details The input-source counterpart of @ref sonare_engine_push_midi_ump,
+///          delivered through the same block-start drain as
+///          `sonare_engine_push_midi_input_*`. The message type rules are the
+///          same: MT 0x3 / 0x5 are refused, MT 0x0 / 0xD / 0xF are accepted and
+///          discarded at the destination.
+/// @param words UMP words, most significant word first. Must be non-NULL.
+/// @param word_count Must equal the word count the message type of `words[0]`
+///        fixes (1, 2, 3 or 4).
+/// @param port_time_samples Port timestamp in samples.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL pointer, a malformed or
+///         refused message, or when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full.
+SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
+                                              size_t word_count, int64_t port_time_samples);
 /// @brief Marks a MIDI destination for external routing (or clears it).
 /// @details A destination marked external bypasses the internal instrument rack:
 ///   its sequenced events are buffered in the engine's external-MIDI output queue

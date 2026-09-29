@@ -157,6 +157,117 @@ SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel
 SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
                                 SonareMidiEventPod* out);
 
+// MIDI 2.0 channel-voice builders (UMP message type 0x4, two words in data0 /
+// data1). Each returns SONARE_ERROR_INVALID_PARAMETER for a NULL @p out, a
+// non-finite or out-of-range @p ppq, a group or channel above 15, or a 7-bit
+// field above 127.
+
+/// @brief Packs a MIDI 2.0 note-on event POD at @p ppq.
+/// @param velocity16 Full 16-bit velocity. 0 is a sounding note-on in MIDI 2.0.
+/// @param attribute_type Note attribute type (0 = none, 3 = pitch 7.9).
+/// @param attribute_data 16-bit attribute value.
+SonareError sonare_midi2_note_on(double ppq, uint8_t group, uint8_t channel, uint8_t note,
+                                 uint16_t velocity16, uint8_t attribute_type,
+                                 uint16_t attribute_data, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 note-off event POD at @p ppq.
+/// @param velocity16 Full 16-bit release velocity.
+SonareError sonare_midi2_note_off(double ppq, uint8_t group, uint8_t channel, uint8_t note,
+                                  uint16_t velocity16, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 control-change event POD at @p ppq.
+/// @param controller Controller number (0..127).
+/// @param value32 Full 32-bit controller value.
+SonareError sonare_midi2_cc(double ppq, uint8_t group, uint8_t channel, uint8_t controller,
+                            uint32_t value32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 poly-pressure event POD at @p ppq.
+/// @param pressure32 Full 32-bit key pressure.
+SonareError sonare_midi2_poly_pressure(double ppq, uint8_t group, uint8_t channel, uint8_t note,
+                                       uint32_t pressure32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 channel-pressure event POD at @p ppq.
+/// @param pressure32 Full 32-bit channel pressure.
+SonareError sonare_midi2_channel_pressure(double ppq, uint8_t group, uint8_t channel,
+                                          uint32_t pressure32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 pitch-bend event POD at @p ppq.
+/// @param bend32 Unsigned 32-bit bend, centre 0x80000000.
+SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, uint32_t bend32,
+                                    SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 program-change event POD at @p ppq.
+/// @details Unlike MIDI 1.0, the bank travels in the same message; it is applied
+///          only when @p bank_valid is non-zero.
+/// @param program Program number (0..127).
+/// @param bank_valid Non-zero to select @p bank_msb / @p bank_lsb with the program.
+/// @param bank_msb Bank select MSB (0..127).
+/// @param bank_lsb Bank select LSB (0..127).
+SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
+                                 int bank_valid, uint8_t bank_msb, uint8_t bank_lsb,
+                                 SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 registered controller (RPN) event POD at @p ppq.
+/// @param bank Controller bank (0..127).
+/// @param index Controller index within the bank (0..127).
+/// @param value32 Full 32-bit controller value.
+SonareError sonare_midi2_registered_controller(double ppq, uint8_t group, uint8_t channel,
+                                               uint8_t bank, uint8_t index, uint32_t value32,
+                                               SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 assignable controller (NRPN) event POD at @p ppq.
+/// @param bank Controller bank (0..127).
+/// @param index Controller index within the bank (0..127).
+/// @param value32 Full 32-bit controller value.
+SonareError sonare_midi2_assignable_controller(double ppq, uint8_t group, uint8_t channel,
+                                               uint8_t bank, uint8_t index, uint32_t value32,
+                                               SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 relative registered controller event POD at @p ppq.
+/// @param bank Controller bank (0..127).
+/// @param index Controller index within the bank (0..127).
+/// @param delta32 Signed change to apply to the addressed value.
+SonareError sonare_midi2_relative_registered_controller(double ppq, uint8_t group, uint8_t channel,
+                                                        uint8_t bank, uint8_t index,
+                                                        int32_t delta32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 relative assignable controller event POD at @p ppq.
+/// @param bank Controller bank (0..127).
+/// @param index Controller index within the bank (0..127).
+/// @param delta32 Signed change to apply to the addressed value.
+SonareError sonare_midi2_relative_assignable_controller(double ppq, uint8_t group, uint8_t channel,
+                                                        uint8_t bank, uint8_t index,
+                                                        int32_t delta32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 registered per-note controller event POD at @p ppq.
+/// @param index Per-note controller index (0..255; see
+///        @ref sonare_midi_per_note_controller_name).
+/// @param value32 Full 32-bit controller value.
+SonareError sonare_midi2_registered_per_note_controller(double ppq, uint8_t group, uint8_t channel,
+                                                        uint8_t note, uint8_t index,
+                                                        uint32_t value32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 assignable per-note controller event POD at @p ppq.
+/// @param index Per-note controller index (0..255).
+/// @param value32 Full 32-bit controller value.
+SonareError sonare_midi2_assignable_per_note_controller(double ppq, uint8_t group, uint8_t channel,
+                                                        uint8_t note, uint8_t index,
+                                                        uint32_t value32, SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 per-note pitch-bend event POD at @p ppq.
+/// @param bend32 Unsigned 32-bit bend, centre 0x80000000.
+SonareError sonare_midi2_per_note_pitch_bend(double ppq, uint8_t group, uint8_t channel,
+                                             uint8_t note, uint32_t bend32,
+                                             SonareMidiEventPod* out);
+
+/// @brief Packs a MIDI 2.0 per-note management event POD at @p ppq.
+/// @param detach Non-zero sets the D flag: detach per-note controllers from
+///        voices already sounding on @p note.
+/// @param reset Non-zero sets the S flag: reset @p note's per-note controllers.
+SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t channel,
+                                             uint8_t note, int detach, int reset,
+                                             SonareMidiEventPod* out);
+
 /// @brief Returns the General MIDI Level 1 instrument name for @p program.
 /// @details The returned pointer is a static table entry owned by libsonare; it remains valid for
 ///          the program lifetime, nothing invalidates it, and it must never be

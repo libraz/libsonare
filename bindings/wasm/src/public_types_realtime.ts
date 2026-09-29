@@ -208,3 +208,6 @@ export interface RealtimeVoiceChangerPodConfig {
   /** True-peak ceiling in dBTP applied by the ISP limiter (default -1.0). */
   limiterIspCeilingDbtp: number;
 }
+
+/** One raw UMP message: 1 to 4 words, most significant word first. */
+export type UmpWords = Uint32Array | readonly number[];

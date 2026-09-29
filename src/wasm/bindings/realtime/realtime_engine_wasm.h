@@ -196,8 +196,9 @@ class RealtimeEngineWasm {
                             const emscripten::val& group_val, const emscripten::val& channel_val,
                             const emscripten::val& note_val, const emscripten::val& pressure_val,
                             const emscripten::val& render_frame_val);
-  void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& word0_val,
+  void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& words_val,
                    const emscripten::val& render_frame_val);
+  void pushMidiInputUmp(const emscripten::val& words_val, int64_t port_time_samples);
   void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
                      const emscripten::val& render_frame_val);
   void pushMidiPanic(const emscripten::val& render_frame_val);
@@ -420,7 +421,8 @@ class RealtimeEngineWasm {
   /// Enqueues one single-word MIDI 1.0 UMP on the live input source. @p what
   /// names the entry point in the refusal, which is the only thing the three
   /// per-note dimensions do not share.
-  void pushMidiInputUmp(const sonare::midi::Ump& ump, int64_t port_time_samples, const char* what);
+  void pushMidiInputUmpInternal(const sonare::midi::Ump& ump, int64_t port_time_samples,
+                                const char* what);
 #endif
 
   sonare::engine::RealtimeEngine engine_{};

@@ -33,7 +33,7 @@ function renderProgram(useGmPrograms: boolean, program: number): Float32Array {
   const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
   try {
     engine.setSynthInstrument({ preset: 'saw-lead', useGmPrograms }, 0);
-    engine.pushMidiUmp(0, midi1Word(0xc, 0, program, 0));
+    engine.pushMidiUmp(0, [midi1Word(0xc, 0, program, 0)]);
     engine.pushMidiNoteOn(0, 0, 0, 60, 100);
     const rendered = new Float32Array(BLOCK_SIZE * BLOCK_COUNT);
     for (let block = 0; block < BLOCK_COUNT; block += 1) {

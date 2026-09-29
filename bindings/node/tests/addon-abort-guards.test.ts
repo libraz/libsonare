@@ -917,6 +917,8 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => e.pushMidiInputCc(300, 300, 300, 300, 'now'));
         swallow(() => e.pushMidiPanic('now'));
         swallow(() => e.pushMidiSysex(0, new Uint8Array([0xf0, 0xf7]), 'now'));
+        swallow(() => e.pushMidiUmp('x', [0x41923c00, 'x'], 'now'));
+        swallow(() => e.pushMidiInputUmp([0x41923c00, 'x'], 'now'));
         swallow(() => e.renderOffline([new Float32Array(${BLOCK})], '128', 'yes'));
         e.destroy();
         const p = new addon.Project();

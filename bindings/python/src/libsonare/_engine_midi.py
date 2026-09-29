@@ -8,6 +8,7 @@ the concrete :class:`RealtimeEngine`); this is not a public class on its own.
 from __future__ import annotations
 
 import ctypes
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from ._ffi_types_mastering_project import SonareControllerBinding, SonareSynthInstrumentBinding
@@ -36,10 +37,17 @@ from ._runtime import (
     _to_c_float,
     _to_c_int,
     _to_c_int64,
+    _to_c_size_t,
     _to_c_uint8,
     _to_c_uint16,
     _to_c_uint32,
 )
+
+
+def _ump_words_to_c(words: Iterable[int]) -> tuple[ctypes.Array[ctypes.c_uint32], int]:
+    """Narrow ``words`` onto a ``uint32_t`` array; the C side validates the count."""
+    values = [_to_c_uint32(word, f"words[{i}]").value for i, word in enumerate(words)]
+    return (ctypes.c_uint32 * len(values))(*values), len(values)
 
 
 class _EngineMidiMixin:
@@ -105,6 +113,36 @@ class _EngineMidiMixin:
                 _to_c_uint32(destination_id, "destination_id"),
                 c_data,
                 ctypes.c_size_t(len(buf)),
+                _to_c_int64(render_frame, "render_frame"),
+            )
+        )
+
+    def push_midi_ump(
+        self,
+        destination_id: int,
+        words: Iterable[int],
+        render_frame: int = -1,
+    ) -> None:
+        """Queue an immediate (live) raw UMP message to a MIDI destination.
+
+        ``words`` holds 1..4 UMP words, most significant first, and its length
+        must match the word count the message type of ``words[0]`` fixes. A MIDI
+        2.0 channel-voice message (MT 0x4) travels at full width. Data messages
+        (MT 0x3 / 0x5) are refused: use :meth:`push_midi_sysex`. Raises
+        :class:`SonareError` for a malformed or refused message, or when the
+        engine queue is full. ``render_frame`` is the render-frame time to
+        apply, or ``-1`` for immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_ump"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        c_words, count = _ump_words_to_c(words)
+        _check(
+            lib.sonare_engine_push_midi_ump(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                c_words,
+                _to_c_size_t(count, "word_count"),
                 _to_c_int64(render_frame, "render_frame"),
             )
         )
@@ -874,6 +912,25 @@ class _EngineMidiMixin:
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(note, "note"),
                 _to_c_uint8(pressure, "pressure"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
+            )
+        )
+
+    def push_midi_input_ump(self, words: Iterable[int], port_time_samples: int = 0) -> None:
+        """Queue a raw UMP message into the live MIDI input source.
+
+        ``words`` follows the rules of :meth:`push_midi_ump`. Requires
+        :meth:`set_midi_input_source`; without it the call is refused.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_input_ump"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        c_words, count = _ump_words_to_c(words)
+        _check(
+            lib.sonare_engine_push_midi_input_ump(
+                self._require_handle(),
+                c_words,
+                _to_c_size_t(count, "word_count"),
                 _to_c_int64(port_time_samples, "port_time_samples"),
             )
         )

@@ -6,6 +6,9 @@ import type { AUTOMATION_CURVE_VALUES } from './value_coercion.js';
 
 export type EngineTelemetryType = 0 | 1;
 
+/** One raw UMP message of 1 to 4 words, most significant word first. */
+export type UmpWords = Uint32Array | readonly number[];
+
 /** Per-track cue/monitor tap mode: off, pre-fader listen, or after-fader listen. */
 export type EngineTrackMonitorMode = 'off' | 'pfl' | 'afl' | 0 | 1 | 2;
 

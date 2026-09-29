@@ -1406,6 +1406,23 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.pushMidiUmp',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiUmp('x', [0x41923c00, 0]) },
+      { argument: 'words', call: (e) => e.pushMidiUmp(0, [0x41923c00, 'x']) },
+      { argument: 'renderFrame', call: (e) => e.pushMidiUmp(0, [0x41923c00, 0], 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiInputUmp',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'words', call: (e) => e.pushMidiInputUmp([0x41923c00, 'x']) },
+      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputUmp([0x41923c00, 0], 'now') },
+    ],
+  },
+  {
     name: 'RealtimeEngine.renderOffline',
     missingRequired: [],
     badTransportArguments: [

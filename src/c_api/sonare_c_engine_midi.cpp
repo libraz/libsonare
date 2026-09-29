@@ -907,6 +907,51 @@ SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t
 #endif
 }
 
+SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                        const uint32_t* words, size_t word_count,
+                                        int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, word_count)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  switch (engine->engine.push_midi_ump(destination_id, words, word_count, render_frame)) {
+    case sonare::engine::MidiUmpPushResult::kQueued:
+      return SONARE_OK;
+    case sonare::engine::MidiUmpPushResult::kInvalidMessage:
+      return SONARE_ERROR_INVALID_PARAMETER;
+    case sonare::engine::MidiUmpPushResult::kSlotsFull:
+    case sonare::engine::MidiUmpPushResult::kQueueFull:
+      return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+  return SONARE_ERROR_INVALID_STATE;
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
+                                              size_t word_count, int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, word_count)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled) return SONARE_ERROR_INVALID_PARAMETER;
+  midi::Ump ump{};
+  for (size_t i = 0; i < word_count; ++i) ump.words[i] = words[i];
+  ump.word_count = static_cast<uint8_t>(word_count);
+  ump.group = midi::ump_group_from_word0(words[0]);
+  return engine->midi_input_source.push_event(ump, port_time_samples) ? SONARE_OK
+                                                                      : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
 SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
                                                         uint32_t destination_id, int external) {
   SONARE_C_API_ENTRY;

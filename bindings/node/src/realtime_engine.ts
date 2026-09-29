@@ -42,6 +42,7 @@ import type {
   Sf2InstrumentConfig,
   SidechainSourceKind,
   SynthPatch,
+  UmpWords,
 } from './types.js';
 import { assertNonNegativeSafeInteger } from './validation.js';
 import {
@@ -1528,6 +1529,28 @@ export class RealtimeEngine {
    */
   pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame = -1): void {
     this.native.pushMidiSysex(destinationId, data, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) raw UMP message to a MIDI destination. `words` is
+   * 1 to 4 words, most significant first, and its length must match the message
+   * type of `words[0]`. MIDI 2.0 channel-voice messages (MT 0x4) arrive at full
+   * width; SysEx7 / data messages (MT 0x3 / 0x5) are refused, use
+   * {@link pushMidiSysex}. Throws when the slot ring or command queue is full
+   * (retry after a process block). `renderFrame` is the render-frame time to
+   * apply, or -1 for immediate.
+   */
+  pushMidiUmp(destinationId: number, words: UmpWords, renderFrame = -1): void {
+    this.native.pushMidiUmp(destinationId, words, renderFrame);
+  }
+
+  /**
+   * Push one raw UMP message (1 to 4 words) to the engine-owned MIDI input
+   * source. The message rules match {@link pushMidiUmp}. `portTimeSamples` is
+   * the port timestamp in samples.
+   */
+  pushMidiInputUmp(words: UmpWords, portTimeSamples = 0): void {
+    this.native.pushMidiInputUmp(words, portTimeSamples);
   }
 
   /**

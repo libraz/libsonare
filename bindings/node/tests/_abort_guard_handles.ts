@@ -178,6 +178,8 @@ export interface NativeEngine {
   articulation(destinationId: unknown, channel: unknown): unknown;
   pushMidiPanic(renderFrame?: unknown): void;
   pushMidiSysex(destinationId: unknown, bytes: unknown, renderFrame?: unknown): void;
+  pushMidiUmp(destinationId: unknown, words: unknown, renderFrame?: unknown): void;
+  pushMidiInputUmp(words: unknown, portTimeSamples?: unknown): void;
   renderOffline(channels: unknown, blockSize?: unknown, finalize?: unknown): Float32Array[];
   setGraph(spec: unknown): void;
   setClips(clips: unknown): void;

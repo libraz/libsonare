@@ -818,6 +818,7 @@ export type {
   TimeSignature,
   TrimRange,
   TrimReport,
+  UmpWords,
   VoicedFlags,
   VoicePresetId,
 } from './public_types';

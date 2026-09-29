@@ -345,6 +345,7 @@ export type {
   TrimRange,
   TrimReport,
   TrimSilenceStereoResult,
+  UmpWords,
   VoicedFlags,
   VoicePresetCategory,
   VoicePresetId,
