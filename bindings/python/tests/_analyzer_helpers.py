@@ -37,6 +37,31 @@ def _all_finite(values) -> bool:
     return all(math.isfinite(v) for v in values)
 
 
+def _read_wav_extensible_header(path: str) -> tuple[int, int, int]:
+    """(channels, frames, sample_rate) of a WAVE_FORMAT_EXTENSIBLE file.
+
+    Stdlib ``wave`` refuses format tag 0xFFFE, which is exactly what a >2
+    channel bounce correctly writes (it carries the speaker-position mask a
+    5.1/7.1 player needs, plain WAVE_FORMAT_PCM cannot). This parses the same
+    fixed 68-byte RIFF/fmt/data header ``_ExtensibleWavWriter.write_header``
+    (``libsonare._cli_common``) emits, instead of going through a reader that
+    cannot open the format the product deliberately writes.
+    """
+    with open(path, "rb") as fh:
+        header = fh.read(68)
+    assert header[0:4] == b"RIFF"
+    assert header[8:12] == b"WAVE"
+    assert header[12:16] == b"fmt "
+    fields = struct.unpack("<HHIIHHHHI", header[20:44])
+    fmt_tag, channels, sample_rate, _byte_rate, _block_align, bits_per_sample = fields[:6]
+    assert fmt_tag == 0xFFFE, f"expected WAVE_FORMAT_EXTENSIBLE (0xfffe), got {fmt_tag:#06x}"
+    assert header[60:64] == b"data"
+    (data_size,) = struct.unpack("<I", header[64:68])
+    bytes_per_frame = channels * (bits_per_sample // 8)
+    frames = data_size // bytes_per_frame if bytes_per_frame else 0
+    return channels, frames, sample_rate
+
+
 def _has_ffmpeg_build_support() -> bool:
     """Return whether the loaded libsonare was compiled with FFmpeg support.
 
@@ -68,5 +93,6 @@ __all__ = [
     "_ffmpeg_cli",
     "_generate_sine",
     "_has_ffmpeg_build_support",
+    "_read_wav_extensible_header",
     "pytestmark",
 ]

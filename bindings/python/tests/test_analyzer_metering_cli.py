@@ -398,10 +398,12 @@ def test_project_bounce_wav_writer_preserves_more_than_two_channels(tmp_path) ->
 
     assert frames == 2
     assert channels == 4
-    with wave.open(str(output), "rb") as wav:
-        assert wav.getnchannels() == 4
-        assert wav.getnframes() == 2
-        assert wav.getframerate() == 48000
+    # >2 channels writes WAVE_FORMAT_EXTENSIBLE (the channel-position mask a
+    # 5.1/7.1 player needs), which stdlib `wave` refuses to open.
+    written_channels, written_frames, written_rate = _read_wav_extensible_header(str(output))
+    assert written_channels == 4
+    assert written_frames == 2
+    assert written_rate == 48000
 
 
 def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_path, capsys) -> None:
