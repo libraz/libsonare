@@ -276,9 +276,8 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
 /// Spec default modulator: velocity -> attenuation concave 960 cB curve,
 /// equivalent to (vel/127)^2 linear gain.
 float sf2_velocity_gain(Velocity16 velocity) noexcept;
-/// Same law for CC7 volume / CC11 expression.
-float sf2_cc_gain(uint8_t value) noexcept;
-/// The same law read through Control32::f7(), so a 32-bit value lands between the 7-bit steps.
+/// The CC7 volume / CC11 expression law, read through Control32::f7() so a 32-bit value lands
+/// between the 7-bit steps.
 float sf2_cc_gain(Control32 value) noexcept;
 
 /// The per-note pitch state one sounding voice carries, whichever pool it lives in.

@@ -816,6 +816,30 @@ TEST_CASE("Sf2Player hears a 32-bit volume, expression and pressure between the 
   }
 }
 
+TEST_CASE("Sf2Player hears a 32-bit modulation wheel between the 7-bit steps",
+          "[midi][sf2][midi2]") {
+  // Route the wheel to AMPLITUDE CONTROL at -100 % (40 20 22) so that more wheel means less level.
+  constexpr uint8_t kV = 64;
+  const uint32_t lo = Control32::from7(kV).raw;
+  const uint32_t hi = Control32::from7(kV + 1).raw;
+  std::vector<uint8_t> route{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x20, 0x22, 0x00};
+  route.push_back(static_cast<uint8_t>((128 - ((0x40 + 0x20 + 0x22) % 128)) & 0x7F));
+  route.push_back(0xF7);
+  auto peak_at = [&](uint32_t raw) {
+    return first_50ms_peak([&](Sf2Player& p) {
+      REQUIRE(p.handle_sysex(route.data(), route.size()));
+      send(p, sonare::midi::make_midi2_control_change(0, 0, 1, raw));
+      send(p, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    });
+  };
+  const float p_lo = peak_at(lo);
+  const float p_mid = peak_at(midpoint(lo, hi));
+  const float p_hi = peak_at(hi);
+  CAPTURE(p_lo, p_mid, p_hi);
+  REQUIRE(p_lo > p_mid);
+  REQUIRE(p_mid > p_hi);
+}
+
 TEST_CASE("Sf2Player hears a 32-bit bend between the 14-bit steps", "[midi][sf2][midi2]") {
   // One 14-bit step at the default 2-semitone range is 0.024 cents; the pitch is read as the span
   // of a second of rising zero crossings.
@@ -910,6 +934,29 @@ TEST_CASE("Sf2Player takes a note's absolute pitch from RPNC #3 and attribute #3
   Sf2Player player = fixture_player();
   send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
   send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3, 67 * 512));
+  const double attribute = cents_between(crossing_hz(render_one_second(player)), 1000.0);
+  CAPTURE(attribute);
+  REQUIRE(std::fabs(attribute - 700.0) < 5.0);
+}
+
+TEST_CASE("Sf2Player returns a sounding absolute-pitch voice to the composed pitch on S=1",
+          "[midi][sf2][midi2]") {
+  // RPNC #3 makes key 60 sound 72; resetting the row while the voice sounds drops its pitch back
+  // to key 60 rather than leaving it at the zone key it was started on.
+  const double after = note_60_cents([](Sf2Player& p) {
+    send(p, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
+    send(p, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+    (void)render_one_second(p);
+    send(p, sonare::midi::make_midi2_per_note_management(0, 0, 60, false, true));
+  });
+  CAPTURE(after);
+  REQUIRE(std::fabs(after) < 5.0);
+
+  // An attribute #3 pitch survives the reset, and the voice stays on it.
+  Sf2Player player = fixture_player();
+  send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3, 67 * 512));
+  (void)render_one_second(player);
+  send(player, sonare::midi::make_midi2_per_note_management(0, 0, 60, false, true));
   const double attribute = cents_between(crossing_hz(render_one_second(player)), 1000.0);
   CAPTURE(attribute);
   REQUIRE(std::fabs(attribute - 700.0) < 5.0);

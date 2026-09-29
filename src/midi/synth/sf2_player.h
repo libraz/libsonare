@@ -332,6 +332,14 @@ class Sf2Player final : public MidiInstrument {
   void on_control_sysex(const uint8_t* data, size_t size) noexcept override;
 
  private:
+  /// gs_default_cc_positions() widened to the controller record's width.
+  static std::array<Control32, 128> default_cc_positions() noexcept {
+    std::array<Control32, 128> out{};
+    const std::array<uint8_t, 128> seven = gs_default_cc_positions();
+    for (size_t i = 0; i < out.size(); ++i) out[i] = Control32::from7(seven[i]);
+    return out;
+  }
+
   struct ChannelState {
     uint8_t program = 0;
     uint8_t bank_msb = 0;  // CC0; GS variation bank select
@@ -356,13 +364,13 @@ class Sf2Player final : public MidiInstrument {
     /// the top of control_change, so the two cannot drift; the three that power
     /// on off zero are seeded here and the fields below take their defaults
     /// from this rather than restating them.
-    std::array<uint8_t, 128> cc_position = gs_default_cc_positions();
+    std::array<Control32, 128> cc_position = default_cc_positions();
     // Default-modulator controller state.
     // Held at MIDI 2.0 width; a MIDI 1.0 value widens exactly and reads back as float(v).
     Control32 volume = Control32::from7(gs_default_cc_positions()[7]);       // CC7
     Control32 expression = Control32::from7(gs_default_cc_positions()[11]);  // CC11
     Control32 pan = Control32::from7(gs_default_cc_positions()[10]);         // CC10
-    uint8_t mod_wheel = 0;                                                   // CC1
+    Control32 mod_wheel = Control32::from7(0);                               // CC1
     uint8_t reverb_send = 0;  // CC91 (the GS layer's GS reset sets the GS power-on 40)
     uint8_t chorus_send = 0;  // CC93
     uint8_t delay_send = 0;   // CC94 (GS delay send; no SF2 generator)

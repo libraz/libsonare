@@ -120,11 +120,6 @@ float sf2_velocity_gain(Velocity16 velocity) noexcept {
   return v * v;
 }
 
-float sf2_cc_gain(uint8_t value) noexcept {
-  const float v = static_cast<float>(value & 0x7Fu) / 127.0f;
-  return v * v;
-}
-
 float sf2_cc_gain(Control32 value) noexcept {
   const float v = value.f7() / 127.0f;
   return v * v;

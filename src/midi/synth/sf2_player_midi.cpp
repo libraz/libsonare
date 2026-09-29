@@ -119,13 +119,12 @@ Control32 add_saturating(Control32 current, Control32 delta) noexcept {
   return Control32::from_raw(static_cast<uint32_t>(clamped));
 }
 
-/// The pitch offset from the sample's zone key, in cents. Exactly 0 while the key carries no
-/// per-note pitch, so a MIDI 1.0 render is untouched.
+/// The pitch offset from the sample's zone key, in cents. Exactly 0 while the voice sounds at its
+/// zone key with no per-note pitch, so a MIDI 1.0 render is untouched.
 float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {
-  const double semitones = pitch.absolute
-                               ? static_cast<double>(state.binding.note) +
-                                     pitch.per_note_semitones - static_cast<double>(state.zone_key)
-                               : pitch.per_note_semitones;
+  const double semitones =
+      static_cast<double>(static_cast<int>(state.binding.note) - static_cast<int>(state.zone_key)) +
+      pitch.per_note_semitones;
   return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * kCentsPerSemitone);
 }
 
@@ -367,8 +366,10 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint
     sound_note = static_cast<uint8_t>(std::clamp(
         static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
         127));
+    // A play-note substitution plays at its own root, so only a pitch-chosen zone moves the key
+    // the per-note offset is measured from.
+    per_note.zone_key = sound_note;
   }
-  per_note.zone_key = sound_note;
   per_note.cents = per_note_cents(per_note, note_pitch);
 
   bool has_renderable_zone = false;
@@ -897,7 +898,7 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   // MIDI RP-015: reset performance controllers, keep program/bank/volume/pan.
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
-  st.mod_wheel = 0;
+  st.mod_wheel = Control32::from7(0);
   st.expression = Control32::from7(127);
   st.pitch_bend = Bend32::center();
   // Channel aftertouch is an RP-015 performance controller and is the second
@@ -948,7 +949,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
   // controller by number and has to read where it sits whatever else it does.
   // The power-on numbers are 16 and 17, the General Purpose controllers, which
   // nothing below handles; a file is free to point a source at one that it does.
-  st.cc_position[controller & 0x7Fu] = value;
+  st.cc_position[controller & 0x7Fu] = value32;
   for (const uint8_t number : st.assignable_cc) {
     if (controller == (number & 0x7Fu)) {
       refresh_channel_mod(ch);
@@ -974,7 +975,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       refresh_part_rig(ch);
       break;
     case 1:
-      st.mod_wheel = value;
+      st.mod_wheel = value32;
       refresh_channel_mod(ch);
       break;
     case 5:  // Portamento time

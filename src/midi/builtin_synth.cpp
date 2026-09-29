@@ -41,14 +41,6 @@ double bend_ratio(float semitones) noexcept {
   return std::pow(2.0, static_cast<double>(semitones) / constants::kSemitonesPerOctave);
 }
 
-// The (v/127)^2 volume / expression law of synth::sf2_cc_gain, read through f7() so a MIDI 2.0
-// value lands between the 7-bit steps; for a MIDI 1.0 value f7() is float(v) and the result is
-// the same float.
-float cc_gain(Control32 value) noexcept {
-  const float v = value.f7() / 127.0f;
-  return v * v;
-}
-
 // Note On attribute #3 carries Pitch 7.9 (M2-104-UM §7.4.15).
 constexpr uint8_t kAttributePitch79 = 0x03;
 // Registered Per-Note Controller #3 is Pitch 7.25 (M2-104-UM §7.4.12).
@@ -144,7 +136,7 @@ void BuiltinSynth::refresh_channel_controls(uint8_t channel) noexcept {
   ChannelControls& c = channel_controls_[channel & 0x0Fu];
   // Volume and expression multiply through the same concave (v/127)^2 curve the
   // SF2 / native voices use, so a part keeps its balance across instruments.
-  c.gain = cc_gain(c.volume) * cc_gain(c.expression);
+  c.gain = synth::sf2_cc_gain(c.volume) * synth::sf2_cc_gain(c.expression);
   // CC10 is 0..127 around a centre of 64, so the positive half spans 63 steps
   // and both 0 and 1 land hard left -- the GM mapping the other instruments use.
   const float pan_units = (c.pan.f7() - 64.0f) / 63.0f * synth::kPanUnitsFullScale;

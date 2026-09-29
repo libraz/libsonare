@@ -858,13 +858,13 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const ChannelState& st = channels_[ch];
   Sf2ChannelMod& mod = channel_mods_[ch];
   const float bend_cents = channel_bend_cents(st.pitch_bend, st.bend_range_cents);
-  mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
+  mod.mod_wheel01 = st.mod_wheel.f7() / 127.0f;
   // The mod matrix's live sources. Filled here as well as in NativeSynth so the
   // same route reads the same controller whichever player owns the voice; poly
   // aftertouch has no position on this path, so the voice's own stays at rest.
-  mod.breath01 = static_cast<float>(st.cc_position[2]) / 127.0f;
+  mod.breath01 = st.cc_position[2].f7() / 127.0f;
   mod.aftertouch01 = st.channel_pressure.f7() / 127.0f;
-  mod.expression01 = static_cast<float>(st.cc_position[11]) / 127.0f;
+  mod.expression01 = st.cc_position[11].f7() / 127.0f;
   mod.pitch_bend01 = (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
   // Where each controller source presently sits, in the block's own order. The
   // bend and polyphonic aftertouch have no position here and stay at rest, so
@@ -877,9 +877,9 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   // at a controller that is already somewhere reads where it is: a file writes
   // the assignment and the controller in whichever order it likes.
   source01[static_cast<size_t>(GsCtrlSource::kCc1)] =
-      static_cast<float>(st.cc_position[st.assignable_cc[0] & 0x7Fu]) / 127.0f;
+      st.cc_position[st.assignable_cc[0] & 0x7Fu].f7() / 127.0f;
   source01[static_cast<size_t>(GsCtrlSource::kCc2)] =
-      static_cast<float>(st.cc_position[st.assignable_cc[1] & 0x7Fu]) / 127.0f;
+      st.cc_position[st.assignable_cc[1] & 0x7Fu].f7() / 127.0f;
 
   // Each destination is the sum of what its sources are worth where they sit.
   // Pitch starts at the bend rather than at zero because the two add on one
