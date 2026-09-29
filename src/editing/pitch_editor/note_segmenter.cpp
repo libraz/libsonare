@@ -19,6 +19,16 @@ int saturated_sample_offset(int frame, double samples_per_frame) noexcept {
   return static_cast<int>(samples);
 }
 
+// A frame carries a usable pitch only when it is both voiced and a finite,
+// positive Hz value. +inf satisfies "> 0.0f", so a plain positivity check
+// alone reads a non-finite frame as strongly voiced instead of as carrying no
+// measurement -- the same contract note_extractor.cpp's own usable_pitch()
+// enforces for the shared non-finite-F0 convention.
+bool usable_pitch(const F0Track& track, int frame) noexcept {
+  const float hz = track.f0_hz[static_cast<size_t>(frame)];
+  return track.voiced[static_cast<size_t>(frame)] && std::isfinite(hz) && hz > 0.0f;
+}
+
 }  // namespace
 
 NoteSegmenter::NoteSegmenter(NoteSegmenterConfig config) : config_(config) {}
@@ -48,8 +58,7 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
   int sustained_deviation = 0;
 
   for (int frame = 0; frame < track.n_frames(); ++frame) {
-    const bool voiced =
-        track.voiced[static_cast<size_t>(frame)] && track.f0_hz[static_cast<size_t>(frame)] > 0.0f;
+    const bool voiced = usable_pitch(track, frame);
     if (!voiced) {
       if (start >= 0 && frame - start >= min_frames) {
         regions.push_back(make_region(track, start, frame));
@@ -91,9 +100,11 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
 }
 
 float NoteSegmenter::hz_to_cents(float hz, float reference_hz) {
-  // log2 of a non-positive ratio is NaN/-inf; guard both inputs so a bad
-  // reference (or an unvoiced 0 Hz) cannot poison the cents statistics.
-  if (!(hz > 0.0f) || !(reference_hz > 0.0f)) {
+  // log2 of a non-positive ratio is NaN/-inf, and a non-finite hz (e.g. +inf
+  // from an unclamped detector) is not a measurement either; guard all three
+  // so a bad reference, an unvoiced 0 Hz, or a non-finite hz cannot poison the
+  // cents statistics.
+  if (!std::isfinite(hz) || !(hz > 0.0f) || !(reference_hz > 0.0f)) {
     return 0.0f;
   }
   return constants::kCentsPerOctave * std::log2(hz / reference_hz);
@@ -102,8 +113,7 @@ float NoteSegmenter::hz_to_cents(float hz, float reference_hz) {
 NoteRegion NoteSegmenter::make_region(const F0Track& track, int start, int end) const {
   std::vector<float> cents;
   for (int frame = start; frame < end; ++frame) {
-    if (track.voiced[static_cast<size_t>(frame)] &&
-        track.f0_hz[static_cast<size_t>(frame)] > 0.0f) {
+    if (usable_pitch(track, frame)) {
       cents.push_back(hz_to_cents(track.f0_hz[static_cast<size_t>(frame)], config_.reference_hz));
     }
   }

@@ -65,12 +65,23 @@ float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
   return 1.0f;
 }
 
-/// Writes @p segment at @p dest, cross-fading its edges against the untouched
-/// source over @p fade samples with the equal-power (cos/sin) weights
-/// NoteEditor splices with: the source ramps down while the segment ramps up,
-/// so the seam keeps its level instead of dipping through silence.
-void overlay(std::vector<float>& output, const Audio& source, const std::vector<float>& segment,
-             int64_t dest, int64_t fade) {
+/// Writes @p segment at @p dest, cross-fading its edges against @p output's
+/// OWN current content over @p fade samples with the equal-power (cos/sin)
+/// weights NoteEditor splices with: the existing content ramps down while the
+/// segment ramps up, so the seam keeps its level instead of dipping through
+/// silence.
+/// @details Blends against @p output rather than the pristine source
+///          deliberately: erase_span always runs immediately before this call
+///          for the same note (even when the edit is a mute), and a
+///          neighbouring note earlier in the render can have already tapered
+///          or overwritten part of this range too. output starts as a copy of
+///          the source and only diverges where a prior erase_span/overlay call
+///          touched it, so blending against output[j] is identical to
+///          blending against the source everywhere untouched, and correctly
+///          picks up the vacated taper (rather than reintroducing the
+///          pristine original) everywhere it is not.
+void overlay(std::vector<float>& output, const std::vector<float>& segment, int64_t dest,
+            int64_t fade) {
   const int64_t n = static_cast<int64_t>(output.size());
   const int64_t seg_len = static_cast<int64_t>(segment.size());
   if (seg_len <= 0 || dest >= n || dest <= -seg_len) return;
@@ -81,9 +92,9 @@ void overlay(std::vector<float>& output, const Audio& source, const std::vector<
     const int64_t k = j - dest;
     const float phase = fade_phase(k, seg_len, fade);
     const float segment_gain = phase >= 1.0f ? 1.0f : std::sin(kHalfPi * phase);
-    const float source_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
+    const float existing_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
     output[static_cast<size_t>(j)] = segment_gain * segment[static_cast<size_t>(k)] +
-                                     source_gain * source[static_cast<size_t>(j)];
+                                     existing_gain * output[static_cast<size_t>(j)];
   }
 }
 
@@ -263,7 +274,7 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
 
     const int64_t fade =
         fade_samples(config.fade_ms, sample_rate, static_cast<int64_t>(segment.size()));
-    overlay(output, audio, segment, saturating_add(onset, note.edit.time_offset_samples), fade);
+    overlay(output, segment, saturating_add(onset, note.edit.time_offset_samples), fade);
   }
 
   return Audio::from_vector(std::move(output), sample_rate);

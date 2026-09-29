@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <vector>
 
 #include "core/audio.h"
@@ -119,6 +120,54 @@ TEST_CASE("NoteSegmenter uses the shared even-sized median for note cents", "[pi
 
   REQUIRE(regions.size() == 1);
   REQUIRE_THAT(regions[0].median_cents, WithinAbs(600.0f, 0.001f));
+}
+
+// pitch-editor-005: +inf (or -inf/NaN) satisfies "hz > 0.0f" with no finiteness
+// guard, so a non-finite F0 estimate used to read as a strongly-voiced frame
+// instead of carrying no measurement -- both starting/extending regions on its
+// own and, worse, landing +inf directly in a region's cents vector.
+TEST_CASE("NoteSegmenter treats a non-finite F0 as unvoiced rather than as a measurement",
+          "[pitch_editor]") {
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+  constexpr float kNegInf = -std::numeric_limits<float>::infinity();
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  // min_note_ms = 1 at this 100 Hz cadence (hop 10, rate 1000) keeps min_frames
+  // at its floor of 1, so even a single surviving frame would form a region --
+  // the fix's absence would be visible on the smallest possible span.
+  const NoteSegmenterConfig config{50.0f, 1.0f, 440.0f};
+
+  for (const float bad : {kInf, kNegInf, kNaN}) {
+    INFO("non-finite value " << bad);
+    F0Track track;
+    track.sample_rate = 1000;
+    track.hop_length = 10;
+    track.f0_hz = {0.0f, bad, 0.0f};
+    track.voiced = {false, true, false};
+    track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+
+    NoteSegmenter segmenter(config);
+    REQUIRE(segmenter.segment(track).empty());
+  }
+
+  // Inside an otherwise-voiced run, the non-finite frame must break it rather
+  // than merge into it -- two finite-median regions, not one region whose
+  // median absorbed an infinity.
+  F0Track split_by_inf;
+  split_by_inf.sample_rate = 1000;
+  split_by_inf.hop_length = 10;
+  split_by_inf.f0_hz = {440.0f, kInf, 440.0f};
+  split_by_inf.voiced = {true, true, true};
+  split_by_inf.voiced_prob.assign(split_by_inf.f0_hz.size(), 1.0f);
+
+  NoteSegmenter segmenter(config);
+  const auto regions = segmenter.segment(split_by_inf);
+  REQUIRE(regions.size() == 2);
+  REQUIRE(regions[0].onset_sample == 0);
+  REQUIRE(regions[1].onset_sample == 20);
+  for (const auto& region : regions) {
+    REQUIRE(std::isfinite(region.median_cents));
+    REQUIRE_THAT(region.median_cents, WithinAbs(0.0f, 0.001f));
+  }
 }
 
 TEST_CASE("NoteSegmenter saturates long-track sample offsets instead of overflowing",
@@ -346,6 +395,68 @@ TEST_CASE("PitchCorrector constant MIDI transpose reaches its target independent
   REQUIRE(corrector.correct_to_midi(audio, 57.0f, 60.0f).size() == audio.size());
 }
 
+// pitch-editor-006: resynthesize's grain-clock accumulators (output_epoch,
+// analysis_epoch) held float, whose 24-bit mantissa can only represent
+// whole-2-sample increments past 2^24 samples (~12.7 min at 22050 Hz) and
+// whole-4 past 2^25, so a non-integer period accumulated a directional,
+// growing pitch/timing drift on long audio rather than a zero-mean rounding
+// error. Slow: the input has to actually cross 2^24 samples to reproduce it.
+TEST_CASE("PitchCorrector holds pitch precision on audio past 2^24 samples",
+          "[pitch_editor][.][slow]") {
+  constexpr int sample_rate = 22050;
+  constexpr int threshold = 1 << 24;
+  // Room for a full one-second measurement window starting half a second past
+  // the threshold, with margin.
+  const int total_samples = threshold + 2 * sample_rate;
+
+  auto samples = sine(440.0f, sample_rate, total_samples);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  const int hop_length = 256;
+  const F0Track track = constant_track(440.0f, sample_rate, hop_length, total_samples / hop_length);
+
+  // Instant snap (no retune glide), matching the one-semitone-correction test
+  // above, so the corrected median F0 reaches the target rather than being
+  // biased flat by the default glide ramp.
+  PitchCorrectionConfig corrector_config;
+  corrector_config.retune_speed_ms = 0.0f;
+  PitchCorrector corrector(corrector_config);
+  const sonare::Audio corrected = corrector.correct_to_midi(audio, track, 70.0f);
+  REQUIRE(corrected.size() == audio.size());
+
+  // Measure only a one-second window well past the threshold, not the whole
+  // buffer: pitch detection over 16M+ samples would dominate this test's
+  // runtime for no extra signal about the defect, which has already fully
+  // accumulated by this point and does not un-accumulate further downstream.
+  const size_t window_start = static_cast<size_t>(threshold) + static_cast<size_t>(sample_rate) / 2;
+  const size_t window_len = static_cast<size_t>(sample_rate);
+  std::vector<float> window(corrected.data() + window_start,
+                            corrected.data() + window_start + window_len);
+  const sonare::Audio window_audio = sonare::Audio::from_vector(std::move(window), sample_rate);
+
+  sonare::PitchConfig config;
+  config.frame_length = 1024;
+  config.hop_length = 256;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  PyinF0Provider provider(config);
+  const float measured_hz = median_voiced_f0(provider.detect(window_audio));
+
+  // Compared against a reference tone measured through the SAME detector, not
+  // against the mathematically exact target: PyinF0Provider carries its own
+  // few-cents systematic bias at this frame_length/hop_length/frequency
+  // combination (the "pYIN-verifiable one semitone correction" test above
+  // does the same, for the same reason), which would otherwise be
+  // indistinguishable from the grain-clock drift this test exists to catch.
+  const float expected_hz = PitchCorrector::midi_to_hz(70.0f);
+  auto reference_samples = sine(expected_hz, sample_rate, sample_rate);
+  const sonare::Audio reference_audio =
+      sonare::Audio::from_vector(std::move(reference_samples), sample_rate);
+  const float reference_hz = median_voiced_f0(provider.detect(reference_audio));
+
+  const float cents_error = 1200.0f * std::log2(measured_hz / reference_hz);
+  REQUIRE(std::abs(cents_error) < 1.0f);
+}
+
 // max_correction_semitones bounds how far a RETUNE may drag a MEASURED pitch.
 // A constant transpose states both endpoints, so the interval between them is
 // the request, not a distance to be pulled back toward: clamping it to the
@@ -422,6 +533,60 @@ TEST_CASE("PitchCorrector rejects out-of-range target and invalid F0 in the core
   REQUIRE_NOTHROW(corrector.correct_to_midi(audio, track, 69.0f));
 }
 
+// pitch-editor-007: the spectral fallback pitch_shift()s the WHOLE buffer by
+// one median delta over the large-shift voiced frames, then that shifted
+// buffer used to stand in for the dry input at every non-PSOLA sample -- not
+// just the ones actually near the large-shift region. An unvoiced region far
+// from the large shift (a breath, a sibilant) must pass through unchanged.
+TEST_CASE(
+    "PitchCorrector's spectral fallback does not shift unvoiced audio elsewhere in the buffer",
+    "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  constexpr int hop = 256;
+  constexpr int frames_per_region = 40;  // ~0.46 s per region
+  constexpr int region_samples = frames_per_region * hop;
+
+  // Region A: low-amplitude noise, unvoiced -- stands in for a breath/sibilant.
+  std::vector<float> noise(static_cast<size_t>(region_samples));
+  std::mt19937 rng(1234);
+  std::uniform_real_distribution<float> dist(-0.05f, 0.05f);
+  for (float& s : noise) {
+    s = dist(rng);
+  }
+
+  // Region B: a tone far enough from the target (A3 -> A4, +12 st) to exceed
+  // the 6-semitone PSOLA limit and force the spectral fallback.
+  auto tone = sine(220.0f, sample_rate, region_samples);
+
+  std::vector<float> samples = noise;
+  samples.insert(samples.end(), tone.begin(), tone.end());
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+
+  F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = hop;
+  track.f0_hz.assign(static_cast<size_t>(2 * frames_per_region), 0.0f);
+  track.voiced.assign(static_cast<size_t>(2 * frames_per_region), false);
+  track.voiced_prob.assign(static_cast<size_t>(2 * frames_per_region), 0.0f);
+  for (int f = frames_per_region; f < 2 * frames_per_region; ++f) {
+    track.f0_hz[static_cast<size_t>(f)] = 220.0f;
+    track.voiced[static_cast<size_t>(f)] = true;
+    track.voiced_prob[static_cast<size_t>(f)] = 1.0f;
+  }
+
+  PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.correct_to_midi(audio, track, 69.0f);
+  REQUIRE(corrected.size() == audio.size());
+
+  // Checked well clear of the region boundary (a generous margin past any
+  // realistic cross-fade width), so this asserts the passthrough itself, not
+  // the cross-fade ramp leading into it.
+  constexpr int boundary_guard = 2000;
+  for (int i = 0; i < region_samples - boundary_guard; ++i) {
+    REQUIRE(corrected[static_cast<size_t>(i)] == samples[static_cast<size_t>(i)]);
+  }
+}
+
 TEST_CASE("PitchCorrector validates configuration and time-varying track shape in the core",
           "[pitch_editor]") {
   PitchCorrectionConfig config;
@@ -436,6 +601,27 @@ TEST_CASE("PitchCorrector validates configuration and time-varying track shape i
   config = {};
   config.scale.mode_mask = 0;
   REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+
+  // pitch-editor-001: scale_quantizer.h documents reference_midi as bounded to
+  // [0, kMaxReferenceMidi] by every public entry point, but PitchCorrector's
+  // own constructor only checked isfinite -- an extreme reference collapses
+  // the float grid in ScaleQuantizer::quantize_midi and, past 2^31 or so, can
+  // hit lround()/int-cast domain issues, silently producing a wrong-sized
+  // correction rather than a refusal. sonare_scale_quantize_midi already
+  // range-checks its own reference_midi; this is the scale-mode PitchCorrector
+  // path the header's own claim did not yet hold for.
+  config = {};
+  config.scale.reference_midi = kMaxReferenceMidi + 1.0f;
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+  config = {};
+  config.scale.reference_midi = -1.0f;
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+  config = {};
+  config.scale.reference_midi = 1e9f;
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+  config = {};
+  config.scale.reference_midi = kMaxReferenceMidi;  // the boundary itself is legal
+  REQUIRE_NOTHROW(PitchCorrector(config));
 
   constexpr int sample_rate = 22050;
   const sonare::Audio audio =

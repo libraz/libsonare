@@ -50,9 +50,12 @@ struct TranscribeConfig {
   float fmin = 65.0f;
   float fmax = 2093.0f;
 
-  /// Shortest span kept as a note.
+  /// Shortest span kept as a note. Monophonic only: the polyphonic chain
+  /// builds exactly one note per tracked ridge and never reads this field.
   float min_note_ms = 30.0f;
-  /// Pitch movement, in cents, that ends one note and starts the next.
+  /// Monophonic: pitch movement, in cents, that ends one note and starts the
+  /// next. Polyphonic: scales the reported f0 stability figure only -- a
+  /// mid-ridge pitch jump is never split into two notes.
   float segmentation_threshold_cents = 50.0f;
 
   /// Level that maps to velocity 1. A note's PEAK per-frame RMS is taken in

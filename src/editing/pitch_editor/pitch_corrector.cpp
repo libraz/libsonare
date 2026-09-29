@@ -38,9 +38,10 @@ float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
 PitchCorrector::PitchCorrector(PitchCorrectionConfig config) : config_(config) {
   SONARE_CHECK(
       valid_scale_args(config_.scale.root, config_.scale.mode_mask) &&
-          std::isfinite(config_.scale.reference_midi) && std::isfinite(config_.retune_amount) &&
-          config_.retune_amount >= 0.0f && config_.retune_amount <= 1.0f &&
-          std::isfinite(config_.max_correction_semitones) &&
+          std::isfinite(config_.scale.reference_midi) && config_.scale.reference_midi >= 0.0f &&
+          config_.scale.reference_midi <= kMaxReferenceMidi &&
+          std::isfinite(config_.retune_amount) && config_.retune_amount >= 0.0f &&
+          config_.retune_amount <= 1.0f && std::isfinite(config_.max_correction_semitones) &&
           config_.max_correction_semitones >= 0.0f && std::isfinite(config_.retune_speed_ms) &&
           config_.retune_speed_ms >= 0.0f && std::isfinite(config_.vibrato_threshold_cents) &&
           config_.vibrato_threshold_cents >= 0.0f,
@@ -256,19 +257,26 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   const int sr = audio.sample_rate();
   const float sr_f = static_cast<float>(sr);
   // Same cadence rule as every other frame<->sample conversion on this track.
-  const float hop = std::max(1.0f, static_cast<float>(track.samples_per_frame()));
+  // double: this is the unit frame_at converts to/from, and frame_at feeds the
+  // grain clock below, which must not lose precision past 2^24 samples.
+  const double hop = std::max(1.0, static_cast<double>(track.samples_per_frame()));
   const int n_frames = track.n_frames();
 
   const float* input = audio.data();
 
-  // Helper: frame index (real) for a sample position.
-  auto frame_at = [hop](float sample_pos) -> float { return sample_pos / hop; };
+  // Helper: frame index (real) for a sample position. double throughout: this
+  // sits directly under the grain clock (output_epoch/analysis_epoch), whose
+  // own accumulation is why this function takes and returns double rather
+  // than float -- see the comment above those two variables below.
+  auto frame_at = [hop](double sample_pos) -> double { return sample_pos / hop; };
 
-  // Linear interpolation of a per-frame curve at a sample position.
-  auto interp_frame = [&](const std::vector<float>& curve, float sample_pos) -> float {
-    const float ff = frame_at(sample_pos);
+  // Linear interpolation of a per-frame curve at a sample position. The
+  // position is double (see frame_at); the curve values stay float, since
+  // they are read fresh per grain rather than accumulated.
+  auto interp_frame = [&](const std::vector<float>& curve, double sample_pos) -> float {
+    const double ff = frame_at(sample_pos);
     int f0 = static_cast<int>(std::floor(ff));
-    const float frac = ff - static_cast<float>(f0);
+    const float frac = static_cast<float>(ff - static_cast<double>(f0));
     f0 = std::clamp(f0, 0, n_frames - 1);
     const int f1 = std::clamp(f0 + 1, 0, n_frames - 1);
     return curve[static_cast<size_t>(f0)] * (1.0f - frac) + curve[static_cast<size_t>(f1)] * frac;
@@ -276,11 +284,11 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
 
   // Build a per-sample voiced flag and per-sample f0 (for epoch spacing).
   auto sample_voiced = [&](int sample_pos) -> bool {
-    int f = static_cast<int>(std::lround(frame_at(static_cast<float>(sample_pos))));
+    int f = static_cast<int>(std::lround(frame_at(static_cast<double>(sample_pos))));
     f = std::clamp(f, 0, n_frames - 1);
     return valid_voiced_frame(track, f);
   };
-  auto sample_f0 = [&](float sample_pos) -> float {
+  auto sample_f0 = [&](double sample_pos) -> float {
     int f = static_cast<int>(std::lround(frame_at(sample_pos)));
     f = std::clamp(f, 0, n_frames - 1);
     const float hz = track.f0_hz[static_cast<size_t>(f)];
@@ -303,11 +311,17 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   // duration-preserving: a region of input duration D maps to output duration D,
   // only the pitch changes. Each grain reads its period/correction from the
   // analysis center so the output stays time-locked to the input pitch contour.
-  float output_epoch = 0.0f;
-  float analysis_epoch = 0.0f;
+  // double, not float: float's 24-bit mantissa can only represent whole-2
+  // increments past 2^24 samples (~5.8 min at 48 kHz) and whole-4 past 2^25,
+  // so a non-integer period_in/period_out accumulated here in float rounds to
+  // that grid every grain -- a directional, growing pitch and timing drift on
+  // long audio, not a zero-mean rounding error. double's 53-bit mantissa holds
+  // sub-sample precision to roughly 2^52 samples, well past any real buffer.
+  double output_epoch = 0.0;
+  double analysis_epoch = 0.0;
   bool have_psola = false;
 
-  while (output_epoch < static_cast<float>(n_samples)) {
+  while (output_epoch < static_cast<double>(n_samples)) {
     // Keep the analysis pointer time-aligned with the synthesis position: it
     // marks the input sample whose pitch period we are about to reproduce.
     const int center = static_cast<int>(std::lround(analysis_epoch));
@@ -428,8 +442,18 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   for (int i = 0; i < n_samples; ++i) {
     const size_t idx = static_cast<size_t>(i);
     const bool psola_here = have_psola && norm[idx] > kSpectrumEpsilon;
+    // The spectral fallback shifts the WHOLE buffer by one median delta, so it
+    // is only a correct stand-in near the large-shift voiced frame(s) that
+    // triggered it -- everywhere else (unvoiced/silence, or a voiced frame
+    // whose own delta was small enough for PSOLA) the documented passthrough
+    // is the dry input, not that global shift.
+    int nearest_frame = static_cast<int>(std::lround(frame_at(static_cast<double>(i))));
+    nearest_frame = std::clamp(nearest_frame, 0, n_frames - 1);
+    const bool near_large_shift =
+        valid_voiced_frame(track, nearest_frame) &&
+        std::abs(deltas_semitones[static_cast<size_t>(nearest_frame)]) > kPsolaMaxSemitones;
     float dry;
-    if (have_fallback && i < static_cast<int>(fallback_audio.size())) {
+    if (have_fallback && near_large_shift && i < static_cast<int>(fallback_audio.size())) {
       dry = fallback_audio[idx];
     } else {
       dry = input[idx];

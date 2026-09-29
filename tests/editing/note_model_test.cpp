@@ -536,6 +536,38 @@ TEST_CASE("extract_notes derives voicing from voiced_prob when the track has no 
   REQUIRE(tail[0].frame_end == 40);
 }
 
+// editing-streaming-004: under centred framing, n_frames == audio_samples / hop
+// + 1, so the trailing frame's raw sample position ((n_frames - 1) * hop)
+// lands exactly at audio_samples -- one past the last real sample. A ridge
+// alive only on that one frame used to convert to onset_sample ==
+// offset_sample == audio_samples (both frame_to_sample calls clamping to the
+// same value), a zero-length note that validate_note_for_render then refused.
+TEST_CASE("extract_notes keeps a one-frame ridge on the trailing centred frame instead of "
+          "collapsing it to zero length",
+          "[note_model]") {
+  constexpr int kFrames = 41;   // one more than kAudioSamples / kHopLength
+  constexpr int kAudioSamples = 6400;
+  const sonare::Audio audio = tone(440.0f, 0.5f, kAudioSamples);
+
+  F0Track track = voiced_track(0.0f, kFrames);
+  silence_frames(track, 0, kFrames - 1);
+  track.voiced[static_cast<size_t>(kFrames - 1)] = true;
+  track.voiced_prob[static_cast<size_t>(kFrames - 1)] = 1.0f;
+  track.f0_hz[static_cast<size_t>(kFrames - 1)] = 440.0f;
+
+  NoteExtractorConfig config;
+  config.segmenter.min_note_ms = 5.0f;  // min_frames == 1 at this 100 Hz cadence
+  const std::vector<NoteObject> notes = extract_notes(audio, track, config);
+  REQUIRE(notes.size() == 1);
+  REQUIRE(notes[0].frame_start == kFrames - 1);
+  REQUIRE(notes[0].frame_end == kFrames);
+  REQUIRE(notes[0].onset_sample >= 0);
+  REQUIRE(notes[0].offset_sample == kAudioSamples);
+  REQUIRE(notes[0].length_samples() > 0);
+
+  REQUIRE_NOTHROW(render_notes(audio, notes));
+}
+
 TEST_CASE("extract_notes rejects malformed audio, track and config", "[note_model]") {
   const sonare::Audio audio = tone(440.0f, 0.5f, 6400);
   const F0Track track = voiced_track(440.0f, 40);
@@ -709,6 +741,41 @@ TEST_CASE("render_notes moves an edited note to its new position", "[note_model]
   const size_t moved_offset = kOffset + static_cast<size_t>(kShift);
   REQUIRE(rms(rendered, moved_onset + 320, moved_offset - 320) > 0.2);
   REQUIRE(peak(rendered, kOnset + 320, moved_onset - 320) < 0.05f);
+}
+
+// pitch-editor-003: a note moved by LESS than its own length lands its new
+// segment's head-fade zone inside the span erase_span just vacated. overlay
+// used to cross-fade that head against the PRISTINE source there, reintroducing
+// up to fade_ms of the original, un-erased note right at the edit boundary --
+// audible as a doubled attack or click. A constant-amplitude fixture (rather
+// than a sine burst) keeps the assertion exact and free of phase-dependent
+// flakiness: whatever sample position is read, the pristine value is always
+// the same known amplitude.
+TEST_CASE("render_notes does not reintroduce the erased original when a note moves by less than "
+          "its own length",
+          "[note_model]") {
+  constexpr int64_t kOnset = 1000;
+  constexpr int64_t kOffset = 2000;   // length 1000, shift 500 < length: destination overlaps
+  constexpr int64_t kShift = 500;     // the span erase_span vacated.
+  constexpr float kAmplitude = 0.9f;
+  const std::vector<float> samples(4000, kAmplitude);
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, kSampleRate);
+
+  NoteObject note = synthetic_note(kOnset, kOffset, 440.0f);
+  note.edit.time_offset_samples = kShift;
+  const sonare::Audio rendered = render_notes(audio, {note});
+
+  // Default fade_ms (5) at kSampleRate is 80 samples, well under the note's
+  // own length, so erase_span's middle (including the destination's own head)
+  // is driven fully to zero before overlay ever runs.
+  const int64_t dest = kOnset + kShift;
+  // k=0 at the destination: fade_phase is (0 + 0.5) / 80, a small but nonzero
+  // phase, so the blend is dominated by whichever reference the fix concerns
+  // (pristine kAmplitude under the bug, the already-erased ~0 under the fix)
+  // rather than by the segment's own tiny starting gain.
+  const float at_dest = std::abs(rendered[static_cast<size_t>(dest)]);
+  CAPTURE(at_dest);
+  REQUIRE(at_dest < 0.1f * kAmplitude);
 }
 
 TEST_CASE("render_notes rejects malformed spans, edits and config", "[note_model]") {

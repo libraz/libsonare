@@ -30,7 +30,13 @@ class ScaleQuantizer {
 
   /// Quantizes to the configured scale grid. Equidistant ties select the lower
   /// pitch. reference_midi may be fractional and shifts the entire 12-TET grid
-  /// (69.25 anchors A4 at MIDI 69.25, for example).
+  /// (69.25 anchors A4 at MIDI 69.25, for example) -- but which ABSOLUTE pitch
+  /// class each grid point resolves to (and therefore whether root/mode_mask
+  /// consider it in scale) is decided by rounding reference_midi to the
+  /// nearest MIDI note once; a reference sitting exactly between two notes
+  /// (69.5, equidistant between A4 and A#4) can resolve to either, and every
+  /// grid point's scale membership shifts by a semitone with it. Keep
+  /// reference_midi within 0.5 semitones of the note it is meant to anchor.
   float quantize_midi(float midi) const noexcept;
   float correction_semitones(float midi) const noexcept { return quantize_midi(midi) - midi; }
   bool pitch_class_enabled(int pitch_class) const noexcept;

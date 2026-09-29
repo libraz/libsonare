@@ -57,11 +57,16 @@ class PitchCorrector {
 
   /// @brief Repitches @p audio frame by frame by @p deltas_semitones.
   /// @details TD-PSOLA over the track's voiced frames and duration-preserving:
-  ///          the output has the input's length and stays time-locked to it,
-  ///          and unvoiced frames pass through. A frame asking for more than
-  ///          PSOLA handles falls back to one spectral shift over the whole
-  ///          buffer, bounded by @c max_correction_semitones and rendered with
-  ///          @c backend -- the only two config fields this reads.
+  ///          the output has the input's length and stays time-locked to it.
+  ///          A voiced frame asking for more than PSOLA handles (beyond
+  ///          @c kPsolaMaxSemitones) is covered by one spectral shift computed
+  ///          once over the whole buffer, bounded by @c max_correction_semitones
+  ///          and rendered with @c backend -- the only two config fields this
+  ///          reads -- but that shift is substituted for the dry input only
+  ///          near the large-shift voiced frame(s) that required it. Every
+  ///          other unvoiced or silent sample passes through as the dry input
+  ///          unchanged, regardless of what some other, unrelated frame
+  ///          elsewhere in the buffer needed.
   ///
   ///          A caller driving this directly owns its own smoothing: a step
   ///          between neighbouring deltas is reproduced as a step.

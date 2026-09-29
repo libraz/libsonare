@@ -118,6 +118,24 @@ NoteObject build_note(const Audio& audio, const pitch_editor::F0Track& resolved,
   note.frame_end = end;
   note.onset_sample = frame_to_sample(start, samples_per_frame, n_samples);
   note.offset_sample = frame_to_sample(end, samples_per_frame, n_samples);
+  // A non-empty frame span (start < end) reaching the track's own last frame
+  // (end == n_frames) must convert to a non-empty sample span too. With
+  // centred framing and a track length that is an exact multiple of the hop,
+  // the trailing frame's own boundary clamp can land its raw start sample at
+  // n_samples too, collapsing a genuine one-frame trailing note to
+  // onset_sample == offset_sample == n_samples. Nudge the onset back one
+  // sample rather than dropping the note: the segmenter already judged this
+  // span long enough in frames, and downstream rendering only requires a
+  // positive sample length, not a minimum one.
+  //
+  // Gated on end == n_frames (not just start < end) so a genuinely
+  // inconsistent (track, n_samples) pair -- a ridge whose span is nowhere near
+  // the track's own end, paired with an n_samples too short to reach it -- is
+  // still refused as the framing error it is, rather than silently patched
+  // into a fabricated note.
+  if (start < end && end == n_frames && note.onset_sample >= note.offset_sample) {
+    note.onset_sample = std::max<int64_t>(0, note.offset_sample - 1);
+  }
 
   note.f0_hz.values.assign(resolved.f0_hz.begin() + start, resolved.f0_hz.begin() + end);
   note.f0_hz.frame_rate_hz = frame_rate;

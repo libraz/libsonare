@@ -18,7 +18,6 @@ using constants::kSemitonesPerOctave;
 
 namespace {
 
-constexpr int kMidiNoteA4 = 69;
 constexpr int kMaxMidiNote = 127;
 constexpr uint8_t kMinVelocity = 1;
 constexpr uint8_t kMaxVelocity = 127;
@@ -83,8 +82,11 @@ std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeCon
 
 std::vector<NoteObject> polyphonic_notes(const Audio& audio, const TranscribeConfig& config) {
   polyphony::PolyphonicEditConfig poly;
+  // min_note_ms is deliberately not forwarded here: the polyphonic path builds
+  // exactly one note per ridge and never consults segmenter.min_note_ms (see
+  // masked_notes.h), so writing it would claim an effect this path does not
+  // have. poly.notes.segmenter.min_note_ms keeps its own harmless default.
   poly.notes.segmenter.segmentation_threshold_cents = config.segmentation_threshold_cents;
-  poly.notes.segmenter.min_note_ms = config.min_note_ms;
   poly.notes.segmenter.reference_hz = config.reference_hz;
   return polyphony::analyze_polyphonic(audio, poly).notes;
 }
@@ -96,7 +98,7 @@ int midi_note_for_hz(float hz, float reference_hz) noexcept {
   if (!std::isfinite(reference_hz) || reference_hz <= 0.0f) return -1;
   const float semitones = kSemitonesPerOctave * std::log2(hz / reference_hz);
   if (!std::isfinite(semitones)) return -1;
-  const float note = std::round(semitones) + static_cast<float>(kMidiNoteA4);
+  const float note = std::round(semitones) + constants::kMidiA4;
   if (note < 0.0f || note > static_cast<float>(kMaxMidiNote)) return -1;
   return static_cast<int>(note);
 }

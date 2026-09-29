@@ -126,9 +126,14 @@ typedef struct {
   float max_refine_hz;      /* highest partial usable to refine f0; 0 derives one */
   float f0_tolerance_cents; /* worst f0 error tolerated; 0 => 50 */
 
-  /* --- Note spans, cut from each ridge. --- */
-  float segmentation_threshold_cents; /* 0 => 50 */
-  float min_note_ms;                  /* 0 => 30 */
+  /* --- Note spans. One note per tracked ridge; the span itself is the
+     ridge's, not cut by these fields (see min_ridge_duration_ms above to
+     filter short ridges instead). --- */
+  float segmentation_threshold_cents; /* scales the reported f0 stability figure
+                                          only -- a mid-ridge pitch jump is never
+                                          split into two notes; 0 => 50 */
+  float min_note_ms;                  /* not read: one note per ridge means nothing here filters
+                                          a short one; 0 => 30 */
   float reference_hz;                 /* cents reference; 0 => 440 */
 } SonarePolyphonicConfig;
 
@@ -143,10 +148,15 @@ typedef struct {
 ///          register of the framing cannot resolve, tracks no ridge; rendering that
 ///          is the residual alone, which is the whole round trip.
 /// @param samples Source audio; @p length must be non-zero and must fit in an int,
-///        every stage below taking the length as one.
+///        every stage below taking the length as one. Also floored by the STFT
+///        framing: the multi-F0 stage needs at least two frames at the
+///        configured n_fft/hop_length, so audio shorter than roughly one
+///        hop_length (~512 samples at the 0 => 512 default) is refused too.
 /// @param config Optional versioned configuration; NULL selects the defaults.
 /// @param out Receives a handle the caller owns and must release with
 ///        @ref sonare_polyphonic_analysis_destroy. Set to NULL before validation.
+/// @note SONARE_ERROR_INVALID_PARAMETER when @p length is zero, or too short for
+///       at least two STFT frames at the configured n_fft/hop_length.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the pitch
 ///       editor.
 SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int sample_rate,
