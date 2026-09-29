@@ -1486,3 +1486,88 @@ TEST_CASE("validate_eq rejects too many bands and Tilt band types", "[mixing][eq
   ok.bands = {peak};
   REQUIRE_NOTHROW(sonare::mixing::validate_eq(ok));
 }
+
+namespace {
+
+// Rejects a null plane through validate_process_buffers, as every mastering insert does.
+class StrictHalfGainProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    if (!validate_process_buffers(channels, num_channels, num_samples)) return;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < num_samples; ++i) channels[ch][i] *= 0.5f;
+    }
+  }
+  void reset() override {}
+};
+
+}  // namespace
+
+TEST_CASE("ChannelStrip treats a null channel as silence in the EQ and insert stages",
+          "[mixing][eq]") {
+  static constexpr int kN = 256;
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.gain_db = 12.0f;
+  band.q = sonare::constants::kButterworthQ;
+  band.enabled = true;
+  const auto make_strip = [&band](sonare::mixing::EqPosition position) {
+    sonare::mixing::ChannelStripConfig config{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f,
+                                              position};
+    auto strip = std::make_unique<sonare::mixing::ChannelStrip>(config);
+    strip->set_eq_band(0, band);
+    strip->add_pre_insert(std::make_unique<StrictHalfGainProcessor>());
+    strip->add_post_insert(std::make_unique<StrictHalfGainProcessor>());
+    strip->prepare(48000.0, kN);
+    return strip;
+  };
+  const auto make_input = [] {
+    std::vector<float> out(kN);
+    for (int i = 0; i < kN; ++i) {
+      out[static_cast<size_t>(i)] =
+          0.5f * std::sin(kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
+    }
+    return out;
+  };
+
+  for (const sonare::mixing::EqPosition position :
+       {sonare::mixing::EqPosition::PreFader, sonare::mixing::EqPosition::PostFader}) {
+    for (const bool segmented : {false, true}) {
+      for (const int null_channel : {0, 1}) {
+        CAPTURE(static_cast<int>(position), segmented, null_channel);
+        auto strip = make_strip(position);
+        auto reference = make_strip(position);
+        // A fader event mid-block forces the segmented path.
+        if (segmented) {
+          REQUIRE(strip->schedule_fader_automation(kN / 2, -6.0f));
+          REQUIRE(reference->schedule_fader_automation(kN / 2, -6.0f));
+        }
+        std::vector<float> live = make_input();
+        std::vector<float> expected = make_input();
+        std::vector<float> silent(kN, 0.0f);
+        float* channels[2] = {};
+        float* reference_channels[2] = {};
+        channels[1 - null_channel] = live.data();
+        reference_channels[1 - null_channel] = expected.data();
+        reference_channels[null_channel] = silent.data();
+
+        REQUIRE_NOTHROW(strip->process_at(channels, 2, kN, 0));
+        reference->process_at(reference_channels, 2, kN, 0);
+        for (int i = 0; i < kN; ++i) {
+          REQUIRE_THAT(live[static_cast<size_t>(i)],
+                       WithinAbs(expected[static_cast<size_t>(i)], 1e-6f));
+        }
+      }
+    }
+  }
+
+  // A block longer than the prepared size cannot borrow a silent plane; it must still not throw.
+  auto strip = make_strip(sonare::mixing::EqPosition::PreFader);
+  std::vector<float> long_input(kN * 2, 0.25f);
+  float* channels[2] = {long_input.data(), nullptr};
+  REQUIRE_NOTHROW(strip->process_at(channels, 2, kN * 2, 0));
+  REQUIRE(std::all_of(long_input.begin(), long_input.end(),
+                      [](float sample) { return std::isfinite(sample); }));
+}

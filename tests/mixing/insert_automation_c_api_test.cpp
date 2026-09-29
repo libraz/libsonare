@@ -203,4 +203,28 @@ TEST_CASE("C-API insert-automation distinguishes non-RT parameters and full lane
   sonare_mixer_destroy(compressors);
 }
 
+// Same split as the fader/pan/width/send paths: an out-of-order time is a bad
+// argument, only a full event ring is capacity exhaustion.
+TEST_CASE("C-API insert-automation separates out-of-order time from a full lane",
+          "[mixing][automation]") {
+  const std::string scene_json = make_compressor_scene();
+  SonareMixer* mixer = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 256);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_strip_at(mixer, 0);
+  REQUIRE(strip != nullptr);
+
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 100, -24.0f, 0) == SONARE_OK);
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 50, -24.0f, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // The rejected push left the lane usable at a later time.
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 101, -24.0f, 0) == SONARE_OK);
+
+  SonareError last = SONARE_OK;
+  for (int64_t pos = 102; pos < 102 + 4096 && last == SONARE_OK; ++pos) {
+    last = sonare_strip_schedule_insert_automation(strip, 0, 0, pos, -24.0f, 0);
+  }
+  REQUIRE(last == SONARE_ERROR_OUT_OF_MEMORY);
+  sonare_mixer_destroy(mixer);
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

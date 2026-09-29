@@ -354,7 +354,7 @@ class ChannelStrip : public rt::ProcessorBase {
   // Upper bound on inserts per strip (pre + post combined). Reserved at
   // construction so add_pre_insert / add_post_insert never reallocate
   // pre_inserts_ / post_inserts_ / insert_sidechains_ while the audio thread
-  // iterates them. Exceeding the cap throws std::length_error from
+  // iterates them. Exceeding the cap throws SonareException(InvalidState) from
   // add_pre_insert / add_post_insert.
   static constexpr size_t kMaxInserts = 64;
   static constexpr size_t kMaxSends = 8;
@@ -386,6 +386,10 @@ class ChannelStrip : public rt::ProcessorBase {
   void process_unsegmented(float* const* channels, int num_channels, int num_samples);
   void process_segment(float* const* channels, int num_channels, int start, int num_samples,
                        int tap_offset);
+  // Channel table for the stages that reject a null plane (EQ, inserts): @p channels
+  // itself when no row is null, else a copy with each null row swapped for a zeroed
+  // stand-in. nullptr when a null row cannot be covered (wider or longer than prepared).
+  float* const* stage_channels(float* const* channels, int num_channels, int num_samples) noexcept;
   void apply_automation_event(const AutomationEvent& event) noexcept;
   void process_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
                             const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
@@ -503,6 +507,9 @@ class ChannelStrip : public rt::ProcessorBase {
   std::vector<std::vector<float>> pre_tap_;    // post-input/pre-insert chain, pre-fader signal
   std::vector<std::vector<float>> post_tap_;   // final output
   std::vector<std::vector<float>> send_temp_;  // per-send work buffer
+  // Silent stand-ins for null rows and the table stage_channels() hands out, sized like the taps.
+  std::vector<std::vector<float>> null_planes_;
+  std::vector<float*> stage_channels_;
 };
 
 }  // namespace sonare::mixing

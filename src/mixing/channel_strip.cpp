@@ -171,6 +171,7 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   // the bank is sized from the width the host declared, not from the stack cap.
   alignment_delay_.set_prepared_channels(prepared_channels_);
   alignment_delay_.prepare(sample_rate, max_block_size);
+  // Preallocates filter state for kRealtimePreparedChannels; process() never allocates.
   eq_.prepare(sample_rate, max_block_size);
   pre_meter_.reset();
   post_meter_.reset();
@@ -200,18 +201,8 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   pre_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   post_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   send_temp_.assign(tap_rows, std::vector<float>(cols, 0.0f));
-
-  // ParametricEq allocates its per-channel filter state lazily on the first process() with a
-  // given channel count. Warm it up here (off the audio thread) so process() stays RT-safe.
-  if (max_block_size_ > 0) {
-    float* warm[kPreparedChannels];
-    for (int ch = 0; ch < kPreparedChannels; ++ch) {
-      warm[ch] = post_tap_[static_cast<size_t>(ch)].data();
-    }
-    eq_.process(warm, kPreparedChannels, max_block_size_);
-    eq_.reset();
-    zero_taps(post_tap_, kPreparedChannels, max_block_size_);
-  }
+  null_planes_.assign(tap_rows, std::vector<float>(cols, 0.0f));
+  stage_channels_.assign(tap_rows, nullptr);
 }
 
 void ChannelStrip::process(float* const* channels, int num_channels, int num_samples) {
@@ -433,10 +424,13 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   alignment_delay_.process(channels, num_channels, num_samples);
 
   const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
-  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
-    eq_.process(channels, num_channels, num_samples);
+  float* const* staged = stage_channels(channels, num_channels, num_samples);
+  if (staged != nullptr) {
+    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
+      eq_.process(staged, num_channels, num_samples);
+    }
+    process_insert_chain(pre_inserts_, pre_insert_spo_, staged, num_channels, num_samples, 0, 0);
   }
-  process_insert_chain(pre_inserts_, pre_insert_spo_, channels, num_channels, num_samples, 0, 0);
   const float pre_gain_reduction_db = aggregate_gain_reduction_db(pre_inserts_);
 
   // Pre-fader tap (after trim, polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux.
@@ -450,11 +444,14 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
   if (num_channels <= 2) panner_.process(channels, num_channels, num_samples);
 
-  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
-    eq_.process(channels, num_channels, num_samples);
+  staged = stage_channels(channels, num_channels, num_samples);
+  if (staged != nullptr) {
+    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
+      eq_.process(staged, num_channels, num_samples);
+    }
+    process_insert_chain(post_inserts_, post_insert_spo_, staged, num_channels, num_samples,
+                         pre_inserts_.size(), 0);
   }
-  process_insert_chain(post_inserts_, post_insert_spo_, channels, num_channels, num_samples,
-                       pre_inserts_.size(), 0);
   const float post_gain_reduction_db =
       std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
@@ -499,21 +496,28 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   alignment_delay_.process(segment, num_channels, num_samples);
 
   const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
-  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
-    eq_.process(segment, num_channels, num_samples);
+  float* const* staged = stage_channels(segment, num_channels, num_samples);
+  if (staged != nullptr) {
+    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
+      eq_.process(staged, num_channels, num_samples);
+    }
+    process_insert_chain(pre_inserts_, pre_insert_spo_, staged, num_channels, num_samples, 0,
+                         start);
   }
-  process_insert_chain(pre_inserts_, pre_insert_spo_, segment, num_channels, num_samples, 0, start);
   copy_to_taps(segment, pre_tap_, num_channels, num_samples, tap_offset);
 
   fader_.process(segment, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
   if (num_channels <= 2) panner_.process(segment, num_channels, num_samples);
 
-  if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
-    eq_.process(segment, num_channels, num_samples);
+  staged = stage_channels(segment, num_channels, num_samples);
+  if (staged != nullptr) {
+    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
+      eq_.process(staged, num_channels, num_samples);
+    }
+    process_insert_chain(post_inserts_, post_insert_spo_, staged, num_channels, num_samples,
+                         pre_inserts_.size(), start);
   }
-  process_insert_chain(post_inserts_, post_insert_spo_, segment, num_channels, num_samples,
-                       pre_inserts_.size(), start);
   if (num_channels <= 2) width_.process(segment, num_channels, num_samples);
 
   if (num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
@@ -522,6 +526,26 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
     }
   }
   copy_to_taps(segment, post_tap_, num_channels, num_samples, tap_offset);
+}
+
+float* const* ChannelStrip::stage_channels(float* const* channels, int num_channels,
+                                           int num_samples) noexcept {
+  if (std::all_of(channels, channels + num_channels, [](float* row) { return row != nullptr; })) {
+    return channels;
+  }
+  if (num_channels > static_cast<int>(stage_channels_.size()) || num_samples > max_block_size_) {
+    return nullptr;
+  }
+  for (int ch = 0; ch < num_channels; ++ch) {
+    const auto row = static_cast<size_t>(ch);
+    if (channels[ch] != nullptr) {
+      stage_channels_[row] = channels[ch];
+      continue;
+    }
+    std::fill(null_planes_[row].begin(), null_planes_[row].begin() + num_samples, 0.0f);
+    stage_channels_[row] = null_planes_[row].data();
+  }
+  return stage_channels_.data();
 }
 
 void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
@@ -802,14 +826,25 @@ InsertAutomationScheduleResult ChannelStrip::schedule_insert_automation_result(
   event.target.kind = AutomationTargetKind::InsertParameter;
   event.target.insert_index = insert_index;
   event.target.param_id = param_id;
+  // An out-of-order time is a bad argument; only a full ring is capacity exhaustion.
+  const auto push_result = [&event](AutomationLane& lane) noexcept {
+    switch (lane.try_push(event)) {
+      case AutomationPushResult::Success:
+        return InsertAutomationScheduleResult::Success;
+      case AutomationPushResult::NonMonotonic:
+        return InsertAutomationScheduleResult::InvalidParameter;
+      case AutomationPushResult::Full:
+        break;
+    }
+    return InsertAutomationScheduleResult::OutOfMemory;
+  };
   // Control thread is the sole writer; only the published slots may already be
   // visible to the audio thread, so scan [0, published) for an existing lane.
   const size_t published = insert_automation_size_.load(std::memory_order_relaxed);
   for (size_t li = 0; li < published; ++li) {
     InsertAutomationLane& lane = insert_automation_[li];
     if (lane.target == event.target && lane.lane) {
-      return lane.lane->push(event) ? InsertAutomationScheduleResult::Success
-                                    : InsertAutomationScheduleResult::OutOfMemory;
+      return push_result(*lane.lane);
     }
   }
   // Hard cap: the push_back below MUST NOT reallocate, because the audio thread
@@ -823,9 +858,8 @@ InsertAutomationScheduleResult ChannelStrip::schedule_insert_automation_result(
   // element. The reader pairs this with an acquire load.
   try {
     auto lane = std::make_unique<AutomationLane>();
-    if (!lane->push(event)) {
-      return InsertAutomationScheduleResult::OutOfMemory;
-    }
+    const InsertAutomationScheduleResult first = push_result(*lane);
+    if (first != InsertAutomationScheduleResult::Success) return first;
     insert_automation_.push_back({event.target, std::move(lane)});
     insert_automation_size_.store(insert_automation_.size(), std::memory_order_release);
     return InsertAutomationScheduleResult::Success;

@@ -186,6 +186,36 @@ TEST_CASE("ChannelStrip schedule_insert_automation enforces kMaxInsertAutomation
           sonare::mixing::InsertAutomationScheduleResult::OutOfMemory);
 }
 
+// ParametricEq::prepare() preallocates its per-channel state, so the strip EQ's
+// very first block -- stereo or as wide as the strip was prepared for -- allocates nothing.
+TEST_CASE("ChannelStrip EQ first block performs no heap allocation after prepare",
+          "[mixing][rt-safety]") {
+  constexpr int kBlock = 128;
+  constexpr int kWide = 8;
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.gain_db = 6.0f;
+  band.q = sonare::constants::kButterworthQ;
+  band.enabled = true;
+  sonare::mixing::ChannelStrip strip;
+  strip.set_prepared_channels(kWide);
+  strip.set_eq_band(0, band);
+  strip.prepare(48000.0, kBlock);
+
+  std::array<std::array<float, kBlock>, kWide> planes{};
+  std::array<float*, kWide> channels{};
+  for (int ch = 0; ch < kWide; ++ch) {
+    planes[static_cast<size_t>(ch)].fill(0.25f);
+    channels[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+  AllocationGuard guard;
+  strip.process(channels.data(), kWide, kBlock);
+  strip.process(channels.data(), 2, kBlock);
+  REQUIRE(guard.count() == 0);
+  REQUIRE(planes[0][kBlock - 1] != 0.25f);
+}
+
 TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safety]") {
   // Regression guard for P0-D: pre_inserts_ and post_inserts_ are reserved
   // to kMaxInserts in the constructor.  add_pre_insert / add_post_insert
@@ -202,11 +232,21 @@ TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safet
   }
   REQUIRE(strip.num_pre_inserts() + strip.num_post_inserts() == cap);
 
-  // The N+1th insert (pre or post) must throw.
-  REQUIRE_THROWS_AS(strip.add_pre_insert(std::make_unique<ScaleProcessor>(1.0f)),
-                    sonare::SonareException);
-  REQUIRE_THROWS_AS(strip.add_post_insert(std::make_unique<ScaleProcessor>(1.0f)),
-                    sonare::SonareException);
+  // The N+1th insert (pre or post) must throw the documented InvalidState.
+  const auto cap_error = [&strip](bool pre) {
+    try {
+      if (pre) {
+        strip.add_pre_insert(std::make_unique<ScaleProcessor>(1.0f));
+      } else {
+        strip.add_post_insert(std::make_unique<ScaleProcessor>(1.0f));
+      }
+    } catch (const sonare::SonareException& error) {
+      return error.code();
+    }
+    return sonare::ErrorCode::Ok;
+  };
+  CHECK(cap_error(true) == sonare::ErrorCode::InvalidState);
+  CHECK(cap_error(false) == sonare::ErrorCode::InvalidState);
 }
 
 // ============================================================================
