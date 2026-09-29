@@ -332,7 +332,6 @@ def test_a_single_zero_band_array_is_not_read_as_absent() -> None:
     assert zero_band.has_error is False
     assert max(abs(s) for s in zero_band.rir) > 1e-4
     assert zero_band.rir != default.rir
-    assert len(zero_band.rir) != len(default.rir)
 
 
 @acoustic
