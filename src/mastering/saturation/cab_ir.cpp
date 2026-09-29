@@ -21,6 +21,9 @@ using constants::kTwoPi;
 // already in the voicing it borrows.
 constexpr CabGeometry kGeomGuitar4x12{0.0530f, 1500.0f, 2, 2, 0.360f, 0.360f};
 constexpr CabGeometry kGeomBass8x10{0.0330f, 1800.0f, 2, 4, 0.290f, 0.290f};
+// The open-back 12" cabinets use the same driver, one alone and two side by side.
+constexpr CabGeometry kGeomGuitar1x12{0.0530f, 1500.0f, 1, 1, 0.360f, 0.360f};
+constexpr CabGeometry kGeomGuitar2x12{0.0530f, 1500.0f, 2, 1, 0.360f, 0.360f};
 
 /// Bessel function of the first kind, order 1, for 0 <= x <= 3.
 /// Abramowitz & Stegun 9.4.4; the polynomial is accurate to about 1e-8 over that
@@ -54,7 +57,17 @@ void lagrange4_weights(float mu, float* out) noexcept {
 }  // namespace
 
 CabGeometry cab_geometry(CabModel model) noexcept {
-  return model == CabModel::kBass8x10 ? kGeomBass8x10 : kGeomGuitar4x12;
+  switch (model) {
+    case CabModel::kBass8x10:
+      return kGeomBass8x10;
+    case CabModel::kGuitar1x12Combo:
+      return kGeomGuitar1x12;
+    case CabModel::kGuitar2x12Open:
+      return kGeomGuitar2x12;
+    case CabModel::kGuitar4x12:
+      break;
+  }
+  return kGeomGuitar4x12;
 }
 
 float piston_minus3db_argument() noexcept {

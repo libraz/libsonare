@@ -291,4 +291,17 @@ TEST_CASE(
         render("eq.graphic", R"({"band15GainDb":6.0,"band20GainDb":-9.0,"q":9.0})");
     REQUIRE(empty.left != narrow.left);
   }
+
+  SECTION("saturation.ampSim") {
+    const RenderResult empty = render("saturation.ampSim", R"({"drive":0.6})");
+    const RenderResult explicit_defaults =
+        render("saturation.ampSim", R"({"drive":0.6,"cab":true,"cabModel":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    for (const char* model : {"1", "2", "3"}) {
+      const RenderResult other =
+          render("saturation.ampSim", std::string(R"({"drive":0.6,"cabModel":)") + model + "}");
+      REQUIRE(empty.left != other.left);
+    }
+  }
 }

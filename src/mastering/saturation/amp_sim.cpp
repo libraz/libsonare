@@ -569,24 +569,22 @@ void AmpSim::design_chain() {
   // the blend is realtime-automatable, so deriving the capacity from it would let
   // a live automation move open the second mic onto a line that prepare() never
   // allocated. The distances cannot move at all, so this is stable. Only the
-  // reported tail follows the blend, since an unused pair has no tail.
+  // reported tail follows the blend and the cab switch, since an unused pair has
+  // no tail; the lines are sized even with the cab off, as `cab` is automatable.
   mic_a_delay_q8_ = 0;
   mic_b_delay_q8_ = 0;
   mic_line_capacity_ = 0;
   mic_tail_samples_ = 0;
-  if (config_.cab) {
-    const float difference_cm = std::fabs(config_.mic_b_distance_cm - config_.mic_distance_cm);
-    const float delay_samples =
-        difference_cm / kSoundSpeedCmPerS * static_cast<float>(sample_rate_);
-    const int delay_q8 = static_cast<int>(std::lround(delay_samples * 256.0f));
-    if (delay_q8 > 0) {
-      (config_.mic_b_distance_cm > config_.mic_distance_cm ? mic_b_delay_q8_ : mic_a_delay_q8_) =
-          delay_q8;
-      // Capacity covers the whole delay plus the Lagrange stencil's lookahead.
-      mic_line_capacity_ = static_cast<int>(std::ceil(delay_samples)) + 8;
-      if (config_.mic_blend > 0.0f) {
-        mic_tail_samples_ = static_cast<int>(std::ceil(delay_samples));
-      }
+  const float difference_cm = std::fabs(config_.mic_b_distance_cm - config_.mic_distance_cm);
+  const float delay_samples = difference_cm / kSoundSpeedCmPerS * static_cast<float>(sample_rate_);
+  const int delay_q8 = static_cast<int>(std::lround(delay_samples * 256.0f));
+  if (delay_q8 > 0) {
+    (config_.mic_b_distance_cm > config_.mic_distance_cm ? mic_b_delay_q8_ : mic_a_delay_q8_) =
+        delay_q8;
+    // Capacity covers the whole delay plus the Lagrange stencil's lookahead.
+    mic_line_capacity_ = static_cast<int>(std::ceil(delay_samples)) + 8;
+    if (config_.cab && config_.mic_blend > 0.0f) {
+      mic_tail_samples_ = static_cast<int>(std::ceil(delay_samples));
     }
   }
   input_gain_ = sonare::db_to_linear(config_.input_db);
@@ -1053,6 +1051,22 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
     case 16:
       config_.input_db = value;
       break;
+    case 17:
+      // A switch, so only 0 and 1 name a state.
+      if (value != 0.0f && value != 1.0f) return false;
+      config_.cab = value != 0.0f;
+      break;
+    case 18:
+      // An unnamed value is refused rather than rounded onto a neighbour.
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(kCabModelCount)) {
+        return false;
+      }
+      // A loaded or generated IR replaces the analytic cabinet, so the model
+      // has nothing to change: accepted, and left unstored.
+      if (has_cab_ir()) return true;
+      config_.cab_model = static_cast<CabModel>(static_cast<int>(value));
+      break;
     default:
       return false;
   }
@@ -1077,7 +1091,7 @@ std::vector<rt::ParamDescriptor> AmpSim::parameter_descriptors() const {
           {"presenceDb", 4},  {"levelDb", 5}, {"power", 6},      {"sag", 7},
           {"transformer", 8}, {"nfb", 9},     {"micAxis", 10},   {"micBAxis", 11},
           {"micBlend", 12},   {"cone", 13},   {"crossover", 14}, {"biasShift", 15},
-          {"inputDb", 16}};
+          {"inputDb", 16},    {"cab", 17},    {"cabModel", 18}};
 }
 
 }  // namespace sonare::mastering::saturation

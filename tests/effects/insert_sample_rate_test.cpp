@@ -41,6 +41,7 @@
 /// - pitch shifter pre-delay, arrival time in ms: the time asked for.
 /// - graphic EQ, a band's -3 dB bandwidth in Hz at a shared Q: computed from the analog
 ///   peaking section the band is built from.
+/// - amp cabinet (1x12 combo), the top roll-off's -3 dB corner in Hz: the corner itself.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
 ///
@@ -69,6 +70,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/saturation/bitcrusher.h"
+#include "mastering/saturation/cab_voicing.h"
 #include "mastering/stereo/stereo_balance.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
@@ -1217,6 +1219,35 @@ double analog_bandwidth_3db_hz(float q) {
   return (crossing(1.0, 8.0) - crossing(1.0, 1.0 / 8.0)) * kGraphicCentreHz;
 }
 
+// --- amp cabinet ------------------------------------------------------------
+
+constexpr double kCabRolloffTolerance = 0.03;
+
+/// The 1x12 combo's cabinet design (no capsule, flat presence) as an impulse response.
+std::vector<float> cab_1x12_impulse(double sample_rate) {
+  namespace sat = sonare::mastering::saturation;
+  const sat::CabDesign design = sat::design_cab_stage(
+      sat::CabModel::kGuitar1x12Combo, sat::MicModel::kNone, 0.0f, 0.0f, 0.0f, sample_rate);
+  return sat::render_cab_design(design, sonare::test::generate_impulse(kFftLength));
+}
+
+/// Where the response has fallen 3.01 dB below its 1 kHz level, bisected in log
+/// frequency over the octave either side of the roll-off corner.
+double cab_rolloff_3db_hz(const std::vector<float>& response, double sample_rate) {
+  const double level = response_db(response, 1000.0, sample_rate) - 3.0103;
+  double a = 2500.0;
+  double b = std::min(10000.0, sample_rate * 0.49);
+  for (int i = 0; i < 60; ++i) {
+    const double mid = std::sqrt(a * b);
+    if (response_db(response, mid, sample_rate) > level) {
+      a = mid;
+    } else {
+      b = mid;
+    }
+  }
+  return std::sqrt(a * b);
+}
+
 std::string at_rate(double sample_rate) {
   return " at " + std::to_string(static_cast<int>(sample_rate)) + " Hz";
 }
@@ -1639,8 +1670,27 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                << rates[1]);
   }
 
+  // --- amp cabinet, 1x12 combo: the roll-off's -3 dB corner, in hertz ---------
+  {
+    const std::string asked = "the 1x12 cabinet's roll-off corner";
+    const double corner = sonare::mastering::saturation::cab_voicing(
+                              sonare::mastering::saturation::CabModel::kGuitar1x12Combo)
+                              .rolloff_hz;
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = cab_rolloff_3db_hz(cab_1x12_impulse(rates[r]), rates[r]);
+      tally.at_least(measured[r], 1.0, asked + at_rate(rates[r]) + ", is readable at all");
+      tally.within(measured[r], corner, kCabRolloffTolerance,
+                   asked + at_rate(rates[r]) + ", against the corner asked for");
+    }
+    tally.within(measured[0], measured[1], kCabRolloffTolerance,
+                 asked + ", lands on one frequency at both rates");
+    WARN(asked << ": " << measured[0] << " Hz at " << rates[0] << ", " << measured[1] << " Hz at "
+               << rates[1]);
+  }
+
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 207);
+  REQUIRE(tally.count() >= 212);
 }

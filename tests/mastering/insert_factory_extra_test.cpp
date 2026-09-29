@@ -1759,6 +1759,7 @@ TEST_CASE("an enum wire value selects the enumerator it always selected",
     CHECK(amp->amp_config().mic_b_model == mics[value]);
   }
   const sat::AmpSim* amp = nullptr;
+  REQUIRE(make_insert("saturation.ampSim", R"({"cabModel":3})") != nullptr);
   const auto held_cab = BuildAs("saturation.ampSim", OneKey("cabModel", 1), &amp);
   CHECK(amp->amp_config().cab_model == sat::CabModel::kBass8x10);
   const auto held_topology = BuildAs("saturation.ampSim", OneKey("topology", 1), &amp);
@@ -1784,7 +1785,7 @@ TEST_CASE("an enum wire value no enumerator is declared for is refused",
       {"multiband.compressor", R"({"mode":4})"},
       {"multiband.saturation", R"({"band0.type":4})"},
       {"saturation.ampSim", R"({"ampModel":6})"},
-      {"saturation.ampSim", R"({"cabModel":2})"},
+      {"saturation.ampSim", R"({"cabModel":4})"},
       {"saturation.ampSim", R"({"topology":2})"},
       {"saturation.ampSim", R"({"powerTube":4})"},
       {"saturation.ampSim", R"({"micModel":4})"},

@@ -483,6 +483,10 @@ constexpr const char* enum_choice_name(sonare::mastering::saturation::CabModel v
       return "guitar4x12";
     case sonare::mastering::saturation::CabModel::kBass8x10:
       return "bass8x10";
+    case sonare::mastering::saturation::CabModel::kGuitar1x12Combo:
+      return "guitar1x12Combo";
+    case sonare::mastering::saturation::CabModel::kGuitar2x12Open:
+      return "guitar2x12Open";
   }
   return nullptr;
 }

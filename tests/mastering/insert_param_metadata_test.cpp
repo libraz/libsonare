@@ -309,7 +309,7 @@ TEST_CASE("every enum a flat parameter selects has unique names within the scan"
   REQUIRE(declared_names<m::saturation::PowerTube>() ==
           std::vector<std::string>{"6l6", "el34", "el84", "6v6"});
   REQUIRE(declared_names<m::saturation::CabModel>() ==
-          std::vector<std::string>{"guitar4x12", "bass8x10"});
+          std::vector<std::string>{"guitar4x12", "bass8x10", "guitar1x12Combo", "guitar2x12Open"});
   REQUIRE(declared_names<m::eq::CutFilterSlope>().front() == "db12PerOct");
   REQUIRE(declared_names<m::eq::EqBandType>().back() == "allPass");
   REQUIRE(declared_names<m::dynamics::DetectorMode>().back() == "logRms");

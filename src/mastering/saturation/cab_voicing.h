@@ -30,7 +30,17 @@ enum class CabModel {
   /// darker, presence-restrained top (2.2 kHz presence, 3.5 kHz roll-off) so a
   /// bass NativeSynth voice sits in a big-cab response rather than a guitar's.
   kBass8x10 = 1,
+  /// Guitar 1x12 open-back combo: a single cone, so a thin low end (100 Hz cut,
+  /// 170 Hz bump) and one breakup peak (2.8 kHz presence, 5 kHz roll-off).
+  kGuitar1x12Combo = 2,
+  /// Guitar 2x12 open-back: wider low-mid than the 1x12 (85 Hz cut, 130 Hz bump)
+  /// but still open-backed, so leaner below than the 4x12 (3.4 kHz presence,
+  /// 4.6 kHz roll-off).
+  kGuitar2x12Open = 3,
 };
+
+/// Number of cabinet models; a `cab_model` value must be a whole number below it.
+inline constexpr int kCabModelCount = 4;
 
 /// Microphone capsule voicing in front of the cabinet. The cab EQ already
 /// approximates a close-miked response, so `kNone` — no explicit mic stage —

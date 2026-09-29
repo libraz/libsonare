@@ -22,11 +22,26 @@ constexpr MicVoicing kMicCondenser{8000.0f, 3.0f, 1.5f, 110.0f, 2.5f, 3400.0f, -
 
 constexpr CabVoicing kCabGuitar4x12{75.0f, 110.0f, 2.0f, 3800.0f, 4800.0f};
 constexpr CabVoicing kCabBass8x10{40.0f, 80.0f, 3.0f, 2200.0f, 3500.0f};
+// 1x12 open-back combo: one cone and no back, so the low cut sits at 100 Hz over a
+// small +1.5 dB thump at 170 Hz; the single speaker's breakup peak is 2.8 kHz.
+constexpr CabVoicing kCabGuitar1x12Combo{100.0f, 170.0f, 1.5f, 2800.0f, 5000.0f};
+// 2x12 open-back: two cones widen the low-mid (+2.5 dB at 130 Hz) but the open back
+// still keeps the low cut at 85 Hz, above the 4x12's 75 Hz; a 4.6 kHz roll-off.
+constexpr CabVoicing kCabGuitar2x12Open{85.0f, 130.0f, 2.5f, 3400.0f, 4600.0f};
 
 }  // namespace
 
 CabVoicing cab_voicing(CabModel model) noexcept {
-  return model == CabModel::kBass8x10 ? kCabBass8x10 : kCabGuitar4x12;
+  switch (model) {
+    case CabModel::kBass8x10:
+      return kCabBass8x10;
+    case CabModel::kGuitar1x12Combo:
+      return kCabGuitar1x12Combo;
+    case CabModel::kGuitar2x12Open:
+      return kCabGuitar2x12Open;
+    default:
+      return kCabGuitar4x12;
+  }
 }
 
 MicVoicing mic_voicing(MicModel model) noexcept {

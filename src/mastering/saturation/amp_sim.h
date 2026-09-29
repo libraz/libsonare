@@ -418,7 +418,10 @@ class AmpSim : public rt::ProcessorBase {
   //  14 = crossover (clamped to [0, 1])
   //  15 = bias_shift (clamped to [0, 1])
   //  16 = input_db
-  // `cab`/`cab_model`/`amp_model`/`mic_model`/`mic_b_model`/`mic_b_invert`/
+  //  17 = cab (0 or 1)
+  //  18 = cab_model (a whole number below kCabModelCount; accepted and ignored
+  //       while a cab IR is loaded or generated)
+  // `amp_model`/`mic_model`/`mic_b_model`/`mic_b_invert`/
   // `power_tube` are discrete switches, so they are not exposed. Neither are
   // the two mic distances (they set delay-line taps, which cannot move
   // mid-stream without a click), `doppler` (it would move the reported
@@ -427,7 +430,7 @@ class AmpSim : public rt::ProcessorBase {
   bool set_parameter(unsigned int param_id, float value) override;
   // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb,
   // 5=levelDb, 6=power, 7=sag, 8=transformer, 9=nfb, 10=micAxis, 11=micBAxis,
-  // 12=micBlend, 13=cone, 14=crossover, 15=biasShift, 16=inputDb.
+  // 12=micBlend, 13=cone, 14=crossover, 15=biasShift, 16=inputDb, 17=cab, 18=cabModel.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
