@@ -39,6 +39,22 @@ def _playback_config_to_json(config: Mapping[str, Any] | str) -> bytes:
     return (config if isinstance(config, str) else json.dumps(dict(config))).encode("utf-8")
 
 
+def _require_playback(lib: ctypes.CDLL) -> None:
+    """Raise a descriptive error rather than an AttributeError from ctypes.
+
+    Playback is a real, independently disableable build option
+    (BUILD_PLAYBACK), so an ABI-matched dylib built without it never sets up
+    these symbols in _ffi_signatures_playback.py's hasattr-guarded configure
+    step. Called at the top of every entry point that creates a handle;
+    methods on an already-created handle need no re-check, since the same
+    dylib backs every call on it.
+    """
+    if not hasattr(lib, "sonare_playback_renderer_create_json"):
+        raise RuntimeError(
+            "the loaded libsonare does not expose playback (built without BUILD_PLAYBACK)"
+        )
+
+
 def _json_out_result(lib: ctypes.CDLL, out: ctypes.c_char_p) -> dict[str, Any]:
     try:
         if not out:
@@ -60,6 +76,7 @@ class HrtfSet:
     def default(cls) -> HrtfSet:
         """Build the embedded default set (SADIE II KU100, native builds only)."""
         lib = _get_lib()
+        _require_playback(lib)
         handle = ctypes.c_void_p()
         _check(lib.sonare_hrtf_set_create_default(ctypes.byref(handle)))
         return cls(handle, lib)
@@ -68,6 +85,7 @@ class HrtfSet:
     def from_bytes(cls, data: bytes) -> HrtfSet:
         """Parse SHRF v1 bytes into an HRTF set; malformed data raises :class:`SonareError`."""
         lib = _get_lib()
+        _require_playback(lib)
         buf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data) if data else None
         handle = ctypes.c_void_p()
         _check(
@@ -76,6 +94,22 @@ class HrtfSet:
             )
         )
         return cls(handle, lib)
+
+    def _require_handle(self) -> ctypes.c_void_p:
+        """Return the live handle, or raise if this HRTF set has been closed.
+
+        A closed handle is NULL (``close()`` overwrites it with a fresh
+        ``c_void_p()``), and the C ABI's ``hrtf`` parameter treats a NULL as an
+        explicit "use the embedded default" rather than as an error -- unlike
+        every other handle in this binding, where a NULL reaching the C ABI is
+        simply refused. Forwarding a closed handle's NULL as an ordinary NULL
+        argument would silently render with the built-in HRTF set instead of
+        the caller's own, with nothing to say so. Falsiness, not ``is None``,
+        matching :meth:`Audio._require_handle`.
+        """
+        if not self._handle:
+            raise RuntimeError("HrtfSet is closed")
+        return self._handle
 
     def close(self) -> None:
         if self._handle:
@@ -115,10 +149,11 @@ class PlaybackRenderer:
         # __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
+        _require_playback(self._lib)
         _check(
             self._lib.sonare_playback_renderer_create_json(
                 _playback_config_to_json(config),
-                hrtf._handle if hrtf is not None else None,
+                hrtf._require_handle() if hrtf is not None else None,
                 _to_c_int(sample_rate, "sample_rate"),
                 _to_c_int(max_block_size, "max_block_size"),
                 ctypes.byref(self._handle),
@@ -306,6 +341,15 @@ def render_playback(
 ) -> np.ndarray:
     """Render a whole interleaved buffer offline, time-aligned with the input.
 
+    Returns a ``(frames, channels)`` float32 ndarray -- ``channels`` is the
+    output CHANNEL COUNT, which the caller cannot know in advance (it follows
+    the render target ``config`` names, e.g. a 5.1 source rendered to
+    headphones comes back stereo), so the shape itself is how this surface
+    carries it, the same way :meth:`Project.bounce` does. Node's
+    ``renderPlayback`` and WASM's carry the same fact as an explicit
+    ``{samples, channels}`` result instead, since neither has a reshape-in-
+    place idiom to lean on.
+
     The renderer latency is removed internally, so the result has the same
     frame count as ``samples`` / ``channels``.
     """
@@ -317,6 +361,7 @@ def render_playback(
         raise SonareValueError("interleaved samples length must be divisible by channels")
     frames = total // ch
     lib = _get_lib()
+    _require_playback(lib)
     out_ptr = ctypes.POINTER(ctypes.c_float)()
     out_frames = ctypes.c_size_t()
     out_channels = ctypes.c_int()
@@ -327,14 +372,15 @@ def render_playback(
             _to_c_int(ch, "channels"),
             _to_c_int(sample_rate, "sample_rate"),
             _playback_config_to_json(config),
-            hrtf._handle if hrtf is not None else None,
+            hrtf._require_handle() if hrtf is not None else None,
             ctypes.byref(out_ptr),
             ctypes.byref(out_frames),
             ctypes.byref(out_channels),
         )
     )
     try:
-        return _from_c_float_array(out_ptr, int(out_frames.value) * int(out_channels.value))
+        flat = _from_c_float_array(out_ptr, int(out_frames.value) * int(out_channels.value))
+        return flat.reshape(int(out_frames.value), int(out_channels.value))
     finally:
         if out_ptr:
             lib.sonare_free_playback_render(out_ptr)
@@ -350,6 +396,7 @@ class PlaybackLoudnessMeter:
     def __init__(self, channels: int, sample_rate: int) -> None:
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
+        _require_playback(self._lib)
         self._channels = _narrow_int(channels, "channels", _C_INT_MIN, _C_INT_MAX)
         if self._channels <= 0:
             raise SonareValueError("channels must be positive")

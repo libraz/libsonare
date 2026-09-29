@@ -109,8 +109,21 @@ def _assert_signature_matches(
         else:
             positional = positional[drop_leading:]
     stub_args = posonly + positional
+    # `inspect.signature`'s own parameter order: POSITIONAL_ONLY,
+    # POSITIONAL_OR_KEYWORD, VAR_POSITIONAL (*args), KEYWORD_ONLY, VAR_KEYWORD
+    # (**kwargs) -- a stub spelling either as a forwarding wrapper (e.g.
+    # `Audio.analyze(self, **kwargs: Any)`) needs both slotted in at the same
+    # position, not just appended, or a `*args`-before-kwonly stub would name
+    # its kwonly parameters in the wrong order against the runtime.
+    vararg_names = [node.args.vararg.arg] if node.args.vararg else []
+    kwarg_names = [node.args.kwarg.arg] if node.args.kwarg else []
 
-    expected_names = [a.arg for a in stub_args] + [a.arg for a in node.args.kwonlyargs]
+    expected_names = (
+        [a.arg for a in stub_args]
+        + vararg_names
+        + [a.arg for a in node.args.kwonlyargs]
+        + kwarg_names
+    )
     assert [p.name for p in runtime_parameters] == expected_names, (
         f"{dotted}: parameter names drifted from {stub_name}"
     )
@@ -118,7 +131,9 @@ def _assert_signature_matches(
     expected_kinds = (
         [inspect.Parameter.POSITIONAL_ONLY] * len(posonly)
         + [inspect.Parameter.POSITIONAL_OR_KEYWORD] * len(positional)
+        + [inspect.Parameter.VAR_POSITIONAL] * len(vararg_names)
         + [inspect.Parameter.KEYWORD_ONLY] * len(node.args.kwonlyargs)
+        + [inspect.Parameter.VAR_KEYWORD] * len(kwarg_names)
     )
     assert [p.kind for p in runtime_parameters] == expected_kinds, (
         f"{dotted}: parameter kinds drifted from {stub_name}"
@@ -128,10 +143,15 @@ def _assert_signature_matches(
         defaults = [inspect.Parameter.empty] * (len(stub_args) - len(node.args.defaults)) + [
             _literal_default(d) for d in node.args.defaults
         ]
+        # *args / **kwargs can never carry a `= value` default in Python syntax,
+        # so both slots are always Parameter.empty -- present only to keep this
+        # list the same length as expected_names/runtime_parameters.
+        defaults += [inspect.Parameter.empty] * len(vararg_names)
         defaults += [
             inspect.Parameter.empty if d is None else _literal_default(d)
             for d in node.args.kw_defaults
         ]
+        defaults += [inspect.Parameter.empty] * len(kwarg_names)
     except ValueError:
         # Names such as ``DEFAULT_HOP_LENGTH`` are deliberately resolved by the
         # module at import time; this structural guard does not execute stub

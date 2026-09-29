@@ -188,11 +188,14 @@ def _percussive_events_to_c(events: Sequence[PercussiveEvent]) -> tuple[object, 
         c_events[i].edit = SonarePercussiveEventEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
-            # success.
-            time_offset_samples=_validate_c_int_field(
-                "render_percussive_events",
+            # success. Int64-bounded like onset_sample/offset_sample above: the
+            # ctypes field is c_int64, and _validate_c_int_field's 32-bit range
+            # would refuse an offset the C ABI, Node and WASM all accept.
+            time_offset_samples=_narrow_int(
                 event.edit.time_offset_samples,
-                f"events[{i}].edit.time_offset_samples",
+                f"render_percussive_events: events[{i}].edit.time_offset_samples",
+                _INT64_MIN,
+                _INT64_MAX,
             ),
             gain_db=float(event.edit.gain_db),
             muted=1 if event.edit.muted else 0,

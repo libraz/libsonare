@@ -40,12 +40,15 @@ from ._ffi import (
     SonarePolyphonicConfig,
 )
 from ._runtime import (
+    _INT64_MAX,
+    _INT64_MIN,
     SonareValueError,
     _check,
     _from_c_float_array,
     _from_c_int_array,
     _get_lib,
     _guard_buffer,
+    _narrow_int,
     _out_float_array,
     _to_c_float_array,
     _to_c_int,
@@ -574,9 +577,13 @@ class PolyphonicAnalysis:
         c_edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
-            # success.
-            time_offset_samples=_validate_c_int_field(
-                "set_note_edit", edit.time_offset_samples, "edit.time_offset_samples"
+            # success. Int64-bounded, not _validate_c_int_field's 32-bit range:
+            # the ctypes field is c_int64, matching the C ABI, Node and WASM.
+            time_offset_samples=_narrow_int(
+                edit.time_offset_samples,
+                "set_note_edit: edit.time_offset_samples",
+                _INT64_MIN,
+                _INT64_MAX,
             ),
             pitch_shift_semitones=float(edit.pitch_shift_semitones),
             gain_db=float(edit.gain_db),

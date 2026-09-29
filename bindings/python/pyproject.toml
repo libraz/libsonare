@@ -97,6 +97,7 @@ artifacts = [
 "../../schemas/realtime-voice-changer-preset.schema.json" = "libsonare/schemas/realtime-voice-changer-preset.schema.json"
 "../../schemas/realtime-voice-changer-preset-pack.schema.json" = "libsonare/schemas/realtime-voice-changer-preset-pack.schema.json"
 "../../schemas/mixer-scene.schema.json" = "libsonare/schemas/mixer-scene.schema.json"
+"../../schemas/playback-renderer-config.schema.json" = "libsonare/schemas/playback-renderer-config.schema.json"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -112,6 +113,7 @@ include = [
 "../../schemas/realtime-voice-changer-preset.schema.json" = "schemas/realtime-voice-changer-preset.schema.json"
 "../../schemas/realtime-voice-changer-preset-pack.schema.json" = "schemas/realtime-voice-changer-preset-pack.schema.json"
 "../../schemas/mixer-scene.schema.json" = "schemas/mixer-scene.schema.json"
+"../../schemas/playback-renderer-config.schema.json" = "schemas/playback-renderer-config.schema.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

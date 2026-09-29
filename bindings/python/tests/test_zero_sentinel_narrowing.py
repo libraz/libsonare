@@ -471,6 +471,9 @@ def test_a_fractional_note_offset_is_refused_rather_than_rendered_unmoved(tone) 
         with pytest.raises(SonareValueError, match="time_offset_samples"):
             rendered(value)
     assert rendered(None) == untouched
+    # M-16: the ctypes field is c_int64, matching the C ABI, Node and WASM --
+    # an offset past the 32-bit range must not be refused as if it were one.
+    rendered(2**32 + 500)
 
 
 def test_a_fractional_event_offset_is_refused_rather_than_rendered_unmoved(hits) -> None:
@@ -489,6 +492,8 @@ def test_a_fractional_event_offset_is_refused_rather_than_rendered_unmoved(hits)
         with pytest.raises(SonareValueError, match="time_offset_samples"):
             rendered(value)
     assert rendered(None) == untouched
+    # M-16: same int64-vs-int32 regression check as the note case above.
+    rendered(2**32 + 500)
 
 
 def test_a_fractional_polyphonic_note_offset_is_refused_rather_than_rendered_unmoved(
@@ -511,3 +516,5 @@ def test_a_fractional_polyphonic_note_offset_is_refused_rather_than_rendered_unm
         with pytest.raises(SonareValueError, match="time_offset_samples"):
             rendered(value)
     assert rendered(None) == untouched
+    # M-16: same int64-vs-int32 regression check as the note case above.
+    rendered(2**32 + 500)

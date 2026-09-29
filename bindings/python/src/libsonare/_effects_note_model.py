@@ -34,7 +34,6 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _unsupported_effect_symbol,
-    _validate_c_int_field,
     _validate_scalar,
 )
 
@@ -451,9 +450,14 @@ def _notes_to_c(fn_name: str, notes: Sequence[NoteObject]) -> tuple[object, int,
         c_notes[i].edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
-            # success.
-            time_offset_samples=_validate_c_int_field(
-                fn_name, note.edit.time_offset_samples, f"notes[{i}].edit.time_offset_samples"
+            # success. Int64-bounded like onset_sample/offset_sample above: the
+            # ctypes field is c_int64, and _validate_c_int_field's 32-bit range
+            # would refuse an offset the C ABI, Node and WASM all accept.
+            time_offset_samples=_narrow_int(
+                note.edit.time_offset_samples,
+                f"{fn_name}: notes[{i}].edit.time_offset_samples",
+                _INT64_MIN,
+                _INT64_MAX,
             ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),

@@ -44,6 +44,7 @@ SIGNATURE_MODULES = (
         "libsonare._ffi_signatures_mixing_assistant",
         "configure_mixing_assistant_signatures",
     ),
+    ("libsonare._ffi_signatures_playback", "configure_playback_signatures"),
     ("libsonare._ffi_signatures_project", "configure_project_signatures"),
     ("libsonare._ffi_signatures_repair_dynamics", "configure_repair_dynamics_signatures"),
 )

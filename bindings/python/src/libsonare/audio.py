@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -531,46 +531,27 @@ class Audio:
             if out_times and out_count.value > 0:
                 self._lib.sonare_free_floats(out_times)
 
-    def analyze(self) -> AnalysisResult:
-        """Run music analysis over the flat native result.
+    def analyze(self, **kwargs: Any) -> AnalysisResult:
+        """Run full music analysis, forwarding to the module-level :func:`libsonare.analyze`.
 
-        This path fills only bpm, key, time signature and beat times; the
-        richer fields of :class:`~libsonare.AnalysisResult` — ``beat_strengths``
-        (one raw onset-envelope frame per beat), ``beat_observations`` (the
-        windowed beat-level evidence), ``downbeat_indices``, chords, sections,
-        timbre, dynamics, rhythm, melody and form — are left at their defaults.
-        Call the module-level :func:`libsonare.analyze` for the complete
-        result, and for the tempo and meter options.
+        Accepts the same keyword options (``bpm_min``, ``use_hpss``,
+        ``meter_candidate_numerators``, ``tuning``, ...) and returns the same
+        fully populated :class:`~libsonare.AnalysisResult` -- chords, sections,
+        timbre, dynamics, rhythm, melody and form included, not just bpm, key,
+        time signature and beat times. This handle contributes only its
+        decoded ``data`` / ``sample_rate``; the analysis itself carries no
+        handle-lifetime state of its own, so there is nothing this method adds
+        over calling the module-level function directly except not having to
+        pass them again.
 
         Raises:
             RuntimeError: If the audio has been closed.
         """
-        from ._ffi import SonareAnalysisResult
-        from .types import Mode, PitchClass, TimeSignature
+        from ._analysis_reports import analyze as _analyze
 
-        handle = self._require_handle()
-        out = SonareAnalysisResult()
-        rc = self._lib.sonare_audio_analyze(handle, ctypes.byref(out))
-        _check(rc)
-        try:
-            beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
-            return AnalysisResult(
-                bpm=float(out.bpm),
-                bpm_confidence=float(out.bpm_confidence),
-                key=Key(
-                    root=PitchClass(out.key.root),
-                    mode=Mode(out.key.mode),
-                    confidence=float(out.key.confidence),
-                ),
-                time_signature=TimeSignature(
-                    numerator=int(out.time_signature.numerator),
-                    denominator=int(out.time_signature.denominator),
-                    confidence=float(out.time_signature.confidence),
-                ),
-                beat_times=beat_times,
-            )
-        finally:
-            self._lib.sonare_free_result(ctypes.byref(out))
+        # .data itself calls _require_handle(), so a closed Audio still raises
+        # RuntimeError here without a second explicit check.
+        return _analyze(self.data, self.sample_rate, **kwargs)
 
     def analyze_bpm(
         self,

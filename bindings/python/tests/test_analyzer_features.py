@@ -22,6 +22,40 @@ def test_audio_analyze() -> None:
     assert isinstance(result.beats, list)
 
 
+def test_audio_analyze_matches_the_module_level_function_field_for_field() -> None:
+    """Audio.analyze() must not be a second, narrower analysis path.
+
+    It used to call sonare_audio_analyze directly, which fills only bpm, key,
+    time signature and beat times and leaves chords / sections / timbre /
+    dynamics / rhythm / melody / form at their defaults -- a Python port of JS
+    reading ``audio.analyze().chords`` got ``[]``, indistinguishable from "no
+    chords detected." Comparing the two results field for field (the dataclass
+    is frozen, so ``==`` is structural) is what a partial result cannot fake:
+    an unfixed regression would disagree on chords/sections/timbre and every
+    other field the narrow C call never populated, not just on one of them.
+    """
+    from libsonare import Audio, analyze
+
+    samples = _generate_sine(220.0, 22050, 3.0)
+    via_handle = Audio.from_buffer(samples, sample_rate=22050).analyze()
+    via_module = analyze(samples, 22050)
+    assert via_handle == via_module
+
+
+def test_audio_analyze_forwards_its_keyword_options() -> None:
+    """A caller-supplied option must reach the same analysis the module-level
+    function runs, not a narrow call the class method used to make with no
+    options parameter at all."""
+    from libsonare import Audio, analyze
+
+    samples = _generate_sine(220.0, 22050, 3.0)
+    audio = Audio.from_buffer(samples, sample_rate=22050)
+    narrow = audio.analyze(bpm_min=190.0, bpm_max=210.0)
+    wide = audio.analyze(bpm_min=60.0, bpm_max=200.0)
+    assert narrow.bpm != wide.bpm
+    assert narrow == analyze(samples, 22050, bpm_min=190.0, bpm_max=210.0)
+
+
 def test_analysis_primitives() -> None:
     """Detailed BPM and rhythm APIs expose reusable primitives."""
     from libsonare import (

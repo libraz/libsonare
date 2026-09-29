@@ -163,6 +163,7 @@ rather than being sent as an explicit value.
 | `suggestion_strength`    | `1.0`   | Overall strength in `[0, 1]`, scaling every level-like decision; `0` sets them all to zero but keeps routing and the physical image corrections |
 | `eq_max_cut_db`          | `4.0`   | Largest cut a single suggested EQ band may apply, in dB      |
 | `mix_bus_headroom_dbtp`  | `-6.0`  | Headroom the summed mix is left with on the master bus, in dBTP |
+| `tempo_bpm`              | `0.0`   | Tempo the suggested delay times are voiced against, in BPM; `0` uses the transport fallback |
 | `enable_structure`       | `True`  | Evaluate bus structure, routing and sends                    |
 | `enable_gain`            | `True`  | Evaluate per-track gain staging                              |
 | `enable_balance`         | `True`  | Evaluate fader balance between tracks                        |
@@ -190,7 +191,7 @@ Every area below has runnable examples and the full API in the
 is preferred when doing more than one computation on the same signal.
 
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (`metering_*`, `waveform_peaks`). → [Python API](https://libsonare.libraz.net/docs/python-api)
-- **Mastering** — 89 named DSP processors, the configurable `mastering_chain`, 25 named presets via `master_audio`, dynamics / repair specialist functions, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 89 named DSP processors, the configurable `mastering_chain`, 30 named presets via `master_audio`, dynamics / repair specialist functions, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mix_stereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Mixing assistant** — `suggest_mix_scene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)

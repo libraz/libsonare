@@ -38,6 +38,36 @@ def test_capabilities_report_playback() -> None:
     assert capabilities()["features"]["playback"] is True
 
 
+class _LibWithoutPlayback:
+    """A stand-in for a ctypes.CDLL from a dylib built without BUILD_PLAYBACK.
+
+    Not a real CDLL: hasattr() on the real thing performs a dlsym lookup and
+    raises AttributeError for a genuinely absent symbol, which is exactly what
+    this object reproduces without needing two actual dylib builds.
+    """
+
+
+def test_require_playback_names_the_missing_capability() -> None:
+    """The internal guard raises a descriptive RuntimeError, not AttributeError.
+
+    _ffi_signatures_playback.py's hasattr guards mean a playback-less but
+    ABI-matched dylib loads cleanly; this is the other half -- an actual call
+    into playback on that dylib must fail by naming what is missing, not with
+    ctypes' own "object has no attribute" message.
+    """
+    from libsonare._playback import _require_playback
+
+    with pytest.raises(RuntimeError, match="playback"):
+        _require_playback(_LibWithoutPlayback())
+
+
+def test_require_playback_is_silent_when_the_symbol_is_present() -> None:
+    from libsonare._playback import _require_playback
+    from libsonare._runtime import _get_lib
+
+    _require_playback(_get_lib())  # does not raise on this build, which has playback
+
+
 def test_renderer_reports_its_shape() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
         assert renderer.output_channels() == 6
@@ -160,8 +190,20 @@ def test_closed_renderer_rejects_further_calls() -> None:
 def test_render_playback_is_time_aligned_and_finite() -> None:
     samples = np.array(_sine(256 * 2), dtype=np.float32)
     out = render_playback(samples, channels=2, sample_rate=SR, config={})
-    assert out.shape == (256 * 2,)
+    # (frames, channels) -- the shape itself names the output channel count,
+    # which the caller cannot know in advance (see render_playback's own
+    # docstring): a 2-channel speakers target here keeps 2 channels out.
+    assert out.shape == (256, 2)
     assert np.isfinite(out).all()
+
+
+def test_render_playback_names_the_output_channel_count_via_shape() -> None:
+    """Headphones renders binaural stereo regardless of the source width."""
+    samples = np.array(_sine(256 * 6), dtype=np.float32)
+    out = render_playback(
+        samples, channels=6, sample_rate=SR, config={"target": {"kind": "headphones"}}
+    )
+    assert out.shape == (256, 2)
 
 
 def test_render_playback_rejects_an_unknown_key() -> None:
@@ -180,6 +222,28 @@ def test_hrtf_set_default_and_lifecycle() -> None:
 def test_hrtf_set_from_bytes_rejects_malformed_data() -> None:
     with pytest.raises(SonareError):
         HrtfSet.from_bytes(b"SHRF\x00\x00\x00\x00")
+
+
+def test_a_closed_hrtf_set_is_refused_rather_than_silently_falling_back_to_the_default() -> None:
+    """A closed handle must never reach the C ABI as an ordinary NULL.
+
+    HrtfSet.close() leaves a NULL handle behind, and the C ABI's hrtf
+    parameter treats NULL as an explicit "use the embedded default" -- the one
+    handle in this binding where NULL is not simply refused. Passing a closed
+    set into either construction path used to silently switch the render to
+    the built-in SADIE II set instead of raising, with nothing to say a custom
+    HRTF was ever asked for.
+    """
+    hrtf = HrtfSet.default()
+    hrtf.close()
+
+    with pytest.raises(RuntimeError, match="closed"):
+        PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK)
+
+    with pytest.raises(RuntimeError, match="closed"):
+        render_playback(
+            np.zeros(4, dtype=np.float32), channels=2, sample_rate=SR, config={}, hrtf=hrtf
+        )
 
 
 def test_loudness_meter_integrates_pushed_frames() -> None:

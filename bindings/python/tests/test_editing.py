@@ -87,6 +87,64 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
         )
 
 
+def test_pitch_correct_to_midi_timevarying_derives_voicing_from_voiced_prob() -> None:
+    """When ``voiced`` is omitted, ``voiced_prob`` decides (>= 0.5 is voiced)
+    instead of every frame defaulting to voiced regardless of what
+    voiced_prob says.
+
+    Driven through pYIN's own NaN-for-unvoiced convention: the core accepts a
+    NaN F0 frame only when that frame is NOT treated as voiced, so acceptance
+    or rejection of an all-NaN track is a direct, deterministic readout of the
+    voicing decision the implementation actually made.
+    """
+    sr = 22050
+    samples = _tone(sr)
+    hop = 512
+    n_frames = len(samples) // hop + 1
+    f0 = [math.nan] * n_frames
+
+    # Below 0.5: every frame reads as unvoiced, so the canonical unvoiced NaN
+    # representation is accepted -- this used to fail with voiced forced true.
+    libsonare.pitch_correct_to_midi_timevarying(
+        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced_prob=[0.1] * n_frames
+    )
+    # At/above 0.5: every frame reads as voiced, so a voiced frame carrying
+    # NaN (no measured pitch) is rejected, the same as an explicit voiced=1.
+    for threshold in (0.9, 0.5):
+        with pytest.raises((ValueError, RuntimeError)):
+            libsonare.pitch_correct_to_midi_timevarying(
+                samples,
+                f0,
+                60.0,
+                sample_rate=sr,
+                hop_length=hop,
+                voiced_prob=[threshold] * n_frames,
+            )
+    # voiced_prob absent too: every frame defaults to voiced, so NaN is
+    # rejected exactly like the all-voiced case above.
+    with pytest.raises((ValueError, RuntimeError)):
+        libsonare.pitch_correct_to_midi_timevarying(
+            samples, f0, 60.0, sample_rate=sr, hop_length=hop
+        )
+
+
+def test_pitch_correct_timevarying_derives_voicing_from_voiced_prob() -> None:
+    """The config-based sibling of the fixed-MIDI function must agree."""
+    sr = 22050
+    samples = _tone(sr)
+    hop = 512
+    n_frames = len(samples) // hop + 1
+    f0 = [math.nan] * n_frames
+
+    libsonare.pitch_correct_timevarying(
+        samples, f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.1] * n_frames
+    )
+    with pytest.raises((ValueError, RuntimeError)):
+        libsonare.pitch_correct_timevarying(
+            samples, f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.9] * n_frames
+        )
+
+
 def test_pitch_correct_timevarying_voiced_accepts_any_int_sequence() -> None:
     """The voiced flags marshal in bulk, so every int-like sequence agrees.
 
