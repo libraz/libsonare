@@ -1762,6 +1762,58 @@ TEST_CASE("RealtimeEngine track lane smoother survives loop wrap", "[engine][rea
   REQUIRE(left.back() < 0.35f);
 }
 
+TEST_CASE("RealtimeEngine folds a playhead at or past loop_end before rendering",
+          "[engine][realtime]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 8;
+  constexpr int64_t kLoopLen = 480;  // loop [0, 0.01) ppq at 60 BPM and 48 kHz
+  std::array<float, kFrames> clip{};
+  for (int i = 0; i < kFrames; ++i) clip[static_cast<size_t>(i)] = static_cast<float>(i + 1);
+  const float* clip_channels[] = {clip.data()};
+
+  auto make_engine = [&](sonare::engine::RealtimeEngine& engine) {
+    engine.prepare(48000.0, kBlock);
+    engine.set_clips({sonare::engine::ClipSchedule{
+        1, {clip_channels, 1, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0}});
+    engine.set_tempo(60.0);
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+  };
+  std::array<float, kBlock> left{};
+  float* io[] = {left.data()};
+
+  SECTION("a loop enabled behind the playhead") {
+    sonare::engine::RealtimeEngine engine;
+    make_engine(engine);
+    for (int block = 0; block < 4; ++block) engine.process(io, 1, kBlock);
+    engine.set_loop(0.0, 0.01, true);
+    left.fill(0.0f);
+    engine.process(io, 1, kBlock);
+    const int64_t start = (4 * kBlock) % kLoopLen;
+    CHECK(left.front() == static_cast<float>(start + 1));
+    CHECK(left.back() == static_cast<float>((start + kBlock - 1) % kLoopLen + 1));
+  }
+
+  SECTION("a seek past loop_end") {
+    sonare::engine::RealtimeEngine engine;
+    make_engine(engine);
+    engine.set_loop(0.0, 0.01, true);
+    engine.process(io, 1, kBlock);
+    sonare::rt::Command seek{};
+    seek.type = sonare::rt::CommandType::kTransportSeekSample;
+    seek.sample_time = -1;
+    seek.arg.i = 1000;
+    REQUIRE(engine.push_command(seek));
+    left.fill(0.0f);
+    engine.process(io, 1, kBlock);
+    const int64_t start = 1000 % kLoopLen;
+    CHECK(left.front() == static_cast<float>(start + 1));
+    CHECK(left.back() == static_cast<float>((start + kBlock - 1) % kLoopLen + 1));
+  }
+}
+
 TEST_CASE("RealtimeEngine processes owned track strip specs before lane mix",
           "[engine][realtime]") {
   constexpr int kBlock = 256;

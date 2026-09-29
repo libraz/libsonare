@@ -377,6 +377,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
           command.sample_time);
 #endif
       transport_.play();
+      transport_.fold_into_loop();
       break;
     case rt::CommandType::kTransportStop:
       transport_.stop();
@@ -401,6 +402,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       break;
     case rt::CommandType::kTransportSeekSample:
       transport_.seek_sample(command.arg.i);
+      transport_.fold_into_loop();
       // Hang-note safety: a seek jumps the playhead, so notes sounding before
       // the jump must be released at the seek frame rather than left to a
       // note-off that the new position will never reach.
@@ -414,6 +416,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       break;
     case rt::CommandType::kTransportSeekPpq:
       transport_.seek_ppq(command.arg.d);
+      transport_.fold_into_loop();
 #if defined(SONARE_WITH_ARRANGEMENT)
       midi_sequencer_.all_notes_off(command.sample_time);
       flush_pdc_delays();
@@ -427,6 +430,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
         enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                       transport_.sample_position(), command.target_id);
       } else {
+        transport_.fold_into_loop();
         // Successful marker seek is a playhead jump: same hang-note release.
 #if defined(SONARE_WITH_ARRANGEMENT)
         midi_sequencer_.all_notes_off(command.sample_time);

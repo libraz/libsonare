@@ -49,6 +49,9 @@ class Transport {
   TransportState snapshot() const noexcept;
   TransportState snapshot_control() const noexcept;
   void advance(int num_frames) noexcept;
+  /// Folds a playing playhead at or past loop_end back into the loop, as
+  /// advance() does when it crosses loop_end. Returns whether it moved.
+  bool fold_into_loop() noexcept;
 
   void play() noexcept { playing_.store(true, std::memory_order_release); }
   void stop() noexcept { playing_.store(false, std::memory_order_release); }
@@ -91,6 +94,8 @@ class Transport {
     double end_ppq = 0.0;
     bool enabled = false;
   };
+
+  int64_t loop_folded(int64_t position) const noexcept;
 
   std::atomic<const TempoMap*> tempo_map_{nullptr};
   std::atomic<double> sample_rate_{constants::kDefaultDawSampleRate};

@@ -90,28 +90,28 @@ void Transport::advance(int num_frames) noexcept {
   const int frames = std::max(num_frames, 0);
   render_frame_.fetch_add(frames, std::memory_order_acq_rel);
   if (!playing() || frames == 0) return;
+  const int64_t position = sample_position_.load(std::memory_order_acquire) + frames;
+  sample_position_.store(loop_folded(position), std::memory_order_release);
+}
 
-  int64_t position = sample_position_.load(std::memory_order_acquire) + frames;
+bool Transport::fold_into_loop() noexcept {
+  if (!playing()) return false;
+  const int64_t position = sample_position_.load(std::memory_order_acquire);
+  const int64_t folded = loop_folded(position);
+  if (folded == position) return false;
+  sample_position_.store(folded, std::memory_order_release);
+  return true;
+}
 
-  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
+int64_t Transport::loop_folded(int64_t position) const noexcept {
   const LoopState loop = loop_reader_.try_load();
-  if (!loop.enabled || loop.end_ppq <= loop.start_ppq) {
-    sample_position_.store(position, std::memory_order_release);
-    return;
-  }
-
+  if (!loop.enabled || loop.end_ppq <= loop.start_ppq) return position;
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
   const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
   const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
   const int64_t loop_len = loop_end - loop_start;
-  if (loop_len <= 0) {
-    sample_position_.store(position, std::memory_order_release);
-    return;
-  }
-
-  if (position >= loop_end) {
-    position = loop_start + ((position - loop_start) % loop_len);
-  }
-  sample_position_.store(position, std::memory_order_release);
+  if (loop_len <= 0 || position < loop_end) return position;
+  return loop_start + ((position - loop_start) % loop_len);
 }
 
 void Transport::seek_sample(int64_t sample) noexcept {

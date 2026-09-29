@@ -54,6 +54,9 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
 
   adopt_tempo_map_snapshot();
   const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
+  // A playhead left at or past loop_end (a loop set behind it, a seek or a new
+  // tempo map) wraps before anything reads it, not after the first sub-block.
+  [[maybe_unused]] const bool wrapped_at_block_start = transport_.fold_into_loop();
   const auto state = transport_.snapshot();
   clip_page_underrun_reported_this_block_ = false;
 #if defined(SONARE_WITH_MIXING)
@@ -95,6 +98,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
 #endif
   drain_commands(state.render_frame, frames);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Same hang-note release as a wrap inside the block.
+  if (wrapped_at_block_start) midi_sequencer_.all_notes_off(state.render_frame);
+#endif
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
   const uint32_t non_rt_rejection_count_before = automation_.non_realtime_safe_rejection_count();
 
