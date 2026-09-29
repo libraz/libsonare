@@ -219,10 +219,12 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   clip_page_requests_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
   clip_page_request_overflow_count_.store(0, std::memory_order_relaxed);
   pending_active_.fill(false);
+#if defined(SONARE_WITH_ARRANGEMENT)
   // The commands dropped above can no longer release their UMP slots, so hand every slot back.
   for (UmpSlot& slot : ump_slots_) {
     slot.released.store(slot.generation.load(std::memory_order_relaxed), std::memory_order_release);
   }
+#endif
   // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
   // the audio thread; mark all slots inactive.
   applied_param_smoothing_ms_ = param_smoothing_ms_.load(std::memory_order_relaxed);
