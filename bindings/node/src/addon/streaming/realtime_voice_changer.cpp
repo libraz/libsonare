@@ -111,8 +111,10 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   const double sample_rate = info[0].As<Napi::Number>().DoubleValue();
-  const int max_block_size = node_arg_int(info, 1, 128);
-  const int channels = node_arg_int(info, 2, 1);
+  int max_block_size{};
+  if (!OptionalIntArg(env, info, 1, "maxBlockSize", 128, &max_block_size)) return env.Undefined();
+  int channels{};
+  if (!OptionalIntArg(env, info, 2, "channels", 1, &channels)) return env.Undefined();
   changer_->prepare(sample_rate, max_block_size, channels);
   prepared_ = true;
   max_block_size_ = max_block_size;

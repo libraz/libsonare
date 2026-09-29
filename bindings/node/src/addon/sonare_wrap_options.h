@@ -219,16 +219,6 @@ inline void node_refuse_fraction(Napi::Env env, const Napi::Value& value, const 
 /// @brief The subject an out-of-range positional argument is named by.
 inline std::string node_arg_label(size_t index) { return "argument " + std::to_string(index); }
 
-/// @brief Read an int positional argument, falling back if absent or non-number,
-///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
-/// @details The last of the substituting positional readers: a present argument
-///   of the wrong type reads as @p fallback. New code reads through the
-///   Optional*Arg / Required*Arg family below, which refuses it by name.
-inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallback) {
-  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
-  return node_narrow_int(info.Env(), info[index], node_arg_label(index).c_str());
-}
-
 // Object-key readers are the *Property family: undefined/null falls back to the
 // default, and any other value of the wrong type is refused by name. They report
 // by throwing, which SONARE_NODE_CATCH turns back into a JS error.

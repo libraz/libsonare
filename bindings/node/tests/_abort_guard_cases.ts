@@ -120,6 +120,16 @@ const withMixer = (run: (mixer: any) => void): void =>
  * other reason cannot satisfy the row.
  */
 const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
+  [
+    'RealtimeVoiceChanger.prepare',
+    'maxBlockSize',
+    () => new addon.RealtimeVoiceChanger('neutral-monitor').prepare(48000, 'x'),
+  ],
+  [
+    'RealtimeVoiceChanger.prepare',
+    'channels',
+    () => new addon.RealtimeVoiceChanger('neutral-monitor').prepare(48000, 128, 'x'),
+  ],
   ['addon.amplitudeToDb', 'ref', () => addon.amplitudeToDb(readerTone, 'x')],
   ['addon.analyze', 'sampleRate', () => addon.analyze(readerTone, 'x')],
   ['addon.analyzeAsync', 'sampleRate', () => addon.analyzeAsync(readerTone, 'x')],
