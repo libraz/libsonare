@@ -268,10 +268,14 @@ constexpr NativeProgram kNativePrograms[] = {
 /// an axis; without a profile the synth ignores all five.
 ControllerProfile bound_profile() {
   ControllerProfile profile;
-  REQUIRE(profile.bind({ControllerInput::kChannelPressure, 0, ControllerAxis::kLoudness, 0.3f, 1.0f}));
-  REQUIRE(profile.bind({ControllerInput::kPolyPressure, 0, ControllerAxis::kBrightness, 0.0f, 1.0f}));
-  REQUIRE(profile.bind({ControllerInput::kControlChange, 67, ControllerAxis::kBrightness, 0.0f, 1.0f}));
-  REQUIRE(profile.bind({ControllerInput::kControlChange, 74, ControllerAxis::kBrightness, 0.0f, 1.0f}));
+  REQUIRE(
+      profile.bind({ControllerInput::kChannelPressure, 0, ControllerAxis::kLoudness, 0.3f, 1.0f}));
+  REQUIRE(
+      profile.bind({ControllerInput::kPolyPressure, 0, ControllerAxis::kBrightness, 0.0f, 1.0f}));
+  REQUIRE(
+      profile.bind({ControllerInput::kControlChange, 67, ControllerAxis::kBrightness, 0.0f, 1.0f}));
+  REQUIRE(
+      profile.bind({ControllerInput::kControlChange, 74, ControllerAxis::kBrightness, 0.0f, 1.0f}));
   REQUIRE(profile.bind({ControllerInput::kVelocity, 0, ControllerAxis::kExcitation, 0.0f, 1.0f}));
   return profile;
 }
@@ -294,7 +298,10 @@ std::string key(const std::string& synth, const std::string& program, const char
 Rows native_rows() {
   Rows rows;
   for (const NativeProgram& p : kNativePrograms) {
-    const std::string prog = std::string("p") + (p.program < 10 ? "00" : p.program < 100 ? "0" : "") +
+    const std::string prog = std::string("p") +
+                             (p.program < 10    ? "00"
+                              : p.program < 100 ? "0"
+                                                : "") +
                              std::to_string(p.program) + "-" + p.label;
     for (const GestureRow& g : kCommonGestures) {
       Script s = base_script(0, kNote);
@@ -421,7 +428,7 @@ Rows sf2_rows() {
     uint8_t velocity;
   };
   const Sense senses[] = {
-      {"gs-sense-default", 0x40, 0x40, 100}, {"gs-sense-depth-low", 0x20, 0x40, 100},
+      {"gs-sense-default", 0x40, 0x40, 100},    {"gs-sense-depth-low", 0x20, 0x40, 100},
       {"gs-sense-depth-high", 0x7F, 0x40, 100}, {"gs-sense-depth-zero", 0x00, 0x40, 100},
       {"gs-sense-offset-up", 0x40, 0x60, 60},   {"gs-sense-offset-down", 0x40, 0x20, 60},
       {"gs-sense-both", 0x60, 0x50, 30},
