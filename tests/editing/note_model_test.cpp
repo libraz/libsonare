@@ -542,10 +542,11 @@ TEST_CASE("extract_notes derives voicing from voiced_prob when the track has no 
 // alive only on that one frame used to convert to onset_sample ==
 // offset_sample == audio_samples (both frame_to_sample calls clamping to the
 // same value), a zero-length note that validate_note_for_render then refused.
-TEST_CASE("extract_notes keeps a one-frame ridge on the trailing centred frame instead of "
-          "collapsing it to zero length",
-          "[note_model]") {
-  constexpr int kFrames = 41;   // one more than kAudioSamples / kHopLength
+TEST_CASE(
+    "extract_notes keeps a one-frame ridge on the trailing centred frame instead of "
+    "collapsing it to zero length",
+    "[note_model]") {
+  constexpr int kFrames = 41;  // one more than kAudioSamples / kHopLength
   constexpr int kAudioSamples = 6400;
   const sonare::Audio audio = tone(440.0f, 0.5f, kAudioSamples);
 
@@ -751,12 +752,13 @@ TEST_CASE("render_notes moves an edited note to its new position", "[note_model]
 // than a sine burst) keeps the assertion exact and free of phase-dependent
 // flakiness: whatever sample position is read, the pristine value is always
 // the same known amplitude.
-TEST_CASE("render_notes does not reintroduce the erased original when a note moves by less than "
-          "its own length",
-          "[note_model]") {
+TEST_CASE(
+    "render_notes does not reintroduce the erased original when a note moves by less than "
+    "its own length",
+    "[note_model]") {
   constexpr int64_t kOnset = 1000;
-  constexpr int64_t kOffset = 2000;   // length 1000, shift 500 < length: destination overlaps
-  constexpr int64_t kShift = 500;     // the span erase_span vacated.
+  constexpr int64_t kOffset = 2000;  // length 1000, shift 500 < length: destination overlaps
+  constexpr int64_t kShift = 500;    // the span erase_span vacated.
   constexpr float kAmplitude = 0.9f;
   const std::vector<float> samples(4000, kAmplitude);
   const sonare::Audio audio = sonare::Audio::from_vector(samples, kSampleRate);

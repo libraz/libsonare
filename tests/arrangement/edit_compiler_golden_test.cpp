@@ -1095,8 +1095,7 @@ TEST_CASE("compiler pads a tempo-sync bake's lead-in when the first anchor is no
   // First anchor (warp_sample=4800, source_sample=2400): a 4800-sample lead-in
   // stretched at 2:1 from a 2400-sample source pre-roll, followed by one 1:1
   // segment covering the rest of the clip's 48000-sample span.
-  REQUIRE(f.project.set_warp_map(
-      {77, "tempo sync", {{4800.0, 2400.0}, {48000.0, 45600.0}}}));
+  REQUIRE(f.project.set_warp_map({77, "tempo sync", {{4800.0, 2400.0}, {48000.0, 45600.0}}}));
 
   arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
   REQUIRE_FALSE(r.has_errors());
@@ -1123,9 +1122,10 @@ TEST_CASE("compiler pads a tempo-sync bake's lead-in when the first anchor is no
 // that starts recording at its own beginning, the common case), there is no
 // source pre-roll to stretch, so the lead-in must be silence rather than
 // missing entirely.
-TEST_CASE("compiler pads a tempo-sync bake's lead-in with silence when the source has none to "
-          "stretch",
-          "[arrangement]") {
+TEST_CASE(
+    "compiler pads a tempo-sync bake's lead-in with silence when the source has none to "
+    "stretch",
+    "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
   REQUIRE(clip != nullptr);

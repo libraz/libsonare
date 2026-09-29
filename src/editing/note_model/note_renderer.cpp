@@ -81,7 +81,7 @@ float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
 ///          picks up the vacated taper (rather than reintroducing the
 ///          pristine original) everywhere it is not.
 void overlay(std::vector<float>& output, const std::vector<float>& segment, int64_t dest,
-            int64_t fade) {
+             int64_t fade) {
   const int64_t n = static_cast<int64_t>(output.size());
   const int64_t seg_len = static_cast<int64_t>(segment.size());
   if (seg_len <= 0 || dest >= n || dest <= -seg_len) return;
