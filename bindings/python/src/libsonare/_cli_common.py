@@ -424,11 +424,11 @@ def _pcm_bytes(samples: np.ndarray, bits_per_sample: int) -> bytes:
     """
     if bits_per_sample == 16:
         codes = _quantize_codes(samples, 32767.0, -32768, 32767)
-        return codes.astype("<i2").tobytes()
+        return bytes(codes.astype("<i2").tobytes())
     if bits_per_sample == 24:
         codes = _quantize_codes(samples, 8388607.0, -8388608, 8388607)
         widened = codes.astype("<i4").view(np.uint8).reshape(-1, 4)
-        return widened[:, :3].tobytes()
+        return bytes(widened[:, :3].tobytes())
     raise ValueError("WAV bits must be 16 or 24")
 
 
