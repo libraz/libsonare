@@ -209,11 +209,13 @@ Sf2Zone make_zone(const std::vector<Sf2Gen>& gens, const std::vector<Sf2Mod>& mo
         zone.vel_lo = g.range_lo();
         zone.vel_hi = g.range_hi();
         break;
+      // Both indices are unsigned WORDs (0..65535); range is checked against the
+      // tables once they are all read.
       case kGenInstrument:
-        if (preset_level && g.amount >= 0) zone.instrument = static_cast<uint16_t>(g.amount);
+        if (preset_level) zone.instrument = static_cast<uint16_t>(g.amount);
         break;
       case kGenSampleId:
-        if (!preset_level && g.amount >= 0) zone.sample = static_cast<uint16_t>(g.amount);
+        if (!preset_level) zone.sample = static_cast<uint16_t>(g.amount);
         break;
       default:
         break;

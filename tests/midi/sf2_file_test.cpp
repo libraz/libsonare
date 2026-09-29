@@ -442,3 +442,34 @@ TEST_CASE("Sf2File global zones supply defaults without becoming layers", "[midi
   REQUIRE_FALSE(zones[1].is_global());
   REQUIRE(sf2.find_preset(0, 5) == 0);
 }
+
+TEST_CASE("Sf2File reads sample and instrument indices at and above 32768 as unsigned",
+          "[midi][sf2]") {
+  // The sampleID / instrument amounts are WORDs; a signed read turns an index
+  // past 32767 into a "global" zone, dropped when it is not the first one.
+  constexpr int kHigh = 32769;
+  Sf2Builder b;
+  const std::vector<float> tone(8, 0.25f);
+  for (int i = 0; i <= kHigh; ++i) b.add_sample("s", tone, 44100, 60, 0, 8);
+  Sf2Builder::ZoneSpec low_sample;
+  low_sample.target = 0;
+  Sf2Builder::ZoneSpec high_sample;
+  high_sample.target = kHigh;
+  b.add_instrument("split", {low_sample, high_sample});
+  for (int i = 1; i <= kHigh; ++i) b.add_instrument("filler", {low_sample});
+  Sf2Builder::ZoneSpec low_inst;
+  low_inst.target = 0;
+  Sf2Builder::ZoneSpec high_inst;
+  high_inst.target = kHigh;
+  b.add_preset("preset", 0, 0, {low_inst, high_inst});
+
+  const std::vector<uint8_t> bytes = b.build();
+  Sf2File sf2;
+  std::string error;
+  REQUIRE(sf2.parse(bytes.data(), bytes.size(), &error));
+  INFO(error);
+  REQUIRE(sf2.instruments()[0].zones.size() == 2);
+  CHECK(sf2.instruments()[0].zones[1].sample == kHigh);
+  REQUIRE(sf2.presets()[0].zones.size() == 2);
+  CHECK(sf2.presets()[0].zones[1].instrument == kHigh);
+}
