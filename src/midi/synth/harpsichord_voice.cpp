@@ -118,7 +118,7 @@ float speaking_length_mm(const HarpsichordPatchParams& params, uint8_t note) noe
 /// own peak (so never above 0).
 float plectrum_release_db(const HarpsichordPatchParams& params, Velocity16 velocity) noexcept {
   constexpr float kSoftest = 1.0f / 127.0f;
-  const float v = static_cast<float>(velocity.u7()) / 127.0f;
+  const float v = velocity.f7() / 127.0f;
   const float peak = std::max(kSoftest, static_cast<float>(params.peak_velocity & 0x7Fu) / 127.0f);
   const float range = std::max(0.0f, params.velocity_range_db);
   if (v <= peak) {

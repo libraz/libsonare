@@ -104,7 +104,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   silence_coeff_ = std::exp(-1.0f / (kSilenceFollowerMs * 0.001f * static_cast<float>(sr)));
 
   const float base_hz = params.base_freq_hz > 0.0f ? params.base_freq_hz : note_to_hz(note);
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
 
   // Membrane modes. The strike is a force with a duration and its spectrum is
   // how much of each mode it reaches; with mallet_ms at 0 it is the older law

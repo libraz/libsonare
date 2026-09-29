@@ -1516,8 +1516,7 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // Felt loss falls off with how hard the string drives it, so a soft note is
   // damped softly (see kDamperVelSlope).
   const float damper_vel_scale =
-      std::min(kDamperVelScaleMax,
-               std::exp(kDamperVelSlope * (kDamperVelAnchor - static_cast<float>(velocity.u7()))));
+      std::min(kDamperVelScaleMax, std::exp(kDamperVelSlope * (kDamperVelAnchor - velocity.f7())));
   const float release_t60 =
       std::max(0.01f, params.release_damp_s * damper_keytrack * damper_vel_scale);
   release_gain_ = loop_gain_for(period, sr, release_t60);
@@ -1591,7 +1590,7 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // register; from there the Hertz velocity laws (harder+shorter with faster
   // blows), the treble's long full-period dwell and the bass re-contact
   // chatter all EMERGE from the interaction instead of being prescribed.
-  const float vel01 = std::max(static_cast<float>(velocity.u7()) / 127.0f, 0.02f);
+  const float vel01 = std::max(velocity.f7() / 127.0f, 0.02f);
   const float p = std::clamp(params.hammer_exponent, 1.5f, 4.0f);
   const float amp_exp = 2.0f * p / (p + 1.0f);
   const float dyn =

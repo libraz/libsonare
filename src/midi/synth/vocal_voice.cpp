@@ -168,7 +168,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
 
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   output_scale_ = kOutputScale * (kVelFloor + (1.0f - kVelFloor) * vel01);
 }
 

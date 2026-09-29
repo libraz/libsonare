@@ -218,7 +218,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   bore_.period = period * kPitchCorrect;
   sign_ = 1.0f;
 
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
   const float level = std::clamp(
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);

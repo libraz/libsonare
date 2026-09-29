@@ -35,7 +35,7 @@ void FmVoiceCore::start(const FmPatchParams& params, double sample_rate, uint8_t
                         Velocity16 velocity) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float base_hz = note_to_hz(static_cast<float>(note & 0x7Fu));
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   const float octaves_above_middle = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
 
   const size_t algo = static_cast<size_t>(

@@ -112,7 +112,7 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   }
 
   // Bellows drive level: steady pressure blended with the struck velocity.
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
   const float level = std::clamp(
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);

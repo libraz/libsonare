@@ -76,7 +76,7 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
   exc_pos_ = 0;
   pick_delay_ =
       static_cast<int>(std::clamp(params.pick_position, 0.0f, 0.5f) * base_period_ + 0.5f);
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   const float vel_amount = std::clamp(params.vel_to_brightness, 0.0f, 1.0f);
   const float bright =
       std::clamp(params.exc_brightness, 0.0f, 1.0f) * ((1.0f - vel_amount) + vel_amount * vel01);

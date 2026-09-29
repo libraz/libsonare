@@ -79,7 +79,7 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
   apply_morph();
 
   // Key click: contact transient scaled a little by velocity.
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   click_level_ = std::clamp(params.key_click, 0.0f, 1.0f) * (0.5f + 0.5f * vel01) * 0.6f;
   const float decay_ms = std::max(0.5f, params.click_decay_ms);
   click_coeff_ = std::exp(-1.0f / (decay_ms * 0.001f * static_cast<float>(sr)));

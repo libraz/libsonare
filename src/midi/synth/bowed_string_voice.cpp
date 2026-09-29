@@ -118,7 +118,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   beta_base_ = beta_;
   beta_target_ = beta_;
 
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   // Bow speed = the dynamic level: the patch speed blended with the struck
   // velocity by vel_to_speed. This is the note-on base the expression scales.
   const float vel_to_speed = std::clamp(params.vel_to_speed, 0.0f, 1.0f);

@@ -204,7 +204,7 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
     sign_ = -1.0f;
   }
 
-  const float vel01 = static_cast<float>(velocity.u7()) / 127.0f;
+  const float vel01 = velocity.f7() / 127.0f;
   // Mouth pressure = the dynamic level: the patch breath blended with the struck
   // velocity by vel_to_breath.
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
