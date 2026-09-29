@@ -342,9 +342,11 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
                      win_length, checked.center, checked.window, checked.pad_mode);
 }
 
-Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
-                                      int n_fft, int hop_length, int sample_rate, WindowType window,
-                                      bool center, int win_length, PadMode pad_mode) {
+namespace {
+
+/// @brief Checks the metadata a caller hands from_complex and returns the element count.
+size_t checked_from_complex_size(int n_bins, int n_frames, int n_fft, int hop_length,
+                                 int sample_rate, int win_length) {
   // Validate the caller-supplied STFT metadata before sizing or copying the
   // external buffer.  Apart from preventing malformed dimensions from being
   // carried into iSTFT, this keeps the invariant used by FFT::inverse:
@@ -362,16 +364,38 @@ Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bin
   SONARE_CHECK_MSG(win_length == 0 || (win_length > 0 && win_length <= n_fft),
                    ErrorCode::InvalidParameter,
                    "Spectrogram::from_complex: win_length must be 0 or in [1, n_fft]");
-  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter,
-                   "Spectrogram::from_complex: data must not be null");
   // Compute the element count in size_t so the multiply cannot overflow int;
   // reject sizes that would not fit in a vector index.
   const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
   SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
                ErrorCode::InvalidParameter);
+  return total;
+}
+
+}  // namespace
+
+Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
+                                      int n_fft, int hop_length, int sample_rate, WindowType window,
+                                      bool center, int win_length, PadMode pad_mode) {
+  const size_t total =
+      checked_from_complex_size(n_bins, n_frames, n_fft, hop_length, sample_rate, win_length);
+  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: data must not be null");
   std::vector<std::complex<float>> spectrum(data, data + total);
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate,
                      win_length, center, window, pad_mode);
+}
+
+Spectrogram Spectrogram::from_complex(std::vector<std::complex<float>>&& data, int n_bins,
+                                      int n_frames, int n_fft, int hop_length, int sample_rate,
+                                      WindowType window, bool center, int win_length,
+                                      PadMode pad_mode) {
+  const size_t total =
+      checked_from_complex_size(n_bins, n_frames, n_fft, hop_length, sample_rate, win_length);
+  SONARE_CHECK_MSG(data.size() == total, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: data must hold n_bins * n_frames values");
+  return Spectrogram(std::move(data), n_bins, n_frames, n_fft, hop_length, sample_rate, win_length,
+                     center, window, pad_mode);
 }
 
 int stft_frame_count(std::size_t signal_length, const StftConfig& config) {

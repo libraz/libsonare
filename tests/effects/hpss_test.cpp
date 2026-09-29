@@ -1394,3 +1394,32 @@ TEST_CASE("hpss answers a non-finite magnitude as if it were zero", "[hpss][nan]
   const HpssSpectrogramResult loud_result = run(loud);
   REQUIRE(loud_result.harmonic.magnitude() != zeroed_result.harmonic.magnitude());
 }
+
+TEST_CASE("the spectrogram-level harmonic and percussive match hpss and the audio path", "[hpss]") {
+  // A caller already holding the STFT (MusicAnalyzer) separates one component
+  // on it; the result must be the same bits the full separation and the audio
+  // entry point produce, so reusing the spectrogram changes nothing downstream.
+  std::vector<float> x(22050);
+  for (size_t i = 0; i < x.size(); ++i) {
+    x[i] = 0.4f * std::sin(0.0627f * static_cast<float>(i)) + ((i % 2205) < 40 ? 0.6f : 0.0f);
+  }
+  const Audio audio = Audio::from_buffer(x.data(), x.size(), 22050);
+  const Spectrogram spec = Spectrogram::compute(audio, StftConfig());
+  for (const bool soft : {true, false}) {
+    HpssConfig config;
+    config.use_soft_mask = soft;
+    config.margin_harmonic = 3.0f;
+    config.margin_percussive = 3.0f;
+    INFO("soft mask " << soft);
+    const HpssSpectrogramResult both = hpss(spec, config);
+    const Spectrogram h = harmonic(spec, config);
+    const Spectrogram p = percussive(spec, config);
+    const size_t total = static_cast<size_t>(spec.n_bins()) * spec.n_frames();
+    REQUIRE(std::equal(h.complex_data(), h.complex_data() + total, both.harmonic.complex_data()));
+    REQUIRE(std::equal(p.complex_data(), p.complex_data() + total, both.percussive.complex_data()));
+    const Audio via_audio = harmonic(audio, config);
+    const Audio via_spec = h.to_audio(static_cast<int>(audio.size()));
+    REQUIRE(via_audio.size() == via_spec.size());
+    REQUIRE(std::equal(via_audio.data(), via_audio.data() + via_audio.size(), via_spec.data()));
+  }
+}

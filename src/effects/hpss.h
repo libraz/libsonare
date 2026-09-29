@@ -120,6 +120,21 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config = H
 HpssAudioResult hpss(const Audio& audio, const HpssConfig& config = HpssConfig(),
                      const StftConfig& stft_config = StftConfig());
 
+/// @brief Separates only the harmonic component of an existing spectrogram.
+/// @param spec Input spectrogram
+/// @param config HPSS configuration
+/// @return Harmonic spectrogram, bit-identical to @ref hpss's harmonic field
+/// @details For a caller that already holds the analysis STFT: builds one mask
+///          and one masked spectrum instead of a second STFT or the discarded
+///          percussive component.
+Spectrogram harmonic(const Spectrogram& spec, const HpssConfig& config = HpssConfig());
+
+/// @brief Separates only the percussive component of an existing spectrogram.
+/// @param spec Input spectrogram
+/// @param config HPSS configuration
+/// @return Percussive spectrogram, bit-identical to @ref hpss's percussive field
+Spectrogram percussive(const Spectrogram& spec, const HpssConfig& config = HpssConfig());
+
 /// @brief Extracts only harmonic component from audio.
 /// @param audio Input audio
 /// @param config HPSS configuration

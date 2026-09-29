@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 #ifndef __EMSCRIPTEN__
 #include <future>
@@ -349,13 +350,13 @@ void fill_hpss_masks(const Spectrogram& spec, const HpssConfig& config, int tota
   std::vector<float> percussive_enhanced =
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  /// Map enhanced arrays to Eigen
-  Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
-  Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
-
-  /// Compute power using Eigen
-  Eigen::ArrayXf h_pow = h_enh.pow(config.power);
-  Eigen::ArrayXf p_pow = p_enh.pow(config.power);
+  /// Raise the filtered magnitudes to the mask power in place: the unpowered
+  /// values are not read again, and two more magnitude-sized buffers would sit
+  /// on top of every other buffer the separation holds.
+  Eigen::Map<Eigen::ArrayXf> h_pow(harmonic_enhanced.data(), total_size);
+  Eigen::Map<Eigen::ArrayXf> p_pow(percussive_enhanced.data(), total_size);
+  h_pow = h_pow.pow(config.power);
+  p_pow = p_pow.pow(config.power);
 
   if (config.use_soft_mask) {
     /// Soft masks matching librosa: the margin is applied to the *opposing*
@@ -396,6 +397,22 @@ void fill_hpss_masks(const Spectrogram& spec, const HpssConfig& config, int tota
   }
 }
 
+/// @brief @p spec with every bin scaled by @p mask, as a new spectrogram.
+/// @details The masked spectrum is moved into the result rather than copied, so
+///          building a component costs one spectrum, not two.
+Spectrogram masked_spectrogram(const Spectrogram& spec, const std::vector<float>& mask) {
+  const size_t total_size = mask.size();
+  std::vector<std::complex<float>> masked(total_size);
+  Eigen::Map<const Eigen::ArrayXcf> complex_map(spec.complex_data(),
+                                                static_cast<Eigen::Index>(total_size));
+  Eigen::Map<const Eigen::ArrayXf> mask_map(mask.data(), static_cast<Eigen::Index>(total_size));
+  Eigen::Map<Eigen::ArrayXcf> masked_out(masked.data(), static_cast<Eigen::Index>(total_size));
+  masked_out = complex_map * mask_map;
+  return Spectrogram::from_complex(std::move(masked), spec.n_bins(), spec.n_frames(), spec.n_fft(),
+                                   spec.hop_length(), spec.sample_rate(), spec.window(),
+                                   spec.center(), spec.win_length());
+}
+
 /// @brief Reconstructs one HPSS component's spectrogram, and only that one.
 /// @param spec Analysis spectrogram
 /// @param config HPSS configuration
@@ -422,16 +439,7 @@ Spectrogram hpss_component(const Spectrogram& spec, const HpssConfig& config, Hp
   std::vector<float> mask(total_size);
   fill_hpss_masks(spec, config, total_size, want == HpssComponent::kHarmonic ? &mask : nullptr,
                   want == HpssComponent::kPercussive ? &mask : nullptr);
-
-  std::vector<std::complex<float>> masked(total_size);
-  Eigen::Map<const Eigen::ArrayXcf> complex_map(spec.complex_data(), total_size);
-  Eigen::Map<const Eigen::ArrayXf> mask_map(mask.data(), total_size);
-  Eigen::Map<Eigen::ArrayXcf> masked_out(masked.data(), total_size);
-  masked_out = complex_map * mask_map;
-
-  return Spectrogram::from_complex(masked.data(), n_bins, n_frames, spec.n_fft(), spec.hop_length(),
-                                   spec.sample_rate(), spec.window(), spec.center(),
-                                   spec.win_length());
+  return masked_spectrogram(spec, mask);
 }
 
 }  // namespace
@@ -444,37 +452,16 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
 
   const int total_size = static_cast<int>(checked_spectrogram_size(n_bins, n_frames));
 
-  std::vector<std::complex<float>> harmonic_complex(total_size);
-  std::vector<std::complex<float>> percussive_complex(total_size);
+  /// The masks are complete, and the filter scratch behind them released, before
+  /// any output spectrum exists; each mask is dropped once its component is built.
+  std::vector<float> harmonic_mask(total_size);
+  std::vector<float> percussive_mask(total_size);
+  fill_hpss_masks(spec, config, total_size, &harmonic_mask, &percussive_mask);
 
-  {
-    /// Both masks are dead once they have been applied, so they do not outlive
-    /// this scope and overlap the two reconstructions below.
-    std::vector<float> harmonic_mask(total_size);
-    std::vector<float> percussive_mask(total_size);
-    fill_hpss_masks(spec, config, total_size, &harmonic_mask, &percussive_mask);
-
-    Eigen::Map<const Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
-    Eigen::Map<const Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
-
-    /// Apply masks to complex spectrum using Eigen
-    Eigen::Map<const Eigen::ArrayXcf> complex_map(spec.complex_data(), total_size);
-    Eigen::Map<Eigen::ArrayXcf> harm_out(harmonic_complex.data(), total_size);
-    Eigen::Map<Eigen::ArrayXcf> perc_out(percussive_complex.data(), total_size);
-
-    harm_out = complex_map * h_mask;
-    perc_out = complex_map * p_mask;
-  }
-
-  /// Create result spectrograms
   HpssSpectrogramResult result;
-  result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
-                                              spec.n_fft(), spec.hop_length(), spec.sample_rate(),
-                                              spec.window(), spec.center(), spec.win_length());
-  result.percussive = Spectrogram::from_complex(percussive_complex.data(), n_bins, n_frames,
-                                                spec.n_fft(), spec.hop_length(), spec.sample_rate(),
-                                                spec.window(), spec.center(), spec.win_length());
-
+  result.harmonic = masked_spectrogram(spec, harmonic_mask);
+  std::vector<float>().swap(harmonic_mask);
+  result.percussive = masked_spectrogram(spec, percussive_mask);
   return result;
 }
 
@@ -493,6 +480,14 @@ HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftCon
   result.percussive = spec_result.percussive.to_audio(static_cast<int>(audio.size()));
 
   return result;
+}
+
+Spectrogram harmonic(const Spectrogram& spec, const HpssConfig& config) {
+  return hpss_component(spec, config, HpssComponent::kHarmonic);
+}
+
+Spectrogram percussive(const Spectrogram& spec, const HpssConfig& config) {
+  return hpss_component(spec, config, HpssComponent::kPercussive);
 }
 
 Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
@@ -520,92 +515,70 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
 
-  /// Get magnitude spectrum
-  const std::vector<float>& magnitude = spec.magnitude();
-
-  /// Apply median filters
-  std::vector<float> harmonic_enhanced =
-      median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
-  std::vector<float> percussive_enhanced =
-      median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
-
   /// Compute masks for three-way split using Eigen
   const int total_size = static_cast<int>(checked_spectrogram_size(n_bins, n_frames));
   std::vector<float> harmonic_mask(total_size);
   std::vector<float> percussive_mask(total_size);
   std::vector<float> residual_mask(total_size);
 
-  /// Map enhanced arrays to Eigen
-  Eigen::Map<const Eigen::ArrayXf> h_enh(harmonic_enhanced.data(), total_size);
-  Eigen::Map<const Eigen::ArrayXf> p_enh(percussive_enhanced.data(), total_size);
+  /// The filter scratch lives only while the masks are formed, so none of it
+  /// overlaps the three output spectra built below.
+  {
+    const std::vector<float>& magnitude = spec.magnitude();
+    std::vector<float> harmonic_enhanced =
+        median_filter_horizontal(magnitude.data(), n_bins, n_frames, config.kernel_size_harmonic);
+    std::vector<float> percussive_enhanced =
+        median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  /// Compute power using Eigen
-  Eigen::ArrayXf h_pow = h_enh.pow(config.power);
-  Eigen::ArrayXf p_pow = p_enh.pow(config.power);
+    /// Raised to the mask power in place (see fill_hpss_masks).
+    Eigen::Map<Eigen::ArrayXf> h_pow(harmonic_enhanced.data(), total_size);
+    Eigen::Map<Eigen::ArrayXf> p_pow(percussive_enhanced.data(), total_size);
+    h_pow = h_pow.pow(config.power);
+    p_pow = p_pow.pow(config.power);
 
-  Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
-  Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
-  Eigen::Map<Eigen::ArrayXf> r_mask(residual_mask.data(), total_size);
+    Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
+    Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
+    Eigen::Map<Eigen::ArrayXf> r_mask(residual_mask.data(), total_size);
 
-  if (config.use_soft_mask) {
-    /// Soft masks matching librosa: the margin is applied to the *opposing*
-    /// component before the power (see hpss() above for the derivation), so the
-    /// margin contributes margin^power rather than margin^1.
-    const float mh_p = std::pow(config.margin_harmonic, config.power);
-    const float mp_p = std::pow(config.margin_percussive, config.power);
+    if (config.use_soft_mask) {
+      /// Soft masks matching librosa: the margin is applied to the *opposing*
+      /// component before the power (see hpss() above for the derivation), so the
+      /// margin contributes margin^power rather than margin^1.
+      const float mh_p = std::pow(config.margin_harmonic, config.power);
+      const float mp_p = std::pow(config.margin_percussive, config.power);
 
-    h_mask = h_pow / (h_pow + mh_p * p_pow + kEpsilon);
-    p_mask = p_pow / (p_pow + mp_p * h_pow + kEpsilon);
+      h_mask = h_pow / (h_pow + mh_p * p_pow + kEpsilon);
+      p_mask = p_pow / (p_pow + mp_p * h_pow + kEpsilon);
 
-    /// Residual is 1 - sum when margins push both masks below their full share
-    Eigen::ArrayXf mask_sum = h_mask + p_mask;
-    r_mask = (1.0f - mask_sum).max(0.0f);
+      /// Residual is 1 - sum when margins push both masks below their full share
+      Eigen::ArrayXf mask_sum = h_mask + p_mask;
+      r_mask = (1.0f - mask_sum).max(0.0f);
 
-    /// Renormalize where residual > 0
-    Eigen::ArrayXf total_all = mask_sum + r_mask;
-    h_mask /= total_all;
-    p_mask /= total_all;
-    r_mask /= total_all;
-  } else {
-    /// Hard mask: residual is where neither dominates clearly
-    Eigen::ArrayXf ratio = (h_pow + kEpsilon) / (p_pow + kEpsilon);
+      /// Renormalize where residual > 0
+      Eigen::ArrayXf total_all = mask_sum + r_mask;
+      h_mask /= total_all;
+      p_mask /= total_all;
+      r_mask /= total_all;
+    } else {
+      /// Hard mask: residual is where neither dominates clearly
+      Eigen::ArrayXf ratio = (h_pow + kEpsilon) / (p_pow + kEpsilon);
 
-    /// ratio > 2.0 -> harmonic only
-    /// ratio < 0.5 -> percussive only
-    /// else -> residual
-    h_mask = (ratio > 2.0f).cast<float>();
-    p_mask = (ratio < 0.5f).cast<float>();
-    r_mask = 1.0f - h_mask - p_mask;
+      /// ratio > 2.0 -> harmonic only
+      /// ratio < 0.5 -> percussive only
+      /// else -> residual
+      h_mask = (ratio > 2.0f).cast<float>();
+      p_mask = (ratio < 0.5f).cast<float>();
+      r_mask = 1.0f - h_mask - p_mask;
+    }
   }
 
-  /// Apply masks to complex spectrum using Eigen
-  const std::complex<float>* complex_data = spec.complex_data();
-
-  std::vector<std::complex<float>> harmonic_complex(total_size);
-  std::vector<std::complex<float>> percussive_complex(total_size);
-  std::vector<std::complex<float>> residual_complex(total_size);
-
-  Eigen::Map<const Eigen::ArrayXcf> complex_map(complex_data, total_size);
-  Eigen::Map<Eigen::ArrayXcf> harm_out(harmonic_complex.data(), total_size);
-  Eigen::Map<Eigen::ArrayXcf> perc_out(percussive_complex.data(), total_size);
-  Eigen::Map<Eigen::ArrayXcf> res_out(residual_complex.data(), total_size);
-
-  harm_out = complex_map * h_mask;
-  perc_out = complex_map * p_mask;
-  res_out = complex_map * r_mask;
-
-  /// Create result spectrograms
+  /// One output spectrum is built at a time, each mask dropped behind it.
   HpssSpectrogramResultWithResidual result;
-  result.harmonic = Spectrogram::from_complex(harmonic_complex.data(), n_bins, n_frames,
-                                              spec.n_fft(), spec.hop_length(), spec.sample_rate(),
-                                              spec.window(), spec.center(), spec.win_length());
-  result.percussive = Spectrogram::from_complex(percussive_complex.data(), n_bins, n_frames,
-                                                spec.n_fft(), spec.hop_length(), spec.sample_rate(),
-                                                spec.window(), spec.center(), spec.win_length());
-  result.residual = Spectrogram::from_complex(residual_complex.data(), n_bins, n_frames,
-                                              spec.n_fft(), spec.hop_length(), spec.sample_rate(),
-                                              spec.window(), spec.center(), spec.win_length());
-
+  result.harmonic = masked_spectrogram(spec, harmonic_mask);
+  std::vector<float>().swap(harmonic_mask);
+  result.percussive = masked_spectrogram(spec, percussive_mask);
+  std::vector<float>().swap(percussive_mask);
+  result.residual = masked_spectrogram(spec, residual_mask);
   return result;
 }
 

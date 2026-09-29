@@ -204,6 +204,15 @@ class Spectrogram {
                                   bool center = true, int win_length = 0,
                                   PadMode pad_mode = PadMode::Constant);
 
+  /// @brief As the pointer overload, taking ownership of @p data instead of copying it.
+  /// @details For a caller that built the spectrum itself (a mask applied to an
+  ///          STFT, say) and has no further use for it; @p data must hold exactly
+  ///          n_bins * n_frames values.
+  static Spectrogram from_complex(std::vector<std::complex<float>>&& data, int n_bins, int n_frames,
+                                  int n_fft, int hop_length, int sample_rate, WindowType window,
+                                  bool center = true, int win_length = 0,
+                                  PadMode pad_mode = PadMode::Constant);
+
   /// @brief Returns number of frequency bins (n_fft/2 + 1).
   int n_bins() const { return n_bins_; }
 

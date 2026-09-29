@@ -1523,3 +1523,24 @@ TEST_CASE("The STFT layer bounds n_fft by magnitude and not only by shape", "[sp
     REQUIRE(spec.n_frames() > 1);
   }
 }
+
+TEST_CASE("Spectrogram from_complex takes ownership of a moved buffer", "[spectrum]") {
+  // A caller that built the spectrum itself hands the buffer over instead of
+  // having it copied, which is what keeps HPSS at one spectrum per component.
+  const int n_fft = 8;
+  const int n_bins = n_fft / 2 + 1;
+  const int n_frames = 3;
+  std::vector<std::complex<float>> data(static_cast<size_t>(n_bins) * n_frames);
+  for (size_t i = 0; i < data.size(); ++i) data[i] = {static_cast<float>(i), -1.0f};
+  const std::vector<std::complex<float>> expected = data;
+  const std::complex<float>* buffer = data.data();
+  const Spectrogram spec = Spectrogram::from_complex(std::move(data), n_bins, n_frames, n_fft, 2,
+                                                     22050, WindowType::Hann);
+  CHECK(spec.complex_data() == buffer);
+  REQUIRE(std::equal(expected.begin(), expected.end(), spec.complex_data()));
+  // A buffer of the wrong size is refused, as a wrong pointer length would be.
+  std::vector<std::complex<float>> short_data(static_cast<size_t>(n_bins) * n_frames - 1);
+  REQUIRE_THROWS_AS(Spectrogram::from_complex(std::move(short_data), n_bins, n_frames, n_fft, 2,
+                                              22050, WindowType::Hann),
+                    SonareException);
+}
