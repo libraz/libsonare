@@ -951,6 +951,30 @@
         },
         {
           "choices": null,
+          "default": 0,
+          "id": 2,
+          "max": null,
+          "min": 0,
+          "name": "ratio",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 3,
+          "max": null,
+          "min": null,
+          "name": "postGainDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
           "default": 1,
           "id": null,
           "max": null,
@@ -2008,6 +2032,220 @@
           "slot": null,
           "type": "number",
           "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "tap3Ms",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "tap4Ms",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "tap1LevelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 9,
+          "max": null,
+          "min": null,
+          "name": "tap2LevelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 10,
+          "max": null,
+          "min": null,
+          "name": "tap3LevelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 11,
+          "max": null,
+          "min": null,
+          "name": "tap4LevelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 12,
+          "max": null,
+          "min": null,
+          "name": "tap3Pan",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 13,
+          "max": null,
+          "min": null,
+          "name": "tap4Pan",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 14,
+          "max": null,
+          "min": null,
+          "name": "invertL",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 15,
+          "max": null,
+          "min": null,
+          "name": "invertR",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 16,
+          "max": null,
+          "min": null,
+          "name": "modRateHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 17,
+          "max": null,
+          "min": null,
+          "name": "modDepthMs",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 18,
+          "max": null,
+          "min": null,
+          "name": "modPhaseDeg",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 19,
+          "max": null,
+          "min": null,
+          "name": "glideMs",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": [
+            {
+              "name": "normal",
+              "value": 0
+            },
+            {
+              "name": "pingPong",
+              "value": 1
+            },
+            {
+              "name": "cross",
+              "value": 2
+            }
+          ],
+          "default": 0,
+          "id": 20,
+          "max": null,
+          "min": null,
+          "name": "crossMode",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "crossfade",
+              "value": 0
+            },
+            {
+              "name": "twoRamps",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 21,
+          "max": null,
+          "min": null,
+          "name": "mixLaw",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
         }
       ],
       "realtimeCost": "low",
@@ -2015,6 +2253,80 @@
       "slots": [],
       "stereoOnly": false,
       "tailSamples": 59795
+    },
+    {
+      "category": "effects",
+      "channelPolicy": "stereoPairOnly",
+      "id": "effects.filter.vowel",
+      "kind": "realtime",
+      "latencySamples": 0,
+      "params": [
+        {
+          "choices": null,
+          "default": 0,
+          "id": 0,
+          "max": null,
+          "min": null,
+          "name": "vowel",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 50,
+          "id": 1,
+          "max": null,
+          "min": null,
+          "name": "accelMs",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0.5,
+          "id": 2,
+          "max": null,
+          "min": null,
+          "name": "drive",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 3,
+          "max": null,
+          "min": null,
+          "name": "driveOn",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 1,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "dryWet",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        }
+      ],
+      "realtimeCost": "low",
+      "realtimeInsertable": true,
+      "slots": [],
+      "stereoOnly": false,
+      "tailSamples": 0
     },
     {
       "category": "effects",
@@ -2081,6 +2393,93 @@
           "rtSafe": true,
           "slot": null,
           "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 1,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "lfoRateHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "lfoDepth",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "bandpass",
+              "value": 0
+            },
+            {
+              "name": "lowpass",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "filterType",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "up",
+              "value": 0
+            },
+            {
+              "name": "down",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "direction",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linearHz",
+              "value": 0
+            },
+            {
+              "name": "linearOctave",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 9,
+          "max": null,
+          "min": null,
+          "name": "sweepLaw",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
           "unit": null
         },
         {
@@ -2182,6 +2581,30 @@
           "unit": "Hz"
         },
         {
+          "choices": null,
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "feedback",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 90,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "phaseDeg",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
           "choices": [
             {
               "name": "off",
@@ -2197,11 +2620,11 @@
             }
           ],
           "default": 0,
-          "id": null,
+          "id": 7,
           "max": null,
           "min": null,
           "name": "preFilterMode",
-          "rtSafe": false,
+          "rtSafe": true,
           "slot": null,
           "type": "enum",
           "unit": null
@@ -2303,6 +2726,54 @@
           "slot": null,
           "type": "number",
           "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "rateHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "preDelayDevMs",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 9,
+          "max": null,
+          "min": null,
+          "name": "depthDev",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 10,
+          "max": null,
+          "min": null,
+          "name": "panDev",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
         }
       ],
       "realtimeCost": "low",
@@ -2391,6 +2862,30 @@
           "unit": "Hz"
         },
         {
+          "choices": null,
+          "default": 180,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "phaseDeg",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "stepRateHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
           "choices": [
             {
               "name": "off",
@@ -2406,11 +2901,11 @@
             }
           ],
           "default": 0,
-          "id": null,
+          "id": 8,
           "max": null,
           "min": null,
           "name": "preFilterMode",
-          "rtSafe": false,
+          "rtSafe": true,
           "slot": null,
           "type": "enum",
           "unit": null
@@ -2490,6 +2985,18 @@
           "unit": null
         },
         {
+          "choices": null,
+          "default": 1,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "depth",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
           "choices": [
             {
               "name": "crossfade",
@@ -2562,6 +3069,135 @@
         },
         {
           "choices": null,
+          "default": 0,
+          "id": 2,
+          "max": null,
+          "min": null,
+          "name": "cents",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 3,
+          "max": null,
+          "min": null,
+          "name": "pan",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "semitones2",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "cents2",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "level2",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "pan2",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "feedback",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "crossfade",
+              "value": 0
+            },
+            {
+              "name": "twoRamps",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 9,
+          "max": null,
+          "min": null,
+          "name": "mixLaw",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": null,
+          "max": null,
+          "min": null,
+          "name": "preDelay2Ms",
+          "rtSafe": false,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": null,
+          "max": null,
+          "min": null,
+          "name": "preDelayMs",
+          "rtSafe": false,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
           "default": 22.5,
           "id": null,
           "max": null,
@@ -2605,6 +3241,63 @@
           "max": null,
           "min": null,
           "name": "dryWet",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "sine",
+              "value": 0
+            },
+            {
+              "name": "triangle",
+              "value": 1
+            },
+            {
+              "name": "square",
+              "value": 2
+            },
+            {
+              "name": "sawUp",
+              "value": 3
+            },
+            {
+              "name": "sawDown",
+              "value": 4
+            }
+          ],
+          "default": 0,
+          "id": 2,
+          "max": null,
+          "min": null,
+          "name": "shape",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 3,
+          "max": null,
+          "min": null,
+          "name": "phaseDeg",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "stereoSpread",
           "rtSafe": true,
           "slot": null,
           "type": "number",
@@ -2683,6 +3376,90 @@
           "slot": null,
           "type": "number",
           "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0.8,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "hornSlowHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 6,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "hornFastHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0.6,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "drumSlowHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 4.44,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "drumFastHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": -1,
+          "id": 9,
+          "max": null,
+          "min": null,
+          "name": "speed",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 10,
+          "max": null,
+          "min": null,
+          "name": "hornLevelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 11,
+          "max": null,
+          "min": null,
+          "name": "drumLevelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
         },
         {
           "choices": null,
@@ -2816,6 +3593,48 @@
           "rtSafe": true,
           "slot": null,
           "type": "number",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "bandpass",
+              "value": 0
+            },
+            {
+              "name": "lowpass",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "filterType",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linearHz",
+              "value": 0
+            },
+            {
+              "name": "linearOctave",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "sweepLaw",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
           "unit": null
         }
       ],
@@ -2965,6 +3784,83 @@
           "slot": null,
           "type": "number",
           "unit": "referenceSamples@29761Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "dampingHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": -120,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "gateThresholdDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 100,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "gateHoldMs",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": [
+            {
+              "name": "normal",
+              "value": 0
+            },
+            {
+              "name": "reverse",
+              "value": 1
+            },
+            {
+              "name": "sweep1",
+              "value": 2
+            },
+            {
+              "name": "sweep2",
+              "value": 3
+            }
+          ],
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "gateType",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": null,
+          "max": null,
+          "min": null,
+          "name": "character",
+          "rtSafe": false,
+          "slot": null,
+          "type": "number",
+          "unit": null
         },
         {
           "choices": null,
@@ -3137,6 +4033,83 @@
           "slot": null,
           "type": "number",
           "unit": "referenceSamples@29761Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "dampingHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": -120,
+          "id": 6,
+          "max": null,
+          "min": null,
+          "name": "gateThresholdDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 100,
+          "id": 7,
+          "max": null,
+          "min": null,
+          "name": "gateHoldMs",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": [
+            {
+              "name": "normal",
+              "value": 0
+            },
+            {
+              "name": "reverse",
+              "value": 1
+            },
+            {
+              "name": "sweep1",
+              "value": 2
+            },
+            {
+              "name": "sweep2",
+              "value": 3
+            }
+          ],
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "gateType",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": null,
+          "max": null,
+          "min": null,
+          "name": "character",
+          "rtSafe": false,
+          "slot": null,
+          "type": "number",
+          "unit": null
         },
         {
           "choices": null,
@@ -15307,6 +16280,18 @@
           "slot": null,
           "type": "number",
           "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 31,
+          "max": null,
+          "min": null,
+          "name": "q",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
         }
       ],
       "realtimeCost": "low",
@@ -60631,7 +61616,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.adaptiveRelease",
       "kind": "realtime",
-      "latencySamples": 60,
+      "latencySamples": 107,
       "params": [
         {
           "choices": null,
@@ -60640,7 +61625,7 @@
           "max": null,
           "min": null,
           "name": "ceilingDb",
-          "rtSafe": true,
+          "rtSafe": false,
           "slot": null,
           "type": "number",
           "unit": "dB"
@@ -60878,7 +61863,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.truePeakLimiter",
       "kind": "realtime",
-      "latencySamples": 60,
+      "latencySamples": 107,
       "params": [
         {
           "choices": null,
@@ -61980,6 +62965,18 @@
           "id": 10,
           "max": null,
           "min": null,
+          "name": "band0.dyn0.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band0.dyn0",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 10,
+          "max": null,
+          "min": null,
           "name": "band0.dyn0.lookaheadMs",
           "rtSafe": true,
           "slot": "band0.dyn0",
@@ -62101,6 +63098,18 @@
           "max": null,
           "min": null,
           "name": "band0.dyn1.releaseMs",
+          "rtSafe": true,
+          "slot": "band0.dyn1",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 21,
+          "max": null,
+          "min": null,
+          "name": "band0.dyn1.detectorDelayMs",
           "rtSafe": true,
           "slot": "band0.dyn1",
           "type": "number",
@@ -62244,6 +63253,18 @@
           "id": 32,
           "max": null,
           "min": null,
+          "name": "band0.dyn2.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band0.dyn2",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 32,
+          "max": null,
+          "min": null,
           "name": "band0.dyn2.lookaheadMs",
           "rtSafe": true,
           "slot": "band0.dyn2",
@@ -62365,6 +63386,18 @@
           "max": null,
           "min": null,
           "name": "band0.dyn3.releaseMs",
+          "rtSafe": true,
+          "slot": "band0.dyn3",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 43,
+          "max": null,
+          "min": null,
+          "name": "band0.dyn3.detectorDelayMs",
           "rtSafe": true,
           "slot": "band0.dyn3",
           "type": "number",
@@ -62508,6 +63541,18 @@
           "id": 54,
           "max": null,
           "min": null,
+          "name": "band0.dyn4.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band0.dyn4",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 54,
+          "max": null,
+          "min": null,
           "name": "band0.dyn4.lookaheadMs",
           "rtSafe": true,
           "slot": "band0.dyn4",
@@ -62629,6 +63674,18 @@
           "max": null,
           "min": null,
           "name": "band0.dyn5.releaseMs",
+          "rtSafe": true,
+          "slot": "band0.dyn5",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 65,
+          "max": null,
+          "min": null,
+          "name": "band0.dyn5.detectorDelayMs",
           "rtSafe": true,
           "slot": "band0.dyn5",
           "type": "number",
@@ -62772,6 +63829,18 @@
           "id": 76,
           "max": null,
           "min": null,
+          "name": "band0.dyn6.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band0.dyn6",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 76,
+          "max": null,
+          "min": null,
           "name": "band0.dyn6.lookaheadMs",
           "rtSafe": true,
           "slot": "band0.dyn6",
@@ -62893,6 +63962,18 @@
           "max": null,
           "min": null,
           "name": "band0.dyn7.releaseMs",
+          "rtSafe": true,
+          "slot": "band0.dyn7",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 87,
+          "max": null,
+          "min": null,
+          "name": "band0.dyn7.detectorDelayMs",
           "rtSafe": true,
           "slot": "band0.dyn7",
           "type": "number",
@@ -63036,6 +64117,18 @@
           "id": 98,
           "max": null,
           "min": null,
+          "name": "band1.dyn0.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band1.dyn0",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 98,
+          "max": null,
+          "min": null,
           "name": "band1.dyn0.lookaheadMs",
           "rtSafe": true,
           "slot": "band1.dyn0",
@@ -63157,6 +64250,18 @@
           "max": null,
           "min": null,
           "name": "band1.dyn1.releaseMs",
+          "rtSafe": true,
+          "slot": "band1.dyn1",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 109,
+          "max": null,
+          "min": null,
+          "name": "band1.dyn1.detectorDelayMs",
           "rtSafe": true,
           "slot": "band1.dyn1",
           "type": "number",
@@ -63300,6 +64405,18 @@
           "id": 120,
           "max": null,
           "min": null,
+          "name": "band1.dyn2.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band1.dyn2",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 120,
+          "max": null,
+          "min": null,
           "name": "band1.dyn2.lookaheadMs",
           "rtSafe": true,
           "slot": "band1.dyn2",
@@ -63421,6 +64538,18 @@
           "max": null,
           "min": null,
           "name": "band1.dyn3.releaseMs",
+          "rtSafe": true,
+          "slot": "band1.dyn3",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 131,
+          "max": null,
+          "min": null,
+          "name": "band1.dyn3.detectorDelayMs",
           "rtSafe": true,
           "slot": "band1.dyn3",
           "type": "number",
@@ -63564,6 +64693,18 @@
           "id": 142,
           "max": null,
           "min": null,
+          "name": "band1.dyn4.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band1.dyn4",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 142,
+          "max": null,
+          "min": null,
           "name": "band1.dyn4.lookaheadMs",
           "rtSafe": true,
           "slot": "band1.dyn4",
@@ -63685,6 +64826,18 @@
           "max": null,
           "min": null,
           "name": "band1.dyn5.releaseMs",
+          "rtSafe": true,
+          "slot": "band1.dyn5",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 153,
+          "max": null,
+          "min": null,
+          "name": "band1.dyn5.detectorDelayMs",
           "rtSafe": true,
           "slot": "band1.dyn5",
           "type": "number",
@@ -63828,6 +64981,18 @@
           "id": 164,
           "max": null,
           "min": null,
+          "name": "band1.dyn6.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band1.dyn6",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 164,
+          "max": null,
+          "min": null,
           "name": "band1.dyn6.lookaheadMs",
           "rtSafe": true,
           "slot": "band1.dyn6",
@@ -63949,6 +65114,18 @@
           "max": null,
           "min": null,
           "name": "band1.dyn7.releaseMs",
+          "rtSafe": true,
+          "slot": "band1.dyn7",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 175,
+          "max": null,
+          "min": null,
+          "name": "band1.dyn7.detectorDelayMs",
           "rtSafe": true,
           "slot": "band1.dyn7",
           "type": "number",
@@ -64092,6 +65269,18 @@
           "id": 186,
           "max": null,
           "min": null,
+          "name": "band2.dyn0.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band2.dyn0",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 186,
+          "max": null,
+          "min": null,
           "name": "band2.dyn0.lookaheadMs",
           "rtSafe": true,
           "slot": "band2.dyn0",
@@ -64213,6 +65402,18 @@
           "max": null,
           "min": null,
           "name": "band2.dyn1.releaseMs",
+          "rtSafe": true,
+          "slot": "band2.dyn1",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 197,
+          "max": null,
+          "min": null,
+          "name": "band2.dyn1.detectorDelayMs",
           "rtSafe": true,
           "slot": "band2.dyn1",
           "type": "number",
@@ -64356,6 +65557,18 @@
           "id": 208,
           "max": null,
           "min": null,
+          "name": "band2.dyn2.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band2.dyn2",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 208,
+          "max": null,
+          "min": null,
           "name": "band2.dyn2.lookaheadMs",
           "rtSafe": true,
           "slot": "band2.dyn2",
@@ -64477,6 +65690,18 @@
           "max": null,
           "min": null,
           "name": "band2.dyn3.releaseMs",
+          "rtSafe": true,
+          "slot": "band2.dyn3",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 219,
+          "max": null,
+          "min": null,
+          "name": "band2.dyn3.detectorDelayMs",
           "rtSafe": true,
           "slot": "band2.dyn3",
           "type": "number",
@@ -64620,6 +65845,18 @@
           "id": 230,
           "max": null,
           "min": null,
+          "name": "band2.dyn4.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band2.dyn4",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 230,
+          "max": null,
+          "min": null,
           "name": "band2.dyn4.lookaheadMs",
           "rtSafe": true,
           "slot": "band2.dyn4",
@@ -64741,6 +65978,18 @@
           "max": null,
           "min": null,
           "name": "band2.dyn5.releaseMs",
+          "rtSafe": true,
+          "slot": "band2.dyn5",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 241,
+          "max": null,
+          "min": null,
+          "name": "band2.dyn5.detectorDelayMs",
           "rtSafe": true,
           "slot": "band2.dyn5",
           "type": "number",
@@ -64884,6 +66133,18 @@
           "id": 252,
           "max": null,
           "min": null,
+          "name": "band2.dyn6.detectorDelayMs",
+          "rtSafe": true,
+          "slot": "band2.dyn6",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 252,
+          "max": null,
+          "min": null,
           "name": "band2.dyn6.lookaheadMs",
           "rtSafe": true,
           "slot": "band2.dyn6",
@@ -65016,7 +66277,7 @@
           "id": 263,
           "max": null,
           "min": null,
-          "name": "band2.dyn7.lookaheadMs",
+          "name": "band2.dyn7.detectorDelayMs",
           "rtSafe": true,
           "slot": "band2.dyn7",
           "type": "number",
@@ -65025,12 +66286,12 @@
         {
           "choices": null,
           "default": 0,
-          "id": null,
+          "id": 263,
           "max": null,
           "min": null,
-          "name": "band0.dyn0.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn0",
+          "name": "band2.dyn7.lookaheadMs",
+          "rtSafe": true,
+          "slot": "band2.dyn7",
           "type": "number",
           "unit": "ms"
         },
@@ -65093,18 +66354,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn1.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn1",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65159,18 +66408,6 @@
           "slot": "band0.dyn1",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn2.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn2",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -65231,18 +66468,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn3.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn3",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65297,18 +66522,6 @@
           "slot": "band0.dyn3",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn4.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn4",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -65369,18 +66582,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn5.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn5",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65435,18 +66636,6 @@
           "slot": "band0.dyn5",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn6.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn6",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -65507,18 +66696,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band0.dyn7.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band0.dyn7",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65573,18 +66750,6 @@
           "slot": "band0.dyn7",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn0.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn0",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -65645,18 +66810,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn1.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn1",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65711,18 +66864,6 @@
           "slot": "band1.dyn1",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn2.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn2",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -65783,18 +66924,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn3.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn3",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65849,18 +66978,6 @@
           "slot": "band1.dyn3",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn4.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn4",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -65921,18 +67038,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn5.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn5",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -65987,18 +67092,6 @@
           "slot": "band1.dyn5",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn6.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn6",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -66059,18 +67152,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band1.dyn7.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band1.dyn7",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -66125,18 +67206,6 @@
           "slot": "band1.dyn7",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn0.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn0",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -66197,18 +67266,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn1.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn1",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -66263,18 +67320,6 @@
           "slot": "band2.dyn1",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn2.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn2",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -66335,18 +67380,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn3.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn3",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -66401,18 +67434,6 @@
           "slot": "band2.dyn3",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn4.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn4",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -66473,18 +67494,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn5.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn5",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -66542,18 +67551,6 @@
         },
         {
           "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn6.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn6",
-          "type": "number",
-          "unit": "ms"
-        },
-        {
-          "choices": null,
           "default": true,
           "id": null,
           "max": null,
@@ -66608,18 +67605,6 @@
           "slot": "band2.dyn6",
           "type": "enum",
           "unit": null
-        },
-        {
-          "choices": null,
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "band2.dyn7.detectorDelayMs",
-          "rtSafe": false,
-          "slot": "band2.dyn7",
-          "type": "number",
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -79991,7 +80976,7 @@
       "channelPolicy": "multichannel",
       "id": "saturation.ampSim",
       "kind": "realtime",
-      "latencySamples": 12,
+      "latencySamples": 48,
       "params": [
         {
           "choices": null,
@@ -80198,6 +81183,47 @@
           "unit": "dB"
         },
         {
+          "choices": null,
+          "default": true,
+          "id": 17,
+          "max": null,
+          "min": null,
+          "name": "cab",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "guitar4x12",
+              "value": 0
+            },
+            {
+              "name": "bass8x10",
+              "value": 1
+            },
+            {
+              "name": "guitar1x12Combo",
+              "value": 2
+            },
+            {
+              "name": "guitar2x12Open",
+              "value": 3
+            }
+          ],
+          "default": 0,
+          "id": 18,
+          "max": null,
+          "min": null,
+          "name": "cabModel",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
           "choices": [
             {
               "name": "classicCrunch",
@@ -80232,18 +81258,6 @@
           "rtSafe": false,
           "slot": null,
           "type": "enum",
-          "unit": null
-        },
-        {
-          "choices": null,
-          "default": true,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "cab",
-          "rtSafe": false,
-          "slot": null,
-          "type": "boolean",
           "unit": null
         },
         {
@@ -80292,27 +81306,6 @@
           "rtSafe": false,
           "slot": null,
           "type": "number",
-          "unit": null
-        },
-        {
-          "choices": [
-            {
-              "name": "guitar4x12",
-              "value": 0
-            },
-            {
-              "name": "bass8x10",
-              "value": 1
-            }
-          ],
-          "default": 0,
-          "id": null,
-          "max": null,
-          "min": null,
-          "name": "cabModel",
-          "rtSafe": false,
-          "slot": null,
-          "type": "enum",
           "unit": null
         },
         {
@@ -80559,6 +81552,228 @@
         },
         {
           "choices": null,
+          "default": 0,
+          "id": 3,
+          "max": 1,
+          "min": 0,
+          "name": "radioNoiseLevel",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 4,
+          "max": 1,
+          "min": 0,
+          "name": "wpNoiseLevel",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 5,
+          "max": 1,
+          "min": 0,
+          "name": "discNoiseLevel",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 6,
+          "max": 1,
+          "min": 0,
+          "name": "humLevel",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 1,
+          "id": 7,
+          "max": 1,
+          "min": 0,
+          "name": "noiseDetune",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": 0,
+          "name": "noiseLpfHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 9,
+          "max": null,
+          "min": 0,
+          "name": "wpNoiseLpfHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 10,
+          "max": null,
+          "min": 0,
+          "name": "discNoiseLpfHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 11,
+          "max": null,
+          "min": 0,
+          "name": "humLpfHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 12,
+          "max": null,
+          "min": 0,
+          "name": "preFilterHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 13,
+          "max": null,
+          "min": 0,
+          "name": "postFilterHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 50,
+          "id": 14,
+          "max": null,
+          "min": 0,
+          "name": "humHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 15,
+          "max": null,
+          "min": null,
+          "name": "wpNoisePink",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "lp",
+              "value": 0
+            },
+            {
+              "name": "ep",
+              "value": 1
+            },
+            {
+              "name": "sp",
+              "value": 2
+            },
+            {
+              "name": "rnd",
+              "value": 3
+            }
+          ],
+          "default": 0,
+          "id": 16,
+          "max": null,
+          "min": null,
+          "name": "discType",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "off",
+              "value": 0
+            },
+            {
+              "name": "lowpass",
+              "value": 1
+            },
+            {
+              "name": "highpass",
+              "value": 2
+            }
+          ],
+          "default": 1,
+          "id": 17,
+          "max": null,
+          "min": null,
+          "name": "filterType",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 18,
+          "max": null,
+          "min": null,
+          "name": "mono",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": null,
           "default": 5351397,
           "id": null,
           "max": null,
@@ -80629,6 +81844,18 @@
           "rtSafe": false,
           "slot": null,
           "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": null,
+          "max": 9,
+          "min": 0,
+          "name": "typeLadder",
+          "rtSafe": false,
+          "slot": null,
+          "type": "number",
           "unit": null
         }
       ],
@@ -81824,7 +83051,7 @@
       "channelPolicy": "multichannel",
       "id": "saturation.tube",
       "kind": "realtime",
-      "latencySamples": 12,
+      "latencySamples": 48,
       "params": [
         {
           "choices": null,
@@ -82039,7 +83266,7 @@
       "channelPolicy": "multichannel",
       "id": "spectral.airBand",
       "kind": "realtime",
-      "latencySamples": 24,
+      "latencySamples": 48,
       "params": [
         {
           "choices": null,
@@ -82220,6 +83447,10 @@
               "value": 0
             },
             {
+              "name": "adaa1",
+              "value": 1
+            },
+            {
               "name": "oversample4x",
               "value": 3
             }
@@ -82380,6 +83611,39 @@
           "rtSafe": true,
           "slot": null,
           "type": "number",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "sine",
+              "value": 0
+            },
+            {
+              "name": "triangle",
+              "value": 1
+            },
+            {
+              "name": "square",
+              "value": 2
+            },
+            {
+              "name": "sawUp",
+              "value": 3
+            },
+            {
+              "name": "sawDown",
+              "value": 4
+            }
+          ],
+          "default": 0,
+          "id": 3,
+          "max": null,
+          "min": null,
+          "name": "shape",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
           "unit": null
         }
       ],
@@ -82606,6 +83870,27 @@
           "rtSafe": true,
           "slot": null,
           "type": "number",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "normalized",
+              "value": 0
+            },
+            {
+              "name": "rawConstantPower",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 1,
+          "max": null,
+          "min": null,
+          "name": "law",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
           "unit": null
         },
         {

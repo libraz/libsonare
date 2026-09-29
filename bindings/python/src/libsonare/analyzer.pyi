@@ -167,6 +167,7 @@ SoloProcessor: TypeAlias = Literal[
     "dynamics.vocalRider",
     "effects.acoustic.roomMorph",
     "effects.delay.stereo",
+    "effects.filter.vowel",
     "effects.modulation.autoWah",
     "effects.modulation.chorus",
     "effects.modulation.ensemble",
