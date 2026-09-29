@@ -16,6 +16,7 @@ from typing import Any
 
 from ._cli_common import (
     _atomic_wav_writer,
+    _atomic_write_bytes,
     _json_key_to_snake_case,
     _load_channels_or_downmix,
     _parse_kv_params,
@@ -126,8 +127,9 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
         # suggest_mix_scene_json, which would re-run an STFT per track and every
         # pairwise pass to reach the same scene. That the two agree is pinned by
         # a test rather than assumed here.
-        with open(args.scene_out, "w", encoding="utf-8") as fh:
-            fh.write(_strict_json_dumps(document.get("scene", {})) + "\n")
+        _atomic_write_bytes(
+            args.scene_out, (_strict_json_dumps(document.get("scene", {})) + "\n").encode("utf-8")
+        )
     print(_strict_json_dumps(document))
     return 0
 
@@ -293,7 +295,10 @@ def cmd_mix(args: argparse.Namespace) -> int:
             mixer.compile()
             # The mixer reports its graph latency separately. Output begins at
             # sample zero without trimming so routing alignment is preserved.
-            with _atomic_wav_writer(args.output, 2, args.sample_rate) as wav:
+            # tail_samples() is a property of the compiled graph, not of render
+            # progress, so it is safe to read here to size the write up front.
+            total_frames = (length or 0) + mixer.tail_samples()
+            with _atomic_wav_writer(args.output, 2, args.sample_rate, frames=total_frames) as wav:
                 for offset in range(0, length or 0, args.block_size):
                     end = min(offset + args.block_size, length or 0)
                     result = mixer.process_stereo(

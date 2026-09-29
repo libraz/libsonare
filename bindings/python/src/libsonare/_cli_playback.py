@@ -3,22 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from ._cli_common import (
     _load_audio_channels,
-    _load_json_object,
     _set_nested_value,
     _strict_json_dumps,
     _write_frame_major_wav,
 )
 from ._cli_inventory import _cli_domain, _cli_scalar_type
 from ._cli_options import SharedParsers, _finite_float
-from ._playback import HrtfSet, PlaybackLoudnessMeter, PlaybackRenderer, render_playback
+from ._playback import HrtfSet, PlaybackLoudnessMeter, PlaybackRenderer
 from ._runtime import SonareValueError
+
+# Matches src/playback/renderer.h's kOfflineRenderBlockFrames: the chunk size
+# the C++ one-shot reference render loop uses.
+_OFFLINE_RENDER_BLOCK_FRAMES = 4096
 
 
 def _unit_interval(value: str) -> float:
@@ -134,14 +140,35 @@ def register_playback_parsers(sub: argparse._SubParsersAction[Any], shared: Shar
     )
 
 
-def _interleave_planes(planes: Sequence[Sequence[float]]) -> list[float]:
-    channels = len(planes)
-    frames = len(planes[0]) if planes else 0
-    interleaved = [0.0] * (frames * channels)
-    for channel, plane in enumerate(planes):
-        for frame in range(frames):
-            interleaved[frame * channels + channel] = plane[frame]
-    return interleaved
+def _interleave_planes(planes: Sequence[Sequence[float]]) -> np.ndarray:
+    """Interleave one array per channel into one frame-major float32 array.
+
+    ``np.stack(..., axis=1).ravel()`` lands on the same memory a fresh
+    C-contiguous array already holds in interleaved order, so the ``ravel()``
+    is a view rather than a second copy. A pure-Python double loop here used
+    to cost one Python-object write per sample -- ~2e9 of them for a 2-hour
+    5.1 file -- dominating render time on anything past a few seconds.
+    """
+    if not planes:
+        return np.empty(0, dtype=np.float32)
+    return np.stack([np.asarray(plane, dtype=np.float32) for plane in planes], axis=1).ravel()
+
+
+def _load_playback_config_document(path: str) -> dict[str, Any]:
+    """Load --config's JSON document.
+
+    A missing file is refused as a caller argument error, matching --hrtf's own
+    behavior on this CLI and the native CLI's --config path, rather than the
+    shared _load_json_object's generic file-not-found exit code.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            loaded = json.load(fh)
+    except OSError as exc:
+        raise SonareValueError(f"cannot open --config file: {path}") from exc
+    if not isinstance(loaded, dict):
+        raise SonareValueError(f"--config JSON root must be an object: {path}")
+    return loaded
 
 
 def _playback_config_document(args: argparse.Namespace) -> dict[str, Any]:
@@ -150,7 +177,7 @@ def _playback_config_document(args: argparse.Namespace) -> dict[str, Any]:
     An absent flag leaves whatever the document already says (or the schema
     default) alone, so "flags win" only applies to a flag the caller gave.
     """
-    document = _load_json_object(args.config) if args.config else {}
+    document = _load_playback_config_document(args.config) if args.config else {}
     if args.target is not None:
         if args.target == "headphones":
             _set_nested_value(document, "target.kind", "headphones")
@@ -199,6 +226,38 @@ def _resolved_program_lufs(
     return measured
 
 
+def _render_via_reporting_handle(
+    renderer: PlaybackRenderer, interleaved: np.ndarray, in_channels: int, frames: int
+) -> np.ndarray:
+    """Render ``frames`` input frames through ``renderer`` block by block.
+
+    Mirrors ``playback::render_interleaved`` (src/playback/renderer.cpp): the
+    tail is padded with ``latency_samples()`` silent frames to flush the
+    pipeline, and that many frames are dropped from the front of the output,
+    so the returned audio and any diagnostics read from ``renderer`` afterward
+    both come from the same, actually-processed handle.
+    """
+    out_channels = renderer.output_channels()
+    latency = renderer.latency_samples()
+    total = frames + latency
+    result = np.zeros((frames, out_channels), dtype=np.float32)
+    block = _OFFLINE_RENDER_BLOCK_FRAMES
+    for start in range(0, total, block):
+        count = min(block, total - start)
+        in_block = np.zeros(count * in_channels, dtype=np.float32)
+        if start < frames:
+            available = min(count, frames - start)
+            in_block[: available * in_channels] = interleaved[
+                start * in_channels : (start + available) * in_channels
+            ]
+        out_block = renderer.process_interleaved(in_block, in_channels).reshape(count, out_channels)
+        lo = max(latency - start, 0)
+        if lo < count:
+            dest_start = start + lo - latency
+            result[dest_start : dest_start + (count - lo)] = out_block[lo:count]
+    return result
+
+
 def cmd_playback(args: argparse.Namespace) -> int:
     if not args.output:
         raise SonareValueError("playback requires --output")
@@ -224,16 +283,20 @@ def cmd_playback(args: argparse.Namespace) -> int:
             raise SonareValueError(f"cannot open --hrtf file: {args.hrtf}") from exc
         hrtf = HrtfSet.from_bytes(hrtf_bytes)
 
+    in_frames = len(planes[0]) if planes else 0
+
     renderer: PlaybackRenderer | None = None
     try:
-        # A second handle just to learn the output channel count and (for
-        # --json) the renderer's own diagnostics; the one-shot render below
-        # owns no handle of its own to ask.
-        renderer = PlaybackRenderer(config, hrtf=hrtf, sample_rate=sample_rate)
-        out_channels = renderer.output_channels()
-        rendered = render_playback(
-            interleaved, channels=channels, sample_rate=sample_rate, config=config, hrtf=hrtf
+        renderer = PlaybackRenderer(
+            config,
+            hrtf=hrtf,
+            sample_rate=sample_rate,
+            max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES,
         )
+        out_channels = renderer.output_channels()
+        rendered = _render_via_reporting_handle(renderer, interleaved, channels, in_frames)
+        # Read after the render so a limiter/loudness clamp or a non-finite
+        # discard the render itself triggered shows up in the report.
         diagnostics = renderer.diagnostics() if args.json else None
     finally:
         if renderer is not None:
@@ -241,9 +304,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
         if hrtf is not None:
             hrtf.close()
 
-    frames, _ = _write_frame_major_wav(
-        args.output, rendered.reshape((-1, out_channels)), sample_rate
-    )
+    frames, _ = _write_frame_major_wav(args.output, rendered, sample_rate)
 
     if args.json:
         print(_strict_json_dumps(diagnostics))

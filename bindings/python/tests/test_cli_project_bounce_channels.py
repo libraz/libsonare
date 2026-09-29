@@ -88,14 +88,39 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
     project_71 = _write_project(tmp_path / "project-71.json", _surround_master_project("7.1"))
     output = tmp_path / "bounce.wav"
 
+    # --frames is required: the project has no tracks or clips, so the
+    # auto-derive-from-arrangement default (omitting --frames) renders 0
+    # frames, which the shared _check_wav_frame_count guard now refuses
+    # (consolidation-016) instead of silently writing an empty WAV. Matches
+    # the native CLI's own mirror of this case (cli_project_test.cpp, "bounce
+    # renders 6/8 channels up to a surround master's own width"), which
+    # passes --frames 256 for the same reason.
     result = _run_console(
-        "project", "bounce", "--in", str(project_51), "-o", str(output), "--channels", "6"
+        "project",
+        "bounce",
+        "--in",
+        str(project_51),
+        "-o",
+        str(output),
+        "--frames",
+        "256",
+        "--channels",
+        "6",
     )
     assert result.returncode == 0, result.stderr
     assert _wav_channel_count(output) == 6
 
     result = _run_console(
-        "project", "bounce", "--in", str(project_71), "-o", str(output), "--channels", "8"
+        "project",
+        "bounce",
+        "--in",
+        str(project_71),
+        "-o",
+        str(output),
+        "--frames",
+        "256",
+        "--channels",
+        "8",
     )
     assert result.returncode == 0, result.stderr
     assert _wav_channel_count(output) == 8

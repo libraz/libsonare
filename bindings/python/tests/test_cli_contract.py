@@ -1334,6 +1334,39 @@ def test_project_bounce_accepts_an_explicit_sample_rate_matching_the_project(tmp
         assert rendered.getframerate() == 44100
 
 
+@pytest.mark.parametrize("explicit_rate", ["0", "-1"])
+def test_project_bounce_rejects_an_explicit_zero_or_negative_sample_rate(
+    tmp_path, explicit_rate: str
+) -> None:
+    """0 and a negative value are still an EXPLICIT --sample-rate, not an omitted
+    one, so both must be refused (exit 3) the same way a mismatched positive
+    value is -- matching the native CLI, which checks presence rather than
+    sign. A Python-only bug once let `requested_sample_rate > 0` treat either
+    as "not provided" and silently rendered at the project's own rate with
+    exit 0, so a script relying on the exit code to detect a bad argument saw
+    false success."""
+    proj = tmp_path / "project.sonare"
+    wav = tmp_path / "bounce.wav"
+    created = _run_console("project", "new", "-o", str(proj), "--sample-rate", "44100")
+    assert created.returncode == 0, created.stderr
+
+    result = _run_console(
+        "project",
+        "bounce",
+        "--in",
+        str(proj),
+        "-o",
+        str(wav),
+        "--frames",
+        "64",
+        "--sample-rate",
+        explicit_rate,
+    )
+    assert result.returncode == 3, result.stderr
+    assert "does not match the project's sample rate" in result.stderr
+    assert not wav.exists()
+
+
 def test_project_bounce_rejects_an_explicit_sample_rate_disagreeing_with_the_project(
     tmp_path,
 ) -> None:

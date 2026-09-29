@@ -5,10 +5,17 @@ checking a headphones target writes 2ch and a 7.1 target writes 8ch
 WAVE_FORMAT_EXTENSIBLE -- the format neither stdlib `wave` nor a plain PCM
 writer emits, so this is the one check that tells the two channel counts apart
 from a file a media player would actually place correctly.
+
+A second suite checks that `--json` diagnostics are read from the same handle
+that produced the audio, using a loud tone driven hard enough to always engage
+the brickwall limiter as the differential signal. A third checks that
+`--config` is refused the same way -- same exit code -- by both front ends on
+a missing file and on a JSON root that is not an object.
 """
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import struct
@@ -82,6 +89,139 @@ def _wav_channels_and_format_tag(path: Path) -> tuple[int, int]:
     fmt_tag = struct.unpack("<H", header[20:22])[0]
     channels = struct.unpack("<H", header[22:24])[0]
     return channels, fmt_tag
+
+
+def _write_mono_full_scale_wav(path: Path) -> None:
+    """A mono, near-full-scale continuous tone, long enough to span several
+    of the renderer's 4096-frame render blocks (see `kOfflineRenderBlockFrames`).
+    """
+    frames = _FRAMES * 4
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(_SAMPLE_RATE)
+        samples = bytearray()
+        for n in range(frames):
+            sample = 0.999 * math.sin(2.0 * math.pi * 220.0 * n / _SAMPLE_RATE)
+            samples += struct.pack("<h", int(sample * 32767.0))
+        wav.writeframesraw(bytes(samples))
+
+
+class PlaybackCliDiagnosticsTest(unittest.TestCase):
+    """`--json` diagnostics come from the handle that actually rendered the audio.
+
+    ``--target-lufs -5 --dialogue-db 12`` (the loudest and most-boosted flags
+    the schema allows) pushed through a near-full-scale tone reliably drives
+    the renderer's brickwall limiter, which reports its last block's gain
+    reduction: a renderer created only to be queried, never fed the actual
+    samples, reports ``limiter_gain_reduction_db: 0`` regardless of input.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.loud_wav = Path(self._tmp.name) / "mono-full-scale.wav"
+        _write_mono_full_scale_wav(self.loud_wav)
+
+    def _run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(argv, capture_output=True, text=True, cwd=ROOT, check=False)
+
+    def _assert_diagnostics_reflect_the_render(self, run_prefix: list[str], output: Path) -> None:
+        result = self._run(
+            [
+                *run_prefix,
+                "playback",
+                str(self.loud_wav),
+                "-o",
+                str(output),
+                "--target-lufs",
+                "-5",
+                "--dialogue-db",
+                "12",
+                "--json",
+            ]
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        diagnostics = json.loads(result.stdout)
+        self.assertLess(diagnostics["limiter_gain_reduction_db"], 0.0, diagnostics)
+
+    def test_native_json_diagnostics_reflect_the_render(self) -> None:
+        native = _native_cli()
+        if native is None:
+            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+        self._assert_diagnostics_reflect_the_render(
+            [str(native)], Path(self._tmp.name) / "native-loud.wav"
+        )
+
+    def test_python_json_diagnostics_reflect_the_render(self) -> None:
+        self._assert_diagnostics_reflect_the_render(
+            _python_cli_argv(), Path(self._tmp.name) / "python-loud.wav"
+        )
+
+
+_EXIT_INVALID_PARAMETER = 3
+
+
+class PlaybackCliConfigRefusalTest(unittest.TestCase):
+    """`--config` is refused the same way -- a missing file, or a JSON root
+    that is not an object -- on both front ends, never silently treated as an
+    absent --config.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.input_wav = Path(self._tmp.name) / "input.wav"
+        _write_surround_wav(self.input_wav)
+        self.non_object_config = Path(self._tmp.name) / "non-object-config.json"
+        self.non_object_config.write_text("[1, 2, 3]")
+        self.missing_config = Path(self._tmp.name) / "does-not-exist.json"
+
+    def _run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(argv, capture_output=True, text=True, cwd=ROOT, check=False)
+
+    def _assert_refused(self, run_prefix: list[str], config_path: Path, output: Path) -> None:
+        result = self._run(
+            [
+                *run_prefix,
+                "playback",
+                str(self.input_wav),
+                "-o",
+                str(output),
+                "--config",
+                str(config_path),
+            ]
+        )
+        self.assertEqual(result.returncode, _EXIT_INVALID_PARAMETER, result.stderr)
+        self.assertFalse(output.exists())
+
+    def test_native_refuses_missing_config_file(self) -> None:
+        native = _native_cli()
+        if native is None:
+            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+        self._assert_refused(
+            [str(native)], self.missing_config, Path(self._tmp.name) / "native-missing.wav"
+        )
+
+    def test_native_refuses_non_object_config_root(self) -> None:
+        native = _native_cli()
+        if native is None:
+            self.skipTest("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+        self._assert_refused(
+            [str(native)], self.non_object_config, Path(self._tmp.name) / "native-non-object.wav"
+        )
+
+    def test_python_refuses_missing_config_file(self) -> None:
+        self._assert_refused(
+            _python_cli_argv(), self.missing_config, Path(self._tmp.name) / "python-missing.wav"
+        )
+
+    def test_python_refuses_non_object_config_root(self) -> None:
+        self._assert_refused(
+            _python_cli_argv(),
+            self.non_object_config,
+            Path(self._tmp.name) / "python-non-object.wav",
+        )
 
 
 class PlaybackCliTest(unittest.TestCase):

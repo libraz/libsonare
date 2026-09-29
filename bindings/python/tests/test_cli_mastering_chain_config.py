@@ -77,11 +77,41 @@ def test_master_assistant_starts_from_a_named_preset(tmp_path, monkeypatch, caps
         monkeypatch.setattr(libsonare, name, capture)
 
     assert _run(["master", str(source), "--assistant", "--preset", "classical", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["mode"] == "assistant"
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mode"] == "assistant"
+    # --preset selects the assistant's starting config (asserted above via the
+    # captured suggest_chain params), but the payload's own preset key is
+    # reserved for the preset ROUTE (mode == "preset") on both CLIs -- native
+    # only assigns preset_name off that route, so its JSON never carries the
+    # key for --assistant --preset either.
+    assert "preset" not in payload
     assert _run(["master", str(source), "--assistant", "--json"]) == 0
     capsys.readouterr()
     # The default --preset value is not a choice the caller made.
     assert seen == [{"preset": "classical"}, {}]
+
+
+def test_mastering_assistant_json_omits_the_preset_key_even_with_preset_supplied(
+    tmp_path, capsys
+) -> None:
+    """``mastering --assistant --preset P --json`` carries no ``preset`` key.
+
+    --preset alongside --assistant selects the suggestion's starting config
+    (mode stays "assistant"), not a second route -- the payload's preset key is
+    reserved for mode == "preset", matching the native CLI: preset_name is only
+    ever assigned on the plain --preset route in
+    tools/cli/sonare_cli_mastering_mixing.cpp, so its assistant JSON never
+    carries the key either. A prior bug passed preset= unconditionally into
+    the payload builder, so this same invocation carried the key only on
+    Python.
+    """
+    source = tmp_path / "input.wav"
+    _write_source(source)
+
+    assert _run(["mastering", str(source), "--assistant", "--preset", "classical", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mode"] == "assistant"
+    assert "preset" not in payload
 
 
 # The dispatch table lives inside the entry point, so the handler is named here

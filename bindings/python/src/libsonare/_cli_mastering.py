@@ -457,7 +457,13 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 result,
                 mode=mode,
                 output=output,
-                preset=preset,
+                # preset selects the assistant's starting config too (see
+                # assistant_config_from_cli), but the payload's preset key is
+                # reserved for the preset ROUTE, matching the native CLI:
+                # tools/cli/sonare_cli_mastering_mixing.cpp only assigns
+                # preset_name on the plain --preset route, so its JSON never
+                # carries the key for --assistant --preset.
+                preset=preset if mode == "preset" else "",
                 explanation=explanation if explain else None,
                 include_report_latency=bool(report_path),
             )
@@ -477,7 +483,11 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         print(_strict_json_dumps(payload))
     else:
         print("  Mastering:" if mode == "loudness" else f"  Mastering {mode}:")
-        if preset:
+        # See the JSON payload's own preset= comment above: preset also seeds
+        # the assistant's starting config, but the printed line is reserved
+        # for the preset ROUTE, matching the native CLI (preset_name stays
+        # empty off that route there too).
+        if preset and mode == "preset":
             print(f"    Preset:       {preset}")
         if mode != "loudness":
             stages = list(getattr(result, "stages", []))

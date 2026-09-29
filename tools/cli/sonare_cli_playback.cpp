@@ -16,6 +16,10 @@ namespace {
 using sonare::util::json::Object;
 using sonare::util::json::Value;
 
+// Matches src/playback/renderer.h's kOfflineRenderBlockFrames: the chunk
+// size the C++ one-shot reference render loop uses.
+constexpr size_t kOfflineRenderBlockFrames = 4096;
+
 std::vector<uint8_t> read_hrtf_file(const std::string& path) {
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open()) throw std::invalid_argument("cannot open --hrtf file: " + path);
@@ -36,10 +40,16 @@ std::vector<uint8_t> read_hrtf_file(const std::string& path) {
 // flag leaves whatever the document already says (or the schema default)
 // alone, so "flags win" only applies to a flag the caller actually gave.
 Value playback_config_document(const CliArgs& args) {
-  Value root = args.has("config")
-                   ? sonare::util::json::parse(read_plain_text_file(args.get_string("config")))
-                   : Value(Object{});
-  if (!root.is_object()) root = Value(Object{});
+  Value root = Value(Object{});
+  if (args.has("config")) {
+    const std::string path = args.get_string("config");
+    root = sonare::util::json::parse(read_plain_text_file(path));
+    // Refused, not silently treated as an absent --config: matching the
+    // Python CLI's own --config path, which rejects a non-object root.
+    if (!root.is_object()) {
+      throw std::invalid_argument("--config JSON root must be an object: " + path);
+    }
+  }
 
   if (args.has("target")) {
     const std::string target = args.get_string("target");
@@ -102,6 +112,47 @@ std::optional<float> resolved_program_lufs(const CliArgs& args,
   return lufs;
 }
 
+// Renders `frames` input frames through `renderer` block by block, mirroring
+// `playback::render_interleaved` (src/playback/renderer.cpp): the tail is
+// padded with `latency_samples()` silent frames to flush the pipeline, and
+// that many frames are dropped from the front of the output, so the returned
+// audio and any diagnostics read from `renderer` afterward both come from the
+// same, actually-processed handle.
+std::vector<float> render_via_reporting_handle(SonarePlaybackRenderer* renderer,
+                                               const std::vector<float>& interleaved,
+                                               int in_channels, int out_channels, size_t frames) {
+  int latency = 0;
+  SonareError err = sonare_playback_renderer_latency_samples(renderer, &latency);
+  if (err != SONARE_OK) throw_playback_error("query playback renderer", err);
+
+  const size_t total = frames + static_cast<size_t>(latency);
+  std::vector<float> result(frames * static_cast<size_t>(out_channels), 0.0f);
+  std::vector<float> in_block(kOfflineRenderBlockFrames * static_cast<size_t>(in_channels), 0.0f);
+  std::vector<float> out_block(kOfflineRenderBlockFrames * static_cast<size_t>(out_channels), 0.0f);
+
+  for (size_t start = 0; start < total; start += kOfflineRenderBlockFrames) {
+    const size_t count = std::min(kOfflineRenderBlockFrames, total - start);
+    std::fill(in_block.begin(), in_block.begin() + count * in_channels, 0.0f);
+    if (start < frames) {
+      const size_t available = std::min(count, frames - start);
+      std::copy(interleaved.begin() + start * in_channels,
+                interleaved.begin() + (start + available) * in_channels, in_block.begin());
+    }
+    err = sonare_playback_renderer_process_interleaved(renderer, in_block.data(), in_channels,
+                                                       out_block.data(), out_channels,
+                                                       static_cast<int>(count));
+    if (err != SONARE_OK) throw_playback_error("render playback", err);
+
+    const size_t lo = latency > static_cast<int>(start) ? static_cast<size_t>(latency) - start : 0;
+    if (lo < count) {
+      const size_t dest_start = start + lo - static_cast<size_t>(latency);
+      std::copy(out_block.begin() + lo * out_channels, out_block.begin() + count * out_channels,
+                result.begin() + dest_start * out_channels);
+    }
+  }
+  return result;
+}
+
 }  // namespace
 
 int cmd_playback(const CliArgs& args, const Audio&) {
@@ -135,47 +186,57 @@ int cmd_playback(const CliArgs& args, const Audio&) {
     if (hrtf_err != SONARE_OK) throw_playback_error("load --hrtf", hrtf_err);
   }
 
-  float* rendered = nullptr;
-  size_t out_frames = 0;
-  int out_channels = 0;
-  const SonareError render_err = sonare_playback_render_interleaved(
-      interleaved.data(), frames, in_channels, sample_rate, config_json.c_str(), hrtf, &rendered,
-      &out_frames, &out_channels);
-  if (render_err != SONARE_OK) {
+  SonarePlaybackRenderer* renderer = nullptr;
+  const SonareError create_err =
+      sonare_playback_renderer_create_json(config_json.c_str(), hrtf, sample_rate,
+                                           static_cast<int>(kOfflineRenderBlockFrames), &renderer);
+  if (create_err != SONARE_OK) {
     if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
-    throw_playback_error("render playback", render_err);
+    throw_playback_error("create playback renderer", create_err);
+  }
+
+  int out_channels = 0;
+  SonareError query_err = sonare_playback_renderer_output_channel_count(renderer, &out_channels);
+  if (query_err != SONARE_OK) {
+    sonare_playback_renderer_destroy(renderer);
+    if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
+    throw_playback_error("query playback renderer", query_err);
+  }
+
+  // Rendering and (below) diagnostics both read from `renderer`, so a
+  // limiter/loudness clamp or a non-finite discard the render itself
+  // triggers is visible in the report.
+  std::vector<float> rendered;
+  try {
+    rendered =
+        render_via_reporting_handle(renderer, interleaved, in_channels, out_channels, frames);
+  } catch (...) {
+    sonare_playback_renderer_destroy(renderer);
+    if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
+    throw;
   }
 
   const ChannelLayout out_layout = layout_from_channel_count(out_channels);
-  save_wav_multichannel(args.output_file, rendered, out_frames, out_channels, out_layout,
+  save_wav_multichannel(args.output_file, rendered.data(), frames, out_channels, out_layout,
                         sample_rate);
-  sonare_free_playback_render(rendered);
 
-  // `--json` reports the renderer's own diagnostics (inactive stages, latency
-  // breakdown, loudness/limiter clamps); a second, unprocessed handle is
-  // created only to read them, since the one-shot render above owns no handle
-  // of its own to ask.
   std::string diagnostics_text = "{}";
   if (args.json_output) {
-    SonarePlaybackRenderer* renderer = nullptr;
-    if (sonare_playback_renderer_create_json(config_json.c_str(), hrtf, sample_rate, 1024,
-                                             &renderer) == SONARE_OK) {
-      char* diagnostics = nullptr;
-      if (sonare_playback_renderer_diagnostics_json(renderer, &diagnostics) == SONARE_OK &&
-          diagnostics != nullptr) {
-        diagnostics_text = diagnostics;
-      }
-      sonare_free_string(diagnostics);
-      sonare_playback_renderer_destroy(renderer);
+    char* diagnostics = nullptr;
+    if (sonare_playback_renderer_diagnostics_json(renderer, &diagnostics) == SONARE_OK &&
+        diagnostics != nullptr) {
+      diagnostics_text = diagnostics;
     }
+    sonare_free_string(diagnostics);
   }
+  sonare_playback_renderer_destroy(renderer);
   if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);
 
   if (args.json_output) {
     std::cout << diagnostics_text << "\n";
   } else if (!args.quiet) {
-    std::cout << color::green << "Rendered " << out_frames << " frames (" << out_channels
-              << " ch @ " << sample_rate << " Hz) to " << args.output_file << color::reset << "\n";
+    std::cout << color::green << "Rendered " << frames << " frames (" << out_channels << " ch @ "
+              << sample_rate << " Hz) to " << args.output_file << color::reset << "\n";
   }
   return 0;
 }

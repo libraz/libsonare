@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import struct
 import tracemalloc
 import wave
 from pathlib import Path
@@ -332,6 +333,72 @@ def test_stereo_and_bounce_writers_share_the_non_finite_substitution(tmp_path) -
     assert _read_codes(bounce, 16) == (0, 8192, 16384, 0)
 
 
+def test_atomic_wav_writer_refuses_an_empty_frame_count(tmp_path) -> None:
+    """The native writer's ``n_frames > 0`` check (save_wav), which the Python
+    WAV writers used to skip entirely."""
+    import libsonare._cli_common as implementation
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_INVALID_PARAMETER
+    from libsonare._runtime import SonareError
+
+    output = tmp_path / "empty.wav"
+    with (
+        pytest.raises(SonareError) as raised,
+        implementation._atomic_wav_writer(str(output), 1, 48000, frames=0),
+    ):
+        pass
+    assert cli._exit_code_for(raised.value) == EXIT_INVALID_PARAMETER
+    assert not output.exists()
+
+
+def test_atomic_wav_writer_refuses_a_frame_count_past_the_riff_32_bit_size_limit(tmp_path) -> None:
+    """The native writer's check_riff_size_fits, mirrored for the mono/stereo path."""
+    import libsonare._cli_common as implementation
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_INVALID_PARAMETER
+    from libsonare._runtime import SonareError
+
+    output = tmp_path / "oversize.wav"
+    block_align = 1 * (16 // 8)  # mono, 16-bit
+    too_many_frames = (implementation._MAX_WAV_DATA_BYTES // block_align) + 1
+    with (
+        pytest.raises(SonareError) as raised,
+        implementation._atomic_wav_writer(str(output), 1, 48000, frames=too_many_frames),
+    ):
+        pass
+    assert cli._exit_code_for(raised.value) == EXIT_INVALID_PARAMETER
+    assert not output.exists()
+
+
+def test_atomic_wav_writer_accepts_the_legal_edge_of_the_riff_32_bit_size_limit(tmp_path) -> None:
+    """The control: the largest frame count the limit permits is not refused."""
+    import libsonare._cli_common as implementation
+
+    output = tmp_path / "edge.wav"
+    block_align = 1 * (16 // 8)  # mono, 16-bit
+    max_frames = implementation._MAX_WAV_DATA_BYTES // block_align
+    with implementation._atomic_wav_writer(str(output), 1, 48000, frames=max_frames):
+        pass
+    assert output.exists()
+
+
+def test_atomic_wav_writer_multichannel_refuses_an_empty_frame_count(tmp_path) -> None:
+    """The same check on the WAVE_FORMAT_EXTENSIBLE (>2 channel) writer."""
+    import libsonare._cli_common as implementation
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_INVALID_PARAMETER
+    from libsonare._runtime import SonareError
+
+    output = tmp_path / "empty-multichannel.wav"
+    with (
+        pytest.raises(SonareError) as raised,
+        implementation._atomic_wav_writer_multichannel(str(output), 6, 48000, frames=0),
+    ):
+        pass
+    assert cli._exit_code_for(raised.value) == EXIT_INVALID_PARAMETER
+    assert not output.exists()
+
+
 def test_wav_writer_peak_memory_is_bounded_by_chunk_size(tmp_path) -> None:
     """Writer scratch memory stays nearly constant as output duration grows."""
     import libsonare._cli_common as implementation
@@ -359,3 +426,112 @@ def test_wav_writer_peak_memory_is_bounded_by_chunk_size(tmp_path) -> None:
         assert wav.getframerate() == 48000
         assert wav.getnframes() == len(large)
         assert wav.readframes(1) == b"\x00 "
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+def test_vectorized_quantizer_matches_the_scalar_one_over_random_and_edge_samples(
+    bits: int,
+) -> None:
+    """``_quantize_codes`` must answer exactly what ``_quantize_sample`` does.
+
+    ``_pcm_bytes`` (the WAV writers' fast path) and ``_pcm16``/``_pcm24`` (the
+    scalar functions the native writer's byte-exactness was pinned against,
+    see ``test_wav_writer_keeps_finite_codes_at_and_below_full_scale``) must
+    stay two spellings of the one quantizer, not two quantizers that happen to
+    agree on the samples a fixture thought to try. numpy's random generator is
+    seeded so a real disagreement reproduces the same way twice.
+    """
+    import numpy as np
+
+    from libsonare._cli_common import _quantize_codes, _quantize_sample
+
+    full_scale, minimum, maximum = (
+        (32767.0, -32768, 32767)
+        if bits == 16
+        else (
+            8388607.0,
+            -8388608,
+            8388607,
+        )
+    )
+    rng = np.random.default_rng(20260928)
+    samples = np.concatenate(
+        [
+            rng.uniform(-1.5, 1.5, 20000).astype(np.float32),
+            # Boundary codes: every integer PCM code +/- 1, converted back to
+            # the float that should round-trip to it.
+            (np.arange(-full_scale - 1, full_scale + 2, 1.0) / full_scale).astype(np.float32),
+            np.array(
+                [
+                    0.0,
+                    -0.0,
+                    1.0,
+                    -1.0,
+                    float("nan"),
+                    float("inf"),
+                    float("-inf"),
+                    1e39,
+                    -1e39,
+                    3.4e38,
+                ],
+                dtype=np.float32,
+            ),
+        ]
+    )
+
+    vectorized = _quantize_codes(samples, full_scale, minimum, maximum)
+    for sample, code in zip(samples, vectorized, strict=True):
+        assert int(code) == _quantize_sample(float(sample), full_scale, minimum, maximum), sample
+
+
+def test_interleave_planes_matches_the_manual_frame_major_order() -> None:
+    from libsonare._cli_playback import _interleave_planes
+
+    planes = [[1.0, 2.0, 3.0], [10.0, 20.0, 30.0], [100.0, 200.0, 300.0]]
+    interleaved = _interleave_planes(planes)
+    assert list(interleaved) == [1.0, 10.0, 100.0, 2.0, 20.0, 200.0, 3.0, 30.0, 300.0]
+    assert interleaved.dtype.name == "float32"
+
+
+def test_interleave_planes_of_nothing_is_empty() -> None:
+    from libsonare._cli_playback import _interleave_planes
+
+    assert list(_interleave_planes([])) == []
+
+
+def test_frame_major_wav_writer_handles_ten_seconds_of_six_channel_audio_quickly(
+    tmp_path,
+) -> None:
+    """The acceptance floor this finding names: 10 s of 48 kHz 6-ch under 1 s.
+
+    Not a tight microbenchmark -- CI machines vary -- but two orders of
+    magnitude below the pure-Python per-sample loop this replaced, which took
+    tens of seconds for the same input on a fast machine.
+    """
+    import time
+
+    import numpy as np
+
+    from libsonare._cli_common import _write_frame_major_wav
+
+    sample_rate = 48000
+    channels = 6
+    frames = sample_rate * 10
+    rng = np.random.default_rng(1)
+    audio = rng.uniform(-0.5, 0.5, (frames, channels)).astype(np.float32)
+
+    output = tmp_path / "six-channel.wav"
+    started = time.monotonic()
+    written_frames, written_channels = _write_frame_major_wav(str(output), audio, sample_rate)
+    elapsed = time.monotonic() - started
+
+    assert (written_frames, written_channels) == (frames, channels)
+    assert elapsed < 1.0, f"took {elapsed:.2f}s, over the 1s floor this finding names"
+    # 6 channels is WAVE_FORMAT_EXTENSIBLE (matching the native CLI's own
+    # writer for anything past stereo), which stdlib `wave` cannot open --
+    # read nChannels from the fmt chunk directly instead, the same way
+    # test_cli_project_bounce_channels.py's own multichannel checks do.
+    with open(output, "rb") as handle:
+        header = handle.read(24)
+    assert struct.unpack("<H", header[22:24])[0] == channels
+    assert output.stat().st_size >= frames * channels * 2  # 16-bit PCM, plus header

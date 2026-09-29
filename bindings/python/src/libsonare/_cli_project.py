@@ -207,7 +207,7 @@ def _project_bounce(
         # only accepted when it matches the project's rate, otherwise report the
         # mismatch by name instead of letting the C ABI reject it generically.
         requested_sample_rate = args.sample_rate
-        if requested_sample_rate is not None and requested_sample_rate > 0:
+        if requested_sample_rate is not None:
             if abs(requested_sample_rate - project_sample_rate) > 1e-6:
                 raise ValueError(
                     f"--sample-rate {requested_sample_rate} does not match the project's "
@@ -756,7 +756,10 @@ def register_project_parsers(
         "--sample-rate",
         type=int,
         default=None,
-        help="Render sample rate (default: the project's own sample rate)",
+        help=(
+            "Render sample rate; must equal the project's own rate (not a resample). "
+            "Default: the project's own sample rate."
+        ),
     )
     pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
     pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
@@ -883,7 +886,10 @@ def register_project_parsers(
         "--sample-rate",
         type=int,
         default=None,
-        help="Render sample rate (default: the project's own sample rate)",
+        help=(
+            "Render sample rate; must equal the project's own rate (not a resample). "
+            "Default: the project's own sample rate."
+        ),
     )
     midi_render_p.add_argument("--frames", type=int, default=0, help="Render length in frames")
     midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")

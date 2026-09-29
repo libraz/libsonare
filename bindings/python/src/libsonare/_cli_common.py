@@ -12,6 +12,8 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager, suppress
 from typing import Any, cast
 
+import numpy as np
+
 from ._ffi import (
     SONARE_ERROR_CANCELLED,
     SONARE_ERROR_DECODE_FAILED,
@@ -376,18 +378,102 @@ def _pcm(sample: float, bits_per_sample: int) -> bytes:
     raise ValueError("WAV bits must be 16 or 24")
 
 
+def _quantize_codes(
+    samples: np.ndarray, full_scale: float, minimum: int, maximum: int
+) -> np.ndarray:
+    """Vectorized :func:`_quantize_sample`, one PCM code per input sample.
+
+    Reproduces the scalar function step for step and in the same precision at
+    each step (float32 narrow, double-precision scale, float32 re-narrow, then
+    integer round and clamp): a shortcut at any one of those steps has
+    disagreed with the native writer on some sample before (see
+    ``_quantize_sample``'s own docstring). ``tests/test_cli_writers.py``
+    checks this against the scalar path over a large random-plus-edge-case
+    sample set, not just the handful of codes the WAV-writer tests pin.
+    """
+    # A magnitude no float32 can hold overflows to +/-inf on this narrowing
+    # cast (matching _to_float32's OverflowError catch below), which numpy
+    # warns about even though the resulting inf is exactly what the isfinite
+    # guard two lines down exists to substitute -- not a sign anything here
+    # went wrong.
+    with np.errstate(over="ignore"):
+        narrowed = np.asarray(samples, dtype=np.float32)
+    finite = np.isfinite(narrowed)
+    # Substituted before the pipeline runs, not after: a NaN/inf surviving into
+    # the round-and-cast below is what the scalar function's isfinite guard
+    # exists to prevent reaching in the first place (an unguarded clamp would
+    # answer +/-full_scale, a peak the encoder never produced), and it is also
+    # what int64 casts a RuntimeWarning about for no benefit here, since the
+    # position is discarded either way.
+    safe = np.where(finite, narrowed, 0.0).astype(np.float32)
+    clamped = np.clip(safe, -1.0, 1.0)
+    scaled = (clamped.astype(np.float64) * full_scale).astype(np.float32).astype(np.float64)
+    rounded = np.where(scaled >= 0.0, np.floor(scaled + 0.5), np.ceil(scaled - 0.5))
+    codes = np.clip(rounded, minimum, maximum).astype(np.int64)
+    return np.where(finite, codes, 0)
+
+
+def _pcm_bytes(samples: np.ndarray, bits_per_sample: int) -> bytes:
+    """Vectorized sibling of :func:`_pcm`: one packed byte string for a whole chunk.
+
+    16-bit output is a straight little-endian int16 pack. 24-bit has no native
+    numpy integer width, so the codes are widened to int32, packed little-endian,
+    and every 4th byte (the sign-extension byte a value in [-2**23, 2**23 - 1]
+    always repeats in a 4-byte two's-complement spelling) is dropped -- the same
+    low 3 bytes ``int.to_bytes(3, "little", signed=True)`` would have produced.
+    """
+    if bits_per_sample == 16:
+        codes = _quantize_codes(samples, 32767.0, -32768, 32767)
+        return codes.astype("<i2").tobytes()
+    if bits_per_sample == 24:
+        codes = _quantize_codes(samples, 8388607.0, -8388608, 8388607)
+        widened = codes.astype("<i4").view(np.uint8).reshape(-1, 4)
+        return widened[:, :3].tobytes()
+    raise ValueError("WAV bits must be 16 or 24")
+
+
 _WAV_CHUNK_FRAMES = 8192
+
+# UINT32_MAX minus the WAVE_FORMAT_EXTENSIBLE header's extra bytes over the
+# plain-PCM header (68 - 8), matching src/core/audio_io.cpp's
+# check_riff_size_fits exactly -- one RIFF chunk cannot declare a size past
+# 2**32 - 1, and both writers share that bound regardless of which header they
+# end up writing.
+_MAX_WAV_DATA_BYTES = 0xFFFFFFFF - 60
+
+
+def _check_wav_frame_count(path: str, frames: int, channels: int, bits_per_sample: int) -> None:
+    """Refuse an empty or RIFF-size-exceeding WAV write before any bytes move.
+
+    Mirrors the native writer's two checks (save_wav / save_wav_multichannel's
+    ``n_frames > 0`` and ``check_riff_size_fits``) so both CLIs reach the same
+    verdict, with the same error class, before either touches the filesystem.
+    """
+    if frames <= 0:
+        raise SonareError(SONARE_ERROR_INVALID_PARAMETER, f"No frames to save: {path}")
+    block_align = channels * (bits_per_sample // 8)
+    if block_align <= 0 or frames > _MAX_WAV_DATA_BYTES // block_align:
+        raise SonareError(
+            SONARE_ERROR_INVALID_PARAMETER,
+            f"WAV data exceeds RIFF 32-bit size limit; use a chunked container: {path}",
+        )
 
 
 @contextmanager
 def _atomic_wav_writer(
-    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16
+    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16, *, frames: int
 ) -> Iterator[Any]:
-    """Yield a WAV writer whose completed file atomically replaces ``path``."""
+    """Yield a WAV writer whose completed file atomically replaces ``path``.
+
+    ``frames`` is the total frame count the caller intends to write, checked
+    up front by @ref _check_wav_frame_count -- before the temp file even
+    exists, so a refused request touches neither it nor ``path``.
+    """
     import wave
 
     if bits_per_sample not in (16, 24):
         raise ValueError("WAV bits must be 16 or 24")
+    _check_wav_frame_count(path, frames, channels, bits_per_sample)
     target = os.path.abspath(path)
     directory = os.path.dirname(target)
     # Creating the scratch file, writing it, and replacing the destination with
@@ -503,7 +589,7 @@ class _ExtensibleWavWriter:
 
 @contextmanager
 def _atomic_wav_writer_multichannel(
-    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16
+    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16, *, frames: int
 ) -> Iterator[_ExtensibleWavWriter]:
     """Yield a WAVE_FORMAT_EXTENSIBLE writer whose completed file atomically replaces ``path``.
 
@@ -513,9 +599,13 @@ def _atomic_wav_writer_multichannel(
     ``save_wav_multichannel`` layout byte for byte. Mono and stereo stay on
     ``_atomic_wav_writer``, which already writes the right (plain-PCM) format
     for those widths.
+
+    ``frames`` is checked up front the same way ``_atomic_wav_writer`` checks
+    it; see @ref _check_wav_frame_count.
     """
     if bits_per_sample not in (16, 24):
         raise ValueError("WAV bits must be 16 or 24")
+    _check_wav_frame_count(path, frames, channels, bits_per_sample)
     target = os.path.abspath(path)
     directory = os.path.dirname(target)
     try:
@@ -551,10 +641,7 @@ def _atomic_wav_writer_multichannel(
 
 def _write_wav_mono_frames(wav: Any, samples: Sequence[float], bits_per_sample: int = 16) -> None:
     """Append one bounded mono PCM chunk to an open WAV writer."""
-    frames = bytearray()
-    for sample in samples:
-        frames.extend(_pcm(float(sample), bits_per_sample))
-    wav.writeframesraw(frames)
+    wav.writeframesraw(_pcm_bytes(np.asarray(samples, dtype=np.float64), bits_per_sample))
 
 
 def _write_wav_stereo_frames(
@@ -565,11 +652,12 @@ def _write_wav_stereo_frames(
 ) -> None:
     """Append one bounded stereo PCM chunk to an open WAV writer."""
     count = min(len(left), len(right))
-    frames = bytearray()
-    for index in range(count):
-        frames.extend(_pcm(float(left[index]), bits_per_sample))
-        frames.extend(_pcm(float(right[index]), bits_per_sample))
-    wav.writeframesraw(frames)
+    # Interleaved the same way _interleave_planes does (frame-major), so one
+    # _pcm_bytes call quantizes and packs both channels' samples together.
+    interleaved = np.empty(count * 2, dtype=np.float64)
+    interleaved[0::2] = np.asarray(left[:count], dtype=np.float64)
+    interleaved[1::2] = np.asarray(right[:count], dtype=np.float64)
+    wav.writeframesraw(_pcm_bytes(interleaved, bits_per_sample))
 
 
 def _write_wav(
@@ -580,7 +668,7 @@ def _write_wav(
     Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range;
     a non-finite sample becomes digital silence.
     """
-    with _atomic_wav_writer(path, 1, sample_rate, bits_per_sample) as wav:
+    with _atomic_wav_writer(path, 1, sample_rate, bits_per_sample, frames=len(samples)) as wav:
         for offset in range(0, len(samples), _WAV_CHUNK_FRAMES):
             chunk = samples[offset : offset + _WAV_CHUNK_FRAMES]
             if bits_per_sample == 16:
@@ -604,7 +692,7 @@ def _write_wav_stereo(
     a non-finite sample becomes digital silence.
     """
     count = min(len(left), len(right))
-    with _atomic_wav_writer(path, 2, sample_rate, bits_per_sample) as wav:
+    with _atomic_wav_writer(path, 2, sample_rate, bits_per_sample, frames=count) as wav:
         for offset in range(0, count, _WAV_CHUNK_FRAMES):
             end = min(offset + _WAV_CHUNK_FRAMES, count)
             if bits_per_sample == 16:
@@ -668,11 +756,25 @@ def _write_frame_major_wav(
                 channels = max(channels, len(row))
 
     writer_cm = (
-        _atomic_wav_writer_multichannel(path, channels, sample_rate, bits_per_sample)
+        _atomic_wav_writer_multichannel(path, channels, sample_rate, bits_per_sample, frames=frames)
         if channels > 2
-        else _atomic_wav_writer(path, channels, sample_rate, bits_per_sample)
+        else _atomic_wav_writer(path, channels, sample_rate, bits_per_sample, frames=frames)
     )
     with writer_cm as wav:
+        # The fast path: `audio` is already a (frames, channels) ndarray with
+        # no ragged/padded rows to fold in -- true for every real caller
+        # (Project.bounce, PlaybackRenderer's reshaped render). Quantizing and
+        # packing a whole chunk through numpy replaces one Python function call
+        # and one bytearray.extend per SAMPLE with one call per CHUNK, which is
+        # the difference between this finishing and running out of memory or
+        # time on a movie-length multichannel file.
+        if isinstance(audio, np.ndarray) and audio.ndim == 2 and audio.shape[1] == channels:
+            for offset in range(0, frames, _WAV_CHUNK_FRAMES):
+                chunk = audio[offset : offset + _WAV_CHUNK_FRAMES]
+                wav.writeframesraw(_pcm_bytes(chunk.astype(np.float64).ravel(), bits_per_sample))
+            return frames, channels
+        # The general duck-typed fallback: possibly-ragged rows, padded with
+        # silence past a short row -- the shape a fast-path ndarray never has.
         pcm = bytearray()
         chunk_frames = 0
         for row in cast(Any, audio):

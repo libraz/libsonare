@@ -437,6 +437,28 @@ def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
         assert rendering.returncode == 0, rendering.stderr
 
 
+def test_suggest_mix_scene_out_classifies_a_failed_write() -> None:
+    """--scene-out used to bypass the shared atomic writer and land on exit 1.
+
+    cmd_suggest_mix wrote the scene through a bare ``open(..., "w")``, so an
+    OSError from a destination that cannot be written (the commonest case: a
+    path that resolves to an existing directory) reached the generic error
+    exit rather than the classified EncodeFailed exit code every other CLI
+    artifact writer reports for the same condition.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lead = os.path.join(tmpdir, "leadVox.wav")
+        _write_wav(lead, _voice_like())
+        scene_out = os.path.join(tmpdir, "scene-out-is-a-directory")
+        os.mkdir(scene_out)
+
+        result = _run_cli(
+            ["suggest-mix", "--input", lead, "--sample-rate", str(SR), "--scene-out", scene_out]
+        )
+        assert result.returncode == 12, result.stderr  # EXIT_ENCODE_FAILED
+        assert scene_out in result.stderr
+
+
 def test_suggest_mix_tempo_option_and_param_are_one_value() -> None:
     """--tempo-bpm reaches the same field as --params tempoBpm=, so naming both is refused."""
     with tempfile.TemporaryDirectory() as tmpdir:
