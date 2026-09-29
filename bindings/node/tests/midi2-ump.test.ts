@@ -173,7 +173,9 @@ describe('RealtimeEngine raw UMP push', () => {
         /words\[1\]/,
       );
       expect(() => engine.pushMidiUmp(0, 'abc' as unknown as number[])).toThrow(TypeError);
-      expect(() => engine.pushMidiUmp(0, new Float32Array(2))).toThrow(TypeError);
+      expect(() => engine.pushMidiUmp(0, new Float32Array(2) as unknown as number[])).toThrow(
+        TypeError,
+      );
       expect(() => engine.pushMidiUmp('x' as unknown as number, NOTE_ON_2W)).toThrow(TypeError);
       expect(() => engine.pushMidiUmp(0, NOTE_ON_2W, 'now' as unknown as number)).toThrow(
         TypeError,
