@@ -28,6 +28,7 @@
 
 #ifdef SONARE_WITH_FX
 #include "effects/delay/stereo_delay.h"
+#include "effects/filter/vowel_filter.h"
 #include "effects/modulation/auto_wah.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/ensemble.h"
@@ -624,6 +625,8 @@ TEST_CASE("every effects-insert config field has a construction key", "[masterin
   require_a_key_per_config_field<modulation::EnsembleConfig>("effects.modulation.ensemble");
   require_a_key_per_config_field<modulation::WahConfig>("effects.modulation.wah");
   require_a_key_per_config_field<modulation::AutoWahConfig>("effects.modulation.autoWah");
+  require_a_key_per_config_field<sonare::effects::filter::VowelFilterConfig>(
+      "effects.filter.vowel");
   require_a_key_per_config_field<modulation::RingModulatorConfig>(
       "effects.modulation.ringModulator");
   require_a_key_per_config_field<sonare::effects::delay::StereoDelayConfig>("effects.delay.stereo");

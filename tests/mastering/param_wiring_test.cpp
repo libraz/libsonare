@@ -697,20 +697,28 @@ TEST_CASE("harmonic generators reach the antialiasing modes they implement",
     REQUIRE(presence != nullptr);
     REQUIRE(presence->config().aliasing == mode);
   }
+
+  auto adaa_insert =
+      make_insert("spectral.presenceEnhancer", aliasing_json(AliasingControl::Adaa1));
+  auto* adaa_presence = dynamic_cast<PresenceEnhancer*>(adaa_insert.get());
+  REQUIRE(adaa_presence != nullptr);
+  REQUIRE(adaa_presence->config().aliasing == AliasingControl::Adaa1);
 }
 
 TEST_CASE("harmonic generators reject the antialiasing modes they do not implement",
           "[mastering][saturation][spectral][param_wiring]") {
-  // Neither harmonic generator has an ADAA antiderivative wired up, so unlike
-  // the clippers both Adaa1 and Adaa2 must be refused rather than run as None.
-  // The refusal has to arrive as a SonareException, which is what every facade
-  // knows how to translate.
+  // The exciter has no ADAA antiderivative wired up, so unlike the clippers both
+  // Adaa1 and Adaa2 must be refused rather than run as None; the presence
+  // enhancer implements Adaa1 and refuses Adaa2. The refusal has to arrive as a
+  // SonareException, which is what every facade knows how to translate.
   const std::string undeclared =
       std::to_string(static_cast<int>(AliasingControl::Oversample4x) + 1);
   for (const char* name : {"saturation.exciter", "spectral.presenceEnhancer"}) {
     CAPTURE(name);
-    REQUIRE_THROWS_AS(make_insert(name, aliasing_json(AliasingControl::Adaa1)),
-                      sonare::SonareException);
+    if (std::string(name) != "spectral.presenceEnhancer") {
+      REQUIRE_THROWS_AS(make_insert(name, aliasing_json(AliasingControl::Adaa1)),
+                        sonare::SonareException);
+    }
     REQUIRE_THROWS_AS(make_insert(name, aliasing_json(AliasingControl::Adaa2)),
                       sonare::SonareException);
     REQUIRE_THROWS_AS(make_insert(name, R"({"aliasing":)" + undeclared + "}"),

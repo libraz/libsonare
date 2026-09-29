@@ -43,6 +43,8 @@ void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
                    make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q));
   // Preallocate the Oversample4x scratch, per-channel streaming state, and
   // the dry-path delay so the audio-thread process() path never allocates.
+  harmonic_adaa_.assign(dynamics::kRealtimePreparedChannels,
+                        sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>{});
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
   oversampled_scratch_.assign(
       static_cast<size_t>(max_block_size_) * static_cast<size_t>(kHarmonicOversampleFactor), 0.0f);
@@ -70,6 +72,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
   ensure_state(num_channels);
 
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
+    const bool adaa = config_.aliasing == sonare::rt::AliasingControl::Adaa1;
     bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {
       if (channels[ch] == nullptr)
@@ -77,7 +80,9 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
       auto& bandpass = bandpass_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         const float presence = bandpass.process(channels[ch][i]);
-        const float harmonic = std::tanh(presence * config_.drive);
+        const float harmonic =
+            adaa ? harmonic_adaa_[static_cast<size_t>(ch)].process(presence * config_.drive)
+                 : std::tanh(presence * config_.drive);
         channels[ch][i] += harmonic * config_.amount;
       }
       // Two floats per channel, once per block.
@@ -144,6 +149,7 @@ void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {
       harmonic_oversampler_.reset_streaming(&state);
     }
     for (auto& delay : dry_delays_) delay.reset();
+    for (auto& adaa : harmonic_adaa_) adaa.reset();
   } else {
     bandpass_.clear();
   }
@@ -155,6 +161,7 @@ void PresenceEnhancer::reset() {
     harmonic_oversampler_.reset_streaming(&state);
   }
   for (auto& delay : dry_delays_) delay.reset();
+  for (auto& adaa : harmonic_adaa_) adaa.reset();
 }
 
 bool PresenceEnhancer::set_parameter(unsigned int param_id, float value) {
@@ -194,14 +201,11 @@ void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
       !(config.center_frequency_hz > 0.0f) || !(config.q > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid presence enhancer configuration");
   }
-  // Only None and Oversample4x are implemented: the harmonic generator is a
-  // plain tanh with no ADAA antiderivative wired up here. Reject Adaa1/Adaa2
-  // instead of silently behaving like None.
-  if (config.aliasing != sonare::rt::AliasingControl::None &&
-      config.aliasing != sonare::rt::AliasingControl::Oversample4x) {
+  // Adaa2 is not implemented: reject it instead of silently behaving like None.
+  if (config.aliasing == sonare::rt::AliasingControl::Adaa2) {
     throw SonareException(
         ErrorCode::InvalidParameter,
-        "presence enhancer ADAA anti-aliasing is not supported; use None or Oversample4x");
+        "presence enhancer ADAA2 anti-aliasing is not supported; use None, Adaa1 or Oversample4x");
   }
 }
 
@@ -223,6 +227,9 @@ void PresenceEnhancer::ensure_state(int num_channels) {
       harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
                                               static_cast<size_t>(max_block_size_));
     }
+  }
+  if (harmonic_adaa_.size() < target_size) {
+    harmonic_adaa_.resize(target_size);
   }
   if (dry_delays_.size() < target_size) {
     const size_t old_size = dry_delays_.size();

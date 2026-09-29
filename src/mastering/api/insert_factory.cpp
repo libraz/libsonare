@@ -81,6 +81,7 @@
 #include <cmath>
 
 #include "effects/delay/stereo_delay.h"
+#include "effects/filter/vowel_filter.h"
 #include "effects/modulation/auto_wah.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/ensemble.h"
@@ -924,6 +925,15 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::read_field(params, "sweepLaw", config.sweep_law);
     return make<effects::modulation::AutoWah>(config);
   }
+  if (name == "effects.filter.vowel") {
+    effects::filter::VowelFilterConfig config;
+    config.vowel = f(params, "vowel", config.vowel);
+    config.accel_ms = f(params, "accelMs", config.accel_ms);
+    config.drive = f(params, "drive", config.drive);
+    config.drive_on = b(params, "driveOn", config.drive_on);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::filter::VowelFilter>(config);
+  }
   if (name == "effects.modulation.rotary") {
     effects::modulation::RotaryConfig config;
     config.rate_hz = f(params, "rateHz", config.rate_hz);
@@ -1175,6 +1185,7 @@ std::vector<std::string> insert_factory_names() {
       "effects.reverb.room",
       "effects.acoustic.roomMorph",
 #endif
+      "effects.filter.vowel",
       "effects.modulation.chorus",
       "effects.modulation.ensemble",
       "effects.modulation.flanger",

@@ -2,9 +2,11 @@
 
 #include <vector>
 
+#include "rt/adaa.h"
 #include "rt/aliasing_control.h"
 #include "rt/biquad_design.h"
 #include "rt/delay_line.h"
+#include "rt/nonlinearities.h"
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 
@@ -35,13 +37,14 @@ class PresenceEnhancer : public rt::ProcessorBase {
   //   1 = drive (clamped to > 0)
   //   2 = center_frequency_hz (clamped to > 0; recomputes bandpass coefficients)
   //   3 = q (clamped to > 0; recomputes bandpass coefficients)
-  // aliasing is an enum (not exposed).
+  // aliasing is an enum (not exposed): None, Adaa1 or Oversample4x.
   bool set_parameter(unsigned int param_id, float value) override;
   // Automatable parameters: 0=amount, 1=drive, 2=centerFrequencyHz, 3=q
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
-  /// @brief None adds no latency; Oversample4x adds the harmonic
-  ///   oversampler's streaming round-trip latency.
+  /// @brief None and Adaa1 add no whole-sample latency (Adaa1's half sample is
+  ///   below the integer figure); Oversample4x adds the harmonic oversampler's
+  ///   streaming round-trip latency.
   int latency_samples() const noexcept override;
 
   using Biquad = rt::BiquadState;
@@ -55,6 +58,8 @@ class PresenceEnhancer : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   std::vector<Biquad> bandpass_;
+  // Adaa1 support: one antiderivative-antialiased tanh per channel.
+  std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>> harmonic_adaa_;
 
   // Oversample4x support: the bandpass filter stays at the base rate (it is
   // linear and does not generate harmonics), but the tanh harmonic-generation

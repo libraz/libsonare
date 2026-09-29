@@ -149,3 +149,12 @@ SADIE II HRTF Database
   https://www.york.ac.uk/sadie-project/database.html
 
   Embedded as: src/playback/default.shrf
+
+================================================================================
+Japanese vowel formant data (Yazawa and Kondo)
+================================================================================
+
+  Licensed under CC-BY-4.0. Yazawa, K. and Kondo, M. (2019), Japanese vowel
+  length data, Zenodo record 15227304 (https://zenodo.org/records/15227304).
+  The male-speaker mean formants of /a e i o u/ set the vowel ratios of the
+  effects.filter.vowel table (src/effects/filter/vowel_filter.cpp).

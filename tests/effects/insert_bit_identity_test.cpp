@@ -93,6 +93,11 @@ constexpr float kPitchShifterCentroidHz = 249.117661f;
 constexpr float kBitcrusherRms = 0.206448466f;
 constexpr float kBitcrusherCentroidHz = 249.123016f;
 
+constexpr float kVowelRms = 0.0293808971f;
+constexpr float kVowelCentroidHz = 262.751984f;
+constexpr float kPresenceRms = 0.206874207f;
+constexpr float kPresenceCentroidHz = 249.200775f;
+
 constexpr float kDattorroRms = 0.119705729f;
 constexpr float kDattorroCentroidHz = 273.524597f;
 
@@ -214,6 +219,34 @@ TEST_CASE(
     // With the LFO off its rate is inert.
     const RenderResult other_rate = render("effects.modulation.autoWah", R"({"lfoRateHz":7.0})");
     REQUIRE(empty.left == other_rate.left);
+  }
+
+  SECTION("effects.filter.vowel") {
+    const RenderResult empty = render("effects.filter.vowel", "{}");
+    const RenderResult explicit_defaults =
+        render("effects.filter.vowel",
+               R"({"vowel":0.0,"accelMs":50.0,"drive":0.5,"driveOn":false,"dryWet":1.0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    // The drive amount is inert while the saturator is out of the path.
+    const RenderResult other_drive = render("effects.filter.vowel", R"({"drive":0.9})");
+    REQUIRE(empty.left == other_drive.left);
+    const Scalars s = measure(empty.left);
+    require_pinned(s, kVowelRms, kVowelCentroidHz);
+  }
+
+  SECTION("spectral.presenceEnhancer") {
+    const RenderResult empty = render("spectral.presenceEnhancer", "{}");
+    const RenderResult explicit_defaults =
+        render("spectral.presenceEnhancer",
+               R"({"amount":0.2,"drive":2.0,"centerFrequencyHz":3200.0,"q":1.2,"aliasing":0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    const Scalars s = measure(empty.left);
+    require_pinned(s, kPresenceRms, kPresenceCentroidHz);
+    // ADAA is opt-in and moves the render.
+    const RenderResult adaa = render("spectral.presenceEnhancer", R"({"aliasing":1})");
+    REQUIRE(empty.left != adaa.left);
   }
 
   SECTION("effects.delay.stereo") {

@@ -260,6 +260,9 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
       make_insert("effects.modulation.autoWah",
                   R"({"lfoRateHz":3,"lfoDepth":0.5,"filterType":1,"direction":1,"sweepLaw":1})") !=
       nullptr);
+  REQUIRE(make_insert("effects.filter.vowel",
+                      R"({"vowel":3.5,"accelMs":20,"drive":0.8,"driveOn":true,"dryWet":0.7})") !=
+          nullptr);
   REQUIRE(
       make_insert(
           "effects.reverb.dattorro",
@@ -1360,7 +1363,7 @@ TEST_CASE(
   // The inherently-stereo set: stereo-image processors, eq.midSide,
   // multiband.imager, and every reverb/modulation/delay effect operate on the
   // front L/R pair and pass surround planes through dry.
-  const std::array<const char*, 24> spo = {"stereo.imager",
+  const std::array<const char*, 25> spo = {"stereo.imager",
                                            "stereo.monoMaker",
                                            "stereo.stereoBalance",
                                            "stereo.haasEnhancer",
@@ -1383,6 +1386,7 @@ TEST_CASE(
                                            "effects.modulation.autoWah",
                                            "effects.modulation.rotary",
                                            "effects.modulation.pitchShifter",
+                                           "effects.filter.vowel",
                                            "effects.delay.stereo"};
   for (const char* id : spo) {
     REQUIRE(channel_policy(id) == ChannelPolicy::StereoPairOnly);

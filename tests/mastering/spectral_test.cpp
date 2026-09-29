@@ -616,16 +616,44 @@ TEST_CASE("PresenceEnhancer None mode aliases audibly before Oversample4x is app
   REQUIRE(alias_db > -20.0f);
 }
 
-TEST_CASE("PresenceEnhancer rejects ADAA anti-aliasing instead of silently aliasing",
+TEST_CASE("PresenceEnhancer Adaa1 lowers the alias products of the base-rate tanh",
           "[mastering][spectral]") {
-  // The harmonic generator is a plain tanh with no ADAA antiderivative wired
-  // up here, so only None and Oversample4x are valid.
-  REQUIRE_THROWS(PresenceEnhancer({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa1}));
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate;
+  const float input_hz = static_cast<float>(kSampleRate) * 0.36f;
+  const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(kSampleRate));
+  const auto dry = generate_sine_samples(input_hz, kSampleRate, kSamples, 0.5f);
+
+  auto alias_db_for = [&](sonare::rt::AliasingControl mode) {
+    PresenceEnhancer enhancer({1.0f, 24.0f, input_hz, 1.0f, mode});
+    enhancer.prepare(kSampleRate, kSamples);
+    REQUIRE(enhancer.latency_samples() == 0);
+    auto wet = dry;
+    process(enhancer, wet);
+    for (size_t i = 0; i < wet.size(); ++i) wet[i] -= dry[i];
+    const float fundamental = projected_amplitude(wet, input_hz, kSampleRate, 4096);
+    const float alias = projected_amplitude(wet, alias_hz, kSampleRate, 4096);
+    return 20.0f * std::log10(alias / fundamental);
+  };
+  const float none_db = alias_db_for(sonare::rt::AliasingControl::None);
+  const float adaa_db = alias_db_for(sonare::rt::AliasingControl::Adaa1);
+  CAPTURE(none_db, adaa_db);
+  REQUIRE(adaa_db < none_db - 3.0f);
+}
+
+TEST_CASE("PresenceEnhancer accepts ADAA1 and rejects ADAA2 instead of silently aliasing",
+          "[mastering][spectral]") {
+  // The harmonic generator has a tanh antiderivative, so None, Adaa1 and
+  // Oversample4x are valid; Adaa2 is not implemented.
+  REQUIRE_NOTHROW(
+      PresenceEnhancer({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa1}));
   REQUIRE_THROWS(PresenceEnhancer({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa2}));
 
   PresenceEnhancer enhancer({0.4f, 4.0f, 3000.0f, 1.2f});
-  REQUIRE_THROWS(
+  REQUIRE_NOTHROW(
       enhancer.set_config({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa1}));
+  REQUIRE_THROWS(
+      enhancer.set_config({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa2}));
 }
 
 TEST_CASE("Spectral processors validate configuration and state", "[mastering][spectral]") {

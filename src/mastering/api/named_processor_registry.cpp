@@ -147,6 +147,8 @@ ChannelPolicy channel_policy(const std::string& id) {
       "effects.modulation.autoWah",
       "effects.modulation.rotary",
       "effects.modulation.pitchShifter",
+      // The vowel filter allocates a stereo pair of banks, like wah.
+      "effects.filter.vowel",
       "effects.delay.stereo",
   };
   return kStereoPairOnly.count(id) != 0 ? ChannelPolicy::StereoPairOnly

@@ -60,6 +60,7 @@
 
 #include "core/fft.h"
 #include "effects/delay/stereo_delay.h"
+#include "effects/filter/vowel_filter.h"
 #include "effects/modulation/auto_wah.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/ensemble.h"
@@ -925,6 +926,42 @@ double horn_fast_rate_hz(double sample_rate) {
   return crossings > 1 ? static_cast<double>(crossings - 1) / (last - first) : 0.0;
 }
 
+// --- vowel filter -----------------------------------------------------------
+
+constexpr int kVowelProbeVowel = 1;
+constexpr double kVowelF1Tolerance = 0.03;
+constexpr double kVowelF1RateTolerance = 0.01;
+
+/// Frequency of the highest point of the vowel filter's response between 250 Hz
+/// and 800 Hz, read from its impulse response by a direct transform at 0.5 Hz steps.
+double vowel_f1_peak_hz(double sample_rate) {
+  sonare::effects::filter::VowelFilterConfig config;
+  config.vowel = static_cast<float>(kVowelProbeVowel);
+  config.accel_ms = 0.0f;
+  sonare::effects::filter::VowelFilter filter(config);
+  filter.prepare(sample_rate, 16384);
+  std::vector<float> ir(16384, 0.0f);
+  ir[0] = 1.0f;
+  sonare::test::process(filter, ir);
+  double best_hz = 0.0;
+  double best = -1.0;
+  for (double hz = 250.0; hz <= 800.0; hz += 0.5) {
+    double re = 0.0;
+    double im = 0.0;
+    const double step = kTwoPiD * hz / sample_rate;
+    for (std::size_t n = 0; n < ir.size(); ++n) {
+      re += ir[n] * std::cos(step * static_cast<double>(n));
+      im -= ir[n] * std::sin(step * static_cast<double>(n));
+    }
+    const double magnitude = std::hypot(re, im);
+    if (magnitude > best) {
+      best = magnitude;
+      best_hz = hz;
+    }
+  }
+  return best_hz;
+}
+
 // --- auto-wah LFO -----------------------------------------------------------
 
 constexpr float kAutoWahLfoHz = 3.0f;
@@ -1613,6 +1650,22 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                  "the auto-wah's LFO is the same rate in hertz at both rates");
   }
 
+  // --- vowel filter: the first formant's centre, in Hz ----------------------
+  {
+    const double asked =
+        static_cast<double>(sonare::effects::filter::vowel_table_hz(kVowelProbeVowel, 0));
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = vowel_f1_peak_hz(rates[r]);
+      tally.within(measured[r], asked, kVowelF1Tolerance,
+                   "the vowel filter's first formant" + at_rate(rates[r]) + ", against the table");
+    }
+    tally.within(measured[0], measured[1], kVowelF1RateTolerance,
+                 "the vowel filter's first formant is one frequency at both rates");
+    WARN("vowel F1: " << measured[0] << " Hz at " << rates[0] << ", " << measured[1] << " Hz at "
+                      << rates[1] << ", table " << asked);
+  }
+
   // --- stereo balance: the glide's settling time, in ms ---------------------
   {
     double measured[2] = {0.0, 0.0};
@@ -1692,5 +1745,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 212);
+  REQUIRE(tally.count() >= 215);
 }

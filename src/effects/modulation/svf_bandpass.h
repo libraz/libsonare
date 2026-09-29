@@ -56,8 +56,36 @@ class SvfBandpass {
     return k * v1;
   }
 
+  /// Sets the coefficients for tick(): centre frequency (Hz) and resonance Q,
+  /// clamped exactly as process() clamps them.
+  void set(float cutoff_hz, float q) noexcept {
+    const float nyquist = static_cast<float>(sample_rate_ * 0.5);
+    const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * nyquist);
+    const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
+                             static_cast<float>(sample_rate_));
+    k_ = 1.0f / std::max(0.5f, q);
+    a1_ = 1.0f / (1.0f + g * (g + k_));
+    a2_ = g * a1_;
+    a3_ = g * a2_;
+  }
+
+  /// Processes one sample with the coefficients of the last set(); the output
+  /// is the unity-peak bandpass, as in process().
+  float tick(float input) noexcept {
+    const float v3 = input - ic2_;
+    const float v1 = a1_ * ic1_ + a2_ * v3;
+    const float v2 = ic2_ + a2_ * ic1_ + a3_ * v3;
+    ic1_ = 2.0f * v1 - ic1_;
+    ic2_ = 2.0f * v2 - ic2_;
+    return k_ * v1;
+  }
+
  private:
   double sample_rate_ = 48000.0;
+  float k_ = 1.0f;
+  float a1_ = 0.0f;
+  float a2_ = 0.0f;
+  float a3_ = 0.0f;
   float ic1_ = 0.0f;
   float ic2_ = 0.0f;
 };
