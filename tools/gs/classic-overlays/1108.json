@@ -1,0 +1,150 @@
+{
+  "type": "11 08",
+  "what_this_is": "The auto-wah half's Sens as the single auto-wah's envelope follower.",
+  "entries": [
+    {
+      "node": {
+        "id": "b_wah_mono",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "in_r"
+        ],
+        "weights": {
+          "in_l": {
+            "value": 0.5
+          },
+          "in_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "effects.modulation.autoWah's envelope follower: the rectified peak of the input through one pole, 8 ms rising and 120 ms falling (AutoWahConfig). The candidate reads each side apart, so the follower takes the mean of the two where autoWah takes their larger.",
+      "replaced_when": {
+        "model_binding": [
+          "11 08",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_wah_env",
+        "kind": "envelope",
+        "input": "b_wah_mono",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "value": 8.0
+        },
+        "release_ms": {
+          "value": 120.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "effects.modulation.autoWah's envelope follower: the rectified peak of the input through one pole, 8 ms rising and 120 ms falling (AutoWahConfig). The candidate reads each side apart, so the follower takes the mean of the two where autoWah takes their larger.",
+      "replaced_when": {
+        "model_binding": [
+          "11 08",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_wah_open",
+        "kind": "gain",
+        "input": "b_one",
+        "unit": "ratio",
+        "gain": {
+          "control": "b_wah_env",
+          "map": {
+            "kind": "points",
+            "points": [
+              [
+                -120.0,
+                1e-06
+              ],
+              [
+                0.0,
+                1.0
+              ]
+            ],
+            "log": true
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The follower's level back from decibels to a multiplier (10^(dB/20), exact where the points interpolate in the log), floored 120 dB down.",
+      "replaced_when": {
+        "model_binding": [
+          "11 08",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_wah_sens",
+        "kind": "gain",
+        "input": "b_wah_open",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 09",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens scales the envelope, the law modern binds to autoWah `sensitivity`.",
+      "replaced_when": {
+        "model_binding": [
+          "11 08",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_position",
+        "kind": "mix",
+        "inputs": [
+          "b_manual",
+          "b_direction",
+          "b_wah_sens"
+        ],
+        "weights": {
+          "b_manual": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0121-whole-one-sided-raised-sine.json"
+            ],
+            "fitted_on": []
+          },
+          "b_direction": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0121-whole-one-sided-raised-sine.json"
+            ],
+            "fitted_on": []
+          },
+          "b_wah_sens": {
+            "value": 127.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "autoWah opens its corner by the scaled envelope across its whole sweep; the candidate's sweep axis is the Manual byte's 0..127, so a full envelope moves the position 127.",
+      "replaced_when": {
+        "model_binding": [
+          "11 08",
+          "40 03 09"
+        ]
+      },
+      "replaces": "b_position"
+    }
+  ]
+}

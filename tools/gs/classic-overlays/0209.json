@@ -1,0 +1,20 @@
+{
+  "type": "02 09",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "776d59f2ca0d",
+      "rationale": "The candidate carries the single chorus's depth readings and moves the two sides together; adopted as drawn.",
+      "replaced_when": {
+        "covers": "776d59f2ca0d"
+      }
+    },
+    {
+      "covers": "9073d7c249c0",
+      "rationale": "The candidate carries the stereo delay's damping pole to the HF byte; adopted as drawn.",
+      "replaced_when": {
+        "covers": "9073d7c249c0"
+      }
+    }
+  ]
+}

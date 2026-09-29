@@ -1,0 +1,955 @@
+{
+  "type": "02 08",
+  "what_this_is": "The enhancer path the candidate does not draw, as spectral.presenceEnhancer's structure: band-pass, drive, tanh, added to the dry signal.",
+  "entries": [
+    {
+      "node": {
+        "id": "enh_peak_l",
+        "kind": "section",
+        "input": "in_l",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_band_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_l",
+          "in_l"
+        ],
+        "weights": {
+          "enh_peak_l": {
+            "value": 0.1111111111111111
+          },
+          "in_l": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_sens_l",
+        "kind": "gain",
+        "input": "enh_band_l",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_curve_l",
+        "kind": "shaper",
+        "input": "enh_sens_l",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_l",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "enh_curve_l"
+        ],
+        "weights": {
+          "in_l": {
+            "value": 1.0
+          },
+          "enh_curve_l": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 04"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_peak_r",
+        "kind": "section",
+        "input": "in_r",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_band_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_r",
+          "in_r"
+        ],
+        "weights": {
+          "enh_peak_r": {
+            "value": 0.1111111111111111
+          },
+          "in_r": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_sens_r",
+        "kind": "gain",
+        "input": "enh_band_r",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_curve_r",
+        "kind": "shaper",
+        "input": "enh_sens_r",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_r",
+        "kind": "mix",
+        "inputs": [
+          "in_r",
+          "enh_curve_r"
+        ],
+        "weights": {
+          "in_r": {
+            "value": 1.0
+          },
+          "enh_curve_r": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 04"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "dly_into_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_l",
+          "dly_fb_l"
+        ],
+        "weights": {
+          "enh_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          },
+          "dly_fb_l": {
+            "value": 1.0,
+            "source": "document",
+            "rests_on": [
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 220: EH -> Delay prints no Fb Mode, so each line's loop returns to its own side",
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the delay as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "dly_into_l"
+    },
+    {
+      "node": {
+        "id": "dly_out_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_l",
+          "dly_line_l"
+        ],
+        "weights": {
+          "enh_l": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          },
+          "dly_line_l": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the delay as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "dly_out_l"
+    },
+    {
+      "node": {
+        "id": "dly_into_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_r",
+          "dly_fb_r"
+        ],
+        "weights": {
+          "enh_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          },
+          "dly_fb_r": {
+            "value": 1.0,
+            "source": "document",
+            "rests_on": [
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 220: EH -> Delay prints no Fb Mode, so each line's loop returns to its own side",
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the delay as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "dly_into_r"
+    },
+    {
+      "node": {
+        "id": "dly_out_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_r",
+          "dly_line_r"
+        ],
+        "weights": {
+          "enh_r": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          },
+          "dly_line_r": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the delay as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 08",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "dly_out_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "9073d7c249c0",
+      "rationale": "The candidate carries the stereo delay's damping pole to the HF byte; adopted as drawn.",
+      "replaced_when": {
+        "covers": "9073d7c249c0"
+      }
+    }
+  ]
+}

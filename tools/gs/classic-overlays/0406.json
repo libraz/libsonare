@@ -1,0 +1,428 @@
+{
+  "type": "04 06",
+  "what_this_is": "The enhancer path the candidate does not draw, as spectral.presenceEnhancer's structure: band-pass, drive, tanh, added to the dry signal.",
+  "entries": [
+    {
+      "node": {
+        "id": "enh_peak_l",
+        "kind": "section",
+        "input": "in_l",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_band_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_l",
+          "in_l"
+        ],
+        "weights": {
+          "enh_peak_l": {
+            "value": 0.1111111111111111
+          },
+          "in_l": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_sens_l",
+        "kind": "gain",
+        "input": "enh_band_l",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_curve_l",
+        "kind": "shaper",
+        "input": "enh_sens_l",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_l",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "enh_curve_l"
+        ],
+        "weights": {
+          "in_l": {
+            "value": 1.0
+          },
+          "enh_curve_l": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 04"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_peak_r",
+        "kind": "section",
+        "input": "in_r",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_band_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_r",
+          "in_r"
+        ],
+        "weights": {
+          "enh_peak_r": {
+            "value": 0.1111111111111111
+          },
+          "in_r": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_sens_r",
+        "kind": "gain",
+        "input": "enh_band_r",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_curve_r",
+        "kind": "shaper",
+        "input": "enh_sens_r",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "enh_r",
+        "kind": "mix",
+        "inputs": [
+          "in_r",
+          "enh_curve_r"
+        ],
+        "weights": {
+          "in_r": {
+            "value": 1.0
+          },
+          "enh_curve_r": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 04"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "ph_feed_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_l",
+          "ph_return_l"
+        ],
+        "weights": {
+          "enh_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-the-resonance-byte-closes-a-loop.json",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          },
+          "ph_return_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-the-resonance-byte-closes-a-loop.json",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the phaser as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      },
+      "replaces": "ph_feed_l"
+    },
+    {
+      "node": {
+        "id": "ph_phased_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_l",
+          "ph_wet_l"
+        ],
+        "weights": {
+          "enh_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-eight-allpass-sections-summed-with-the-dry.json",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          },
+          "ph_wet_l": {
+            "byte": "40 03 09",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  0.0
+                ],
+                [
+                  127,
+                  1.0
+                ]
+              ]
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-eight-allpass-sections-summed-with-the-dry.json",
+              "inferences/roland-sc8850-01/0120-the-resonance-byte-closes-a-loop.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Rhodes Multi PH Mix, 0\u201364\u2013127 over 00\u20137F",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the phaser as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      },
+      "replaces": "ph_phased_l"
+    },
+    {
+      "node": {
+        "id": "ph_feed_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_r",
+          "ph_return_r"
+        ],
+        "weights": {
+          "enh_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-the-resonance-byte-closes-a-loop.json",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          },
+          "ph_return_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-the-resonance-byte-closes-a-loop.json",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the phaser as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      },
+      "replaces": "ph_feed_r"
+    },
+    {
+      "node": {
+        "id": "ph_phased_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_r",
+          "ph_wet_r"
+        ],
+        "weights": {
+          "enh_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-eight-allpass-sections-summed-with-the-dry.json",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          },
+          "ph_wet_r": {
+            "byte": "40 03 09",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  0.0
+                ],
+                [
+                  127,
+                  1.0
+                ]
+              ]
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0120-eight-allpass-sections-summed-with-the-dry.json",
+              "inferences/roland-sc8850-01/0120-the-resonance-byte-closes-a-loop.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Rhodes Multi PH Mix, 0\u201364\u2013127 over 00\u20137F",
+              "inferences/models/0120-whole-raised-sine-in-octaves.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the phaser as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "04 06",
+          "40 03 03"
+        ]
+      },
+      "replaces": "ph_phased_r"
+    }
+  ]
+}

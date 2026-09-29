@@ -1,0 +1,1376 @@
+{
+  "type": "11 07",
+  "what_this_is": "The rotary half's acceleration and Separate as the single rotary's.",
+  "entries": [
+    {
+      "node": {
+        "id": "b_low_gap_hz",
+        "kind": "gain",
+        "input": "b_one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 0A",
+          "map": {
+            "kind": "stepped-table",
+            "per_entry": 8,
+            "entries": [
+              0.9768,
+              0.4884,
+              0.3256,
+              0.2442,
+              0.19536,
+              0.1628,
+              0.139543,
+              0.1221,
+              0.108533,
+              0.09768,
+              0.0814,
+              0.06105,
+              0.030525,
+              0.015263,
+              0.007631,
+              0.005814
+            ]
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Rotary Low Accl, 0-3-15"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "rationale": "The acceleration byte as the 01 22 candidate reads it, a rate gap by the byte's top four bits, the measured accel.rotor table modern binds to rotary `undershootHz`. The gaps are written here by hand, so a test holds them to that candidate's.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier"
+    },
+    {
+      "node": {
+        "id": "b_low_slow_short",
+        "kind": "mix",
+        "inputs": [
+          "b_low_slow_hz",
+          "b_low_gap_hz",
+          "b_one"
+        ],
+        "weights": {
+          "b_low_slow_hz": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_gap_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_one": {
+            "value": -0.595,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short.json",
+              "inferences/models/0122-stops-short-low.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_slow_climb",
+        "kind": "shaper",
+        "input": "b_low_slow_short",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_slow_floor",
+        "kind": "mix",
+        "inputs": [
+          "b_low_slow_climb",
+          "b_one"
+        ],
+        "weights": {
+          "b_low_slow_climb": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_one": {
+            "value": 0.595,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short.json",
+              "inferences/models/0122-stops-short-low.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_slow_over",
+        "kind": "mix",
+        "inputs": [
+          "b_low_slow_floor",
+          "b_low_slow_hz"
+        ],
+        "weights": {
+          "b_low_slow_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_slow_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_slow_past",
+        "kind": "shaper",
+        "input": "b_low_slow_over",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_slow_rate",
+        "kind": "mix",
+        "inputs": [
+          "b_low_slow_floor",
+          "b_low_slow_past"
+        ],
+        "weights": {
+          "b_low_slow_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_slow_past": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_fast_short",
+        "kind": "mix",
+        "inputs": [
+          "b_low_fast_hz",
+          "b_low_gap_hz",
+          "b_low_slow_rate"
+        ],
+        "weights": {
+          "b_low_fast_hz": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_gap_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_slow_rate": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-the-speed-switch-picks-which-rate-byte-the-rotor-follows.json",
+              "inferences/roland-sc8850-01/0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_fast_climb",
+        "kind": "shaper",
+        "input": "b_low_fast_short",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_fast_floor",
+        "kind": "mix",
+        "inputs": [
+          "b_low_fast_climb",
+          "b_low_slow_rate"
+        ],
+        "weights": {
+          "b_low_fast_climb": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_slow_rate": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_fast_over",
+        "kind": "mix",
+        "inputs": [
+          "b_low_fast_floor",
+          "b_low_fast_hz"
+        ],
+        "weights": {
+          "b_low_fast_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_fast_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_fast_past",
+        "kind": "shaper",
+        "input": "b_low_fast_over",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_fast_rate",
+        "kind": "mix",
+        "inputs": [
+          "b_low_fast_floor",
+          "b_low_fast_past"
+        ],
+        "weights": {
+          "b_low_fast_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_low_fast_past": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_low_rate",
+        "kind": "mix",
+        "inputs": [
+          "b_low_slow_rate",
+          "b_low_fast_rate"
+        ],
+        "weights": {
+          "b_low_slow_rate": {
+            "byte": "40 03 11",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  1.0
+                ],
+                [
+                  63,
+                  1.0
+                ],
+                [
+                  64,
+                  0.0
+                ],
+                [
+                  127,
+                  0.0
+                ]
+              ]
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-the-speed-switch-picks-which-rate-byte-the-rotor-follows.json",
+              "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Rotary Speed, Slow/Fast over 00/7F",
+              "inferences/roland-sc8850-01/1107-a-renumbered-rotary-is-one-rotor-above-the-transient.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 223: PH / Rotary RT Speed, Slow/Fast over 00/7F",
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          },
+          "b_low_fast_rate": {
+            "byte": "40 03 11",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  0.0
+                ],
+                [
+                  63,
+                  0.0
+                ],
+                [
+                  64,
+                  1.0
+                ],
+                [
+                  127,
+                  1.0
+                ]
+              ]
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-the-speed-switch-picks-which-rate-byte-the-rotor-follows.json",
+              "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Rotary Speed, Slow/Fast over 00/7F",
+              "inferences/roland-sc8850-01/1107-a-renumbered-rotary-is-one-rotor-above-the-transient.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 223: PH / Rotary RT Speed, Slow/Fast over 00/7F",
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own speed switch, now choosing between the settled rates.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0A"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short",
+      "replaces": "b_low_rate"
+    },
+    {
+      "node": {
+        "id": "b_high_gap_hz",
+        "kind": "gain",
+        "input": "b_one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 0E",
+          "map": {
+            "kind": "stepped-table",
+            "per_entry": 8,
+            "entries": [
+              0.9768,
+              0.4884,
+              0.3256,
+              0.2442,
+              0.19536,
+              0.1628,
+              0.139543,
+              0.1221,
+              0.108533,
+              0.09768,
+              0.0814,
+              0.06105,
+              0.030525,
+              0.015263,
+              0.007631,
+              0.005814
+            ]
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Rotary Hi Accl, 0-11-15"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "rationale": "The acceleration byte as the 01 22 candidate reads it, a rate gap by the byte's top four bits, the measured accel.rotor table modern binds to rotary `undershootHz`. The gaps are written here by hand, so a test holds them to that candidate's.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier"
+    },
+    {
+      "node": {
+        "id": "b_high_slow_short",
+        "kind": "mix",
+        "inputs": [
+          "b_high_slow_hz",
+          "b_high_gap_hz",
+          "b_one"
+        ],
+        "weights": {
+          "b_high_slow_hz": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_gap_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_one": {
+            "value": -0.799,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short.json",
+              "inferences/models/0122-stops-short-high.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_slow_climb",
+        "kind": "shaper",
+        "input": "b_high_slow_short",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_slow_floor",
+        "kind": "mix",
+        "inputs": [
+          "b_high_slow_climb",
+          "b_one"
+        ],
+        "weights": {
+          "b_high_slow_climb": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_one": {
+            "value": 0.799,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short.json",
+              "inferences/models/0122-stops-short-high.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_slow_over",
+        "kind": "mix",
+        "inputs": [
+          "b_high_slow_floor",
+          "b_high_slow_hz"
+        ],
+        "weights": {
+          "b_high_slow_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_slow_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_slow_past",
+        "kind": "shaper",
+        "input": "b_high_slow_over",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_slow_rate",
+        "kind": "mix",
+        "inputs": [
+          "b_high_slow_floor",
+          "b_high_slow_past"
+        ],
+        "weights": {
+          "b_high_slow_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_slow_past": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_fast_short",
+        "kind": "mix",
+        "inputs": [
+          "b_high_fast_hz",
+          "b_high_gap_hz",
+          "b_high_slow_rate"
+        ],
+        "weights": {
+          "b_high_fast_hz": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_gap_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_slow_rate": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-the-speed-switch-picks-which-rate-byte-the-rotor-follows.json",
+              "inferences/roland-sc8850-01/0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_fast_climb",
+        "kind": "shaper",
+        "input": "b_high_fast_short",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_fast_floor",
+        "kind": "mix",
+        "inputs": [
+          "b_high_fast_climb",
+          "b_high_slow_rate"
+        ],
+        "weights": {
+          "b_high_fast_climb": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_slow_rate": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_fast_over",
+        "kind": "mix",
+        "inputs": [
+          "b_high_fast_floor",
+          "b_high_fast_hz"
+        ],
+        "weights": {
+          "b_high_fast_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_fast_hz": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_fast_past",
+        "kind": "shaper",
+        "input": "b_high_fast_over",
+        "curve": "points",
+        "points": [
+          [
+            -1000.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1000.0,
+            1000.0
+          ]
+        ],
+        "oversample": 1,
+        "drive": {
+          "value": 0.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        },
+        "is": "The part of the input above nothing."
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_fast_rate",
+        "kind": "mix",
+        "inputs": [
+          "b_high_fast_floor",
+          "b_high_fast_past"
+        ],
+        "weights": {
+          "b_high_fast_floor": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          },
+          "b_high_fast_past": {
+            "value": -1.0,
+            "source": "law",
+            "rests_on": [],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The 01 22 candidate's settled rate: the rotor stops short of the rate byte by the gap, never below its floor, and the fast rate never below the slow one.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short"
+    },
+    {
+      "node": {
+        "id": "b_high_rate",
+        "kind": "mix",
+        "inputs": [
+          "b_high_slow_rate",
+          "b_high_fast_rate"
+        ],
+        "weights": {
+          "b_high_slow_rate": {
+            "byte": "40 03 11",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  1.0
+                ],
+                [
+                  63,
+                  1.0
+                ],
+                [
+                  64,
+                  0.0
+                ],
+                [
+                  127,
+                  0.0
+                ]
+              ]
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-the-speed-switch-picks-which-rate-byte-the-rotor-follows.json",
+              "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Rotary Speed, Slow/Fast over 00/7F",
+              "inferences/roland-sc8850-01/1107-a-renumbered-rotary-is-one-rotor-above-the-transient.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 223: PH / Rotary RT Speed, Slow/Fast over 00/7F",
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          },
+          "b_high_fast_rate": {
+            "byte": "40 03 11",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  0.0
+                ],
+                [
+                  63,
+                  0.0
+                ],
+                [
+                  64,
+                  1.0
+                ],
+                [
+                  127,
+                  1.0
+                ]
+              ]
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0122-the-speed-switch-picks-which-rate-byte-the-rotor-follows.json",
+              "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 217: Rotary Speed, Slow/Fast over 00/7F",
+              "inferences/roland-sc8850-01/1107-a-renumbered-rotary-is-one-rotor-above-the-transient.json",
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 223: PH / Rotary RT Speed, Slow/Fast over 00/7F",
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "carried",
+      "rationale": "The candidate's own speed switch, now choosing between the settled rates.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 0E"
+        ]
+      },
+      "from": "0122-a-rotary-rate-byte-aims-a-rotor-and-the-rotor-stops-short",
+      "replaces": "b_high_rate"
+    },
+    {
+      "node": {
+        "id": "b_rotor_l",
+        "kind": "mix",
+        "inputs": [
+          "b_low_level_l",
+          "b_high_level_l"
+        ],
+        "weights": {
+          "b_low_level_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          },
+          "b_high_level_l": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's rotor sum, under a new id so the spread can take the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_rotor_r",
+        "kind": "mix",
+        "inputs": [
+          "b_low_level_r",
+          "b_high_level_r"
+        ],
+        "weights": {
+          "b_low_level_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          },
+          "b_high_level_r": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0122-whole-amplitude-only-lands-on-the-entry.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's rotor sum, under a new id so the spread can take the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_rotor_mid",
+        "kind": "mix",
+        "inputs": [
+          "b_rotor_l",
+          "b_rotor_r"
+        ],
+        "weights": {
+          "b_rotor_l": {
+            "value": 0.5
+          },
+          "b_rotor_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_rotor_side_l",
+        "kind": "mix",
+        "inputs": [
+          "b_rotor_l",
+          "b_rotor_r"
+        ],
+        "weights": {
+          "b_rotor_l": {
+            "value": 0.5
+          },
+          "b_rotor_r": {
+            "value": -0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_rotor_side_r",
+        "kind": "mix",
+        "inputs": [
+          "b_rotor_l",
+          "b_rotor_r"
+        ],
+        "weights": {
+          "b_rotor_l": {
+            "value": -0.5
+          },
+          "b_rotor_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_sum_l",
+        "kind": "mix",
+        "inputs": [
+          "b_rotor_mid",
+          "b_rotor_side_l"
+        ],
+        "weights": {
+          "b_rotor_mid": {
+            "value": 1.0
+          },
+          "b_rotor_side_l": {
+            "byte": "40 03 10",
+            "law": "d.unit",
+            "anchor": "b_sum_l.weights.b_low_level_l"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      },
+      "replaces": "b_sum_l"
+    },
+    {
+      "node": {
+        "id": "b_sum_r",
+        "kind": "mix",
+        "inputs": [
+          "b_rotor_mid",
+          "b_rotor_side_r"
+        ],
+        "weights": {
+          "b_rotor_mid": {
+            "value": 1.0
+          },
+          "b_rotor_side_r": {
+            "byte": "40 03 10",
+            "law": "d.unit",
+            "anchor": "b_sum_r.weights.b_low_level_r"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Separate as the stereo spread modern binds by d.unit to rotary `stereoSpread`: each side moves from the mean of the two rotor sums toward its own sum. Anchored (D33) so the power-on byte reads the candidate's own sides, which it draws at full separation.",
+      "replaced_when": {
+        "model_binding": [
+          "11 07",
+          "40 03 10"
+        ]
+      },
+      "replaces": "b_sum_r"
+    }
+  ]
+}

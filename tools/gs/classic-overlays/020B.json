@@ -1,0 +1,20 @@
+{
+  "type": "02 0B",
+  "what_this_is": "Covers only; every printed slot is bound.",
+  "covers": [
+    {
+      "covers": "265e94f2c279",
+      "rationale": "The candidate carries the single flanger's two balance ramps; adopted as drawn.",
+      "replaced_when": {
+        "covers": "265e94f2c279"
+      }
+    },
+    {
+      "covers": "776d59f2ca0d",
+      "rationale": "The candidate carries the single chorus's depth readings and moves the two sides together; adopted as drawn.",
+      "replaced_when": {
+        "covers": "776d59f2ca0d"
+      }
+    }
+  ]
+}

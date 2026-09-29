@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "midi/gs_classic_sensitivity.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_classic/graph_engine.h"
 #include "midi/synth/gs_classic/model_registry.h"
@@ -40,6 +41,7 @@ namespace sonare::midi::synth::gs_classic {
 namespace {
 
 namespace gc = sonare::midi::synth::gs_classic;
+using gc::test::gs_classic_require_heard;
 using sonare::midi::synth::kGsEfxTypeDefaults;
 
 constexpr uint16_t kFirstType = 0x0140;
@@ -215,77 +217,37 @@ std::array<uint8_t, 20> power_on(uint16_t type) {
   return {};
 }
 
-/// Whether the slot at its two ends changes the drawing, with the other bytes at `context`.
-bool heard_in(const gc::GsClassicModelSet& models, const gc::GsClassicType& model,
-              const std::array<uint8_t, 20>& context, int slot, const Printed& ends) {
+/// Whether the slot at its two ends changes the default configuration's drawing, with the
+/// other bytes at `context`.
+bool heard_in(uint16_t type, int slot, const Printed& ends,
+              const std::array<uint8_t, 20>& context) {
+  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
+  REQUIRE(registry.valid());
+  const gc::GsClassicType* model = registry.find(type);
+  REQUIRE(model != nullptr);
   std::array<uint8_t, 20> low = context;
   std::array<uint8_t, 20> high = context;
   low[static_cast<std::size_t>(slot)] = ends.lo;
   high[static_cast<std::size_t>(slot)] = ends.hi;
-  const Drawing a = draw(models, model, low);
-  const Drawing b = draw(models, model, high);
+  const Drawing a = draw(registry.models(), *model, low);
+  const Drawing b = draw(registry.models(), *model, high);
   const double band_db = largest_band_difference(digest(a), digest(b));
   const double l2 = relative_l2(a, b);
   UNSCOPED_INFO("largest band difference " << band_db << " dB, relative L2 " << l2);
   return band_db >= kHeardDb || l2 >= kHeardRelativeL2;
 }
 
-/// Draws every slot `pick` keeps at its two ends and requires each pair to differ:
-/// at power-on first, then with exactly one other printed slot at one end of its range,
-/// one such context at a time, until one of them is heard.
-template <typename Pick>
-void require_heard(Pick pick) {
-  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
-  REQUIRE(registry.valid());
-  const gc::GsClassicModelSet& models = registry.models();
-  const auto slots = printed_slots();
-  REQUIRE(!slots.empty());
-
-  std::size_t compared = 0;
-  uint16_t previous_type = 0;
-  for (const auto& [key, ends] : slots) {
-    const auto [type, slot] = key;
-    const bool first_of_type = type != previous_type;
-    previous_type = type;
-    if (!pick(first_of_type)) continue;
-    const gc::GsClassicType* model = registry.find(type);
-    REQUIRE(model != nullptr);
-    INFO("type " << std::hex << type << std::dec << " slot " << slot << " bytes " << int(ends.lo)
-                 << "/" << int(ends.hi));
-    REQUIRE(ends.lo != ends.hi);
-    const std::array<uint8_t, 20> rest = power_on(type);
-    bool heard = heard_in(models, *model, rest, slot, ends);
-    for (auto other = slots.lower_bound({type, 0});
-         !heard && other != slots.end() && other->first.first == type; ++other) {
-      const int moved = other->first.second;
-      if (moved == slot) continue;
-      for (uint8_t end : {other->second.lo, other->second.hi}) {
-        if (heard || end == rest[static_cast<std::size_t>(moved)]) continue;
-        std::array<uint8_t, 20> context = rest;
-        context[static_cast<std::size_t>(moved)] = end;
-        heard = heard_in(models, *model, context, slot, ends);
-        if (heard) {
-          WARN("type " << std::hex << type << std::dec << " slot " << slot << " is heard with slot "
-                       << moved << " at byte " << int(end));
-        }
-      }
-    }
-    CHECK(heard);
-    ++compared;
-  }
-  CHECK(compared > 0);
-}
-
 }  // namespace
 
 TEST_CASE("GS classic types 01 40-01 73: each type's first printed byte is heard",
           "[gs-classic-types-01b]") {
-  require_heard([](bool first_of_type) { return first_of_type; });
+  gs_classic_require_heard(
+      printed_slots(), [](bool first_of_type) { return first_of_type; }, power_on, heard_in);
 }
 
 TEST_CASE("GS classic types 01 40-01 73: every printed byte is heard",
           "[gs-classic-types-01b-all][.][slow]") {
-  require_heard([](bool) { return true; });
+  gs_classic_require_heard(printed_slots(), [](bool) { return true; }, power_on, heard_in);
 }
 
 namespace {

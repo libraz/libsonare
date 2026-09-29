@@ -1,0 +1,512 @@
+{
+  "type": "11 06",
+  "what_this_is": "The drive half's amp switch and type as the single overdrive's cabinet; the auto-wah half's Sens as the single auto-wah's envelope follower.",
+  "entries": [
+    {
+      "node": {
+        "id": "a_sel_curve",
+        "kind": "mix",
+        "inputs": [
+          "a_od_post",
+          "a_ds_post"
+        ],
+        "weights": {
+          "a_od_post": {
+            "byte": "40 03 03",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 1.0,
+                "1": 0.0,
+                "*": 1.0
+              }
+            },
+            "source": "document",
+            "rests_on": [
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 222: OD / AutoWah OD Sel, Odrv/Dist over 00/01",
+              "The page prints Odrv/Dist against the byte; each state is drawn as the stand-alone type of that name.",
+              "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+            ],
+            "fitted_on": []
+          },
+          "a_ds_post": {
+            "byte": "40 03 03",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 1.0,
+                "*": 0.0
+              }
+            },
+            "source": "document",
+            "rests_on": [
+              "documents/roland-sc-8850-owners-manual-en/effect-list.json page 222: OD / AutoWah OD Sel, Odrv/Dist over 00/01",
+              "The page prints Odrv/Dist against the byte; each state is drawn as the stand-alone type of that name.",
+              "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own drive selection after the curve, under a new id so the amp switch can take the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 06"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab0_hp",
+        "kind": "section",
+        "input": "a_sel_curve",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 75.0
+        },
+        "q": {
+          "value": 0.7071067811865475
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab0_bump",
+        "kind": "section",
+        "input": "a_cab0_hp",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 110.0
+        },
+        "q": {
+          "value": 1.0
+        },
+        "gain_db": {
+          "value": 2.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab0_lp1",
+        "kind": "section",
+        "input": "a_cab0_bump",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 4800.0
+        },
+        "q": {
+          "value": 1.3065629648763766
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab0_lp2",
+        "kind": "section",
+        "input": "a_cab0_lp1",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 4800.0
+        },
+        "q": {
+          "value": 0.541196100146197
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab1_hp",
+        "kind": "section",
+        "input": "a_sel_curve",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 40.0
+        },
+        "q": {
+          "value": 0.7071067811865475
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab1_bump",
+        "kind": "section",
+        "input": "a_cab1_hp",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 80.0
+        },
+        "q": {
+          "value": 1.0
+        },
+        "gain_db": {
+          "value": 3.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab1_lp1",
+        "kind": "section",
+        "input": "a_cab1_bump",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 3500.0
+        },
+        "q": {
+          "value": 1.3065629648763766
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab1_lp2",
+        "kind": "section",
+        "input": "a_cab1_lp1",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 3500.0
+        },
+        "q": {
+          "value": 0.541196100146197
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab_select",
+        "kind": "mix",
+        "inputs": [
+          "a_cab0_lp2",
+          "a_cab1_lp2"
+        ],
+        "weights": {
+          "a_cab0_lp2": {
+            "byte": "40 03 05",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 1.0,
+                "1": 0.0
+              }
+            }
+          },
+          "a_cab1_lp2": {
+            "byte": "40 03 05",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 1.0
+              }
+            }
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Amp Type state i is cab_model i, the d.enum4 modern binds to ampSim `cabModel`. The states past 1 name cab models cab_voicing does not have yet, so they read the nearest named state.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 05"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_cab_step",
+        "kind": "mix",
+        "inputs": [
+          "a_cab_select",
+          "a_sel_curve"
+        ],
+        "weights": {
+          "a_cab_select": {
+            "value": 1.0
+          },
+          "a_sel_curve": {
+            "value": -1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "What the cabinet changes, for the amp switch to add.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 06"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "a_sel",
+        "kind": "mix",
+        "inputs": [
+          "a_sel_curve",
+          "a_cab_step"
+        ],
+        "weights": {
+          "a_sel_curve": {
+            "value": 1.0
+          },
+          "a_cab_step": {
+            "byte": "40 03 06",
+            "law": "d.enum2"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Amp Sw puts the cabinet after the curve, the d.enum2 modern binds to ampSim `cab`.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 06"
+        ]
+      },
+      "replaces": "a_sel"
+    },
+    {
+      "node": {
+        "id": "b_wah_mono",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "in_r"
+        ],
+        "weights": {
+          "in_l": {
+            "value": 0.5
+          },
+          "in_r": {
+            "value": 0.5
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "effects.modulation.autoWah's envelope follower: the rectified peak of the input through one pole, 8 ms rising and 120 ms falling (AutoWahConfig). The candidate reads each side apart, so the follower takes the mean of the two where autoWah takes their larger.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_wah_env",
+        "kind": "envelope",
+        "input": "b_wah_mono",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "value": 8.0
+        },
+        "release_ms": {
+          "value": 120.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "effects.modulation.autoWah's envelope follower: the rectified peak of the input through one pole, 8 ms rising and 120 ms falling (AutoWahConfig). The candidate reads each side apart, so the follower takes the mean of the two where autoWah takes their larger.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_wah_open",
+        "kind": "gain",
+        "input": "b_one",
+        "unit": "ratio",
+        "gain": {
+          "control": "b_wah_env",
+          "map": {
+            "kind": "points",
+            "points": [
+              [
+                -120.0,
+                1e-06
+              ],
+              [
+                0.0,
+                1.0
+              ]
+            ],
+            "log": true
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The follower's level back from decibels to a multiplier (10^(dB/20), exact where the points interpolate in the log), floored 120 dB down.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_wah_sens",
+        "kind": "gain",
+        "input": "b_wah_open",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 09",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens scales the envelope, the law modern binds to autoWah `sensitivity`.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 09"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "b_position",
+        "kind": "mix",
+        "inputs": [
+          "b_manual",
+          "b_direction",
+          "b_wah_sens"
+        ],
+        "weights": {
+          "b_manual": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0121-whole-one-sided-raised-sine.json"
+            ],
+            "fitted_on": []
+          },
+          "b_direction": {
+            "value": 1.0,
+            "source": "law",
+            "rests_on": [
+              "inferences/models/0121-whole-one-sided-raised-sine.json"
+            ],
+            "fitted_on": []
+          },
+          "b_wah_sens": {
+            "value": 127.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "autoWah opens its corner by the scaled envelope across its whole sweep; the candidate's sweep axis is the Manual byte's 0..127, so a full envelope moves the position 127.",
+      "replaced_when": {
+        "model_binding": [
+          "11 06",
+          "40 03 09"
+        ]
+      },
+      "replaces": "b_position"
+    }
+  ]
+}

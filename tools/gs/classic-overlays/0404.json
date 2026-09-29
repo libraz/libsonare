@@ -1,0 +1,420 @@
+{
+  "type": "04 04",
+  "what_this_is": "The delay's feedback loop.",
+  "entries": [
+    {
+      "node": {
+        "id": "dly_fb_l",
+        "kind": "gain",
+        "input": "dly_line_l",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 14",
+          "law": "d.feedback"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Dly Fb returns the line's output to its input, the law modern binds to stereo delay `feedback`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 04",
+          "40 03 14"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_into_l",
+        "kind": "mix",
+        "inputs": [
+          "cf_out_l",
+          "dly_fb_l"
+        ],
+        "weights": {
+          "cf_out_l": {
+            "value": 1.0
+          },
+          "dly_fb_l": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The line's input and its returned output, as the stereo delay sums them.",
+      "replaced_when": {
+        "model_binding": [
+          "04 04",
+          "40 03 14"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_line_l",
+        "kind": "delay",
+        "input": "dly_into_l",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "table",
+            "entries": [
+              0.0,
+              5.0,
+              10.0,
+              15.0,
+              20.0,
+              25.0,
+              30.0,
+              35.0,
+              40.0,
+              45.0,
+              50.0,
+              55.0,
+              60.0,
+              65.0,
+              70.0,
+              75.0,
+              80.0,
+              85.0,
+              90.0,
+              95.0,
+              100.0,
+              105.0,
+              110.0,
+              115.0,
+              120.0,
+              125.0,
+              130.0,
+              135.0,
+              140.0,
+              145.0,
+              150.0,
+              155.0,
+              160.0,
+              165.0,
+              170.0,
+              175.0,
+              180.0,
+              185.0,
+              190.0,
+              195.0,
+              200.0,
+              205.0,
+              210.0,
+              215.0,
+              220.0,
+              225.0,
+              230.0,
+              235.0,
+              240.0,
+              245.0,
+              250.0,
+              255.0,
+              260.0,
+              265.0,
+              270.0,
+              275.0,
+              280.0,
+              285.0,
+              290.0,
+              295.0,
+              300.0,
+              305.0,
+              310.0,
+              315.0,
+              320.0,
+              325.0,
+              330.0,
+              335.0,
+              340.0,
+              345.0,
+              350.0,
+              355.0,
+              360.0,
+              365.0,
+              370.0,
+              375.0,
+              380.0,
+              385.0,
+              390.0,
+              395.0,
+              400.0,
+              405.0,
+              410.0,
+              415.0,
+              420.0,
+              425.0,
+              430.0,
+              435.0,
+              440.0,
+              445.0,
+              450.0,
+              455.0,
+              460.0,
+              465.0,
+              470.0,
+              475.0,
+              480.0,
+              485.0,
+              490.0,
+              495.0,
+              500.0,
+              505.0,
+              510.0,
+              515.0,
+              520.0,
+              525.0,
+              530.0,
+              535.0,
+              540.0,
+              545.0,
+              550.0,
+              555.0,
+              560.0,
+              565.0,
+              570.0,
+              575.0,
+              580.0,
+              585.0,
+              590.0,
+              595.0,
+              600.0,
+              605.0,
+              610.0,
+              615.0,
+              620.0,
+              625.0,
+              630.0,
+              635.0
+            ],
+            "out_of_range": 127
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Clean Gt Multi2 Dly Time, 0\u201330ms\u2013635ms over *5",
+            "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own delay path, now fed from the loop's sum.",
+      "replaced_when": {
+        "model_binding": [
+          "04 04",
+          "40 03 14"
+        ]
+      },
+      "replaces": "dly_line_l"
+    },
+    {
+      "node": {
+        "id": "dly_fb_r",
+        "kind": "gain",
+        "input": "dly_line_r",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 14",
+          "law": "d.feedback"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Dly Fb returns the line's output to its input, the law modern binds to stereo delay `feedback`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 04",
+          "40 03 14"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_into_r",
+        "kind": "mix",
+        "inputs": [
+          "cf_out_r",
+          "dly_fb_r"
+        ],
+        "weights": {
+          "cf_out_r": {
+            "value": 1.0
+          },
+          "dly_fb_r": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The line's input and its returned output, as the stereo delay sums them.",
+      "replaced_when": {
+        "model_binding": [
+          "04 04",
+          "40 03 14"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_line_r",
+        "kind": "delay",
+        "input": "dly_into_r",
+        "interpolation": "none",
+        "time_ms": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "table",
+            "entries": [
+              0.0,
+              5.0,
+              10.0,
+              15.0,
+              20.0,
+              25.0,
+              30.0,
+              35.0,
+              40.0,
+              45.0,
+              50.0,
+              55.0,
+              60.0,
+              65.0,
+              70.0,
+              75.0,
+              80.0,
+              85.0,
+              90.0,
+              95.0,
+              100.0,
+              105.0,
+              110.0,
+              115.0,
+              120.0,
+              125.0,
+              130.0,
+              135.0,
+              140.0,
+              145.0,
+              150.0,
+              155.0,
+              160.0,
+              165.0,
+              170.0,
+              175.0,
+              180.0,
+              185.0,
+              190.0,
+              195.0,
+              200.0,
+              205.0,
+              210.0,
+              215.0,
+              220.0,
+              225.0,
+              230.0,
+              235.0,
+              240.0,
+              245.0,
+              250.0,
+              255.0,
+              260.0,
+              265.0,
+              270.0,
+              275.0,
+              280.0,
+              285.0,
+              290.0,
+              295.0,
+              300.0,
+              305.0,
+              310.0,
+              315.0,
+              320.0,
+              325.0,
+              330.0,
+              335.0,
+              340.0,
+              345.0,
+              350.0,
+              355.0,
+              360.0,
+              365.0,
+              370.0,
+              375.0,
+              380.0,
+              385.0,
+              390.0,
+              395.0,
+              400.0,
+              405.0,
+              410.0,
+              415.0,
+              420.0,
+              425.0,
+              430.0,
+              435.0,
+              440.0,
+              445.0,
+              450.0,
+              455.0,
+              460.0,
+              465.0,
+              470.0,
+              475.0,
+              480.0,
+              485.0,
+              490.0,
+              495.0,
+              500.0,
+              505.0,
+              510.0,
+              515.0,
+              520.0,
+              525.0,
+              530.0,
+              535.0,
+              540.0,
+              545.0,
+              550.0,
+              555.0,
+              560.0,
+              565.0,
+              570.0,
+              575.0,
+              580.0,
+              585.0,
+              590.0,
+              595.0,
+              600.0,
+              605.0,
+              610.0,
+              615.0,
+              620.0,
+              625.0,
+              630.0,
+              635.0
+            ],
+            "out_of_range": 127
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Clean Gt Multi2 Dly Time, 0\u201330ms\u2013635ms over *5",
+            "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own delay path, now fed from the loop's sum.",
+      "replaced_when": {
+        "model_binding": [
+          "04 04",
+          "40 03 14"
+        ]
+      },
+      "replaces": "dly_line_r"
+    }
+  ]
+}

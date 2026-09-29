@@ -92,38 +92,38 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `01 71` | head-shadow-alone-the-mid-restored | 0 | - | 3 | 0 | 0 | 1.526 |
 | `01 72` | hold-of-two-at-rest-quantiser-after-the-pre-filter | 0 | - | 8 | 0 | 0 | 1.000 |
 | `01 73` | one-pole-pan-places-only-the-mono-sum | 0 | - | 20 | 0 | 0 | 1.319 |
-| `02 00` | dry-after-the-drive-tone-first | 0 | - | 11 | 2 | 0 | 0.810 |
-| `02 01` | dry-after-the-drive-tone-first | 0 | - | 12 | 2 | 1 | 1.000 |
-| `02 02` | dry-after-the-drive-tone-last | 0 | - | 11 | 2 | 0 | 0.983 |
-| `02 03` | dry-before-the-drive-tone-first | 0 | - | 11 | 2 | 0 | 1.221 |
-| `02 04` | dry-after-the-drive-tone-first | 0 | - | 12 | 2 | 1 | 1.000 |
-| `02 05` | dry-after-the-drive-tone-last | 0 | - | 11 | 2 | 0 | 0.925 |
-| `02 06` | raised-sine | 0 | - | 9 | 2 | 0 | 171.962 |
-| `02 07` | raised-sine | 0 | - | 10 | 2 | 1 | 0.920 |
-| `02 08` | loop-a-sample-late | 0 | - | 9 | 2 | 0 | 1.019 |
+| `02 00` | dry-after-the-drive-tone-first | 0 | - | 11 | 0 | 0 | 0.810 |
+| `02 01` | dry-after-the-drive-tone-first | 0 | - | 12 | 0 | 1 | 1.000 |
+| `02 02` | dry-after-the-drive-tone-last | 0 | - | 11 | 0 | 0 | 0.983 |
+| `02 03` | dry-before-the-drive-tone-first | 0 | - | 11 | 0 | 0 | 1.221 |
+| `02 04` | dry-after-the-drive-tone-first | 0 | - | 12 | 0 | 1 | 1.000 |
+| `02 05` | dry-after-the-drive-tone-last | 0 | - | 11 | 0 | 0 | 0.925 |
+| `02 06` | raised-sine | 0 | - | 9 | 0 | 0 | 171.962 |
+| `02 07` | raised-sine | 0 | - | 10 | 0 | 1 | 0.920 |
+| `02 08` | loop-a-sample-late | 0 | - | 9 | 0 | 0 | 1.019 |
 | `02 09` | dry-before-the-chorus | 0 | - | 11 | 0 | 0 | 0.331 |
 | `02 0A` | dry-after-the-flanger | 0 | - | 12 | 0 | 1 | 0.852 |
 | `02 0B` | dry-after-the-chorus | 0 | - | 12 | 0 | 1 | 1.000 |
-| `02 0C` | drive-then-equaliser | 0 | - | 18 | 3 | 0 | 0.372 |
-| `04 00` | compressor-then-drive | 0 | - | 20 | 5 | 0 | 0.573 |
-| `04 01` | compressor-equaliser-drive | 0 | - | 20 | 4 | 0 | 0.979 |
-| `04 02` | wah-then-drive | 0 | - | 20 | 3 | 0 | 0.992 |
-| `04 03` | compressor-then-equaliser | 0 | - | 19 | 3 | 0 | 0.000 |
-| `04 04` | mix-bytes-add-the-effect | 0 | - | 20 | 1 | 0 | 0.176 |
-| `04 05` | compressor-drive-equaliser | 0 | - | 20 | 4 | 0 | 1.000 |
-| `04 06` | mix-byte-crossfades | 0 | - | 20 | 2 | 1 | 0.173 |
-| `05 00` | shifter-then-equaliser-mix-adds | 0 | - | 20 | 3 | 4 | 0.031 |
+| `02 0C` | drive-then-equaliser | 0 | - | 18 | 0 | 0 | 0.372 |
+| `04 00` | compressor-then-drive | 0 | - | 20 | 0 | 0 | 0.573 |
+| `04 01` | compressor-equaliser-drive | 0 | - | 20 | 0 | 0 | 0.979 |
+| `04 02` | wah-then-drive | 0 | - | 20 | 0 | 0 | 0.992 |
+| `04 03` | compressor-then-equaliser | 0 | - | 19 | 0 | 0 | 0.000 |
+| `04 04` | mix-bytes-add-the-effect | 0 | - | 20 | 0 | 0 | 0.176 |
+| `04 05` | compressor-drive-equaliser | 0 | - | 20 | 0 | 0 | 1.000 |
+| `04 06` | mix-byte-crossfades | 0 | - | 20 | 0 | 1 | 0.173 |
+| `05 00` | shifter-then-equaliser-mix-adds | 0 | - | 20 | 0 | 4 | 0.031 |
 | `11 00` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 13 | 0 | 0 | 0.825 |
 | `11 01` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 14 | 0 | 1 | 0.714 |
 | `11 02` | side-by-side-pan-places-each-half | 1 side-by-side | a: places the mono sum; b: places the mono sum | 14 | 0 | 1 | 0.891 |
-| `11 03` | side-by-side | 1 side-by-side | a: places the mono sum; b: places the mono sum | 13 | 4 | 0 | 0.962 |
-| `11 04` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 19 | 5 | 0 | 0.164 |
-| `11 05` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 14 | 2 | 0 | 0.002 |
-| `11 06` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 16 | 3 | 0 | 0.187 |
-| `11 07` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 20 | 3 | 0 | 0.164 |
-| `11 08` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 17 | 1 | 0 | 2.011 |
+| `11 03` | side-by-side | 1 side-by-side | a: places the mono sum; b: places the mono sum | 13 | 0 | 0 | 0.962 |
+| `11 04` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 19 | 0 | 0 | 0.164 |
+| `11 05` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 14 | 0 | 0 | 0.002 |
+| `11 06` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 16 | 0 | 0 | 0.187 |
+| `11 07` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 20 | 0 | 0 | 0.164 |
+| `11 08` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 17 | 0 | 0 | 2.011 |
 
-Unbound printed slots: 67 of 770 in 27 types.
+Unbound printed slots: 3 of 770 in 3 types.
 
 ### Document values
 
@@ -131,15 +131,15 @@ Unbound printed slots: 67 of 770 in 27 types.
 
 ### Shipping size
 
-The default configuration ships 206 de-duplicated map specs (183 in the raw configuration), 27 control curves, 1879 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
+The default configuration ships 219 de-duplicated map specs (183 in the raw configuration), 27 control curves, 2210 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
 
 | pool | raw bytes | gzip bytes |
 |---|---|---|
-| map specs | 86999 | 28968 |
+| map specs | 94483 | 34575 |
 | control curves | 27864 | 21274 |
-| node tables | 104720 | 30405 |
-| total | 219583 | 81681 |
+| node tables | 124256 | 34231 |
+| total | 246603 | 90590 |
 
-Expanding the specs at registry construction puts 105472 bytes of LUTs on the heap per configuration.
+Expanding the specs at registry construction puts 112128 bytes of LUTs on the heap per configuration.
 
 <!-- END GENERATED: tools/gs/classic_models.py -->

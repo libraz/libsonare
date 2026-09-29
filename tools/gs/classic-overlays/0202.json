@@ -1,0 +1,487 @@
+{
+  "type": "02 02",
+  "what_this_is": "The amp switch and the amp type, as saturation.ampSim's cabinet after the curve.",
+  "entries": [
+    {
+      "node": {
+        "id": "od_post_curve",
+        "kind": "gain",
+        "input": "od_drive",
+        "unit": "db",
+        "gain": {
+          "value": -33.051,
+          "source": "measured",
+          "rests_on": [
+            "data/units/roland-sc8850-01/efx-orders/cc-07-the-volume-in-front-of-the-drive-as-orders-on-one-component.json",
+            "data/units/roland-sc8850-01/efx-orders/cc-07-the-volume-in-front-of-the-drive-as-orders-on-one-component-an-octave-up.json",
+            "data/units/roland-sc8850-01/efx-orders/cc-07-the-volume-in-front-of-the-drive-as-orders-on-one-component-a-twelfth-up.json",
+            "inferences/models/0110-whole-tanh.json"
+          ],
+          "fitted_on": [
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              16
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              28
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              40
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              52
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              64
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              76
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              88
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              100
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              112
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component",
+              127
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              16
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              28
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              40
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              52
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              64
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              76
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              88
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              100
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              112
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-a-twelfth-up",
+              127
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              16
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              28
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              40
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              52
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              64
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              76
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              88
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              100
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              112
+            ],
+            [
+              "the-curve-on-a-carrier-that-is-one-component-an-octave-up",
+              127
+            ]
+          ]
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own gain after the curve, under a new id so the amp switch can take the id it fed.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 06"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "od_cab0_hp",
+        "kind": "section",
+        "input": "od_post_curve",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 75.0
+        },
+        "q": {
+          "value": 0.7071067811865475
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab0_bump",
+        "kind": "section",
+        "input": "od_cab0_hp",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 110.0
+        },
+        "q": {
+          "value": 1.0
+        },
+        "gain_db": {
+          "value": 2.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab0_lp1",
+        "kind": "section",
+        "input": "od_cab0_bump",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 4800.0
+        },
+        "q": {
+          "value": 1.3065629648763766
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab0_lp2",
+        "kind": "section",
+        "input": "od_cab0_lp1",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 4800.0
+        },
+        "q": {
+          "value": 0.541196100146197
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 0, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab1_hp",
+        "kind": "section",
+        "input": "od_post_curve",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 40.0
+        },
+        "q": {
+          "value": 0.7071067811865475
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab1_bump",
+        "kind": "section",
+        "input": "od_cab1_hp",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 80.0
+        },
+        "q": {
+          "value": 1.0
+        },
+        "gain_db": {
+          "value": 3.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab1_lp1",
+        "kind": "section",
+        "input": "od_cab1_bump",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 3500.0
+        },
+        "q": {
+          "value": 1.3065629648763766
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab1_lp2",
+        "kind": "section",
+        "input": "od_cab1_lp1",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 3500.0
+        },
+        "q": {
+          "value": 0.541196100146197
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 1, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab_select",
+        "kind": "mix",
+        "inputs": [
+          "od_cab0_lp2",
+          "od_cab1_lp2"
+        ],
+        "weights": {
+          "od_cab0_lp2": {
+            "byte": "40 03 05",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 1.0,
+                "1": 0.0
+              }
+            }
+          },
+          "od_cab1_lp2": {
+            "byte": "40 03 05",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 1.0
+              }
+            }
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Amp Type state i is cab_model i, the d.enum4 modern binds to ampSim `cabModel`. The states past 1 name cab models cab_voicing does not have yet, so they read the nearest named state.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab_step",
+        "kind": "mix",
+        "inputs": [
+          "od_cab_select",
+          "od_post_curve"
+        ],
+        "weights": {
+          "od_cab_select": {
+            "value": 1.0
+          },
+          "od_post_curve": {
+            "value": -1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "What the cabinet changes, for the amp switch to add.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 06"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_post",
+        "kind": "mix",
+        "inputs": [
+          "od_post_curve",
+          "od_cab_step"
+        ],
+        "weights": {
+          "od_post_curve": {
+            "value": 1.0
+          },
+          "od_cab_step": {
+            "byte": "40 03 06",
+            "law": "d.enum2"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Amp Sw puts the cabinet after the curve, the d.enum2 modern binds to ampSim `cab`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 06"
+        ]
+      },
+      "covers": "a037ea0f6827",
+      "replaces": "od_post"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "2c210a4f5925",
+      "rationale": "The candidate's tanh holds no state; adopted as drawn.",
+      "replaced_when": {
+        "covers": "2c210a4f5925"
+      }
+    },
+    {
+      "covers": "9073d7c249c0",
+      "rationale": "The candidate carries the stereo delay's damping pole to the HF byte; adopted as drawn.",
+      "replaced_when": {
+        "covers": "9073d7c249c0"
+      }
+    }
+  ]
+}

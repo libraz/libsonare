@@ -1,0 +1,1409 @@
+{
+  "type": "02 06",
+  "what_this_is": "The enhancer path the candidate does not draw, as spectral.presenceEnhancer's structure: band-pass, drive, tanh, added to the dry signal.",
+  "entries": [
+    {
+      "node": {
+        "id": "enh_peak_l",
+        "kind": "section",
+        "input": "in_l",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_band_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_l",
+          "in_l"
+        ],
+        "weights": {
+          "enh_peak_l": {
+            "value": 0.1111111111111111
+          },
+          "in_l": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_sens_l",
+        "kind": "gain",
+        "input": "enh_band_l",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_curve_l",
+        "kind": "shaper",
+        "input": "enh_sens_l",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_l",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "enh_curve_l"
+        ],
+        "weights": {
+          "in_l": {
+            "value": 1.0
+          },
+          "enh_curve_l": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 04"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_peak_r",
+        "kind": "section",
+        "input": "in_r",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 3200.0
+        },
+        "q": {
+          "value": 0.3794733192202055
+        },
+        "gain_db": {
+          "value": 20.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_band_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_peak_r",
+          "in_r"
+        ],
+        "weights": {
+          "enh_peak_r": {
+            "value": 0.1111111111111111
+          },
+          "in_r": {
+            "value": -0.1111111111111111
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "spectral.presenceEnhancer's band: an RBJ band-pass at 3200 Hz, Q 1.2, peak 0 dB. Drawn as a +20 dB peaking section less the dry path over nine, which is that band-pass exactly when the peaking Q is 1.2 over sqrt(10).",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_sens_r",
+        "kind": "gain",
+        "input": "enh_band_r",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 03",
+          "law": "d.unit"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Sens is the enhancer's drive into its curve, the law modern binds to presenceEnhancer `drive`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_curve_r",
+        "kind": "shaper",
+        "input": "enh_sens_r",
+        "curve": "tanh",
+        "oversample": 1,
+        "drive": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "presenceEnhancer's harmonic generator, tanh of the driven band.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "enh_r",
+        "kind": "mix",
+        "inputs": [
+          "in_r",
+          "enh_curve_r"
+        ],
+        "weights": {
+          "in_r": {
+            "value": 1.0
+          },
+          "enh_curve_r": {
+            "byte": "40 03 04",
+            "law": "d.unit"
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Mix adds the harmonics to the dry signal, the law modern binds to presenceEnhancer `amount`.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 04"
+        ]
+      },
+      "covers": "a5968d6036ed"
+    },
+    {
+      "node": {
+        "id": "cho_line_l",
+        "kind": "delay",
+        "input": "enh_l",
+        "interpolation": "linear",
+        "time_ms": {
+          "byte": "40 03 08",
+          "map": {
+            "kind": "table",
+            "entries": [
+              0.0,
+              0.09375,
+              0.1875,
+              0.28125,
+              0.375,
+              0.5,
+              0.59375,
+              0.6875,
+              0.78125,
+              0.875,
+              1.0,
+              1.09375,
+              1.1875,
+              1.28125,
+              1.375,
+              1.5,
+              1.59375,
+              1.6875,
+              1.78125,
+              1.875,
+              2.0,
+              2.09375,
+              2.1875,
+              2.28125,
+              2.375,
+              2.5,
+              2.59375,
+              2.6875,
+              2.78125,
+              2.875,
+              3.0,
+              3.09375,
+              3.1875,
+              3.28125,
+              3.375,
+              3.5,
+              3.59375,
+              3.6875,
+              3.78125,
+              3.875,
+              4.0,
+              4.09375,
+              4.1875,
+              4.28125,
+              4.375,
+              4.5,
+              4.59375,
+              4.6875,
+              4.78125,
+              4.875,
+              5.0,
+              5.5,
+              6.0,
+              6.5,
+              7.0,
+              7.5,
+              8.0,
+              8.5,
+              9.0,
+              9.5,
+              10.0,
+              11.0,
+              12.0,
+              13.0,
+              14.0,
+              15.0,
+              16.0,
+              17.0,
+              18.0,
+              19.0,
+              20.0,
+              21.0,
+              22.0,
+              23.0,
+              24.0,
+              25.0,
+              26.0,
+              27.0,
+              28.0,
+              29.0,
+              30.0,
+              31.0,
+              32.0,
+              33.0,
+              34.0,
+              35.0,
+              36.0,
+              37.0,
+              38.0,
+              39.0,
+              40.0,
+              41.0,
+              42.0,
+              43.0,
+              44.0,
+              45.0,
+              46.0,
+              47.0,
+              48.0,
+              49.0,
+              50.0,
+              52.0,
+              54.0,
+              56.0,
+              58.0,
+              60.0,
+              62.0,
+              64.0,
+              66.0,
+              68.0,
+              70.0,
+              72.0,
+              74.0,
+              76.0,
+              78.0,
+              80.0,
+              82.0,
+              84.0,
+              86.0,
+              88.0,
+              90.0,
+              92.0,
+              94.0,
+              96.0,
+              98.0,
+              100.0,
+              100.0,
+              100.0
+            ],
+            "out_of_range": 127
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+            "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+          ],
+          "fitted_on": []
+        },
+        "modulated_by": {
+          "control": "cho_sweep_l",
+          "depth_ms": {
+            "byte": "40 03 0A",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  0.0
+                ],
+                [
+                  16,
+                  0.9214
+                ],
+                [
+                  32,
+                  1.8053
+                ],
+                [
+                  64,
+                  3.7309
+                ],
+                [
+                  96,
+                  6.2169
+                ],
+                [
+                  127,
+                  9.1685
+                ]
+              ]
+            },
+            "source": "measured",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0123-the-flanger-and-the-chorus-share-a-front-end.json",
+              "data/units/roland-sc8850-01/vibrato/01-42-07-what-a-depth-byte-is-worth-on-the-chorus.json",
+              "data/units/roland-sc8850-01/vibrato/01-42-07-what-a-depth-byte-is-worth-near-the-printed-pre-delay.json",
+              "data/units/roland-sc8850-01/vibrato/01-42-07-what-a-depth-byte-is-worth-well-clear-of-the-floor.json",
+              "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+            ],
+            "fitted_on": [
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "016"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "032"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "064"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "096"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "127"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "016"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "032"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "064"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "096"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "127"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "016"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "032"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "064"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "096"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "127"
+              ]
+            ]
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the chorus as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "cho_line_l"
+    },
+    {
+      "node": {
+        "id": "cho_out_l",
+        "kind": "mix",
+        "inputs": [
+          "enh_l",
+          "cho_line_l"
+        ],
+        "weights": {
+          "enh_l": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+            ],
+            "fitted_on": []
+          },
+          "cho_line_l": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the chorus as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "cho_out_l"
+    },
+    {
+      "node": {
+        "id": "cho_line_r",
+        "kind": "delay",
+        "input": "enh_r",
+        "interpolation": "linear",
+        "time_ms": {
+          "byte": "40 03 08",
+          "map": {
+            "kind": "table",
+            "entries": [
+              0.0,
+              0.09375,
+              0.1875,
+              0.28125,
+              0.375,
+              0.5,
+              0.59375,
+              0.6875,
+              0.78125,
+              0.875,
+              1.0,
+              1.09375,
+              1.1875,
+              1.28125,
+              1.375,
+              1.5,
+              1.59375,
+              1.6875,
+              1.78125,
+              1.875,
+              2.0,
+              2.09375,
+              2.1875,
+              2.28125,
+              2.375,
+              2.5,
+              2.59375,
+              2.6875,
+              2.78125,
+              2.875,
+              3.0,
+              3.09375,
+              3.1875,
+              3.28125,
+              3.375,
+              3.5,
+              3.59375,
+              3.6875,
+              3.78125,
+              3.875,
+              4.0,
+              4.09375,
+              4.1875,
+              4.28125,
+              4.375,
+              4.5,
+              4.59375,
+              4.6875,
+              4.78125,
+              4.875,
+              5.0,
+              5.5,
+              6.0,
+              6.5,
+              7.0,
+              7.5,
+              8.0,
+              8.5,
+              9.0,
+              9.5,
+              10.0,
+              11.0,
+              12.0,
+              13.0,
+              14.0,
+              15.0,
+              16.0,
+              17.0,
+              18.0,
+              19.0,
+              20.0,
+              21.0,
+              22.0,
+              23.0,
+              24.0,
+              25.0,
+              26.0,
+              27.0,
+              28.0,
+              29.0,
+              30.0,
+              31.0,
+              32.0,
+              33.0,
+              34.0,
+              35.0,
+              36.0,
+              37.0,
+              38.0,
+              39.0,
+              40.0,
+              41.0,
+              42.0,
+              43.0,
+              44.0,
+              45.0,
+              46.0,
+              47.0,
+              48.0,
+              49.0,
+              50.0,
+              52.0,
+              54.0,
+              56.0,
+              58.0,
+              60.0,
+              62.0,
+              64.0,
+              66.0,
+              68.0,
+              70.0,
+              72.0,
+              74.0,
+              76.0,
+              78.0,
+              80.0,
+              82.0,
+              84.0,
+              86.0,
+              88.0,
+              90.0,
+              92.0,
+              94.0,
+              96.0,
+              98.0,
+              100.0,
+              100.0,
+              100.0
+            ],
+            "out_of_range": 127
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+            "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+          ],
+          "fitted_on": []
+        },
+        "modulated_by": {
+          "control": "cho_sweep_r",
+          "depth_ms": {
+            "byte": "40 03 0A",
+            "map": {
+              "kind": "points",
+              "points": [
+                [
+                  0,
+                  0.0
+                ],
+                [
+                  16,
+                  0.9214
+                ],
+                [
+                  32,
+                  1.8053
+                ],
+                [
+                  64,
+                  3.7309
+                ],
+                [
+                  96,
+                  6.2169
+                ],
+                [
+                  127,
+                  9.1685
+                ]
+              ]
+            },
+            "source": "measured",
+            "rests_on": [
+              "inferences/roland-sc8850-01/0123-the-flanger-and-the-chorus-share-a-front-end.json",
+              "data/units/roland-sc8850-01/vibrato/01-42-07-what-a-depth-byte-is-worth-on-the-chorus.json",
+              "data/units/roland-sc8850-01/vibrato/01-42-07-what-a-depth-byte-is-worth-near-the-printed-pre-delay.json",
+              "data/units/roland-sc8850-01/vibrato/01-42-07-what-a-depth-byte-is-worth-well-clear-of-the-floor.json",
+              "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+            ],
+            "fitted_on": [
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "016"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "032"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "064"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "096"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-clear",
+                "127"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "016"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "032"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "064"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "096"
+              ],
+              [
+                "the-same-depth-byte-with-room-to-sweep/0142-near",
+                "127"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "016"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "032"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "064"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "096"
+              ],
+              [
+                "whether-the-two-share-a-modulator/0142",
+                "127"
+              ]
+            ]
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the chorus as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "cho_line_r"
+    },
+    {
+      "node": {
+        "id": "cho_out_r",
+        "kind": "mix",
+        "inputs": [
+          "enh_r",
+          "cho_line_r"
+        ],
+        "weights": {
+          "enh_r": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+            ],
+            "fitted_on": []
+          },
+          "cho_line_r": {
+            "byte": "40 03 0C",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json",
+              "inferences/models/0142-whole-raised-sine-filter-before-the-split.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own node, now fed by the enhancer; the candidate draws no enhancer path, so the enhancer sits in front of the chorus as modern's chain puts it.",
+      "replaced_when": {
+        "model_binding": [
+          "02 06",
+          "40 03 03"
+        ]
+      },
+      "covers": "a5968d6036ed",
+      "replaces": "cho_out_r"
+    }
+  ],
+  "covers": [
+    {
+      "covers": "776d59f2ca0d",
+      "rationale": "The candidate carries the single chorus's depth readings and moves the two sides together; adopted as drawn.",
+      "replaced_when": {
+        "covers": "776d59f2ca0d"
+      }
+    }
+  ]
+}

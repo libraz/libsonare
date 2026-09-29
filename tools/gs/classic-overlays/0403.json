@@ -1,0 +1,304 @@
+{
+  "type": "04 03",
+  "what_this_is": "The compressor's detector times from the designed laws; the delay's feedback loop.",
+  "entries": [
+    {
+      "node": {
+        "id": "cmp_detect_l",
+        "kind": "envelope",
+        "input": "in_l",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "byte": "40 03 03",
+          "law": "d.attack_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 04",
+          "law": "d.sustain_ms"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Attack and Sustain as the detector's rise and fall, the laws modern binds to compressor `attackMs` and `releaseMs`, anchored (D33) to the fitted times at the power-on bytes.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 03"
+        ]
+      },
+      "replaces": "cmp_detect_l"
+    },
+    {
+      "node": {
+        "id": "cmp_detect_r",
+        "kind": "envelope",
+        "input": "in_r",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "linear",
+        "attack_ms": {
+          "byte": "40 03 03",
+          "law": "d.attack_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 04",
+          "law": "d.sustain_ms"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Attack and Sustain as the detector's rise and fall, the laws modern binds to compressor `attackMs` and `releaseMs`, anchored (D33) to the fitted times at the power-on bytes.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 03"
+        ]
+      },
+      "replaces": "cmp_detect_r"
+    },
+    {
+      "node": {
+        "id": "dly_fb_l",
+        "kind": "gain",
+        "input": "dly_line_l",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 12",
+          "law": "d.feedback"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Dly Fb returns the line's output to its input, the law modern binds to stereo delay `feedback`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 12"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_into_l",
+        "kind": "mix",
+        "inputs": [
+          "cf_out_l",
+          "dly_fb_l"
+        ],
+        "weights": {
+          "cf_out_l": {
+            "value": 1.0
+          },
+          "dly_fb_l": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The line's input and its returned output, as the stereo delay sums them.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 12"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_damp_l",
+        "kind": "section",
+        "input": "dly_into_l",
+        "stage": "pole",
+        "side": "low",
+        "form": "one-multiply",
+        "corner_hz": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "stepped-table",
+            "entries": [
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0
+            ],
+            "per_entry": 8
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/freq-the-byte-indexes-a-third-octave-table.json",
+            "inferences/roland-sc8850-01/0150-a-damping-byte-sits-on-the-cheapest-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Clean Gt Multi 1 Dly HF, 315\u20138k/Bypass over *8",
+            "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+          ],
+          "fitted_on": []
+        },
+        "sections": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "points",
+            "points": [
+              [
+                119,
+                1
+              ],
+              [
+                120,
+                0
+              ]
+            ]
+          },
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 218: Stereo Delay HF Damp, 315-8k/Bypass, column *8",
+            "documents/roland-sc-8850-owners-manual-en/value-conversion.json pages 224-225",
+            "inferences/roland-sc8850-01/0150-a-damping-byte-sits-on-the-cheapest-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Clean Gt Multi 1 Dly HF, 315\u20138k/Bypass over *8",
+            "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own delay path, now fed from the loop's sum.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 12"
+        ]
+      },
+      "replaces": "dly_damp_l"
+    },
+    {
+      "node": {
+        "id": "dly_fb_r",
+        "kind": "gain",
+        "input": "dly_line_r",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 12",
+          "law": "d.feedback"
+        }
+      },
+      "basis": "invented",
+      "rationale": "Dly Fb returns the line's output to its input, the law modern binds to stereo delay `feedback`.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 12"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_into_r",
+        "kind": "mix",
+        "inputs": [
+          "cf_out_r",
+          "dly_fb_r"
+        ],
+        "weights": {
+          "cf_out_r": {
+            "value": 1.0
+          },
+          "dly_fb_r": {
+            "value": 1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The line's input and its returned output, as the stereo delay sums them.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 12"
+        ]
+      }
+    },
+    {
+      "node": {
+        "id": "dly_damp_r",
+        "kind": "section",
+        "input": "dly_into_r",
+        "stage": "pole",
+        "side": "low",
+        "form": "one-multiply",
+        "corner_hz": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "stepped-table",
+            "entries": [
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0
+            ],
+            "per_entry": 8
+          },
+          "source": "law",
+          "rests_on": [
+            "inferences/roland-sc8850-01/freq-the-byte-indexes-a-third-octave-table.json",
+            "inferences/roland-sc8850-01/0150-a-damping-byte-sits-on-the-cheapest-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Clean Gt Multi 1 Dly HF, 315\u20138k/Bypass over *8",
+            "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+          ],
+          "fitted_on": []
+        },
+        "sections": {
+          "byte": "40 03 13",
+          "map": {
+            "kind": "points",
+            "points": [
+              [
+                119,
+                1
+              ],
+              [
+                120,
+                0
+              ]
+            ]
+          },
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 218: Stereo Delay HF Damp, 315-8k/Bypass, column *8",
+            "documents/roland-sc-8850-owners-manual-en/value-conversion.json pages 224-225",
+            "inferences/roland-sc8850-01/0150-a-damping-byte-sits-on-the-cheapest-pole.json",
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 221: Clean Gt Multi 1 Dly HF, 315\u20138k/Bypass over *8",
+            "inferences/models/0150-whole-phase-on-the-way-out-loop-a-sample-late.json"
+          ],
+          "fitted_on": []
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's own delay path, now fed from the loop's sum.",
+      "replaced_when": {
+        "model_binding": [
+          "04 03",
+          "40 03 12"
+        ]
+      },
+      "replaces": "dly_damp_r"
+    }
+  ]
+}
