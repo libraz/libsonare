@@ -763,6 +763,38 @@ def generate_yin_reference():
     return refs
 
 
+def generate_yin_high_rate_reference():
+    """YIN and pYIN at 96 kHz with the default 2048-sample frame and fmin 65 Hz.
+
+    sr / fmin = 1477 sits between frame_length / 2 and frame_length - 1, where
+    librosa searches periods out to ceil(sr / fmin) (and only warns), so a
+    70 Hz tone is inside the searched range.
+    """
+    sr = 96000
+    frame_length = 2048
+    hop_length = 512
+    fmin = 65.0
+    fmax = 2093.0
+    y = librosa.tone(70.0, sr=sr, duration=1.0)
+    f0_yin = librosa.yin(
+        y, fmin=fmin, fmax=fmax, sr=sr, frame_length=frame_length, hop_length=hop_length
+    )
+    f0_pyin, voiced_flag, _ = librosa.pyin(
+        y, fmin=fmin, fmax=fmax, sr=sr, frame_length=frame_length, hop_length=hop_length
+    )
+    return {
+        "signal": "70Hz_tone",
+        "sr": sr,
+        "fmin": fmin,
+        "fmax": fmax,
+        "frame_length": frame_length,
+        "hop_length": hop_length,
+        "yin_f0": f0_yin.tolist(),
+        "pyin_f0": np.nan_to_num(f0_pyin, nan=0.0).tolist(),
+        "pyin_voiced": voiced_flag.astype(int).tolist(),
+    }
+
+
 def generate_pyin_reference():
     """pYIN pitch detection reference."""
     sr = 22050
@@ -2116,6 +2148,7 @@ def main():
         "cqt_family": generate_cqt_family_reference(),
         "yin": generate_yin_reference(),
         "pyin": generate_pyin_reference(),
+        "yin_high_rate": generate_yin_high_rate_reference(),
         "hpss": generate_hpss_reference(),
         "beat": generate_beat_reference(),
         "db_conversion": generate_db_conversion_reference(),

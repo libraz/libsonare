@@ -1024,3 +1024,26 @@ TEST_CASE("piptrack does not report a positive pitch with a non-finite magnitude
     REQUIRE(counts.second == 0);
   }
 }
+
+TEST_CASE("YIN and pYIN refuse the parameters librosa refuses", "[pitch]") {
+  // librosa raises ParameterError when one period of fmin does not fit in the
+  // frame (sr / fmin >= frame_length - 1) and when fmax exceeds Nyquist.
+  std::vector<float> samples(96000, 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = std::sin(0.01f * static_cast<float>(i));
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 96000);
+  PitchConfig too_low;
+  too_low.fmin = 40.0f;  // 96000 / 40 = 2400 >= 2047
+  REQUIRE_THROWS_AS(yin_track(audio, too_low), SonareException);
+  REQUIRE_THROWS_AS(pyin(audio, too_low), SonareException);
+  PitchConfig above_nyquist;
+  above_nyquist.fmin = 65.0f;
+  above_nyquist.fmax = 60000.0f;
+  REQUIRE_THROWS_AS(yin_track(audio, above_nyquist), SonareException);
+  REQUIRE_THROWS_AS(pyin(audio, above_nyquist), SonareException);
+  // The 96 kHz default (sr / fmin = 1477) is inside librosa's range.
+  PitchConfig defaults;
+  REQUIRE_NOTHROW(yin_track(audio, defaults));
+  REQUIRE_NOTHROW(pyin(audio, defaults));
+}

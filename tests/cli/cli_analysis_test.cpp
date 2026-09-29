@@ -553,16 +553,15 @@ TEST_CASE("CLI pitch command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("invalid value for --algorithm"));
   }
 
-  SECTION("zero-frame frequency range emits a nullable voiced ratio") {
-    const std::string short_wav = unique_temp_path("_pitch_zero_frames.wav");
+  SECTION("an fmin whose period does not fit the frame is refused, as librosa refuses it") {
+    // 22050 / 5 = 4410 samples does not fit a 2048-sample frame. This used to
+    // run with the period search silently clipped and report zero frames.
+    const std::string short_wav = unique_temp_path("_pitch_infeasible_fmin.wav");
     create_test_wav(short_wav, 0.02f, 440.0f);
     auto [code, output] =
         exec_command(CLI + " pitch " + short_wav + " --fmin 5 --fmax 10 --json -q");
-    REQUIRE(code == 0);
-    const auto payload = sonare::util::json::parse_strict(output);
-    REQUIRE(payload["n_frames"].as_int() == 0);
-    REQUIRE(payload["voiced_count"].as_int() == 0);
-    REQUIRE(payload["voiced_ratio"].is_null());
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("fmin=5 is too small for frame_length=2048"));
     std::remove(short_wav.c_str());
   }
 }

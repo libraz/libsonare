@@ -241,8 +241,9 @@ float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff,
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / fmax));
   int max_period = static_cast<int>(std::ceil(static_cast<float>(sr) / fmin));
 
-  // Limit max_period to half frame length
-  max_period = std::min(max_period, frame_length / 2);
+  // librosa.yin's clip: the difference function is defined out to the last lag
+  // the frame holds.
+  max_period = std::min(max_period, frame_length - 1);
 
   if (min_period >= max_period || max_period < 2) {
     *out_confidence = 0.0f;
@@ -303,6 +304,29 @@ float yin_with_confidence(const float* frame, int frame_length, int sr, float fm
                                  out_confidence);
 }
 
+namespace {
+
+/// @brief librosa's __check_yin_params: the checks that need the sample rate.
+/// @details fmax may not exceed Nyquist, and one period of fmin has to fit in
+///          the frame (sr / fmin < frame_length - 1). librosa warns, and does not
+///          raise, when fewer than two periods fit.
+void check_yin_rate_params(int sr, const PitchConfig& config) {
+  const float nyquist = 0.5f * static_cast<float>(sr);
+  SONARE_CHECK_MSG(config.fmax <= nyquist, ErrorCode::InvalidParameter,
+                   "fmax=" + util::to_text(config.fmax) + " cannot exceed Nyquist frequency " +
+                       util::to_text(nyquist));
+  const double periods = static_cast<double>(sr) / static_cast<double>(config.fmin);
+  SONARE_CHECK_MSG(
+      periods < static_cast<double>(config.frame_length - 1), ErrorCode::InvalidParameter,
+      "fmin=" + util::to_text(config.fmin) +
+          " is too small for frame_length=" + std::to_string(config.frame_length) +
+          " and sr=" + std::to_string(sr) + ". Either increase to fmin=" +
+          util::to_text(static_cast<float>(sr) / static_cast<float>(config.frame_length - 1)) +
+          " or frame_length=" + std::to_string(static_cast<int>(std::ceil(periods)) + 1));
+}
+
+}  // namespace
+
 PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
   SONARE_CHECK_MSG(config.frame_length > 0, ErrorCode::InvalidParameter,
@@ -326,6 +350,7 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
                    "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
 
   int sr = audio.sample_rate();
+  check_yin_rate_params(sr, config);
   std::vector<float> padded;
   const float* data = audio.data();
   size_t signal_samples = audio.size();
@@ -400,6 +425,7 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
                    "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
 
   int sr = audio.sample_rate();
+  check_yin_rate_params(sr, config);
   std::vector<float> padded;
   const float* data = audio.data();
   size_t signal_samples = audio.size();
@@ -424,10 +450,9 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   // Convert frequency to period
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / config.fmax));
   int max_period = static_cast<int>(std::ceil(static_cast<float>(sr) / config.fmin));
-  // Cap at frame_length / 2: lags beyond half the frame leave too few samples in
-  // the difference window to be reliable (matches yin_with_confidence). The old
-  // `frame_length - 1` cap admitted near-1-sample lags from a single product.
-  max_period = std::min(max_period, config.frame_length / 2);
+  // librosa.pyin's clip, the same as yin_with_confidence's. pyin() refuses an fmin
+  // whose period does not fit the frame, so the clip only bites through rounding.
+  max_period = std::min(max_period, config.frame_length - 1);
 
   if (min_period >= max_period) {
     return PitchResult();

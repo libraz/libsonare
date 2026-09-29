@@ -351,3 +351,53 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
     REQUIRE(probability_correlation >= min_probability_correlation);
   }
 }
+
+TEST_CASE("YIN and pYIN search librosa's period range at 96 kHz", "[pitch][reference]") {
+  // sr / fmin = 1477 with a 2048-sample frame: librosa searches out to
+  // ceil(sr / fmin), past half the frame, so a 70 Hz tone is in range.
+  auto json = JsonReader::parse_file("tests/librosa/reference/yin_high_rate.json");
+  const auto& data = json["data"];
+  const int sr = data["sr"].as_int();
+  std::vector<float> samples(static_cast<size_t>(sr));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = static_cast<float>(std::cos(kTwoPiD * 70.0 * static_cast<double>(i) / sr));
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sr);
+  PitchConfig config;
+  config.fmin = data["fmin"].as_float();
+  config.fmax = data["fmax"].as_float();
+  config.frame_length = data["frame_length"].as_int();
+  config.hop_length = data["hop_length"].as_int();
+  const auto median_of = [](std::vector<float> v) {
+    std::sort(v.begin(), v.end());
+    return v.empty() ? 0.0f : v[v.size() / 2];
+  };
+
+  const auto& ref_yin = data["yin_f0"].as_array();
+  std::vector<float> want_yin;
+  for (const auto& v : ref_yin) want_yin.push_back(v.as_float());
+  const PitchResult yin = yin_track(audio, config);
+  REQUIRE(yin.f0.size() == want_yin.size());
+  std::vector<float> got_yin;
+  for (size_t i = 0; i < yin.f0.size(); ++i) {
+    if (std::isfinite(yin.f0[i]) && yin.f0[i] > 0.0f) got_yin.push_back(yin.f0[i]);
+  }
+  INFO("yin median " << median_of(got_yin) << " Hz, librosa " << median_of(want_yin) << " Hz");
+  CHECK(std::abs(median_of(got_yin) / median_of(want_yin) - 1.0f) < 0.01f);
+
+  const auto& ref_f0 = data["pyin_f0"].as_array();
+  const auto& ref_voiced = data["pyin_voiced"].as_array();
+  std::vector<float> want_pyin;
+  for (size_t i = 0; i < ref_f0.size(); ++i) {
+    if (ref_voiced[i].as_int() != 0) want_pyin.push_back(ref_f0[i].as_float());
+  }
+  const PitchResult pyin_result = pyin(audio, config);
+  std::vector<float> got_pyin;
+  for (size_t i = 0; i < pyin_result.f0.size(); ++i) {
+    if (pyin_result.voiced_flag[i] && pyin_result.f0[i] > 0.0f)
+      got_pyin.push_back(pyin_result.f0[i]);
+  }
+  REQUIRE(!want_pyin.empty());
+  INFO("pyin median " << median_of(got_pyin) << " Hz, librosa " << median_of(want_pyin) << " Hz");
+  CHECK(std::abs(median_of(got_pyin) / median_of(want_pyin) - 1.0f) < 0.01f);
+}

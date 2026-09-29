@@ -698,7 +698,11 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 /// @brief Estimate f0 with YIN.
 /// @details Like librosa.yin, every complete frame receives a finite frequency estimate;
 /// voiced_flag reports whether the threshold was crossed. fill_na is retained for ABI
-/// compatibility and has no effect on YIN output.
+/// compatibility and has no effect on YIN output. Periods are searched from
+/// floor(sample_rate / fmax) to min(ceil(sample_rate / fmin), frame_length - 1), and
+/// the librosa ParameterError cases are rejected with @c SONARE_ERROR_INVALID_PARAMETER:
+/// @p fmax above Nyquist, and an @p fmin whose period does not fit the frame
+/// (sample_rate / fmin >= frame_length - 1).
 /// @param threshold Aperiodicity cutoff on the cumulative mean normalized
 ///   difference function: a frame is voiced when its first CMNDF minimum falls
 ///   below this. NOT a level in the units of @p samples -- the CMNDF is
@@ -723,6 +727,8 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 ///   @c SONARE_ERROR_INVALID_PARAMETER. 0.1 is the library default and
 ///   librosa's.
 /// @param fill_na If non-zero, return 0 for unvoiced pYIN f0 frames; otherwise keep NaN.
+/// @details The period range and the rejected @p fmin / @p fmax combinations are
+///   those of @ref sonare_pitch_yin (librosa.pyin's).
 /// @note @c out->voiced_flag is the voicing decision — the Viterbi path's
 ///       voiced/unvoiced state — and is what a consumer should gate on.
 ///
