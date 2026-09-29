@@ -300,10 +300,15 @@ TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[
   int sr = 22050;
   int n_fft = 1024;
 
+  // The first handle is held for the whole case, as the mel-cache test does: a
+  // released entry's storage can be recycled for its rebuild, so comparing
+  // against a freed address passes or fails by what malloc hands back. Held, the
+  // original allocation stays live and the comparison is decided by the cache.
   ChromaFilterConfig first;
   first.n_chroma = 12;
   first.tuning = 0.0f;
-  const void* first_ptr = get_chroma_filterbank_cached(sr, n_fft, first)->data();
+  const auto first_handle = get_chroma_filterbank_cached(sr, n_fft, first);
+  const void* first_ptr = first_handle->data();
 
   // Pressure-test by inserting more distinct keys than the cap. The chroma
   // cache uses kMaxChromaCacheSize = 8 today; the test only requires eviction
@@ -316,8 +321,10 @@ TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[
     (void)get_chroma_filterbank_cached(sr, n_fft, c);
   }
 
-  const void* first_ptr_after = get_chroma_filterbank_cached(sr, n_fft, first)->data();
-  REQUIRE(first_ptr_after != first_ptr);
+  const auto rebuilt_handle = get_chroma_filterbank_cached(sr, n_fft, first);
+  REQUIRE(rebuilt_handle->data() != first_ptr);
+  // The evicted handle still describes the same filterbank it was built with.
+  REQUIRE(*rebuilt_handle == *first_handle);
 }
 
 TEST_CASE("get_chroma_filterbank_cached promotes on hit (true LRU)", "[chroma][cache]") {
@@ -327,10 +334,13 @@ TEST_CASE("get_chroma_filterbank_cached promotes on hit (true LRU)", "[chroma][c
   int n_fft = 1024;
 
   // Pick distinct keys via `tuning` deltas so we don't change filterbank shape.
+  // A's handle is held throughout so a wrongly evicted A could not be rebuilt at
+  // the same address and pass the comparisons below.
   ChromaFilterConfig a;
   a.n_chroma = 12;
   a.tuning = 0.0f;
-  const void* a_ptr = get_chroma_filterbank_cached(sr, n_fft, a)->data();
+  const auto a_handle = get_chroma_filterbank_cached(sr, n_fft, a);
+  const void* a_ptr = a_handle->data();
 
   // Fill the remaining slots (cap-1 = 7 today).
   constexpr int kFill = 7;
