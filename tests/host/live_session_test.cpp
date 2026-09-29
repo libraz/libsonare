@@ -125,8 +125,7 @@ TEST_CASE("LiveSession opens an audio output with no MIDI input", "[host][live][
 
   const LiveOpenResult result = session.open(&engine, config);
   if (result == LiveOpenResult::kAudioOutputUnavailable) {
-    SUCCEED("no audio output device available; skipping");
-    return;
+    SKIP("no audio output device available; skipping");
   }
   // A machine with no MIDI source at all must still reach a running session,
   // which is the whole point of the configuration.
@@ -181,8 +180,7 @@ TEST_CASE("LiveSession's reported latency tracks the block size it negotiated", 
   const Reading large = measure(512);
   if (small.result == LiveOpenResult::kAudioOutputUnavailable ||
       large.result == LiveOpenResult::kAudioOutputUnavailable) {
-    SUCCEED("no audio output device available; skipping");
-    return;
+    SKIP("no audio output device available; skipping");
   }
   REQUIRE(small.result == LiveOpenResult::kOk);
   REQUIRE(large.result == LiveOpenResult::kOk);
@@ -197,9 +195,8 @@ TEST_CASE("LiveSession's reported latency tracks the block size it negotiated", 
     // The driver held one buffer size across both requests, so the term under
     // test never varied. Reporting this as a pass would record a measurement
     // that did not happen.
-    WARN("device would not change its block size (" << small.block
+    SKIP("device would not change its block size (" << small.block
                                                     << " frames); difference not measured");
-    return;
   }
   const double expected_ms = static_cast<double>(large.block - small.block) * 1000.0 / small.rate;
   REQUIRE(large.latency_ms - small.latency_ms == Catch::Approx(expected_ms).margin(0.05));
@@ -221,8 +218,7 @@ TEST_CASE("LiveSession runs a minute of 128-frame blocks without a dropout",
 
   const LiveOpenResult result = session.open(&engine, config);
   if (result == LiveOpenResult::kAudioOutputUnavailable) {
-    SUCCEED("no audio output device available; skipping");
-    return;
+    SKIP("no audio output device available; skipping");
   }
   REQUIRE(result == LiveOpenResult::kOk);
   REQUIRE(session.is_running());

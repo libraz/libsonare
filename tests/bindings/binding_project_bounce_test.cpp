@@ -75,7 +75,7 @@ TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI"
 
 TEST_CASE("channel-strip project bounce shares the live destination voice pool", "[project]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("channel-strip bounce requires the mixing build");
+  SKIP("channel-strip bounce requires the mixing build");
 #else
   constexpr int kSampleRate = 48000;
   constexpr int kBlockSize = 128;
@@ -180,7 +180,7 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
 
 TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[project]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("source-aware channel-strip bounce requires the mixing build");
+  SKIP("source-aware channel-strip bounce requires the mixing build");
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -296,7 +296,7 @@ TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[proj
 
 TEST_CASE("shared opaque automation keeps the first project-order owner", "[project]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("shared channel-strip bounce requires the mixing build");
+  SKIP("shared channel-strip bounce requires the mixing build");
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -383,7 +383,7 @@ TEST_CASE("shared opaque automation keeps the first project-order owner", "[proj
 
 TEST_CASE("auto-length bounce keeps both tracks of a shared MIDI destination", "[project]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("channel-strip bounce requires the mixing build");
+  SKIP("channel-strip bounce requires the mixing build");
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -485,7 +485,7 @@ TEST_CASE("auto-length bounce keeps both tracks of a shared MIDI destination", "
 
 TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", "[project]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("channel-strip bounce requires the mixing build");
+  SKIP("channel-strip bounce requires the mixing build");
 #else
   // Builds a project whose single strip-bound track carries one opaque fader
   // lane with `point_count` breakpoints, bounces it, and returns the resulting
@@ -587,7 +587,7 @@ TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", 
 
 TEST_CASE("channel-strip bounce rejects a shared opaque callback destination", "[project]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("channel-strip bounce requires the mixing build");
+  SKIP("channel-strip bounce requires the mixing build");
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

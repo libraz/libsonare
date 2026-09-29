@@ -15,6 +15,7 @@ a missing file and on a JSON root that is not an object.
 
 from __future__ import annotations
 
+import functools
 import json
 import math
 import os
@@ -50,6 +51,21 @@ def _native_cli() -> Path | None:
     return None
 
 
+def _run_cli(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a CLI from the repo root with the in-tree Python package importable.
+
+    Mirrors tools/conformance/check_cli_contract.py, which puts
+    ``bindings/python/src`` on PYTHONPATH so the Python front end resolves the
+    source tree rather than whatever an interpreter happens to have installed.
+    """
+    environment = os.environ.copy()
+    python_src = str(ROOT / "bindings" / "python" / "src")
+    environment["PYTHONPATH"] = python_src + os.pathsep + environment.get("PYTHONPATH", "")
+    return subprocess.run(
+        argv, capture_output=True, text=True, cwd=ROOT, env=environment, check=False
+    )
+
+
 def _python_cli_argv() -> list[str]:
     """The Python CLI invocation, preferring the installed console script.
 
@@ -61,6 +77,27 @@ def _python_cli_argv() -> list[str]:
     if script.is_file():
         return [str(script)]
     return [sys.executable, "-m", "libsonare.cli"]
+
+
+@functools.lru_cache(maxsize=1)
+def _python_library_error() -> str | None:
+    """Why the in-tree Python front end cannot load libsonare, or None if it can."""
+    probe = _run_cli(
+        [sys.executable, "-c", "from libsonare._ffi import load_library; load_library()"]
+    )
+    return None if probe.returncode == 0 else (probe.stderr.strip().splitlines() or ["failed"])[-1]
+
+
+def _python_cli_or_skip(test: unittest.TestCase) -> list[str]:
+    """The Python CLI invocation, skipping the test when no library is built.
+
+    The build-free CI gate has neither front end; the native half skips on a
+    missing binary, and this is the same rule for the Python half.
+    """
+    error = _python_library_error()
+    if error is not None:
+        test.skipTest(f"libsonare shared library not loadable: {error}")
+    return _python_cli_argv()
 
 
 def _write_surround_wav(path: Path) -> None:
@@ -124,7 +161,7 @@ class PlaybackCliDiagnosticsTest(unittest.TestCase):
         _write_mono_full_scale_wav(self.loud_wav)
 
     def _run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(argv, capture_output=True, text=True, cwd=ROOT, check=False)
+        return _run_cli(argv)
 
     def _assert_diagnostics_reflect_the_render(self, run_prefix: list[str], output: Path) -> None:
         result = self._run(
@@ -155,7 +192,7 @@ class PlaybackCliDiagnosticsTest(unittest.TestCase):
 
     def test_python_json_diagnostics_reflect_the_render(self) -> None:
         self._assert_diagnostics_reflect_the_render(
-            _python_cli_argv(), Path(self._tmp.name) / "python-loud.wav"
+            _python_cli_or_skip(self), Path(self._tmp.name) / "python-loud.wav"
         )
 
 
@@ -178,7 +215,7 @@ class PlaybackCliConfigRefusalTest(unittest.TestCase):
         self.missing_config = Path(self._tmp.name) / "does-not-exist.json"
 
     def _run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(argv, capture_output=True, text=True, cwd=ROOT, check=False)
+        return _run_cli(argv)
 
     def _assert_refused(self, run_prefix: list[str], config_path: Path, output: Path) -> None:
         result = self._run(
@@ -213,12 +250,14 @@ class PlaybackCliConfigRefusalTest(unittest.TestCase):
 
     def test_python_refuses_missing_config_file(self) -> None:
         self._assert_refused(
-            _python_cli_argv(), self.missing_config, Path(self._tmp.name) / "python-missing.wav"
+            _python_cli_or_skip(self),
+            self.missing_config,
+            Path(self._tmp.name) / "python-missing.wav",
         )
 
     def test_python_refuses_non_object_config_root(self) -> None:
         self._assert_refused(
-            _python_cli_argv(),
+            _python_cli_or_skip(self),
             self.non_object_config,
             Path(self._tmp.name) / "python-non-object.wav",
         )
@@ -232,7 +271,7 @@ class PlaybackCliTest(unittest.TestCase):
         _write_surround_wav(self.surround_wav)
 
     def _run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(argv, capture_output=True, text=True, cwd=ROOT, check=False)
+        return _run_cli(argv)
 
     def _assert_target_writes(
         self, run_prefix: list[str], target: str, expected_channels: int, output: Path
@@ -262,12 +301,15 @@ class PlaybackCliTest(unittest.TestCase):
 
     def test_python_headphones_output_is_stereo(self) -> None:
         self._assert_target_writes(
-            _python_cli_argv(), "headphones", 2, Path(self._tmp.name) / "python-headphones.wav"
+            _python_cli_or_skip(self),
+            "headphones",
+            2,
+            Path(self._tmp.name) / "python-headphones.wav",
         )
 
     def test_python_seven_one_output_is_extensible(self) -> None:
         self._assert_target_writes(
-            _python_cli_argv(), "7.1", 8, Path(self._tmp.name) / "python-71.wav"
+            _python_cli_or_skip(self), "7.1", 8, Path(self._tmp.name) / "python-71.wav"
         )
 
 

@@ -1297,8 +1297,7 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
 
   const std::string fdn = sonare_mastering_insert_param_info("effects.reverb.fdn");
   if (fdn == "[]") {
-    SUCCEED("FX processors not built; realtime reverb descriptors unavailable");
-    return;
+    SKIP("FX processors not built; realtime reverb descriptors unavailable");
   }
   // dryWet is realtime-safe and exposed with its integer id.
   REQUIRE(fdn.find("\"name\":\"dryWet\"") != std::string::npos);
@@ -1317,12 +1316,10 @@ TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix
           "[c_api][engine]") {
 #if defined(SONARE_WITH_MASTERING)
   if (std::string(sonare_mastering_insert_param_info("effects.reverb.fdn")) == "[]") {
-    SUCCEED("FX processors not built");
-    return;
+    SKIP("FX processors not built");
   }
 #else
-  SUCCEED("mastering support not built");
-  return;
+  SKIP("mastering support not built");
 #endif
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
@@ -1630,7 +1627,7 @@ TEST_CASE("sonare_engine lane send timing taps pre or post fader", "[c_api][engi
   REQUIRE(pre_rms > 0.1);
   REQUIRE(pre_rms > post_rms * 5.0);
 #else
-  SUCCEED("mixing feature not built");
+  SKIP("mixing feature not built");
 #endif
 }
 

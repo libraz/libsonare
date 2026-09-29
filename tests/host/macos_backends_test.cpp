@@ -174,8 +174,7 @@ TEST_CASE("CoreMIDI live endpoint round-trip", "[host][coremidi][.]") {
   using sonare::host::backends::CoreMidiOutput;
   // Requires at least one source and destination present on the host.
   if (CoreMidiInput::source_count() == 0 || CoreMidiOutput::destination_count() == 0) {
-    SUCCEED("no CoreMIDI endpoints present; skipping live round-trip");
-    return;
+    SKIP("no CoreMIDI endpoints present; skipping live round-trip");
   }
   CoreMidiOutput output;
   REQUIRE(output.open(0));
@@ -292,8 +291,7 @@ TEST_CASE("CoreMIDI input keeps manual injection available while a live source i
   using sonare::host::backends::CoreMidiInput;
   // Requires at least one source present on the host.
   if (CoreMidiInput::source_count() == 0) {
-    SUCCEED("no CoreMIDI sources present; skipping live injection check");
-    return;
+    SKIP("no CoreMIDI sources present; skipping live injection check");
   }
   CoreMidiInput input;
   REQUIRE(input.open(0));
@@ -455,8 +453,7 @@ TEST_CASE("AU host enumerates and renders a system instrument", "[host][au][.]")
   using sonare::host::backends::AuInstrumentProvider;
   const auto instruments = AuInstrumentProvider::enumerate(sonare::host::PluginKind::kInstrument);
   if (instruments.empty()) {
-    SUCCEED("no Audio Unit instruments installed; skipping render");
-    return;
+    SKIP("no Audio Unit instruments installed; skipping render");
   }
   AuInstrumentProvider provider;
   const auto& desc = instruments.front();
@@ -489,8 +486,7 @@ TEST_CASE("AU host renders mono then stereo without audio-thread reconfiguration
   using sonare::host::backends::AuInstrumentProvider;
   const auto instruments = AuInstrumentProvider::enumerate(sonare::host::PluginKind::kInstrument);
   if (instruments.empty()) {
-    SUCCEED("no Audio Unit instruments installed; skipping mono render");
-    return;
+    SKIP("no Audio Unit instruments installed; skipping mono render");
   }
   AuInstrumentProvider provider;
   auto instrument = provider.create_instrument(instruments.front());
@@ -531,8 +527,7 @@ TEST_CASE("AU host parameter enumeration is consistent across the cached instanc
     }
   }
   if (with_params == nullptr) {
-    SUCCEED("no AU instrument with parameters installed; skipping cache-consistency check");
-    return;
+    SKIP("no AU instrument with parameters installed; skipping cache-consistency check");
   }
 
   const size_t count = provider.parameter_count(*with_params);
@@ -577,8 +572,7 @@ TEST_CASE("AU host descriptors carry the units the installed plugins publish", "
     }
   }
   if (parameters_seen == 0) {
-    SUCCEED("no Audio Unit effect parameters installed; skipping unit translation check");
-    return;
+    SKIP("no Audio Unit effect parameters installed; skipping unit translation check");
   }
   REQUIRE(non_generic_units > 0);
 }
@@ -632,8 +626,7 @@ TEST_CASE("CoreAudio opens the default output device", "[host][coreaudio][.]") {
   CoreAudioDevice device;
   SineCallback callback;
   if (!device.open(config, &callback)) {
-    SUCCEED("no default output device available; skipping");
-    return;
+    SKIP("no default output device available; skipping");
   }
   REQUIRE(device.start());
   REQUIRE(device.is_running());
@@ -701,8 +694,7 @@ TEST_CASE("CoreAudio xrun telemetry spans the whole open, not one start", "[host
   CoreAudioDevice device;
   SineCallback callback;
   if (!device.open(config, &callback)) {
-    SUCCEED("no default output device available; skipping");
-    return;
+    SKIP("no default output device available; skipping");
   }
   // A real dropout cannot be provoked on demand, so the count is seeded through
   // the test seam; it is the same counter the render callback increments.

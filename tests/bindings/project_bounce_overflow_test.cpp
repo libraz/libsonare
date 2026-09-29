@@ -170,7 +170,7 @@ TEST_CASE("project bounce keeps the nonpositive total-frames sentinel including 
 
 TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[project][overflow]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("channel-strip bounce requires the mixing build");
+  SKIP("channel-strip bounce requires the mixing build");
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -204,7 +204,7 @@ TEST_CASE("project bounce rejects oversized channel-strip stem shapes", "[projec
 
 TEST_CASE("project bounce rejects oversized MIDI source-stem shapes", "[project][overflow]") {
 #if !defined(SONARE_WITH_MIXING)
-  SUCCEED("source-aware channel-strip bounce requires the mixing build");
+  SKIP("source-aware channel-strip bounce requires the mixing build");
 #else
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

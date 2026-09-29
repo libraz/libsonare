@@ -233,8 +233,33 @@ TEST_CASE("MelodyAnalyzer short audio", "[melody_analyzer]") {
   MelodyConfig config;
   MelodyAnalyzer analyzer(audio, config);
 
-  // Should still work without crashing
-  (void)analyzer.count();
+  // Plain YIN frames left-aligned windows that fit entirely: 4410 samples,
+  // 2048-sample frames, 256-sample hop.
+  const size_t expected =
+      (audio.size() - static_cast<size_t>(config.frame_length)) / config.hop_length + 1;
+  REQUIRE(analyzer.count() == expected);
+  std::vector<float> voiced;
+  for (size_t i = 0; i < analyzer.count(); ++i) {
+    const PitchPoint& point = analyzer.contour().pitches[i];
+    CAPTURE(i, point.time, point.frequency, point.confidence);
+    CHECK_THAT(point.time, WithinAbs(static_cast<float>(i * config.hop_length) / 22050.0f, 1e-6f));
+    CHECK(std::isfinite(point.frequency));
+    CHECK((point.frequency == 0.0f ||
+           (point.frequency >= config.fmin && point.frequency <= config.fmax)));
+    CHECK(point.confidence >= 0.0f);
+    CHECK(point.confidence <= 1.0f);
+    if (point.frequency > 0.0f) voiced.push_back(point.frequency);
+  }
+  // Every frame of a steady tone is voiced at its pitch.
+  REQUIRE(voiced.size() == analyzer.count());
+  CHECK_THAT(analyzer.mean_frequency(), WithinRel(440.0f, 0.01f));
+}
+
+TEST_CASE("MelodyAnalyzer audio shorter than one frame yields no frames", "[melody_analyzer]") {
+  Audio audio = generate_sine_audio(440.0f, 22050, 0.05f, 0.8f);  // 1102 < 2048 samples
+  MelodyAnalyzer analyzer(audio, MelodyConfig());
+  CHECK(analyzer.count() == 0);
+  CHECK_FALSE(analyzer.has_melody());
 }
 
 TEST_CASE("MelodyAnalyzer different frequencies", "[melody_analyzer]") {

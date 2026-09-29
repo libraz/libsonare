@@ -202,8 +202,7 @@ TEST_CASE("every strip in a suggested scene reaches the master", "[mixing][assis
   const auto result = sonare::mixing::assistant::suggest_scene(fixture.inputs());
   const auto& scene = result.scene;
   if (scene.connections.empty()) {
-    SUCCEED("structure suggestions are disabled in this build");
-    return;
+    SKIP("structure suggestions are disabled in this build");
   }
 
   for (const auto& strip : scene.strips) {

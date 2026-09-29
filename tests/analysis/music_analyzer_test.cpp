@@ -412,8 +412,21 @@ TEST_CASE("MusicAnalyzer melody analyzer", "[music_analyzer]") {
 
   auto& melody = analyzer.melody_analyzer();
 
-  // Just verify it doesn't crash
-  (void)melody.count();
+  // The melody view runs plain YIN at the analyzer's hop over 2048-sample frames.
+  const MelodyConfig defaults;
+  const int hop = MusicAnalyzerConfig().hop_length;
+  const size_t expected = (audio.size() - static_cast<size_t>(defaults.frame_length)) / hop + 1;
+  REQUIRE(melody.count() == expected);
+  for (size_t i = 0; i < melody.count(); ++i) {
+    const PitchPoint& point = melody.contour().pitches[i];
+    CAPTURE(i, point.time, point.frequency, point.confidence);
+    CHECK_THAT(point.time, WithinAbs(static_cast<float>(i * hop) / audio.sample_rate(), 1e-5f));
+    CHECK(std::isfinite(point.frequency));
+    CHECK((point.frequency == 0.0f ||
+           (point.frequency >= defaults.fmin && point.frequency <= defaults.fmax)));
+    CHECK(point.confidence >= 0.0f);
+    CHECK(point.confidence <= 1.0f);
+  }
 }
 
 TEST_CASE("AnalysisResult struct", "[music_analyzer]") {
@@ -548,12 +561,12 @@ TEST_CASE("MusicAnalyzer precompute then lazy access", "[.][slow][music_analyzer
   REQUIRE(analyzer.key_analyzer().key().confidence >= 0.0f);
   REQUIRE(analyzer.timbre_analyzer().brightness() >= 0.0f);
   REQUIRE(analyzer.dynamics_analyzer().dynamics().dynamic_range_db >= 0.0f);
-  // count() returns size_t; just verify the calls succeed without throwing
-  (void)analyzer.beat_analyzer().count();
-  (void)analyzer.chord_analyzer().count();
+  // The lazy views are the ones analyze() copied its lists from.
+  CHECK(analyzer.beat_analyzer().count() == result.beats.size());
+  CHECK(analyzer.chord_analyzer().count() == result.chords.size());
   REQUIRE(!analyzer.rhythm_analyzer().groove_type().empty());
-  (void)analyzer.section_analyzer().count();
-  (void)analyzer.melody_analyzer().count();
+  CHECK(analyzer.section_analyzer().count() == result.sections.size());
+  CHECK(analyzer.melody_analyzer().count() == result.melody.pitches.size());
 }
 
 TEST_CASE("MusicAnalyzer reports downbeats as ascending in-range beat indices",

@@ -201,7 +201,7 @@ TEST_CASE("onset seed and bow acceleration default to identity", "[midi][synth][
 }
 
 TEST_CASE("onset seed and bow acceleration stay stable across the shipped voices",
-          "[.][midi][synth][bowed][onset]") {
+          "[.][slow][midi][synth][bowed][onset]") {
   // Neither mechanism may be given more than a moment: this is a stability and
   // measurement pass, not a fit. `[.]` because the render grid is ~1.5 s x 42
   // cells x 2 mechanisms.
