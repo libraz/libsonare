@@ -6,7 +6,10 @@ import {
   ebur128LoudnessRange,
   fourierTempogram,
   lufs,
+  masterAudio,
+  masterAudioStereo,
   masteringChain,
+  masteringChainStereo,
   meteringSilenceRatio,
   momentaryLufs,
   nnlsChroma,
@@ -87,6 +90,44 @@ describe('progress callback', () => {
         samples: new Float32Array(22050).fill(0.1),
         sampleRate: 22050,
         config: { eq: { tilt: { tiltDb: 1.0 } } },
+        cancel: () => true,
+      }),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
+  });
+
+  // The remaining mono/stereo x chain/preset combinations, mirroring
+  // masteringChain's own case above: each forwards `cancel` through its own
+  // _ex C-ABI call, and a forwarding regression on any one of them would ship
+  // green everywhere else while that one variant ran to completion instead of
+  // aborting -- see tests-017.
+  it('masteringChainStereo cancels through the request cancel callback', () => {
+    expect(() =>
+      masteringChainStereo({
+        left: new Float32Array(22050).fill(0.1),
+        right: new Float32Array(22050).fill(0.1),
+        sampleRate: 22050,
+        config: { eq: { tilt: { tiltDb: 1.0 } } },
+        cancel: () => true,
+      }),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
+  });
+
+  it('masterAudio cancels through the request cancel callback', () => {
+    expect(() =>
+      masterAudio({
+        samples: new Float32Array(22050).fill(0.1),
+        sampleRate: 22050,
+        cancel: () => true,
+      }),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
+  });
+
+  it('masterAudioStereo cancels through the request cancel callback', () => {
+    expect(() =>
+      masterAudioStereo({
+        left: new Float32Array(22050).fill(0.1),
+        right: new Float32Array(22050).fill(0.1),
+        sampleRate: 22050,
         cancel: () => true,
       }),
     ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));

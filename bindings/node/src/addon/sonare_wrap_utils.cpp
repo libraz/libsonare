@@ -118,7 +118,11 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
                                   int* count) {
   Napi::Env env = object.Env();
   const Napi::Value value = object.Get(key);
-  if (!value.IsArray()) return true;
+  if (value.IsUndefined() || value.IsNull()) return true;
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, std::string(key) + " must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
 
   const Napi::Array array = value.As<Napi::Array>();
   const uint32_t length = array.Length();
@@ -150,38 +154,39 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   if (!value.IsObject()) return false;
 
   const Napi::Object object = value.As<Napi::Object>();
+  // Every field below is a plain quantity or flag -- none is documented (in
+  // analysis.ts's MusicAnalyzeOptions) as reading a wrong-typed value as
+  // "unspecified" -- so all of them belong on the refuse-by-name *Property
+  // family, matching nFft/hopLength rather than diverging from them.
   options->n_fft = IntProperty(object, "nFft", options->n_fft);
   options->hop_length = IntProperty(object, "hopLength", options->hop_length);
-  options->bpm_min = node_float_option(object, "bpmMin", options->bpm_min);
-  options->bpm_max = node_float_option(object, "bpmMax", options->bpm_max);
-  options->start_bpm = node_float_option(object, "startBpm", options->start_bpm);
+  options->bpm_min = FiniteFloatProperty(object, "bpmMin", options->bpm_min);
+  options->bpm_max = FiniteFloatProperty(object, "bpmMax", options->bpm_max);
+  options->start_bpm = FiniteFloatProperty(object, "startBpm", options->start_bpm);
   options->use_triads_only =
-      node_bool_option(object, "useTriadsOnly", options->use_triads_only != 0) ? 1 : 0;
-  options->use_hpss = node_bool_option(object, "useHpss", options->use_hpss != 0) ? 1 : 0;
+      BoolProperty(object, "useTriadsOnly", options->use_triads_only != 0) ? 1 : 0;
+  options->use_hpss = BoolProperty(object, "useHpss", options->use_hpss != 0) ? 1 : 0;
   options->chroma_highpass_hz =
-      node_float_option(object, "chromaHighpassHz", options->chroma_highpass_hz);
+      FiniteFloatProperty(object, "chromaHighpassHz", options->chroma_highpass_hz);
   options->use_bass_weighted =
-      node_bool_option(object, "useBassWeighted", options->use_bass_weighted != 0) ? 1 : 0;
+      BoolProperty(object, "useBassWeighted", options->use_bass_weighted != 0) ? 1 : 0;
   options->chroma_hop_multiplier =
-      node_int_option(object, "chromaHopMultiplier", options->chroma_hop_multiplier);
-  options->use_chord_hmm =
-      node_bool_option(object, "useChordHmm", options->use_chord_hmm != 0) ? 1 : 0;
+      IntProperty(object, "chromaHopMultiplier", options->chroma_hop_multiplier);
+  options->use_chord_hmm = BoolProperty(object, "useChordHmm", options->use_chord_hmm != 0) ? 1 : 0;
   options->use_chord_key_context =
-      node_bool_option(object, "useChordKeyContext", options->use_chord_key_context != 0) ? 1 : 0;
+      BoolProperty(object, "useChordKeyContext", options->use_chord_key_context != 0) ? 1 : 0;
   options->chord_hmm_beam_width =
-      node_int_option(object, "chordHmmBeamWidth", options->chord_hmm_beam_width);
+      IntProperty(object, "chordHmmBeamWidth", options->chord_hmm_beam_width);
   options->detect_chord_inversions =
-      node_bool_option(object, "detectChordInversions", options->detect_chord_inversions != 0) ? 1
-                                                                                               : 0;
+      BoolProperty(object, "detectChordInversions", options->detect_chord_inversions != 0) ? 1 : 0;
   options->adaptive_tempo =
-      node_bool_option(object, "adaptiveTempo", options->adaptive_tempo != 0) ? 1 : 0;
+      BoolProperty(object, "adaptiveTempo", options->adaptive_tempo != 0) ? 1 : 0;
   options->tempo_update_interval_beats =
-      node_int_option(object, "tempoUpdateIntervalBeats", options->tempo_update_interval_beats);
+      IntProperty(object, "tempoUpdateIntervalBeats", options->tempo_update_interval_beats);
   options->compute_tempo_curve =
-      node_bool_option(object, "computeTempoCurve", options->compute_tempo_curve != 0) ? 1 : 0;
-  options->meter_denominator =
-      node_int_option(object, "meterDenominator", options->meter_denominator);
-  options->tuning = node_float_option(object, "tuning", options->tuning);
+      BoolProperty(object, "computeTempoCurve", options->compute_tempo_curve != 0) ? 1 : 0;
+  options->meter_denominator = IntProperty(object, "meterDenominator", options->meter_denominator);
+  options->tuning = FiniteFloatProperty(object, "tuning", options->tuning);
   return ReadMeterCandidateNumerators(object, "meterCandidateNumerators",
                                       options->meter_candidate_numerators,
                                       &options->meter_candidate_numerator_count);

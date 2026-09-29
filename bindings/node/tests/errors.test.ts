@@ -257,3 +257,34 @@ describe('the addon exception map covers every core ErrorCode', () => {
     expect(text.slice(start, text.indexOf('\n}', start))).not.toMatch(/\bdefault\s*:/);
   });
 });
+
+/**
+ * A raw std::bad_alloc/invalid_argument/logic_error escaping the core (rather
+ * than a sonare::SonareException) used to reach SONARE_NODE_CATCH's generic
+ * catch(std::exception) arm as a bare Napi::Error with no code property, while
+ * the C ABI's own catch chain (SONARE_C_CATCH) classifies the same exception
+ * types to OutOfMemory/InvalidParameter/InvalidState. Both catch macros now
+ * delegate that classification to the single shared
+ * sonare::error_code_for_std_exception (src/util/error_classification.h),
+ * which the WASM exception-introspection switch also calls -- see
+ * bindings/wasm/tests/errors.test.ts for that half.
+ */
+describe('SONARE_NODE_CATCH classifies a raw std::exception through the shared classifier', () => {
+  it('calls error_code_for_std_exception exactly once per catch macro', () => {
+    const text = addonSourceText('sonare_wrap_utils.h');
+    const nodeCatch = text.slice(text.indexOf('#define SONARE_NODE_CATCH('));
+    const tryCatch = nodeCatch.slice(0, nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
+    const voidCatch = nodeCatch.slice(nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
+    const hits = (s: string) => (s.match(/error_code_for_std_exception/g) ?? []).length;
+    expect(hits(tryCatch)).toBe(1);
+    expect(hits(voidCatch)).toBe(1);
+  });
+
+  it('no longer special-cases std::bad_alloc separately from other std::exception', () => {
+    // The special case was the defect: it left invalid_argument/logic_error on
+    // the generic arm with no code property. Merging into one classified arm
+    // is the fix, so a reintroduced bad_alloc-only catch is a regression.
+    const text = addonSourceText('sonare_wrap_utils.h');
+    expect(text).not.toMatch(/catch\s*\(\s*const\s+std::bad_alloc\s*&?\s*\)/);
+  });
+});

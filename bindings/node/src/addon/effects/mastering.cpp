@@ -79,16 +79,23 @@ struct ProgressContext {
   std::optional<Napi::Function> cancel;
 };
 
+// A JS callback that throws leaves an exception pending; every further N-API
+// call must be skipped, and the chain is cancelled so the throw surfaces
+// promptly instead of after the whole render has run. Mirrors progress.cpp's
+// c_progress/c_cancel.
 void ReportProgress(float progress, const char* stage, void* user_data) {
   auto* context = static_cast<ProgressContext*>(user_data);
+  if (context->env.IsExceptionPending()) return;
   context->callback.Call({Napi::Number::New(context->env, progress),
                           Napi::String::New(context->env, stage != nullptr ? stage : "")});
 }
 
 int CancellationRequested(void* user_data) {
   auto* context = static_cast<ProgressContext*>(user_data);
+  if (context->env.IsExceptionPending()) return 1;
   if (!context->cancel) return 0;
   const Napi::Value result = context->cancel->Call({});
+  if (context->env.IsExceptionPending()) return 1;
   return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
 }
 
@@ -729,13 +736,15 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
       typed.Data(), typed.ElementLength(), node_narrow_int(env, info[1], node_arg_label(1).c_str()),
       c_params.empty() ? nullptr : c_params.data(), c_params.size(), ReportProgress, &progress,
       &result, CancellationRequested, &progress);
+  // The pending-exception check comes first: throwing a SonareError on top of a
+  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_result(&result);
+    return env.Undefined();
+  }
   if (err != SONARE_OK) {
     sonare_free_mastering_chain_result(&result);
     ThrowSonareError(env, err);
-    return env.Undefined();
-  }
-  if (env.IsExceptionPending()) {
-    sonare_free_mastering_chain_result(&result);
     return env.Undefined();
   }
   Napi::Object out = CMonoChainResultToObject(env, result);
@@ -777,13 +786,15 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
       left.Data(), right.Data(), left.ElementLength(), sr,
       c_params.empty() ? nullptr : c_params.data(), c_params.size(), ReportProgress, &progress,
       &result, CancellationRequested, &progress);
+  // The pending-exception check comes first: throwing a SonareError on top of a
+  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_stereo_result(&result);
+    return env.Undefined();
+  }
   if (err != SONARE_OK) {
     sonare_free_mastering_chain_stereo_result(&result);
     ThrowSonareError(env, err);
-    return env.Undefined();
-  }
-  if (env.IsExceptionPending()) {
-    sonare_free_mastering_chain_stereo_result(&result);
     return env.Undefined();
   }
   Napi::Object out = CStereoChainResultToObject(env, result);
@@ -821,13 +832,15 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
       node_narrow_int(env, info[2], node_arg_label(2).c_str()),
       c_overrides.empty() ? nullptr : c_overrides.data(), c_overrides.size(), ReportProgress,
       &progress, &result, CancellationRequested, &progress);
+  // The pending-exception check comes first: throwing a SonareError on top of a
+  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_result(&result);
+    return env.Undefined();
+  }
   if (err != SONARE_OK) {
     sonare_free_mastering_chain_result(&result);
     ThrowSonareError(env, err);
-    return env.Undefined();
-  }
-  if (env.IsExceptionPending()) {
-    sonare_free_mastering_chain_result(&result);
     return env.Undefined();
   }
   Napi::Object out = CMonoChainResultToObject(env, result);
@@ -870,13 +883,15 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
       preset_name.c_str(), left.Data(), right.Data(), left.ElementLength(), sr,
       c_overrides.empty() ? nullptr : c_overrides.data(), c_overrides.size(), ReportProgress,
       &progress, &result, CancellationRequested, &progress);
+  // The pending-exception check comes first: throwing a SonareError on top of a
+  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_stereo_result(&result);
+    return env.Undefined();
+  }
   if (err != SONARE_OK) {
     sonare_free_mastering_chain_stereo_result(&result);
     ThrowSonareError(env, err);
-    return env.Undefined();
-  }
-  if (env.IsExceptionPending()) {
-    sonare_free_mastering_chain_stereo_result(&result);
     return env.Undefined();
   }
   Napi::Object out = CStereoChainResultToObject(env, result);

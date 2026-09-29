@@ -436,9 +436,17 @@ export interface ProjectBounceOptions {
   totalFrames?: number;
   /** Render block size; <= 0 / omit => 128. */
   blockSize?: number;
-  /** Output channel count; <= 0 / omit => 2. */
+  /**
+   * Output channel count: 1, 2, 6 or 8, and at most the width of the scene
+   * master's layout (mono/stereo/no master allow 2). The master is mixed at
+   * this width; 1 folds a 2-channel master to 0.5(L+R). <= 0 / omit => 2.
+   */
   numChannels?: number;
-  /** Output sample rate; <= 0 / omit => the project's. */
+  /**
+   * Output sample rate. This is not a resample: a positive value must equal
+   * the project's own sample rate, or the bounce is refused. <= 0 / omit =>
+   * the project's.
+   */
   sampleRate?: number;
   /** Host-instrument PDC (samples) fed to the compiler. */
   instrumentLatencySamples?: number;

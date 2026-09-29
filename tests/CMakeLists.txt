@@ -51,6 +51,7 @@ add_executable(sonare_tests
   util/reassigned_test.cpp
   util/validated_config_test.cpp
   util/zero_is_default_test.cpp
+  util/error_classification_test.cpp
   core/convert_test.cpp
   core/window_test.cpp
   core/fft_test.cpp

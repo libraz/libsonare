@@ -178,6 +178,21 @@ describe('shared public-input conformance corpus', () => {
     });
   }
 
+  // The corpus above drives only out-of-range/fractional byte values (all
+  // RangeError). A present, wrong-TYPE byte field used to report a bare, unnamed
+  // "A number was expected" instead of naming which field was wrong.
+  it('names the field for a wrong-typed MidiByteProperty value instead of an anonymous type error', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      expect(() =>
+        engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, channel: '3' } as never),
+      ).toThrow(/^channel must be a number$/);
+      expect(engine.midiCcBindingCount()).toBe(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('rejects an out-of-byte-range positional MIDI argument', () => {
     const learnEvents = [0, 64, 127].map((value) => Project.midiCc(0, 0, 0, 7, value));
 
@@ -507,6 +522,64 @@ describe('a throwing progress callback surfaces as a catchable JS exception', ()
         throw new Error('boom from onProgress');
       }),
     ).toThrow('boom from onProgress');
+  });
+
+  // masterAudio runs the same MasteringChain as masteringChain/masterAudio's
+  // other progress entry points (mastering.cpp), all of which share the
+  // ReportProgress/CancellationRequested pair. A throw must both surface the
+  // caller's own error (not a wrapped SonareError) and stop the chain at its
+  // next checkpoint instead of finishing the whole render first -- the two
+  // halves of the invariant, and neither implies the other: the error message
+  // already propagated correctly even when the chain kept running to
+  // completion behind it (the C-ABI error check ran after the pending-exception
+  // check even before this fix, just not before it).
+  it('masterAudio stops the chain early instead of running to completion when onProgress throws', () => {
+    // Once onProgress has thrown, N-API silently no-ops any further attempt to
+    // call into JS on that context (Napi::Function::Call returns without
+    // invoking anything while an exception is pending), so ReportProgress and
+    // CancellationRequested never reach the callback again either way -- fixed
+    // or not. The onProgress call COUNT therefore cannot tell the two states
+    // apart; only the amount of native work the chain went on to do can. CPU
+    // time attributed to this process, not wall-clock, carries that: a
+    // preempted synchronous call accrues no "user"/"system" time while it is
+    // not actually running, so process.cpuUsage() stays close to the real
+    // work done regardless of what else this shared machine is doing at the
+    // same moment, unlike Date.now().
+    const sampleRate = 22050;
+    const samples = new Float32Array(sampleRate * 8).map(
+      (_, i) => Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.3,
+    );
+    const cpuMicros = (usage: NodeJS.CpuUsage): number => usage.user + usage.system;
+
+    // Warm up caches/allocations once, unmeasured, so the timed calls below
+    // are not skewed by first-call cold start in either direction.
+    masterAudio({ samples, sampleRate, preset: 'pop', onProgress: () => {} });
+
+    const baselineStart = process.cpuUsage();
+    masterAudio({ samples, sampleRate, preset: 'pop', onProgress: () => {} });
+    const baselineCpuUs = cpuMicros(process.cpuUsage(baselineStart));
+
+    const throwStart = process.cpuUsage();
+    expect(() =>
+      masterAudio({
+        samples,
+        sampleRate,
+        preset: 'pop',
+        onProgress: () => {
+          throw new Error('boom from onProgress');
+        },
+      }),
+    ).toThrow('boom from onProgress');
+    const throwCpuUs = cpuMicros(process.cpuUsage(throwStart));
+
+    // A render cancelled at its first checkpoint bails out of the remaining
+    // stages, so it must consume a clear fraction of the full render's own
+    // CPU time. Measured on this codebase's 'pop' preset: throwCpuUs/baselineCpuUs
+    // sits at ~0.285-0.289 across five repeated trials on a quiet machine (see
+    // the finding's DB result for the raw numbers); 0.5 leaves comfortable
+    // headroom above that without weakening the assertion to the point of
+    // vacuity (0.5 still requires the throwing call to skip real work).
+    expect(throwCpuUs).toBeLessThan(Math.max(baselineCpuUs * 0.5, 1));
   });
 });
 

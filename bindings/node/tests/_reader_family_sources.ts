@@ -125,10 +125,10 @@ export const READER_FAMILIES: Readonly<
     stringProperty: 'coerce',
     uintProperty: 'coerce',
     wordProperty: 'coerce',
-    onsetWindowFrames: 'coerce', // extra: wraps intProperty, then bounds it
     // Type-checked first, so a wrong type is refused rather than converted.
     enumProperty: 'refuse',
     floatOption: 'refuse',
+    onsetWindowFrames: 'refuse', // extra: wraps typedIntProperty, then bounds it
     typedBoolProperty: 'refuse',
     typedDoubleProperty: 'refuse',
     typedFloatProperty: 'refuse',
@@ -143,6 +143,7 @@ export const READER_FAMILIES: Readonly<
     optionAt: 'out-of-scope',
     repairOptionValue: 'out-of-scope',
     requiredEnumProperty: 'out-of-scope',
+    requireInt64Property: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
   },
 };

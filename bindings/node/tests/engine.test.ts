@@ -585,6 +585,15 @@ describe('RealtimeEngine native binding', () => {
     // (the native side validates the enum range).
     expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }])).not.toThrow();
     expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 2 }])).not.toThrow();
+    // 257/-255 narrow to 1 (Stereo, valid) if the addon range-checks the
+    // uint8_t C-ABI field's value AFTER narrowing to it instead of before --
+    // the wrap this guards against on both the lane and the bus reader.
+    expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 257 }])).toThrow(
+      /\[0, 255\]/,
+    );
+    expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 257 }])).toThrow(
+      /\[0, 255\]/,
+    );
 
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: true }] }]);
     for (const lane of [
@@ -1257,7 +1266,14 @@ describe('RealtimeEngine native binding', () => {
     }
   });
 
-  it('reuses destroyed clip page provider slots', () => {
+  it('never reuses a clip page provider id after it is destroyed', () => {
+    // ids used to be freed-slot indices, so a destroyed provider's id was
+    // handed straight back to the next createClipPageProvider call -- a
+    // clip bound to the stale id then silently played whichever provider now
+    // held that slot instead of being refused. Ids are read relatively here
+    // (rather than pinned to literal numbers) because a failed
+    // createFileClipPageProvider attempt above also consumes and immediately
+    // frees one, and this test must not depend on how many ids came before it.
     const engine = new RealtimeEngine(48000, 8);
     expect(() =>
       engine.createFileClipPageProvider('/definitely/missing/sonare-clip.f32', {
@@ -1267,18 +1283,37 @@ describe('RealtimeEngine native binding', () => {
       }),
     ).toThrow();
     const afterFailedOpen = engine.createClipPageProvider(1, 8, 4);
-    expect(afterFailedOpen.id).toBe(1);
     afterFailedOpen.destroy();
 
     const first = engine.createClipPageProvider(1, 8, 4);
     const second = engine.createClipPageProvider(1, 8, 4);
-    expect(first.id).toBe(1);
-    expect(second.id).toBe(2);
+    expect(second.id).toBe(first.id + 1);
     first.destroy();
-    const reused = engine.createClipPageProvider(1, 8, 4);
-    expect(reused.id).toBe(1);
+    const third = engine.createClipPageProvider(1, 8, 4);
+    // The control: ids keep climbing rather than backfilling first's freed id.
+    expect(third.id).toBe(second.id + 1);
+    expect(third.id).not.toBe(first.id);
     second.destroy();
-    reused.destroy();
+    third.destroy();
+    engine.destroy();
+  });
+
+  it('refuses a clip bound to a destroyed provider instead of silently playing whatever now holds its old id', () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const stale = engine.createClipPageProvider(1, 8, 4);
+    stale.destroy();
+    // Before the fix this reused stale's numeric id, so the assertion below
+    // would have silently bound clip 1 to replacement's audio instead of
+    // throwing -- the control is that replacement gets a DIFFERENT id.
+    const replacement = engine.createClipPageProvider(1, 8, 4);
+    expect(replacement.id).not.toBe(stale.id);
+    replacement.supply(0, [new Float32Array([9, 9, 9, 9])]);
+
+    expect(() => engine.setClips([{ id: 1, pageProvider: stale, startPpq: 0 }])).toThrow(
+      /pageProvider is not a live ClipPageProvider/,
+    );
+
+    replacement.destroy();
     engine.destroy();
   });
 

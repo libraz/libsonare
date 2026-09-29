@@ -648,6 +648,33 @@ export const CASES: AbortGuardCase[] = [
         argument: 'omitted sampleRate and maxBlockSize',
         call: (e) => (e.prepare as unknown as () => void)(),
       },
+      // maxChannels has a documented fallback (64), so only a present
+      // wrong-typed value is refused; omitting it legitimately defaults.
+      { argument: 'maxChannels', call: (e) => e.prepare(SR, BLOCK, 1024, 1024, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setTempo',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'bpm', call: (e) => e.setTempo('120') },
+      { argument: 'omitted bpm', call: (e) => (e.setTempo as unknown as () => void)() },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setTimeSignature',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'numerator', call: (e) => e.setTimeSignature('4', 4) },
+      { argument: 'denominator', call: (e) => e.setTimeSignature(4, '4') },
+      {
+        argument: 'omitted denominator',
+        call: (e) => (e.setTimeSignature as unknown as (n: unknown) => void)(4),
+      },
+      {
+        argument: 'omitted numerator and denominator',
+        call: (e) => (e.setTimeSignature as unknown as () => void)(),
+      },
     ],
   },
   {
@@ -675,45 +702,245 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'RealtimeEngine.seekPpq',
     missingRequired: [],
-    badTransportArguments: [{ argument: 'renderFrame', call: (e) => e.seekPpq(0, 'x') }],
+    badTransportArguments: [
+      { argument: 'ppq', call: (e) => e.seekPpq('0') },
+      { argument: 'renderFrame', call: (e) => e.seekPpq(0, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.sampleAtPpq',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'ppq', call: (e) => e.sampleAtPpq('0') }],
+  },
+  {
+    name: 'RealtimeEngine.setLoopFromMarkers',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'startMarkerId', call: (e) => e.setLoopFromMarkers('0', MARKER_ID) },
+      { argument: 'endMarkerId', call: (e) => e.setLoopFromMarkers(MARKER_ID, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.marker',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'id', call: (e) => e.marker('x') }],
   },
   {
     name: 'RealtimeEngine.seekMarker',
     missingRequired: [],
-    badTransportArguments: [{ argument: 'renderFrame', call: (e) => e.seekMarker(MARKER_ID, 'x') }],
+    badTransportArguments: [
+      { argument: 'markerId', call: (e) => e.seekMarker('x') },
+      { argument: 'renderFrame', call: (e) => e.seekMarker(MARKER_ID, 'x') },
+    ],
   },
   {
     name: 'RealtimeEngine.countInEndSample',
     missingRequired: [],
-    badTransportArguments: [{ argument: 'startSample', call: (e) => e.countInEndSample('0', 1) }],
+    badTransportArguments: [
+      { argument: 'startSample', call: (e) => e.countInEndSample('0', 1) },
+      { argument: 'bars', call: (e) => e.countInEndSample(0, 'x') },
+      {
+        argument: 'omitted bars',
+        call: (e) => (e.countInEndSample as unknown as (startSample: unknown) => void)(0),
+      },
+      {
+        argument: 'omitted startSample and bars',
+        call: (e) => (e.countInEndSample as unknown as () => void)(),
+      },
+    ],
   },
   {
     name: 'RealtimeEngine.setParameter',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'paramId', call: (e) => e.setParameter('x', 0.5) },
+      { argument: 'value', call: (e) => e.setParameter(PARAM_ID, 'x') },
       { argument: 'renderFrame', call: (e) => e.setParameter(PARAM_ID, 0.5, 'now') },
+      {
+        argument: 'omitted value',
+        call: (e) => (e.setParameter as unknown as (paramId: unknown) => void)(PARAM_ID),
+      },
     ],
   },
   {
     name: 'RealtimeEngine.setParameterSmoothed',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'paramId', call: (e) => e.setParameterSmoothed('x', 0.5) },
+      { argument: 'value', call: (e) => e.setParameterSmoothed(PARAM_ID, 'x') },
       { argument: 'renderFrame', call: (e) => e.setParameterSmoothed(PARAM_ID, 0.5, 'now') },
+      {
+        argument: 'omitted value',
+        call: (e) => (e.setParameterSmoothed as unknown as (paramId: unknown) => void)(PARAM_ID),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setParamSmoothingMs',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'smoothingMs', call: (e) => e.setParamSmoothingMs('5') },
+      {
+        argument: 'omitted smoothingMs',
+        call: (e) => (e.setParamSmoothingMs as unknown as () => void)(),
+      },
     ],
   },
   {
     name: 'RealtimeEngine.setSoloMute',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'laneIndex', call: (e) => e.setSoloMute('0', true, false) },
+      { argument: 'solo', call: (e) => e.setSoloMute(0, 1, false) },
+      { argument: 'mute', call: (e) => e.setSoloMute(0, true, 1) },
       { argument: 'renderFrame', call: (e) => e.setSoloMute(0, true, false, 'now') },
+      {
+        argument: 'omitted mute',
+        call: (e) => (e.setSoloMute as unknown as (l: unknown, s: unknown) => void)(0, true),
+      },
     ],
   },
   {
     name: 'RealtimeEngine.setTrackMonitorMode',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'laneIndex', call: (e) => e.setTrackMonitorMode('0', 1) },
+      { argument: 'mode', call: (e) => e.setTrackMonitorMode(0, 'x') },
       { argument: 'renderFrame', call: (e) => e.setTrackMonitorMode(0, 1, 'now') },
+      {
+        argument: 'omitted mode',
+        call: (e) => (e.setTrackMonitorMode as unknown as (l: unknown) => void)(0),
+      },
     ],
+  },
+  {
+    name: 'RealtimeEngine.setBuiltinInstrument',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setBuiltinInstrument('x', {}) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setSynthInstrument',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setSynthInstrument('x', {}) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setSf2Instrument',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setSf2Instrument('x', {}) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.clearMidiInstrument',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'destinationId', call: (e) => e.clearMidiInstrument('x') }],
+  },
+  {
+    name: 'RealtimeEngine.setMidiFx',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'destinationId', call: (e) => e.setMidiFx('x', '{}') }],
+  },
+  {
+    name: 'RealtimeEngine.clearMidiFx',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'destinationId', call: (e) => e.clearMidiFx('x') }],
+  },
+  {
+    name: 'RealtimeEngine.setMidiInputSource',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'destinationId', call: (e) => e.setMidiInputSource('x') }],
+  },
+  {
+    name: 'RealtimeEngine.setControllerProfile',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setControllerProfile('x', 'mpe') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.bindController',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'destinationId',
+        call: (e) => e.bindController('x', { input: 'channel-pressure', axis: 'none' }),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.clearControllerBindings',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.clearControllerBindings('x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.controllerBindingCount',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.controllerBindingCount('x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setControllerVelocityMeaningful',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setControllerVelocityMeaningful('x', true) },
+      { argument: 'meaningful', call: (e) => e.setControllerVelocityMeaningful(0, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.controllerVelocityMeaningful',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.controllerVelocityMeaningful('x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setControllerNoteTracking',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'destinationId',
+        call: (e) => e.setControllerNoteTracking('x', 'bend', 'last'),
+      },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.controllerNoteTracking',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.controllerNoteTracking('x', 'bend') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.legatoFallbackCount',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'destinationId', call: (e) => e.legatoFallbackCount('x') }],
+  },
+  {
+    name: 'RealtimeEngine.setMidiDestinationExternal',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setMidiDestinationExternal('x', true) },
+      { argument: 'external', call: (e) => e.setMidiDestinationExternal(0, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setExternalMidiClockEnabled',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'enabled', call: (e) => e.setExternalMidiClockEnabled('x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setWarpVoiceCapacity',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'voices', call: (e) => e.setWarpVoiceCapacity('x') }],
   },
   {
     name: 'RealtimeEngine.bindMidiCc',
@@ -725,12 +952,16 @@ export const CASES: AbortGuardCase[] = [
         call: (e) => e.bindMidiCc(300, 300, PARAM_ID, 0, 1),
         error: RangeError,
       },
+      { argument: 'paramId', call: (e) => e.bindMidiCc(0, 7, 'x', 0, 1) },
+      { argument: 'minValue', call: (e) => e.bindMidiCc(0, 7, PARAM_ID, 'x', 1) },
+      { argument: 'maxValue', call: (e) => e.bindMidiCc(0, 7, PARAM_ID, 0, 'x') },
     ],
   },
   {
     name: 'RealtimeEngine.pushMidiNoteOn',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiNoteOn('x', 0, 0, 60, 100) },
       // The reported reproduction: a MIDI-learn slider handing 0..1023 through.
       // Two out-of-range bytes in a row is what raised the second throw.
       {
@@ -746,6 +977,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.setArticulation',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.setArticulation('x', 0, 'poly') },
       {
         argument: 'channel out of byte range',
         call: (e) => e.setArticulation(0, 300, 'poly'),
@@ -766,6 +998,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.articulation',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.articulation('x', 0) },
       {
         argument: 'channel out of byte range',
         call: (e) => e.articulation(0, 300),
@@ -777,6 +1010,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.pushMidiNoteOff',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiNoteOff('x', 0, 0, 60, 0) },
       {
         argument: 'group and channel out of byte range',
         call: (e) => e.pushMidiNoteOff(0, 300, 300, 60, 0),
@@ -789,6 +1023,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.pushMidiCc',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiCc('x', 0, 0, 7, 64) },
       {
         argument: 'group and channel out of byte range',
         call: (e) => e.pushMidiCc(0, 300, 300, 7, 64),
@@ -801,6 +1036,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.pushMidiPitchBend',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiPitchBend('x', 0, 0, 8192) },
       {
         argument: 'group and channel out of byte range',
         call: (e) => e.pushMidiPitchBend(0, 300, 300, 8192),
@@ -819,6 +1055,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.pushMidiChannelPressure',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiChannelPressure('x', 0, 0, 64) },
       {
         argument: 'group and channel out of byte range',
         call: (e) => e.pushMidiChannelPressure(0, 300, 300, 64),
@@ -831,6 +1068,7 @@ export const CASES: AbortGuardCase[] = [
     name: 'RealtimeEngine.pushMidiPolyPressure',
     missingRequired: [],
     badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiPolyPressure('x', 0, 0, 60, 64) },
       {
         argument: 'group and channel out of byte range',
         call: (e) => e.pushMidiPolyPressure(0, 300, 300, 60, 64),
@@ -930,6 +1168,10 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badTransportArguments: [
       {
+        argument: 'destinationId',
+        call: (e) => e.pushMidiSysex('x', new Uint8Array([0xf0, 0x7e, 0xf7])),
+      },
+      {
         argument: 'renderFrame',
         call: (e) => e.pushMidiSysex(0, new Uint8Array([0xf0, 0x7e, 0xf7]), 'now'),
       },
@@ -948,7 +1190,11 @@ export const CASES: AbortGuardCase[] = [
   {
     name: 'RealtimeEngine.setLoop',
     missingRequired: [],
-    badTransportArguments: [{ argument: 'enabled', call: (e) => e.setLoop(0, 4, 1) }],
+    badTransportArguments: [
+      { argument: 'startPpq', call: (e) => e.setLoop('0', 4, true) },
+      { argument: 'endPpq', call: (e) => e.setLoop(0, 'x', true) },
+      { argument: 'enabled', call: (e) => e.setLoop(0, 4, 1) },
+    ],
   },
   {
     name: 'RealtimeEngine.setAutomationLane',
@@ -1618,6 +1864,14 @@ export const CASES: AbortGuardCase[] = [
   //
   // The shapes matter as much as the values: `new Mixer(2 ** 32, 128)` never
   // reaches the reader, because the sceneJson type check refuses it first.
+  {
+    name: 'PlaybackRenderer',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'sampleRate', call: () => new addon.PlaybackRenderer('{}', null, '48000') },
+      { argument: 'maxBlockSize', call: () => new addon.PlaybackRenderer('{}', null, 48000, 'x') },
+    ],
+  },
   {
     name: 'PolyphonicAnalysis',
     missingRequired: [],

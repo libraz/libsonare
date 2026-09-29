@@ -80,6 +80,14 @@ const capture = (run: () => string): string | Error => {
 const FIELDS = [
   { key: 'delta', low: 8, high: 30 },
   { key: 'threshold', low: 8, high: 20 },
+  // Frame-count peak-picking window widths, brought onto the same refusing
+  // family as threshold/delta on both surfaces (typedIntProperty on WASM,
+  // IntProperty on the addon). Neither value is each field's own default (1):
+  // that value's onset set is indistinguishable from the default's, which
+  // would satisfy the positive control below without it discriminating anything.
+  { key: 'preMax', low: 5, high: 10 },
+  { key: 'postMax', low: 5, high: 10 },
+  { key: 'wait', low: 5, high: 10 },
 ] as const;
 
 /** The values that separate a refusing reader from a coercing one. */

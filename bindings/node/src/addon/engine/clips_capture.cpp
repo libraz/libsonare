@@ -52,10 +52,10 @@ const char* CaptureSourceName(int source) {
   return source == SONARE_ENGINE_CAPTURE_SOURCE_INPUT ? "input" : "output";
 }
 
-SonareClipPageProvider* ProviderById(const std::vector<SonareClipPageProvider*>& providers,
-                                     int id) {
-  if (id <= 0 || static_cast<size_t>(id) > providers.size()) return nullptr;
-  return providers[static_cast<size_t>(id - 1)];
+SonareClipPageProvider* ProviderById(
+    const std::unordered_map<int, SonareClipPageProvider*>& providers, int id) {
+  const auto it = providers.find(id);
+  return it == providers.end() ? nullptr : it->second;
 }
 
 // Reads an optional `sends` array off a track lane or bus object, in the one
@@ -259,9 +259,19 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
       Napi::Object obj = value.As<Napi::Object>();
       if (!RequiredUint32Property(env, obj, "trackId", &lane.track_id)) return env.Undefined();
       lane.output_bus_id = Uint32Property(obj, "outputBusId", lane.output_bus_id);
-      lane.source_channel_layout = static_cast<uint8_t>(
-          Uint32Property(obj, "sourceChannelLayout", lane.source_channel_layout));
+      // The full-range value is checked BEFORE narrowing to the uint8_t C-ABI
+      // field: narrowing first would let e.g. 257 wrap to 1 (a valid Stereo)
+      // and arrive at the C ABI already inside the range its own check
+      // accepts.
+      const uint32_t source_channel_layout_raw =
+          Uint32Property(obj, "sourceChannelLayout", lane.source_channel_layout);
       if (env.IsExceptionPending()) return env.Undefined();
+      if (source_channel_layout_raw > 255) {
+        Napi::RangeError::New(env, "sourceChannelLayout must be an integer in [0, 255]")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      lane.source_channel_layout = static_cast<uint8_t>(source_channel_layout_raw);
       std::vector<SonareEngineTrackSend> lane_sends;
       if (!ReadOptionalSends(env, obj, &lane_sends)) return env.Undefined();
       if (!lane_sends.empty()) {
@@ -322,9 +332,18 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     if (!RequiredUint32Property(env, obj, "busId", &bus.bus_id)) return env.Undefined();
     bus.gain_db = FloatProperty(obj, "gainDb", 0.0f);
     // Zero-init leaves channel_layout at 0 (mono); default to stereo so existing
-    // callers that omit it keep the prior stereo behavior.
-    bus.channel_layout =
-        static_cast<uint8_t>(Uint32Property(obj, "channelLayout", SONARE_CHANNEL_LAYOUT_STEREO));
+    // callers that omit it keep the prior stereo behavior. The full-range
+    // value is checked BEFORE narrowing to the uint8_t C-ABI field, the same
+    // way the track lane's sourceChannelLayout above does.
+    const uint32_t channel_layout_raw =
+        Uint32Property(obj, "channelLayout", SONARE_CHANNEL_LAYOUT_STEREO);
+    if (env.IsExceptionPending()) return env.Undefined();
+    if (channel_layout_raw > 255) {
+      Napi::RangeError::New(env, "channelLayout must be an integer in [0, 255]")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    bus.channel_layout = static_cast<uint8_t>(channel_layout_raw);
     // Bus this bus's output sums into instead of the master mix; 0 (the
     // zero-init default) keeps the bus on the master mix.
     bus.output_bus_id = Uint32Property(obj, "outputBusId", bus.output_bus_id);
@@ -976,14 +995,9 @@ Napi::Value RealtimeEngineWrap::CreateClipPageProvider(const Napi::CallbackInfo&
   ThrowIfError(env,
                sonare_clip_page_provider_create(num_channels, num_samples, page_frames, &provider));
   if (env.IsExceptionPending()) return env.Undefined();
-  for (size_t index = 0; index < clip_page_providers_.size(); ++index) {
-    if (clip_page_providers_[index] == nullptr) {
-      clip_page_providers_[index] = provider;
-      return Napi::Number::New(env, static_cast<double>(index + 1));
-    }
-  }
-  clip_page_providers_.push_back(provider);
-  return Napi::Number::New(env, static_cast<double>(clip_page_providers_.size()));
+  const int id = next_clip_page_provider_id_++;
+  clip_page_providers_[id] = provider;
+  return Napi::Number::New(env, static_cast<double>(id));
   SONARE_NODE_CATCH(env)
 }
 
@@ -1064,7 +1078,7 @@ Napi::Value RealtimeEngineWrap::DestroyClipPageProvider(const Napi::CallbackInfo
   SonareClipPageProvider* provider = ProviderById(clip_page_providers_, id);
   if (!provider) return env.Undefined();
   sonare_clip_page_provider_destroy(provider);
-  clip_page_providers_[static_cast<size_t>(id - 1)] = nullptr;
+  clip_page_providers_.erase(id);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

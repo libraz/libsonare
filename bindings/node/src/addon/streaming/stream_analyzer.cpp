@@ -30,14 +30,15 @@ sonare::QuantizeConfig QuantizeConfigFromValue(const Napi::Value& value) {
   sonare::QuantizeConfig qconfig;
   if (!value.IsObject()) return qconfig;
   Napi::Object object = value.As<Napi::Object>();
-  qconfig.mel_db_min =
-      static_cast<float>(node_double_option(object, "melDbMin", qconfig.mel_db_min));
-  qconfig.mel_db_max =
-      static_cast<float>(node_double_option(object, "melDbMax", qconfig.mel_db_max));
-  qconfig.onset_max = static_cast<float>(node_double_option(object, "onsetMax", qconfig.onset_max));
-  qconfig.rms_max = static_cast<float>(node_double_option(object, "rmsMax", qconfig.rms_max));
+  // Plain quantities, none documented as reading a wrong-typed value as
+  // "unspecified" (types_features.ts's StreamQuantizeConfig only documents
+  // omission, not type), so DoubleProperty rather than node_double_option.
+  qconfig.mel_db_min = static_cast<float>(DoubleProperty(object, "melDbMin", qconfig.mel_db_min));
+  qconfig.mel_db_max = static_cast<float>(DoubleProperty(object, "melDbMax", qconfig.mel_db_max));
+  qconfig.onset_max = static_cast<float>(DoubleProperty(object, "onsetMax", qconfig.onset_max));
+  qconfig.rms_max = static_cast<float>(DoubleProperty(object, "rmsMax", qconfig.rms_max));
   qconfig.centroid_max =
-      static_cast<float>(node_double_option(object, "centroidMax", qconfig.centroid_max));
+      static_cast<float>(DoubleProperty(object, "centroidMax", qconfig.centroid_max));
   return qconfig;
 }
 
@@ -161,40 +162,45 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.n_fft = CheckedConfigInt(DoubleProperty(opts, "nFft", config.n_fft), "nFft");
       config.hop_length =
           CheckedConfigInt(DoubleProperty(opts, "hopLength", config.hop_length), "hopLength");
-      config.n_mels = CheckedConfigInt(node_double_option(opts, "nMels", config.n_mels), "nMels");
-      config.fmin = static_cast<float>(node_double_option(opts, "fmin", config.fmin));
-      config.fmax = static_cast<float>(node_double_option(opts, "fmax", config.fmax));
+      // Every field from here down is a plain quantity or flag, none documented
+      // (types_features.ts's StreamAnalyzerConfig) as reading a wrong-typed
+      // value as "unspecified" -- StreamAnalyzerConfig's own doc comment
+      // requires the count fields to be refused rather than truncated, which
+      // DoubleProperty/BoolProperty give (node_double_option/node_bool_option
+      // silently fall back on a wrong TYPE before CheckedConfigInt ever sees
+      // it, so the fraction/range check downstream never runs on that case).
+      config.n_mels = CheckedConfigInt(DoubleProperty(opts, "nMels", config.n_mels), "nMels");
+      config.fmin = static_cast<float>(DoubleProperty(opts, "fmin", config.fmin));
+      config.fmax = static_cast<float>(DoubleProperty(opts, "fmax", config.fmax));
       config.tuning_ref_hz =
-          static_cast<float>(node_double_option(opts, "tuningRefHz", config.tuning_ref_hz));
-      config.compute_magnitude =
-          node_bool_option(opts, "computeMagnitude", config.compute_magnitude);
-      config.compute_mel = node_bool_option(opts, "computeMel", config.compute_mel);
-      config.compute_chroma = node_bool_option(opts, "computeChroma", config.compute_chroma);
-      config.compute_onset = node_bool_option(opts, "computeOnset", config.compute_onset);
-      config.compute_spectral = node_bool_option(opts, "computeSpectral", config.compute_spectral);
-      config.emit_every_n_frames =
-          CheckedConfigInt(node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames),
-                           "emitEveryNFrames");
-      config.magnitude_downsample = CheckedConfigInt(
-          node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample),
-          "magnitudeDownsample");
+          static_cast<float>(DoubleProperty(opts, "tuningRefHz", config.tuning_ref_hz));
+      config.compute_magnitude = BoolProperty(opts, "computeMagnitude", config.compute_magnitude);
+      config.compute_mel = BoolProperty(opts, "computeMel", config.compute_mel);
+      config.compute_chroma = BoolProperty(opts, "computeChroma", config.compute_chroma);
+      config.compute_onset = BoolProperty(opts, "computeOnset", config.compute_onset);
+      config.compute_spectral = BoolProperty(opts, "computeSpectral", config.compute_spectral);
+      config.emit_every_n_frames = CheckedConfigInt(
+          DoubleProperty(opts, "emitEveryNFrames", config.emit_every_n_frames), "emitEveryNFrames");
+      config.magnitude_downsample =
+          CheckedConfigInt(DoubleProperty(opts, "magnitudeDownsample", config.magnitude_downsample),
+                           "magnitudeDownsample");
       const double max_pending_frames =
-          node_double_option(opts, "maxPendingFrames", config.max_pending_frames);
+          DoubleProperty(opts, "maxPendingFrames", config.max_pending_frames);
       if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "maxPendingFrames must be a non-negative integer");
       }
       const double max_progression_entries =
-          node_double_option(opts, "maxProgressionEntries", config.max_progression_entries);
+          DoubleProperty(opts, "maxProgressionEntries", config.max_progression_entries);
       if (!sonare::numeric::checked_integral_cast(max_progression_entries,
                                                   &config.max_progression_entries)) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "maxProgressionEntries must be a non-negative integer");
       }
       config.key_update_interval_sec = static_cast<float>(
-          node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
+          DoubleProperty(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
       config.bpm_update_interval_sec = static_cast<float>(
-          node_double_option(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
+          DoubleProperty(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
       if (!ParseWindowOption(opts, env, &config.window)) return;
       const Napi::Value output_format_value = opts.Get("outputFormat");
       if (!output_format_value.IsUndefined() && !output_format_value.IsNull() &&

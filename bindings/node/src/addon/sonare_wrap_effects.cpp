@@ -268,7 +268,13 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
     return env.Undefined();
   }
   for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = has_voiced ? (voiced_arr[i] != 0) : true;
+    // voiced wins when present; absent that, voicedProb decides (>= 0.5 is
+    // voiced, matching sonare_note_segments' own voiced_threshold default);
+    // with neither, every frame defaults to voiced. Matches the C ABI's
+    // sonare_pitch_correct_to_midi_timevarying, which this direct core call
+    // otherwise bypasses.
+    const bool is_voiced =
+        has_voiced ? (voiced_arr[i] != 0) : (has_prob ? (prob_arr[i] >= 0.5f) : true);
     track.voiced[i] = is_voiced;
     track.voiced_prob[i] = has_prob ? prob_arr[i] : (is_voiced ? 1.0f : 0.0f);
   }
@@ -1482,7 +1488,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
     Napi::Object opts = info[3].As<Napi::Object>();
     config.n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
     config.hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
-    config.heal_radius_frames = node_int_option(opts, "healRadiusFrames", kZeroIsSentinel);
+    config.heal_radius_frames = IntProperty(opts, "healRadiusFrames", kZeroIsSentinel);
 
     // Optional window, by name or by ordinal.
     Napi::Value win_val = opts.Get("window");
@@ -1502,15 +1508,15 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
       throw std::runtime_error("spectralEdit: each op must be a plain object");
     }
     Napi::Object op = item.As<Napi::Object>();
-    // This bag reads two ways. startSample and gainDb here, and nFft and
-    // hopLength in the config object above, refuse a wrong-typed value by name;
-    // endSample, lowHz, highHz and healRadiusFrames answer one with the default.
-    // The WASM binding reads every one of them through an inline
-    // hasProperty/as<T>() pair, which coerces rather than doing either.
+    // Every field in this bag now refuses a wrong-typed value by name, matching
+    // nFft/hopLength/healRadiusFrames in the config object above. The WASM
+    // binding reads every one of them through int64Property/floatProperty,
+    // which coerce rather than refuse -- an accepted, tracked divergence
+    // (reader-family-scope.test.ts), not something this reader can close.
     ops[i].start_sample = Int64Property(op, "startSample", 0);
-    ops[i].end_sample = node_int64_option(op, "endSample", static_cast<int64_t>(length));
-    ops[i].low_hz = node_float_option(op, "lowHz", 0.0f);
-    ops[i].high_hz = node_float_option(op, "highHz", 0.0f);
+    ops[i].end_sample = Int64Property(op, "endSample", static_cast<int64_t>(length));
+    ops[i].low_hz = FloatProperty(op, "lowHz", 0.0f);
+    ops[i].high_hz = FloatProperty(op, "highHz", 0.0f);
     ops[i].gain_db = FloatProperty(op, "gainDb", 0.0f);
 
     // Resolve mode: required string field.

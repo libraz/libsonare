@@ -313,23 +313,14 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   // int reader substitutes the default for it.
   ['NonNegativeSizeTProperty>repairIntOption', ['trimsilenceconfig:paddingSamples']],
 
-  // THE ADDON ANSWERS WITH THE DEFAULT WHERE EMBIND COERCES — 10 fields.
+  // THE ADDON ANSWERS WITH THE DEFAULT WHERE EMBIND COERCES — 4 fields.
   //
   // The addon puts these on its substituting family and embind reads them through a coercing one,
   // so a numeric string is ignored on the addon and applied on WASM -- the divergence that is
-  // two different results rather than a result against an error. `detectOnsets`' six frame
-  // counts sit here, in the same bag as the two fields that were brought into agreement.
-  [
-    'node_int_option>onsetWindowFrames',
-    [
-      'detectonsets:backtrackRange',
-      'detectonsets:postAvg',
-      'detectonsets:postMax',
-      'detectonsets:preAvg',
-      'detectonsets:preMax',
-      'detectonsets:wait',
-    ],
-  ],
+  // two different results rather than a result against an error. `detectOnsets`'s six frame
+  // counts (preMax/postMax/preAvg/postAvg/wait/backtrackRange) used to sit here alongside
+  // threshold/delta; all eight are now on typedIntProperty/typedFloatProperty on WASM and
+  // IntProperty/FloatProperty on the addon, so the pair expired and the field lines moved with it.
   [
     'node_float_option>setNumberOption',
     [
@@ -501,7 +492,7 @@ describe('the scanner sees what it claims to', () => {
     // lists already catch both, but this states the number a reader of this file
     // is being asked to believe.
     const live = new Set(mismatchedFields().map((field) => field.readerPair));
-    expect(live.size).toBe(20);
+    expect(live.size).toBe(19);
     expect([...live].every((pair) => ACCOUNTED.has(pair))).toBe(true);
   });
 });

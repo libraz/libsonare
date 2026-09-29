@@ -442,24 +442,22 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_
 /// @brief Read a MIDI-byte-wide property destined for a uint8_t C-ABI field.
 /// @details Unlike Uint32Property, this rejects a value that would silently wrap
 ///          through the narrowing cast (256 -> 0) and so arrive at the C ABI
-///          already inside the range its own check accepts. Throws a JS
-///          RangeError for a non-integer or out-of-[0,255] value; the caller
-///          must bail on a pending exception before the native call. The finer
+///          already inside the range its own check accepts. Presence- and
+///          type-checked like the rest of the *Property family (undefined/null
+///          takes @p fallback, any other wrong-typed value is refused by name
+///          via @ref node_require_property_type), then throws a JS RangeError
+///          naming @p key for a non-integer or out-of-[0,255] value. The finer
 ///          MIDI range (group < 16, note < 128, ...) stays the C ABI's to
 ///          enforce, so this only closes the wrap.
+/// @throws Napi::TypeError or Napi::RangeError naming @p key.
 inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key,
                                 uint8_t fallback) {
-  // An earlier field of the same struct may have left an exception pending; a
-  // RangeError raised on top of it would abort the process instead of reaching
-  // JS. Report nothing and let the caller bail on the first error.
-  if (env.IsExceptionPending()) return fallback;
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(env, value.IsNumber(), key, "a number");
   const double number = value.As<Napi::Number>().DoubleValue();
   if (!(number >= 0.0) || number > 255.0 || std::floor(number) != number) {
-    Napi::RangeError::New(env, std::string(key) + " must be an integer in [0, 255]")
-        .ThrowAsJavaScriptException();
-    return fallback;
+    throw Napi::RangeError::New(env, std::string(key) + " must be an integer in [0, 255]");
   }
   return static_cast<uint8_t>(number);
 }
@@ -908,6 +906,30 @@ inline bool RequiredIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
 inline bool RequiredInt64Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                              const char* name, int64_t* out) {
   return RequiredInt64Value(env, info[index], name, out);
+}
+
+/// @brief Read a required uint32 positional argument.
+inline bool RequiredUint32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, uint32_t* out) {
+  return RequiredUint32Value(env, info[index], name, out);
+}
+
+/// @brief Read a required float positional argument.
+inline bool RequiredFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                             const char* name, float* out) {
+  return RequiredFloatValue(env, info[index], name, out);
+}
+
+/// @brief Read a required double positional argument.
+inline bool RequiredDoubleArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, double* out) {
+  return RequiredDoubleValue(env, info[index], name, out);
+}
+
+/// @brief Read a required boolean positional argument.
+inline bool RequiredBoolArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                            const char* name, bool* out) {
+  return RequiredBoolValue(env, info[index], name, out);
 }
 
 /// @brief Read an optional int positional argument.

@@ -42,6 +42,8 @@ export interface NativeEngine {
   seekPpq(ppq: unknown, renderFrame?: unknown): void;
   seekMarker(markerId: unknown, renderFrame?: unknown): void;
   countInEndSample(startSample: unknown, bars?: unknown): number;
+  setTempo(bpm: unknown): void;
+  setTimeSignature(numerator: unknown, denominator: unknown): void;
   getTransportState(): NativeTransportState;
   setMarkers(markers: unknown): void;
   markerByIndex(index: unknown): unknown;
@@ -52,6 +54,7 @@ export interface NativeEngine {
   addParameter(parameter: unknown): void;
   setParameter(paramId: unknown, value: unknown, renderFrame?: unknown): void;
   setParameterSmoothed(paramId: unknown, value: unknown, renderFrame?: unknown): void;
+  setParamSmoothingMs(smoothingMs: unknown): void;
   setSoloMute(laneIndex: unknown, solo: unknown, mute: unknown, renderFrame?: unknown): void;
   setTrackMonitorMode(laneIndex: unknown, mode: unknown, renderFrame?: unknown): void;
   setMidiInputSource(destinationId: unknown): void;

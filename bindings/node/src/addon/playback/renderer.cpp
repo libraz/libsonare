@@ -40,8 +40,12 @@ PlaybackRendererWrap::PlaybackRendererWrap(const Napi::CallbackInfo& info)
   const std::string config_json = info[0].As<Napi::String>().Utf8Value();
   const SonareHrtfSet* hrtf = nullptr;
   if (!HrtfSetWrap::ReadHandle(env, info[1], &hrtf)) return;
-  const int sample_rate = sonare_node::node_arg_int(info, 2, 48000);
-  const int max_block_size = sonare_node::node_arg_int(info, 3, 1024);
+  int sample_rate = 48000;
+  int max_block_size = 1024;
+  if (!sonare_node::OptionalIntArg(env, info, 2, "sampleRate", 48000, &sample_rate) ||
+      !sonare_node::OptionalIntArg(env, info, 3, "maxBlockSize", 1024, &max_block_size)) {
+    return;
+  }
   sonare_node::ThrowIfError(
       env, sonare_playback_renderer_create_json(config_json.c_str(), hrtf, sample_rate,
                                                 max_block_size, &renderer_));

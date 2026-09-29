@@ -90,10 +90,15 @@ export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
 export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
 export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
 
-export interface AnalyzeWithProgressRequest extends SamplesRequest {
+export interface AnalyzeWithProgressRequest extends SamplesRequest, MusicAnalyzeOptions {
   onProgress?: AnalysisProgressCallback;
   cancel?: () => boolean;
-  /** Analysis options, with the same fields and defaults {@link analyze} takes. */
+  /**
+   * Analysis options, with the same fields and defaults {@link analyze} takes.
+   * Equivalent to setting the same fields directly on this request object (the
+   * flattened form {@link analyze}/{@link analyzeAsync} take); a field set both
+   * ways takes the value set here.
+   */
   options?: MusicAnalyzeOptions;
 }
 
@@ -153,6 +158,57 @@ export interface MusicAnalyzeOptions {
   tuning?: number;
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
+
+/**
+ * Every {@link MusicAnalyzeOptions} key, kept in sync with the interface by
+ * the type checker: `Record<keyof MusicAnalyzeOptions, true>` fails to
+ * compile if this object's keys and that interface's disagree in either
+ * direction.
+ */
+const MUSIC_ANALYZE_OPTION_KEYS: Record<keyof MusicAnalyzeOptions, true> = {
+  nFft: true,
+  hopLength: true,
+  bpmMin: true,
+  bpmMax: true,
+  startBpm: true,
+  useTriadsOnly: true,
+  useHpss: true,
+  chromaHighpassHz: true,
+  useBassWeighted: true,
+  chromaHopMultiplier: true,
+  useChordHmm: true,
+  useChordKeyContext: true,
+  chordHmmBeamWidth: true,
+  detectChordInversions: true,
+  adaptiveTempo: true,
+  tempoUpdateIntervalBeats: true,
+  computeTempoCurve: true,
+  meterCandidateNumerators: true,
+  meterDenominator: true,
+  tuning: true,
+};
+const MUSIC_ANALYZE_OPTION_KEY_LIST = Object.keys(
+  MUSIC_ANALYZE_OPTION_KEYS,
+) as (keyof MusicAnalyzeOptions)[];
+
+/**
+ * Pulls MusicAnalyzeOptions fields spread directly onto a request object
+ * (`analyze`/`analyzeAsync`'s flattened `MusicAnalyzeRequest` shape) rather
+ * than nested under `options` (`analyzeWithProgress`'s own documented shape).
+ * A request built for one is structurally assignable to the other -- every
+ * extra field either carries is optional on the other's type -- so a caller
+ * reusing one request object across both must not have either shape's fields
+ * silently dropped.
+ */
+function flattenedMusicAnalyzeOptions(request: MusicAnalyzeOptions): MusicAnalyzeOptions {
+  const out: MusicAnalyzeOptions = {};
+  for (const key of MUSIC_ANALYZE_OPTION_KEY_LIST) {
+    if (request[key] !== undefined) {
+      (out as Record<string, unknown>)[key] = request[key];
+    }
+  }
+  return out;
+}
 
 /** Request for {@link estimateMeter}. */
 export interface EstimateMeterRequest {
@@ -435,10 +491,19 @@ export function analyzeAsync(
   if (!(samples instanceof Float32Array) && (!samples || typeof samples !== 'object')) {
     return addon.analyzeAsync(samples as Float32Array, sampleRate);
   }
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('analyzeAsync', resolvedSampleRate);
-  return addon.analyzeAsync(request.samples, resolvedSampleRate, request);
+  // Normalizing and validating can throw (a bad sample rate, or an invalid
+  // option value the addon reports as a synchronous C++ throw rather than a
+  // pending-exception-to-reject conversion); route that through the same
+  // rejected-Promise contract so `analyzeAsync(...).catch(h)` sees every
+  // validation failure, matching masterAudioAsync/masterAudioStereoAsync.
+  try {
+    const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+    const resolvedSampleRate = request.sampleRate ?? 22050;
+    assertSampleRate('analyzeAsync', resolvedSampleRate);
+    return addon.analyzeAsync(request.samples, resolvedSampleRate, request);
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 /**
@@ -465,13 +530,22 @@ export function analyzeWithProgress(
     samples instanceof Float32Array ? { samples, sampleRate, onProgress, options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('analyzeWithProgress', resolvedSampleRate);
+  // A request object built from analyze/analyzeAsync's flattened
+  // MusicAnalyzeRequest shape carries its option fields directly on the
+  // request rather than nested under `options`; read both and let the
+  // nested `options` -- this function's own documented shape -- win a field
+  // present in both, rather than silently dropping the flattened ones.
+  const mergedOptions: MusicAnalyzeOptions = {
+    ...flattenedMusicAnalyzeOptions(request),
+    ...request.options,
+  };
   // The addon reads options with the same reader analyze uses.
   return addon.analyzeWithProgress(
     request.samples,
     resolvedSampleRate,
     request.onProgress ?? (() => {}),
     request.cancel ?? (() => false),
-    request.options ?? {},
+    mergedOptions,
   );
 }
 

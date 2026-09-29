@@ -54,6 +54,30 @@ describe('Node async API', () => {
       await expect(promise).rejects.toThrow(/Expected \(Float32Array, sampleRate\?\)/);
     });
 
+    it('rejects a bad sample rate or a wrong-typed option without throwing synchronously', async () => {
+      // Three distinct failure sites, all of which used to escape as a
+      // synchronous throw instead of a rejection: assertSampleRate (TS,
+      // unwrapped), and two C++ addon throws that unwind straight past the
+      // pending-exception check the async entry point had -- ReadMusicAnalyzeOptions'
+      // *Property family reports a wrong-typed OR out-of-range option by C++
+      // throw, not by leaving a pending exception. Driven through analyzeAsync
+      // itself (not the raw addon), so this is the contract a caller actually sees.
+      const samples = generateSine(440, 0.05);
+      const cases: Array<[string, () => Promise<unknown>]> = [
+        ['bad sample rate', () => analyzeAsync(samples, 0)],
+        ['nFft wrong type', () => analyzeAsync(samples, SR, { nFft: 'x' as unknown as number })],
+        ['nFft out of range', () => analyzeAsync(samples, SR, { nFft: 2 ** 40 })],
+      ];
+      for (const [label, run] of cases) {
+        let promise: Promise<unknown> | undefined;
+        expect(() => {
+          promise = run();
+        }, `${label} threw synchronously`).not.toThrow();
+        expect(promise, label).toBeInstanceOf(Promise);
+        await expect(promise, label).rejects.toThrow();
+      }
+    });
+
     it('rejects C-ABI failures as SonareError', async () => {
       let caught: unknown;
       try {

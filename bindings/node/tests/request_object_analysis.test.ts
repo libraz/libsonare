@@ -89,6 +89,49 @@ describe('analysis request-object compatibility', () => {
     expect(requestCalls).toBe(positionalCalls);
   });
 
+  it('honours MusicAnalyzeOptions flattened onto an analyzeWithProgress request', () => {
+    // A request built in analyze/analyzeAsync's flattened MusicAnalyzeRequest
+    // shape (bpmMin/bpmMax as top-level fields, not nested under `options`) is
+    // structurally assignable to AnalyzeWithProgressRequest too -- every field
+    // it carries is optional there -- so a caller reusing one across both used
+    // to have the flattened bounds silently dropped by analyzeWithProgress,
+    // which only ever read request.options.
+    //
+    // A steady tone, not the file's silent `samples`: bpmMin/bpmMax constrain
+    // the tempo search, and silence has no periodicity for that search to land
+    // on, so it reports the same value regardless of the bounds reaching it.
+    const tone = new Float32Array(sampleRate * 2).map(
+      (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate),
+    );
+    const flatRequest = { samples: tone, sampleRate, bpmMin: 190, bpmMax: 210 };
+    const viaAnalyze = analyze(flatRequest);
+    const viaProgress = analyzeWithProgress({ ...flatRequest, onProgress: () => {} });
+    expect(viaProgress.bpm).toBeGreaterThanOrEqual(190);
+    expect(viaProgress.bpm).toBeLessThanOrEqual(210);
+    expect(viaProgress.bpm).toBe(viaAnalyze.bpm);
+    // The positive control: without the bounds actually reaching the reader,
+    // this input's natural tempo does not land in [190, 210] on its own.
+    const withoutBounds = analyzeWithProgress({ samples: tone, sampleRate, onProgress: () => {} });
+    expect(withoutBounds.bpm).not.toBe(viaProgress.bpm);
+  });
+
+  it('lets a nested `options` field win over the same field flattened onto the request', () => {
+    const tone = new Float32Array(sampleRate * 2).map(
+      (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate),
+    );
+    const request = {
+      samples: tone,
+      sampleRate,
+      bpmMin: 190, // flattened -- must lose
+      bpmMax: 210, // flattened -- must lose
+      onProgress: () => {},
+      options: { bpmMin: 80, bpmMax: 90 }, // nested -- must win
+    };
+    const result = analyzeWithProgress(request);
+    expect(result.bpm).toBeGreaterThanOrEqual(80);
+    expect(result.bpm).toBeLessThanOrEqual(90);
+  });
+
   it('preserves advanced analysis option calls', () => {
     expect(analyzeSections({ samples, sampleRate, minSectionSec: 1 })).toEqual(
       analyzeSections(samples, sampleRate, { minSectionSec: 1 }),

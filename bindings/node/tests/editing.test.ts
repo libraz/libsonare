@@ -89,6 +89,30 @@ describe('editing effects', () => {
     expect(pyinResult.every((x) => Number.isFinite(x))).toBe(true);
   });
 
+  it('pitchCorrectToMidiTimevarying derives voicing from voicedProb when voiced is omitted', () => {
+    // voicedProb below 0.5 must behave exactly like an explicit all-unvoiced
+    // array, and at/above 0.5 exactly like an explicit all-voiced one -- never
+    // like "every frame voiced" regardless of what voicedProb says.
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    const lowProb = new Float32Array(nFrames).fill(0.1);
+    const highProb = new Float32Array(nFrames).fill(0.9);
+    const allUnvoiced = new Int32Array(nFrames).fill(0);
+    const allVoiced = new Int32Array(nFrames).fill(1);
+
+    const viaLowProb = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, lowProb);
+    const viaExplicitUnvoiced = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, allUnvoiced);
+    expect(Array.from(viaLowProb)).toEqual(Array.from(viaExplicitUnvoiced));
+
+    const viaHighProb = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, highProb);
+    const viaExplicitVoiced = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, allVoiced);
+    expect(Array.from(viaHighProb)).toEqual(Array.from(viaExplicitVoiced));
+
+    // The two derived answers must actually differ, or this proves nothing.
+    expect(viaLowProb.some((x, i) => Math.abs(x - viaHighProb[i]) > 1e-6)).toBe(true);
+  });
+
   it('rejects mismatched pitch-track companion arrays before native reads', () => {
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;

@@ -65,9 +65,9 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     Napi::Object options = info[2].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
     hop_length = IntProperty(options, "hopLength", hop_length);
-    use_hpss = node_bool_option(options, "useHpss", use_hpss);
-    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
+    use_hpss = BoolProperty(options, "useHpss", use_hpss);
+    loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = FiniteFloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     Napi::Value genre = options.Get("genreHint");
@@ -113,9 +113,9 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
     Napi::Object options = info[2].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
     hop_length = IntProperty(options, "hopLength", hop_length);
-    use_hpss = node_bool_option(options, "useHpss", use_hpss);
-    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
+    use_hpss = BoolProperty(options, "useHpss", use_hpss);
+    loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = FiniteFloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     Napi::Value genre = options.Get("genreHint");
@@ -290,14 +290,14 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
     config.n_fft = IntProperty(options, "nFft", config.n_fft);
     config.hop_length = IntProperty(options, "hopLength", config.hop_length);
     config.threshold = FloatProperty(options, "threshold", config.threshold);
-    config.pre_max = node_int_option(options, "preMax", config.pre_max);
-    config.post_max = node_int_option(options, "postMax", config.post_max);
-    config.pre_avg = node_int_option(options, "preAvg", config.pre_avg);
-    config.post_avg = node_int_option(options, "postAvg", config.post_avg);
+    config.pre_max = IntProperty(options, "preMax", config.pre_max);
+    config.post_max = IntProperty(options, "postMax", config.post_max);
+    config.pre_avg = IntProperty(options, "preAvg", config.pre_avg);
+    config.post_avg = IntProperty(options, "postAvg", config.post_avg);
     config.delta = FloatProperty(options, "delta", config.delta);
-    config.wait = node_int_option(options, "wait", config.wait);
-    config.backtrack = node_bool_option(options, "backtrack", false) ? 1 : 0;
-    config.backtrack_range = node_int_option(options, "backtrackRange", config.backtrack_range);
+    config.wait = IntProperty(options, "wait", config.wait);
+    config.backtrack = BoolProperty(options, "backtrack", false) ? 1 : 0;
+    config.backtrack_range = IntProperty(options, "backtrackRange", config.backtrack_range);
   }
 
   float* times = nullptr;
@@ -433,7 +433,20 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate = node_arg_int(info, 1, 22050);
   SonareMusicAnalyzeOptions options{};
-  const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
+  bool has_options = false;
+  try {
+    // Most ReadMusicAnalyzeOptions fields (the *Property family) report a
+    // wrong-typed value by C++ throw, which unwinds straight past a
+    // pending-exception check -- unlike the array field
+    // (meterCandidateNumerators), which leaves a pending exception without
+    // throwing. Both must become a rejection rather than a synchronous throw
+    // out of this Promise-returning entry point.
+    has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
+  } catch (const Napi::Error& e) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(e.Value());
+    return deferred.Promise();
+  }
   if (env.IsExceptionPending()) {
     // The async form reports bad input as a rejected Promise, so the pending
     // exception is cleared before it can collide with the Promise plumbing.

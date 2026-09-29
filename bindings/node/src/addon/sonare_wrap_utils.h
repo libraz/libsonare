@@ -10,6 +10,7 @@
 
 #include "mastering/api/named_processor.h"
 #include "sonare_wrap_options.h"
+#include "util/error_classification.h"
 #include "util/exception.h"
 namespace sonare_node {
 
@@ -264,12 +265,9 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
     sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \
     return env.Undefined();                                                                   \
   }                                                                                           \
-  catch (const std::bad_alloc&) {                                                             \
-    sonare_node::ThrowSonareError(env, SONARE_ERROR_OUT_OF_MEMORY);                           \
-    return env.Undefined();                                                                   \
-  }                                                                                           \
   catch (const std::exception& e) {                                                           \
-    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();                             \
+    sonare_node::ThrowSonareErrorMessage(                                                     \
+        env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)), e.what());    \
     return env.Undefined();                                                                   \
   }                                                                                           \
   catch (...) {                                                                               \
@@ -288,11 +286,9 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
   catch (const sonare::SonareException& e) {                                                  \
     sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \
   }                                                                                           \
-  catch (const std::bad_alloc&) {                                                             \
-    sonare_node::ThrowSonareError(env, SONARE_ERROR_OUT_OF_MEMORY);                           \
-  }                                                                                           \
   catch (const std::exception& e) {                                                           \
-    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();                             \
+    sonare_node::ThrowSonareErrorMessage(                                                     \
+        env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)), e.what());    \
   }                                                                                           \
   catch (...) {                                                                               \
     Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();                      \
