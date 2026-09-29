@@ -68,7 +68,10 @@ void StreamAnalyzer::flush_pending_chord() {
 }
 
 void StreamAnalyzer::update_progressive_estimate(float current_time) {
-  current_estimate_.accumulated_seconds = current_time;
+  /// current_time is on the caller's timeline; the confidence ramp, the update
+  /// intervals and accumulated_seconds count only audio fed since reset().
+  const float elapsed = std::max(0.0f, current_time - base_time_sec_);
+  current_estimate_.accumulated_seconds = elapsed;
   current_estimate_.used_frames = frame_count_;
   /// current_estimate_.updated is deliberately NOT cleared here. It reports
   /// whether a key or BPM re-estimate happened in the interval the consumer is
@@ -79,7 +82,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 
   /// Update key estimate using Krumhansl-Schmuckler correlation
   if (config_.compute_chroma && chroma_frame_count_ > 0) {
-    float time_since_key_update = current_time - last_key_update_time_;
+    float time_since_key_update = elapsed - last_key_update_time_;
     if (time_since_key_update >= config_.key_update_interval_sec) {
       /// Normalize chroma_sum for key detection
       std::array<float, 12> mean_chroma;
@@ -99,11 +102,11 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       current_estimate_.key_minor = key_match.minor;
 
       /// Confidence based on correlation strength and time
-      float time_factor = std::min(1.0f, current_time / kConfidenceRampSeconds);
+      float time_factor = std::min(1.0f, elapsed / kConfidenceRampSeconds);
       float corr_factor = (key_match.correlation + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
       current_estimate_.key_confidence = corr_factor * time_factor;
 
-      last_key_update_time_ = current_time;
+      last_key_update_time_ = elapsed;
       current_estimate_.updated = true;
     }
 
@@ -206,7 +209,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
   if (config_.compute_onset) {
     int n_onset = static_cast<int>(onset_accumulator_size_);
 
-    float time_since_bpm_update = current_time - last_bpm_update_time_;
+    float time_since_bpm_update = elapsed - last_bpm_update_time_;
     if (time_since_bpm_update >= config_.bpm_update_interval_sec && n_onset >= kMinOnsetFrames) {
       /// Compute max lag based on minimum BPM (use internal sample rate)
       int max_lag = bpm_to_lag(kBpmMin, internal_sample_rate_, config_.hop_length);
@@ -237,10 +240,10 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 
         /// Combine relative confidence with time-based confidence
         /// Time factor: confidence increases as we get more data (up to the ramp)
-        float time_factor = std::min(1.0f, current_time / kConfidenceRampSeconds);
+        float time_factor = std::min(1.0f, elapsed / kConfidenceRampSeconds);
         current_estimate_.bpm_confidence = tempo.confidence * time_factor;
 
-        last_bpm_update_time_ = current_time;
+        last_bpm_update_time_ = elapsed;
         current_estimate_.updated = true;
       }
     }

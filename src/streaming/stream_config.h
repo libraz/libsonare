@@ -18,6 +18,11 @@ enum class OutputFormat {
   Uint8 = 2,    ///< 8-bit unsigned integer (for visualization)
 };
 
+/// @brief Rate the streaming analyzer runs at once the input exceeds
+///        kStreamMaxDirectSampleRate; slower inputs are analyzed at their own rate.
+inline constexpr int kStreamInternalSampleRate = 44100;
+inline constexpr int kStreamMaxDirectSampleRate = 44100;
+
 inline constexpr size_t kDefaultStreamMaxPendingFrames = 4096;
 inline constexpr size_t kMaxStreamPendingFrames = 1u << 20;
 inline constexpr size_t kDefaultStreamMaxProgressionEntries = 4096;
@@ -121,14 +126,20 @@ struct StreamConfig {
   /// @brief Returns overlap size in samples.
   int overlap() const { return n_fft - hop_length; }
 
-  /// @brief Returns frame duration in seconds.
-  float frame_duration() const {
-    return static_cast<float>(hop_length) / static_cast<float>(sample_rate);
+  /// @brief Returns the rate frames are analyzed at: the input rate, or
+  ///        kStreamInternalSampleRate when the input is resampled.
+  int analysis_sample_rate() const {
+    return sample_rate > kStreamMaxDirectSampleRate ? kStreamInternalSampleRate : sample_rate;
   }
 
-  /// @brief Returns maximum frequency for mel.
+  /// @brief Returns the spacing of emitted frames in seconds.
+  float frame_duration() const {
+    return static_cast<float>(hop_length) / static_cast<float>(analysis_sample_rate());
+  }
+
+  /// @brief Returns maximum frequency for mel; 0 selects the analysis Nyquist.
   float effective_fmax() const {
-    return fmax > 0.0f ? fmax : static_cast<float>(sample_rate) / 2.0f;
+    return fmax > 0.0f ? fmax : static_cast<float>(analysis_sample_rate()) / 2.0f;
   }
 };
 

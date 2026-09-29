@@ -24,6 +24,8 @@ struct StreamResampler::Impl {
   std::vector<double> input_block;  ///< Reused double-precision input scratch.
   size_t total_input_samples = 0;
   size_t total_output_samples = 0;
+  /// Zero input that always covers the filter latency; see finalize().
+  size_t drain_input_limit = 0;
 };
 
 StreamResampler::StreamResampler(int src_sr, int dst_sr) : impl_(std::make_unique<Impl>()) {
@@ -34,6 +36,11 @@ StreamResampler::StreamResampler(int src_sr, int dst_sr) : impl_(std::make_uniqu
   if (!impl_->passthrough) {
     impl_->resampler = std::make_unique<r8b::CDSPResampler24>(
         static_cast<double>(src_sr), static_cast<double>(dst_sr), kBlockSize);
+    // r8brain answers drain lengths only from the start of the stream, in int
+    // samples. The latency is constant, so bound it once from a short probe.
+    impl_->drain_input_limit =
+        static_cast<size_t>(impl_->resampler->getInputRequiredForOutput(kBlockSize)) +
+        static_cast<size_t>(kBlockSize);
   }
   impl_->input_block.reserve(kBlockSize);
 }
@@ -115,31 +122,9 @@ void StreamResampler::finalize(std::vector<float>& out) {
   if (impl_->total_output_samples >= expected_output) {
     return;
   }
-  if (expected_output > static_cast<size_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "stream resampler final output exceeds supported drain length");
-  }
-  // r8brain's drain-length helper returns int input samples. Downsampling can
-  // require substantially more input than output, so constrain the requested
-  // output by the source/destination ratio before calling it; otherwise a very
-  // long high-rate stream could overflow inside the helper despite fitting the
-  // output-side int check above. kBlockSize leaves room for filter latency.
-  const long double max_helper_output =
-      static_cast<long double>(std::numeric_limits<int>::max() - kBlockSize) *
-      static_cast<long double>(impl_->dst_sr) / static_cast<long double>(impl_->src_sr);
-  if (static_cast<long double>(expected_output) > max_helper_output) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "stream resampler final input exceeds supported drain length");
-  }
-  const int required_input_int =
-      impl_->resampler->getInputRequiredForOutput(static_cast<int>(expected_output));
-  if (required_input_int < 0) {
-    throw SonareException(ErrorCode::InvalidState,
-                          "stream resampler returned an invalid drain length");
-  }
-  const size_t required_input = static_cast<size_t>(required_input_int);
-  size_t flush_remaining =
-      required_input > impl_->total_input_samples ? required_input - impl_->total_input_samples : 0;
+  // Drain by the output still owed rather than an absolute position, so a
+  // stream of any length finalizes.
+  size_t flush_remaining = impl_->drain_input_limit;
 
   impl_->input_block.assign(kBlockSize, 0.0);
   while (impl_->total_output_samples < expected_output && flush_remaining > 0) {

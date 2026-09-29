@@ -9,6 +9,7 @@
 #include "analysis/progression_patterns.h"
 #include "core/resample.h"
 #include "stream_analyzer_test_helpers.h"
+#include "streaming/stream_resampler.h"
 #include "support/alloc_guard.h"
 #include "util/exception.h"
 
@@ -34,6 +35,25 @@ TEST_CASE("StreamConfig helpers", "[streaming]") {
   SECTION("effective_fmax custom") {
     config.fmax = 8000.0f;
     REQUIRE_THAT(config.effective_fmax(), WithinAbs(8000.0f, 0.1f));
+  }
+}
+
+TEST_CASE("StreamConfig frame_duration matches the spacing of emitted frames", "[streaming]") {
+  for (const int sr : {22050, 44100, 48000, 96000}) {
+    CAPTURE(sr);
+    StreamConfig config;
+    config.sample_rate = sr;
+    config.n_fft = 2048;
+    config.hop_length = 512;
+    config.max_pending_frames = 256;
+    StreamAnalyzer analyzer(config);
+    const std::vector<float> audio = generate_sine(sr * 2, 440.0f, sr);
+    analyzer.process(audio.data(), audio.size());
+    const auto frames = analyzer.read_frames(256);
+    REQUIRE(frames.size() > 20);
+    const float spacing = (frames[20].timestamp - frames[0].timestamp) / 20.0f;
+    CHECK_THAT(config.frame_duration(), WithinRel(spacing, 1e-3f));
+    CHECK(config.effective_fmax() <= static_cast<float>(std::min(sr, 44100)) * 0.5f + 0.1f);
   }
 }
 
@@ -1766,4 +1786,65 @@ TEST_CASE("StreamAnalyzer counts a call whose input it had to scrub", "[streamin
     analyzer.reset();
     REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
   }
+}
+
+TEST_CASE("StreamAnalyzer confidence ramp counts audio since reset and ignores the timeline anchor",
+          "[streaming][offset]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+  config.compute_onset = true;
+  config.key_update_interval_sec = 2.0f;
+  config.bpm_update_interval_sec = 4.0f;
+
+  const int seconds = 6;
+  const std::vector<float> audio =
+      generate_chord_click_bed(seconds * config.sample_rate, config.sample_rate, 120.0f);
+  const size_t base = static_cast<size_t>(config.sample_rate) * 600;
+
+  StreamAnalyzer origin(config);
+  origin.process(audio.data(), audio.size());
+  const ProgressiveEstimate expected = origin.stats().estimate;
+  REQUIRE(expected.key_confidence > 0.0f);
+  REQUIRE(expected.bpm_confidence > 0.0f);
+  REQUIRE_THAT(expected.accumulated_seconds, WithinAbs(static_cast<float>(seconds), 0.1f));
+
+  StreamAnalyzer seeked(config);
+  seeked.reset(base);
+  seeked.process(audio.data(), audio.size());
+
+  StreamAnalyzer external(config);
+  external.process(audio.data(), audio.size(), base);
+
+  for (StreamAnalyzer* analyzer : {&seeked, &external}) {
+    const ProgressiveEstimate got = analyzer->stats().estimate;
+    CHECK_THAT(got.accumulated_seconds, WithinAbs(expected.accumulated_seconds, 1e-3f));
+    CHECK_THAT(got.key_confidence, WithinAbs(expected.key_confidence, 1e-4f));
+    CHECK_THAT(got.bpm_confidence, WithinAbs(expected.bpm_confidence, 1e-4f));
+  }
+}
+
+TEST_CASE("StreamResampler finalizes a stream past the int sample range", "[.][slow][streaming]") {
+  // 2^31 + 2^26 input samples: past what r8brain's int drain helper can address.
+  const int src = 2822400;
+  const int dst = 44100;
+  const size_t total = (size_t{1} << 31) + (size_t{1} << 26);
+  streaming_detail::StreamResampler resampler(src, dst);
+  std::vector<float> chunk(size_t{1} << 22, 0.0f);
+  std::vector<float> out;
+  size_t produced = 0;
+  for (size_t fed = 0; fed < total; fed += chunk.size()) {
+    out.clear();
+    resampler.process(chunk.data(), chunk.size(), out);
+    produced += out.size();
+  }
+  out.clear();
+  REQUIRE_NOTHROW(resampler.finalize(out));
+  produced += out.size();
+  CHECK(produced == total / static_cast<size_t>(src / dst));
+  out.clear();
+  resampler.finalize(out);
+  CHECK(out.empty());
 }

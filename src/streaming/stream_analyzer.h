@@ -279,9 +279,9 @@ class StreamAnalyzer {
 
   // Internal sample rate for analysis (downsample if input is higher)
   // Using 44100 Hz internally ensures consistent results regardless of input sample rate
-  static constexpr int kInternalSampleRate = 44100;
-  static constexpr int kMaxDirectSampleRate = 44100;  // Resample anything above 44100 Hz
-  int internal_sample_rate_;                          // Actual rate used for analysis
+  static constexpr int kInternalSampleRate = kStreamInternalSampleRate;
+  static constexpr int kMaxDirectSampleRate = kStreamMaxDirectSampleRate;
+  int internal_sample_rate_;  // Actual rate used for analysis
   bool needs_resampling_ = false;
   bool needs_mel_analysis_ = false;
   float resample_ratio_ = 1.0f;
