@@ -148,6 +148,32 @@ constexpr const char* enum_choice_name(sonare::mastering::final::DitherType valu
   return nullptr;
 }
 
+constexpr const char* enum_choice_name(sonare::mastering::saturation::BitCrusherDiscType value) {
+  switch (value) {
+    case sonare::mastering::saturation::BitCrusherDiscType::kLp:
+      return "lp";
+    case sonare::mastering::saturation::BitCrusherDiscType::kEp:
+      return "ep";
+    case sonare::mastering::saturation::BitCrusherDiscType::kSp:
+      return "sp";
+    case sonare::mastering::saturation::BitCrusherDiscType::kRnd:
+      return "rnd";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::BitCrusherFilterType value) {
+  switch (value) {
+    case sonare::mastering::saturation::BitCrusherFilterType::kOff:
+      return "off";
+    case sonare::mastering::saturation::BitCrusherFilterType::kLowpass:
+      return "lowpass";
+    case sonare::mastering::saturation::BitCrusherFilterType::kHighpass:
+      return "highpass";
+  }
+  return nullptr;
+}
+
 constexpr const char* enum_choice_name(sonare::mastering::saturation::QuantizerMode value) {
   switch (value) {
     case sonare::mastering::saturation::QuantizerMode::kFixedDepth:
@@ -796,7 +822,24 @@ inline double field_as_double(Enum value) {
   X("ditherType", dither_type)             \
   X("ditherSeed", dither_seed)             \
   X("holdHz", hold_hz)                     \
-  X("quantizerMode", quantizer_mode)
+  X("quantizerMode", quantizer_mode)       \
+  X("radioNoiseLevel", radio_noise_level)  \
+  X("wpNoiseLevel", wp_noise_level)        \
+  X("discNoiseLevel", disc_noise_level)    \
+  X("humLevel", hum_level)                 \
+  X("noiseDetune", noise_detune)           \
+  X("wpNoisePink", wp_noise_pink)          \
+  X("discType", disc_type)                 \
+  X("humHz", hum_hz)                       \
+  X("noiseLpfHz", noise_lpf_hz)            \
+  X("wpNoiseLpfHz", wp_noise_lpf_hz)       \
+  X("discNoiseLpfHz", disc_noise_lpf_hz)   \
+  X("humLpfHz", hum_lpf_hz)                \
+  X("preFilterHz", pre_filter_hz)          \
+  X("postFilterHz", post_filter_hz)        \
+  X("filterType", filter_type)             \
+  X("mono", mono)                          \
+  X("typeLadder", type_ladder)
 
 #define SONARE_FIELDS_HARD_CLIPPER(X) \
   X("ceiling", ceiling)               \

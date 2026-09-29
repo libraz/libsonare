@@ -251,6 +251,11 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
           "effects.reverb.dattorro",
           R"({"dampingHz":2500,"gateThresholdDb":-40,"gateHoldMs":120,"gateType":2,"character":5})") !=
       nullptr);
+  REQUIRE(
+      make_insert(
+          "saturation.bitcrusher",
+          R"({"radioNoiseLevel":0.2,"noiseDetune":0.5,"wpNoiseLevel":0.1,"wpNoisePink":true,"discNoiseLevel":0.3,"discType":2,"humLevel":0.05,"humHz":60,"noiseLpfHz":8000,"wpNoiseLpfHz":4000,"discNoiseLpfHz":6000,"humLpfHz":500,"preFilterHz":8000,"postFilterHz":2000,"filterType":2,"mono":true,"typeLadder":4})") !=
+      nullptr);
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
@@ -1774,6 +1779,9 @@ TEST_CASE("an enum wire value no enumerator is declared for is refused",
       {"saturation.waveshaper", R"({"curve":3})"},
       {"saturation.bitcrusher", R"({"ditherType":4})"},
       {"saturation.bitcrusher", R"({"quantizerMode":2})"},
+      {"saturation.bitcrusher", R"({"filterType":3})"},
+      {"saturation.bitcrusher", R"({"discType":4})"},
+      {"saturation.bitcrusher", R"({"typeLadder":10})"},
   };
   for (const auto& [name, params] : undeclared) {
     INFO(name << " " << params);

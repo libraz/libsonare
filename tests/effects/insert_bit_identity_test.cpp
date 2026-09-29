@@ -207,7 +207,7 @@ TEST_CASE(
     const RenderResult empty = render("saturation.bitcrusher", "{}");
     const RenderResult explicit_defaults = render(
         "saturation.bitcrusher",
-        R"({"bitDepth":12,"downsampleFactor":1,"mix":1.0,"ditherType":0,"ditherSeed":5351397,"holdHz":0.0,"quantizerMode":0})");
+        R"({"bitDepth":12,"downsampleFactor":1,"mix":1.0,"ditherType":0,"ditherSeed":5351397,"holdHz":0.0,"quantizerMode":0,"radioNoiseLevel":0.0,"wpNoiseLevel":0.0,"discNoiseLevel":0.0,"humLevel":0.0,"noiseDetune":1.0,"wpNoisePink":false,"discType":0,"humHz":50.0,"noiseLpfHz":0.0,"wpNoiseLpfHz":0.0,"discNoiseLpfHz":0.0,"humLpfHz":0.0,"preFilterHz":0.0,"postFilterHz":0.0,"filterType":1,"mono":false,"typeLadder":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);

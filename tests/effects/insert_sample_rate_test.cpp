@@ -31,6 +31,7 @@
 /// - ensemble pre-delay deviation, spacing between voices in seconds: the deviation itself.
 /// - flanger step rate, hold period in seconds: the reciprocal of the step rate.
 /// - lofi, first aperture null in Hz: the hold rate itself.
+/// - lofi pre-filter, half-power corner in Hz: the corner itself (bilinear pole).
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
 /// - rotary, acceleration time constant in seconds: the time constant itself.
 /// - rotary fast horn speed, tremolo rate in Hz: the rate asked for.
@@ -646,6 +647,46 @@ Null first_null_hz(float hold_hz, double sample_rate) {
   return best;
 }
 
+// The lofi pre-filter's -3 dB corner: the frequency at which the filtered tone's
+// amplitude has fallen to one over root two, found by bisection over a
+// monotone low-pass. Held to the asked corner at each rate and across rates.
+constexpr float kLofiPreFilterHz = 1500.0f;
+constexpr double kLofiCornerTolerance = 0.01;
+constexpr double kHalfPowerGain = 0.70710678118654752440;
+constexpr int kCornerBisections = 24;
+constexpr double kCornerProbeSeconds = 0.2;
+
+/// Amplitude the pre-filter passes at @p probe_hz, read over the second half of the tone.
+double lofi_pre_filter_gain(float corner_hz, double sample_rate, double probe_hz) {
+  BitCrusherConfig config;
+  config.quantizer_mode = QuantizerMode::kOff;
+  config.pre_filter_hz = corner_hz;
+  BitCrusher processor(config);
+  const std::size_t count = static_cast<std::size_t>(sample_rate * kCornerProbeSeconds);
+  processor.prepare(sample_rate, static_cast<int>(count));
+  std::vector<float> tone(count);
+  const double step = kTwoPiD * probe_hz / sample_rate;
+  for (std::size_t i = 0; i < count; ++i) {
+    tone[i] = static_cast<float>(std::sin(step * static_cast<double>(i)));
+  }
+  float* channels[] = {tone.data()};
+  processor.process(channels, 1, static_cast<int>(count));
+  double energy = 0.0;
+  const std::size_t from = count / 2;
+  for (std::size_t i = from; i < count; ++i) energy += static_cast<double>(tone[i]) * tone[i];
+  return std::sqrt(2.0 * energy / static_cast<double>(count - from));
+}
+
+double lofi_pre_filter_corner_hz(float corner_hz, double sample_rate) {
+  double lo = 0.2 * static_cast<double>(corner_hz);
+  double hi = 4.0 * static_cast<double>(corner_hz);
+  for (int i = 0; i < kCornerBisections; ++i) {
+    const double mid = std::sqrt(lo * hi);
+    (lofi_pre_filter_gain(corner_hz, sample_rate, mid) > kHalfPowerGain ? lo : hi) = mid;
+  }
+  return std::sqrt(lo * hi);
+}
+
 /// How far @p value sits from the nearest whole number.
 double distance_from_whole(double value) { return std::fabs(value - std::round(value)); }
 
@@ -1254,6 +1295,22 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     }
     tally.within(measured[0], measured[1], kNullTolerance,
                  "the lofi aperture null lands on one frequency at both rates, " + asked);
+  }
+
+  // --- lofi pre-filter: the -3 dB corner, in hertz ---------------------------
+  {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = lofi_pre_filter_corner_hz(kLofiPreFilterHz, rates[r]);
+      WARN("lofi pre-filter corner" << at_rate(rates[r]) << ": " << measured[r] << " Hz");
+      // Against what was asked for, per rate; the cross-rate check below is the
+      // other half of the pair and neither one covers the other.
+      tally.within(
+          measured[r], static_cast<double>(kLofiPreFilterHz), kLofiCornerTolerance,
+          "the lofi pre-filter corner" + at_rate(rates[r]) + ", against the corner asked for");
+    }
+    tally.within(measured[0], measured[1], kLofiCornerTolerance,
+                 "the lofi pre-filter corner lands on one frequency at both rates");
   }
 
   // --- pitch shifter: the beat period, in seconds ---------------------------
