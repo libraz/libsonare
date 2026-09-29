@@ -117,9 +117,10 @@ inline bool destination_emits_midi2(const SoundDestination& destination) noexcep
 /// group is forced to the external port's @ref ExternalPortDescriptor::group so
 /// the event lands on the configured group. Messages that are already in the
 /// target protocol (and non-channel-voice messages) pass through with only the
-/// group applied. A MIDI 2.0-only form (per-note / registered controller) that
-/// has no MIDI 1.0 equivalent yields an Ump with `word_count == 0` (caller
-/// drops it). RT-safe; no allocation.
+/// group applied. A form with no single-message MIDI 1.0 equivalent (per-note
+/// controllers; registered / assignable controllers, which need
+/// @ref convert_for_destination_messages) yields an Ump with `word_count == 0`
+/// (caller drops it). RT-safe; no allocation.
 inline Ump convert_for_destination(const Ump& ump, const SoundDestination& destination) noexcept {
   Ump out = ump;
   const bool to_midi2 = destination_emits_midi2(destination);
@@ -141,8 +142,9 @@ inline Ump convert_for_destination(const Ump& ump, const SoundDestination& desti
 /// that lower to a single UMP, but a MIDI 2.0 program change with the bank-valid
 /// flag, sent to a MIDI 1.0 port, expands to CC#0 (bank MSB), CC#32 (bank LSB)
 /// and Program Change so the device selects the intended bank/patch instead of
-/// dropping the bank. The external port's group is applied to every emitted
-/// message. RT-safe; no allocation. Callers send `messages[0..count)` in order.
+/// dropping the bank, and a registered / assignable controller expands to its
+/// RPN / NRPN selector pair plus Data Entry MSB/LSB. The external port's group is applied to every
+/// emitted message. RT-safe; no allocation. Callers send `messages[0..count)` in order.
 inline Midi1MessageList convert_for_destination_messages(
     const Ump& ump, const SoundDestination& destination) noexcept {
   Midi1MessageList out;

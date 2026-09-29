@@ -18,8 +18,10 @@
 ///     trip is lossless; a 2.0 value with non-zero low bits is not.
 ///   - Note number, channel, group, CC index, program and bank are identical
 ///     fields in both protocols and always round-trip.
-///   - Per-note and registered/assignable controllers, the note-on attribute and
-///     per-note pitch exist only in 2.0 and are DROPPED on down-convert.
+///   - Registered / assignable controllers lower to the four-message RPN / NRPN
+///     sequence (selector MSB/LSB, then Data Entry MSB/LSB). Per-note
+///     controllers, the note-on attribute and per-note pitch exist only in 2.0
+///     and are DROPPED on down-convert.
 
 #include <array>
 #include <cstddef>
@@ -397,24 +399,37 @@ size_t ump_to_midi1_bytes(const Ump& ump, uint8_t* out, size_t cap) noexcept;
 Ump midi1_to_midi2(const Ump& ump) noexcept;
 
 /// Down-converts a MIDI 2.0 channel-voice UMP to MIDI 1.0. Velocity/CC are
-/// down-scaled to 7 bits (LOSSY low bits). Per-note / registered controllers
-/// have no MIDI 1.0 equivalent: those return an Ump with `word_count == 0`
-/// (caller should drop them). Returns the original unchanged if `ump` is not a
+/// down-scaled to 7 bits (LOSSY low bits). Forms with no single-message MIDI 1.0
+/// equivalent -- per-note controllers, and registered / assignable controllers,
+/// which take four (see midi2_to_midi1_messages()) -- return an Ump with
+/// `word_count == 0` (caller should drop them). Returns the original unchanged if `ump` is not a
 /// MIDI 2.0 channel-voice message.
 Ump midi2_to_midi1(const Ump& ump) noexcept;
 
 /// A MIDI 2.0 -> MIDI 1.0 conversion result that can carry multi-message
-/// lowerings such as bank-select CC#0/CC#32 plus program-change.
+/// lowerings such as bank-select CC#0/CC#32 plus program-change, or an RPN /
+/// NRPN selector pair plus Data Entry MSB/LSB.
 struct Midi1MessageList {
-  std::array<Ump, 3> messages{};
+  std::array<Ump, 4> messages{};
   uint8_t count = 0;
 };
 
 /// Down-converts one UMP into zero or more MIDI 1.0 channel-voice UMPs. Most
 /// channel-voice messages produce one output; a MIDI 2.0 Program Change with
 /// the bank-valid flag set produces CC#0, CC#32, and Program Change at the same
-/// timestamp. MIDI 2.0-only controller forms produce count == 0.
+/// timestamp; a Registered (Assignable) Controller produces CC#101/100
+/// (CC#99/98) with its bank and index, then CC#6 and CC#38 with the top 14 bits
+/// of its value. Per-note controller forms produce count == 0.
 Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept;
+
+/// True for a MIDI 2.0 Registered or Assignable (channel) Controller: the RPN /
+/// NRPN forms, which carry a 32-bit value like a Control Change but address it
+/// by (bank, index), and which midi2_to_midi1_messages() lowers to four messages.
+inline bool is_registered_or_assignable_controller(const Ump& ump) noexcept {
+  return ump.message_type() == UmpMessageType::kMidi2ChannelVoice &&
+         (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kRegisteredController) ||
+          ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kAssignableController));
+}
 
 /// 7-bit -> 16-bit velocity up-scale (bit-replication scaling: repeats the
 /// source bits to fill the destination width). Distinct from pitch bend's

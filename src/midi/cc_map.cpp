@@ -20,19 +20,6 @@ bool is_control_change(const Ump& ump) noexcept {
   return ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange);
 }
 
-// The MIDI 2.0 one-word RPN / NRPN forms. They are controller messages that
-// carry a 32-bit value in word[1] exactly like a MIDI 2.0 Control Change, but
-// address it by (bank, index) instead of by controller number -- which is what
-// param_to_cc emits for a selector-addressed binding.
-bool is_registered_or_assignable_controller(const Ump& ump) noexcept {
-  if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) {
-    return false;
-  }
-  const uint8_t status = ump.status_nibble();
-  return status == static_cast<uint8_t>(UmpStatus::kRegisteredController) ||
-         status == static_cast<uint8_t>(UmpStatus::kAssignableController);
-}
-
 // True for the kinds addressed by an RPN/NRPN selector pair rather than by their
 // own controller number. Their cc_number is the Data Entry controller every such
 // binding shares, so it identifies nothing on its own.

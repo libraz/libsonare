@@ -648,7 +648,8 @@ Ump midi2_to_midi1(const Ump& ump) noexcept {
     case UmpStatus::kAssignablePerNoteController:
     case UmpStatus::kRegisteredController:
     case UmpStatus::kAssignableController: {
-      // MIDI 2.0 controller forms have no MIDI 1.0 equivalent: signal "drop me".
+      // No single-message MIDI 1.0 form (the channel controllers take four, see
+      // midi2_to_midi1_messages()): signal "drop me".
       Ump dropped;
       dropped.word_count = 0;
       return dropped;
@@ -683,6 +684,20 @@ Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept {
       out.count = 3;
       return out;
     }
+  }
+
+  if (is_registered_or_assignable_controller(ump)) {
+    const bool registered = status == static_cast<uint8_t>(UmpStatus::kRegisteredController);
+    const uint8_t bank = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
+    const uint8_t index = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
+    const uint8_t data_msb = static_cast<uint8_t>((ump.words[1] >> 25u) & 0x7Fu);
+    const uint8_t data_lsb = static_cast<uint8_t>((ump.words[1] >> 18u) & 0x7Fu);
+    out.messages[0] = make_midi1_control_change(ump.group, channel, registered ? 101 : 99, bank);
+    out.messages[1] = make_midi1_control_change(ump.group, channel, registered ? 100 : 98, index);
+    out.messages[2] = make_midi1_control_change(ump.group, channel, 6, data_msb);
+    out.messages[3] = make_midi1_control_change(ump.group, channel, 38, data_lsb);
+    out.count = 4;
+    return out;
   }
 
   const Ump single = midi2_to_midi1(ump);

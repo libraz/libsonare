@@ -464,3 +464,83 @@ TEST_CASE("SMF2 export preserves clip length beyond the final event", "[midi][sm
   // Without threading the length through, End-of-Clip would sit at ppq 2.0.
   REQUIRE(imported.clip_lengths_ppq.front() == Catch::Approx(8.0));
 }
+
+// An in-track defect that the chunk length lets the parser step over keeps the
+// track's parsed prefix and every later track, whatever the defect is.
+TEST_CASE("SMF import keeps the prefix and later tracks past an in-track event defect", "[midi]") {
+  const auto import_with_defect = [](const std::vector<uint8_t>& defect) {
+    // Track 0: note 60 on, then the defect, then an end-of-track the parser
+    // never reaches.
+    std::vector<uint8_t> track0 = {0x00, 0x90, 0x3C, 0x64};
+    track0.insert(track0.end(), defect.begin(), defect.end());
+    track0.insert(track0.end(), {0x00, 0xFF, 0x2F, 0x00});
+    // Track 1: a clean note 64.
+    const std::vector<uint8_t> track1 = {0x00, 0x90, 0x40, 0x64, 0x60, 0x80,
+                                         0x40, 0x00, 0x00, 0xFF, 0x2F, 0x00};
+    std::vector<uint8_t> smf;
+    push_tag(&smf, "MThd");
+    push_u32(&smf, 6);
+    push_u16(&smf, 1);
+    push_u16(&smf, 2);
+    push_u16(&smf, 480);
+    const std::vector<uint8_t>* tracks[] = {&track0, &track1};
+    for (const std::vector<uint8_t>* track : tracks) {
+      push_tag(&smf, "MTrk");
+      push_u32(&smf, static_cast<uint32_t>(track->size()));
+      smf.insert(smf.end(), track->begin(), track->end());
+    }
+    return import_smf(smf);
+  };
+  const auto require_recovered = [](const SmfImportResult& r) {
+    REQUIRE(r.status == SmfStatus::kTruncated);
+    bool found_60 = false;
+    bool found_64 = false;
+    for (const auto& clip : r.clips) {
+      for (const auto& e : clip.events()) {
+        if (e.ump.is_note_on() && e.ump.note_number() == 60) found_60 = true;
+        if (e.ump.is_note_on() && e.ump.note_number() == 64) found_64 = true;
+      }
+    }
+    CHECK(found_60);
+    CHECK(found_64);
+  };
+
+  SECTION("data byte with no running status") {
+    // A text meta clears running status, so the data bytes after it have none.
+    require_recovered(import_with_defect({0x00, 0xFF, 0x01, 0x01, 'A', 0x00, 0x3E, 0x64}));
+  }
+  SECTION("delta-time VLQ longer than four bytes") {
+    require_recovered(import_with_defect({0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x80, 0x3C, 0x00}));
+  }
+  SECTION("meta length VLQ longer than four bytes") {
+    require_recovered(import_with_defect({0x00, 0xFF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x00}));
+  }
+  SECTION("SysEx length VLQ longer than four bytes") {
+    require_recovered(import_with_defect({0x00, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00}));
+  }
+}
+
+TEST_CASE("MIDI Clip File import plays the stretch before the first tempo and meter at 120 BPM",
+          "[midi]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.add_event(ev(2.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const std::vector<sonare::transport::TempoSegment> tempo = {{1.0, 60.0, 0.0}};
+  std::vector<sonare::transport::TimeSignatureSegment> meter(1);
+  meter[0].start_ppq = 1.0;
+  meter[0].time_sig.numerator = 3;
+  meter[0].time_sig.denominator = 4;
+  const auto exported = export_clip_file(clip, tempo, meter, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  const Smf2ImportResult r = import_clip_file(exported.bytes);
+  REQUIRE(r.ok());
+  REQUIRE(r.tempo_segments.size() == 2);
+  CHECK(r.tempo_segments[0].start_ppq == 0.0);
+  CHECK(r.tempo_segments[0].bpm == Catch::Approx(120.0));
+  CHECK(r.tempo_segments[1].start_ppq == Catch::Approx(1.0));
+  CHECK(r.tempo_segments[1].bpm == Catch::Approx(60.0));
+  REQUIRE(r.time_signatures.size() == 2);
+  CHECK(r.time_signatures[0].start_ppq == 0.0);
+  CHECK(r.time_signatures[0].time_sig.numerator == 4);
+  CHECK(r.time_signatures[1].time_sig.numerator == 3);
+}

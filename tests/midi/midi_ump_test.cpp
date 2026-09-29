@@ -734,3 +734,30 @@ TEST_CASE("UMP group derivation returns 0 for the message types that have no gro
   REQUIRE_FALSE(sonare::midi::ump_message_type_has_group(0x0));
   REQUIRE_FALSE(sonare::midi::ump_message_type_has_group(0x0F));
 }
+
+TEST_CASE("MIDI 2.0 registered and assignable controllers lower to RPN / NRPN data entry",
+          "[midi]") {
+  // Data MSB is bits 31..25 and LSB bits 24..18 of the 32-bit value.
+  const uint32_t value = (uint32_t{0x45} << 25) | (uint32_t{0x12} << 18) | 0x3FFFFu;
+  const auto check = [&](const Ump& ump, uint8_t msb_cc, uint8_t lsb_cc) {
+    const auto lowered = sonare::midi::midi2_to_midi1_messages(ump);
+    REQUIRE(lowered.count == 4);
+    const uint8_t expected[4][2] = {{msb_cc, 9}, {lsb_cc, 17}, {6, 0x45}, {38, 0x12}};
+    for (uint8_t i = 0; i < 4; ++i) {
+      INFO("message " << int{i});
+      const Ump& m = lowered.messages[i];
+      REQUIRE(m.message_type() == UmpMessageType::kMidi1ChannelVoice);
+      REQUIRE(m.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange));
+      REQUIRE(m.group == 2);
+      REQUIRE(m.channel() == 5);
+      REQUIRE(m.note_number() == expected[i][0]);
+      REQUIRE(m.data2_7bit() == expected[i][1]);
+    }
+  };
+  check(sonare::midi::make_midi2_registered_controller(2, 5, 9, 17, value), 101, 100);
+  check(sonare::midi::make_midi2_assignable_controller(2, 5, 9, 17, value), 99, 98);
+  // Per-note controllers have no MIDI 1.0 form and still lower to nothing.
+  REQUIRE(sonare::midi::midi2_to_midi1_messages(
+              sonare::midi::make_midi2_per_note_controller(2, 5, 60, 1, value))
+              .count == 0);
+}

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_clip.h"
@@ -16,6 +17,7 @@
 #include "midi/smf.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace {
@@ -1330,4 +1332,50 @@ TEST_CASE("note_targets_from_smf refuses bytes that are not an SMF", "[midi][smf
   REQUIRE_THROWS_AS(note_targets_from_smf(garbage.data(), garbage.size(), 0),
                     sonare::SonareException);
   REQUIRE_THROWS_AS(note_targets_from_smf(nullptr, 32, 0), sonare::SonareException);
+}
+
+TEST_CASE("SMF import plays the stretch before the first tempo and meter at 120 BPM in 4/4",
+          "[midi]") {
+  // The first Set Tempo (60 BPM) and Time Signature (3/4) sit one quarter in.
+  std::vector<uint8_t> body = {0x00, 0x90, 60, 100};
+  body.insert(body.end(), {0x83, 0x60, 0xFF, 0x51, 0x03, 0x0F, 0x42, 0x40});
+  body.insert(body.end(), {0x00, 0xFF, 0x58, 0x04, 0x03, 0x02, 0x18, 0x08});
+  body.insert(body.end(), {0x00, 0x80, 60, 0x00, 0x00, 0xFF, 0x2F, 0x00});
+  const SmfImportResult r = import_smf(wrap_format0_track(body));
+  REQUIRE(r.ok());
+  REQUIRE(r.tempo_segments.size() == 2);
+  CHECK(r.tempo_segments[0].start_ppq == 0.0);
+  CHECK(r.tempo_segments[0].bpm == Catch::Approx(sonare::constants::kDefaultBpm));
+  CHECK(r.tempo_segments[1].start_ppq == Catch::Approx(1.0));
+  CHECK(r.tempo_segments[1].bpm == Catch::Approx(60.0));
+  REQUIRE(r.time_signatures.size() == 2);
+  CHECK(r.time_signatures[0].start_ppq == 0.0);
+  CHECK(r.time_signatures[0].time_sig.numerator == 4);
+  CHECK(r.time_signatures[0].time_sig.denominator == 4);
+  CHECK(r.time_signatures[1].start_ppq == Catch::Approx(1.0));
+  CHECK(r.time_signatures[1].time_sig.numerator == 3);
+}
+
+TEST_CASE("SMF export writes a MIDI 2.0 Registered Controller as its RPN data-entry sequence",
+          "[midi]") {
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{
+      0.0, sonare::midi::make_midi2_registered_controller(0, 2, 0, 0, uint32_t{12} << 25)});
+  clip.add_event(MidiClipEvent{1.0, sonare::midi::make_midi1_note_on(0, 2, 60, 100)});
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
+  const SmfImportResult r = import_smf(exported.bytes);
+  REQUIRE(r.ok());
+  REQUIRE(r.clips.size() == 1);
+  std::vector<std::pair<uint8_t, uint8_t>> ccs;
+  for (const auto& e : r.clips[0].events()) {
+    if (e.ump.status_nibble() == static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange)) {
+      ccs.emplace_back(e.ump.note_number(), e.ump.data2_7bit());
+    }
+  }
+  const std::vector<std::pair<uint8_t, uint8_t>> expected = {{101, 0}, {100, 0}, {6, 12}, {38, 0}};
+  REQUIRE(ccs == expected);
 }

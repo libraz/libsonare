@@ -133,8 +133,9 @@ class Reader {
   }
 
   /// Reads a variable-length quantity (7 bits/byte, MSB = continuation). At most
-  /// 4 bytes per the SMF spec; a 5th continuation byte is treated as overflow.
-  uint32_t vlq() noexcept {
+  /// 4 bytes per the SMF spec; a 5th continuation byte sets @p too_long, which
+  /// is a defect in the event rather than a read past the buffer.
+  uint32_t vlq(bool* too_long) noexcept {
     uint32_t value = 0;
     for (int i = 0; i < 4; ++i) {
       const uint8_t byte = u8();
@@ -143,7 +144,7 @@ class Reader {
       if ((byte & 0x80u) == 0) return value;
     }
     // A fifth byte with the continuation bit still set is malformed.
-    overflow_ = true;
+    *too_long = true;
     return value;
   }
 
@@ -315,10 +316,11 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   };
 
   while (reader->pos() < end_pos && !reader->overflow()) {
-    const uint32_t delta = reader->vlq();
+    bool vlq_too_long = false;
+    const uint32_t delta = reader->vlq(&vlq_too_long);
     if (reader->overflow()) return false;
-    if (reader->pos() > end_pos) {
-      mark_truncated();  // A VLQ delta ran past the track end.
+    if (vlq_too_long || reader->pos() > end_pos) {
+      mark_truncated();  // A delta longer than four bytes, or one past the track end.
       break;
     }
     if (tick > std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(delta)) {
@@ -343,10 +345,11 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         break;
       }
       const uint8_t meta_type = reader->u8();
-      const uint32_t meta_len = reader->vlq();
+      bool len_too_long = false;
+      const uint32_t meta_len = reader->vlq(&len_too_long);
       if (reader->overflow()) return false;
       // Reject a meta payload whose declared length overruns the track boundary.
-      if (reader->pos() > end_pos || meta_len > track_remaining()) {
+      if (len_too_long || reader->pos() > end_pos || meta_len > track_remaining()) {
         mark_truncated();
         break;
       }
@@ -460,10 +463,11 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
 
     if (status == kSysExStart || status == kSysExEscape) {
       running_status = 0;
-      const uint32_t sysex_len = reader->vlq();
+      bool len_too_long = false;
+      const uint32_t sysex_len = reader->vlq(&len_too_long);
       if (reader->overflow()) return false;
       // Reject a SysEx payload whose declared length overruns the track boundary.
-      if (reader->pos() > end_pos || sysex_len > track_remaining()) {
+      if (len_too_long || reader->pos() > end_pos || sysex_len > track_remaining()) {
         mark_truncated();
         break;
       }
@@ -546,7 +550,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     } else {
       // Running status: the byte we read was actually the first data byte; the
       // real status is the previously-seen running-status byte.
-      if ((running_status & 0x80u) == 0) return false;  // No status to run with.
+      if ((running_status & 0x80u) == 0) {
+        mark_truncated();  // No status to run with.
+        break;
+      }
       first_data = status;
       have_first_data = true;
       status = running_status;
@@ -795,21 +802,6 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
                                  !result.time_signatures.empty() || !result.markers.empty() ||
                                  !result.sequence_name.empty();
 
-  // Provide sane defaults so the consumer can hand the segment vectors straight
-  // to TempoMap::set_segments without an empty-vector crash. A recovered
-  // truncated import reaches the same consumers as a clean one, so the defaults
-  // apply to every result rather than only to the clean parse.
-  if (result.tempo_segments.empty()) {
-    transport::TempoSegment seg;
-    seg.start_ppq = 0.0;
-    seg.bpm = kDefaultBpm;
-    result.tempo_segments.push_back(seg);
-  }
-  if (result.time_signatures.empty()) {
-    transport::TimeSignatureSegment seg;
-    seg.start_ppq = 0.0;
-    result.time_signatures.push_back(seg);
-  }
   std::stable_sort(result.tempo_segments.begin(), result.tempo_segments.end(),
                    [](const transport::TempoSegment& a, const transport::TempoSegment& b) {
                      return a.start_ppq < b.start_ppq;
@@ -819,6 +811,22 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
       [](const transport::TimeSignatureSegment& a, const transport::TimeSignatureSegment& b) {
         return a.start_ppq < b.start_ppq;
       });
+  // Until a file's first Set Tempo / Time Signature the SMF defaults of 120 BPM
+  // and 4/4 apply, so each map starts with them unless an event sits at tick 0.
+  // This also hands TempoMap::set_segments a non-empty vector. A recovered
+  // truncated import reaches the same consumers as a clean one, so the defaults
+  // apply to every result rather than only to the clean parse.
+  if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
+    transport::TempoSegment seg;
+    seg.start_ppq = 0.0;
+    seg.bpm = kDefaultBpm;
+    result.tempo_segments.insert(result.tempo_segments.begin(), seg);
+  }
+  if (result.time_signatures.empty() || result.time_signatures.front().start_ppq > 0.0) {
+    transport::TimeSignatureSegment seg;
+    seg.start_ppq = 0.0;
+    result.time_signatures.insert(result.time_signatures.begin(), seg);
+  }
   return result;
 }
 

@@ -169,13 +169,19 @@ TEST_CASE("SMF2 preserves the position of a non-zero first tempo/time-sig", "[mi
   const Smf2ImportResult imported = import_clip_file(exported.bytes);
   REQUIRE(imported.ok());
 
-  REQUIRE(imported.tempo_segments.size() == 1);
-  REQUIRE(imported.tempo_segments.front().start_ppq == Catch::Approx(4.0).margin(0.01));
-  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(150.0).margin(0.01));
-  REQUIRE(imported.time_signatures.size() == 1);
-  REQUIRE(imported.time_signatures.front().start_ppq == Catch::Approx(4.0).margin(0.01));
-  REQUIRE(imported.time_signatures.front().time_sig.numerator == 7);
-  REQUIRE(imported.time_signatures.front().time_sig.denominator == 8);
+  // Ahead of them the map carries the 120 BPM / 4/4 the file plays before its
+  // first tempo and meter messages.
+  REQUIRE(imported.tempo_segments.size() == 2);
+  REQUIRE(imported.tempo_segments.front().start_ppq == 0.0);
+  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(120.0));
+  REQUIRE(imported.tempo_segments[1].start_ppq == Catch::Approx(4.0).margin(0.01));
+  REQUIRE(imported.tempo_segments[1].bpm == Catch::Approx(150.0).margin(0.01));
+  REQUIRE(imported.time_signatures.size() == 2);
+  REQUIRE(imported.time_signatures.front().start_ppq == 0.0);
+  REQUIRE(imported.time_signatures.front().time_sig.numerator == 4);
+  REQUIRE(imported.time_signatures[1].start_ppq == Catch::Approx(4.0).margin(0.01));
+  REQUIRE(imported.time_signatures[1].time_sig.numerator == 7);
+  REQUIRE(imported.time_signatures[1].time_sig.denominator == 8);
 }
 
 TEST_CASE("SMF2 export clamps very low BPM tempo instead of wrapping", "[midi][smf2]") {

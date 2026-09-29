@@ -576,8 +576,14 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   }
 
   result.ticks_per_quarter = dctpq;
-  if (result.tempo_segments.empty()) result.tempo_segments.push_back({0.0, kDefaultBpm, 0.0});
-  if (result.time_signatures.empty()) result.time_signatures.push_back({0.0, {4, 4}});
+  // 120 BPM and 4/4 hold until the first tempo / time-signature message, which
+  // arrive in tick order.
+  if (result.tempo_segments.empty() || result.tempo_segments.front().start_ppq > 0.0) {
+    result.tempo_segments.insert(result.tempo_segments.begin(), {0.0, kDefaultBpm, 0.0});
+  }
+  if (result.time_signatures.empty() || result.time_signatures.front().start_ppq > 0.0) {
+    result.time_signatures.insert(result.time_signatures.begin(), {0.0, {4, 4}});
+  }
 
   if (has_events) {
     clip.sort_stable();
