@@ -234,6 +234,84 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   sonare_realtime_voice_changer_destroy(handle);
 }
 
+TEST_CASE("sonare_realtime_voice_changer_create_json refuses config exceeding the JSON byte budget",
+          "[voice_changer][c-api][resource]") {
+  // One JSON string value past the 64 MiB config budget. The refusal has to
+  // come from the byte precheck, not from the parser walking a document this
+  // size into json::Value nodes first. realtime_voice_changer_config_from_input
+  // parses every `{`-prefixed input before deciding whether it is the flat POD
+  // or a full preset document, so this is the single admission both shapes
+  // funnel through.
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create_json(oversized.c_str(), 48000, 128, 1, &handle) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(handle == nullptr);
+
+  // The C ABI wrapper does not route this path's error through
+  // sonare_last_error_message(), so check the message on the underlying
+  // function it calls instead.
+  RealtimeVoiceChangerConfig config;
+  std::string error;
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(oversized, &config, &error));
+  REQUIRE(error.find("byte budget") != std::string::npos);
+
+  // An ordinary preset id still creates a handle, so the refusal above is the
+  // size and not some other change to config handling.
+  REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", 48000, 128, 1, &handle) ==
+          SONARE_OK);
+  REQUIRE(handle != nullptr);
+  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, oversized.c_str()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deep-narrator") == SONARE_OK);
+  sonare_realtime_voice_changer_destroy(handle);
+}
+
+TEST_CASE(
+    "sonare_realtime_voice_changer_validate_preset_json refuses a document exceeding the JSON "
+    "byte budget",
+    "[voice_changer][c-api][resource]") {
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+
+  char* normalized = nullptr;
+  char* error = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_validate_preset_json(
+              oversized.c_str(), &normalized, &error) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(normalized == nullptr);
+  REQUIRE(error != nullptr);
+  REQUIRE(std::string(error).find("byte budget") != std::string::npos);
+  sonare_free_string(error);
+
+  // An ordinary preset document still validates, so the refusal above is the
+  // size and not some other change to preset validation.
+  normalized = nullptr;
+  error = nullptr;
+  const std::string valid_json =
+      realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol);
+  REQUIRE(sonare_realtime_voice_changer_validate_preset_json(valid_json.c_str(), &normalized,
+                                                             &error) == SONARE_OK);
+  REQUIRE(normalized != nullptr);
+  sonare_free_string(normalized);
+}
+
+TEST_CASE("realtime_voice_changer_config_from_json refuses text exceeding the JSON byte budget",
+          "[voice_changer][resource]") {
+  // The lenient duplicate-key-tolerant sibling (admit, not admit_strict) still
+  // runs under the same byte budget as every other JSON entry point.
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+  REQUIRE_THROWS_AS(realtime_voice_changer_config_from_json(oversized),
+                    sonare::util::json::JsonError);
+
+  // An ordinary DSP object still parses, so the refusal above is the size and
+  // not some other change to config parsing.
+  const auto config = realtime_voice_changer_config_from_json(R"({"dsp":{"inputGainDb":3}})");
+  REQUIRE(config.input_gain_db == 3.0f);
+}
+
 TEST_CASE("RealtimeVoiceChanger C API default POD preserves the ISP limiter",
           "[voice_changer][c-api]") {
   SonareRealtimeVoiceChangerConfig defaults{};

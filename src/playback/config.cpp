@@ -7,7 +7,7 @@
 
 #include "playback/layout_convert.h"
 #include "util/exception.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/number_format.h"
 
 namespace sonare::playback {
@@ -51,7 +51,7 @@ bool read_bool(const Value& value, const std::string& key) {
   return value.as_bool();
 }
 
-const std::string& read_string(const Value& value, const std::string& key) {
+std::string read_string(const Value& value, const std::string& key) {
   if (!value.is_string()) fail(key + " must be a string");
   return value.as_string();
 }
@@ -360,7 +360,7 @@ const char* room_preset_name(RoomPreset preset) noexcept {
 RendererConfig parse_renderer_config(std::string_view json) {
   Value root;
   try {
-    root = util::json::parse_strict(std::string(json));
+    root = util::json::admit_strict(std::string(json));
   } catch (const util::json::JsonError& e) {
     fail(std::string("invalid configuration JSON: ") + e.what());
   }

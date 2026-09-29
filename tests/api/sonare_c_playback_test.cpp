@@ -82,6 +82,29 @@ TEST_CASE("playback renderer creation rejects malformed configuration", "[playba
   CHECK(text_contains(sonare_last_error_message(), "unknown key"));
 }
 
+TEST_CASE("playback renderer config exceeding the JSON byte budget is refused, not parsed",
+          "[playback][capi][resource]") {
+  // One JSON string value past the 64 MiB config budget. The refusal has to
+  // come from the byte precheck, not from the parser walking a document this
+  // size into json::Value nodes first.
+  const std::string oversized =
+      "{\"pad\": \"" + std::string(64u * 1024u * 1024u + 1024u, 'a') + "\"}";
+
+  SonarePlaybackRenderer* renderer = reinterpret_cast<SonarePlaybackRenderer*>(uintptr_t{1});
+  CHECK(sonare_playback_renderer_create_json(oversized.c_str(), nullptr, 48000, 512, &renderer) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(renderer == nullptr);
+  CHECK(text_contains(sonare_last_error_message(), "byte budget"));
+
+  // The same call with an ordinary config still creates a renderer, so the
+  // refusal above is the size and not some other change to config handling.
+  renderer = create_renderer(headphones_config());
+  CHECK(sonare_playback_renderer_set_config_json(renderer, oversized.c_str()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(text_contains(sonare_last_error_message(), "byte budget"));
+  sonare_playback_renderer_destroy(renderer);
+}
+
 TEST_CASE("playback renderer set_config_json adopts realtime keys and rejects a prepare change",
           "[playback][capi]") {
   SonarePlaybackRenderer* renderer = create_renderer(speakers_5_1_config());

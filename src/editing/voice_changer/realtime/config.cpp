@@ -7,7 +7,7 @@
 #include "editing/voice_changer/realtime.h"
 #include "effects/formant_warp.h"
 #include "util/exception.h"
-#include "util/json.h"
+#include "util/json_budget.h"
 #include "util/json_schema.h"
 #include "util/number_format.h"
 
@@ -639,7 +639,7 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
   if (input.front() != '{')
     return realtime_voice_changer_preset(realtime_voice_changer_preset_from_id(input));
 
-  const auto root = sonare::util::json::parse(input);
+  const auto root = sonare::util::json::admit(input);
   RealtimeVoiceChangerConfig c;
   const auto* dsp = root.find("dsp");
   const auto* macros = root.find("macros");
@@ -795,9 +795,10 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     // Strict parse: a preset document with duplicate keys (e.g. two `"id"`
     // entries) is a user-config bug — fail fast rather than silently keeping
     // the last value. The lenient `realtime_voice_changer_config_from_json`
-    // path below keeps using `parse` because it doubles as the realtime
-    // C-API entry point and must stay maximally tolerant.
-    const auto root = sonare::util::json::parse_strict(trim_copy(json));
+    // path below keeps using `admit` (not `admit_strict`) because it doubles
+    // as the realtime C-API entry point and must stay maximally tolerant of
+    // duplicate keys; both still run under the same resource budget.
+    const auto root = sonare::util::json::admit_strict(trim_copy(json));
     if (!has_allowed_keys(
             root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
             error)) {
@@ -920,7 +921,7 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     // realtimeVoiceChangerPresetConfig(). It is intentionally not a preset
     // document, but must be complete and type-correct so a partial object
     // cannot silently fall back to unrelated defaults.
-    const auto root = sonare::util::json::parse_strict(input);
+    const auto root = sonare::util::json::admit_strict(input);
     if (root.is_object() && root.find("retuneSemitones") != nullptr) {
       static constexpr std::array<const char*, 36> kFlatPodKeys = {
           "inputGainDb",
