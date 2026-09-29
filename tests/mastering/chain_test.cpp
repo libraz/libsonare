@@ -742,9 +742,10 @@ TEST_CASE("Mono chain measures loudness at the stage input after upstream makeup
 // only compresses in its first block, with the compressor fully released by
 // the time the last (mostly silent) block finishes, used to read back near
 // 0 dB regardless of the real mid-song reduction.
-TEST_CASE("dynamics.compressor's reported gain reduction reflects the whole program, not the "
-          "final block",
-          "[mastering][chain]") {
+TEST_CASE(
+    "dynamics.compressor's reported gain reduction reflects the whole program, not the "
+    "final block",
+    "[mastering][chain]") {
   using sonare::mastering::api::internal::kOfflineProcessorBlockSize;
   constexpr int kSampleRate = 44100;
   // Three blocks: loud, then two full blocks of silence. last_gain_reduction_db()
@@ -760,8 +761,8 @@ TEST_CASE("dynamics.compressor's reported gain reduction reflects the whole prog
   // later, so the compressor's release (100 ms default) has long recovered by
   // the time the final block's own worst-reduction figure is taken.
   for (std::size_t i = 0; i < static_cast<std::size_t>(kOfflineProcessorBlockSize); ++i) {
-    samples[i] = 0.9f * std::sin(sonare::constants::kTwoPi * 300.0f * static_cast<float>(i) /
-                                 kSampleRate);
+    samples[i] =
+        0.9f * std::sin(sonare::constants::kTwoPi * 300.0f * static_cast<float>(i) / kSampleRate);
   }
 
   MasteringChainConfig config;
