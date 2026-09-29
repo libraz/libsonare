@@ -222,6 +222,7 @@ export class PlaybackLoudnessMeter {
  * Offline one-shot playback render: builds a renderer internally, feeds the
  * whole signal through it, and removes the renderer's own latency from the
  * front of the result so the output aligns with the input.
+ * An empty or non-finite `samples` is refused with an `InvalidParameter` error.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
   return addon.renderPlayback(

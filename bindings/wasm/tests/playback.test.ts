@@ -211,7 +211,7 @@ describe('playback renderer (WASM)', () => {
     }
   });
 
-  it('treats a 0-frame planar block and a 0-frame offline render as a no-op', () => {
+  it('treats a 0-frame planar block as a no-op and refuses a 0-frame offline render', () => {
     const renderer = new PlaybackRenderer({
       config: SPEAKERS_5_1,
       sampleRate: SR,
@@ -225,28 +225,32 @@ describe('playback renderer (WASM)', () => {
     } finally {
       renderer.delete();
     }
-    const result = renderPlayback({
-      samples: new Float32Array(0),
-      channels: 6,
-      sampleRate: SR,
-      config: SPEAKERS_5_1,
-    });
-    expect(result.channels).toBe(6);
-    expect(result.samples).toHaveLength(0);
+    expect(() =>
+      renderPlayback({
+        samples: new Float32Array(0),
+        channels: 6,
+        sampleRate: SR,
+        config: SPEAKERS_5_1,
+      }),
+    ).toThrow(/must not be empty/);
   });
 
-  it('accepts non-finite samples in an offline render, matching processPlanar/processInterleaved', () => {
+  it('refuses non-finite samples in an offline render, unlike the block path', () => {
     const planes = noisePlanes(6, 512);
     planes[3][100] = Number.NaN;
-    const result = renderPlayback({
-      samples: interleave(planes),
-      channels: 6,
-      sampleRate: SR,
-      config: SPEAKERS_5_1,
-    });
-    expect(result.channels).toBe(6);
-    expect(result.samples).toHaveLength(512 * 6);
-    expect(result.samples.every(Number.isFinite)).toBe(true);
+    let caught: unknown;
+    try {
+      renderPlayback({
+        samples: interleave(planes),
+        channels: 6,
+        sampleRate: SR,
+        config: SPEAKERS_5_1,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(SonareError);
+    expect((caught as SonareError).codeName).toBe('InvalidParameter');
   });
 
   it('follows the input channel count under "auto" and reports it as plain data', () => {

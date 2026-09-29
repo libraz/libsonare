@@ -239,6 +239,7 @@ export class PlaybackLoudnessMeter {
  * Offline one-shot playback render: builds a renderer internally, feeds the
  * whole interleaved signal through it, and removes the renderer's own latency
  * so the output aligns with the input frame for frame.
+ * An empty or non-finite `samples` is refused with an `InvalidParameter` error.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
   return getSonareModule().renderPlayback(
