@@ -24,6 +24,17 @@ constexpr float kKsSympatheticRingS = 1.5f;
 /// stops) decays toward the other live sources.
 constexpr float kResidualTauSeconds = 0.5f;
 
+/// The (v/127)^2 volume / expression law of sf2_cc_gain, read through f7() so a MIDI 2.0 value
+/// lands between the 7-bit steps; for a MIDI 1.0 value f7() is float(v) and the result is the
+/// same float.
+float cc_gain(Control32 value) noexcept {
+  const float v = value.f7() / 127.0f;
+  return v * v;
+}
+
+/// Registered Controller 0/0 in bank 0: pitch bend sensitivity.
+constexpr uint8_t kRcPitchBendSensitivity = 0;
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -254,6 +265,7 @@ void NativeSynth::reset() {
   // per-channel path.
   channels_[kDrumChannelIndex].drums = true;
   mpe_.reset();
+  skipped_events_ = 0;
   refresh_all_channel_mods();
 }
 
@@ -267,17 +279,16 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   // sections 2.2.5 - 2.2.7). Outside one -- which is every channel until an MCM
   // arrives -- this is the arithmetic that was always here.
   const bool zoned = mpe_.role(ch) != MpeChannelRole::kUnassigned;
-  mod.pitch_cents =
-      zoned ? mpe_.bend_semitones(ch) * 100.0f
-            : (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
-  mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
-  mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
+  mod.pitch_cents = zoned ? zone_bend_semitones(ch) * 100.0f
+                          : (st.pitch_bend.f14() - 8192.0f) / 8192.0f * st.bend_range_cents;
+  mod.gain = cc_gain(st.volume) * cc_gain(st.expression);
+  mod.mod_wheel01 = st.mod_wheel.f7() / 127.0f;
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
-  mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
-  mod.breath01 = static_cast<float>(st.breath) / 127.0f;
-  mod.aftertouch01 = static_cast<float>(zoned ? mpe_.pressure(ch) : st.pressure) / 127.0f;
-  mod.expression01 = static_cast<float>(st.expression) / 127.0f;
-  mod.pitch_bend01 = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f;
+  mod.pan_units = (st.pan.f7() - 64.0f) / 63.0f * 500.0f;
+  mod.breath01 = st.breath.f7() / 127.0f;
+  mod.aftertouch01 = (zoned ? zone_pressure(ch) : st.pressure.f7()) / 127.0f;
+  mod.expression01 = st.expression.f7() / 127.0f;
+  mod.pitch_bend01 = (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
   // The three axes that land on the channel rather than inside an engine. Each
   // is folded only when a binding has reached it, so a profile that names none
   // leaves this arithmetic untouched rather than multiplying by an identity.
@@ -553,10 +564,10 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_
       if (v.sostenuto) continue;
       if (!st.sustain) {
         v.release();  // pedal up: the damper falls now
-      } else if (st.sustain_level < 127 && v.patch != nullptr &&
+      } else if (st.sustain_level.f7() < 127.0f && v.patch != nullptr &&
                  v.patch->mode == SynthEngineMode::kPiano) {
         // Half-pedal: the partially raised damper rests on the string.
-        v.piano.damp(static_cast<float>(127 - st.sustain_level) / 63.0f);
+        v.piano.damp((127.0f - st.sustain_level.f7()) / 63.0f);
       }
       // else (full pedal): the string rings on freely.
     }
@@ -577,20 +588,21 @@ void NativeSynth::recharge_percussion(uint8_t ch) noexcept {
   channels_[ch].percussion_armed = true;
 }
 
-void NativeSynth::sustain_cc(uint8_t channel, uint8_t value) noexcept {
+void NativeSynth::sustain_cc(uint8_t channel, Control32 value) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
   const bool was_down = st.sustain;
   st.sustain_level = value;
-  st.sustain = value >= 64;
+  st.sustain = value.u7() >= 64;
   if (st.sustain) {
     // Half-pedal: a partially raised damper still rests on the strings, so held
     // (key-up) notes ring on at an intermediate rate; a full lift (127) leaves
     // them ringing freely. Key-down and sostenuto-captured notes keep their
     // dampers mechanically off, so they are untouched.
-    if (value < 127) {
-      const float strength = static_cast<float>(127 - value) / 63.0f;
+    const float level = value.f7();
+    if (level < 127.0f) {
+      const float strength = (127.0f - level) / 63.0f;
       for (NativeSynthVoice& v : pool_) {
         if (v.active && v.channel == ch && !v.key_down && !v.sostenuto && v.patch != nullptr &&
             v.patch->mode == SynthEngineMode::kPiano) {
@@ -629,7 +641,7 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
-  channels_[ch].sustain_level = 0;
+  channels_[ch].sustain_level = Control32::from7(0);
   // A released key left in the legato stack would be retuned back to later.
   channels_[ch].held_count = 0;
   for (NativeSynthVoice& v : pool_) {
@@ -646,7 +658,7 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
-  channels_[ch].sustain_level = 0;
+  channels_[ch].sustain_level = Control32::from7(0);
   channels_[ch].held_count = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch) v.kill();
@@ -670,9 +682,9 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   }
 }
 
-void NativeSynth::channel_pressure(uint8_t channel, uint8_t pressure7) noexcept {
+void NativeSynth::channel_pressure(uint8_t channel, Control32 pressure) noexcept {
   const uint8_t ch = channel & 0x0Fu;
-  channels_[ch].pressure = pressure7 & 0x7Fu;
+  channels_[ch].pressure = pressure;
   // A manager's pressure is a bias on every member of its zone, so it reaches
   // further than the channel it arrived on (2.2.7).
   if (mpe_.role(ch) == MpeChannelRole::kManager) {
@@ -682,12 +694,12 @@ void NativeSynth::channel_pressure(uint8_t channel, uint8_t pressure7) noexcept 
   }
 }
 
-void NativeSynth::poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept {
+void NativeSynth::poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   // Prohibited on a member channel, where pressure is the channel's and belongs
   // to the one note living on it (2.2.7).
   if (mpe_.ignores(ch, MpeIgnorable::kPolyKeyPressure)) return;
-  const float value = static_cast<float>(pressure7 & 0x7Fu) / 127.0f;
+  const float value = pressure.f7() / 127.0f;
   // Every sounding voice on the note takes it: a layered patch is several
   // voices of one key, and pressure is a property of the key.
   for (NativeSynthVoice& v : pool_) {
@@ -699,11 +711,11 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   // MIDI RP-015: reset performance controllers, keep volume/pan.
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
-  st.mod_wheel = 0;
-  st.expression = 127;
-  st.pitch_bend = 8192;
-  st.breath = 0;
-  st.pressure = 0;
+  st.mod_wheel = Control32::from7(0);
+  st.expression = Control32::from7(127);
+  st.pitch_bend = Bend32::center();
+  st.breath = Control32::from7(0);
+  st.pressure = Control32::from7(0);
   for (NativeSynthVoice& v : pool_) {
     if (v.channel == ch) v.poly_pressure01 = 0.0f;
   }
@@ -713,7 +725,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   // which is where every reader of them takes their combined value -- leaving
   // them here would reset the channel and change nothing that is heard.
   mpe_.reset_controls(static_cast<uint16_t>(uint16_t{1} << ch));
-  sustain_cc(ch, 0);
+  sustain_cc(ch, Control32::from7(0));
   sostenuto_pedal(ch, false);
   st.una_corda = false;
   if (mpe_.role(ch) == MpeChannelRole::kManager) {
@@ -733,9 +745,42 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   push_excitation_control(ch);
 }
 
-void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
+void NativeSynth::bend_range_msb(uint8_t channel, uint8_t semitones) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  // Inside a zone the range is the zone's, and a value sent to one member
+  // reaches every member of it (2.2.5), so the refresh is zone-wide.
+  if (mpe_.apply_bend_sensitivity(ch, static_cast<float>(semitones))) {
+    refresh_all_channel_mods();
+  } else {
+    channels_[ch].bend_range_cents = 100.0f * static_cast<float>(semitones);
+    refresh_channel_mod(ch);
+  }
+}
+
+void NativeSynth::bend_range_lsb(uint8_t channel, uint8_t cents) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
+  // The fractional semitone. MPE recommends senders leave it at zero and
+  // permits rather than requires a receiver to answer it, so the zone
+  // takes it on the same terms the channel always has.
+  if (mpe_.role(ch) != MpeChannelRole::kUnassigned) {
+    const float whole = std::floor(mpe_.bend_sensitivity(ch));
+    mpe_.apply_bend_sensitivity(ch, whole + static_cast<float>(cents) / 100.0f);
+    refresh_all_channel_mods();
+  } else {
+    st.bend_range_cents =
+        100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(cents);
+    refresh_channel_mod(ch);
+  }
+}
+
+void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 control) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  ChannelState& st = channels_[ch];
+  // Continuous controllers keep the full-width value for their float laws; the
+  // switches, bank select, the pedals and the parameter-number machinery read
+  // the 7-bit value.
+  const uint8_t value = control.u7();
   switch (controller) {
     case 0:
       // Bank select is prohibited on a member channel in MIDI Mode 3 and
@@ -745,25 +790,25 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       st.bank_msb = value;
       break;
     case 1:
-      st.mod_wheel = value;
+      st.mod_wheel = control;
       refresh_channel_mod(ch);
       break;
     case 7:
-      st.volume = value;
+      st.volume = control;
       refresh_channel_mod(ch);
       break;
     case 10:
-      st.pan = value;
+      st.pan = control;
       refresh_channel_mod(ch);
       break;
     case 2:
       // The matrix source. Which axis CC2 additionally reaches, if any, is the
       // controller profile's to say and is applied before this switch runs.
-      st.breath = value;
+      st.breath = control;
       refresh_channel_mod(ch);
       break;
     case 11:
-      st.expression = value;
+      st.expression = control;
       refresh_channel_mod(ch);  // every engine's loudness rides the expression VCA
       break;
     case 32:
@@ -777,31 +822,11 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       if (st.params.selected_rpn(0, 6)) {
         apply_mcm(ch, value);
       } else if (st.params.selected_rpn(0, 0)) {
-        // Inside a zone the range is the zone's, and a value sent to one member
-        // reaches every member of it (2.2.5), so the refresh is zone-wide.
-        if (mpe_.apply_bend_sensitivity(ch, static_cast<float>(value))) {
-          refresh_all_channel_mods();
-        } else {
-          st.bend_range_cents = 100.0f * static_cast<float>(value);
-          refresh_channel_mod(ch);
-        }
+        bend_range_msb(ch, value);
       }
       break;
     case 38:
-      if (st.params.selected_rpn(0, 0)) {
-        // The fractional semitone. MPE recommends senders leave it at zero and
-        // permits rather than requires a receiver to answer it, so the zone
-        // takes it on the same terms the channel always has.
-        if (mpe_.role(ch) != MpeChannelRole::kUnassigned) {
-          const float whole = std::floor(mpe_.bend_sensitivity(ch));
-          mpe_.apply_bend_sensitivity(ch, whole + static_cast<float>(value) / 100.0f);
-          refresh_all_channel_mods();
-        } else {
-          st.bend_range_cents =
-              100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
-          refresh_channel_mod(ch);
-        }
-      }
+      if (st.params.selected_rpn(0, 0)) bend_range_lsb(ch, value);
       break;
     case kMpeTimbreCc:
       // The third per-note dimension (2.2.8) reaches an axis through the
@@ -811,7 +836,7 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       // do here, and the case stands so the default below cannot claim it.
       break;
     case 64:
-      sustain_cc(ch, value);
+      sustain_cc(ch, control);
       break;
     case 66:
       sostenuto_pedal(ch, value >= 64);
@@ -872,72 +897,86 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
   // is bound to an axis starts from its own value rather than the previous
   // note's.
   apply_controller_input(u);
-  if (u.is_note_on()) {
-    const Velocity16 vel = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                               ? Velocity16::from7(u.data2_7bit())
-                               : Velocity16::from_raw(static_cast<uint16_t>(u.words[1] >> 16));
-    note_on(u.channel(), u.note_number(), vel, event.source_track_id);
-  } else if (u.is_note_off()) {
-    note_off(u.channel(), u.note_number(), event.source_track_id);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
-    const uint8_t ch = u.channel() & 0x0Fu;
-    if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
-      channels_[ch].pitch_bend =
-          static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number());
-      mpe_.track_bend(ch, Bend32::from14(channels_[ch].pitch_bend));
-    } else {
-      channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
-      mpe_.track_bend(ch, Bend32::from_raw(u.words[1]));
-    }
-    // A manager's bend applies to every sounding note in its zone (2.2.6), so
-    // like its pressure it reaches past the channel it arrived on.
-    if (mpe_.role(ch) == MpeChannelRole::kManager) {
-      refresh_all_channel_mods();
-    } else {
-      refresh_channel_mod(ch);
-    }
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
-    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                               ? u.note_number()
-                               : scale_cc_32_to_7(u.words[1]);
-    channel_pressure(u.channel(), value7);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPolyPressure)) {
-    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                               ? u.data2_7bit()
-                               : scale_cc_32_to_7(u.words[1]);
-    poly_pressure(u.channel(), u.note_number(), value7);
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
-    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
-                               ? u.data2_7bit()
-                               : scale_cc_32_to_7(u.words[1]);
-    control_change(u.channel(), u.note_number(), value7);
-  } else if (is_registered_or_assignable_controller(u)) {
-    // The RPN / NRPN gesture in its MIDI 2.0 form takes the path its four MIDI
-    // 1.0 messages do, so parameter selection and data entry treat it the same.
-    const Midi1MessageList lowered = midi2_to_midi1_messages(u);
-    for (uint8_t i = 0; i < lowered.count; ++i) {
-      control_change(u.channel(), lowered.messages[i].note_number(),
-                     lowered.messages[i].data2_7bit());
-    }
-  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
-    // GS drum-kit select: in gm_kit mode the drum channel's program picks the
-    // kit variation (Room/Power/808/...). Melodic patches ignore it.
-    const uint8_t ch = u.channel() & 0x0Fu;
-    // In MIDI Mode 3 a zone is monotimbral, so a program change reaching a
-    // member channel is ignored rather than splitting the zone across two
-    // patches (2.3.3). Mode 4 is the case that permits it.
-    if (mpe_.ignores(ch, MpeIgnorable::kProgramChange)) return;
-    if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-      channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
-      // Bit 0 of word 0 is the bank-valid flag: the bank bytes carry meaning
-      // only when it is set, and an unset flag leaves the channel's bank alone.
-      if ((u.words[0] & 0x01u) != 0) {
-        channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
-        channels_[ch].bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+  ChannelVoiceEvent ev;
+  if (!decode_channel_voice(u, &ev)) {
+    ++skipped_events_;  // Reserved status.
+    return;
+  }
+  const uint8_t ch = ev.channel & 0x0Fu;
+  switch (ev.kind) {
+    case ChannelVoiceKind::NoteOn:
+      note_on(ch, ev.note, ev.velocity, event.source_track_id);
+      break;
+    case ChannelVoiceKind::NoteOff:
+      note_off(ch, ev.note, event.source_track_id);
+      break;
+    case ChannelVoiceKind::PitchBend:
+      channels_[ch].pitch_bend = ev.bend;
+      mpe_.track_bend(ch, ev.bend);
+      // A manager's bend applies to every sounding note in its zone (2.2.6), so
+      // like its pressure it reaches past the channel it arrived on.
+      if (mpe_.role(ch) == MpeChannelRole::kManager) {
+        refresh_all_channel_mods();
+      } else {
+        refresh_channel_mod(ch);
       }
-    } else {
-      channels_[ch].program = u.note_number();
-    }
+      break;
+    case ChannelVoiceKind::ChannelPressure:
+      channel_pressure(ch, ev.value);
+      break;
+    case ChannelVoiceKind::PolyPressure:
+      poly_pressure(ch, ev.note, ev.value);
+      break;
+    case ChannelVoiceKind::ControlChange:
+      control_change(ch, ev.note, ev.value);
+      break;
+    case ChannelVoiceKind::RegisteredController:
+    case ChannelVoiceKind::AssignableController:
+      registered_controller(u, ev);
+      break;
+    case ChannelVoiceKind::ProgramChange:
+      // GS drum-kit select: in gm_kit mode the drum channel's program picks the
+      // kit variation (Room/Power/808/...). Melodic patches ignore it.
+      // In MIDI Mode 3 a zone is monotimbral, so a program change reaching a
+      // member channel is ignored rather than splitting the zone across two
+      // patches (2.3.3). Mode 4 is the case that permits it.
+      if (mpe_.ignores(ch, MpeIgnorable::kProgramChange)) break;
+      channels_[ch].program = ev.program;
+      // The MIDI 2.0 bank-valid flag: the bank bytes carry meaning only when it
+      // is set, and an unset flag leaves the channel's bank alone.
+      if ((ev.flags & 0x01u) != 0) {
+        channels_[ch].bank_msb = ev.bank_msb;
+        channels_[ch].bank_lsb = ev.bank_lsb;
+      }
+      break;
+    case ChannelVoiceKind::RelativeRegistered:
+    case ChannelVoiceKind::RelativeAssignable:
+    case ChannelVoiceKind::RegisteredPerNote:
+    case ChannelVoiceKind::AssignablePerNote:
+    case ChannelVoiceKind::PerNotePitchBend:
+    case ChannelVoiceKind::PerNoteManagement:
+      ++skipped_events_;
+      break;
+  }
+}
+
+void NativeSynth::registered_controller(const Ump& ump, const ChannelVoiceEvent& ev) noexcept {
+  const uint8_t ch = ev.channel & 0x0Fu;
+  if (ev.kind == ChannelVoiceKind::RegisteredController && ev.bank == 0 &&
+      ev.index == kRcPitchBendSensitivity) {
+    // RPN 0/0's Data Entry MSB and LSB, read by truncation, applied in the order
+    // the MIDI 1.0 gesture applies them.
+    const uint16_t range14 = ev.value.u14();
+    bend_range_msb(ch, static_cast<uint8_t>(range14 >> 7));
+    bend_range_lsb(ch, static_cast<uint8_t>(range14 & 0x7Fu));
+    return;
+  }
+  // The RPN / NRPN gesture in its MIDI 2.0 form takes the path its four MIDI
+  // 1.0 messages do, so parameter selection and data entry treat it the same.
+  const Midi1MessageList lowered = midi2_to_midi1_messages(ump);
+  for (uint8_t i = 0; i < lowered.count; ++i) {
+    control_change(ch, lowered.messages[i].note_number(),
+                   Control32::from7(lowered.messages[i].data2_7bit()));
   }
 }
 
@@ -1012,9 +1051,9 @@ void NativeSynth::process_impl(float* const* channels,
   // the shutter is effectively open, so the one-pole is bypassed (swell_active).
   bool swell_active = false;
   if (pipe_organ_mode_ && swell_depth_ > 0.0f) {
-    uint8_t closed = 127;
-    for (const ChannelState& ch : channels_) closed = std::min(closed, ch.expression);
-    const float shut = (1.0f - static_cast<float>(closed) / 127.0f) * swell_depth_;
+    uint32_t closed = Control32::from7(127).raw;
+    for (const ChannelState& ch : channels_) closed = std::min(closed, ch.expression.raw);
+    const float shut = (1.0f - Control32::from_raw(closed).f7() / 127.0f) * swell_depth_;
     const float fc = std::exp(std::log(20000.0f) + shut * (std::log(300.0f) - std::log(20000.0f)));
     if (fc < 19000.0f) {
       swell_active = true;

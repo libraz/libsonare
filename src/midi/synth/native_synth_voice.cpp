@@ -137,7 +137,7 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
 float sampler_velocity_gain(Velocity16 velocity, float exponent) noexcept {
   if (exponent <= 0.0f) return 1.0f;
   if (exponent == 2.0f) return sf2_velocity_gain(velocity);
-  return std::pow(static_cast<float>(velocity.u7()) / 127.0f, exponent);
+  return std::pow(velocity.f7() / 127.0f, exponent);
 }
 
 }  // namespace
@@ -272,10 +272,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
-  static_cutoff_cents =
-      p.vel_to_cutoff_cents * (static_cast<float>(velocity.u7()) / 127.0f - 1.0f) +
-      p.key_track * 100.0f * (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) +
-      part_mod.cutoff_cents;
+  static_cutoff_cents = p.vel_to_cutoff_cents * (velocity.f7() / 127.0f - 1.0f) +
+                        p.key_track * 100.0f * (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) +
+                        part_mod.cutoff_cents;
   if (p.drive > 0.0f) {
     // Gain-compensated tanh drive (same law as the Sf2 part insert).
     drive_gain = 1.0f + 9.0f * p.drive;
@@ -329,7 +328,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   has_engine_control_routes = has_matrix && p.mod_matrix.has_engine_control_route();
   // A reused slot must not inherit the previous note's LFO rate.
   matrix_lfo1_rate_scale = 1.0f;
-  velocity01 = static_cast<float>(velocity.u7()) / 127.0f;
+  velocity01 = velocity.f7() / 127.0f;
   poly_pressure01 = 0.0f;
   key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);

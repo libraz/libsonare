@@ -2324,3 +2324,203 @@ TEST_CASE("CC11 attenuates a bowed string exactly as it does every other engine"
     }
   }
 }
+
+namespace {
+
+using sonare::midi::Bend32;
+using sonare::midi::Control32;
+using sonare::midi::Velocity16;
+using sonare::midi::synth::ModDestination;
+using sonare::midi::synth::ModSource;
+
+/// First 50 ms at the output rate.
+constexpr int kOnsetSamples = 2400;
+
+/// A sine through an open filter, so level and pitch read cleanly.
+NativeSynthConfig resolution_config() {
+  NativeSynthConfig cfg;
+  cfg.patch.waveform = VaWaveform::kSine;
+  cfg.patch.cutoff_hz = 20000.0f;
+  cfg.patch.gain = 0.8f;
+  return cfg;
+}
+
+/// Raw MIDI 2.0 value halfway between two neighbouring upscaled points.
+uint32_t raw_midpoint(uint32_t lo, uint32_t hi) { return lo + (hi - lo) / 2u; }
+
+/// True when @p mid lies strictly between @p lo and @p hi, whichever way they are ordered, and
+/// clear of both by a tenth of the step, so rounding noise at either end cannot pass for it.
+bool strictly_between(double lo, double mid, double hi) {
+  const double margin = 0.1 * std::fabs(hi - lo);
+  return lo != hi && (mid - lo) * (hi - mid) > 0.0 && std::fabs(mid - lo) > margin &&
+         std::fabs(hi - mid) > margin;
+}
+
+/// Onset peak of note 69 after @p before is sent on channel 0.
+template <typename Setup>
+float onset_peak(const NativeSynthConfig& cfg, Setup before, uint16_t velocity16) {
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  before(synth);
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 69, velocity16)));
+  return peak(render(synth, kOnsetSamples).left);
+}
+
+/// Onset peak with @p controller at the MIDI 2.0 value @p raw.
+float cc_onset_peak(const NativeSynthConfig& cfg, uint8_t controller, uint32_t raw) {
+  return onset_peak(
+      cfg,
+      [&](NativeSynth& s) {
+        s.on_event(0, event(sonare::midi::make_midi2_control_change(0, 0, controller, raw)));
+      },
+      Velocity16::from7(100).raw);
+}
+
+/// Sounding frequency of note 69 on @p channel bent to the MIDI 2.0 value @p raw, after
+/// @p before has run.
+template <typename Setup>
+double bent_hz(Setup before, uint8_t channel, uint32_t raw) {
+  NativeSynth synth(resolution_config());
+  synth.prepare(kOutRate, 256);
+  before(synth);
+  synth.on_event(0, event(sonare::midi::make_midi2_pitch_bend(0, channel, raw)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, channel, 69, 100)));
+  return estimate_frequency(render(synth, 48000).left, kOutRate, 1024);
+}
+
+}  // namespace
+
+TEST_CASE("NativeSynth hears a MIDI 2.0 volume or expression between the 7-bit steps",
+          "[midi][synth][midi2]") {
+  const NativeSynthConfig cfg = resolution_config();
+  for (const uint8_t controller : {uint8_t{7}, uint8_t{11}}) {
+    const uint32_t lo = Control32::from7(100).raw;
+    const uint32_t hi = Control32::from7(101).raw;
+    const float p_lo = cc_onset_peak(cfg, controller, lo);
+    const float p_mid = cc_onset_peak(cfg, controller, raw_midpoint(lo, hi));
+    const float p_hi = cc_onset_peak(cfg, controller, hi);
+    INFO("CC" << int{controller} << " " << p_lo << " / " << p_mid << " / " << p_hi);
+    CHECK(strictly_between(p_lo, p_mid, p_hi));
+  }
+}
+
+TEST_CASE("NativeSynth hears a MIDI 2.0 channel pressure between the 7-bit steps",
+          "[midi][synth][midi2]") {
+  NativeSynthConfig cfg = resolution_config();
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kAftertouch, ModDestination::kAmpGain, -0.5f};
+  const auto pressure_peak = [&](uint32_t raw) {
+    return onset_peak(
+        cfg,
+        [&](NativeSynth& s) {
+          s.on_event(0, event(sonare::midi::make_midi2_channel_pressure(0, 0, raw)));
+        },
+        Velocity16::from7(100).raw);
+  };
+  const uint32_t lo = Control32::from7(64).raw;
+  const uint32_t hi = Control32::from7(65).raw;
+  const float p_lo = pressure_peak(lo);
+  const float p_mid = pressure_peak(raw_midpoint(lo, hi));
+  const float p_hi = pressure_peak(hi);
+  INFO(p_lo << " / " << p_mid << " / " << p_hi);
+  CHECK(strictly_between(p_lo, p_mid, p_hi));
+}
+
+TEST_CASE("NativeSynth hears a MIDI 2.0 velocity between the 7-bit steps", "[midi][synth][midi2]") {
+  // The voice's own velocity source, routed to pitch so the level laws downstream of it
+  // cannot answer for it.
+  NativeSynthConfig cfg = resolution_config();
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kPitchCents, 1200.0f};
+  const auto velocity_hz = [&](uint32_t raw) {
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0,
+                   event(sonare::midi::make_midi2_note_on(0, 0, 69, static_cast<uint16_t>(raw))));
+    return estimate_frequency(render(synth, 48000).left, kOutRate, 1024);
+  };
+  const uint32_t lo = Velocity16::from7(80).raw;
+  const uint32_t hi = Velocity16::from7(81).raw;
+  const double f_lo = velocity_hz(lo);
+  const double f_mid = velocity_hz(raw_midpoint(lo, hi));
+  const double f_hi = velocity_hz(hi);
+  INFO(f_lo << " / " << f_mid << " / " << f_hi);
+  CHECK(strictly_between(f_lo, f_mid, f_hi));
+}
+
+TEST_CASE("NativeSynth bends a MIDI 2.0 pitch bend between the 14-bit steps",
+          "[midi][synth][midi2]") {
+  const uint32_t lo = Bend32::from14(10000).raw;
+  const uint32_t hi = Bend32::from14(10001).raw;
+  const uint32_t mid = raw_midpoint(lo, hi);
+
+  SECTION("an ordinary channel") {
+    // A 48-semitone range widens one 14-bit step to about half a cent.
+    const auto wide = [](NativeSynth& s) {
+      s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 101, 0)));
+      s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 100, 0)));
+      s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, 48)));
+    };
+    const double f_lo = bent_hz(wide, 0, lo);
+    const double f_mid = bent_hz(wide, 0, mid);
+    const double f_hi = bent_hz(wide, 0, hi);
+    INFO(f_lo << " / " << f_mid << " / " << f_hi);
+    CHECK(strictly_between(f_lo, f_mid, f_hi));
+  }
+
+  SECTION("an MPE member channel") {
+    // Lower zone of fifteen members; a member bends over the zone's 48 semitones.
+    const auto zone = [](NativeSynth& s) {
+      s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 101, 0)));
+      s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 100, 6)));
+      s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, 15)));
+    };
+    const double f_lo = bent_hz(zone, 1, lo);
+    const double f_mid = bent_hz(zone, 1, mid);
+    const double f_hi = bent_hz(zone, 1, hi);
+    INFO(f_lo << " / " << f_mid << " / " << f_hi);
+    CHECK(strictly_between(f_lo, f_mid, f_hi));
+  }
+}
+
+TEST_CASE("NativeSynth takes a MIDI 2.0 Registered Controller 0/0 as the RPN 0/0 bend range",
+          "[midi][synth][midi2]") {
+  // 12 semitones and 50 cents: Data Entry MSB 12, LSB 50.
+  constexpr uint16_t kRange14 = (12u << 7) | 50u;
+  const auto render_bent = [](uint8_t channel, bool zoned, bool midi2) {
+    NativeSynth synth(resolution_config());
+    synth.prepare(kOutRate, 256);
+    if (zoned) {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 101, 0)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 100, 6)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, 15)));
+    }
+    if (midi2) {
+      synth.on_event(0, event(sonare::midi::make_midi2_registered_controller(
+                            0, channel, 0, 0, Control32::from14_zero_ext(kRange14).raw)));
+    } else {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, channel, 101, 0)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, channel, 100, 0)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, channel, 6, 12)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, channel, 38, 50)));
+    }
+    synth.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, channel, 12288)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, channel, 69, 100)));
+    return render(synth, 16384).left;
+  };
+
+  SECTION("an ordinary channel") {
+    const std::vector<float> rpn = render_bent(0, false, false);
+    const std::vector<float> rc = render_bent(0, false, true);
+    // Half of +12.5 semitones from A4, so the range really moved off its default.
+    const double hz = estimate_frequency(rc, kOutRate, 1024);
+    CHECK(hz > 440.0 * std::pow(2.0, 6.0 / 12.0));
+    CHECK(rc == rpn);
+  }
+
+  SECTION("an MPE member channel") {
+    const std::vector<float> rpn = render_bent(1, true, false);
+    const std::vector<float> rc = render_bent(1, true, true);
+    const double hz = estimate_frequency(rc, kOutRate, 1024);
+    CHECK(hz > 440.0 * std::pow(2.0, 6.0 / 12.0));
+    CHECK(rc == rpn);
+  }
+}

@@ -31,6 +31,7 @@
 #include <memory>
 #include <vector>
 
+#include "midi/channel_voice_decode.h"
 #include "midi/control_value.h"
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
@@ -621,10 +622,14 @@ class NativeSynth final : public MidiInstrument {
     return true;
   }
 
+  /// Channel-voice messages received but not acted on: reserved statuses, per-note messages and
+  /// relative controllers. Cleared by reset().
+  uint64_t skipped_event_count() const noexcept { return skipped_events_; }
+
  private:
   struct ChannelState {
-    bool sustain = false;       // CC64 >= 64 (dampers lifted)
-    uint8_t sustain_level = 0;  // raw CC64 (half-pedal damper position)
+    bool sustain = false;                           // CC64 >= 64 (dampers lifted)
+    Control32 sustain_level = Control32::from7(0);  // CC64 (half-pedal damper position)
     /// CC66 pedal position. Sostenuto captures exactly the keys held at the
     /// DOWN EDGE, so the capture sweep must be edge-triggered: a pedal that
     /// keeps sending values >= 64 would otherwise capture notes struck after
@@ -640,21 +645,22 @@ class NativeSynth final : public MidiInstrument {
     /// Rhythm part: resolves through the drum map instead of the melodic
     /// programs. Channel 10 by default (GM), matching Sf2Player.
     bool drums = false;
-    uint8_t volume = 100;      // CC7
-    uint8_t expression = 127;  // CC11
-    uint8_t pan = 64;          // CC10
-    uint8_t mod_wheel = 0;     // CC1
+    /// Controller values at MIDI 2.0 width: a float law reads f7(), a switch u7().
+    Control32 volume = Control32::from7(100);      // CC7
+    Control32 expression = Control32::from7(127);  // CC11
+    Control32 pan = Control32::from7(64);          // CC10
+    Control32 mod_wheel = Control32::from7(0);     // CC1
     /// CC2 and channel aftertouch as the channel last sent them, unscaled by
     /// any engine's own axis. The per-engine breath fields below carry a 255
     /// "untouched" sentinel because they override a preset value; these two are
     /// controller state and start at zero, which is what a channel that has
     /// sent nothing means.
-    uint8_t breath = 0;
-    uint8_t pressure = 0;
+    Control32 breath = Control32::from7(0);
+    Control32 pressure = Control32::from7(0);
     uint8_t program = 0;  // last program change (or GM melodic program)
     uint8_t bank_msb = 0;
     uint8_t bank_lsb = 0;
-    uint16_t pitch_bend = 8192;
+    Bend32 pitch_bend = Bend32::center();
     /// Expression axes as the channel's ControllerProfile has resolved them.
     /// Which controller reaches which axis is the profile's to say, and which
     /// axis an engine reads is engine_axis_capability()'s; nothing between them
@@ -709,10 +715,17 @@ class NativeSynth final : public MidiInstrument {
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;
-  void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
-  void channel_pressure(uint8_t channel, uint8_t pressure7) noexcept;
-  void poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept;
-  void sustain_cc(uint8_t channel, uint8_t value) noexcept;
+  void control_change(uint8_t channel, uint8_t controller, Control32 control) noexcept;
+  void channel_pressure(uint8_t channel, Control32 pressure) noexcept;
+  void poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept;
+  void sustain_cc(uint8_t channel, Control32 value) noexcept;
+  /// RPN 0/0's Data Entry MSB (whole semitones) and LSB (cents), which a MIDI 2.0 Registered
+  /// Controller 0/0 delivers together.
+  void bend_range_msb(uint8_t channel, uint8_t semitones) noexcept;
+  void bend_range_lsb(uint8_t channel, uint8_t cents) noexcept;
+  /// A MIDI 2.0 Registered / Assignable Controller: 0/0 is read straight from the message, every
+  /// other one takes the path its four MIDI 1.0 messages do.
+  void registered_controller(const Ump& ump, const ChannelVoiceEvent& ev) noexcept;
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
@@ -751,14 +764,19 @@ class NativeSynth final : public MidiInstrument {
   /// attributed to and no other.
   void refresh_mpe_note_mods(uint8_t channel) noexcept;
   /// The message a channel's combined value would arrive as. MIDI 1.0 because
-  /// the zone model's domain is 7-bit, which is also what the protocol dispatch
-  /// below narrows every controller to. Groupless, because the profile resolves
+  /// the zone model's domain is 7-bit. Groupless, because the profile resolves
   /// from the status, the controller number and the channel alone.
   Ump mpe_controller_message(uint8_t channel, MpeDimension dimension) const noexcept;
   /// Resolves @p channel's combined value through the profile, and every member
   /// of the zone as well when @p channel is the manager, whose value is a bias
   /// on each of them.
   void push_mpe_controller_axis(uint8_t channel, MpeDimension dimension) noexcept;
+  /// The zone model tracks bend at 14 bits and pressure at 7; these add back the fraction of a
+  /// step a MIDI 2.0 value carries, from the channel state that holds it at full width. For a
+  /// MIDI 1.0 value the fraction is zero and the zone model's own value is returned unchanged.
+  float zone_bend_semitones(uint8_t channel) const noexcept;
+  float zone_manager_bend_semitones(uint8_t channel) const noexcept;
+  float zone_pressure(uint8_t channel) const noexcept;
   /// Tracks the two combining dimensions ahead of the profile, so a value
   /// reaching an axis carries the manager's fold (2.2.7, 2.2.8).
   void track_mpe_input(const Ump& ump) noexcept;
@@ -786,6 +804,7 @@ class NativeSynth final : public MidiInstrument {
   std::vector<MpeNote> mpe_notes_;
   std::vector<uint64_t> mpe_note_ages_;
   uint64_t legato_fallbacks_ = 0;
+  uint64_t skipped_events_ = 0;
   double sample_rate_ = 0.0;
   bool prepared_ = false;
   int64_t tail_samples_ = 0;

@@ -1,6 +1,28 @@
+#include <algorithm>
+
 #include "midi/synth/native_synth.h"
 
 namespace sonare::midi::synth {
+
+namespace {
+
+/// Appendix C.5's divisor for a 14-bit bend displacement, the one MpeState applies.
+constexpr float kMpeBendScale = 8191.0f;
+
+/// The manager channel of the zone @p channel belongs to. Ask the role first.
+uint8_t zone_manager(const MpeState& mpe, uint8_t channel) noexcept {
+  return mpe.zone_of(channel) == MpeZone::kLower ? kMpeLowerManagerChannel
+                                                 : kMpeUpperManagerChannel;
+}
+
+/// The semitones of @p bend below its 14-bit step at @p channel's zone sensitivity: what the
+/// zone model's 14-bit tracking drops. Zero for any bend a MIDI 1.0 message can carry.
+float bend_fraction(const MpeState& mpe, uint8_t channel, Bend32 bend) noexcept {
+  const float steps = bend.f14() - static_cast<float>(bend.u14());
+  return steps == 0.0f ? 0.0f : mpe.bend_sensitivity(channel) * steps / kMpeBendScale;
+}
+
+}  // namespace
 
 ControllerProfile default_controller_profile() noexcept {
   ControllerProfile profile;
@@ -145,10 +167,8 @@ void NativeSynth::refresh_mpe_note_mods(uint8_t channel) noexcept {
   // rule says about the member's own.
   const Sf2ChannelMod& mod = channel_mods_[ch];
   const float member_bend_cents =
-      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * 100.0f;
-  const uint8_t manager =
-      mpe_.zone_of(ch) == MpeZone::kLower ? kMpeLowerManagerChannel : kMpeUpperManagerChannel;
-  const float manager_pressure01 = static_cast<float>(mpe_.pressure(manager)) / 127.0f;
+      (zone_bend_semitones(ch) - zone_manager_bend_semitones(ch)) * 100.0f;
+  const float manager_pressure01 = zone_pressure(zone_manager(mpe_, ch)) / 127.0f;
   for (NativeSynthVoice& v : pool_) {
     if (!v.active || v.channel != ch) continue;
     const bool takes_bend = bend_note == kControllerAnyNote || v.note == bend_note;
@@ -159,6 +179,45 @@ void NativeSynth::refresh_mpe_note_mods(uint8_t channel) noexcept {
     if (!takes_bend) v.mpe_mod.pitch_cents -= member_bend_cents;
     if (!takes_pressure) v.mpe_mod.aftertouch01 = manager_pressure01;
   }
+}
+
+float NativeSynth::zone_manager_bend_semitones(uint8_t channel) const noexcept {
+  const float tracked = mpe_.manager_bend_semitones(channel);
+  if (mpe_.role(channel) == MpeChannelRole::kUnassigned) return tracked;
+  const uint8_t manager = zone_manager(mpe_, channel);
+  const float fraction = bend_fraction(mpe_, manager, channels_[manager].pitch_bend);
+  return fraction == 0.0f ? tracked : tracked + fraction;
+}
+
+float NativeSynth::zone_bend_semitones(uint8_t channel) const noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const MpeChannelRole role = mpe_.role(ch);
+  if (role != MpeChannelRole::kMember) {
+    return role == MpeChannelRole::kManager ? zone_manager_bend_semitones(ch)
+                                            : mpe_.bend_semitones(ch);
+  }
+  const uint8_t manager = zone_manager(mpe_, ch);
+  const float own = bend_fraction(mpe_, ch, channels_[ch].pitch_bend);
+  const float bias = bend_fraction(mpe_, manager, channels_[manager].pitch_bend);
+  float semitones = mpe_.bend_semitones(ch);
+  if (own != 0.0f) semitones += own;
+  if (bias != 0.0f) semitones += bias;
+  return semitones;
+}
+
+float NativeSynth::zone_pressure(uint8_t channel) const noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const float tracked = static_cast<float>(mpe_.pressure(ch));
+  const MpeChannelRole role = mpe_.role(ch);
+  if (role == MpeChannelRole::kUnassigned) return tracked;
+  const auto fraction_of = [this](uint8_t c) noexcept {
+    const Control32 p = channels_[c].pressure;
+    return p.f7() - static_cast<float>(p.u7());
+  };
+  float fraction = fraction_of(ch);
+  if (role == MpeChannelRole::kMember) fraction += fraction_of(zone_manager(mpe_, ch));
+  if (fraction == 0.0f) return tracked;
+  return std::min(tracked + fraction, 127.0f);
 }
 
 Ump NativeSynth::mpe_controller_message(uint8_t channel, MpeDimension dimension) const noexcept {
