@@ -49,9 +49,12 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
-  int hop = node_arg_int(info, 2, 512);
-  int win = node_arg_int(info, 3, 384);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  int win{};
+  if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
   int mode = SONARE_TEMPOGRAM_AUTOCORRELATION;
   try {
     mode = info.Length() >= 5 ? TempogramModeFromValue(info[4]) : SONARE_TEMPOGRAM_AUTOCORRELATION;
@@ -84,11 +87,16 @@ Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
-  int hop = node_arg_int(info, 2, 512);
-  int win = node_arg_int(info, 3, 384);
-  float bpm_min = node_arg_finite_float(info, 4, 60.0f);
-  int n_bins = node_arg_int(info, 5, 60);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  int win{};
+  if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
+  float bpm_min{};
+  if (!OptionalFiniteFloatArg(env, info, 4, "bpmMin", 60.0f, &bpm_min)) return env.Undefined();
+  int n_bins{};
+  if (!OptionalIntArg(env, info, 5, "nBins", 60, &n_bins)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
@@ -111,11 +119,16 @@ Napi::Value SonareWrap::Plp(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
-  int hop = node_arg_int(info, 2, 512);
-  float tempo_min = node_arg_finite_float(info, 3, 30.0f);
-  float tempo_max = node_arg_finite_float(info, 4, 300.0f);
-  int win = node_arg_int(info, 5, 384);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  float tempo_min{};
+  if (!OptionalFiniteFloatArg(env, info, 3, "tempoMin", 30.0f, &tempo_min)) return env.Undefined();
+  float tempo_max{};
+  if (!OptionalFiniteFloatArg(env, info, 4, "tempoMax", 300.0f, &tempo_max)) return env.Undefined();
+  int win{};
+  if (!OptionalIntArg(env, info, 5, "win", 384, &win)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -133,10 +146,14 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
-  int n_fft = node_arg_int(info, 2, 2048);
-  int hop = node_arg_int(info, 3, 512);
-  int n_mels = node_arg_int(info, 4, 128);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  int n_fft{};
+  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
+  int n_mels{};
+  if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -154,11 +171,16 @@ Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
-  int n_fft = node_arg_int(info, 2, 2048);
-  int hop = node_arg_int(info, 3, 512);
-  int n_mels = node_arg_int(info, 4, 128);
-  int n_bands = node_arg_int(info, 5, 6);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  int n_fft{};
+  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
+  int n_mels{};
+  if (!OptionalIntArg(env, info, 4, "nMels", 128, &n_mels)) return env.Undefined();
+  int n_bands{};
+  if (!OptionalIntArg(env, info, 5, "nBands", 6, &n_bands)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
@@ -181,9 +203,12 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
-  int hop = node_arg_int(info, 2, 512);
-  int win = node_arg_int(info, 3, 384);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
+  int win{};
+  if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
   const int center =
       info.Length() >= 5 && info[4].IsBoolean() ? (info[4].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
   const int norm =
@@ -211,9 +236,12 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int win = node_arg_int(info, 1, 384);
-  int sr = node_arg_int(info, 2, 22050);
-  int hop = node_arg_int(info, 3, 512);
+  int win{};
+  if (!OptionalIntArg(env, info, 1, "win", 384, &win)) return env.Undefined();
+  int sr{};
+  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
+  int hop{};
+  if (!OptionalIntArg(env, info, 3, "hop", 512, &hop)) return env.Undefined();
   std::vector<float> factors;
   if (info.Length() >= 5 && !info[4].IsUndefined() && !info[4].IsNull()) {
     factors = FloatVectorFromValue(info[4], "factors");
@@ -237,15 +265,20 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int sr = node_arg_int(info, 1, 22050);
+  int sr{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
   const bool enable_blend =
       info.Length() >= 3 && info[2].IsBoolean() ? info[2].As<Napi::Boolean>().Value() : true;
-  const float blend_weight = node_arg_finite_float(info, 3, 0.55f);
-  const int blend_n_fft = node_arg_int(info, 4, 4096);
-  const int hop_length = node_arg_int(info, 5, 512);
+  float blend_weight{};
+  if (!OptionalFiniteFloatArg(env, info, 3, "blendWeight", 0.55f, &blend_weight))
+    return env.Undefined();
+  int blend_n_fft{};
+  if (!OptionalIntArg(env, info, 4, "blendNFft", 4096, &blend_n_fft)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 5, "hopLength", 512, &hop_length)) return env.Undefined();
   SonareError err =
       sonare_nnls_chroma_ex2(arr.Data(), arr.ElementLength(), sr, enable_blend ? 1 : 0,
                              blend_weight, blend_n_fft, hop_length, &out, &count, &n_frames);

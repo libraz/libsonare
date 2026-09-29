@@ -1,5 +1,5 @@
 /**
- * `node_float_option` refuses a finite number no 32-bit float can hold, and the
+ * `FloatProperty` refuses a finite number no 32-bit float can hold, and the
  * WASM surface answers the same input the same way.
  *
  * The input that matters is FINITE. `Infinity` was already handled and cannot
@@ -12,8 +12,7 @@
  * The type question is the other half of the finding, and it is an asymmetry
  * question: a test against one surface establishes nothing about it. The last
  * describe drives both the addon and the WASM binding with the same four
- * wrong-typed values and compares each against its own default-parameter run,
- * which is the comparison that holds whichever answer the surfaces settle on.
+ * wrong-typed values, and both refuse them by name.
  *
  * Driven against the addon rather than the TypeScript facade for the reader
  * cases: `meteringSpectrum`'s facade validates only `samples` and forwards the
@@ -21,7 +20,7 @@
  * generated binding or a direct consumer sees. One assertion pins that the
  * facade adds nothing on top.
  *
- * Field: `dbRef` on `meteringSpectrum`. It is one of the two `node_float_option`
+ * Field: `dbRef` on `meteringSpectrum`. It is one of the two `FloatProperty`
  * fields on that bag, it has no facade guard, and the returned `db` curve moves
  * with it.
  */
@@ -106,9 +105,8 @@ describe('the addon float option reader refuses a value no float can hold', () =
   });
 
   it('forwards a non-finite number to the C ABI, which refuses it', () => {
-    // Not the default substitution: `node_float_option` falls back only for a
-    // value that is not a JS number, so a NaN the caller wrote reaches the core
-    // and is answered there. Asserted as the outcome rather than as a throw
+    // Not a default substitution: `FloatProperty` passes a non-finite number
+    // through, so a NaN the caller wrote reaches the core and is answered there. Asserted as the outcome rather than as a throw
     // shape, because the two are different reports of the same input.
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       const caught = capture(() => spectrumDb(value));
@@ -167,17 +165,14 @@ describe('the addon and the WASM binding read one options bag one way', () => {
     expect(() => wasmLateDelayMs(INSIDE_FLOAT_MAX)).not.toThrow();
   });
 
-  it("answers a non-number by each field's own contract", () => {
-    // The two fields are not in the same class and must not be asserted as if
-    // they were. `dbRef` is read by the substituting family, whose contract IS
-    // the fallback, so its assertion is the RESULT against the
-    // default-parameter run. `volume` is read by a reader that reserves its
-    // substitution for a non-finite NUMBER, so a wrong type is refused by name.
-    const nodeDefault = spectrumDb();
-    expect(nodeDefault).not.toBe(spectrumDb(2.0));
+  it('refuses a non-number by name on both', () => {
+    // Both fields now read through a refusing reader, so a wrong type is an
+    // error naming the key on each surface rather than a default on one of them.
     for (const value of WRONG_TYPES) {
       const label = JSON.stringify(value);
-      expect(spectrumDb(value), `node dbRef ${label}`).toBe(nodeDefault);
+      const fromNode = capture(() => spectrumDb(value));
+      expect(fromNode, `node dbRef ${label}`).toBeInstanceOf(TypeError);
+      expect((fromNode as Error).message).toBe('dbRef must be a number');
       const caught = capture(() => wasmLateDelayMs(value));
       expect(caught, `wasm volume ${label}`).toBeInstanceOf(Error);
       expect((caught as Error).message).toBe('volume must be a number');

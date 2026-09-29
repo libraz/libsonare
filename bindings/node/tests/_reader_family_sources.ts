@@ -78,14 +78,6 @@ export const READER_FAMILIES: Readonly<
   Record<'node' | 'wasm', Readonly<Record<string, Family | OutOfScope>>>
 > = {
   node: {
-    // Type-checked fallback: a present wrong-typed value reads as unspecified.
-    node_bool_option: 'substitute',
-    node_double_option: 'substitute',
-    node_float_option: 'substitute',
-    node_int64_option: 'substitute',
-    node_int_option: 'substitute',
-    node_string_option: 'substitute',
-    node_uint32_option: 'substitute',
     // Presence + type checked: undefined/null takes the default, anything else
     // of the wrong type is refused by name (node_require_property_type).
     BoolProperty: 'refuse',
@@ -133,7 +125,7 @@ export const READER_FAMILIES: Readonly<
     typedDoubleProperty: 'refuse',
     typedFloatProperty: 'refuse',
     typedIntProperty: 'refuse',
-    // Type-checked fallback, the mirror of the addon's node_*_option family.
+    // Type-checked fallback: a present wrong-typed value reads as the default.
     repairBoolOption: 'substitute',
     repairFloatOption: 'substitute',
     repairIntOption: 'substitute',

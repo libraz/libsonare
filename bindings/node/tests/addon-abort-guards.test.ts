@@ -238,21 +238,14 @@ function expectNativeStillWorks(): void {
 
 /**
  * The other half of the positional readers' contract, which the table above
- * cannot express: that table pins REJECTIONS, and this is the opposite.
+ * cannot express: that table pins REJECTIONS, and this pins the default.
  *
- * `sonare_wrap_options.h` states it for the whole `node_arg_*` family in as many
- * words — "a missing OR present-but-non-number argument at index falls back to
- * fallback (a type-checked fallback, not a presence-only check)" — and until
- * now nothing asserted it, which is exactly how moving these sites onto the
- * strict reader changed the behaviour with nothing going red.
- *
- * The two contracts are separate and both are live on the same argument. A
- * magnitude past the native `int` must be refused, because ToInt32 wraps it into
- * a different, legal kernel and the call then separates on a setting the caller
- * never asked for. A non-number must NOT be refused, because falling back is
- * what this family promises. Asserted by result rather than by "it did not
- * throw", so a fallback that quietly selected something other than the default
- * fails too.
+ * An omitted, undefined or null argument takes the core's default, and a present
+ * one of the wrong type is refused by name rather than read as that default --
+ * a wrong-typed kernel silently becoming 31 is a setting the caller never asked
+ * for. A magnitude past the native `int` is refused too, because ToInt32 wraps
+ * it into a different, legal kernel. Asserted by result rather than by "it did
+ * not throw", so a default that quietly selected something else fails too.
  */
 /** The shape a C-ABI-coded refusal reaches JS as; the addon never constructs a class. */
 interface SonareErrorShape extends Error {
@@ -271,7 +264,7 @@ const captureError = (run: () => unknown): SonareErrorShape | undefined => {
   }
 };
 
-describe('the HPSS positional readers keep their type-checked fallback', () => {
+describe('the HPSS positional readers default only an omitted argument', () => {
   const tone = new Float32Array(2048).map((_, i) => Math.sin((2 * Math.PI * 440 * i) / SR));
 
   /** Every float field of a result reduced to one comparable string. */
@@ -303,13 +296,16 @@ describe('the HPSS positional readers keep their type-checked fallback', () => {
 
   for (const entry of entries) {
     for (const [index, argument] of POSITIONS.entries()) {
-      it(`${entry.name}: a wrong-typed ${argument} falls back to its default`, () => {
-        const args = [...DEFAULTS];
-        expect(digest(entry.run(...args.map((value, at) => (at === index ? 'x' : value))))).toBe(
-          digest(entry.run(...args)),
-        );
+      it(`${entry.name}: a wrong-typed ${argument} is refused by name, not read as its default`, () => {
+        const args: unknown[] = DEFAULTS.map((value, at) => (at === index ? 'x' : value));
+        expect(() => entry.run(...args)).toThrow(TypeError);
+        expect(captureError(() => entry.run(...args))?.message).toContain(argument);
       });
     }
+
+    it(`${entry.name}: null reads as an omitted argument`, () => {
+      expect(digest(entry.run(null, null, null, null))).toBe(digest(entry.run(...DEFAULTS)));
+    });
 
     it(`${entry.name}: omitted arguments fall back to the same defaults`, () => {
       // A short argument list and an explicit default must agree, or the
@@ -372,9 +368,12 @@ describe('the HPSS positional readers keep their type-checked fallback', () => {
 
 describe('addon object readers stop at the first bad field', () => {
   for (const { name, rejectsArgument } of CASES) {
-    for (const { argument, call, error } of rejectsArgument ?? []) {
+    for (const { argument, call, error, message } of rejectsArgument ?? []) {
       it(`${name}: a wrong-typed ${argument} throws exactly one catchable error`, () => {
         expect(() => call()).toThrow(error ?? TypeError);
+        if (message !== undefined) {
+          expect(() => call()).toThrow(message);
+        }
         expectNativeStillWorks();
       });
     }
@@ -619,12 +618,8 @@ describe('rejected project arguments leave the project byte-identical', () => {
  *     the shared family, so all three are blind to code that simply never uses
  *     it. That is exactly how this class began.
  *
- * What is still OUTSIDE the population, deliberately: the lenient `node_arg_*`
- * family (type-checks and falls back to a default, so it never leaves a pending
- * exception and never hands the C ABI a dummy alongside one), and `.As<Napi::T>()`
- * with no value accessor (an unchecked cast that cannot itself fail). An author
- * can still leave the population by using `node_arg_*`; that is a lenience
- * decision, not an unguarded read, and it is visible in review as one.
+ * What is still OUTSIDE the population, deliberately: `.As<Napi::T>()` with no
+ * value accessor (an unchecked cast that cannot itself fail).
  */
 describe('the abort-guard table accounts for every rejecting entry point', () => {
   it('self-checks the source scanners, so the registers are not comparing nothing', () => {
@@ -636,10 +631,8 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     // This one reports its whole population, not just its violations, so the
     // floor is what proves a clean sweep swept something. What remains is the
     // non-integer half: every integer read moved onto the shared narrowing
-    // family, either as a hand-written node_arg_int copy folded back onto the
-    // reader (outside this population by design, since that family is the
-    // lenience decision) or as a bare info[i] read routed through
-    // node_narrow_int, which is a call rather than an inline accessor.
+    // family, either onto a bail-out reader or as a bare info[i] read routed
+    // through node_narrow_int, which is a call rather than an inline accessor.
     // 100 reads match. The floor sits well under that on purpose: routing an
     // argument onto a reader shrinks this population without touching the
     // violation subset it guards, so such a move must not redden it.

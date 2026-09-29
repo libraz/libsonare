@@ -56,9 +56,9 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
 /// Shared by every entry point carrying such a list, so the capacity rule and
 /// the rejection wording cannot drift apart between them.
 ///
-/// An absent or non-array value leaves @p numerators and @p count alone, which
-/// keeps whatever default the caller staged — the type-checked fallback the
-/// node_*_option family gives every other key. An array replaces the set
+/// An undefined or null value leaves @p numerators and @p count alone, which
+/// keeps whatever default the caller staged, and a present non-array is refused
+/// by name, as the *Property family does for every other key. An array replaces the set
 /// wholesale, including an empty one: the core rejects a cleared list rather
 /// than silently restoring the default, so the caller is told instead of
 /// getting a set it did not ask for.
@@ -87,12 +87,11 @@ struct HpssArguments {
 /// One reader for both entry points, so neither the defaults nor the narrowing
 /// can drift apart between them.
 ///
-/// The kernels and the geometry go through node_arg_int_no_wrap rather than a
-/// bare Int32Value(), which is ToInt32 and therefore WRAPS: a kernel of 2^32
-/// arrives as 0 and 2^32 + 1 as 1, both of which the core's own guards accept,
-/// so the call separates on a kernel the caller never asked for instead of being
-/// refused. Only the wrap is closed — a non-number argument keeps the
-/// type-checked fallback the node_arg_* family documents.
+/// Every argument goes through the Optional*Arg family: an omitted, undefined or
+/// null argument takes the core's default, a wrong-typed one is refused by name,
+/// and a number the int cannot hold is refused rather than wrapped by ToInt32
+/// (2^32 would arrive as 0 and 2^32 + 1 as 1, both of which the core's own guards
+/// accept).
 ///
 /// Nothing else is re-checked here. The core refuses a non-positive or
 /// odd nFft, a non-positive hop, a hop past nFft / 2, and every kernel outside

@@ -144,10 +144,15 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate = node_arg_int(info, 1, 22050);
-  const int n_fft = node_arg_int(info, 2, 2048);
-  const int hop_length = node_arg_int(info, 3, 512);
-  const float min_section_sec = node_arg_finite_float(info, 4, 4.0f);
+  int sample_rate{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  int n_fft{};
+  if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
+  float min_section_sec{};
+  if (!OptionalFiniteFloatArg(env, info, 4, "minSectionSec", 4.0f, &min_section_sec))
+    return env.Undefined();
 
   SonareSectionResult result{};
   SonareError err = sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, n_fft,
@@ -184,7 +189,8 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate = node_arg_int(info, 1, 22050);
+  int sample_rate{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
 
   // Seeded from the C ABI rather than restated, so the facade cannot drift from
   // the core's BoundaryConfig. No field here takes ZeroIsSentinel: the C entry
@@ -251,12 +257,18 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   }
 
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sample_rate = node_arg_int(info, 1, 22050);
-  const float fmin = node_arg_finite_float(info, 2, 65.0f);
-  const float fmax = node_arg_finite_float(info, 3, 2093.0f);
-  const int frame_length = node_arg_int(info, 4, 2048);
-  const int hop_length = node_arg_int(info, 5, 256);
-  const float threshold = node_arg_finite_float(info, 6, 0.1f);
+  int sample_rate{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  float fmin{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "fmin", 65.0f, &fmin)) return env.Undefined();
+  float fmax{};
+  if (!OptionalFiniteFloatArg(env, info, 3, "fmax", 2093.0f, &fmax)) return env.Undefined();
+  int frame_length{};
+  if (!OptionalIntArg(env, info, 4, "frameLength", 2048, &frame_length)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 5, "hopLength", 256, &hop_length)) return env.Undefined();
+  float threshold{};
+  if (!OptionalFiniteFloatArg(env, info, 6, "threshold", 0.1f, &threshold)) return env.Undefined();
   const int use_pyin =
       info.Length() >= 8 && info[7].IsBoolean() && info[7].As<Napi::Boolean>().Value() ? 1 : 0;
   // center defaults to true (matches librosa.pyin(center=True)); only honored

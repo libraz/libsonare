@@ -8,8 +8,8 @@
  * which case the call returns what a caller who asked for nothing would have
  * got and the parameter silently stops being read. `kZeroIsSentinel` marks
  * the second kind, and marking it made the distinction a property of the source
- * SPELLING — `node_int_option(opts, "nFft", kZeroIsSentinel)` and
- * `node_int_option(opts, "frameStart", 0)` are now different text where they
+ * SPELLING — `IntProperty(opts, "nFft", kZeroIsSentinel)` and
+ * `IntProperty(opts, "frameStart", 0)` are now different text where they
  * used to be identical.
  *
  * That is only worth anything if something reads it. This is that reader: a
@@ -290,10 +290,6 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
-  ['node_bool_option', 'Reads a boolean, so it has no integer zero to land on.'],
-  ['node_double_option', 'Reads a double; truncation is not in play.'],
-  ['node_float_option', 'Reads a float; truncation is not in play.'],
-  ['node_string_option', 'Reads a string, so it has no numeric fallback at all.'],
   [
     'FloatArrayProperty',
     'Reads a float array off a record and returns an empty vector when absent; there is no scalar fallback.',
@@ -301,10 +297,6 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   [
     'MidiByteProperty',
     'Refuses a non-integer outright, so no fractional value can truncate onto its zero. The exemption belongs to the READER rather than to any field, which is why it is recorded here instead of once per call site: a site moving off it onto a truncating reader must start owing a reason.',
-  ],
-  [
-    'node_uint32_option',
-    'Carries only the ZeroIsSentinel overload, so no call can spell a literal-zero fallback, and it refuses a fraction besides. Both are properties of the READER, so a site that moves to a plain-fallback uint32 reader starts owing a reason.',
   ],
   [
     'Int32Property',
@@ -494,11 +486,11 @@ describe('the zero-fallback scanner sees what it claims to', () => {
     {
       file: 'fake.cpp',
       text: [
-        'void A(const Napi::Object& o) { a = node_int_option(o, "a", 0); }',
-        'void B(const Napi::Object& o) { b = node_int64_option(o, "b", 0); }',
+        'void A(const Napi::Object& o) { a = IntProperty(o, "a", 0); }',
+        'void B(const Napi::Object& o) { b = Int64Property(o, "b", 0); }',
         'void C(const Napi::Object& o) { c = Int64Property(o, "c", kZeroIsSentinel); }',
         'void D(const Napi::Object& o) { d = Uint32Property(o, "d", 0); }',
-        'void E(const Napi::Object& o) { e = node_float_option(o, "e", 0); }',
+        'void E(const Napi::Object& o) { e = FloatProperty(o, "e", 0); }',
         'void F(const Napi::Object& o) { f = IntProperty(o, "f", 8); }',
       ].join('\n'),
     },

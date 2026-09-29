@@ -124,7 +124,7 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
     config.threshold = FloatProperty(options, "threshold", config.threshold);
     if (options.Has("paddingSamples")) {
       const int padding_samples =
-          node_int_option(options, "paddingSamples", static_cast<int>(config.padding_samples));
+          IntProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
       if (padding_samples < 0) {
         Napi::RangeError::New(env, "paddingSamples must be non-negative")
             .ThrowAsJavaScriptException();
@@ -133,8 +133,8 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
       config.padding_samples = static_cast<size_t>(padding_samples);
     }
     config.mode = parse_trim_silence_mode(options, config.mode);
-    config.gate_lufs = node_float_option(options, "gateLufs", config.gate_lufs);
-    config.window_ms = node_float_option(options, "windowMs", config.window_ms);
+    config.gate_lufs = FloatProperty(options, "gateLufs", config.gate_lufs);
+    config.window_ms = FloatProperty(options, "windowMs", config.window_ms);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config);

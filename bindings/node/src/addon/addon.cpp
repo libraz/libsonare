@@ -276,12 +276,17 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   if (!sonare_node::OptionalMidiByteArg(env, info, 4, "minMovement", 0, &min_movement)) {
     return env.Undefined();
   }
+  float min_value = 0.0f;
+  float max_value = 1.0f;
+  if (!sonare_node::OptionalFloatArg(env, info, 2, "minValue", 0.0f, &min_value) ||
+      !sonare_node::OptionalFloatArg(env, info, 3, "maxValue", 1.0f, &max_value)) {
+    return env.Undefined();
+  }
   SonareMidiCcBinding learned{};
   const SonareError err = sonare_midi_cc_learn(
       events.empty() ? nullptr : events.data(), events.size(),
       sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
-      sonare_node::node_arg_float(info, 2, 0.0f), sonare_node::node_arg_float(info, 3, 1.0f),
-      min_movement, &learned);
+      min_value, max_value, min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
@@ -333,12 +338,13 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   // The UMP group is a uint8_t C-ABI argument; reject rather than wrap.
   uint8_t group = 0;
   if (!sonare_node::RequiredMidiByteValue(env, info[3], "group", &group)) return env.Undefined();
+  double ppq = 0.0;
+  if (!sonare_node::OptionalDoubleArg(env, info, 4, "ppq", 0.0, &ppq)) return env.Undefined();
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
       bindings.empty() ? nullptr : bindings.data(), bindings.size(),
       sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
-      sonare_node::node_narrow_finite_float(env, info[2], "unitValue"), group,
-      sonare_node::node_arg_double(info, 4, 0.0), &event);
+      sonare_node::node_narrow_finite_float(env, info[2], "unitValue"), group, ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI param-to-CC arguments").ThrowAsJavaScriptException();

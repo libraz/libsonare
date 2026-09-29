@@ -203,7 +203,7 @@ interface FloatArgument {
 }
 
 /**
- * Every argument routed through `node_arg_finite_float`.
+ * Every argument routed through `OptionalFiniteFloatArg`.
  *
  * `site` is the reader call, not the entry point: `cqt`, `pseudoCqt` and
  * `hybridCqt` share one `fmin` read through `CqtLike`, and `referenceMidi` is
@@ -627,7 +627,7 @@ describe('an optional float argument is refused rather than saturated', () => {
 });
 
 /**
- * The two arguments that stay on `node_arg_float`.
+ * The two arguments that stay on `OptionalFloatArg`, which passes a non-finite value.
  *
  * A NaN gamma SELECTS the librosa-compatible ERB-derived automatic value at
  * `src/feature/vqt.cpp`, so refusing it would be a regression of a working
@@ -674,10 +674,13 @@ describe('a gamma keeps its NaN, which selects the automatic ERB value', () => {
 });
 
 describe('the table covers the whole reader population', () => {
-  it('drives every node_arg_finite_float call site in the addon', () => {
+  it('drives every OptionalFiniteFloatArg call site in the addon', () => {
     const calls = addonSources()
       .filter((source) => source.file !== 'sonare_wrap_options.h')
-      .flatMap((source) => source.text.match(/node_arg_finite_float\(info,/g) ?? []);
+      .flatMap(
+        (source) =>
+          source.text.match(/OptionalFiniteFloatArg\((?:env|info\.Env\(\)), info,/g) ?? [],
+      );
     const sites = new Set(FINITE_ARGUMENTS.map((argument) => argument.site));
     expect(sites.size).toBe(calls.length);
   });
@@ -685,7 +688,7 @@ describe('the table covers the whole reader population', () => {
   it('keeps the two deliberately passed-through gammas out of that population', () => {
     const gammas = addonSources()
       .filter((source) => source.file === 'features/advanced.cpp')
-      .flatMap((source) => source.text.match(/const float gamma = node_arg_float\(info,/g) ?? []);
+      .flatMap((source) => source.text.match(/OptionalFloatArg\(env, info, \d+, "gamma"/g) ?? []);
     expect(gammas).toHaveLength(PASSTHRU_ARGUMENTS.length);
   });
 });

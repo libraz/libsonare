@@ -23,11 +23,16 @@ using namespace sonare_node::features;
 Napi::Value SonareWrap::Tone(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  const float frequency = node_arg_float(info, 0, 440.0f);
-  const int sample_rate = node_arg_int(info, 1, 22050);
-  const float duration = node_arg_float(info, 2, 1.0f);
-  const float phase = node_arg_float(info, 3, 0.0f);
-  const float amplitude = node_arg_float(info, 4, 1.0f);
+  float frequency{};
+  if (!OptionalFloatArg(env, info, 0, "frequency", 440.0f, &frequency)) return env.Undefined();
+  int sample_rate{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  float duration{};
+  if (!OptionalFloatArg(env, info, 2, "duration", 1.0f, &duration)) return env.Undefined();
+  float phase{};
+  if (!OptionalFloatArg(env, info, 3, "phase", 0.0f, &phase)) return env.Undefined();
+  float amplitude{};
+  if (!OptionalFloatArg(env, info, 4, "amplitude", 1.0f, &amplitude)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError error =
@@ -40,11 +45,16 @@ Napi::Value SonareWrap::Tone(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Chirp(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  const float fmin = node_arg_float(info, 0, 440.0f);
-  const float fmax = node_arg_float(info, 1, 880.0f);
-  const int sample_rate = node_arg_int(info, 2, 22050);
-  const float duration = node_arg_float(info, 3, 1.0f);
-  const bool linear = node_arg_bool(info, 4, true);
+  float fmin{};
+  if (!OptionalFloatArg(env, info, 0, "fmin", 440.0f, &fmin)) return env.Undefined();
+  float fmax{};
+  if (!OptionalFloatArg(env, info, 1, "fmax", 880.0f, &fmax)) return env.Undefined();
+  int sample_rate{};
+  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  float duration{};
+  if (!OptionalFloatArg(env, info, 3, "duration", 1.0f, &duration)) return env.Undefined();
+  bool linear{};
+  if (!OptionalBoolArg(env, info, 4, "linear", true, &linear)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError error =
@@ -62,10 +72,14 @@ Napi::Value SonareWrap::Clicks(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const auto times = info[0].As<Napi::Float32Array>();
-  const int sample_rate = node_arg_int(info, 1, 22050);
-  const int length = node_arg_int(info, 2, 0);
-  const float frequency = node_arg_float(info, 3, 1000.0f);
-  const float duration = node_arg_float(info, 4, 0.1f);
+  int sample_rate{};
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  int length{};
+  if (!OptionalIntArg(env, info, 2, "length", 0, &length)) return env.Undefined();
+  float frequency{};
+  if (!OptionalFloatArg(env, info, 3, "frequency", 1000.0f, &frequency)) return env.Undefined();
+  float duration{};
+  if (!OptionalFloatArg(env, info, 4, "duration", 0.1f, &duration)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
   const SonareError error = sonare_clicks(times.Data(), times.ElementLength(), sample_rate, length,
@@ -83,9 +97,12 @@ Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float top_db = node_arg_finite_float(info, 1, 60.0f);
-  int frame_length = node_arg_int(info, 2, 2048);
-  int hop_length = node_arg_int(info, 3, 512);
+  float top_db{};
+  if (!OptionalFiniteFloatArg(env, info, 1, "topDb", 60.0f, &top_db)) return env.Undefined();
+  int frame_length{};
+  if (!OptionalIntArg(env, info, 2, "frameLength", 2048, &frame_length)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   int start = 0;
@@ -109,9 +126,12 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float top_db = node_arg_finite_float(info, 1, 60.0f);
-  int frame_length = node_arg_int(info, 2, 2048);
-  int hop_length = node_arg_int(info, 3, 512);
+  float top_db{};
+  if (!OptionalFiniteFloatArg(env, info, 1, "topDb", 60.0f, &top_db)) return env.Undefined();
+  int frame_length{};
+  if (!OptionalIntArg(env, info, 2, "frameLength", 2048, &frame_length)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   int* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_split_silence(arr.Data(), arr.ElementLength(), top_db, frame_length,
@@ -159,9 +179,12 @@ Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_rep
     lengths.push_back(signal_arrays.back().ElementLength());
   }
 
-  float top_db = node_arg_finite_float(info, 1, 60.0f);
-  int frame_length = node_arg_int(info, 2, 2048);
-  int hop_length = node_arg_int(info, 3, 512);
+  float top_db{};
+  if (!OptionalFiniteFloatArg(env, info, 1, "topDb", 60.0f, &top_db)) return env.Undefined();
+  int frame_length{};
+  if (!OptionalIntArg(env, info, 2, "frameLength", 2048, &frame_length)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   int* out = nullptr;
   size_t out_count = 0;
   SonareSilenceCommonReport report{};
@@ -232,7 +255,8 @@ Napi::Value SonareWrap::PadCenter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float pad_value = node_arg_finite_float(info, 2, 0.0f);
+  float pad_value{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "padValue", 0.0f, &pad_value)) return env.Undefined();
   const int64_t target_size = node_narrow_int64(env, info[1], "targetSize");
   if (target_size < 0) {
     Napi::RangeError::New(env, "size must be non-negative").ThrowAsJavaScriptException();
@@ -255,7 +279,8 @@ Napi::Value SonareWrap::FixLength(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float pad_value = node_arg_finite_float(info, 2, 0.0f);
+  float pad_value{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "padValue", 0.0f, &pad_value)) return env.Undefined();
   const int64_t target_size = node_narrow_int64(env, info[1], "targetSize");
   if (target_size < 0) {
     Napi::RangeError::New(env, "size must be non-negative").ThrowAsJavaScriptException();
@@ -278,8 +303,10 @@ Napi::Value SonareWrap::FixFrames(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   std::vector<int> frames = IntVectorFromValue(info[0], "frames");
-  int x_min = node_arg_int(info, 1, 0);
-  int x_max = node_arg_int(info, 2, -1);
+  int x_min{};
+  if (!OptionalIntArg(env, info, 1, "xMin", 0, &x_min)) return env.Undefined();
+  int x_max{};
+  if (!OptionalIntArg(env, info, 2, "xMax", -1, &x_max)) return env.Undefined();
   bool pad = info.Length() >= 4 && info[3].IsBoolean() ? info[3].As<Napi::Boolean>().Value() : true;
   int* out = nullptr;
   size_t count = 0;
@@ -350,8 +377,10 @@ Napi::Value SonareWrap::VectorNormalize(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  int norm_type = node_arg_int(info, 1, 0);
-  float threshold = node_arg_finite_float(info, 2, 0.0f);
+  int norm_type{};
+  if (!OptionalIntArg(env, info, 1, "normType", 0, &norm_type)) return env.Undefined();
+  float threshold{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "threshold", 0.0f, &threshold)) return env.Undefined();
   float* out = nullptr;
   size_t count = 0;
   SonareError err =

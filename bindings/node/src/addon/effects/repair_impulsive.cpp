@@ -339,10 +339,10 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.clip_threshold = node_float_option(options, "clipThreshold", config.clip_threshold);
+    config.clip_threshold = FloatProperty(options, "clipThreshold", config.clip_threshold);
     config.lpc_order = IntProperty(options, "lpcOrder", config.lpc_order);
-    config.iterations = node_int_option(options, "iterations", config.iterations);
-    config.lpc_blend = node_float_option(options, "lpcBlend", config.lpc_blend);
+    config.iterations = IntProperty(options, "iterations", config.iterations);
+    config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::declip(audio, config);
@@ -438,7 +438,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
     Napi::Object options = info[2].As<Napi::Object>();
     config.threshold = FloatProperty(options, "threshold", config.threshold);
     config.mode = parse_decrackle_mode(options, config.mode);
-    config.levels = node_int_option(options, "levels", config.levels);
+    config.levels = IntProperty(options, "levels", config.levels);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::decrackle(audio, config);

@@ -194,15 +194,15 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
 
 bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArguments* out) {
   const sonare::HpssConfig defaults;
-  if (!node_arg_int_no_wrap(env, info, 2, "kernelHarmonic", defaults.kernel_size_harmonic,
-                            &out->kernel_harmonic) ||
-      !node_arg_int_no_wrap(env, info, 3, "kernelPercussive", defaults.kernel_size_percussive,
-                            &out->kernel_percussive) ||
-      !node_arg_int_no_wrap(env, info, 4, "nFft", kDefaultNFft, &out->n_fft) ||
-      !node_arg_int_no_wrap(env, info, 5, "hopLength", kDefaultHopLength, &out->hop_length)) {
+  if (!OptionalIntArg(env, info, 2, "kernelHarmonic", defaults.kernel_size_harmonic,
+                      &out->kernel_harmonic) ||
+      !OptionalIntArg(env, info, 3, "kernelPercussive", defaults.kernel_size_percussive,
+                      &out->kernel_percussive) ||
+      !OptionalIntArg(env, info, 4, "nFft", kDefaultNFft, &out->n_fft) ||
+      !OptionalIntArg(env, info, 5, "hopLength", kDefaultHopLength, &out->hop_length) ||
+      !OptionalBoolArg(env, info, 6, "hardMask", false, &out->hard_mask)) {
     return false;
   }
-  out->hard_mask = node_arg_bool(info, 6, false);
   return true;
 }
 

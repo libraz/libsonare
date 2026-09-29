@@ -892,12 +892,11 @@ namespace {
 void ReadRetuneConfig(const Napi::Value& value, float* semitones, float* mix, int* grain_size) {
   if (!value.IsObject()) return;
   const Napi::Object object = value.As<Napi::Object>();
-  *semitones = node_float_option(object, "semitones", *semitones);
+  *semitones = FloatProperty(object, "semitones", *semitones);
   *mix = FloatProperty(object, "mix", *mix);
   // "grain_size" is the snake_case spelling the WASM surface also accepts; the
   // camelCase key wins when both are present.
-  *grain_size =
-      node_int_option(object, "grainSize", node_int_option(object, "grain_size", *grain_size));
+  *grain_size = IntProperty(object, "grainSize", IntProperty(object, "grain_size", *grain_size));
 }
 
 }  // namespace

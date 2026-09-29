@@ -216,8 +216,10 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   if (!ValidateMatrixDims(env, "decompose", n_features, n_frames, arr.ElementLength())) {
     return env.Undefined();
   }
-  int n_iter = node_arg_int(info, 4, 50);
-  float beta = node_arg_finite_float(info, 5, 2.0f);
+  int n_iter{};
+  if (!OptionalIntArg(env, info, 4, "nIter", 50, &n_iter)) return env.Undefined();
+  float beta{};
+  if (!OptionalFiniteFloatArg(env, info, 5, "beta", 2.0f, &beta)) return env.Undefined();
   // Optional 7th arg selects the initialiser ("random" | "nndsvd"). When given,
   // route through the with-init variant for the NNDSVD warm-start.
   std::string init =
@@ -360,8 +362,10 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   }
   std::string aggregate =
       info.Length() >= 4 && info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "mean";
-  int k = node_arg_int(info, 4, 7);
-  int width = node_arg_int(info, 5, 1);
+  int k{};
+  if (!OptionalIntArg(env, info, 4, "k", 7, &k)) return env.Undefined();
+  int width{};
+  if (!OptionalIntArg(env, info, 5, "width", 1, &width)) return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
   SonareError err = sonare_nn_filter(arr.Data(), n_features, n_frames, aggregate.c_str(), k, width,
@@ -390,7 +394,8 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int sr = node_arg_int(info, 2, 22050);
+  int sr{};
+  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
   int align_zeros =
       info.Length() >= 4 && info[3].IsBoolean() && info[3].As<Napi::Boolean>().Value() ? 1 : 0;
   float* out = nullptr;
@@ -417,7 +422,8 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int sr = node_arg_int(info, 2, 22050);
+  int sr{};
+  if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
   int align_zeros =
       info.Length() >= 4 && info[3].IsBoolean() ? (info[3].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
   int* out = nullptr;
@@ -485,8 +491,12 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sr");
   float rate = node_narrow_finite_float(env, info[2], "rate");
-  int n_fft = node_arg_int(info, 3, sonare::constants::kDefaultNFft);
-  int hop_length = node_arg_int(info, 4, sonare::constants::kDefaultHopLength);
+  int n_fft{};
+  if (!OptionalIntArg(env, info, 3, "nFft", sonare::constants::kDefaultNFft, &n_fft))
+    return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 4, "hopLength", sonare::constants::kDefaultHopLength, &hop_length))
+    return env.Undefined();
   float* out = nullptr;
   size_t out_length = 0;
   SonareError err = sonare_phase_vocoder(arr.Data(), arr.ElementLength(), sr, rate, n_fft,

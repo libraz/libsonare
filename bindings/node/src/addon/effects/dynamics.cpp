@@ -104,11 +104,10 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
     config.auto_makeup = BoolProperty(options, "autoMakeup", config.auto_makeup);
     config.detector = parse_compressor_detector(env, options, config.detector);
     config.sidechain_hpf_enabled =
-        node_bool_option(options, "sidechainHpfEnabled", config.sidechain_hpf_enabled);
-    config.sidechain_hpf_hz = node_float_option(options, "sidechainHpfHz", config.sidechain_hpf_hz);
-    config.pdr_time_ms = node_float_option(options, "pdrTimeMs", config.pdr_time_ms);
-    config.pdr_release_scale =
-        node_float_option(options, "pdrReleaseScale", config.pdr_release_scale);
+        BoolProperty(options, "sidechainHpfEnabled", config.sidechain_hpf_enabled);
+    config.sidechain_hpf_hz = FloatProperty(options, "sidechainHpfHz", config.sidechain_hpf_hz);
+    config.pdr_time_ms = FloatProperty(options, "pdrTimeMs", config.pdr_time_ms);
+    config.pdr_release_scale = FloatProperty(options, "pdrReleaseScale", config.pdr_release_scale);
   }
   sonare::mastering::dynamics::Compressor processor(config);
   int latency = 0;
@@ -138,10 +137,10 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
     config.attack_ms = FloatProperty(options, "attackMs", config.attack_ms);
     config.release_ms = FloatProperty(options, "releaseMs", config.release_ms);
     config.range_db = FloatProperty(options, "rangeDb", config.range_db);
-    config.hold_ms = node_float_option(options, "holdMs", config.hold_ms);
+    config.hold_ms = FloatProperty(options, "holdMs", config.hold_ms);
     config.close_threshold_db =
-        node_float_option(options, "closeThresholdDb", config.close_threshold_db);
-    config.key_hpf_hz = node_float_option(options, "keyHpfHz", config.key_hpf_hz);
+        FloatProperty(options, "closeThresholdDb", config.close_threshold_db);
+    config.key_hpf_hz = FloatProperty(options, "keyHpfHz", config.key_hpf_hz);
   }
   sonare::mastering::dynamics::Gate processor(config);
   int latency = 0;

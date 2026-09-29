@@ -219,105 +219,19 @@ inline void node_refuse_fraction(Napi::Env env, const Napi::Value& value, const 
 /// @brief The subject an out-of-range positional argument is named by.
 inline std::string node_arg_label(size_t index) { return "argument " + std::to_string(index); }
 
-// Canonical positional-argument readers, shared by every addon TU. Semantics
-// match the recurring inline sites: a missing OR present-but-non-number
-// argument at @p index falls back to @p fallback (a type-checked fallback, not
-// a presence-only check). Preserve the int/float/double distinction per call
-// site (Int32Value vs FloatValue vs DoubleValue).
-
 /// @brief Read an int positional argument, falling back if absent or non-number,
 ///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
+/// @details The last of the substituting positional readers: a present argument
+///   of the wrong type reads as @p fallback. New code reads through the
+///   Optional*Arg / Required*Arg family below, which refuses it by name.
 inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallback) {
   if (index >= info.Length() || !info[index].IsNumber()) return fallback;
   return node_narrow_int(info.Env(), info[index], node_arg_label(index).c_str());
 }
 
-/// @brief Read an int positional argument with this family's type-checked
-///        fallback, but refuse a NUMBER the narrowing would wrap.
-/// @details Reads through @ref node_narrow_int like the rest of the family, so
-///          the refusal is the same one; what this adds is a bool return, for a
-///          caller that wants to stop explicitly rather than let the throw
-///          unwind past it. A missing or non-number argument still falls back.
-///          Use Int32Arg where a wrong TYPE should be refused too; this is for
-///          the sites whose documented contract is the fallback.
-///
-///          A RangeError here and a SonareError for the same 2^32 + 1 in the TS
-///          facade is not a contradiction: each layer guards a different
-///          boundary. The facade guards the library's public domain, so it
-///          pre-empts a native refusal and reports that code; this guards the C
-///          int itself, where the value has no faithful representation at all,
-///          which is the addon's own RangeError class (MidiByteProperty,
-///          Int32Arg). A facade caller never reaches this check.
-/// @return false when the argument could not be read; a refused number throws.
-inline bool node_arg_int_no_wrap(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
-                                 const char* name, int fallback, int* out) {
-  if (env.IsExceptionPending() || out == nullptr) return false;
-  if (index >= info.Length() || !info[index].IsNumber()) {
-    *out = fallback;
-    return true;
-  }
-  *out = node_narrow_int(env, info[index], name);
-  return true;
-}
-
-/// @brief Read a uint32 positional argument, falling back if absent or non-number,
-///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
-inline uint32_t node_arg_uint32(const Napi::CallbackInfo& info, size_t index, uint32_t fallback) {
-  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
-  return node_narrow_uint32(info.Env(), info[index], node_arg_label(index).c_str());
-}
-
-/// @brief Read an int64 positional argument, falling back if absent or non-number,
-///        and refusing a number the narrowing would wrap (@ref node_narrow_number).
-inline int64_t node_arg_int64(const Napi::CallbackInfo& info, size_t index, int64_t fallback) {
-  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
-  return node_narrow_int64(info.Env(), info[index], node_arg_label(index).c_str());
-}
-
-/// @brief Read a float positional argument, falling back if absent or non-number,
-///        and refusing a number no 32-bit float can hold (@ref node_narrow_float).
-inline float node_arg_float(const Napi::CallbackInfo& info, size_t index, float fallback) {
-  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
-  return node_narrow_float(info.Env(), info[index], node_arg_label(index).c_str());
-}
-
-/// @brief Read a float positional argument whose field documents no
-///        "unspecified" spelling, refusing a non-finite value as well as one no
-///        32-bit float can hold (@ref node_narrow_finite_float).
-/// @details Same fallback as @ref node_arg_float -- a missing OR
-///   present-but-non-number argument takes @p fallback -- so the two differ only
-///   in what a written number may be. Use this one unless the field documents an
-///   infinity or a NaN as selecting something, as the VQT gamma does.
-inline float node_arg_finite_float(const Napi::CallbackInfo& info, size_t index, float fallback) {
-  if (index >= info.Length() || !info[index].IsNumber()) return fallback;
-  return node_narrow_finite_float(info.Env(), info[index], node_arg_label(index).c_str());
-}
-
-/// @brief Read a double positional argument, falling back if absent or non-number.
-inline double node_arg_double(const Napi::CallbackInfo& info, size_t index, double fallback) {
-  return index < info.Length() && info[index].IsNumber()
-             ? info[index].As<Napi::Number>().DoubleValue()
-             : fallback;
-}
-
-/// @brief Read a bool positional argument, falling back if absent or non-boolean.
-inline bool node_arg_bool(const Napi::CallbackInfo& info, size_t index, bool fallback) {
-  return index < info.Length() && info[index].IsBoolean() ? info[index].As<Napi::Boolean>().Value()
-                                                          : fallback;
-}
-
-// Two helper families with deliberately different lenience, shared by every
-// addon TU (do not re-declare per-file copies):
-//   * node_*_option  — type-checked: a present-but-wrong-typed value falls
-//     back to the default. Reserved for the keys that document a wrong-typed
-//     value as meaning "unspecified"; a key with no such contract belongs in
-//     the family below, or the same bag reads two ways across the surfaces.
-//   * *Property      — presence + type checked: undefined/null falls back to the
-//     default, and any other value of the wrong type is refused by name (it
-//     does NOT silently fall back like node_*_option). Used by engine/project
-//     structs whose values are further validated downstream by the C ABI, and
-//     by the options keys whose value is a quantity rather than a spelling of
-//     "unspecified".
+// Object-key readers are the *Property family: undefined/null falls back to the
+// default, and any other value of the wrong type is refused by name. They report
+// by throwing, which SONARE_NODE_CATCH turns back into a JS error.
 
 /// @brief Refuses a present value the reader cannot read, naming @p key.
 /// @details The typed N-API accessors report a mismatch by leaving a pending JS
@@ -331,75 +245,6 @@ inline void node_require_property_type(Napi::Env env, bool ok, const char* key,
                                        const char* expected) {
   if (env.IsExceptionPending() || ok) return;
   throw Napi::TypeError::New(env, std::string(key) + " must be " + expected);
-}
-
-/// @brief Read an integer option from a JS object, falling back if missing.
-inline int node_int_option(const Napi::Object& object, const char* key, int fallback) {
-  Napi::Value value = object.Get(key);
-  if (!value.IsNumber()) return fallback;
-  return node_narrow_int(object.Env(), value, key);
-}
-
-/// @brief Read an integer option whose 0 is the library default
-///        (@ref ZeroIsSentinel), refusing a fraction.
-inline int node_int_option(const Napi::Object& object, const char* key, ZeroIsSentinel) {
-  Napi::Value value = object.Get(key);
-  if (!value.IsNumber()) return 0;
-  node_refuse_fraction(object.Env(), value, key);
-  return node_narrow_int(object.Env(), value, key);
-}
-
-/// @brief Read a uint32 option whose 0 is the library default
-///        (@ref ZeroIsSentinel), refusing a fraction.
-/// @details The object-key counterpart of the @ref OptionalUint32Arg overload
-///   below; there is no plain-fallback `node_uint32_option`, because a uint32
-///   key whose default is not 0 has no site here yet.
-inline uint32_t node_uint32_option(const Napi::Object& object, const char* key, ZeroIsSentinel) {
-  Napi::Value value = object.Get(key);
-  if (!value.IsNumber()) return 0;
-  node_refuse_fraction(object.Env(), value, key);
-  return node_narrow_uint32(object.Env(), value, key);
-}
-
-/// @brief Read a float option from a JS object, falling back if missing.
-inline float node_float_option(const Napi::Object& object, const char* key, float fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? node_narrow_float(object.Env(), value, key) : fallback;
-}
-
-/// @brief Read a double option from a JS object, falling back if missing.
-inline double node_double_option(const Napi::Object& object, const char* key, double fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().DoubleValue() : fallback;
-}
-
-/// @brief Read an int64 option from a JS object, falling back if missing.
-inline int64_t node_int64_option(const Napi::Object& object, const char* key, int64_t fallback) {
-  Napi::Value value = object.Get(key);
-  if (!value.IsNumber()) return fallback;
-  return node_narrow_int64(object.Env(), value, key);
-}
-
-/// @brief Read an int64 option whose 0 is the library default
-///        (@ref ZeroIsSentinel), refusing a fraction.
-inline int64_t node_int64_option(const Napi::Object& object, const char* key, ZeroIsSentinel) {
-  Napi::Value value = object.Get(key);
-  if (!value.IsNumber()) return 0;
-  node_refuse_fraction(object.Env(), value, key);
-  return node_narrow_int64(object.Env(), value, key);
-}
-
-/// @brief Read a boolean option from a JS object, falling back if missing.
-inline bool node_bool_option(const Napi::Object& object, const char* key, bool fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
-}
-
-/// @brief Read a UTF-8 string option from a JS object, falling back if missing.
-inline std::string node_string_option(const Napi::Object& object, const char* key,
-                                      const char* fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsString() ? value.As<Napi::String>().Utf8Value() : std::string(fallback);
 }
 
 /// @brief Read an int property: undefined/null returns the fallback, any other
@@ -436,6 +281,16 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return node_narrow_uint32(obj.Env(), value, key);
+}
+
+/// @brief Read a uint32 property whose 0 is the library default
+///        (@ref ZeroIsSentinel), refusing a fraction.
+inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, ZeroIsSentinel) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return 0;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  node_refuse_fraction(obj.Env(), value, key);
   return node_narrow_uint32(obj.Env(), value, key);
 }
 
@@ -1014,6 +869,22 @@ inline bool OptionalFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size
     return true;
   }
   return RequiredFloatValue(env, value, name, out);
+}
+
+/// @brief Read an optional float positional argument whose field documents no
+///        "unspecified" spelling, refusing a non-finite value as well
+///        (@ref node_narrow_finite_float).
+inline bool OptionalFiniteFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                   const char* name, float fallback, float* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  if (!RequireNumberValue(env, value, name)) return false;
+  *out = node_narrow_finite_float(env, value, name);
+  return true;
 }
 
 /// @brief Read an optional double positional argument.

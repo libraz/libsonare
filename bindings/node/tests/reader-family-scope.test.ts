@@ -66,7 +66,7 @@ import {
  * the other surface's helper normalizes to.
  */
 const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
-  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 136 fields.
+  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 141 fields.
   //
   // The addon's presence-checked readers REFUSE a wrong-typed value by name; embind's read the
   // same field through `val::as<T>()`, which COERCES. A numeric string and a one-element array
@@ -252,8 +252,18 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   ['DoubleProperty>doubleProperty', ['setmidiclips:startPpq', 'settemposegments:endBpm']],
   ['WordProperty>wordProperty', ['setmidievents:data1']],
   ['DoubleProperty>floatProperty', ['tempooptionsfrom:rampThreshold']],
+  [
+    'FloatProperty>setNumberOption',
+    [
+      'estimatemeter:compoundSubdivisionThreshold',
+      'estimatemeter:downbeatWeight',
+      'estimatemeter:measureWeight',
+      'estimatemeter:subdivisionWeight',
+    ],
+  ],
+  ['IntProperty>setNumberOption', ['estimatemeter:denominator']],
 
-  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND ANSWERS WITH THE DEFAULT — 33 fields.
+  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND ANSWERS WITH THE DEFAULT — 44 fields.
   //
   // The repair readers were written to match the addon's options readers when THOSE substituted a
   // default for a wrong-typed value. The addon moved to refusing and these did not follow, so
@@ -277,8 +287,14 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'masteringrepairdeclick:neighborRatio',
       'masteringrepairdeclick:residualRatio',
       'masteringrepairdeclick:threshold',
+      'masteringrepairdeclip:clipThreshold',
+      'masteringrepairdeclip:lpcBlend',
       'masteringrepairdecrackle:threshold',
+      'masteringrepairdehum:adaptation',
+      'masteringrepairdehum:fundamentalHz',
+      'masteringrepairdehum:pllBandwidth',
       'masteringrepairdehum:q',
+      'masteringrepairdehum:searchRangeHz',
       'trimsilenceconfig:gateLufs',
       'trimsilenceconfig:threshold',
       'trimsilenceconfig:windowMs',
@@ -295,7 +311,11 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'dereverbconfig:wpeTaps',
       'masteringrepairdeclick:lpcOrder',
       'masteringrepairdeclick:maxClickSamples',
+      'masteringrepairdeclip:iterations',
       'masteringrepairdeclip:lpcOrder',
+      'masteringrepairdecrackle:levels',
+      'masteringrepairdehum:frameSize',
+      'masteringrepairdehum:harmonics',
     ],
   ],
   [
@@ -304,6 +324,7 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
       'denoiseconfig:gainSmoothing',
       'denoiseconfig:speechPresenceGain',
       'dereverbconfig:wpeEnabled',
+      'masteringrepairdehum:adaptive',
     ],
   ],
   // Same class again, and the only field whose addon reader is size_t-wide. Both
@@ -312,24 +333,6 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
   // part company on a wrong TYPE: the addon refuses `'256'` by name, embind's
   // int reader substitutes the default for it.
   ['NonNegativeSizeTProperty>repairIntOption', ['trimsilenceconfig:paddingSamples']],
-
-  // THE ADDON ANSWERS WITH THE DEFAULT WHERE EMBIND COERCES — 4 fields.
-  //
-  // The addon puts these on its substituting family and embind reads them through a coercing one,
-  // so a numeric string is ignored on the addon and applied on WASM -- the divergence that is
-  // two different results rather than a result against an error. `detectOnsets`'s six frame
-  // counts (preMax/postMax/preAvg/postAvg/wait/backtrackRange) used to sit here alongside
-  // threshold/delta; all eight are now on typedIntProperty/typedFloatProperty on WASM and
-  // IntProperty/FloatProperty on the addon, so the pair expired and the field lines moved with it.
-  [
-    'node_float_option>setNumberOption',
-    [
-      'estimatemeter:downbeatWeight',
-      'estimatemeter:measureWeight',
-      'estimatemeter:subdivisionWeight',
-    ],
-  ],
-  ['node_int_option>setNumberOption', ['estimatemeter:denominator']],
 ]);
 
 /** Two surfaces reading one field two ways, the shape the register answers. */
@@ -367,7 +370,7 @@ describe('a cross-surface reader-family disagreement is fixed or recorded', () =
     // to the two families that make a disagreement visible at all.
     const families = (surface: 'node' | 'wasm') =>
       [...new Set(readSites(surface).map((site) => site.family))].sort();
-    expect(families('node')).toEqual(['refuse', 'substitute']);
+    expect(families('node')).toEqual(['refuse']);
     expect(families('wasm')).toEqual(['coerce', 'refuse', 'substitute']);
   });
 
@@ -381,8 +384,8 @@ describe('a cross-surface reader-family disagreement is fixed or recorded', () =
 
   it('holds detectOnsets threshold and delta in agreement', () => {
     // RED WHEN: either field goes back onto a reader whose family the other
-    // surface does not share -- floatProperty on the WASM side, or
-    // node_float_option on the addon side. The per-site ratchet for the one
+    // surface does not share -- floatProperty on the WASM side, or a
+    // substituting reader on the addon side. The per-site ratchet for the one
     // field this register was opened by, kept apart from ACCOUNTED because its
     // claim is agreement rather than a recorded divergence.
     const agreed = pairedFields().filter((field) =>
@@ -483,7 +486,6 @@ describe('the scanner sees what it claims to', () => {
     // reader refuses, the Property suffix reads as checked and that one coerces.
     expect(READER_FAMILIES.wasm.floatOption).toBe('refuse');
     expect(READER_FAMILIES.wasm.floatProperty).toBe('coerce');
-    expect(READER_FAMILIES.node.node_float_option).toBe('substitute');
     expect(READER_FAMILIES.node.FloatProperty).toBe('refuse');
   });
 

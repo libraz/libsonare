@@ -887,9 +887,9 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
     Napi::Object options = info[0].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
     hop_length = IntProperty(options, "hopLength", hop_length);
-    use_hpss = node_bool_option(options, "useHpss", use_hpss);
-    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
+    use_hpss = BoolProperty(options, "useHpss", use_hpss);
+    loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = FloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = node_genre_hint_option(options);
@@ -932,9 +932,9 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
     Napi::Object options = info[0].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
     hop_length = IntProperty(options, "hopLength", hop_length);
-    use_hpss = node_bool_option(options, "useHpss", use_hpss);
-    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
+    use_hpss = BoolProperty(options, "useHpss", use_hpss);
+    loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = FloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = node_genre_hint_option(options);

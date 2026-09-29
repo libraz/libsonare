@@ -1113,7 +1113,7 @@ export interface ZeroFallbackSite {
   line: number;
   /** The literal JS key the reader was given. */
   key: string;
-  /** `node_int_option`, `IntProperty`, ... */
+  /** `IntProperty`, `Int64Property`, ... */
   reader: string;
   /** True when the fallback is spelled `kZeroIsSentinel` rather than `0`. */
   tagged: boolean;
@@ -1125,7 +1125,7 @@ export interface ZeroFallbackSite {
  * The object-key integer readers whose fallback position can hold either a
  * literal 0 or the sentinel tag.
  *
- * Only four of these carry a `ZeroIsSentinel` overload; the rest are here
+ * Only three of these carry a `ZeroIsSentinel` overload; the rest are here
  * because their zero poses the same question, and a site that cannot be tagged
  * must still answer it in writing.
  *
@@ -1147,8 +1147,6 @@ export interface ZeroFallbackSite {
  * surface as a site owing a reason.
  */
 const ZERO_FALLBACK_READER_NAMES = [
-  'node_int_option',
-  'node_int64_option',
   'IntProperty',
   'Int64Property',
   'Uint32Property',

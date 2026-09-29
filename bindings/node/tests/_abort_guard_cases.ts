@@ -73,6 +73,8 @@ export interface BadArgument<T> {
   argument: string;
   call: (target: T) => void;
   error?: ErrorConstructor;
+  /** When set, the refusal must also match this, so it names the argument it refuses. */
+  message?: RegExp;
 }
 
 const samples = (n = 4): Float32Array => new Float32Array(n);
@@ -89,6 +91,222 @@ export const clickTrack = (bpm = 120, seconds = 3, sampleRate = PROJECT_SR): Flo
   }
   return block;
 };
+
+/** A tone long enough for the framing defaults, and a 2x2 matrix for the shaped inputs. */
+const readerTone = new Float32Array(4096).map((_, i) => Math.sin((2 * Math.PI * 440 * i) / 22050));
+const readerMatrix = new Float32Array(4).fill(0.5);
+const readerAudio = () => addon.Audio.fromBuffer(readerTone, 22050);
+const READER_MIXER_SCENE = JSON.stringify({
+  version: 1,
+  buses: [
+    { id: 'master', role: 'master', inserts: [] },
+    { id: 'fx', role: 'aux', inserts: [] },
+  ],
+  connections: [
+    { source: 's', destination: 'master' },
+    { source: 'fx', destination: 'master' },
+  ],
+  strips: [{ id: 's', inserts: [], sends: [] }],
+});
+// biome-ignore lint/suspicious/noExplicitAny: the native Mixer handle is untyped.
+const withMixer = (run: (mixer: any) => void): void =>
+  run(new addon.Mixer(READER_MIXER_SCENE, 48000, 512));
+
+/**
+ * Entry points whose optional positional arguments used to substitute their
+ * default for a wrong-typed value. Each row passes a string at the first such
+ * argument, after arguments that pass their own checks, and the refusal has to
+ * name that argument -- so a TypeError raised by an earlier check for some
+ * other reason cannot satisfy the row.
+ */
+const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
+  ['addon.amplitudeToDb', 'ref', () => addon.amplitudeToDb(readerTone, 'x')],
+  ['addon.analyze', 'sampleRate', () => addon.analyze(readerTone, 'x')],
+  ['addon.analyzeAsync', 'sampleRate', () => addon.analyzeAsync(readerTone, 'x')],
+  ['addon.analyzeBpm', 'sampleRate', () => addon.analyzeBpm(readerTone, 'x')],
+  ['addon.analyzeDynamics', 'sampleRate', () => addon.analyzeDynamics(readerTone, 'x')],
+  [
+    'addon.analyzeImpulseResponse',
+    'sampleRate',
+    () => addon.analyzeImpulseResponse(readerTone, 'x'),
+  ],
+  ['addon.analyzeMelody', 'sampleRate', () => addon.analyzeMelody(readerTone, 'x')],
+  ['addon.analyzeRhythm', 'sampleRate', () => addon.analyzeRhythm(readerTone, 'x')],
+  ['addon.analyzeSections', 'sampleRate', () => addon.analyzeSections(readerTone, 'x')],
+  ['addon.analyzeTimbre', 'sampleRate', () => addon.analyzeTimbre(readerTone, 'x')],
+  ['addon.bassChroma', 'sampleRate', () => addon.bassChroma(readerTone, 'x')],
+  ['addon.chirp', 'fmin', () => addon.chirp('x')],
+  [
+    'addon.chordFunctionalAnalysis',
+    'keyRoot',
+    () => addon.chordFunctionalAnalysis(readerTone, 'x'),
+  ],
+  ['addon.chroma', 'sampleRate', () => addon.chroma(readerTone, 'x')],
+  ['addon.chromaCens', 'sampleRate', () => addon.chromaCens(readerTone, 'x')],
+  ['addon.chromaCqt', 'sampleRate', () => addon.chromaCqt(readerTone, 'x')],
+  ['addon.clicks', 'sampleRate', () => addon.clicks(readerTone, 'x')],
+  ['addon.cqt', 'sampleRate', () => addon.cqt(readerTone, 'x')],
+  ['addon.cqtToAudio', 'sampleRate', () => addon.cqtToAudio(readerMatrix, 2, 2, 'x')],
+  ['addon.cyclicTempogram', 'sampleRate', () => addon.cyclicTempogram(readerTone, 'x')],
+  ['addon.dbToAmplitude', 'ref', () => addon.dbToAmplitude(readerTone, 'x')],
+  ['addon.dbToPower', 'ref', () => addon.dbToPower(readerTone, 'x')],
+  ['addon.decompose', 'nIter', () => addon.decompose(readerMatrix, 2, 2, 1, 'x')],
+  ['addon.deemphasis', 'coef', () => addon.deemphasis(readerTone, 'x')],
+  ['addon.detectAcoustic', 'sampleRate', () => addon.detectAcoustic(readerTone, 'x')],
+  ['addon.detectBeats', 'sampleRate', () => addon.detectBeats(readerTone, 'x')],
+  ['addon.detectBoundaries', 'sampleRate', () => addon.detectBoundaries(readerTone, 'x')],
+  ['addon.detectBpm', 'sampleRate', () => addon.detectBpm(readerTone, 'x')],
+  ['addon.detectChords', 'sampleRate', () => addon.detectChords(readerTone, 'x')],
+  ['addon.detectDownbeats', 'sampleRate', () => addon.detectDownbeats(readerTone, 'x')],
+  ['addon.detectKey', 'sampleRate', () => addon.detectKey(readerTone, 'x')],
+  ['addon.detectKeyCandidates', 'sampleRate', () => addon.detectKeyCandidates(readerTone, 'x')],
+  ['addon.detectOnsets', 'sampleRate', () => addon.detectOnsets(readerTone, 'x')],
+  ['addon.ebur128LoudnessRange', 'sampleRate', () => addon.ebur128LoudnessRange(readerTone, 'x')],
+  ['addon.estimateTuning', 'sampleRate', () => addon.estimateTuning(readerTone, 'x')],
+  ['addon.fixFrames', 'xMin', () => addon.fixFrames(new Int32Array([0, 1]), 'x')],
+  ['addon.fourierTempogram', 'sampleRate', () => addon.fourierTempogram(readerTone, 'x')],
+  ['addon.framesToSamples', 'hop', () => addon.framesToSamples(2, 'x')],
+  ['addon.griffinLim', 'sampleRate', () => addon.griffinLim(readerMatrix, 2, 2, 'x')],
+  ['addon.hybridCqt', 'sampleRate', () => addon.hybridCqt(readerTone, 'x')],
+  ['addon.lufs', 'sampleRate', () => addon.lufs(readerTone, 'x')],
+  ['addon.lufsInterleaved', 'sampleRate', () => addon.lufsInterleaved(readerTone, 2, 'x')],
+  [
+    'addon.lufsSeriesInterleaved',
+    'sampleRate',
+    () => addon.lufsSeriesInterleaved(readerTone, 2, 'x'),
+  ],
+  ['addon.melDelta', 'nFeatures', () => addon.melDelta(readerTone, 'x')],
+  ['addon.melSpectrogram', 'sampleRate', () => addon.melSpectrogram(readerTone, 'x')],
+  ['addon.melToAudio', 'sampleRate', () => addon.melToAudio(readerMatrix, 2, 2, 'x')],
+  ['addon.melToStft', 'sampleRate', () => addon.melToStft(readerMatrix, 2, 2, 'x')],
+  ['addon.meteringCrestFactorDb', 'sampleRate', () => addon.meteringCrestFactorDb(readerTone, 'x')],
+  ['addon.meteringDcOffset', 'sampleRate', () => addon.meteringDcOffset(readerTone, 'x')],
+  [
+    'addon.meteringDetectClipping',
+    'sampleRate',
+    () => addon.meteringDetectClipping(readerTone, 'x'),
+  ],
+  ['addon.meteringDynamicRange', 'sampleRate', () => addon.meteringDynamicRange(readerTone, 'x')],
+  ['addon.meteringPeakDb', 'sampleRate', () => addon.meteringPeakDb(readerTone, 'x')],
+  [
+    'addon.meteringPhaseScope',
+    'sampleRate',
+    () => addon.meteringPhaseScope(readerTone, readerTone, 'x'),
+  ],
+  ['addon.meteringRmsDb', 'sampleRate', () => addon.meteringRmsDb(readerTone, 'x')],
+  ['addon.meteringSilenceRatio', 'sampleRate', () => addon.meteringSilenceRatio(readerTone, 'x')],
+  ['addon.meteringSpectrum', 'sampleRate', () => addon.meteringSpectrum(readerTone, 'x')],
+  ['addon.meteringSpectrumFrame', 'sampleRate', () => addon.meteringSpectrumFrame(readerTone, 'x')],
+  [
+    'addon.meteringStereoCorrelation',
+    'sampleRate',
+    () => addon.meteringStereoCorrelation(readerTone, readerTone, 'x'),
+  ],
+  [
+    'addon.meteringStereoWidth',
+    'sampleRate',
+    () => addon.meteringStereoWidth(readerTone, readerTone, 'x'),
+  ],
+  ['addon.meteringTruePeakDb', 'sampleRate', () => addon.meteringTruePeakDb(readerTone, 'x')],
+  [
+    'addon.meteringVectorscope',
+    'sampleRate',
+    () => addon.meteringVectorscope(readerTone, readerTone, 'x'),
+  ],
+  ['addon.mfcc', 'sampleRate', () => addon.mfcc(readerTone, 'x')],
+  ['addon.mfccToAudio', 'nMels', () => addon.mfccToAudio(readerMatrix, 2, 2, 'x')],
+  ['addon.mfccToMel', 'nMels', () => addon.mfccToMel(readerMatrix, 2, 2, 'x')],
+  ['addon.momentaryLufs', 'sampleRate', () => addon.momentaryLufs(readerTone, 'x')],
+  ['addon.nnFilter', 'k', () => addon.nnFilter(readerMatrix, 2, 2, 'mean', 'x')],
+  ['addon.nnlsChroma', 'sampleRate', () => addon.nnlsChroma(readerTone, 'x')],
+  ['addon.onsetEnvelope', 'sampleRate', () => addon.onsetEnvelope(readerTone, 'x')],
+  ['addon.onsetStrengthMulti', 'sampleRate', () => addon.onsetStrengthMulti(readerTone, 'x')],
+  ['addon.phaseVocoder', 'nFft', () => addon.phaseVocoder(readerMatrix, 2, 2, 'x')],
+  ['addon.piptrack', 'sampleRate', () => addon.piptrack(readerTone, 'x')],
+  ['addon.pitchPyin', 'sampleRate', () => addon.pitchPyin(readerTone, 'x')],
+  ['addon.pitchShift', 'nFft', () => addon.pitchShift(readerTone, 2, 2, 'x')],
+  ['addon.pitchTuning', 'resolution', () => addon.pitchTuning(readerTone, 'x')],
+  ['addon.pitchYin', 'sampleRate', () => addon.pitchYin(readerTone, 'x')],
+  ['addon.plp', 'sampleRate', () => addon.plp(readerTone, 'x')],
+  ['addon.polyFeatures', 'sampleRate', () => addon.polyFeatures(readerTone, 'x')],
+  ['addon.powerToDb', 'ref', () => addon.powerToDb(readerTone, 'x')],
+  ['addon.preemphasis', 'coef', () => addon.preemphasis(readerTone, 'x')],
+  ['addon.pseudoCqt', 'sampleRate', () => addon.pseudoCqt(readerTone, 'x')],
+  ['addon.reassignedSpectrogram', 'sampleRate', () => addon.reassignedSpectrogram(readerTone, 'x')],
+  ['addon.remix', 'sampleRate', () => addon.remix(readerTone, new Int32Array([0, 2]), 'x')],
+  [
+    'addon.remixAlignedIntervals',
+    'sampleRate',
+    () => addon.remixAlignedIntervals(readerTone, new Int32Array([0, 2]), 'x'),
+  ],
+  ['addon.rmsEnergy', 'sampleRate', () => addon.rmsEnergy(readerTone, 'x')],
+  ['addon.samplesToFrames', 'hop', () => addon.samplesToFrames(2, 'x')],
+  ['addon.segmentAgglomerative', 'rows', () => addon.segmentAgglomerative(readerTone, 'x')],
+  [
+    'addon.segmentCrossSimilarity',
+    'xRows',
+    () => addon.segmentCrossSimilarity(readerMatrix, 'x', 2, readerMatrix),
+  ],
+  ['addon.segmentLagToRecurrence', 'rows', () => addon.segmentLagToRecurrence(readerTone, 'x')],
+  ['addon.segmentPathEnhance', 'n', () => addon.segmentPathEnhance(readerTone, 'x')],
+  ['addon.segmentRecurrenceMatrix', 'rows', () => addon.segmentRecurrenceMatrix(readerTone, 'x')],
+  ['addon.segmentRecurrenceToLag', 'n', () => addon.segmentRecurrenceToLag(readerTone, 'x')],
+  ['addon.shortTermLufs', 'sampleRate', () => addon.shortTermLufs(readerTone, 'x')],
+  ['addon.spectralBandwidth', 'sampleRate', () => addon.spectralBandwidth(readerTone, 'x')],
+  ['addon.spectralCentroid', 'sampleRate', () => addon.spectralCentroid(readerTone, 'x')],
+  ['addon.spectralContrast', 'sampleRate', () => addon.spectralContrast(readerTone, 'x')],
+  ['addon.spectralFlatness', 'sampleRate', () => addon.spectralFlatness(readerTone, 'x')],
+  ['addon.spectralFlux', 'sampleRate', () => addon.spectralFlux(readerTone, 'x')],
+  ['addon.spectralRolloff', 'sampleRate', () => addon.spectralRolloff(readerTone, 'x')],
+  ['addon.splitSilence', 'topDb', () => addon.splitSilence(readerTone, 'x')],
+  ['addon.splitSilenceCommon', 'topDb', () => addon.splitSilenceCommon([readerTone], 'x')],
+  [
+    'addon.splitSilenceCommonWithReport',
+    'topDb',
+    () => addon.splitSilenceCommonWithReport([readerTone], 'x'),
+  ],
+  ['addon.stft', 'sampleRate', () => addon.stft(readerTone, 'x')],
+  ['addon.stftDb', 'sampleRate', () => addon.stftDb(readerTone, 'x')],
+  ['addon.tempogram', 'sampleRate', () => addon.tempogram(readerTone, 'x')],
+  ['addon.tempogramRatio', 'win', () => addon.tempogramRatio(readerTone, 'x')],
+  ['addon.timeStretch', 'nFft', () => addon.timeStretch(readerTone, 2, 2, 'x')],
+  ['addon.tone', 'frequency', () => addon.tone('x')],
+  ['addon.trimSilence', 'topDb', () => addon.trimSilence(readerTone, 'x')],
+  ['addon.vectorNormalize', 'normType', () => addon.vectorNormalize(readerTone, 'x')],
+  ['addon.vqt', 'sampleRate', () => addon.vqt(readerTone, 'x')],
+  ['addon.vqtToAudio', 'sampleRate', () => addon.vqtToAudio(readerMatrix, 2, 2, 'x')],
+  ['addon.zeroCrossingRate', 'sampleRate', () => addon.zeroCrossingRate(readerTone, 'x')],
+  ['Mixer.addSend', 'sendDb', () => withMixer((mixer) => mixer.addSend('s', 'fx', 'master', 'x'))],
+  ['addon.midiParamToCc', 'ppq', () => addon.midiParamToCc([], 0, 0, 0, 'x')],
+  [
+    'Mixer.scheduleFaderAutomation',
+    'curve',
+    () => withMixer((mixer) => mixer.scheduleFaderAutomation('s', 0, 0, 'x')),
+  ],
+  [
+    'Mixer.scheduleInsertAutomation',
+    'curve',
+    () => withMixer((mixer) => mixer.scheduleInsertAutomation(0, 0, 0, 0, 0, 'x')),
+  ],
+  [
+    'Mixer.schedulePanAutomation',
+    'curve',
+    () => withMixer((mixer) => mixer.schedulePanAutomation('s', 0, 0, 'x')),
+  ],
+  [
+    'Mixer.scheduleSendAutomation',
+    'curve',
+    () => withMixer((mixer) => mixer.scheduleSendAutomation('s', 0, 0, 0, 'x')),
+  ],
+  [
+    'Mixer.scheduleWidthAutomation',
+    'curve',
+    () => withMixer((mixer) => mixer.scheduleWidthAutomation('s', 0, 1, 'x')),
+  ],
+  ['Mixer.setPan', 'panMode', () => withMixer((mixer) => mixer.setPan('s', 0, 'x'))],
+  ['Audio.silenceRatio', 'thresholdDb', () => readerAudio().silenceRatio('x')],
+  ['Audio.truePeakDb', 'oversample', () => readerAudio().truePeakDb('x')],
+];
 
 export const CASES: AbortGuardCase[] = [
   {
@@ -1975,4 +2193,9 @@ export const CASES: AbortGuardCase[] = [
       },
     ],
   },
+  ...NAMED_OPTIONAL_REFUSALS.map(([name, argument, call]) => ({
+    name,
+    missingRequired: [],
+    rejectsArgument: [{ argument, call, message: new RegExp(`\\b${argument} must be`) }],
+  })),
 ];

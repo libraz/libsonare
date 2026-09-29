@@ -181,7 +181,7 @@ const BARE_HAS_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ],
   [
     'effects/repair_trim.cpp:paddingSamples',
-    'The value is read with the type-checked node_int_option and the default is non-negative, so undefined cannot trip the range check.',
+    'The value is read with the presence-checked IntProperty and the default is non-negative, so undefined cannot trip the range check.',
   ],
 ]);
 
@@ -1149,11 +1149,11 @@ describe('addon JS-object readers stay on the shared helper families', () => {
     const inShared = shaped
       .filter((site) => site.file === SHARED_READER_FILE)
       .map((site) => site.name);
-    // Both shared families, and the two arities (with and without a leading
+    // The shared family, and the two arities (with and without a leading
     // Napi::Env), have to keep resolving or the shape check is blind.
     for (const name of [
-      'node_int_option',
-      'node_string_option',
+      'IntProperty',
+      'StringProperty',
       'BoolProperty',
       'MidiByteProperty',
       'RequiredStringProperty',

@@ -33,7 +33,7 @@ constexpr int kAcousticMaxSampleRate = 384000;
 // since a silent default is what once made half the seed space unreachable
 // without a symptom.
 unsigned SeedFromOptions(const Napi::Object& opts, unsigned fallback) {
-  const uint32_t seed_in = node_uint32_option(opts, "seed", kZeroIsSentinel);
+  const uint32_t seed_in = Uint32Property(opts, "seed", kZeroIsSentinel);
   return seed_in == 0 ? fallback : seed_in;
 }
 

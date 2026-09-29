@@ -75,8 +75,10 @@ Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
   }
   const std::string send_id = info[1].As<Napi::String>().Utf8Value();
   const std::string destination_bus_id = info[2].As<Napi::String>().Utf8Value();
-  const float send_db = node_arg_finite_float(info, 3, 0.0f);
-  const int timing = node_arg_int(info, 4, 0);
+  float send_db{};
+  if (!OptionalFiniteFloatArg(env, info, 3, "sendDb", 0.0f, &send_db)) return env.Undefined();
+  int timing{};
+  if (!OptionalIntArg(env, info, 4, "timing", 0, &timing)) return env.Undefined();
 
   size_t index = 0;
   SonareError err = sonare_strip_add_send(strip, send_id.c_str(), destination_bus_id.c_str(),

@@ -86,7 +86,8 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   }
   // Omitting panMode passes SONARE_PAN_MODE_KEEP (-1) so a plain pan nudge does
   // not reset a scene strip's current pan mode.
-  const int pan_mode = node_arg_int(info, 2, -1);
+  int pan_mode{};
+  if (!OptionalIntArg(env, info, 2, "panMode", -1, &pan_mode)) return env.Undefined();
   SonareError err =
       sonare_strip_set_pan(strip, node_narrow_finite_float(env, info[1], "pan"), pan_mode);
   if (err != SONARE_OK) {
@@ -290,11 +291,11 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   }
   const Napi::Object obj = info[1].As<Napi::Object>();
   SonareSurroundPan pan{};
-  pan.azimuth = node_float_option(obj, "azimuth", 0.0f);
-  pan.elevation = node_float_option(obj, "elevation", 0.0f);
-  pan.divergence = node_float_option(obj, "divergence", 0.0f);
-  pan.lfe = node_float_option(obj, "lfe", 0.0f);
-  pan.distance = node_float_option(obj, "distance", 1.0f);
+  pan.azimuth = FloatProperty(obj, "azimuth", 0.0f);
+  pan.elevation = FloatProperty(obj, "elevation", 0.0f);
+  pan.divergence = FloatProperty(obj, "divergence", 0.0f);
+  pan.lfe = FloatProperty(obj, "lfe", 0.0f);
+  pan.distance = FloatProperty(obj, "distance", 1.0f);
   SonareError err = sonare_strip_set_surround_pan(strip, &pan);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip surround pan: ");

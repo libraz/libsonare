@@ -235,10 +235,10 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
     config.over_subtraction = FloatProperty(options, "overSubtraction", config.over_subtraction);
     config.spectral_floor = FloatProperty(options, "spectralFloor", config.spectral_floor);
     config.noise_estimation_quantile =
-        node_float_option(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
+        FloatProperty(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
     config.speech_presence_gain =
-        node_bool_option(options, "speechPresenceGain", config.speech_presence_gain);
-    config.gain_smoothing = node_bool_option(options, "gainSmoothing", config.gain_smoothing);
+        BoolProperty(options, "speechPresenceGain", config.speech_presence_gain);
+    config.gain_smoothing = BoolProperty(options, "gainSmoothing", config.gain_smoothing);
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
     Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
@@ -399,14 +399,14 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DehumConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.fundamental_hz = node_float_option(options, "fundamentalHz", config.fundamental_hz);
-    config.harmonics = node_int_option(options, "harmonics", config.harmonics);
+    config.fundamental_hz = FloatProperty(options, "fundamentalHz", config.fundamental_hz);
+    config.harmonics = IntProperty(options, "harmonics", config.harmonics);
     config.q = FloatProperty(options, "q", config.q);
-    config.adaptive = node_bool_option(options, "adaptive", config.adaptive);
-    config.search_range_hz = node_float_option(options, "searchRangeHz", config.search_range_hz);
-    config.adaptation = node_float_option(options, "adaptation", config.adaptation);
-    config.frame_size = node_int_option(options, "frameSize", config.frame_size);
-    config.pll_bandwidth = node_float_option(options, "pllBandwidth", config.pll_bandwidth);
+    config.adaptive = BoolProperty(options, "adaptive", config.adaptive);
+    config.search_range_hz = FloatProperty(options, "searchRangeHz", config.search_range_hz);
+    config.adaptation = FloatProperty(options, "adaptation", config.adaptation);
+    config.frame_size = IntProperty(options, "frameSize", config.frame_size);
+    config.pll_bandwidth = FloatProperty(options, "pllBandwidth", config.pll_bandwidth);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::dehum(audio, config);

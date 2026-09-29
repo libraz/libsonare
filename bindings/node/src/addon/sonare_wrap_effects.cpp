@@ -147,8 +147,10 @@ Napi::Value SonareWrap::TimeStretch(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
   float rate = node_narrow_finite_float(env, info[2], "rate");
-  int n_fft = node_arg_int(info, 3, 2048);
-  int hop_length = node_arg_int(info, 4, 512);
+  int n_fft{};
+  if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -178,8 +180,10 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
   float semitones = node_narrow_finite_float(env, info[2], "semitones");
-  int n_fft = node_arg_int(info, 3, 2048);
-  int hop_length = node_arg_int(info, 4, 512);
+  int n_fft{};
+  if (!OptionalIntArg(env, info, 3, "nFft", 2048, &n_fft)) return env.Undefined();
+  int hop_length{};
+  if (!OptionalIntArg(env, info, 4, "hopLength", 512, &hop_length)) return env.Undefined();
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -1278,7 +1282,9 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float threshold_db = node_arg_finite_float(info, 2, -60.0f);
+  float threshold_db{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "thresholdDb", -60.0f, &threshold_db))
+    return env.Undefined();
   auto parse_frame_option = [&](size_t index, const char* name, int fallback, int* output) {
     if (info.Length() <= index || info[index].IsUndefined()) {
       *output = fallback;
@@ -1333,7 +1339,8 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = node_narrow_int(env, info[1], "sr");
-  float target_db = node_arg_finite_float(info, 2, 0.0f);
+  float target_db{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "targetDb", 0.0f, &target_db)) return env.Undefined();
   std::string mode =
       info.Length() >= 4 && info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "peak";
   if (mode != "peak" && mode != "rms") {

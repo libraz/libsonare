@@ -12,7 +12,7 @@
  * The bound is asserted one double-ULP wide on both signs rather than one
  * decade, so a limit off by any amount fails here.
  *
- * `analyzeBpm` covers `node_arg_float` (argument 2, `bpmMin`), `peakPick`
+ * `analyzeBpm` covers `OptionalFloatArg` (argument 2, `bpmMin`), `peakPick`
  * covers `RequiredFloatValue` (`delta`), `renderNotes` covers
  * `FloatArrayProperty` (each `amplitudeEnvelope` element). All three run
  * through the public facade, which forwards each value verbatim.
@@ -87,7 +87,7 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
     for (const value of PAST_FLOAT_MAX) {
       const caught = capture(() => run(value));
       expect(caught, `bpmMin ${value}`).toBeInstanceOf(RangeError);
-      expect((caught as RangeError).message).toBe(`argument 2 ${RANGE_MESSAGE}`);
+      expect((caught as RangeError).message).toBe(`bpmMin ${RANGE_MESSAGE}`);
     }
   });
 
