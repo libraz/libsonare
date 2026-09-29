@@ -98,6 +98,10 @@ class Chorus : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
+  /// Returns the pre-filter sections and the lines they feed to rest once a
+  /// non-finite value has reached a section, once per block.
+  void discard_non_finite() noexcept;
+
   ChorusConfig config_{};
   double sample_rate_ = 48000.0;
   std::array<ModDelayLine, 2> delays_;

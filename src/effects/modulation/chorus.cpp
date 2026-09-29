@@ -1,6 +1,7 @@
 #include "effects/modulation/chorus.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "rt/scoped_no_denormals.h"
 
@@ -82,6 +83,16 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
       left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
     }
   }
+  discard_non_finite();
+}
+
+void Chorus::discard_non_finite() noexcept {
+  // The section is recursive, so one non-finite sample would stay in it for
+  // good; the line only carries what the section already let through.
+  if (std::isfinite(pre_filters_[0].state()) && std::isfinite(pre_filters_[1].state())) return;
+  for (auto& pre_filter : pre_filters_) pre_filter.reset();
+  for (auto& delay : delays_) delay.reset();
+  note_non_finite_discard();
 }
 
 bool Chorus::set_parameter(unsigned int param_id, float value) {

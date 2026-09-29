@@ -31,6 +31,7 @@
 #include "effects/common/dc_blocker.h"
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/auto_wah.h"
+#include "effects/modulation/chorus.h"
 #include "effects/modulation/ensemble.h"
 #include "effects/modulation/flanger.h"
 #include "effects/modulation/phaser.h"
@@ -372,6 +373,24 @@ TEST_CASE("the flanger's feedback path is returned to rest", "[effects][non_fini
   check_recovery(prepared<Flanger>(config), contamination);
 }
 
+TEST_CASE("the chorus's pre-filter is returned to rest", "[effects][non_finite]") {
+  using sonare::effects::modulation::Chorus;
+  using sonare::effects::modulation::ChorusConfig;
+  using sonare::effects::modulation::PreFilterMode;
+
+  for (const PreFilterMode mode : {PreFilterMode::kLowPass, PreFilterMode::kHighPass}) {
+    DYNAMIC_SECTION("mode " << static_cast<int>(mode)) {
+      ChorusConfig config;
+      config.dry_wet = 0.5f;
+      config.pre_filter_mode = mode;
+      config.pre_filter_hz = 2000.0f;
+      // The line is read at most centre + depth behind the write head.
+      check_recovery(prepared<Chorus>(config),
+                     ms_to_samples(config.center_delay_ms + config.depth_ms));
+    }
+  }
+}
+
 TEST_CASE("the phaser's allpass sections are returned to rest", "[effects][non_finite]") {
   using sonare::effects::modulation::Phaser;
   using sonare::effects::modulation::PhaserConfig;
@@ -476,6 +495,14 @@ TEST_CASE("an insert counts the state it discarded", "[effects][non_finite]") {
     config.feedback = 0.8f;
     config.dry_wet = 0.5f;
     check_discard_is_counted(prepared<modulation::Flanger>(config),
+                             ms_to_samples(config.center_delay_ms + config.depth_ms));
+  }
+  SECTION("chorus") {
+    modulation::ChorusConfig config;
+    config.dry_wet = 0.5f;
+    config.pre_filter_mode = modulation::PreFilterMode::kLowPass;
+    config.pre_filter_hz = 2000.0f;
+    check_discard_is_counted(prepared<modulation::Chorus>(config),
                              ms_to_samples(config.center_delay_ms + config.depth_ms));
   }
   SECTION("phaser") {
