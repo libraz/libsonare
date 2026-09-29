@@ -1159,6 +1159,59 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") 
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_set_clips_reads_a_zero_tempo_sync_length_as_the_source_length",
+          "[c_api]") {
+  // length_samples == 0 means "to the end of the source" for every warp mode, so
+  // it must behave exactly like that length spelled out.
+  std::vector<float> source(4096);
+  for (size_t i = 0; i < source.size(); ++i) {
+    source[i] = std::sin(static_cast<float>(i) * 0.02f);
+  }
+  const float* clip_channels[] = {source.data()};
+  constexpr int64_t kOffset = 1000;
+  const SonareEngineWarpAnchor anchors[] = {{0.0, 0.0}, {4000.0, 3096.0}};
+  auto render = [&](int64_t length, bool with_anchors, std::vector<float>* out) {
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
+    SonareEngineClip clip{};
+    clip.id = 305;
+    clip.channels = clip_channels;
+    clip.num_channels = 1;
+    clip.num_samples = static_cast<int64_t>(source.size());
+    clip.clip_offset_samples = kOffset;
+    clip.length_samples = length;
+    clip.gain = 1.0f;
+    clip.warp_mode = SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
+    if (with_anchors) {
+      clip.warp_anchors = anchors;
+      clip.warp_anchor_count = 2;
+    }
+    const SonareError err = sonare_engine_set_clips(engine, &clip, 1);
+    if (err == SONARE_OK) {
+      REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+      out->assign(8192, 0.0f);
+      float* channels[] = {out->data()};
+      REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out->size())) ==
+              SONARE_OK);
+    }
+    sonare_engine_destroy(engine);
+    return err;
+  };
+  for (const bool with_anchors : {false, true}) {
+    CAPTURE(with_anchors);
+    std::vector<float> spelled;
+    std::vector<float> defaulted;
+    REQUIRE(render(static_cast<int64_t>(source.size()) - kOffset, with_anchors, &spelled) ==
+            SONARE_OK);
+    REQUIRE(render(0, with_anchors, &defaulted) == SONARE_OK);
+    CHECK(defaulted == spelled);
+    float peak = 0.0f;
+    for (float v : defaulted) peak = std::max(peak, std::abs(v));
+    CHECK(peak > 0.1f);
+  }
+}
+
 TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[c_api]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

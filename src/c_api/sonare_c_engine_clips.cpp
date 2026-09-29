@@ -23,9 +23,11 @@ bool rounded_nonnegative_sample(double sample, size_t* out) noexcept {
   return numeric::checked_round_cast(sample, out);
 }
 
-bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
+/// @p target_length is the clip's resolved length: length_samples, or the rest
+/// of the source when that is 0.
+bool tempo_sync_segments_for_clip(const SonareEngineClip& clip, int64_t target_length,
                                   std::vector<engine::TempoSyncWarpSegment>* out) {
-  if (!out || clip.length_samples <= 0 || clip.clip_offset_samples < 0 ||
+  if (!out || target_length <= 0 || clip.clip_offset_samples < 0 ||
       clip.clip_offset_samples >= clip.num_samples) {
     return false;
   }
@@ -66,7 +68,7 @@ bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
   engine::TempoSyncWarpSegment segment;
   segment.source_offset = base_offset;
   segment.source_samples = static_cast<size_t>(clip.num_samples) - base_offset;
-  segment.target_samples = static_cast<size_t>(clip.length_samples);
+  segment.target_samples = static_cast<size_t>(target_length);
   if (segment.source_samples == 0 || segment.target_samples == 0) return false;
   out->push_back(segment);
   return true;
@@ -134,7 +136,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
       // is copied into ClipAudioStorage.
     } else if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
       std::vector<engine::TempoSyncWarpSegment> segments;
-      if (!tempo_sync_segments_for_clip(clip, &segments)) {
+      if (!tempo_sync_segments_for_clip(clip, effective_length, &segments)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       engine::TempoSyncWarpBakeConfig bake_config;
