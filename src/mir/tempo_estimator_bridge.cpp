@@ -183,6 +183,18 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
   return segments;
 }
 
+// TempoMap pins ppq 0 to sample 0, so a first beat after silence needs a
+// lead-in: shift every tempo and meter start by the first beat's time, played
+// at the first segment's tempo, so detected beat k lands on its grid line.
+void apply_lead_in(const BeatAnalysisInput& input, TempoEstimate& est) {
+  if (input.beats.empty() || est.segments.empty()) return;
+  const double first_beat_s = static_cast<double>(input.beats.front().time);
+  if (!(first_beat_s > 0.0)) return;
+  const double lead_in_ppq = first_beat_s * est.segments.front().bpm / 60.0;
+  for (transport::TempoSegment& seg : est.segments) seg.start_ppq += lead_in_ppq;
+  for (transport::TimeSignatureSegment& sig : est.time_sigs) sig.start_ppq += lead_in_ppq;
+}
+
 float clamp01(double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); }
 
 // Confidence from how tightly the decoded BPM tracks the observed IBIs:
@@ -292,6 +304,7 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
     est.time_sigs = build_time_sigs(input, config, 1.0);
     est.confidence = estimate_confidence(obs, decoded);
     est.label = "primary";
+    apply_lead_in(input, est);
     candidates.push_back(std::move(est));
   }
 
@@ -306,6 +319,7 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
       est.time_sigs = build_time_sigs(input, config, 2.0);
       est.confidence = scaled_octave_confidence(primary_conf, input, 2.0);
       est.label = "double";
+      apply_lead_in(input, est);
       candidates.push_back(std::move(est));
     }
     {
@@ -314,6 +328,7 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
       est.time_sigs = build_time_sigs(input, config, 0.5);
       est.confidence = scaled_octave_confidence(primary_conf, input, 0.5);
       est.label = "half";
+      apply_lead_in(input, est);
       candidates.push_back(std::move(est));
     }
   }

@@ -437,3 +437,73 @@ TEST_CASE("mir bridge segments start where the shared tempo curve moves", "[mir]
   // with the bridge on a single trivial segment and prove nothing.
   REQUIRE(primary.segments.size() > 3);
 }
+
+TEST_CASE("mir bridge places the grid on beats that start after a lead-in", "[mir]") {
+  constexpr double kLeadIn = 0.3;
+  const int n = 16;
+  auto shifted = [](BeatAnalysisInput in, double lead_in) {
+    for (Beat& beat : in.beats) {
+      beat.time += static_cast<float>(lead_in);
+      beat.frame = static_cast<int>(beat.time * in.sample_rate / in.hop_length);
+    }
+    return in;
+  };
+  // Grid time of detected beat k, read from the first beat's position on the map.
+  auto grid_times = [&](const TempoEstimate& est, const BeatAnalysisInput& in, double ppq_per_beat,
+                        bool check_phase) {
+    sonare::transport::TempoMap map;
+    map.prepare(in.sample_rate);
+    map.set_segments(est.segments);
+    map.set_time_signatures(est.time_sigs);
+    // Nudged past the sample rounding so a beat on a boundary reads its own bar.
+    const double first_ppq =
+        map.sample_to_ppq(std::llround(in.beats[0].time * in.sample_rate)) + 1e-4;
+    if (check_phase) CHECK(map.bar_start_ppq(first_ppq) == Catch::Approx(first_ppq).margin(1e-3));
+    std::vector<double> times;
+    for (int k = 0; k < n; ++k) {
+      const double ppq = first_ppq + k * ppq_per_beat;
+      times.push_back(static_cast<double>(map.ppq_to_sample(ppq)) / in.sample_rate);
+      // Half-tempo beats alternate between a grid line and the midpoint.
+      if (!check_phase || std::fmod(k * ppq_per_beat, 1.0) != 0.0) continue;
+      const double fraction = map.ppq_to_bar_beat(ppq).beat_fraction;
+      CHECK(std::min(fraction, 1.0 - fraction) < 0.02);
+    }
+    return times;
+  };
+  auto ppq_per_beat_of = [](const TempoEstimate& est) {
+    const std::string label = est.label;
+    return label == "double" ? 2.0 : label == "half" ? 0.5 : 1.0;
+  };
+  TempoEstimatorConfig cfg;
+  cfg.include_octave_candidates = true;
+
+  SECTION("constant tempo: every beat sits on its grid line") {
+    const BeatAnalysisInput in = shifted(make_constant_fixture(100.0, n), kLeadIn);
+    for (const TempoEstimate& est : estimate_tempo(in, cfg)) {
+      CAPTURE(std::string(est.label));
+      const std::vector<double> times = grid_times(est, in, ppq_per_beat_of(est), true);
+      for (int k = 0; k < n; ++k) {
+        CHECK(times[static_cast<size_t>(k)] ==
+              Catch::Approx(in.beats[static_cast<size_t>(k)].time).margin(0.02));
+      }
+    }
+  }
+
+  SECTION("ramped tempo: the grid moves with the lead-in") {
+    const BeatAnalysisInput base = make_ramp_fixture(96.0, 132.0, n);
+    const BeatAnalysisInput in = shifted(base, kLeadIn);
+    const std::vector<TempoEstimate> reference = estimate_tempo(base, cfg);
+    const std::vector<TempoEstimate> late = estimate_tempo(in, cfg);
+    REQUIRE(late.size() == reference.size());
+    for (size_t c = 0; c < late.size(); ++c) {
+      CAPTURE(std::string(late[c].label));
+      const double ppq_per_beat = ppq_per_beat_of(late[c]);
+      const std::vector<double> want = grid_times(reference[c], base, ppq_per_beat, false);
+      const std::vector<double> got = grid_times(late[c], in, ppq_per_beat, true);
+      for (int k = 0; k < n; ++k) {
+        CHECK(got[static_cast<size_t>(k)] ==
+              Catch::Approx(want[static_cast<size_t>(k)] + kLeadIn).margin(0.002));
+      }
+    }
+  }
+}
