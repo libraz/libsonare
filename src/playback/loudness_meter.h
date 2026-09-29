@@ -2,7 +2,7 @@
 
 /// @file loudness_meter.h
 /// @brief Integrated loudness of multichannel program material, pushed in
-///        chunks of any length, for the renderer's loudness alignment.
+///        non-empty chunks of any length, for the renderer's loudness alignment.
 ///
 /// Runs `mixing::MeterProcessor` (LUFS on, true peak off) on 4096-frame
 /// deinterleaved blocks with the BS.1770 channel weights of the channel count.
@@ -26,6 +26,8 @@ class PlaybackLoudnessMeter {
   PlaybackLoudnessMeter& operator=(const PlaybackLoudnessMeter&) = delete;
 
   /// Feeds @p frames interleaved frames.
+  /// @throws SonareException(InvalidParameter) if @p frames is 0, @p samples
+  ///         is null, or any sample is non-finite.
   void push_interleaved(const float* samples, size_t frames);
   /// Integrated loudness of everything pushed so far, in LUFS.
   float integrated_lufs() const;

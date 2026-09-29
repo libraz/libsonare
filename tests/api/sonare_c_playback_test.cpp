@@ -324,13 +324,25 @@ TEST_CASE("sonare_playback_render_interleaved renders offline and validates its 
             in.data(), 256, 3, 48000, R"({"input": {"layout": "stereo"}})", nullptr, &out,
             &out_frames, &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
 
-  // frames == 0 with a null input buffer is accepted and yields no output.
+  // Offline entry point: an empty or non-finite input is refused, the same
+  // contract every other offline buffer-taking entry point holds.
   out = reinterpret_cast<float*>(uintptr_t{1});
+  out_frames = 5;
+  out_channels = 5;
   CHECK(sonare_playback_render_interleaved(nullptr, 0, 2, 48000, headphones_config().c_str(),
-                                           nullptr, &out, &out_frames, &out_channels) == SONARE_OK);
+                                           nullptr, &out, &out_frames,
+                                           &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out == nullptr);
   CHECK(out_frames == 0u);
-  CHECK(out_channels == 2);
+  CHECK(out_channels == 0);
+
+  std::vector<float> non_finite = in;
+  non_finite[7] = std::numeric_limits<float>::quiet_NaN();
+  out = reinterpret_cast<float*>(uintptr_t{1});
+  CHECK(sonare_playback_render_interleaved(non_finite.data(), 256, 2, 48000,
+                                           headphones_config().c_str(), nullptr, &out, &out_frames,
+                                           &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
 }
 
 TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]") {
@@ -362,6 +374,19 @@ TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]"
 
   CHECK(sonare_playback_loudness_meter_push_interleaved(nullptr, block.data(), 8) ==
         SONARE_ERROR_INVALID_PARAMETER);
+
+  // Offline entry point: an empty or non-finite push is refused, the same
+  // contract every other offline buffer-taking entry point holds.
+  SonarePlaybackLoudnessMeter* live = nullptr;
+  REQUIRE(sonare_playback_loudness_meter_create(2, 48000, &live) == SONARE_OK);
+  CHECK(sonare_playback_loudness_meter_push_interleaved(live, block.data(), 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  std::vector<float> non_finite_block = block;
+  non_finite_block[9] = std::numeric_limits<float>::quiet_NaN();
+  CHECK(sonare_playback_loudness_meter_push_interleaved(live, non_finite_block.data(), 4096) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  sonare_playback_loudness_meter_destroy(live);
+
   lufs = 1.0f;
   CHECK(sonare_playback_loudness_meter_integrated_lufs(nullptr, &lufs) ==
         SONARE_ERROR_INVALID_PARAMETER);

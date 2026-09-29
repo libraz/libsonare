@@ -17,6 +17,7 @@
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
 #include "util/number_format.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::playback {
 
@@ -572,8 +573,13 @@ uint32_t PlaybackRenderer::non_finite_discard_count() const noexcept {
 std::vector<float> render_interleaved(const float* in, size_t frames, int in_channels,
                                       int sample_rate, const RendererConfig& config,
                                       const HrtfSet* hrtf, int* out_channels) {
-  SONARE_CHECK_MSG(in != nullptr || frames == 0, ErrorCode::InvalidParameter,
-                   "input samples are null");
+  // Offline entry point: unlike process_interleaved below, the caller does
+  // not own the finite check here.
+  SONARE_CHECK_MSG(frames != 0, ErrorCode::InvalidParameter, "input samples must not be empty");
+  SONARE_CHECK_MSG(in != nullptr, ErrorCode::InvalidParameter, "input samples is null");
+  SONARE_CHECK_MSG(in_channels > 0, ErrorCode::InvalidParameter, "in_channels must be positive");
+  SONARE_CHECK_MSG(numeric::all_finite(in, frames * static_cast<size_t>(in_channels)),
+                   ErrorCode::InvalidParameter, "input samples contains a non-finite sample");
   PlaybackRenderer renderer(config, hrtf, sample_rate, kOfflineRenderBlockFrames);
   const bool auto_layout = config.prepare.input_layout == InputLayout::Auto;
   ChannelLayout layout = ChannelLayout::Stereo;

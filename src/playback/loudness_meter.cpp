@@ -5,6 +5,7 @@
 
 #include "mixing/meter.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::playback {
 
@@ -51,10 +52,23 @@ PlaybackLoudnessMeter::PlaybackLoudnessMeter(int channels, int sample_rate) {
 PlaybackLoudnessMeter::~PlaybackLoudnessMeter() = default;
 
 void PlaybackLoudnessMeter::push_interleaved(const float* samples, size_t frames) {
-  if (frames == 0) return;
+  // Offline entry point: the caller does not own the finite check here.
+  if (frames == 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "PlaybackLoudnessMeter::push_interleaved: samples must not be empty");
+  }
+  if (samples == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "PlaybackLoudnessMeter::push_interleaved: samples must not be null");
+  }
 
   Impl& im = *impl_;
   const size_t ch = static_cast<size_t>(im.channels);
+  if (!numeric::all_finite(samples, frames * ch)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "PlaybackLoudnessMeter::push_interleaved: samples contains a non-finite sample");
+  }
   // Every frame reaches the meter in this call; the meter keeps its own gating state.
   for (size_t offset = 0; offset < frames; offset += kPlaybackLoudnessBlockFrames) {
     const size_t n = std::min(frames - offset, static_cast<size_t>(kPlaybackLoudnessBlockFrames));

@@ -100,7 +100,9 @@ class PlaybackRenderer {
 
 /// Renders a whole interleaved buffer offline, latency removed: the result has
 /// @p frames frames of `*out_channels` channels.
-/// @throws SonareException(InvalidParameter).
+/// @throws SonareException(InvalidParameter) if @p frames is 0, @p in is null,
+///         @p in_channels is not positive, or @p in contains a non-finite
+///         sample.
 std::vector<float> render_interleaved(const float* in, size_t frames, int in_channels,
                                       int sample_rate, const RendererConfig& config,
                                       const HrtfSet* hrtf, int* out_channels);

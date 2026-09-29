@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -175,15 +176,23 @@ TEST_CASE("playback loudness meter channels() method", "[playback][loudness]") {
   CHECK(meter8.channels() == 8);
 }
 
-TEST_CASE("playback loudness meter empty push", "[playback][loudness]") {
-  using sonare::constants::kFloorDb;
+// push_interleaved is an offline (control-thread) entry point, so it holds the
+// same empty/null/finite contract every other offline buffer-taking call in
+// the library does.
+TEST_CASE("playback loudness meter rejects an empty, null, or non-finite push",
+          "[playback][loudness]") {
   PlaybackLoudnessMeter meter(2, 48000);
-  // Empty push should not crash or affect state.
-  meter.push_interleaved(nullptr, 0);
-  // Should still work after an empty push.
+  CHECK_THROWS_AS(meter.push_interleaved(nullptr, 0), sonare::SonareException);
   std::vector<float> samples(4096 * 2, 0.0f);
+  CHECK_THROWS_AS(meter.push_interleaved(nullptr, 4096), sonare::SonareException);
+  CHECK_THROWS_AS(meter.push_interleaved(samples.data(), 0), sonare::SonareException);
+  samples[9] = std::numeric_limits<float>::quiet_NaN();
+  CHECK_THROWS_AS(meter.push_interleaved(samples.data(), 4096), sonare::SonareException);
+
+  // Still usable afterwards: a refused push must not corrupt the running state.
+  std::fill(samples.begin(), samples.end(), 0.0f);
+  using sonare::constants::kFloorDb;
   meter.push_interleaved(samples.data(), 4096);
-  // Should return floor (no signal pushed yet, just silence).
   CHECK(meter.integrated_lufs() <= kFloorDb + 1.0f);
 }
 

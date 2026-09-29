@@ -144,6 +144,8 @@ SonareError sonare_playback_renderer_non_finite_discard_count(
 /// @details The output is aligned with the input (the renderer latency is
 ///          removed) and has @p frames frames of @p out_channels channels.
 /// @note Release @p out with @ref sonare_free_playback_render.
+/// @note SONARE_ERROR_INVALID_PARAMETER when @p frames is 0, @p in is null, or
+///       @p in contains a non-finite sample.
 SonareError sonare_playback_render_interleaved(const float* in, size_t frames, int in_channels,
                                                int sample_rate, const char* config_json,
                                                const SonareHrtfSet* hrtf, float** out,
@@ -157,7 +159,9 @@ void sonare_free_playback_render(float* samples);
 ///       a handle, not a sonare_free_* buffer.
 SonareError sonare_playback_loudness_meter_create(int channels, int sample_rate,
                                                   SonarePlaybackLoudnessMeter** out);
-/// @brief Feeds interleaved frames of any length.
+/// @brief Feeds interleaved frames of any non-zero length.
+/// @note SONARE_ERROR_INVALID_PARAMETER when @p meter is null, @p frames is 0,
+///       @p in is null, or @p in contains a non-finite sample.
 SonareError sonare_playback_loudness_meter_push_interleaved(SonarePlaybackLoudnessMeter* meter,
                                                             const float* in, size_t frames);
 /// @brief Integrated loudness of everything pushed so far, in LUFS.
