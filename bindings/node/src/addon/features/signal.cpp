@@ -424,3 +424,45 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
   return FloatResult(env, out, count);
   SONARE_NODE_CATCH(env)
 }
+
+Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
+    return env.Undefined();
+  }
+  auto arr = info[0].As<Napi::Float32Array>();
+  float coef{};
+  if (!OptionalFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
+  bool use_zi = info.Length() >= 3 && info[2].IsNumber();
+  float zi{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();
+  float* out = nullptr;
+  size_t count = 0;
+  SonareError err =
+      sonare_preemphasis(arr.Data(), arr.ElementLength(), coef, zi, use_zi ? 1 : 0, &out, &count);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
+    return env.Undefined();
+  }
+  auto arr = info[0].As<Napi::Float32Array>();
+  float coef{};
+  if (!OptionalFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
+  bool use_zi = info.Length() >= 3 && info[2].IsNumber();
+  float zi{};
+  if (!OptionalFiniteFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();
+  float* out = nullptr;
+  size_t count = 0;
+  SonareError err =
+      sonare_deemphasis(arr.Data(), arr.ElementLength(), coef, zi, use_zi ? 1 : 0, &out, &count);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
+}

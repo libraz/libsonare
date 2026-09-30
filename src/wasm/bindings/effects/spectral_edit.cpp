@@ -104,9 +104,9 @@ val js_spectral_edit(val samples, const val& sample_rate, val ops, val options) 
       val op = ops[i];
       SpectralRegionOp region;
       // An omitted endSample defaults to the whole signal (matches the Node
-      // facade, sonare_wrap_effects.cpp). The core defaults end_sample to 0,
-      // which would otherwise make an omitted endSample a silent no-op here while
-      // Node processes the full region.
+      // addon, bindings/node/src/addon/effects/spectral_edit.cpp). The core
+      // defaults end_sample to 0, which would otherwise make an omitted endSample a
+      // silent no-op here while Node processes the full region.
       region.end_sample = static_cast<int64_t>(audio.size());
       // Sample positions arrive as plain JS numbers; requireInt64Property
       // refuses a fraction or an out-of-int64-range value by name instead of

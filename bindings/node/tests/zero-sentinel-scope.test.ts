@@ -168,21 +168,21 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'Estimator mode ordinal, where 0 is the default arm of the switch — a named mode.',
   ],
   [
-    'sonare_wrap_effects.cpp:onsetSample',
+    'effects/note_editing.cpp:onsetSample',
     'An onset position in samples; 0 is the first sample of the buffer.',
   ],
   [
-    'sonare_wrap_effects.cpp:offsetSample',
+    'effects/note_editing.cpp:offsetSample',
     'An end position in samples; 0 is the first sample of the buffer.',
   ],
-  ['sonare_wrap_effects.cpp:frameStart', 'An analysis frame index; 0 is the first frame.'],
-  ['sonare_wrap_effects.cpp:frameEnd', 'An analysis frame index; 0 is the first frame.'],
+  ['effects/note_editing.cpp:frameStart', 'An analysis frame index; 0 is the first frame.'],
+  ['effects/note_editing.cpp:frameEnd', 'An analysis frame index; 0 is the first frame.'],
   [
-    'sonare_wrap_effects.cpp:timeOffsetSamples',
+    'effects/note_editing.cpp:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
   ],
   [
-    'sonare_wrap_effects.cpp:startSample',
+    'effects/spectral_edit.cpp:startSample',
     'A spectral-edit op start position in samples; 0 is the first sample of the buffer.',
   ],
   [

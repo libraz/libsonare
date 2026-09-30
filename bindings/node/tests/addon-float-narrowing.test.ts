@@ -599,13 +599,13 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     // Optional in substance: `useZi` is `info[2].IsNumber()`, so the fallback is
     // the same one the reader writes. 0 vs 1 shifts out[0] by exactly `coef`.
     name: 'preemphasis zi',
-    site: 'sonare_wrap_features.cpp Preemphasis zi',
+    site: 'features/signal.cpp Preemphasis zi',
     control: [0, 1],
     call: (v) => native.preemphasis(Float32Array.from([1, 2, 3, 4]), 0.97, v)[0],
   },
   {
     name: 'deemphasis zi',
-    site: 'sonare_wrap_features.cpp Deemphasis zi',
+    site: 'features/signal.cpp Deemphasis zi',
     control: [0, 1],
     call: (v) => native.deemphasis(Float32Array.from([1, 2, 3, 4]), 0.97, v)[0],
   },
@@ -713,7 +713,7 @@ describe('the table covers the whole reader population', () => {
 const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
   {
     name: 'timeToFrames time',
-    site: 'sonare_wrap_features.cpp TimeToFrames time',
+    site: 'features/conversion.cpp TimeToFrames time',
     control: [1, 2],
     call: (v) => native.timeToFrames(v, SAMPLE_RATE, 512),
   },
@@ -766,7 +766,7 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'extractNotes frameRate',
-    site: 'sonare_wrap_effects.cpp ExtractNotes frameRate',
+    site: 'effects/note_editing.cpp ExtractNotes frameRate',
     control: [NOTE_RATE, NOTE_RATE * 2],
     call: (v) =>
       native.extractNotes(NOTE_AUDIO, SAMPLE_RATE, NOTE_F0, v, { voicedProb: NOTE_PROB }).at(-1)
@@ -774,26 +774,26 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'decomposeNotePitch frameRate',
-    site: 'sonare_wrap_effects.cpp DecomposeNotePitch frameRate',
+    site: 'effects/note_editing.cpp DecomposeNotePitch frameRate',
     control: [NOTE_RATE, NOTE_RATE * 2],
     call: (v) => magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, v, 441, 3).vibratoCents),
   },
   {
     name: 'decomposeNotePitch medianHz',
-    site: 'sonare_wrap_effects.cpp DecomposeNotePitch medianHz',
+    site: 'effects/note_editing.cpp DecomposeNotePitch medianHz',
     control: [441, 220],
     call: (v) => native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, v, 3).centreHz,
   },
   {
     name: 'decomposeNotePitch vibratoCutoffHz',
-    site: 'sonare_wrap_effects.cpp DecomposeNotePitch vibratoCutoffHz',
+    site: 'effects/note_editing.cpp DecomposeNotePitch vibratoCutoffHz',
     control: [3, 0.5],
     call: (v) =>
       magnitudeSum(native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, 441, v).vibratoCents),
   },
   {
     name: 'splitNote frameRate',
-    site: 'sonare_wrap_effects.cpp SplitNote frameRate',
+    site: 'effects/note_editing.cpp SplitNote frameRate',
     control: [NOTE_RATE, NOTE_RATE * 2],
     call: (v) =>
       native
@@ -802,7 +802,7 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'mergeNotes frameRate',
-    site: 'sonare_wrap_effects.cpp MergeNotes frameRate',
+    site: 'effects/note_editing.cpp MergeNotes frameRate',
     control: [NOTE_RATE, NOTE_RATE * 2],
     call: (v) =>
       native
@@ -1371,28 +1371,28 @@ const SATURATES = [
 const C_ABI_FLOAT_ARGUMENTS: CAbiFloatArgument[] = [
   {
     name: 'hzToMel hz',
-    site: 'sonare_wrap_features.cpp HzToMel hz',
+    site: 'features/conversion.cpp HzToMel hz',
     control: [440, 880],
     call: (v) => native.hzToMel(v),
     propagates: SATURATES,
   },
   {
     name: 'melToHz mel',
-    site: 'sonare_wrap_features.cpp MelToHz mel',
+    site: 'features/conversion.cpp MelToHz mel',
     control: [1000, 2000],
     call: (v) => native.melToHz(v),
     propagates: SATURATES,
   },
   {
     name: 'hzToMidi hz',
-    site: 'sonare_wrap_features.cpp HzToMidi hz',
+    site: 'features/conversion.cpp HzToMidi hz',
     control: [440, 880],
     call: (v) => native.hzToMidi(v),
     propagates: SATURATES,
   },
   {
     name: 'midiToHz midi',
-    site: 'sonare_wrap_features.cpp MidiToHz midi',
+    site: 'features/conversion.cpp MidiToHz midi',
     control: [69, 81],
     call: (v) => native.midiToHz(v),
     // Not SATURATES: 2**-Infinity is 0, so this one bottoms out rather than
@@ -1407,7 +1407,7 @@ const C_ABI_FLOAT_ARGUMENTS: CAbiFloatArgument[] = [
   },
   {
     name: 'hzToNote hz',
-    site: 'sonare_wrap_features.cpp HzToNote hz',
+    site: 'features/conversion.cpp HzToNote hz',
     control: [440, 880],
     call: (v) => native.hzToNote(v),
     // The core's documented answer for every frequency with no note, non-finite

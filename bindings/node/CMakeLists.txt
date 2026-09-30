@@ -62,6 +62,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_engine.cpp
   src/addon/engine/clips_capture.cpp
   src/addon/engine/graph_offline.cpp
+  src/addon/engine/strip_controls.cpp
   src/addon/sonare_wrap_project.cpp
   src/addon/project/edit.cpp
   src/addon/project/external_stems.cpp
@@ -82,13 +83,17 @@ set(ADDON_SOURCES
   src/addon/effects/mastering_pair.cpp
   src/addon/effects/mixing.cpp
   src/addon/effects/mixing_assistant.cpp
+  src/addon/effects/note_editing.cpp
   src/addon/effects/repair_dereverb.cpp
   src/addon/effects/repair_impulsive.cpp
   src/addon/effects/repair_noise.cpp
   src/addon/effects/repair_trim.cpp
+  src/addon/effects/spectral_edit.cpp
   src/addon/sonare_wrap_features.cpp
   src/addon/features/advanced.cpp
+  src/addon/features/conversion.cpp
   src/addon/features/rhythm.cpp
+  src/addon/features/segment.cpp
   src/addon/features/signal.cpp
   src/addon/sonare_wrap_mixer.cpp
   src/addon/mixer/strip_state.cpp
