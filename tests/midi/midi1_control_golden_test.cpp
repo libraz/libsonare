@@ -505,7 +505,9 @@ std::map<std::string, std::string> load_manifest() {
 void write_manifest() {
   std::ofstream file(kManifest);
   file << "# synth/program/gesture\tfnv1a_quantized_interleaved_hash\n";
-  for (const char* synth : {"native", "sf2", "builtin"}) {
+  for (const char* name : {"native", "sf2", "builtin"}) {
+    // A named string, so GCC does not read the cached reference as bound to a temporary.
+    const std::string synth(name);
     for (const auto& row : cached(synth)) file << row.first << '\t' << row.second << '\n';
   }
 }
