@@ -24,13 +24,14 @@ The design this implements splits coverage into three, because `gs.md`'s own rul
 
 The header names the first two `kGsEfxPrinted` and `kGsEfxMeasured`. `reach.reached` in the JSON is the name the schema opened with for the second and is kept beside it, so a reader holding an older file finds the number under either spelling.
 
-**The other two are answered on the libsonare side, by `make gs-efx-coverage`.** It walks the hand-written binding files under `tools/gs/efx-bindings/` and adjudicates every printed (type, slot) into exactly one of five forms:
+**The other two are answered on the libsonare side, by `make gs-efx-coverage`.** It walks the hand-written binding files under `tools/gs/efx-bindings/` and adjudicates every printed (type, slot) into exactly one of three forms (translated, designed, enables):
 
 ```
 GS EFX coverage: printed=<n> translated=<n> designed=<n> enables=<n>
+GS EFX basis: carried=<n> invented=<n>
 ```
 
-It fails while the five do not add up to the first, so a parameter nobody has looked at reads as a shortfall rather than as silence. `src/midi/synth/docs/gs.md` holds what each form means and what stops a row being filed under whichever one is cheapest to defend.
+It fails while the three do not add up to the first, so a parameter nobody has looked at reads as a shortfall rather than as silence. `src/midi/synth/docs/gs.md` holds what each form means and what stops a row being filed under whichever one is cheapest to defend.
 
 The header also carries a named count per class, `kGsEfxReach*`. **A class reaching zero is a failure of the derivation and not a property of the unit**: a class that stopped being fed produces exactly what a class that was never wired produces, and both look like a clean run. The script exits non-zero on it, and the C++ side checks the same thing without an archive by enumerating the fourteen classes by hand — which is why the header offers the fourteen counts as named constants and not as an array the test could iterate. A derivation that dropped a class would drop its count too, and a test reading the list would pass by not looking.
 
@@ -140,7 +141,7 @@ make gs-efx-tables-check                 # fail if the committed ones are stale
 
 The archive is external and holds measurements of one named individual machine under its own licence. `efx-tables.json` and `gs_efx_tables.h` are committed so that a clone builds without fetching anything — the same arrangement the census and the unit diff next to them have, which is also why `GS_EFX_ARCHIVE` carries no default: a path into a tree a clone does not have is a dead pointer rather than a convenience.
 
-It reads two directories and no others: `data/units/<unit>/efx-params/`, taken from the archive's own `index.json` rather than by globbing, and the sibling stages the two self-checks cite; and `inferences/<unit>/` plus the one model file the pan readout lives in. Both fall under the archive's CC0 dedication. **Nothing under its `documents/` tree is read**, and that is a licence boundary rather than a preference: the extracted structuring there is dedicated but the document content is not, and every input this derivation needs turned out to be present in the measurements anyway.
+It reads two directories and no others: `data/units/<unit>/efx-params/`, taken from the archive's own `index.json` rather than by globbing, and the sibling stages the two self-checks cite; and `inferences/<unit>/` plus the one model file the pan readout lives in. Both fall under the archive's CC0 dedication. **The derivation and `coverage.py` read nothing under the archive's `documents/` tree; only `tools/gs/marks_from_manual.py` opens it**, to transcribe the manual's `+`/`#` marks and printed parameter names onto the binding rows. That is a licence boundary rather than a preference: the extracted structuring there is dedicated but the document content is not, so what leaves the script is a mark and a name per row, never a printed table, and every input the derivation itself needs is present in the measurements anyway.
 
 The header is rendered from the committed JSON by the same script, so it has one source:
 

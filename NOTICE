@@ -162,3 +162,17 @@ Japanese vowel formant data (Yazawa and Kondo)
   length data, Zenodo record 15227304 (https://zenodo.org/records/15227304).
   The male-speaker mean formants of /a e i o u/ set the vowel ratios of the
   effects.filter.vowel table (src/effects/filter/vowel_filter.cpp).
+
+================================================================================
+soundings renderer (GS classic insertion-effect graph)
+================================================================================
+
+  Copyright (c) 2026 libraz
+
+  Licensed under the MIT License.
+
+  The classic GS insertion-effect realisation (src/midi/synth/gs_classic/)
+  ports the node-graph renderer of the soundings measurement project to C++,
+  and src/midi/synth/gs_classic_models.inc is generated from that project's
+  model files by tools/gs/classic_models.py. The measurements themselves are
+  dedicated to the public domain (CC0).
