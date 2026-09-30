@@ -393,7 +393,10 @@ class TestDetectReverb:
         detected = libsonare.mastering_repair_detect_reverb(tone, SR)
         repaired = libsonare.mastering_repair_dereverb_classical_stereo(tone, tone, SR)
 
-        assert detected == repaired.report.detected
+        # The two paths sum in different orders; Linux aarch64 parts by 0.0016 dB.
+        reported = repaired.report.detected
+        assert detected.late_decay_ratio_db == pytest.approx(reported.late_decay_ratio_db, abs=1e-2)
+        assert detected.late_predictability == pytest.approx(reported.late_predictability, abs=1e-6)
 
     def test_refuses_a_non_power_of_two_window_by_name(self) -> None:
         with pytest.raises(ValueError, match="n_fft"):
