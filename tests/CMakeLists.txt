@@ -17,6 +17,7 @@ add_executable(sonare_tests
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_args.cpp
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_console.cpp
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_json.cpp
+  ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_option_validation.cpp
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_registry.cpp
   util/math_utils_test.cpp
   util/non_finite_sample_test.cpp

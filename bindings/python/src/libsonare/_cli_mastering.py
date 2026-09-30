@@ -443,7 +443,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 # preset selects the assistant's starting config too (see
                 # assistant_config_from_cli), but the payload's preset key is
                 # reserved for the preset ROUTE, matching the native CLI:
-                # tools/cli/sonare_cli_mastering_mixing.cpp only assigns
+                # tools/cli/sonare_cli_mastering.cpp only assigns
                 # preset_name on the plain --preset route, so its JSON never
                 # carries the key for --assistant --preset.
                 preset=preset if mode == "preset" else "",

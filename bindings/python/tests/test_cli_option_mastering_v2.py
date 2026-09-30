@@ -407,7 +407,7 @@ def test_python_wav_writer_emits_24_bit_header(tmp_path) -> None:
 
 
 def test_native_handler_source_consumes_bits_and_rejects_eq_conflicts() -> None:
-    source = Path(__file__).parents[3] / "tools" / "cli" / "sonare_cli_mastering_mixing.cpp"
+    source = Path(__file__).parents[3] / "tools" / "cli" / "sonare_cli_mastering.cpp"
     text = source.read_text(encoding="utf-8")
     assert 'args.get_int("bits", 16)' in text
     assert '" cannot be combined with --params"' in text
@@ -627,9 +627,7 @@ def test_presence_gated_mastering_options_match_the_native_handler() -> None:
     """
     from libsonare import _cli_mastering
 
-    native = (
-        Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_mastering_mixing.cpp"
-    )
+    native = Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_mastering.cpp"
     text = native.read_text(encoding="utf-8")
     for name in (
         "enable-repair",

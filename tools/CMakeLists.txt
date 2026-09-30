@@ -8,11 +8,16 @@ add_executable(sonare
   cli/sonare_cli_dsp.cpp
   cli/sonare_cli_features_metering.cpp
   cli/sonare_cli_json.cpp
-  cli/sonare_cli_mastering_mixing.cpp
+  cli/sonare_cli_mastering.cpp
+  cli/sonare_cli_mixing.cpp
+  cli/sonare_cli_option_validation.cpp
   cli/sonare_cli_playback.cpp
   cli/sonare_cli_processing.cpp
   cli/sonare_cli_project.cpp
+  cli/sonare_cli_project_audio.cpp
+  cli/sonare_cli_project_midi.cpp
   cli/sonare_cli_registry.cpp
+  cli/sonare_cli_repair.cpp
 )
 
 target_link_libraries(sonare PRIVATE sonare_core)

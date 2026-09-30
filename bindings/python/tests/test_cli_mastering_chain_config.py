@@ -21,9 +21,7 @@ _SAMPLE_RATE = 22_050
 _DURATION_SEC = 0.5
 
 _NATIVE_REGISTRY = Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_registry.cpp"
-_NATIVE_HANDLER = (
-    Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_mastering_mixing.cpp"
-)
+_NATIVE_HANDLER = Path(__file__).resolve().parents[3] / "tools" / "cli" / "sonare_cli_mastering.cpp"
 
 
 def _planes(channels: int) -> list[list[float]]:
@@ -100,7 +98,7 @@ def test_mastering_assistant_json_omits_the_preset_key_even_with_preset_supplied
     (mode stays "assistant"), not a second route -- the payload's preset key is
     reserved for mode == "preset", matching the native CLI: preset_name is only
     ever assigned on the plain --preset route in
-    tools/cli/sonare_cli_mastering_mixing.cpp, so its assistant JSON never
+    tools/cli/sonare_cli_mastering.cpp, so its assistant JSON never
     carries the key either. A prior bug passed preset= unconditionally into
     the payload builder, so this same invocation carried the key only on
     Python.
