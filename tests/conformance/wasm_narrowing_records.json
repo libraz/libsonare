@@ -85,6 +85,11 @@
       "file": "bindings/project/project_transcribe.cpp",
       "symbol": "velocityField",
       "reason": "signedField's standing, over the shared intProperty, for the one transcription field whose domain is a range rather than a sign. The same presence gate applies for the same reason, and 0 is additionally not a MIDI velocity. Measured: 0 and 128 are refused with InvalidParameter, omission reproduces the baseline exactly, and a fixedVelocity of 77 is observed on every emitted note-on, so the field is read rather than merely accepted. The message wording is the Node facade's verbatim, so one domain reports one way on both surfaces."
+    },
+    {
+      "file": "bindings/realtime/midi.cpp",
+      "symbol": "umpWordsFromVal",
+      "reason": "Delegates every element's narrowing to the shared checkedWordFromVal and the array's length to the shared wasmArrayLikeLength, so the conversion contract is single-sourced. What is local is the message's own domain: a UMP carries one to four words, which only the two raw-UMP push entry points ask."
     }
   ],
   "positional": {
@@ -103,7 +108,7 @@
           "uint64_t"
         ],
         "parameter_pattern": ".",
-        "count": 15,
+        "count": 16,
         "status": "benign",
         "defect": "refuses",
         "mechanism": [

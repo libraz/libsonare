@@ -103,6 +103,12 @@
       "argument": "peak",
       "type": "c_float",
       "reason": "NaN here is the C ABI's spelling for no offline peak measured, so the conversion must be able to carry one; the caller's own value goes through _narrow_float where it enters instead."
+    },
+    {
+      "file": "_engine_midi.py",
+      "argument": "values",
+      "type": "c_uint32",
+      "reason": "Already narrowed: every entry is the .value of _to_c_uint32 for that word, so the list reaching this conversion holds only values it cannot change."
     }
   ],
   "argtype_arguments": [],
