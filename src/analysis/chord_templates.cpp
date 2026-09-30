@@ -310,7 +310,7 @@ float ChordTemplate::correlate(const float* chroma) const {
   }
   // Three of the extended qualities are anagrams of a commoner one rooted
   // elsewhere: a maj6 spells the m7 a minor third below, a min6 spells the m7b5
-  // a minor third below, and a 7sus4 spells the sus2add4 a fourth below. Their
+  // a minor third below, and a 7sus4 spells the sus2add4 a fourth above. Their
   // chroma vectors are identical, so nothing in this function can separate
   // them — only which pitch class the bass sounds can, and that evidence
   // reaches the decision outside the template. Leaving them level here would
