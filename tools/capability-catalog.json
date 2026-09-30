@@ -2246,6 +2246,27 @@
           "slot": null,
           "type": "enum",
           "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linear",
+              "value": 0
+            },
+            {
+              "name": "lagrange3",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 22,
+          "max": null,
+          "min": null,
+          "name": "interpolation",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
         }
       ],
       "realtimeCost": "low",
@@ -2628,6 +2649,27 @@
           "slot": null,
           "type": "enum",
           "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linear",
+              "value": 0
+            },
+            {
+              "name": "lagrange3",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 8,
+          "max": null,
+          "min": null,
+          "name": "interpolation",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
         }
       ],
       "realtimeCost": "low",
@@ -2774,6 +2816,27 @@
           "slot": null,
           "type": "number",
           "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linear",
+              "value": 0
+            },
+            {
+              "name": "lagrange3",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 11,
+          "max": null,
+          "min": null,
+          "name": "interpolation",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
         }
       ],
       "realtimeCost": "low",
@@ -2905,6 +2968,27 @@
           "max": null,
           "min": null,
           "name": "preFilterMode",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linear",
+              "value": 0
+            },
+            {
+              "name": "lagrange3",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 9,
+          "max": null,
+          "min": null,
+          "name": "interpolation",
           "rtSafe": true,
           "slot": null,
           "type": "enum",
@@ -3170,6 +3254,39 @@
           "rtSafe": true,
           "slot": null,
           "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "linear",
+              "value": 0
+            },
+            {
+              "name": "lagrange3",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 10,
+          "max": null,
+          "min": null,
+          "name": "interpolation",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 11,
+          "max": null,
+          "min": null,
+          "name": "antiAlias",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
           "unit": null
         },
         {
@@ -3460,6 +3577,48 @@
           "slot": null,
           "type": "number",
           "unit": "dB"
+        },
+        {
+          "choices": [
+            {
+              "name": "linear",
+              "value": 0
+            },
+            {
+              "name": "lagrange3",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 12,
+          "max": null,
+          "min": null,
+          "name": "interpolation",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "classic",
+              "value": 0
+            },
+            {
+              "name": "geometric",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 13,
+          "max": null,
+          "min": null,
+          "name": "model",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
         },
         {
           "choices": null,
@@ -83711,15 +83870,15 @@
         {
           "choices": [
             {
-              "name": "phones",
+              "name": "speakers",
               "value": 0
             },
             {
-              "name": "speakers",
+              "name": "phones",
               "value": 1
             }
           ],
-          "default": 0,
+          "default": 1,
           "id": 4,
           "max": null,
           "min": null,
