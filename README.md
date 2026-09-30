@@ -1,136 +1,41 @@
 # libsonare
 
-[![CI](https://img.shields.io/github/actions/workflow/status/libraz/libsonare/ci.yml?branch=main&label=CI)](https://github.com/libraz/libsonare/actions)
-[![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
-[![PyPI](https://img.shields.io/pypi/v/libsonare)](https://pypi.org/project/libsonare/)
-[![codecov](https://codecov.io/gh/libraz/libsonare/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libsonare)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
-[![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
-
-**libsonare turns audio into data and data back into audio.** Load a song and get
-its BPM, key, chords, and structure; master and mix it to broadcast loudness; turn
-MIDI into sound with built-in instruments; or build a whole DAW on top — the same
-engine in C++, Python, Node.js, and the browser. The C++ core has zero runtime dependencies;
-the Python package depends on NumPy, with no Python required by the native engine,
-no Python at runtime, and no GPL/AGPL or model weights.
-
-**Reach for it when you need to:**
-
-- **Analyze audio** — BPM, key, chords, sections, loudness — without pulling in a heavy Python/ML stack.
-- **Master or mix to spec** — broadcast-grade loudness and true-peak control, in-process or fully in the browser.
-- **Turn MIDI into sound** — built-in instruments cover all 128 GM programs + drums, no SoundFont required.
-- **Ship one audio engine** — the same C++ DSP runs natively and in the browser (WASM + AudioWorklet), with identical results.
+**libsonare turns audio into data and data back into audio.** Load a song and get its BPM, key, chords, and structure; master and mix it to broadcast loudness; turn MIDI into sound with built-in instruments; or build a whole DAW on top — the same engine in C++, Python, Node.js, and the browser. The C++ core has zero runtime dependencies; the Python package depends on NumPy, and there is no GPL/AGPL code and no model weights.
 
 📖 **[Documentation](https://libsonare.libraz.net)** &nbsp;·&nbsp; 🎧 **[Browser-local demos](https://libsonare.libraz.net/demos)** &nbsp;·&nbsp; **[Getting started](https://libsonare.libraz.net/docs/getting-started)**
 
-## What can you build with it?
+## sonare studio
 
-**[sonare studio](https://sonare-studio.libraz.net)** is a full browser-based
-DAW built entirely on the libsonare WASM engine — multi-track sequencing, a
-piano roll, score engraving, a mixer, mastering, and WAV/MP3/MIDI/MusicXML
-export, all running client-side. It shows how far one Apache-2.0 engine reaches,
-from analysis to a playable, exportable arrangement.
-
-It's a hosted live demo that drives the whole engine end-to-end as an
-integration test bed, not a production product (source not public). Try it in
-the browser to see what libsonare can power.
+**[sonare studio](https://sonare-studio.libraz.net)** is a browser-based DAW built entirely on the libsonare WASM engine: multi-track sequencing, piano roll, score engraving, mixer, mastering, and WAV/MP3/MIDI/MusicXML export, all client-side. It is a hosted live demo that exercises the whole engine end to end, not a production product (source not public).
 
 ## What's inside
 
-- **Analysis** — BPM, key, chords (HMM smoothing, inversions, key-context),
-  beat/downbeat, time signature, sections, timbre, dynamics, pitch (YIN/pYIN),
-  tempogram/PLP, NNLS chroma, EBU R128 loudness, and room acoustics (RT60 from
-  either a blind recording or a measured impulse response; EDT and C50/C80/D50
-  require the impulse response and read as NaN in blind mode — EDT measures the
-  0 to -10 dB decay independently of the late decay the blind estimator fits
-  for RT60, and the clarity family needs a known direct-sound arrival time a
-  blind recording does not have). Where it overlaps librosa, defaults match
-  and are validated against librosa reference values in CI — so results port
-  over without surprises.
-- **Mastering** — 91 distinct named DSP processors (EQ, dynamics, multiband,
-  stereo, saturation, repair, maximizer, reference matching), or 73 with
-  `BUILD_FX=OFF` (the creative streaming effects are omitted), built against
-  published
-  references: ITU-R BS.1770-4 loudness and true-peak limiting, Linkwitz-Riley
-  crossovers, Vicanek matched-Z biquads, ADAA-antialiased clippers, a Dempwolf
-  12AX7 tube model, and polyphase FIR oversampling. Repair is classical DSP, not
-  DNN separation.
-- **Mixing & routing** — a real-time-safe channel-strip / bus model
-  (denormal-guarded, lock-free parameter changes, plugin-delay compensation) with
-  pan modes, sends, FX buses, metering, scene presets, and offline rendering.
-- **Mixing assistant** — an optional offline pass that analyzes a set of tracks
-  and suggests a mixer scene (trims, faders, pans, EQ, dynamics, buses, sends)
-  with a written explanation of every decision. It suggests only: no audio is
-  processed, and handing the scene to the mixer is the caller's separate step.
-- **Editing & creative FX** — time stretch / pitch shift, pitch correction, note
-  stretch, voice change, five reverb engines, modulation effects, stereo delay,
-  guitar amp sim, and ducking.
-- **Room acoustics** — synthesize a room impulse response from shoebox geometry,
-  blindly estimate an equivalent room from a recording, or morph a recording's
-  reverberation toward a target room. Dependency-free and deterministic.
-- **Built-in instruments** — a patch-driven NativeSynth with 17 synthesis engines
-  (subtractive, FM, additive, Karplus-Strong, and modal resonators, plus physically-modeled piano, harpsichord, bowed strings, reeds,
-  brass, flute, pipe organ, plucked strings, voice, free reed, and percussion, and
-  a sample player for PCM you supply), a
-  mod matrix, and named presets,
-  backed by a data-free GM/GS fallback covering all 128 programs, the GS rhythm
-  sets and the variation tones it voices apart, so MIDI never renders silent.
-  Add a host-supplied SoundFont and the GS-compatible
-  16-part SF2 player takes over, falling back per program. The physical-model
-  voices are usable today and being refined over time as tuning continues.
-- **Headless DAW runtime** — author projects with audio & MIDI tracks/clips
-  (split/trim/move with undo/redo), takes and comp lanes, per-clip warp, MIDI
-  1.0/2.0 sequencing, SMF and MIDI 2.0 Clip File I/O, deterministic byte-stable
-  JSON, and offline bounce through the built-in instruments.
-- **Realtime engine** — a sample-accurate, allocation-free playback engine:
-  transport, clip playback with warp (repitching or pitch-preserving), paged
-  streaming for huge clips with look-ahead page requests, live MIDI input
-  (MIDI 1.0 and MIDI 2.0 UMP, received at full resolution),
-  lock-free automation down to individual instrument parameters, and
-  capture/recording. The same engine runs in the browser through an
-  AudioWorklet.
-- **Playback renderer** — turns decoded mono/stereo/5.1/7.1 PCM into what a
-  listener actually hears: channel conversion (upmix, downmix, remapping),
-  loudness matching, night-mode dynamics and dialogue level, speaker
-  calibration and bass management, HRTF-based binaural rendering with head
-  tracking and a synthesized room, and a reportable fixed latency for
-  audio/video sync. No decoding, containers, video, or DRM.
-
-See the [documentation](https://libsonare.libraz.net) for the full API of every
-feature, runtime, and processor.
+- **Analysis** — BPM, key, chords, beats, sections, pitch, loudness (EBU R128), and room acoustics; defaults match librosa where they overlap, and CI checks them against librosa reference values. [Analysis](https://libsonare.libraz.net/docs/analysis)
+- **Stems and transcription** — split a mix into stems with `decomposeStems`, and transcribe audio to MIDI with `transcribe`. [Source separation](https://libsonare.libraz.net/docs/analysis#source-separation) · [CLI `transcribe`](https://libsonare.libraz.net/docs/cli-examples)
+- **Mastering** — 91 distinct named DSP processors (EQ, dynamics, multiband, stereo, saturation, repair, maximizer, reference matching), or 73 with `BUILD_FX=OFF`, plus five restoration presets (vinyl, tape hiss, field recording, voice memo, shellac 78). [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors) · [Mastering assistant](https://libsonare.libraz.net/docs/mastering-assistant)
+- **Mixing and routing** — channel strips, buses, sends, bus-to-bus routing, track- or bus-keyed sidechains, scene presets, and an optional assistant that suggests a mixer scene. [Mixing](https://libsonare.libraz.net/docs/mixing) · [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine) · [Mixing assistant](https://libsonare.libraz.net/docs/mixing-assistant)
+- **Editing and creative FX** — time stretch, pitch shift, pitch correction, voice change, reverbs, modulation, delay, and amp sim. [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp) · [Spectral editing](https://libsonare.libraz.net/docs/spectral-editing)
+- **Note editing and takes** — edit notes of monophonic and polyphonic takes, align a take to a reference (`alignTakeToReference`), and tune it to a MIDI melody (`tune-to-midi`). [MIDI editing](https://libsonare.libraz.net/docs/project-editing-midi) · [Takes](https://libsonare.libraz.net/docs/recording-and-takes)
+- **Room acoustics** — synthesize, estimate, and morph room impulse responses. [Acoustic analysis](https://libsonare.libraz.net/docs/acoustic-analysis)
+- **Built-in instruments** — a NativeSynth with 17 synthesis engines and a GM/GS fallback covering all 128 programs, so MIDI never renders silent. The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 1.8.x patch releases. [NativeSynth](https://libsonare.libraz.net/docs/native-synth) · [Physical models](https://libsonare.libraz.net/docs/physical-models)
+- **GS and SoundFont** — GS SysEx reception, two realisations of the GS insertion effects (modern and classic), and a GS-compatible 16-part SF2 player for host-supplied SoundFonts. [GM/GS](https://libsonare.libraz.net/docs/gm-gs) · [SoundFont player](https://libsonare.libraz.net/docs/soundfont-player)
+- **Headless DAW runtime** — projects with audio and MIDI tracks, takes, warp, MIDI 1.0/2.0 sequencing, SMF I/O, and offline bounce. [Project editing](https://libsonare.libraz.net/docs/project-editing)
+- **Realtime engine** — allocation-free playback, streaming, live MIDI 1.0/2.0 input, lock-free automation, and recording, in the browser through an AudioWorklet too. [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine) · [MIDI input](https://libsonare.libraz.net/docs/midi-input)
+- **Playback renderer** — channel conversion, loudness matching, bass management, and HRTF binaural rendering for headphones and speakers. [Playback](https://libsonare.libraz.net/docs/playback)
+- **C++ package** — the C++ library installs as a CMake package (`find_package(sonare)`). [C++ API](https://libsonare.libraz.net/docs/cpp-api)
 
 ## Installation
 
 ```bash
 npm install @libraz/libsonare   # JavaScript / TypeScript (WASM, takes Float32Array)
-pip install libsonare            # Python (WAV/MP3 — see "Audio formats" for M4A/AAC etc.)
+pip install libsonare            # Python (WAV/MP3; other formats need an FFmpeg build)
 ```
 
-[`@libraz/libsonare-native`](bindings/node/) is not published to npm. Clone this
-repository and use it as a local dependency; its README covers the native build
-and FFmpeg options.
+[`@libraz/libsonare-native`](bindings/node/) is not published to npm; clone this repository and use it as a local dependency. See [Installation](https://libsonare.libraz.net/docs/installation) for formats, FFmpeg, and the runtime choice.
 
 ## Quick start
 
-The snippets below cover the headline capabilities; the docs site has the full,
-per-runtime API.
-
-> **Which runtime, and does it decode files for you?** WASM decodes WAV/MP3 and
-> falls back to the browser codec stack for other browser-supported formats;
-> Python and the Node native addon read files directly. →
-> [Choose your runtime](https://libsonare.libraz.net/docs/getting-started#choose-your-runtime)
-
 ### JavaScript / TypeScript (WASM)
-
-Start with encoded audio bytes. `Audio.fromMemoryWithBrowserFallback()` uses the
-built-in WAV/MP3 decoder first, then `AudioContext.decodeAudioData()` for formats
-such as M4A, AAC, FLAC, and OGG that the browser supports.
-
-Top-level one-shot APIs use a request object as their documented form. Positional
-calls remain supported for compatibility; stateful methods and small scalar helpers
-keep their natural forms.
 
 ```typescript
 import { Audio, init } from '@libraz/libsonare';
@@ -141,23 +46,11 @@ const bytes = new Uint8Array(await file.arrayBuffer());
 const audio = await Audio.fromMemoryWithBrowserFallback(bytes);
 const result = audio.analyze(); // BPM, key, chords, sections, ...
 console.log(result.key.name);
-
-// If samples are already decoded, pass a Float32Array directly instead.
-const decoded = Audio.fromBuffer(samples, sampleRate);
 ```
-
-If the app only needs analysis, feature extraction, or metering, use the
-smaller `@libraz/libsonare/analysis` entry. It excludes mastering, mixing, and
-realtime APIs. With emsdk 6.0.10 it measures 0.98 MiB raw / 373 KiB gzip against
-the full entry's 5.43 MiB raw / 1.80 MiB gzip; both figures are the measurement
-recorded in `bindings/wasm/wasm-size-baseline.json`.
 
 → [JavaScript API](https://libsonare.libraz.net/docs/js-api) · [Browser / WASM](https://libsonare.libraz.net/docs/wasm)
 
 ### Python
-
-`pip install libsonare` ships a WAV/MP3-only wheel. For other formats, pre-convert
-with `ffmpeg` or rebuild with FFmpeg linked (see [Audio formats](#audio-formats)).
 
 ```python
 import libsonare
@@ -169,27 +62,9 @@ result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
 print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS")
 ```
 
-→ [Python API](https://libsonare.libraz.net/docs/python-api) · [CLI](https://libsonare.libraz.net/docs/cli)
-
-The `sonare` command-line tool ships with the Python package
-(`sonare analyze song.mp3`, `sonare mastering …`, `sonare project …`).
-The separately released native CLI is named `sonare-cli`, so both commands can
-coexist on `PATH` without changing their behavior.
-
-CLI command names are intentionally distinct where their operating models differ:
-`sonare mix` loads a mixer scene and renders one or more inputs, while
-`sonare-cli mix-strip` applies a channel strip to one input. `mix-strip` is the
-only spelling for the channel strip; the native CLI no longer accepts `mix`, so
-one command line cannot mean two different things depending on which front-end
-runs it.
+The `sonare` command-line tool ships with the Python package; the native CLI is `sonare-cli`. → [Python API](https://libsonare.libraz.net/docs/python-api) · [CLI](https://libsonare.libraz.net/docs/cli)
 
 ### C++
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-cmake --install build --prefix ~/.local
-```
 
 ```cmake
 find_package(sonare REQUIRED)
@@ -197,8 +72,7 @@ target_link_libraries(app PRIVATE sonare::sonare)
 ```
 
 ```cpp
-#include "sonare.h"            // analysis + features + effects
-#include "mastering/master.h"  // mastering chain & processors
+#include "sonare.h"
 
 auto audio = sonare::Audio::from_file("music.mp3");
 auto result = sonare::MusicAnalyzer(audio).analyze();
@@ -206,122 +80,31 @@ std::cout << "BPM: " << result.bpm
           << ", Key: " << result.key.to_string() << std::endl;
 ```
 
-`sonare::sonare` links every subsystem the installation was built with; the
-individual archives are exported as `sonare::core`, `sonare::mastering`,
-`sonare::engine` and so on for a narrower link line. `add_subdirectory()` on a
-checkout defines the same target names, so either way of obtaining the library
-takes the same `target_link_libraries`.
-
 → [C++ API](https://libsonare.libraz.net/docs/cpp-api)
-
-### Instruments & MIDI
-
-Turn a MIDI arrangement into audio with the built-in instruments — no SoundFont
-required. Build a `Project`, add notes, and bounce it through a NativeSynth preset.
-
-```python
-import libsonare
-
-with libsonare.Project() as project:
-    project.set_sample_rate(48000)
-    _, clip_id = project.add_midi_clip(0.0, 4.0)             # start, length (quarter notes)
-    project.set_midi_events(clip_id, [
-        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
-        libsonare.Project.midi_note_off(2.0, 0, 0, 60),
-    ])
-    audio = project.bounce_with_synth_instrument("e-piano", num_channels=2)  # → float32 audio
-```
-
-The same `Project` / bounce API is available from Python, Node and WASM (the CLI
-exposes a curated subset — see the [runtime capability
-matrix](tools/parity/surface-coverage.md)); add a host-supplied SoundFont to
-render through the GS-compatible SF2 player instead.
-
-→ [Python API](https://libsonare.libraz.net/docs/python-api) · [Documentation](https://libsonare.libraz.net)
-
-## Audio formats
-
-| Format | Default¹ | With FFmpeg² | WASM (`@libraz/libsonare`) |
-|--------|----------|--------------|----------------------------|
-| WAV (PCM 16/24/32, float32) | ✅ | ✅ | built-in decoder |
-| MP3 | ✅ | ✅ | built-in decoder |
-| M4A / AAC / FLAC / OGG / Opus / WMA / … | ❌ (clear error) | ✅ | browser codec fallback where supported |
-
-¹ **Default**: the PyPI wheel and source builds without FFmpeg dev libs. Wheels
-are pinned to this mode so installation never depends on your `libavformat`.
-
-² **With FFmpeg**: a source build with FFmpeg linked — CMake auto-detects via
-pkg-config (`-DSONARE_WITH_FFMPEG=AUTO`). Python: `SONARE_FFMPEG=1 pip install
-libsonare --no-binary libsonare`; Node native: `SONARE_FFMPEG=1 yarn build`.
-Because detection is automatic, which decoder handles a given file depends on
-what is installed on the build machine: the two modes differ in the formats they
-accept and in the error an undecodable file raises (`InvalidFormat` without
-FFmpeg, `DecodeFailed` with it). Pass `ON` or `OFF` explicitly to pin the mode.
-
-The WASM bundle intentionally excludes large codec libraries. Its small built-in
-WAV/MP3 decoder and browser `decodeAudioData()` fallback cover the normal browser
-entry point; pass a `Float32Array` when samples are already decoded.
 
 ## Build from source
 
 ```bash
-make build && make test   # native; auto-detects FFmpeg, mastering + mixing on by default
+make build && make test   # native
 make wasm                  # WebAssembly
 make release               # optimized native build
 ```
 
-Trim the binary with `-DBUILD_MASTERING=OFF` / `-DBUILD_MIXING=OFF` for
-analysis-only builds, or drop just the mixing assistant with
-`-DBUILD_MIXING_ASSISTANT=OFF` (default `ON`) and keep the mixer. Optional,
-experimental, off-by-default macOS host backends
-(CoreAudio / CoreMIDI / AU host) cover device I/O and AU hosting for source
-builds; they ship in no published package. See the
-[architecture docs](https://libsonare.libraz.net/docs/architecture) for build
-options.
+Build options (`BUILD_MASTERING`, `BUILD_MIXING`, `BUILD_MIXING_ASSISTANT`, FFmpeg) are covered in [Architecture](https://libsonare.libraz.net/docs/architecture).
 
 ## Documentation
 
-Full docs and browser-local demos live at
-**[libsonare.libraz.net](https://libsonare.libraz.net)** ([demos](https://libsonare.libraz.net/demos)).
+Full docs and browser-local demos live at **[libsonare.libraz.net](https://libsonare.libraz.net)**.
 
 - **Learn** — [Introduction](https://libsonare.libraz.net/docs/introduction) · [Getting started](https://libsonare.libraz.net/docs/getting-started) · [Installation](https://libsonare.libraz.net/docs/installation) · [Examples](https://libsonare.libraz.net/docs/examples)
 - **API by runtime** — [Browser / WASM](https://libsonare.libraz.net/docs/wasm) · [JavaScript](https://libsonare.libraz.net/docs/js-api) · [Python](https://libsonare.libraz.net/docs/python-api) · [Node.js native](https://libsonare.libraz.net/docs/native-bindings) · [C++](https://libsonare.libraz.net/docs/cpp-api) · [CLI](https://libsonare.libraz.net/docs/cli)
-- **By task** — [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors) · [Mixing](https://libsonare.libraz.net/docs/mixing) · [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp) · [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming) · [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Details** — [Architecture](https://libsonare.libraz.net/docs/architecture) · [librosa compatibility](https://libsonare.libraz.net/docs/librosa-compatibility) · [Benchmarks](https://libsonare.libraz.net/docs/benchmarks) · [Glossary](https://libsonare.libraz.net/docs/glossary)
 
-### How much of the engine each runtime reaches
-
-The DSP core is one C++17 implementation and every runtime calls into it, so a
-result computed in the browser is the result computed natively. The *API
-surface* around it is hand-written per runtime and is not identical: Python,
-Node and WASM each reach a little over 90% of the C ABI's entry points, and the
-two command-line front-ends are each a deliberately curated subset — not the
-same subset, which is why they are two columns. Per-domain figures are published as a
-generated table — [runtime capability
-matrix](tools/parity/surface-coverage.md) — regenerated by
-`make surface-coverage` and gated in CI, so the numbers cannot drift from the
-code.
+Every runtime calls the same C++17 DSP core, but each API surface is hand-written and not identical; see [Binding parity](https://libsonare.libraz.net/docs/binding-parity) and the generated [runtime capability matrix](tools/parity/surface-coverage.md).
 
 ## Non-goals
 
-libsonare is the headless engine, not an application. It intentionally does not
-include a UI or DAW workflow, third-party plugin hosting (VST/CLAP), a
-cross-platform real-time I/O abstraction, bundled sample data, or deep-learning
-models. Windows is not supported; use Linux, macOS, WebAssembly, or WSL2. Callers
-own the audio callback and the UI; the experimental macOS backends are the only
-(opt-in, unpublished) exception to the I/O boundary. These limits keep the library
-dependency-free and Apache-2.0 pure. See
-[Non-goals](https://libsonare.libraz.net/docs/architecture) for the rationale.
-
-Note-level composition is outside it too — harmonizing a line, writing a bass
-part, reharmonizing a progression. That layer is
-[`@libraz/libcantus`](https://github.com/libraz/libcantus), a separate
-pure-TypeScript library; the two share no code and neither depends on the other.
-The two meet at a project's MIDI events: generate notes against a reading of the
-harmony, then merge them into a clip through the set-MIDI-events call every
-runtime already reaches. libsonare does carry a small rule-based assist seam
-behind its C ABI, but its modules are built in and nothing can register one from
-outside C++, so the event API is the integration point rather than the seam.
+libsonare is the headless engine, not an application. It does not include a UI or DAW workflow, VST/CLAP plugin hosting, a cross-platform real-time I/O abstraction, bundled sample data, or deep-learning models. Windows is not supported; use Linux, macOS, WebAssembly, or WSL2. Note-level composition belongs to the separate [`@libraz/libcantus`](https://github.com/libraz/libcantus). See [Architecture](https://libsonare.libraz.net/docs/architecture#non-goals) for the rationale.
 
 ## License
 
