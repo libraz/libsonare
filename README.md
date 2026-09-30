@@ -6,7 +6,7 @@
 
 ## sonare studio
 
-**[sonare studio](https://sonare-studio.libraz.net)** is a browser-based DAW built entirely on the libsonare WASM engine: multi-track sequencing, piano roll, score engraving, mixer, mastering, and WAV/MP3/MIDI/MusicXML export, all client-side. It is a hosted live demo that exercises the whole engine end to end, not a production product (source not public).
+**[sonare studio](https://sonare-studio.libraz.net)** is a browser-based DAW whose audio runs on the libsonare WASM engine: multi-track playback, instruments, mixer, mastering, and audio export, all client-side. Its music theory and composition features come from [`@libraz/libcantus`](https://github.com/libraz/libcantus), and score rendering from a separate library. It is a hosted live demo that exercises the engine end to end, not a production product (source not public).
 
 ## What's inside
 

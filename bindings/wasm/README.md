@@ -10,7 +10,7 @@
 
 **Turn audio into data and back — entirely in the browser.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments, all client-side via WebAssembly — the same C++ engine that runs natively, with zero dependencies and no model weights. 91 named mastering DSP processors implemented against published references; analysis defaults match librosa where the two overlap.
 
-**Guides and the full API reference: [libsonare.libraz.net](https://libsonare.libraz.net)**. Try it without installing anything: the [live demos](https://libsonare.libraz.net/demos), or [sonare studio](https://sonare-studio.libraz.net), a browser DAW built on this engine.
+**Guides and the full API reference: [libsonare.libraz.net](https://libsonare.libraz.net)**. Try it without installing anything: the [live demos](https://libsonare.libraz.net/demos), or [sonare studio](https://sonare-studio.libraz.net), a browser DAW whose audio runs on this engine.
 
 ## Installation
 
