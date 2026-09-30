@@ -40,6 +40,7 @@ EXEMPT_FILES = {
     "project.ts",
     "project_synth.ts",
     "realtime_engine.ts",
+    "synth_catalog.ts",
     "realtime_voice_changer.ts",
     "opfs_clip_pages.ts",
     "scale.ts",
