@@ -3,16 +3,16 @@
     "sonare-analysis.wasm": {
       "code": 962773,
       "data": 56180,
-      "gzip": 382225,
+      "gzip": 382215,
       "raw": 1023564,
-      "sha256": "bee07f1ecd4a3813af0a1172480c61b399e0e580398013ed3b92c6a528913e3c"
+      "sha256": "f0b8ef21316c2b7699693d78f883674df2f4ae95c22e13dab8170551df09db01"
     },
     "sonare.wasm": {
-      "code": 5479367,
-      "data": 583532,
-      "gzip": 2027218,
-      "raw": 6082929,
-      "sha256": "4b8f793a822096f19ca587c1e4d5825c5526dcfa81077a912c78ef798e6c77c4"
+      "code": 5493210,
+      "data": 693110,
+      "gzip": 2106722,
+      "raw": 6206371,
+      "sha256": "346f05f1d2cd0cee6d982fdc590aa816c7ea3473fc8d4a5e4edb9e06520d74e5"
     }
   },
   "format": 1,
