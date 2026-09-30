@@ -258,11 +258,12 @@ TEST_CASE("upmix on/off cross-fade ends at exact weights", "[playback][upmix]") 
   Planes out(6, std::vector<float>(static_cast<size_t>(kTotal)));
   std::array<float*, 6> ptrs{};
   for (int start = 0; start < kTotal; start += kBlock) {
+    const int count = std::min(kBlock, kTotal - start);
     UpmixParams p;
     p.enabled = start < off_at || start >= on_at;
     toggled.set_params(p, false);
     for (size_t ch = 0; ch < 6; ++ch) ptrs[ch] = out[ch].data() + start;
-    toggled.process(l.data() + start, r.data() + start, ptrs.data(), kBlock);
+    toggled.process(l.data() + start, r.data() + start, ptrs.data(), count);
   }
 
   bool off_exact = true;

@@ -343,8 +343,9 @@ TEST_CASE("sonare_playback_render_interleaved renders offline and validates its 
                                            &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
 
   // A fixed input layout that the channel count does not match is rejected.
+  const std::vector<float> in3(256 * 3, 0.1f);
   CHECK(sonare_playback_render_interleaved(
-            in.data(), 256, 3, 48000, R"({"input": {"layout": "stereo"}})", nullptr, &out,
+            in3.data(), 256, 3, 48000, R"({"input": {"layout": "stereo"}})", nullptr, &out,
             &out_frames, &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Offline entry point: an empty or non-finite input is refused, the same
