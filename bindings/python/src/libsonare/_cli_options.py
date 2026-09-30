@@ -250,6 +250,25 @@ def _add_wav_bits_argument(parser: argparse.ArgumentParser) -> argparse.Action:
     )
 
 
+def _wav_bits(args: argparse.Namespace) -> int:
+    """Return the requested PCM width, keeping the CLI contract intentionally small."""
+    bits = int(getattr(args, "bits", 16))
+    if bits not in (16, 24):
+        raise ValueError("bits must be 16 or 24")
+    return bits
+
+
+def _option_supplied(args: argparse.Namespace, name: str) -> bool:
+    """Report whether the caller spelled ``--name`` on the command line.
+
+    The parser records the destination of every option present on argv, so an
+    option carrying its documented default still counts as supplied -- the same
+    answer the native ``CliArgs::has`` gives for identical argv.
+    """
+    supplied = getattr(args, "_supplied_options", ())
+    return name.replace("-", "_") in supplied
+
+
 def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     fmin = getattr(args, "fmin", None)
     fmax = getattr(args, "fmax", None)

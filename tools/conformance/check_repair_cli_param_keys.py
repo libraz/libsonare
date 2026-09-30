@@ -1,6 +1,6 @@
 """Check the hand-written key set the Python `repair` CLI subcommand carries.
 
-`bindings/python/src/libsonare/_cli_mastering.py` hardcodes
+`bindings/python/src/libsonare/_cli_repair.py` hardcodes
 `_NON_REPAIR_CHAIN_DISABLE_OVERRIDES` -- every top-level chain module's own
 ``.enabled`` flag *other than* ``repair.*``, forced off so `repair --preset`
 cannot master -- because no C ABI entry exposes a chain config's field list as
@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CHAIN_JSON_PATH = ROOT / "src/mastering/api/chain_json.cpp"
-CLI_MASTERING_PATH = ROOT / "bindings/python/src/libsonare/_cli_mastering.py"
+CLI_REPAIR_PATH = ROOT / "bindings/python/src/libsonare/_cli_repair.py"
 
 # One `add_field(params, "dotted.key", <cpp expression>);` call, possibly
 # wrapped across two lines (the printed form breaks long calls after the key).
@@ -39,13 +39,13 @@ def _extract_python_string_set(source: str, name: str) -> set[str]:
         rf"^{re.escape(name)}\b.*?\{{(.*?)\n\s*\}}\)?", source, re.DOTALL | re.MULTILINE
     )
     if match is None:
-        raise ValueError(f"{name}: declaration not found in {CLI_MASTERING_PATH}")
+        raise ValueError(f"{name}: declaration not found in {CLI_REPAIR_PATH}")
     return set(re.findall(r'"([\w.]+)"', match.group(1)))
 
 
 def main() -> int:
     chain_json_text = CHAIN_JSON_PATH.read_text(encoding="utf-8")
-    cli_source = CLI_MASTERING_PATH.read_text(encoding="utf-8")
+    cli_source = CLI_REPAIR_PATH.read_text(encoding="utf-8")
     errors: list[str] = []
 
     all_enabled_keys = {

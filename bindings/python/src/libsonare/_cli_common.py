@@ -980,6 +980,14 @@ def _parse_json_config(raw: str, path: str) -> dict[str, Any]:
     return loaded
 
 
+def _chain_params_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap the native ``{version, params}`` chain-config representation."""
+    params = config.get("params")
+    if isinstance(params, dict):
+        return dict(params)
+    return dict(config)
+
+
 def _parse_json_list(raw: str, path: str) -> list[dict[str, Any]]:
     if path:
         with open(path, encoding="utf-8") as fh:

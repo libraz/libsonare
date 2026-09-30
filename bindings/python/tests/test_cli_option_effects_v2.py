@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
 import libsonare
 import libsonare._cli_acoustic as acoustic
 import libsonare._cli_effects as effects
+import libsonare._cli_note_edit as note_edit
 
 
 def _args(**values: object) -> argparse.Namespace:
@@ -22,7 +23,9 @@ def _args(**values: object) -> argparse.Namespace:
     return argparse.Namespace(**defaults)
 
 
-def _capture_emit(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+def _capture_emit(
+    monkeypatch: pytest.MonkeyPatch, module: ModuleType = effects
+) -> list[dict[str, object]]:
     calls: list[dict[str, object]] = []
 
     def emit(
@@ -34,7 +37,7 @@ def _capture_emit(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
         calls.append({"args": args, "channels": channels, "sample_rate": sr, **kwargs})
         return 0
 
-    monkeypatch.setattr(effects, "_emit_effect_result", emit)
+    monkeypatch.setattr(module, "_emit_effect_result", emit)
     return calls
 
 
@@ -76,8 +79,8 @@ def test_pitch_shift_and_time_stretch_forward_fft_options(
 def test_pitch_correct_forwards_requested_pitch_to_constant_facade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(effects, "_load_audio", lambda _path: ([0.1], 44100))
-    emitted = _capture_emit(monkeypatch)
+    monkeypatch.setattr(note_edit, "_load_audio", lambda _path: ([0.1], 44100))
+    emitted = _capture_emit(monkeypatch, note_edit)
     calls: dict[str, object] = {}
 
     def fake_pitch_correct(samples: list[float], **kwargs: object) -> list[float]:
@@ -85,7 +88,7 @@ def test_pitch_correct_forwards_requested_pitch_to_constant_facade(
         return [0.5]
 
     monkeypatch.setattr(libsonare, "pitch_correct_to_midi", fake_pitch_correct)
-    assert effects.cmd_pitch_correct(_args(current_midi=60.0, target_midi=64.0)) == 0
+    assert note_edit.cmd_pitch_correct(_args(current_midi=60.0, target_midi=64.0)) == 0
 
     assert calls == {
         "samples": [0.1],
