@@ -76,6 +76,31 @@ def _has_ffmpeg_build_support() -> bool:
         return False
 
 
+def _write_test_wav(path: str, samples: list[float], sample_rate: int) -> None:
+    """Write mono 16-bit PCM WAV using only the standard library."""
+    frames = bytearray()
+    for s in samples:
+        clamped = max(-1.0, min(1.0, s))
+        frames += struct.pack("<h", int(round(clamped * 32767.0)))
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        wav.writeframes(bytes(frames))
+
+
+def _run_cli(args: list[str]) -> subprocess.CompletedProcess:
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
+    return subprocess.run(
+        [sys.executable, "-m", "libsonare.cli", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
 __all__ = [
     "LIB_AVAILABLE",
     "Path",

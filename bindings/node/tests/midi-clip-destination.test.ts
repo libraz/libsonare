@@ -6,7 +6,7 @@
  * as "unset" reroutes the clip to its track id, which is audible as silence at
  * the requested destination and as an unexpected voice at the track's own. The
  * three cases below fix both directions of that mapping, and Python pins the
- * same behaviour in bindings/python/tests/test_engine.py so the surfaces
+ * same behaviour in bindings/python/tests/test_engine_midi.py so the surfaces
  * cannot drift apart.
  */
 
