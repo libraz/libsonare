@@ -7,6 +7,8 @@
 #include <vector>
 
 #include "effects/common/mix_law.h"
+#include "effects/modulation/mod_delay_line.h"
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 
 namespace sonare::effects::modulation {
@@ -37,6 +39,14 @@ struct PitchShifterConfig {
   /// Fraction of the shifted sum written back into the delay line, in [-0.95, 0.95].
   float feedback = 0.0f;
   common::MixLaw mix_law = common::MixLaw::kCrossfade;
+  /// How the taps read between samples; see DelayInterpolation. Lagrange3 reads
+  /// no closer than one sample behind the write head.
+  DelayInterpolation interpolation = DelayInterpolation::kLinear;
+  /// When a voice's ratio exceeds 1, a fourth-order Linkwitz-Riley low-pass at
+  /// fs / (2 * ratio) runs ahead of the write, so the content the shift would
+  /// fold back above Nyquist is removed first. The corner follows the larger of
+  /// the sounding voices' ratios.
+  bool anti_alias = false;
 };
 
 /// A classic H910-style pitch shifter: a delay line read by two taps one window
@@ -58,12 +68,19 @@ class PitchShifter : public rt::ProcessorBase {
   //   0 = semitones (clamped to [-24, 24]), 1 = dry_wet, 2 = cents, 3 = pan,
   //   4 = semitones2, 5 = cents2, 6 = level2, 7 = pan2, 8 = feedback,
   //   9 = mix_law (a whole number naming a law, refused otherwise)
+  //   10 = interpolation (0 linear, 1 Lagrange3), 11 = anti_alias (0 or 1)
   // The pre-delays have no id: they size the delay line.
   bool set_parameter(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   float read_tap(int channel, float delay) const noexcept;
+  float read_tap_lagrange3(int channel, float delay) const noexcept;
+
+  /// Derives the anti-alias corner, in hertz, from the larger sounding ratio and
+  /// rebuilds the low-pass sections when it moved. A ratio of 1 or less leaves
+  /// the section out of the path.
+  void update_anti_alias(float max_ratio) noexcept;
 
   PitchShifterConfig config_{};
   double sample_rate_ = 48000.0;
@@ -74,6 +91,10 @@ class PitchShifter : public rt::ProcessorBase {
   std::array<float, 2> feedback_state_{{0.0f, 0.0f}};  ///< last shifted sum, per channel.
   std::array<std::vector<float>, 2> buffers_;
   std::array<int, 2> write_pos_{{0, 0}};
+  /// Corner of the anti-alias low-pass in hertz; 0 while the section is out of the path.
+  float anti_alias_corner_hz_ = 0.0f;
+  /// [channel][section]: two Butterworth sections make one Linkwitz-Riley 4.
+  std::array<std::array<rt::BiquadState, 2>, 2> anti_alias_;
 };
 
 }  // namespace sonare::effects::modulation

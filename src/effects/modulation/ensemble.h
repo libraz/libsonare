@@ -1,16 +1,15 @@
 #pragma once
 
 /// @file ensemble.h
-/// @brief BBD-style string-machine ensemble (Solina-type 3-phase chorus).
+/// @brief Band-limited three-tap ensemble chorus (string-machine style, 3-phase).
 ///
-/// The classic ensemble is three bucket-brigade delay lines per channel
-/// modulated by a SLOW and a FAST LFO simultaneously, with the three taps
-/// 120 degrees apart on both — the dual-rate 3-phase scheme is what turns a
-/// single voice into a "section". Two BBD character traits are modelled on
-/// the wet path: the limited bucket bandwidth (a gentle one-pole lowpass,
-/// `tone_hz`) and the inherently mono-summed source spreading into stereo
-/// (the right channel reads the same 3-phase pattern with inverted LFO
-/// polarity).
+/// Three interpolated delay lines per channel are modulated by a SLOW and a
+/// FAST LFO simultaneously, with the three taps 120 degrees apart on both —
+/// the dual-rate 3-phase scheme is what turns a single voice into a
+/// "section". The structure is digital, not a bucket-brigade emulation: the
+/// wet path is band-limited by a gentle one-pole lowpass (`tone_hz`) and the
+/// source spreads into stereo (the right channel reads the same 3-phase
+/// pattern with inverted LFO polarity).
 
 #include <array>
 #include <vector>
@@ -42,6 +41,8 @@ struct EnsembleConfig {
   float pre_delay_dev_ms = 0.0f;
   float depth_dev = 0.0f;
   float pan_dev = 0.0f;
+  /// How the delay lines read between samples; see DelayInterpolation.
+  DelayInterpolation interpolation = DelayInterpolation::kLinear;
 };
 
 class Ensemble : public rt::ProcessorBase {
@@ -65,6 +66,7 @@ class Ensemble : public rt::ProcessorBase {
   //                        delay line prepare() sized)
   //   9 = depth_dev      (clamped to [-1, 1])
   //  10 = pan_dev        (clamped to [0, 1])
+  //  11 = interpolation  (0 linear, 1 Lagrange3)
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

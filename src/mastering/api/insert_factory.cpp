@@ -860,6 +860,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::read_field(params, "preFilterMode", config.pre_filter_mode);
     config.feedback = f(params, "feedback", config.feedback);
     config.phase_deg = f(params, "phaseDeg", config.phase_deg);
+    detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Chorus>(config);
   }
   if (name == "effects.modulation.ensemble") {
@@ -875,6 +876,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.pre_delay_dev_ms = f(params, "preDelayDevMs", config.pre_delay_dev_ms);
     config.depth_dev = f(params, "depthDev", config.depth_dev);
     config.pan_dev = f(params, "panDev", config.pan_dev);
+    detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Ensemble>(config);
   }
   if (name == "effects.modulation.flanger") {
@@ -888,6 +890,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::read_field(params, "preFilterMode", config.pre_filter_mode);
     config.phase_deg = f(params, "phaseDeg", config.phase_deg);
     config.step_rate_hz = f(params, "stepRateHz", config.step_rate_hz);
+    detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Flanger>(config);
   }
   if (name == "effects.modulation.phaser") {
@@ -957,6 +960,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.speed = f(params, "speed", config.speed);
     config.horn_level_db = f(params, "hornLevelDb", config.horn_level_db);
     config.drum_level_db = f(params, "drumLevelDb", config.drum_level_db);
+    detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Rotary>(config);
   }
   if (name == "effects.modulation.ringModulator") {
@@ -983,6 +987,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.pre_delay2_ms = f(params, "preDelay2Ms", config.pre_delay2_ms);
     config.feedback = f(params, "feedback", config.feedback);
     detail::read_field(params, "mixLaw", config.mix_law);
+    detail::read_field(params, "interpolation", config.interpolation);
+    config.anti_alias = b(params, "antiAlias", config.anti_alias);
     return make<effects::modulation::PitchShifter>(config);
   }
   if (name == "effects.delay.stereo") {
@@ -1009,6 +1015,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.glide_ms = f(params, "glideMs", config.glide_ms);
     detail::read_field(params, "crossMode", config.cross_mode);
     detail::read_field(params, "mixLaw", config.mix_law);
+    detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::delay::StereoDelay>(config);
   }
   return nullptr;

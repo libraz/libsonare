@@ -264,8 +264,8 @@ TEST_CASE("Ensemble deviation keys are realtime and reject non-finite values",
     CHECK(processor.set_parameter(id, 0.1f));
     CHECK_FALSE(processor.set_parameter(id, std::nanf("")));
   }
-  CHECK_FALSE(processor.parameter_is_realtime_safe(11));
-  CHECK_FALSE(processor.set_parameter(11, 0.0f));
+  CHECK_FALSE(processor.parameter_is_realtime_safe(12));
+  CHECK_FALSE(processor.set_parameter(12, 0.0f));
 
   // A deviation far past its range is clamped to what prepare() sized and
   // still renders finite audio.

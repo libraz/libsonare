@@ -65,6 +65,8 @@ void Rotary::prepare(double sample_rate, int) {
     drum_lfo_[ch].prepare(sample_rate_);
     horn_delay_[ch].prepare(max_delay);
     drum_delay_[ch].prepare(max_delay);
+    horn_delay_[ch].set_interpolation(config_.interpolation);
+    drum_delay_[ch].set_interpolation(config_.interpolation);
   }
   reset();
 }
@@ -198,15 +200,25 @@ bool Rotary::set_parameter(unsigned int param_id, float value) {
     case 11:
       config_.drum_level_db = value;
       return true;
+    case 12: {
+      if (!delay_interpolation_acceptable(value)) return false;
+      config_.interpolation = static_cast<DelayInterpolation>(static_cast<int>(value));
+      for (int ch = 0; ch < 2; ++ch) {
+        horn_delay_[ch].set_interpolation(config_.interpolation);
+        drum_delay_[ch].set_interpolation(config_.interpolation);
+      }
+      return true;
+    }
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> Rotary::parameter_descriptors() const {
-  return {{"rateHz", 0},     {"depthMs", 1},    {"tremolo", 2},      {"dryWet", 3},
-          {"drumRateHz", 4}, {"hornSlowHz", 5}, {"hornFastHz", 6},   {"drumSlowHz", 7},
-          {"drumFastHz", 8}, {"speed", 9},      {"hornLevelDb", 10}, {"drumLevelDb", 11}};
+  return {{"rateHz", 0},        {"depthMs", 1},    {"tremolo", 2},      {"dryWet", 3},
+          {"drumRateHz", 4},    {"hornSlowHz", 5}, {"hornFastHz", 6},   {"drumSlowHz", 7},
+          {"drumFastHz", 8},    {"speed", 9},      {"hornLevelDb", 10}, {"drumLevelDb", 11},
+          {"interpolation", 12}};
 }
 
 }  // namespace sonare::effects::modulation

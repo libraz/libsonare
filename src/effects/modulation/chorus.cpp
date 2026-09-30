@@ -46,6 +46,7 @@ void Chorus::prepare(double sample_rate, int) {
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(max_delay_seconds)) + 1;
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
+    delay.set_interpolation(config_.interpolation);
   }
   lfos_[0].prepare(sample_rate_);
   lfos_[1].prepare(sample_rate_);
@@ -171,6 +172,12 @@ bool Chorus::set_parameter(unsigned int param_id, float value) {
       }
       return true;
     }
+    case 8: {
+      if (!delay_interpolation_acceptable(value)) return false;
+      config_.interpolation = static_cast<DelayInterpolation>(static_cast<int>(value));
+      for (auto& delay : delays_) delay.set_interpolation(config_.interpolation);
+      return true;
+    }
     default:
       return false;
   }
@@ -180,12 +187,13 @@ bool Chorus::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
   // delay lines are pre-sized to kMaxChorusDelayMs at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 7;
+  return param_id <= 8;
 }
 
 std::vector<rt::ParamDescriptor> Chorus::parameter_descriptors() const {
-  return {{"rateHz", 0},      {"depthMs", 1},  {"centerDelayMs", 2}, {"dryWet", 3},
-          {"preFilterHz", 4}, {"feedback", 5}, {"phaseDeg", 6},      {"preFilterMode", 7}};
+  return {{"rateHz", 0},   {"depthMs", 1},       {"centerDelayMs", 2},
+          {"dryWet", 3},   {"preFilterHz", 4},   {"feedback", 5},
+          {"phaseDeg", 6}, {"preFilterMode", 7}, {"interpolation", 8}};
 }
 
 void Chorus::reset() {

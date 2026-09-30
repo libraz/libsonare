@@ -261,7 +261,7 @@ TEST_CASE("realtime ids reach the voices and the pre-delays stay construction-on
   for (unsigned int id = 2; id <= 8; ++id) REQUIRE(shifter.set_parameter(id, 0.25f));
   REQUIRE(shifter.set_parameter(9, 1.0f));
   for (const float bad : {-1.0f, 0.5f, 2.0f}) REQUIRE_FALSE(shifter.set_parameter(9, bad));
-  REQUIRE_FALSE(shifter.set_parameter(10, 0.0f));
+  REQUIRE_FALSE(shifter.set_parameter(12, 0.0f));
   for (const auto& descriptor : shifter.parameter_descriptors()) {
     CHECK(descriptor.key != std::string("preDelayMs"));
     CHECK(descriptor.key != std::string("preDelay2Ms"));

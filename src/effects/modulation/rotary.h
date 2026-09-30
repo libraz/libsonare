@@ -60,6 +60,8 @@ struct RotaryConfig {
   float speed = -1.0f;
   float horn_level_db = 0.0f;  ///< horn rotor output level.
   float drum_level_db = 0.0f;  ///< drum rotor output level.
+  /// How the delay lines read between samples; see DelayInterpolation.
+  DelayInterpolation interpolation = DelayInterpolation::kLinear;
 };
 
 /// A two-rotor rotary-speaker model: the signal is split by a crossover into a
@@ -84,6 +86,7 @@ class Rotary : public rt::ProcessorBase {
   //   5..8 = horn_slow_hz, horn_fast_hz, drum_slow_hz, drum_fast_hz
   //   9 = speed (-1 off, 0 slow, 1 fast)
   //   10 = horn_level_db, 11 = drum_level_db
+  //   12 = interpolation (0 linear, 1 Lagrange3)
   bool set_parameter(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

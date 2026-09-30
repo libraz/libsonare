@@ -180,7 +180,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.ensemble", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.ensemble",
-        R"({"rateSlowHz":0.6,"rateFastHz":5.5,"depthSlowMs":1.8,"depthFastMs":0.25,"centerDelayMs":5.0,"toneHz":6500.0,"dryWet":0.5,"rateHz":0.0,"preDelayDevMs":0.0,"depthDev":0.0,"panDev":0.0})");
+        R"({"rateSlowHz":0.6,"rateFastHz":5.5,"depthSlowMs":1.8,"depthFastMs":0.25,"centerDelayMs":5.0,"toneHz":6500.0,"dryWet":0.5,"rateHz":0.0,"preDelayDevMs":0.0,"depthDev":0.0,"panDev":0.0,"interpolation":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -191,7 +191,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.rotary", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.rotary",
-        R"({"rateHz":6.0,"drumRateHz":4.44,"depthMs":1.2,"tremolo":0.5,"stereoSpread":1.0,"dryWet":1.0,"accelTauS":0.0,"decelTauS":0.0,"undershootHz":0.0,"drumUndershootHz":0.0,"hornSlowHz":0.8,"hornFastHz":6.0,"drumSlowHz":0.6,"drumFastHz":4.44,"speed":-1.0,"hornLevelDb":0.0,"drumLevelDb":0.0})");
+        R"({"rateHz":6.0,"drumRateHz":4.44,"depthMs":1.2,"tremolo":0.5,"stereoSpread":1.0,"dryWet":1.0,"accelTauS":0.0,"decelTauS":0.0,"undershootHz":0.0,"drumUndershootHz":0.0,"hornSlowHz":0.8,"hornFastHz":6.0,"drumSlowHz":0.6,"drumFastHz":4.44,"speed":-1.0,"hornLevelDb":0.0,"drumLevelDb":0.0,"interpolation":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -202,7 +202,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.chorus", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.chorus",
-        R"({"rateHz":0.8,"depthMs":6.0,"centerDelayMs":14.0,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0,"feedback":0.0,"phaseDeg":90.0})");
+        R"({"rateHz":0.8,"depthMs":6.0,"centerDelayMs":14.0,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0,"feedback":0.0,"phaseDeg":90.0,"interpolation":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -213,7 +213,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.flanger", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.flanger",
-        R"({"rateHz":0.25,"depthMs":2.0,"centerDelayMs":3.0,"feedback":0.3,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0,"phaseDeg":180.0,"stepRateHz":0.0})");
+        R"({"rateHz":0.25,"depthMs":2.0,"centerDelayMs":3.0,"feedback":0.3,"dryWet":0.5,"preFilterHz":0.0,"preFilterMode":0,"phaseDeg":180.0,"stepRateHz":0.0,"interpolation":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -273,7 +273,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.delay.stereo", "{}");
     const RenderResult explicit_defaults = render(
         "effects.delay.stereo",
-        R"({"delayTimeLMs":250.0,"delayTimeRMs":250.0,"feedback":0.25,"pingPong":0.0,"dryWet":0.5,"dampingHz":0.0,"tap3Ms":0.0,"tap4Ms":0.0,"tap1LevelDb":0.0,"tap2LevelDb":0.0,"tap3LevelDb":0.0,"tap4LevelDb":0.0,"tap3Pan":0.0,"tap4Pan":0.0,"invertL":false,"invertR":false,"modRateHz":0.0,"modDepthMs":0.0,"modPhaseDeg":0.0,"glideMs":0.0,"crossMode":0,"mixLaw":0})");
+        R"({"delayTimeLMs":250.0,"delayTimeRMs":250.0,"feedback":0.25,"pingPong":0.0,"dryWet":0.5,"dampingHz":0.0,"tap3Ms":0.0,"tap4Ms":0.0,"tap1LevelDb":0.0,"tap2LevelDb":0.0,"tap3LevelDb":0.0,"tap4LevelDb":0.0,"tap3Pan":0.0,"tap4Pan":0.0,"invertL":false,"invertR":false,"modRateHz":0.0,"modDepthMs":0.0,"modPhaseDeg":0.0,"glideMs":0.0,"crossMode":0,"mixLaw":0,"interpolation":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -284,7 +284,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.pitchShifter", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.pitchShifter",
-        R"({"semitones":0.0,"dryWet":1.0,"windowMs":22.5,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0})");
+        R"({"semitones":0.0,"dryWet":1.0,"windowMs":22.5,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0,"interpolation":0,"antiAlias":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);
@@ -295,7 +295,7 @@ TEST_CASE(
         render("effects.modulation.pitchShifter", R"({"semitones":7})");
     const RenderResult shifted_explicit = render(
         "effects.modulation.pitchShifter",
-        R"({"semitones":7,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0})");
+        R"({"semitones":7,"cents":0.0,"pan":0.0,"semitones2":0.0,"cents2":0.0,"level2":0.0,"pan2":0.0,"preDelayMs":0.0,"preDelay2Ms":0.0,"feedback":0.0,"mixLaw":0,"interpolation":0,"antiAlias":0})");
     REQUIRE(shifted_empty.left == shifted_explicit.left);
     REQUIRE(shifted_empty.right == shifted_explicit.right);
   }

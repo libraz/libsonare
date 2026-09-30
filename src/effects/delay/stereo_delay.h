@@ -60,6 +60,9 @@ struct StereoDelayConfig {
   float glide_ms = 0.0f;
   StereoDelayCrossMode cross_mode = StereoDelayCrossMode::kNormal;
   common::MixLaw mix_law = common::MixLaw::kCrossfade;
+  /// How the lines read between samples. Lagrange3 reads no closer than one
+  /// sample behind the write head, so a loop delay of 0 ms becomes one sample.
+  modulation::DelayInterpolation interpolation = modulation::DelayInterpolation::kLinear;
 };
 
 class StereoDelay : public rt::ProcessorBase {
@@ -83,7 +86,7 @@ class StereoDelay : public rt::ProcessorBase {
   //   5 = damping_hz (corner in Hz, <= 0 bypasses; rebuilds one coefficient)
   //   6/7 = tap3_ms/tap4_ms, 8..11 = tap1..4_level_db, 12/13 = tap3/4_pan
   //   14/15 = invert_l/r, 16..18 = mod_rate_hz/depth_ms/phase_deg, 19 = glide_ms
-  //   20 = cross_mode, 21 = mix_law
+  //   20 = cross_mode, 21 = mix_law, 22 = interpolation (0 linear, 1 Lagrange3)
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
@@ -98,6 +101,9 @@ class StereoDelay : public rt::ProcessorBase {
   /// rate. The corner is what is stored; the pole is non-linear in the rate and
   /// so is rebuilt rather than scaled whenever either changes.
   void update_damping() noexcept;
+
+  /// Hands config_.interpolation to every line.
+  void apply_interpolation() noexcept;
 
   StereoDelayConfig config_{};
   double sample_rate_ = 48000.0;

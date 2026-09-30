@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "effects/modulation/mod_delay_line.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 
@@ -26,6 +25,9 @@ constexpr float kMaxPreDelayMs = 1000.0f;
 constexpr float kMaxFeedback = 0.95f;
 constexpr float kMaxCents = 100.0f;
 constexpr float kCentsPerSemitone = 100.0f;
+// The corner stays below this fraction of the rate so a ratio just above 1
+// keeps the section's design away from Nyquist.
+constexpr double kMaxAntiAliasCornerFraction = 0.45;
 
 /// The two crossfade gains and tap positions of one voice's grain.
 struct Grain {
@@ -60,6 +62,9 @@ float semitone_ratio(float semitones, float cents) noexcept {
 
 float finite_or_zero(float value) noexcept { return delay_param_acceptable(value) ? value : 0.0f; }
 
+/// True for exactly 0 or 1, the two values a switch accepts.
+bool is_switch_value(float value) noexcept { return value == 0.0f || value == 1.0f; }
+
 }  // namespace
 
 PitchShifter::PitchShifter(PitchShifterConfig config) : config_(config) {
@@ -87,6 +92,7 @@ void PitchShifter::prepare(double sample_rate, int) {
   grain_ = std::max(64, static_cast<int>(sample_rate_ * grain_ms * 0.001));
   const float pre_ms = std::max(config_.pre_delay_ms, config_.pre_delay2_ms);
   const float sr = static_cast<float>(sample_rate_);
+  anti_alias_corner_hz_ = 0.0f;
   pre_delay_samples_ = {config_.pre_delay_ms * 0.001f * sr, config_.pre_delay2_ms * 0.001f * sr};
   const int pre_max = static_cast<int>(std::ceil(pre_ms * 0.001f * sr));
   const size_t len = static_cast<size_t>(grain_ + pre_max + 4);
@@ -101,6 +107,9 @@ void PitchShifter::reset() {
   phase2_ = 0.0f;
   feedback_state_ = {0.0f, 0.0f};
   write_pos_ = {0, 0};
+  for (auto& channel : anti_alias_) {
+    for (auto& section : channel) section.reset();
+  }
   for (auto& buffer : buffers_) {
     std::fill(buffer.begin(), buffer.end(), 0.0f);
   }
@@ -110,6 +119,9 @@ float PitchShifter::read_tap(int channel, float delay) const noexcept {
   // Same fractional-read hazard as ModDelayLine::process: a non-finite delay
   // cannot produce an in-range index, so the tap contributes nothing.
   if (!delay_param_acceptable(delay)) return 0.0f;
+  if (config_.interpolation == DelayInterpolation::kLagrange3) {
+    return read_tap_lagrange3(channel, delay);
+  }
   const auto& buffer = buffers_[static_cast<size_t>(channel)];
   const float size = static_cast<float>(buffer.size());
   float read_pos = static_cast<float>(write_pos_[static_cast<size_t>(channel)]) - delay;
@@ -118,6 +130,46 @@ float PitchShifter::read_tap(int channel, float delay) const noexcept {
   const int i1 = (i0 + 1) % static_cast<int>(buffer.size());
   const float frac = read_pos - std::floor(read_pos);
   return buffer[static_cast<size_t>(i0)] * (1.0f - frac) + buffer[static_cast<size_t>(i1)] * frac;
+}
+
+float PitchShifter::read_tap_lagrange3(int channel, float delay) const noexcept {
+  const auto& buffer = buffers_[static_cast<size_t>(channel)];
+  const int size = static_cast<int>(buffer.size());
+  // Nodes sit at delays D-1, D, D+1, D+2; the buffer holds grain + pre-delay + 4
+  // samples, so D + 2 stays inside it.
+  const float clamped = std::clamp(delay, 1.0f, static_cast<float>(size - 3));
+  const int whole = static_cast<int>(clamped);
+  const float f = clamped - static_cast<float>(whole);
+  const float w0 = -f * (f - 1.0f) * (f - 2.0f) * (1.0f / 6.0f);
+  const float w1 = (f + 1.0f) * (f - 1.0f) * (f - 2.0f) * 0.5f;
+  const float w2 = -(f + 1.0f) * f * (f - 2.0f) * 0.5f;
+  const float w3 = (f + 1.0f) * f * (f - 1.0f) * (1.0f / 6.0f);
+  const int head = write_pos_[static_cast<size_t>(channel)];
+  auto tap = [&](int back) {
+    return buffer[static_cast<size_t>(((head - back) % size + size) % size)];
+  };
+  return w0 * tap(whole - 1) + w1 * tap(whole) + w2 * tap(whole + 1) + w3 * tap(whole + 2);
+}
+
+void PitchShifter::update_anti_alias(float max_ratio) noexcept {
+  if (!(max_ratio > 1.0f)) {
+    anti_alias_corner_hz_ = 0.0f;
+    return;
+  }
+  const double corner_hz = std::min(sample_rate_ / (2.0 * static_cast<double>(max_ratio)),
+                                    kMaxAntiAliasCornerFraction * sample_rate_);
+  if (static_cast<float>(corner_hz) == anti_alias_corner_hz_) return;
+  const bool engaging = anti_alias_corner_hz_ == 0.0f;
+  anti_alias_corner_hz_ = static_cast<float>(corner_hz);
+  const float w0 = static_cast<float>(sonare::constants::kTwoPiD * corner_hz / sample_rate_);
+  const rt::BiquadCoeffs coeffs = rt::rbj_lowpass(w0, sonare::constants::kInvSqrt2);
+  for (auto& channel : anti_alias_) {
+    for (auto& section : channel) {
+      section.set(coeffs);
+      // A section left out of the path holds stale history; start it from rest.
+      if (engaging) section.reset();
+    }
+  }
 }
 
 void PitchShifter::process(float* const* channels, int num_channels, int num_samples) {
@@ -143,6 +195,11 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   const float pre2 = pre_delay_samples_[1];
   const float level2 = config_.level2;
   const bool second = level2 > 0.0f;
+  const bool anti_alias = config_.anti_alias;
+  if (anti_alias) {
+    update_anti_alias(std::max(ratio, second ? ratio2 : 1.0f));
+  }
+  const bool filtering = anti_alias && anti_alias_corner_hz_ > 0.0f;
   const float feedback = config_.feedback;
   const std::array<float, 2> pan = balance_gains(config_.pan);
   const std::array<float, 2> pan2 = balance_gains(config_.pan2);
@@ -156,6 +213,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
     // while reporting zero latency. Pass the input through instead, and keep
     // filling the grain buffers so a later shift starts from real history
     // rather than silence.
+    anti_alias_corner_hz_ = 0.0f;
     for (int i = 0; i < num_samples; ++i) {
       for (int ch = 0; ch < active; ++ch) {
         if (channels[ch] == nullptr) continue;
@@ -178,7 +236,16 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
       if (channels[ch] == nullptr) continue;
       const size_t c = static_cast<size_t>(ch);
       const float in = channels[ch][i];
-      buffers_[c][static_cast<size_t>(write_pos_[c])] = in;
+      float written = in;
+      if (filtering) {
+        written = anti_alias_[c][1].process(anti_alias_[c][0].process(in));
+        if (!std::isfinite(written)) {
+          // The sections are recursive: one non-finite input would stay in them for good.
+          for (auto& section : anti_alias_[c]) section.reset();
+          written = 0.0f;
+        }
+      }
+      buffers_[c][static_cast<size_t>(write_pos_[c])] = written;
       const float voice =
           unity ? read_tap(ch, pre)
                 : g.g1 * read_tap(ch, g.phase + pre) + g.g2 * read_tap(ch, g.phase2 + pre);
@@ -243,14 +310,23 @@ bool PitchShifter::set_parameter(unsigned int param_id, float value) {
       }
       config_.mix_law = static_cast<common::MixLaw>(static_cast<int>(value));
       return true;
+    case 10:
+      if (!delay_interpolation_acceptable(value)) return false;
+      config_.interpolation = static_cast<DelayInterpolation>(static_cast<int>(value));
+      return true;
+    case 11:
+      if (!is_switch_value(value)) return false;
+      config_.anti_alias = value != 0.0f;
+      return true;
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> PitchShifter::parameter_descriptors() const {
-  return {{"semitones", 0}, {"dryWet", 1}, {"cents", 2}, {"pan", 3},      {"semitones2", 4},
-          {"cents2", 5},    {"level2", 6}, {"pan2", 7},  {"feedback", 8}, {"mixLaw", 9}};
+  return {{"semitones", 0},  {"dryWet", 1}, {"cents", 2},          {"pan", 3},
+          {"semitones2", 4}, {"cents2", 5}, {"level2", 6},         {"pan2", 7},
+          {"feedback", 8},   {"mixLaw", 9}, {"interpolation", 10}, {"antiAlias", 11}};
 }
 
 }  // namespace sonare::effects::modulation

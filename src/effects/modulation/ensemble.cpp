@@ -51,7 +51,10 @@ void Ensemble::prepare(double sample_rate, int) {
   const float max_delay_ms = kMaxCenterDelayMs + 2.0f * kMaxDepthMs;
   const float max_delay_seconds = std::max(kMinDelayBufferSeconds, max_delay_ms * 0.001f);
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(max_delay_seconds)) + 1;
-  for (auto& delay : delays_) delay.prepare(max_delay);
+  for (auto& delay : delays_) {
+    delay.prepare(max_delay);
+    delay.set_interpolation(config_.interpolation);
+  }
   for (size_t tap = 0; tap < 3; ++tap) {
     slow_lfos_[tap].prepare(sample_rate_);
     fast_lfos_[tap].prepare(sample_rate_);
@@ -176,6 +179,12 @@ bool Ensemble::set_parameter(unsigned int param_id, float value) {
     case 10:
       config_.pan_dev = std::clamp(value, 0.0f, 1.0f);
       return true;
+    case 11: {
+      if (!delay_interpolation_acceptable(value)) return false;
+      config_.interpolation = static_cast<DelayInterpolation>(static_cast<int>(value));
+      for (auto& delay : delays_) delay.set_interpolation(config_.interpolation);
+      return true;
+    }
     default:
       return false;
   }
@@ -186,13 +195,13 @@ bool Ensemble::parameter_is_realtime_safe(unsigned int param_id) const noexcept 
   // delay lines are pre-sized to kMaxCenterDelayMs + kMaxDepthMs at prepare(),
   // so no id allocates or resets audio state. Unknown ids are rejected by
   // set_parameter.
-  return param_id <= 10;
+  return param_id <= 11;
 }
 
 std::vector<rt::ParamDescriptor> Ensemble::parameter_descriptors() const {
   return {{"rateSlowHz", 0},    {"rateFastHz", 1}, {"depthSlowMs", 2}, {"depthFastMs", 3},
           {"centerDelayMs", 4}, {"toneHz", 5},     {"dryWet", 6},      {"rateHz", 7},
-          {"preDelayDevMs", 8}, {"depthDev", 9},   {"panDev", 10}};
+          {"preDelayDevMs", 8}, {"depthDev", 9},   {"panDev", 10},     {"interpolation", 11}};
 }
 
 }  // namespace sonare::effects::modulation

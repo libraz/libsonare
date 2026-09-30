@@ -87,7 +87,13 @@ void StereoDelay::prepare(double sample_rate, int) {
     delay.prepare(max_delay);
   }
   update_damping();
+  apply_interpolation();
   reset();
+}
+
+void StereoDelay::apply_interpolation() noexcept {
+  for (auto& delay : delays_) delay.set_interpolation(config_.interpolation);
+  for (auto& delay : tap_delays_) delay.set_interpolation(config_.interpolation);
 }
 
 void StereoDelay::update_damping() noexcept {
@@ -298,6 +304,7 @@ void StereoDelay::reset() {
 void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
   config_ = sanitize_config(config);
   update_damping();
+  apply_interpolation();
 }
 
 bool StereoDelay::set_parameter(unsigned int param_id, float value) {
@@ -387,6 +394,11 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
       }
       return true;
     }
+    case 22:
+      if (!modulation::delay_interpolation_acceptable(value)) return false;
+      config_.interpolation = static_cast<modulation::DelayInterpolation>(static_cast<int>(value));
+      apply_interpolation();
+      return true;
     default:
       return false;
   }
@@ -398,16 +410,16 @@ bool StereoDelay::parameter_is_realtime_safe(unsigned int param_id) const noexce
   // smoothed in process(), so no id allocates or resets audio state. The damping
   // corner recomputes one coefficient and leaves its cell where it stood, so it
   // is in-place too. Unknown ids are rejected by set_parameter.
-  return param_id <= 21;
+  return param_id <= 22;
 }
 
 std::vector<rt::ParamDescriptor> StereoDelay::parameter_descriptors() const {
-  return {{"delayTimeLMs", 0}, {"delayTimeRMs", 1}, {"feedback", 2},     {"pingPong", 3},
-          {"dryWet", 4},       {"dampingHz", 5},    {"tap3Ms", 6},       {"tap4Ms", 7},
-          {"tap1LevelDb", 8},  {"tap2LevelDb", 9},  {"tap3LevelDb", 10}, {"tap4LevelDb", 11},
-          {"tap3Pan", 12},     {"tap4Pan", 13},     {"invertL", 14},     {"invertR", 15},
-          {"modRateHz", 16},   {"modDepthMs", 17},  {"modPhaseDeg", 18}, {"glideMs", 19},
-          {"crossMode", 20},   {"mixLaw", 21}};
+  return {{"delayTimeLMs", 0}, {"delayTimeRMs", 1}, {"feedback", 2},      {"pingPong", 3},
+          {"dryWet", 4},       {"dampingHz", 5},    {"tap3Ms", 6},        {"tap4Ms", 7},
+          {"tap1LevelDb", 8},  {"tap2LevelDb", 9},  {"tap3LevelDb", 10},  {"tap4LevelDb", 11},
+          {"tap3Pan", 12},     {"tap4Pan", 13},     {"invertL", 14},      {"invertR", 15},
+          {"modRateHz", 16},   {"modDepthMs", 17},  {"modPhaseDeg", 18},  {"glideMs", 19},
+          {"crossMode", 20},   {"mixLaw", 21},      {"interpolation", 22}};
 }
 
 }  // namespace sonare::effects::delay

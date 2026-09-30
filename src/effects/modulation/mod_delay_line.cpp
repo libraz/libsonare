@@ -28,6 +28,9 @@ float ModDelayLine::process(float input, float delay_samples) {
     write_index_ = (write_index_ + 1) % static_cast<int>(buffer_.size());
     return 0.0f;
   }
+  if (interpolation_ == DelayInterpolation::kLagrange3) {
+    return process_lagrange3(input, delay_samples);
+  }
   const float clamped_delay =
       std::clamp(delay_samples, 0.0f, static_cast<float>(max_delay_samples_));
   buffer_[static_cast<size_t>(write_index_)] = input;
@@ -45,6 +48,32 @@ float ModDelayLine::process(float input, float delay_samples) {
                        buffer_[static_cast<size_t>(index1)] * frac;
 
   write_index_ = (write_index_ + 1) % static_cast<int>(buffer_.size());
+  return output;
+}
+
+float ModDelayLine::process_lagrange3(float input, float delay_samples) {
+  // The far node sits two samples past the whole delay, so the ceiling is one below the line's.
+  const float ceiling = static_cast<float>(std::max(1, max_delay_samples_ - 1));
+  const float delay = std::clamp(delay_samples, 1.0f, ceiling);
+  buffer_[static_cast<size_t>(write_index_)] = input;
+
+  // Nodes sit at delays D-1, D, D+1, D+2 around the interval the fraction falls in.
+  const int whole = static_cast<int>(delay);
+  const float f = delay - static_cast<float>(whole);
+  const float w0 = -f * (f - 1.0f) * (f - 2.0f) * (1.0f / 6.0f);
+  const float w1 = (f + 1.0f) * (f - 1.0f) * (f - 2.0f) * 0.5f;
+  const float w2 = -(f + 1.0f) * f * (f - 2.0f) * 0.5f;
+  const float w3 = (f + 1.0f) * f * (f - 1.0f) * (1.0f / 6.0f);
+
+  const int size = static_cast<int>(buffer_.size());
+  auto tap = [&](int delay_back) {
+    const int index = ((write_index_ - delay_back) % size + size) % size;
+    return buffer_[static_cast<size_t>(index)];
+  };
+  const float output =
+      w0 * tap(whole - 1) + w1 * tap(whole) + w2 * tap(whole + 1) + w3 * tap(whole + 2);
+
+  write_index_ = (write_index_ + 1) % size;
   return output;
 }
 

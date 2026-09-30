@@ -118,8 +118,8 @@ TEST_CASE("taps 3 and 4 arrive at their times, levels and pans and vanish at zer
     REQUIRE(delay.parameter_is_realtime_safe(6));
     REQUIRE(delay.set_parameter(6, 30.0f));
     REQUIRE(delay.config().tap3_ms == 30.0f);
-    REQUIRE(delay.parameter_is_realtime_safe(21));
-    REQUIRE_FALSE(delay.parameter_is_realtime_safe(22));
+    REQUIRE(delay.parameter_is_realtime_safe(22));
+    REQUIRE_FALSE(delay.parameter_is_realtime_safe(23));
   }
 }
 

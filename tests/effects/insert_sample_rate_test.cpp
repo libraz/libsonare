@@ -39,6 +39,7 @@
 /// - stereo delay tap 3, arrival time in ms: the time asked for.
 /// - stereo balance glide, settling time in ms: the 5 ms it is built for.
 /// - pitch shifter pre-delay, arrival time in ms: the time asked for.
+/// - pitch shifter anti-alias, low-pass corner in Hz: fs / (2 * ratio), read off a tone above it.
 /// - graphic EQ, a band's -3 dB bandwidth in Hz at a shared Q: computed from the analog
 ///   peaking section the band is built from.
 /// - amp cabinet (1x12 combo), the top roll-off's -3 dB corner in Hz: the corner itself.
@@ -1131,6 +1132,48 @@ double pre_delay_arrival_ms(double sample_rate) {
   return weight > 0.0 ? 1000.0 * moment / weight / sample_rate : 0.0;
 }
 
+// --- pitch shifter anti-alias -----------------------------------------------
+
+constexpr float kAntiAliasSemitones = 12.0f;
+constexpr double kAntiAliasProbeRatio = 1.15;
+constexpr double kAntiAliasTolerance = 0.02;
+constexpr int kLr4Order = 4;
+constexpr int kAntiAliasSkipGrains = 3;
+constexpr int kAntiAliasMeasureGrains = 20;
+
+/// RMS of a sine at @p tone_hz through the +12 semitone shifter, over a whole number of grains
+/// so the crossfade gains average out and the level follows the tone's amplitude alone.
+double shifted_tone_rms(double tone_hz, bool anti_alias, double sample_rate) {
+  PitchShifterConfig config;
+  config.semitones = kAntiAliasSemitones;
+  config.anti_alias = anti_alias;
+  PitchShifter shifter(config);
+  const int grain =
+      static_cast<int>(sample_rate * 2.0 * sonare::effects::modulation::kDefaultWindowMs * 0.001);
+  const int skip = kAntiAliasSkipGrains * grain;
+  const int samples = skip + kAntiAliasMeasureGrains * grain;
+  shifter.prepare(sample_rate, samples);
+  std::vector<float> left = sonare::test::generate_sine(samples, static_cast<float>(tone_hz),
+                                                        static_cast<int>(sample_rate), 0.5f);
+  std::vector<float> right = left;
+  float* channels[2] = {left.data(), right.data()};
+  shifter.process(channels, 2, samples);
+  return sonare::test::rms(left, static_cast<std::size_t>(skip));
+}
+
+/// Corner of the write-side low-pass in Hz. The digital fourth-order Linkwitz-Riley has
+/// |H| = 1 / (1 + (tan(pi f / fs) / tan(pi fc / fs))^4), so one tone a little above the asked-for
+/// corner gives the corner back; the tone sits off the frequency the shift maps onto Nyquist,
+/// where a sine's amplitude would depend on its phase.
+double anti_alias_corner_hz(double sample_rate) {
+  const double asked = sample_rate / (2.0 * std::exp2(kAntiAliasSemitones / 12.0));
+  const double tone = asked * kAntiAliasProbeRatio;
+  const double gain =
+      shifted_tone_rms(tone, true, sample_rate) / shifted_tone_rms(tone, false, sample_rate);
+  const double warped_ratio = std::pow(1.0 / gain - 1.0, 1.0 / kLr4Order);
+  return sample_rate / kPiD * std::atan(std::tan(kPiD * tone / sample_rate) / warped_ratio);
+}
+
 // --- parametric EQ ----------------------------------------------------------
 
 // Band-type selectors, in the order the insert's params decode them.
@@ -1648,6 +1691,23 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                  "the pitch shifter's pre-delay arrives at the same time in ms at both rates");
   }
 
+  // --- pitch shifter anti-alias: the low-pass corner, in hertz --------------
+  {
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      const double asked = rates[r] / (2.0 * std::exp2(kAntiAliasSemitones / 12.0));
+      measured[r] = anti_alias_corner_hz(rates[r]);
+      WARN("pitch shifter anti-alias corner" << at_rate(rates[r]) << ": " << measured[r] << " Hz");
+      tally.within(measured[r], asked, kAntiAliasTolerance,
+                   "the pitch shifter's anti-alias corner" + at_rate(rates[r]) +
+                       ", against fs / (2 * ratio)");
+    }
+    // The corner is a frequency, so the two rates place it at 2 * ratio / fs apart, not equal.
+    tally.within(measured[0] / kAltHostRate, measured[1] / kHostRate, kAntiAliasTolerance,
+                 "the pitch shifter's anti-alias corner sits at the same fraction of the rate at "
+                 "both rates");
+  }
+
   // The glide reaches the audio and not only the rotor's own accessor: two
   // instances differing in nothing but the time constant render differently
   // while the glide is in flight.
@@ -1793,5 +1853,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 218);
+  REQUIRE(tally.count() >= 221);
 }

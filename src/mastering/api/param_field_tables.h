@@ -301,6 +301,16 @@ constexpr const char* enum_choice_name(sonare::effects::common::MixLaw value) {
   return nullptr;
 }
 
+constexpr const char* enum_choice_name(sonare::effects::modulation::DelayInterpolation value) {
+  switch (value) {
+    case sonare::effects::modulation::DelayInterpolation::kLinear:
+      return "linear";
+    case sonare::effects::modulation::DelayInterpolation::kLagrange3:
+      return "lagrange3";
+  }
+  return nullptr;
+}
+
 constexpr const char* enum_choice_name(sonare::effects::modulation::PreFilterMode value) {
   switch (value) {
     case sonare::effects::modulation::PreFilterMode::kOff:

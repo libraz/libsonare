@@ -292,6 +292,7 @@ TEST_CASE("every enum a flat parameter selects has unique names within the scan"
   (void)declared_names<m::saturation::QuantizerMode>();
   (void)declared_names<sonare::effects::modulation::PhaserMixMode>();
   (void)declared_names<sonare::effects::modulation::PreFilterMode>();
+  (void)declared_names<sonare::effects::modulation::DelayInterpolation>();
   (void)declared_names<m::multiband::CrossoverMode>();
   (void)declared_names<m::eq::LinearPhaseEqConfig::Resolution>();
   (void)declared_names<m::eq::PultecComponentModel>();

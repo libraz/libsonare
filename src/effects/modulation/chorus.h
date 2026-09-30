@@ -80,6 +80,8 @@ struct ChorusConfig {
   float feedback = 0.0f;
   /// Phase of the right LFO ahead of the left, in degrees, clamped to [0, 180].
   float phase_deg = 90.0f;
+  /// How the delay lines read between samples; see DelayInterpolation.
+  DelayInterpolation interpolation = DelayInterpolation::kLinear;
 };
 
 class Chorus : public rt::ProcessorBase {
@@ -99,6 +101,7 @@ class Chorus : public rt::ProcessorBase {
   //   5 = feedback (clamped to [-0.95, 0.95] in process(); the sign is carried)
   //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
   //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
+  //   8 = interpolation (0 linear, 1 Lagrange3)
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
