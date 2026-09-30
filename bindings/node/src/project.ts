@@ -1,7 +1,5 @@
 import { addon } from './native.js';
 import type {
-  AlignTakeToReferenceRequest,
-  AlignTakeToReferenceResult,
   BuiltinInstrumentConfig,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
@@ -41,7 +39,6 @@ import type {
   ProjectTranscribeRequest,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
-  SynthEnumTables,
   SynthPatch,
   SynthWaveform,
   WarpMode,
@@ -68,6 +65,9 @@ import {
   warpModeValue,
 } from './value_coercion.js';
 
+export * from './synth_catalog.js';
+export * from './take_alignment.js';
+
 export type { ProjectAutomationTargetKind } from './types.js';
 export {
   PROJECT_AUTOMATION_TARGET_OPAQUE,
@@ -83,153 +83,6 @@ export {
  */
 export function projectAbiVersion(): number {
   return addon.projectAbiVersion();
-}
-
-/**
- * NativeSynth preset catalog names (`'sine'`, `'saw-lead'`, `'e-piano'`,
- * `'drum-kit'`, ...). Use these to discover valid {@link SynthPatch} preset
- * names instead of hardcoding magic strings.
- */
-export function synthPresetNames(): string[] {
-  return addon.synthPresetNames();
-}
-
-/**
- * GS rhythm-set name a rhythm part's `program` selects (`'Standard'`,
- * `'Room'`, `'Jazz'`, ...), or `null` when the module's own tone map defines
- * no set there.
- *
- * @remarks
- * The answer is the module's own map, which is the newest one and reaches
- * every set this build voices; a file selecting an older map reaches fewer.
- */
-export function synthGsDrumKitName(program: number): string | null {
-  return addon.synthGsDrumKitName(program);
-}
-
-/**
- * Whether the GS rhythm set at `program` is voiced apart from Standard: `true`
- * when at least one drum note differs, `false` when the set renders exactly as
- * Standard, `null` when no set sits at `program`.
- *
- * @remarks
- * Derived by applying the set to every note's resolved patch and comparing, so
- * the answer follows the voicing rather than a list that has to be kept in step
- * with it. Four sets GS fills with one-shots share the Standard voicing
- * deliberately, so a picker built from the set list alone offers four choices
- * that change nothing — annotate or disable them with this.
- *
- * @example
- * ```ts
- * const kits = Array.from({ length: 128 }, (_, program) => ({ program, name: synthGsDrumKitName(program) }))
- *   .filter((kit): kit is { program: number; name: string } => kit.name !== null)
- *   .map((kit) => ({ ...kit, placeholder: synthGsDrumKitIsVoicedApart(kit.program) === false }));
- * ```
- */
-export function synthGsDrumKitIsVoicedApart(program: number): boolean | null {
-  const r: number = addon.synthGsDrumKitIsVoicedApart(program);
-  return r < 0 ? null : r === 1;
-}
-
-/**
- * Whether melodic Bank Select `bank` on `program` is voiced apart from the
- * capital tone: `true` when the bank has a patch of its own, `false` when it
- * resolves to the capital, `null` when either argument is outside `[0, 127]` —
- * both are seven-bit MIDI values, so `128` is out of range rather than the drum
- * bank here.
- *
- * @remarks
- * Resolving an unvoiced variation to its capital is what GS specifies, so a
- * `false` is correct behaviour rather than a gap — but only this query
- * separates it from a bank that is voiced, which otherwise takes rendering both
- * and comparing. Accepts the GS Bank Select MSB and the GM2 LSB alike, since
- * both address the same variation.
- */
-export function synthGsVariationIsVoicedApart(bank: number, program: number): boolean | null {
-  const r: number = addon.synthGsVariationIsVoicedApart(bank, program);
-  return r < 0 ? null : r === 1;
-}
-
-/**
- * Fetch a named catalog preset as a {@link SynthPatch} (the preset name plus
- * the wrapper-section values), so hosts can inspect a preset and tweak fields
- * before binding it. A `"va:"` routing prefix is accepted; unknown names
- * throw.
- */
-export function synthPresetPatch(name: string): SynthPatch {
-  return addon.synthPresetPatch(name);
-}
-
-/**
- * Controller-profile preset names (`'gm'`, `'breath'`, `'breath-aftertouch'`,
- * `'mpe'`). Use these with {@link RealtimeEngine.setControllerProfile} instead
- * of hardcoding magic strings; an unknown name throws.
- */
-export function controllerProfileNames(): string[] {
-  return addon.controllerProfileNames();
-}
-
-/** Return the canonical NativeSynth enum tables from the native C oracle. */
-export function synthEnumTables(): SynthEnumTables {
-  return addon._synthEnumTables();
-}
-
-/**
- * Align one take to a reference timeline, producing the warp anchors that place
- * the take under it.
- *
- * Measures a chromagram for each signal and aligns them, then reduces the
- * alignment to anchors {@link Project.setWarpMap} accepts: at least two finite,
- * strictly increasing pairs. The reduction is needed rather than decorative — an
- * alignment path advances one axis at a time, so the raw correspondence repeats a
- * coordinate wherever one signal carries more frames than the other, and those
- * pairs are refused as a warp map.
- *
- * **The anchors are oriented for the take's own clip.** `warpSample` is a
- * position on the REFERENCE timeline and `sourceSample` the corresponding
- * position in the TAKE, which is the direction a clip whose source is that take
- * needs. This is why the entry point exists rather than the core alignment being
- * exposed directly: that one names its arguments the other way round, so passing
- * the reference as its reference yields the inverse map and nothing reports it.
- *
- * `alignment` reports how well the alignment was conditioned, so a take the
- * reference genuinely fits can be told from one it does not. It is descriptive
- * only: no field makes the call fail.
- *
- * @example
- * ```typescript
- * const { anchors, alignment } = alignTakeToReference({
- *   reference: guide,
- *   take: comp,
- *   sampleRate: 48000,
- * });
- * console.log(alignment.meanResidualFrames);
- * project.setWarpMap({ id: 1, name: 'comp', anchors });
- * project.setClipWarpRef(takeClipId, 1);
- * ```
- *
- * @throws `RangeError` when either buffer is empty or carries a non-finite
- *         sample, or when `sampleRate` is out of range; `TypeError` when
- *         `hopLength` or `binsPerOctave` carries the wrong type; and a
- *         `SonareError` with `InvalidParameter` for a `binsPerOctave` that is not
- *         a multiple of 12 or that `sampleRate` cannot carry, and when the two
- *         signals produce no pair of distinct anchors — which is what an
- *         unalignable pair looks like, and is reported rather than answered with
- *         a map a caller cannot use.
- */
-export function alignTakeToReference(
-  request: AlignTakeToReferenceRequest,
-): AlignTakeToReferenceResult {
-  assertSamples('alignTakeToReference', request.reference, true, 'reference');
-  assertSamples('alignTakeToReference', request.take, true, 'take');
-  assertSampleRate('alignTakeToReference', request.sampleRate);
-  // The config keys are forwarded unvalidated on purpose: both default at 0,
-  // which the library reads as "keep the default", so the addon's property
-  // readers are the layer that refuses a wrong type by name.
-  return addon.alignTakeToReference(request.reference, request.take, request.sampleRate, {
-    hopLength: request.hopLength,
-    binsPerOctave: request.binsPerOctave,
-  });
 }
 
 /**
