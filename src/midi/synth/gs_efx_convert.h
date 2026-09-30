@@ -72,6 +72,14 @@ void gs_efx_pan(uint8_t value, float* left, float* right) noexcept;
 /// do not sum to a constant).
 void gs_efx_balance(uint8_t value, float* direct, float* effect) noexcept;
 
+/// PAN byte -> a balance position in [-1, 1]: the position whose constant-power
+/// pair has the measured left/right ratio. A receiver applies its own pan law.
+float gs_efx_pan_position(uint8_t value) noexcept;
+
+/// BALANCE byte -> the effect's share effect / (direct + effect) of the measured
+/// pair, the fraction a dry/wet control takes.
+float gs_efx_balance_fraction(uint8_t value) noexcept;
+
 /// AZIMUTH byte -> one of the 31 measured stereo positions, in degrees.
 int gs_efx_azimuth_deg(uint8_t value) noexcept;
 
@@ -115,8 +123,7 @@ int gs_efx_enum_index(uint8_t value, int count) noexcept;
 
 /// @name Row vocabulary
 /// The generated binding rows carry these as plain integers. Measured classes
-/// 0-13 are numbered by gs_efx_tables.h; the two below continue that run, and
-/// gs_efx_bindings.h names the ratio one kGsEfxClassRatio (14).
+/// 0-13 are numbered by gs_efx_tables.h; the two below continue that run.
 /// @{
 inline constexpr uint8_t kGsEfxRowTranslated = 0;  ///< Row reads a measured table or ratio.
 inline constexpr uint8_t kGsEfxRowDesigned = 1;    ///< Row reads a carried class or a designed law.

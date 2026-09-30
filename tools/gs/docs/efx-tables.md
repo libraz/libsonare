@@ -27,7 +27,7 @@ The header names the first two `kGsEfxPrinted` and `kGsEfxMeasured`. `reach.reac
 **The other two are answered on the libsonare side, by `make gs-efx-coverage`.** It walks the hand-written binding files under `tools/gs/efx-bindings/` and adjudicates every printed (type, slot) into exactly one of five forms:
 
 ```
-GS EFX coverage: printed=<n> translated=<n> state=<n> unmapped=<n> unreadable=<n> builder=<n>
+GS EFX coverage: printed=<n> translated=<n> designed=<n> enables=<n>
 ```
 
 It fails while the five do not add up to the first, so a parameter nobody has looked at reads as a shortfall rather than as silence. `src/midi/synth/docs/gs.md` holds what each form means and what stops a row being filed under whichever one is cheapest to defend.

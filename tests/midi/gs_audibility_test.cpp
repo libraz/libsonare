@@ -126,10 +126,16 @@ enum class Setup : uint8_t {
   kEfxTypeOnly,   ///< An EFX type is selected; no part is routed through it.
   kEfxRouteOnly,  ///< Part 1 is routed; no type is selected.
   kEfxActive,     ///< Both, so an insertion chain is built and the part bussed.
-  kEqLifted,      ///< Both master-EQ bands off 0 dB, where the EQ is a no-op.
-  kVolumeCut,     ///< MASTER VOLUME pulled down, for the reset-command rows.
-  kBendApplied,   ///< The melodic part bent fully up, where a bend range scales.
-  kModWheelUp,    ///< The melodic part's CC1 raised, where a mod depth scales.
+  /// That, with both EFX CONTROL depths at full and CC1 raised, so a source
+  /// pointed at CC1 moves the type's `+` and `#` slots.
+  kEfxControlDepths,
+  /// That, with both EFX CONTROL sources on CC1 and CC1 raised, so a depth
+  /// scales a source that is off its rest position.
+  kEfxControlSources,
+  kEqLifted,     ///< Both master-EQ bands off 0 dB, where the EQ is a no-op.
+  kVolumeCut,    ///< MASTER VOLUME pulled down, for the reset-command rows.
+  kBendApplied,  ///< The melodic part bent fully up, where a bend range scales.
+  kModWheelUp,   ///< The melodic part's CC1 raised, where a mod depth scales.
   /// The melodic part's channel pressure raised, with CC1 raised beside it.
   /// The wheel is there because LFO1 is shared: aftertouch powers on with no
   /// pitch depth of its own, so its LFO RATE destination would be retuning an
@@ -178,6 +184,10 @@ const char* setup_name(Setup setup) {
       return "efx-route";
     case Setup::kEfxActive:
       return "efx-active";
+    case Setup::kEfxControlDepths:
+      return "efx-control-depths";
+    case Setup::kEfxControlSources:
+      return "efx-control-sources";
     case Setup::kEqLifted:
       return "eq-lifted";
     case Setup::kVolumeCut:
@@ -241,6 +251,10 @@ std::vector<std::vector<uint8_t>> setup_writes(Setup setup, uint8_t unit = 0) {
       return {route};
     case Setup::kEfxActive:
       return {type, route};
+    case Setup::kEfxControlDepths:
+      return {type, route, dt1(0x40031C, {0x7F}), dt1(0x40031E, {0x7F})};
+    case Setup::kEfxControlSources:
+      return {type, route, dt1(0x40031B, {0x01}), dt1(0x40031D, {0x01})};
     case Setup::kEqLifted:
       // +12 dB low, -12 dB high, both corners left at their defaults so a FREQ
       // probe is the only thing that moves them.
@@ -282,12 +296,16 @@ Setup setup_for(const GsAddressEntry& row) {
     case GsParam::kEfxSendToReverb:
     case GsParam::kEfxSendToChorus:
     case GsParam::kEfxSendToDelay:
-    case GsParam::kEfxControlSource1:
-    case GsParam::kEfxControlDepth1:
-    case GsParam::kEfxControlSource2:
-    case GsParam::kEfxControlDepth2:
     case GsParam::kEfxSendEqSwitch:
       return Setup::kEfxActive;
+    // A CONTROL moves a slot only while its source is off rest and its depth
+    // is off centre, so each half of the pair is probed with the other set.
+    case GsParam::kEfxControlSource1:
+    case GsParam::kEfxControlSource2:
+      return Setup::kEfxControlDepths;
+    case GsParam::kEfxControlDepth1:
+    case GsParam::kEfxControlDepth2:
+      return Setup::kEfxControlSources;
     // The type is the probe, so the setup supplies only the routing.
     case GsParam::kEfxType:
       return Setup::kEfxRouteOnly;
@@ -398,6 +416,11 @@ Probe probe_for(const GsAddressEntry& row) {
       // 7F 7F is a type no adapter realises, so no chain is built and the part
       // is never bussed. 01 10 is Overdrive, which realises.
       return {{0x01, 0x10}, "the generic value selects a type nothing realises"};
+    case GsParam::kEfxControlSource1:
+    case GsParam::kEfxControlSource2:
+      // hi is 7F, a source that is off. 01 is CC1, which the setup raises;
+      // Overdrive carries both marks, so either CONTROL has a slot to move.
+      return {{0x01}, "hi names no source"};
     case GsParam::kPartCtrlSourceNumber:
       // hi points both sources at CC127, which nothing sends. The setup moves
       // expression, so 11 is the number that makes the write mean something —
@@ -582,7 +605,8 @@ void setup_channel_state(Sf2Player& p, Setup setup) {
   const uint8_t ch = gs_part_block_to_channel(kMelodicBlock);
   if (setup == Setup::kBendApplied) {
     p.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, ch, 16383)));
-  } else if (setup == Setup::kModWheelUp) {
+  } else if (setup == Setup::kModWheelUp || setup == Setup::kEfxControlDepths ||
+             setup == Setup::kEfxControlSources) {
     cc(p, ch, 1, 127);
   } else if (setup == Setup::kAftertouchUp) {
     p.on_event(0, event(sonare::midi::make_midi1_channel_pressure(0, ch, 127)));

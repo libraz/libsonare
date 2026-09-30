@@ -154,7 +154,7 @@ These are the rules a reviewer will check a change against, and most of them are
 - **Every printed insertion-effect parameter is adjudicated, and the adjudication is a file rather than a judgement.** `tools/gs/efx-bindings/*.json` gives each of the 770 printed (type, slot) pairs exactly one of five forms — translated to an insert control, held as a documented state, unmapped because nothing here realises that effect type, unreadable, or the chain skeleton's own — under the rules in that directory's `SCHEMA.md`. `make gs-efx-coverage` tallies them and fails while they do not add up:
 
   ```
-  GS EFX coverage: printed=<n> translated=<n> state=<n> unmapped=<n> unreadable=<n> builder=<n>
+  GS EFX coverage: printed=<n> translated=<n> designed=<n> enables=<n>
   ```
 
   The equation alone is weak — it balances just as well with every row filed under the form easiest to defend — so the form is measured against the chain the row's type actually builds rather than taken on the row's word, and a translated row must also name a control its insert publishes as realtime-automatable or appear on a reasoned exception list. Adding a row means running the check, not arguing for the classification.

@@ -137,6 +137,7 @@ class DriftTest(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         return proc.returncode, [ln for ln in proc.stdout.splitlines() if ln.strip()]
 

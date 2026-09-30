@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Report where the soundings archive has moved past what the GS EFX tree recorded.
 
 A designed row, an enables row and a classic overlay entry each record the condition under
@@ -36,9 +35,7 @@ MEASURED_SOURCES = ("law", "measured")
 # taken across types, `<dir>/40-03-AA-...` (address only, the claim's `about.types` gives types).
 RECORD_TYPED = re.compile(r"/([0-9A-F]{2})-([0-9A-F]{2})-([0-9A-F]{2})(?:-|\.json)")
 RECORD_ADDRESS = re.compile(r"/40-03-([0-9A-F]{2})-")
-TYPE_ROW = re.compile(
-    r'\{0x([0-9A-Fa-f]{4}),[^"{}]*"([0-9a-f]{64})",\s*([-+0-9.eE]+)f?,'
-)
+TYPE_ROW = re.compile(r'\{0x([0-9A-Fa-f]{4}),[^"{}]*"([0-9a-f]{64})",\s*([-+0-9.eE]+)f?,')
 
 
 class Stop(Exception):
@@ -204,7 +201,7 @@ class Archive:
             if path.is_file():
                 items = self.json(path).get("what_no_candidate_here_predicts", [])
                 return {hashlib.sha1(t.encode("utf-8")).hexdigest()[:12] for t in items}
-        raise Stop(f"no candidates/whole-{sorted(names)[0]}.json in {self.inferences}")
+        raise Stop(f"no candidates/whole-{min(names)}.json in {self.inferences}")
 
 
 def check_key(archive: Archive, reaches: set, key: str, value, where: str, findings: list) -> None:

@@ -63,6 +63,79 @@
 
 namespace sonare::midi::synth {
 
+/// One stage of a realised insertion unit, at the same position as the stage
+/// gs_efx_insert_chain (or the classic unit) describes, so a queued update
+/// addresses it by index. The identity fields are read by the control thread
+/// only; `fade` and `enabled_now` belong to the audio thread.
+struct Sf2EfxStageRt {
+  /// Null where the factory could not build the stage; the position is kept
+  /// and nothing runs there.
+  std::unique_ptr<rt::ProcessorBase> proc;
+  std::string name;
+  uint8_t branch = kGsEfxBranchFront;
+  uint8_t ordinal = 0;
+  /// CONTROL thread: the enable state last realised or queued, which is what
+  /// the next edit's enable list is compared against.
+  mutable bool enabled_target = true;
+  /// AUDIO thread: 1 runs the stage, 0 passes its input through untouched with
+  /// the processor's state frozen, in between crossfades dry to wet.
+  mutable float fade = 1.0f;
+  /// AUDIO thread: the enable state `fade` is moving toward.
+  mutable bool enabled_now = true;
+};
+
+/// One realised insertion unit: its stages in chain order and the scratch its
+/// parallel halves and fades run in.
+struct Sf2EfxUnitRt {
+  GsEfxRealization realization = GsEfxRealization::kModern;
+  std::vector<Sf2EfxStageRt> stages;
+  /// Dry copy, half A and half B, each stereo x the render chunk. Allocated on
+  /// the control thread; the audio thread writes it through the const snapshot.
+  mutable std::vector<float> scratch;
+  /// Fade movement per sample: a whole fade takes kSf2EfxFadeMs.
+  float fade_step = 1.0f;
+};
+
+/// Length of the linear crossfade a stage's enable switch takes.
+inline constexpr float kSf2EfxFadeMs = 5.0f;
+
+/// One control an EFX CONTROL writes: stage @c stage_index of unit 0 and the
+/// parameter it takes. A modern destination reads the slot byte through
+/// @c binding; a classic one (null @c binding) takes the byte itself in slot
+/// @c param_id.
+struct Sf2EfxControlDest {
+  uint8_t stage_index = 0;
+  uint32_t param_id = 0;
+  const GsEfxBindingRow* binding = nullptr;
+};
+
+/// EFX CONTROL 1 or 2 of unit 0 (40 03 1B-1E), resolved when the unit is built:
+/// the source of part @c part moves slot @c slot (the type's `+` or `#` slot)
+/// away from its base byte within [@c lo, @c hi], scaled by the depth. Built
+/// only where the source is a controller and the type marks a slot; otherwise
+/// @c n_dest is 0 and the control is inert. The identity fields are read by the
+/// control thread; the three mutable ones belong to the audio thread.
+struct Sf2EfxControlRt {
+  uint8_t part = 0;
+  uint8_t source = 0;    ///< Raw CONTROL SOURCE byte: 01-5F CC1-95, 60 CAf, 61 bend.
+  uint8_t depth = 0x40;  ///< Raw CONTROL DEPTH byte; 40 is no modulation.
+  uint8_t slot = 0;
+  uint8_t lo = 0;  ///< Lowest byte the slot takes.
+  uint8_t hi = 0;  ///< Highest byte the slot takes.
+  /// How many evenly spaced bytes across [lo, hi] the slot prints as states
+  /// (00/7F is two); 0 where every byte between is a value.
+  uint8_t states = 0;
+  uint8_t n_dest = 0;
+  std::array<Sf2EfxControlDest, 4> dest{};
+  /// AUDIO thread: the slot's unmodulated byte, moved by kControlBase.
+  mutable uint8_t base_byte = 0;
+  /// AUDIO thread: the byte the destinations last received.
+  mutable uint8_t applied_byte = 0;
+  /// AUDIO thread: an update rewrote a destination, so the next block writes it
+  /// whether or not the modulated byte moved.
+  mutable bool dirty = false;
+};
+
 /// A realised per-part insert routing, handed to the audio thread as one
 /// immutable-lifetime snapshot. `chains[part]` is the series of inserts run on
 /// that part's stereo bus (a config kProcessor slot, or a GS-EFX-installed
@@ -80,7 +153,12 @@ struct Sf2RealizedEfx {
   /// parts assigned to a unit sum into it and it runs once, which is what an
   /// effect is rather than a limit of the machine (docs/gs.md). Unit 0 is the
   /// spec one; 1-15 are the extension's.
-  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, kGsEfxUnitCount> unit_chains{};
+  std::array<Sf2EfxUnitRt, kGsEfxUnitCount> units{};
+  /// EFX CONTROL 1 and 2, which only unit 0 has.
+  std::array<Sf2EfxControlRt, 2> controls{};
+  /// Which build this is. A queued update carries the generation it was
+  /// resolved against and is dropped by any other snapshot.
+  uint32_t generation = 0;
   /// The unit each part merges into after its own insert, or kNoUnit. A part
   /// with no unit goes straight from its own bus to the mix.
   static constexpr uint8_t kNoUnit = 0xFF;
@@ -172,6 +250,9 @@ struct Sf2PlayerConfig {
   /// thread — realise_gs_efx() allocates. The live engine leaves it false and
   /// pumps EFX from the control thread instead.
   bool realize_efx_inline = false;
+  /// Which layer realises the GS insertion units, for every unit at once. The
+  /// modern chain is the default; classic runs each type's generated graph.
+  GsEfxRealization gs_efx_realization = GsEfxRealization::kModern;
   /// ~8 Hz first-order DC blocker on the summed mix bus. What motivates it is
   /// the synth-fallback floor, which renders the same physical-model voices as
   /// the NativeSynth host: a sustained wind or reed part leaves a DC offset on
@@ -186,6 +267,21 @@ struct Sf2PlayerConfig {
   GsEffectsConfig effects;
 #endif
 };
+
+/// CONTROL thread: realise one insertion unit. kModern builds @p stages
+/// through @p factory, keeping a null processor where a stage cannot be built;
+/// kClassic ignores @p stages and makes the type's classic unit the only stage,
+/// holding @p efx's bytes. Type 00 00 (Thru) realises no stage either way.
+/// Allocates.
+Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>& stages,
+                                GsEfxRealization realization,
+                                const decltype(Sf2PlayerConfig::insert_factory)& factory,
+                                double sample_rate, int max_block);
+
+/// AUDIO thread: run @p unit in place over @p n frames (n <= the max_block it
+/// was built for): the front stages, then each half on its own copy of their
+/// output summed back, then the back stages. Allocation-free.
+void sf2_run_efx_unit(const Sf2EfxUnitRt& unit, float* left, float* right, int n) noexcept;
 
 class Sf2Player final : public MidiInstrument {
  public:
@@ -322,6 +418,26 @@ class Sf2Player final : public MidiInstrument {
   /// Sf2RealizedEfx and publishes it; the audio thread swaps it in wait-free at
   /// the next block.
   void realize_gs_efx();
+
+  /// CONTROL thread: switch every insertion unit to @p realization. A change
+  /// rebuilds all units, so their tails are cut. Allocates.
+  void set_gs_efx_realization(GsEfxRealization realization);
+  GsEfxRealization gs_efx_realization() const noexcept { return config_.gs_efx_realization; }
+
+  /// CONTROL thread: realise and edit the units over @p rows instead of the
+  /// generated binding tables, as gs_efx_insert_chain's own overload does;
+  /// nullptr returns to the generated tables. @p rows must outlive the player.
+  /// Takes effect at the next build (test seam).
+  void set_gs_efx_rows(const GsEfxRowView* rows) noexcept { efx_rows_ = rows; }
+
+  /// How many times the insertion units have been built and published; an edit
+  /// applied in place leaves it where it was (test/diagnostic).
+  uint32_t gs_efx_generation() const noexcept { return efx_generation_; }
+
+  /// The byte EFX CONTROL @p control (0 = CONTROL 1) last wrote into its slot
+  /// in the adopted snapshot, or -1 where that control drives nothing. Written
+  /// by the audio thread, so read it between process() calls (test/diagnostic).
+  int gs_efx_control_byte(size_t control) const noexcept;
 
   /// CONTROL thread: parse a GS SysEx for its insertion-effect content, update
   /// the control-owned EFX mirror, and republish the realised inserts so a live
@@ -842,27 +958,39 @@ class Sf2Player final : public MidiInstrument {
   /// audio-side channel state.
   bool apply_efx_sysex(const uint8_t* data, size_t size) noexcept;
 
-  /// A pending GS EFX parameter update handed from the control thread to the
-  /// audio thread: apply set_parameter(@c param_id, @c value) to stage
-  /// @c stage_index of part @c part's realised insert chain.
+  /// What an EfxParamUpdate does to its stage.
+  enum class EfxUpdateKind : uint8_t {
+    kParam,        ///< set_parameter(param_id, value) on a modern stage.
+    kEnable,       ///< Turn the stage on (value != 0) or off, through its fade.
+    kClassicByte,  ///< Write byte `value` into slot `param_id` of a classic unit.
+    kControlBase,  ///< Byte `value` is the new base of EFX CONTROL `stage_index`.
+  };
+
+  /// A pending GS EFX update handed from the control thread to the audio
+  /// thread, addressed to stage @c stage_index of insertion unit @c unit in the
+  /// snapshot of generation @c generation.
   struct EfxParamUpdate {
+    EfxUpdateKind kind = EfxUpdateKind::kParam;
     uint8_t unit = 0;
     uint8_t stage_index = 0;
     uint32_t param_id = 0;
     float value = 0.0f;
+    uint32_t generation = 0;
   };
 
   /// Wait-free single-producer (control thread) / single-consumer (audio thread)
-  /// ring of pending EFX parameter updates. A parameter-only GS EFX edit is
-  /// resolved to updates on the control thread and applied on the audio thread
-  /// (serialized with process()), so a live insert processor is never mutated
-  /// across threads and its DSP state (reverb/delay tails) is never rebuilt away.
+  /// ring of pending EFX updates. A parameter-only GS EFX edit is resolved to
+  /// updates on the control thread and applied on the audio thread (serialized
+  /// with process()), so a live insert processor is never mutated across threads
+  /// and its DSP state (reverb/delay tails) is never rebuilt away.
   /// Held by unique_ptr so Sf2Player stays movable (std::atomic is not movable).
   class EfxParamQueue {
    public:
-    /// Capacity (power of two). GS EFX parameter edits are sparse; when the ring
-    /// is full a push is dropped, which is harmless because the next rebuild
-    /// bakes the current parameter values in from the EFX mirror.
+    /// Capacity (power of two). When the ring is full a push fails. A failed
+    /// kParam is dropped: every edit re-sends all of its unit's keys, so the
+    /// value is stale only until the unit's next edit or rebuild. Any other kind
+    /// carries state no later edit re-sends, so its failure turns the edit into
+    /// a rebuild, which bakes the whole EFX mirror in.
     static constexpr size_t kCapacity = 128;
     static_assert((kCapacity & (kCapacity - 1)) == 0, "kCapacity must be a power of two");
 
@@ -949,14 +1077,36 @@ class Sf2Player final : public MidiInstrument {
   void drain_gs_system_updates() noexcept;
 
   /// CONTROL thread: resolve a parameter-only GS EFX edit against the live
-  /// published chain (reading only the const parameter-descriptor bridge) and
-  /// enqueue the resulting set_parameter tuples for the audio thread. Returns
-  /// true when a full rebuild is required instead (no live chain, no automatable
-  /// parameter matched, or a parameter that is not realtime-safe).
-  bool enqueue_efx_param_updates(size_t unit);
+  /// published unit (reading only the const parameter-descriptor bridge) and
+  /// enqueue the resulting updates for the audio thread: kParam and kEnable for
+  /// a modern unit, kClassicByte for each slot of a classic unit that differs
+  /// from @p previous_params, and kControlBase for each EFX CONTROL whose slot
+  /// moved. Returns true when a full rebuild is required
+  /// instead (no live unit, a realization or stage shape other than the
+  /// published one, nothing to enqueue, a parameter that is not realtime-safe,
+  /// or a failed push of anything but kParam).
+  bool enqueue_efx_param_updates(size_t unit, const std::array<uint8_t, 20>& previous_params);
+  /// CONTROL thread: build and publish a fresh snapshot under the next
+  /// generation. Allocates.
+  void publish_realized_efx();
+  /// Generation of the last snapshot publish_realized_efx() handed over.
+  uint32_t efx_generation_ = 0;
+  /// Rows the units are realised over in place of the generated tables, or null.
+  const GsEfxRowView* efx_rows_ = nullptr;
+  /// The modern stage list of @p efx, over efx_rows_ when set.
+  std::vector<GsEfxStage> efx_stages(const GsEfx& efx) const {
+    return efx_rows_ != nullptr ? gs_efx_insert_chain(efx, *efx_rows_) : gs_efx_insert_chain(efx);
+  }
   /// AUDIO thread: apply every pending EFX parameter update to the current
   /// published chain, serialized with process(). RT-safe (no alloc, no lock).
   void drain_efx_param_updates() noexcept;
+  /// CONTROL thread: resolve unit 0's EFX CONTROL 1/2 onto @p out's unit 0,
+  /// which must already be built.
+  void build_efx_controls(Sf2RealizedEfx& out) const;
+  /// AUDIO thread, after drain_efx_param_updates(): move each EFX CONTROL's slot
+  /// to where its source now puts it, writing the destinations only when the
+  /// byte moved or an update rewrote them. RT-safe (no alloc, no lock).
+  void apply_efx_controls() noexcept;
 
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;

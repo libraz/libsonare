@@ -17,8 +17,7 @@ read between the printed endpoints a row carries in ``range``. It is admitted
 only where those endpoints force a whole step per byte, and the header is
 refused otherwise, because a rounded step is a conversion nobody measured.
 
-Two renderings are emitted. ``kGsEfxBindings`` holds the translated rows in
-the older shape. ``kGsEfxBindingRows`` holds translated and designed rows as
+``kGsEfxBindingRows`` holds translated and designed rows as
 ``GsEfxBindingRow`` (declared in ``gs_efx_convert.h``), each carrying its law
 by value -- a designed law resolved from ``tools/gs/efx-designed-laws.json``,
 a ratio's endpoints -- and ``kGsEfxEnables`` holds the enables rows.
@@ -68,8 +67,6 @@ NAME_INDEX_LIMIT = 0xFFFF
 
 # The spelling of a printed byte range, as the archive's printed_values has it.
 BYTE_RANGE_RE = re.compile(r"^([0-9A-F]{2})–([0-9A-F]{2})$")
-
-NO_RANGE = 0xFF
 
 
 def _module(name: str, path: Path):
@@ -147,60 +144,6 @@ def printed_range(row: dict, where: str) -> tuple[int, int, int, int]:
     return lo_byte, hi_byte, lo_unit, hi_unit
 
 
-def collect(rows: list[dict], classes: dict, order: tuple[str, ...]) -> list[dict]:
-    """One emitted entry per (type, slot, key) a binding row translates."""
-    laws = {name: list(body["tables"]) for name, body in classes.items()}
-    laws.update({name: list(tables) for name, tables in BINDING_LAWS.items()})
-    numbering = list(order) + list(BINDING_LAWS)
-    out: list[dict] = []
-    for row in rows:
-        if "stage" not in row or "designed" in row:
-            continue
-        where = f"{row['_file']}[{row['_index']}]"
-        gs_class = row.get("class")
-        table = row.get("table")
-        if gs_class not in numbering:
-            sys.exit(f"{where}: class {gs_class!r} is not one the tables declare")
-        tables = laws[gs_class]
-        if table not in tables:
-            sys.exit(f"{where}: {gs_class!r} has no table {table!r}")
-        if gs_class in BINDING_LAWS:
-            ends = printed_range(row, where)
-        elif "range" in row:
-            sys.exit(f'{where}: "range" is read by the ratio law only')
-        else:
-            ends = None
-        for key in keys_of(row):
-            out.append(
-                {
-                    "type": parsed_type(row["type"]),
-                    "slot": int(row["slot"]),
-                    "conversion_class": numbering.index(gs_class),
-                    "table": tables.index(table),
-                    "stage": str(row["stage"]),
-                    "key": key,
-                    "range": ends,
-                    "label": f"{gs_class}.{table}",
-                }
-            )
-    # Sorted so a type's rows are contiguous and the walk over one unit's
-    # twenty slots visits them in slot order.
-    out.sort(key=lambda entry: (entry["type"], entry["slot"], entry["key"]))
-    duplicates = set()
-    seen = set()
-    for entry in out:
-        address = (entry["type"], entry["slot"], entry["key"])
-        if address in seen:
-            duplicates.add(address)
-        seen.add(address)
-    if duplicates:
-        spelled = ", ".join(
-            f"{type_:#06x} slot {slot} {key}" for type_, slot, key in sorted(duplicates)
-        )
-        sys.exit(f"two binding rows drive the same control: {spelled}")
-    return out
-
-
 def out_of(key: str) -> str:
     """Which quantity a row's control takes from a table that yields two."""
     spelled = key.lower()
@@ -238,55 +181,70 @@ def collect_rows(
     numbering = row_class_numbering(order)
     entries: list[dict] = []
     enables: list[dict] = []
-    for row in rows:
-        where = f"{row['_file']}[{row['_index']}]"
-        form = coverage.row_form(row, where)
-        entry = {
-            "type": parsed_type(row["type"]),
-            "slot": int(row["slot"]),
-            "ordinal": int(row.get("ordinal", 0)),
-            "mark": row.get("printed_mark"),
-            "law": None,
-            "byte": (0, 0),
-            "unit": (0, 0),
-        }
+    for source in rows:
+        where = f"{source['_file']}[{source['_index']}]"
+        form = coverage.row_form(source, where)
         if form == "enables":
-            enables.append(dict(entry, **enable_of(row["enables"], where)))
+            enables.append(enable_entry(source, where, form))
             continue
-        if form == "translated":
-            entry["kind"] = "kGsEfxRowTranslated"
-            gs_class, table = row.get("class"), row.get("table")
-            if gs_class in BINDING_LAWS:
-                lo_byte, hi_byte, lo_unit, hi_unit = printed_range(row, where)
-                entry["byte"], entry["unit"] = (lo_byte, hi_byte), (lo_unit, hi_unit)
-        elif form == "designed":
-            entry["kind"] = "kGsEfxRowDesigned"
-            if "printed_values" not in row:
-                sys.exit(f"{where}: a designed row needs printed_values")
-            entry["byte"] = coverage.byte_domain(row["printed_values"])
-            law = row["designed"]["law"]
-            if row["designed"]["basis"] == "invented":
-                entry["law"] = coverage.designed_law(laws, law)
-                if entry["law"] is None:
-                    sys.exit(f"{where}: designed law {law!r} is not in the designed-law file")
-                gs_class, table = None, None
+        # A row with alternatives is one generated row per target stage.
+        for row in coverage.targets_of(source, where):
+            entry = {
+                "type": parsed_type(row["type"]),
+                "slot": int(row["slot"]),
+                "mark": row.get("printed_mark"),
+                "law": None,
+                "byte": (0, 0),
+                "unit": (0, 0),
+            }
+            if form == "translated":
+                entry["kind"] = "kGsEfxRowTranslated"
+                gs_class, table = row.get("class"), row.get("table")
+                if gs_class in BINDING_LAWS:
+                    lo_byte, hi_byte, lo_unit, hi_unit = printed_range(row, where)
+                    entry["byte"], entry["unit"] = (lo_byte, hi_byte), (lo_unit, hi_unit)
+            elif form == "designed":
+                entry["kind"] = "kGsEfxRowDesigned"
+                if "printed_values" not in row:
+                    sys.exit(f"{where}: a designed row needs printed_values")
+                entry["byte"] = coverage.byte_domain(row["printed_values"])
+                law = row["designed"]["law"]
+                if row["designed"]["basis"] == "invented":
+                    entry["law"] = coverage.designed_law(laws, law)
+                    if entry["law"] is None:
+                        sys.exit(f"{where}: designed law {law!r} is not in the designed-law file")
+                    gs_class, table = None, None
+                else:
+                    gs_class, table = law.split(".", 1)
             else:
-                gs_class, table = law.split(".", 1)
-        else:
-            continue
-        if gs_class is None:
-            entry["class"], entry["table"], label = 0, 0, row["designed"]["law"]
-        else:
-            if gs_class not in numbering or table not in tables_of[gs_class]:
-                sys.exit(f"{where}: {gs_class}.{table} is not a class this header numbers")
-            entry["class"] = numbering.index(gs_class)
-            entry["table"] = tables_of[gs_class].index(table)
-            label = f"{gs_class}.{table}"
-        for key in keys_of(row):
-            entries.append(dict(entry, stage=str(row["stage"]), key=key, label=label))
-    entries.sort(key=lambda e: (e["type"], e["slot"], e["key"]))
+                continue
+            if gs_class is None:
+                entry["class"], entry["table"], label = 0, 0, row["designed"]["law"]
+            else:
+                if gs_class not in numbering or table not in tables_of[gs_class]:
+                    sys.exit(f"{where}: {gs_class}.{table} is not a class this header numbers")
+                entry["class"] = numbering.index(gs_class)
+                entry["table"] = tables_of[gs_class].index(table)
+                label = f"{gs_class}.{table}"
+            # A row reaching several same-named stages is one generated row per stage.
+            for ordinal in coverage.ordinals_of(row, where, form):
+                for key in keys_of(row):
+                    entries.append(
+                        dict(entry, stage=str(row["stage"]), ordinal=ordinal, key=key, label=label)
+                    )
+    entries.sort(key=lambda e: (e["type"], e["slot"], e["stage"], e["key"], e["ordinal"]))
     enables.sort(key=lambda e: (e["type"], e["slot"]))
     return entries, enables
+
+
+def enable_entry(row: dict, where: str, form: str) -> dict:
+    """One GsEfxEnable: the row's address and the stages its byte turns on."""
+    return {
+        "type": parsed_type(row["type"]),
+        "slot": int(row["slot"]),
+        "ordinal": coverage.ordinals_of(row, where, form)[0],
+        **enable_of(row["enables"], where),
+    }
 
 
 def enable_of(enables: dict, where: str) -> dict:
@@ -319,27 +277,20 @@ def camel(name: str) -> str:
     return "".join(part.capitalize() for part in name.split("_"))
 
 
-def render(
-    entries: list[dict], order: tuple[str, ...], rows: list[dict], enables: list[dict]
-) -> str:
-    stages = sorted({entry["stage"] for entry in entries})
-    keys = sorted({entry["key"] for entry in entries})
-    ranges = sorted({entry["range"] for entry in entries if entry["range"] is not None})
-    if len(stages) >= 0xFF or len(keys) >= 0xFF or len(ranges) >= NO_RANGE:
-        sys.exit("the name tables outgrew their index width")
+def render(rows: list[dict], enables: list[dict]) -> str:
     out: list[str] = []
     w = out.append
 
     w(f"// Generated by {GENERATED_BY} from tools/gs/efx-bindings/ -- do not edit.")
     w("//")
-    w("// Which insert control each insertion-effect parameter byte drives. One row")
-    w("// per (type, slot, key) a binding file translates; the rows a binding file")
-    w("// leaves as a documented state, as unmapped or as the skeleton's own")
-    w("// business are absent, which is what makes a missing row mean something.")
+    w("// Which insert control each insertion-effect parameter byte drives, and which")
+    w("// stages a switch or selector byte turns on. Every printed (type, slot) is")
+    w("// one row here: translated through a measured table, driven through a")
+    w("// designed law, or an enables row.")
     w("//")
-    w("// The conversion law is named rather than carried: `conversion_class` and")
-    w("// `table` index the same tables gs_efx_tables.h numbers, so a byte read")
-    w("// here and a byte read through kGsEfxSlotConversions read alike.")
+    w("// A measured row names its law: `conv_class` and `table` index the same")
+    w("// tables gs_efx_tables.h numbers, so a byte read here and a byte read through")
+    w("// kGsEfxSlotConversions read alike.")
     w("")
     w("#pragma once")
     w("")
@@ -350,67 +301,6 @@ def render(
     w('#include "midi/synth/gs_efx_convert.h"')
     w("")
     w("namespace sonare::midi::synth {")
-    w("")
-    w("/// One insert control an insertion-effect byte drives.")
-    w("struct GsEfxBinding {")
-    w("  uint16_t type;             ///< The two type bytes, MSB in the high byte.")
-    w("  uint8_t slot;              ///< Slot index from the first parameter address.")
-    w("  uint8_t conversion_class;  ///< One of the kGsEfxClass* values.")
-    w("  uint8_t table;             ///< Which table of that class.")
-    w("  uint8_t stage;             ///< Index into kGsEfxBindingStages.")
-    w("  uint8_t key;               ///< Index into kGsEfxBindingKeys.")
-    w("  uint8_t range;  ///< Index into kGsEfxBindingRanges, or kGsEfxBindingNoRange.")
-    w("};")
-    w("")
-    w("/// The printed endpoints a ratio row is read between: the byte range the")
-    w("/// archive records and the unit range beside it. The generator refuses a pair")
-    w("/// that does not put a whole unit step on every byte.")
-    w("struct GsEfxBindingRange {")
-    w("  uint8_t lo_byte;")
-    w("  uint8_t hi_byte;")
-    w("  int16_t lo_unit;")
-    w("  int16_t hi_unit;")
-    w("};")
-    w("")
-    for index, name in enumerate(BINDING_LAWS, start=len(order)):
-        w("/// A law no measured table holds, numbered after the kGsEfxClass* values")
-        w("/// gs_efx_tables.h emits; the row carries its own endpoints.")
-        w(f"inline constexpr uint8_t kGsEfxClass{camel(name)} = {index};")
-    w(f"inline constexpr uint8_t kGsEfxBindingNoRange = 0x{NO_RANGE:02X};")
-    w("")
-    w(f"inline constexpr std::array<GsEfxBindingRange, {len(ranges)}> kGsEfxBindingRanges = {{{{")
-    for lo_byte, hi_byte, lo_unit, hi_unit in ranges:
-        w(f"    {{0x{lo_byte:02X}, 0x{hi_byte:02X}, {lo_unit}, {hi_unit}}},")
-    w("}};")
-    w("")
-    w("// The insert names and control names the rows below point at, each spelled")
-    w("// once. A name is an index so the table stays a plain array of integers.")
-    w(f"inline constexpr std::array<std::string_view, {len(stages)}> kGsEfxBindingStages = {{{{")
-    for stage in stages:
-        w(f'    "{stage}",')
-    w("}};")
-    w("")
-    w(f"inline constexpr std::array<std::string_view, {len(keys)}> kGsEfxBindingKeys = {{{{")
-    for key in keys:
-        w(f'    "{key}",')
-    w("}};")
-    w("")
-    w("// Sorted by (type, slot, key), so one unit's rows are contiguous.")
-    w(f"inline constexpr std::array<GsEfxBinding, {len(entries)}> kGsEfxBindings = {{{{")
-    stage_index = {name: i for i, name in enumerate(stages)}
-    key_index = {name: i for i, name in enumerate(keys)}
-    range_index = {ends: i for i, ends in enumerate(ranges)}
-    for entry in entries:
-        spelled_range = (
-            "kGsEfxBindingNoRange" if entry["range"] is None else str(range_index[entry["range"]])
-        )
-        w(
-            f"    {{0x{entry['type']:04X}, {entry['slot']}, {entry['conversion_class']}, "
-            f"{entry['table']}, {stage_index[entry['stage']]}, {key_index[entry['key']]}, "
-            f"{spelled_range}}},"
-            f"  // {entry['label']} -> {entry['stage']}.{entry['key']}"
-        )
-    w("}};")
     w("")
     render_rows(w, rows, enables)
     w("}  // namespace sonare::midi::synth")
@@ -452,7 +342,7 @@ def render_rows(w, rows: list[dict], enables: list[dict]) -> None:
     w("")
     w("// Translated and designed rows alike, read through gs_efx_binding_value. A")
     w("// designed row holds its law by value; a ratio row holds its printed ends.")
-    w("// Sorted by (type, slot, key).")
+    w("// One row per (type, slot, key, ordinal), sorted in that order.")
     w(f"inline constexpr std::array<GsEfxBindingRow, {len(rows)}> kGsEfxBindingRows = {{{{")
     for e in rows:
         spelled_law = law_constant(e["label"] if e["law"] is not None else "none")
@@ -528,11 +418,10 @@ def main() -> int:
     classes = json.loads(args.tables.read_text(encoding="utf-8"))["classes"]
     check_convert_constants(order, CONVERT_HEADER)
     rows = load_rows(args.bindings)
-    entries = collect(rows, classes, order)
-    if not entries:
-        sys.exit("no binding row carries a stage; the header would bind nothing")
     row_entries, enables = collect_rows(rows, classes, order, coverage.load_laws(args.laws))
-    rendered = laid_out(render(entries, order, row_entries, enables), args.header)
+    if not row_entries:
+        sys.exit("no binding row carries a stage; the header would bind nothing")
+    rendered = laid_out(render(row_entries, enables), args.header)
 
     if args.check:
         try:
@@ -546,11 +435,11 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"binding header is current: {args.header} ({len(entries)} controls)")
+        print(f"binding header is current: {args.header} ({len(row_entries)} rows)")
         return 0
 
     args.header.write_text(rendered, encoding="utf-8")
-    print(f"wrote {args.header} ({len(entries)} controls)")
+    print(f"wrote {args.header} ({len(row_entries)} rows)")
     return 0
 
 

@@ -7,6 +7,7 @@
 #include <cstddef>
 
 #include "midi/synth/gs_efx_tables.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -153,6 +154,24 @@ void gs_efx_balance(uint8_t value, float* direct, float* effect) noexcept {
   if (effect != nullptr) *effect = balance_ramp(n - kGsEfxBalanceCornerDirect);
 }
 
+float gs_efx_pan_position(uint8_t value) noexcept {
+  using sonare::constants::kInvPi;
+  float left = 0.0f;
+  float right = 0.0f;
+  gs_efx_pan(value, &left, &right);
+  // The constant-power pair (cos, sin) of angle (b + 1)·π/4 has this ratio.
+  const float position = 4.0f * kInvPi * std::atan2(right, left) - 1.0f;
+  return std::clamp(position, -1.0f, 1.0f);
+}
+
+float gs_efx_balance_fraction(uint8_t value) noexcept {
+  float direct = 0.0f;
+  float effect = 0.0f;
+  gs_efx_balance(value, &direct, &effect);
+  assert(direct + effect > 0.0f);
+  return effect / (direct + effect);
+}
+
 int gs_efx_azimuth_deg(uint8_t value) noexcept {
   // Add two (the rounding of the divide by four), shift, then recentre: the byte's
   // 128 values leave 32 quarter-turns, so the middle one is the clamp plus one.
@@ -285,6 +304,14 @@ float gs_efx_binding_value(const GsEfxBindingRow& row, uint8_t byte) noexcept {
       return gs_efx_window_ms(byte);
     case kGsEfxClassCorner:
       return gs_efx_corner_hz(byte, row.table == 1 ? GsShelfSide::kHigh : GsShelfSide::kLow);
+    case kGsEfxClassWave:
+      return static_cast<float>(gs_efx_wave(byte));
+    case kGsEfxClassAzimuth:
+      return static_cast<float>(gs_efx_azimuth_deg(byte));
+    case kGsEfxClassPan:
+      return gs_efx_pan_position(byte);
+    case kGsEfxClassBalance:
+      return gs_efx_balance_fraction(byte);
     case kGsEfxRowClassRatio: {
       float units = 0.0f;
       const bool whole =

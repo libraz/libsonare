@@ -1,7 +1,9 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -10,8 +12,13 @@
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#if defined(SONARE_MIDI_WITH_FX)
+#include "midi/synth/gs_classic/classic_unit.h"
+#include "midi/synth/gs_classic/model_registry.h"
+#endif
 
 namespace sonare::midi::synth {
 
@@ -603,7 +610,110 @@ bool json_find_number(std::string_view json, std::string_view key, float& out) {
   return true;
 }
 
+/// The generated binding rows and enables, which the player reads when no test
+/// rows are set.
+constexpr GsEfxRowView kGeneratedEfxRows{kGsEfxBindingRows.data(), kGsEfxBindingRows.size(),
+                                         kGsEfxEnables.data(), kGsEfxEnables.size()};
+
+/// @name EFX CONTROL SOURCE bytes
+/// 01-5F name CC1-95, 60 channel aftertouch and 61 the bend; 00 and 62-7F are off.
+/// @{
+constexpr uint8_t kEfxSourceAftertouch = 0x60;
+constexpr uint8_t kEfxSourceBend = 0x61;
+/// @}
+/// The CONTROL DEPTH byte that modulates nothing.
+constexpr uint8_t kEfxDepthCentre = 0x40;
+
+/// The type number @p rows spell @p type as: its own where a row names it,
+/// otherwise its alias (the spelling gs_efx_insert_chain binds through).
+uint16_t efx_row_type(const GsEfxRowView& rows, uint16_t type) noexcept {
+  for (size_t i = 0; i < rows.n_rows; ++i) {
+    if (rows.rows[i].type == type) return type;
+  }
+  return gs_efx_alias_type(type);
+}
+
+/// Where the source of @p control sits, as the fraction its depth scales: 0..1
+/// for a controller or channel aftertouch, -1..+1 for the bend. Read at full
+/// width, as refresh_channel_mod reads the same controllers.
+template <typename Channel>
+float efx_control_position(const Sf2EfxControlRt& control, const Channel& st) noexcept {
+  if (control.source == kEfxSourceBend) return (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
+  if (control.source == kEfxSourceAftertouch) return st.channel_pressure.f7() / 127.0f;
+  return st.cc_position[control.source & 0x7Fu].f7() / 127.0f;
+}
+
+/// The byte @p control puts its slot at with its source at @p position: the
+/// base's place in [lo, hi] moved by depth x position, clamped to the range and
+/// rounded to the nearest byte the slot takes, so a two-state slot switches at
+/// half. The depth is centred on 40 over 64 steps.
+uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcept {
+  const float span = static_cast<float>(control.hi - control.lo);
+  if (span <= 0.0f) return control.base_byte;
+  const float depth =
+      (static_cast<float>(control.depth) - static_cast<float>(kEfxDepthCentre)) / 64.0f;
+  const float base =
+      (static_cast<float>(control.base_byte) - static_cast<float>(control.lo)) / span;
+  float u = std::clamp(base + depth * position, 0.0f, 1.0f);
+  if (control.states >= 2) {
+    const float last = static_cast<float>(control.states - 1);
+    u = std::floor(u * last + 0.5f) / last;
+  }
+  return static_cast<uint8_t>(control.lo + static_cast<int>(std::floor(u * span + 0.5f)));
+}
+
 }  // namespace
+
+/// The one stage a classic unit realises, named so the shape check can tell it
+/// apart from a modern stage list.
+constexpr std::string_view kClassicStageName = "gs.classic";
+
+Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>& stages,
+                                GsEfxRealization realization,
+                                const decltype(Sf2PlayerConfig::insert_factory)& factory,
+                                double sample_rate, int max_block) {
+  Sf2EfxUnitRt out;
+  out.realization = realization;
+  const double fade_samples = static_cast<double>(kSf2EfxFadeMs) * 1e-3 * sample_rate;
+  out.fade_step = fade_samples > 1.0 ? static_cast<float>(1.0 / fade_samples) : 1.0f;
+  if (realization == GsEfxRealization::kClassic) {
+#if defined(SONARE_MIDI_WITH_FX)
+    const gs_classic::GsClassicModelRegistry& registry = gs_classic::gs_classic_default_registry();
+    const gs_classic::GsClassicType* model =
+        efx.type != 0 && registry.valid() ? registry.find(efx.type) : nullptr;
+    if (model != nullptr) {
+      Sf2EfxStageRt stage;
+      stage.name = std::string(kClassicStageName);
+      auto unit = std::make_unique<gs_classic::GsClassicUnit>(registry.models(), *model);
+      for (size_t slot = 0; slot < efx.params.size(); ++slot) {
+        unit->set_parameter(static_cast<unsigned int>(slot), static_cast<float>(efx.params[slot]));
+      }
+      // Every shipped model is a graph the engine draws (the classic type tests build each one).
+      unit->prepare(sample_rate, max_block);
+      stage.proc = std::move(unit);
+      out.stages.push_back(std::move(stage));
+    }
+#endif
+  } else {
+    out.stages.reserve(stages.size());
+    for (const GsEfxStage& stage : stages) {
+      Sf2EfxStageRt rt;
+      rt.name = stage.name;
+      rt.branch = stage.branch;
+      rt.ordinal = stage.ordinal;
+      rt.enabled_target = stage.enabled;
+      rt.enabled_now = stage.enabled;
+      rt.fade = stage.enabled ? 1.0f : 0.0f;
+      if (factory) {
+        rt.proc = factory(stage.name, stage.params_json);
+        if (rt.proc != nullptr) rt.proc->prepare(sample_rate, max_block);
+      }
+      out.stages.push_back(std::move(rt));
+    }
+  }
+  if (!out.stages.empty()) out.scratch.assign(3 * 2 * static_cast<size_t>(max_block), 0.0f);
+  return out;
+}
 
 std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
   auto out = std::make_shared<Sf2RealizedEfx>();
@@ -664,26 +774,114 @@ std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
     out->any_bussed = out->any_bussed || out->part_bussed[static_cast<size_t>(part)];
   }
   // One chain per unit, built only for a unit some part actually feeds: parts
-  // sharing a unit sum into it and it runs once (docs/gs.md). Stages whose
-  // factory build returns null (an FX stage in a no-FX build) are skipped, so a
-  // partial chain still runs.
+  // sharing a unit sum into it and it runs once (docs/gs.md). A stage the
+  // factory cannot build (an FX stage in a no-FX build) keeps its position with
+  // nothing in it, so the rest of the chain still runs and updates stay aligned.
   for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
     if (!out->unit_fed[unit]) continue;
-    for (const GsEfxStage& stage : gs_efx_insert_chain(efx_[unit])) {
-      auto proc = config_.insert_factory(stage.name, stage.params_json);
-      if (proc != nullptr) {
-        proc->prepare(sample_rate_, kChunkFrames);
-        out->unit_chains[unit].push_back(std::move(proc));
+    const GsEfx& efx = efx_[unit];
+    const std::vector<GsEfxStage> stages = config_.gs_efx_realization == GsEfxRealization::kModern
+                                               ? efx_stages(efx)
+                                               : std::vector<GsEfxStage>{};
+    out->units[unit] = sf2_build_efx_unit(efx, stages, config_.gs_efx_realization,
+                                          config_.insert_factory, sample_rate_, kChunkFrames);
+  }
+  build_efx_controls(*out);
+  return out;
+}
+
+void Sf2Player::build_efx_controls(Sf2RealizedEfx& out) const {
+  // Only the spec unit has the CONTROL rows, and only a unit that runs has a
+  // slot to move.
+  const Sf2EfxUnitRt& unit = out.units[0];
+  if (!out.unit_fed[0] || unit.stages.empty()) return;
+  // The controllers are the lowest-numbered part's among those the unit takes.
+  uint8_t part = 0;
+  while (part < 16 && out.part_unit[part] != 0) ++part;
+  if (part >= 16) return;
+  const GsEfx& efx = efx_[0];
+  const GsEfxRowView& rows = efx_rows_ != nullptr ? *efx_rows_ : kGeneratedEfxRows;
+  const uint16_t type = efx_row_type(rows, efx.type);
+  const bool classic = unit.realization == GsEfxRealization::kClassic;
+  for (size_t k = 0; k < out.controls.size(); ++k) {
+    const uint8_t source = efx.control_source[k];
+    if (source == 0 || source > kEfxSourceBend) continue;
+    // CONTROL 1 drives the type's `+` slot, CONTROL 2 its `#` slot.
+    const uint8_t mark = k == 0 ? '+' : '#';
+    Sf2EfxControlRt control;
+    control.part = part;
+    control.source = source;
+    control.depth = efx.control_depth[k];
+    const GsEfxBindingRow* first = nullptr;
+    for (size_t i = 0; i < rows.n_rows; ++i) {
+      const GsEfxBindingRow& row = rows.rows[i];
+      if (row.type != type || row.printed_mark != mark) continue;
+      if (first == nullptr) first = &row;
+      if (row.slot != first->slot) continue;
+      if (classic) {
+        // The classic unit reads the wire byte itself.
+        control.dest[0] = {0, row.slot, nullptr};
+        control.n_dest = 1;
+        break;
+      }
+      if (control.n_dest >= control.dest.size()) break;
+      const std::string_view stage_name = kGsEfxRowStages[row.stage];
+      const std::string_view key = kGsEfxRowKeys[row.key];
+      for (size_t s = 0; s < unit.stages.size(); ++s) {
+        const Sf2EfxStageRt& stage = unit.stages[s];
+        if (stage.proc == nullptr || stage.name != stage_name || stage.ordinal != row.ordinal) {
+          continue;
+        }
+        for (const rt::ParamDescriptor& d : stage.proc->parameter_descriptors()) {
+          // A control that is not realtime-safe cannot be written per block.
+          if (d.key != key || !stage.proc->parameter_is_realtime_safe(d.id)) continue;
+          control.dest[control.n_dest++] = {static_cast<uint8_t>(s), d.id, &row};
+          break;
+        }
+        break;
       }
     }
+    if (control.n_dest == 0) continue;
+    control.slot = first->slot;
+    // A printed list of states takes its first bytes, a printed range is the
+    // row's own, and a slot printing neither takes the whole byte.
+    const int states = gs_efx_printed_states(efx.type, control.slot);
+    if (states > 0) {
+      control.lo = 0;
+      control.hi = static_cast<uint8_t>(states - 1);
+    } else if (first->byte_lo < first->byte_hi) {
+      control.lo = first->byte_lo;
+      control.hi = first->byte_hi;
+      if (first->kind == kGsEfxRowDesigned && first->law.form == kGsEfxFormEnum) {
+        control.states = first->law.n_states;
+      }
+    } else {
+      control.lo = 0x00;
+      control.hi = 0x7F;
+    }
+    control.base_byte = efx.params[control.slot];
+    // The unit was built at the base, so that is what its destinations hold.
+    control.applied_byte = control.base_byte;
+    out.controls[k] = control;
   }
-  return out;
+}
+
+void Sf2Player::publish_realized_efx() {
+  std::shared_ptr<Sf2RealizedEfx> snapshot = build_realized_efx();
+  snapshot->generation = ++efx_generation_;
+  efx_pub_->publish(std::move(snapshot));
 }
 
 void Sf2Player::realize_gs_efx() {
   gs_efx_dirty_ = false;
   if (!prepared_) return;
-  efx_pub_->publish(build_realized_efx());
+  publish_realized_efx();
+}
+
+void Sf2Player::set_gs_efx_realization(GsEfxRealization realization) {
+  if (config_.gs_efx_realization == realization) return;
+  config_.gs_efx_realization = realization;
+  realize_gs_efx();
 }
 
 bool Sf2Player::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
@@ -721,13 +919,23 @@ bool Sf2Player::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
   // not realtime-safe, fall back to a full rebuild.
   const int unit = gs_efx_addressed_unit(data, size);
   if (unit < 0) return false;
+  GsEfx& target = efx_[static_cast<size_t>(unit)];
+  const std::array<uint8_t, 20> previous_params = target.params;
+  const std::array<uint8_t, 2> previous_source = target.control_source;
+  const std::array<uint8_t, 2> previous_depth = target.control_depth;
   bool type_changed = false;
-  if (!apply_gs_efx_sysex(efx_[static_cast<size_t>(unit)], data, size, &type_changed)) return false;
+  if (!apply_gs_efx_sysex(target, data, size, &type_changed)) return false;
   if (type_changed) return true;
-  return enqueue_efx_param_updates(static_cast<size_t>(unit));
+  // Which slot a CONTROL drives, and from which controller, is resolved when the
+  // unit is built.
+  if (target.control_source != previous_source || target.control_depth != previous_depth) {
+    return true;
+  }
+  return enqueue_efx_param_updates(static_cast<size_t>(unit), previous_params);
 }
 
-bool Sf2Player::enqueue_efx_param_updates(size_t unit) {
+bool Sf2Player::enqueue_efx_param_updates(size_t unit,
+                                          const std::array<uint8_t, 20>& previous_params) {
   // CONTROL thread. Reads the last-published routing (control_current) purely to
   // discover each built stage processor's JSON-key -> param-id bridge
   // (parameter_descriptors() is const and safe to read concurrently with the
@@ -738,15 +946,59 @@ bool Sf2Player::enqueue_efx_param_updates(size_t unit) {
   const Sf2RealizedEfx* snapshot = efx_pub_->control_current().get();
   if (snapshot == nullptr) return true;  // nothing built yet -> rebuild
   if (unit >= kGsEfxUnitCount || !snapshot->unit_fed[unit]) return true;
-  const std::vector<GsEfxStage> stages = gs_efx_insert_chain(efx_[unit]);
-  if (stages.empty()) return true;  // Thru / unmapped -> no chain, rebuild
-  const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = snapshot->unit_chains[unit];
-  // The published chain skips stages the factory could not build, so it is a
-  // prefix of the stage list; align positionally over the built stages.
-  const size_t count = std::min(chain.size(), stages.size());
+  const Sf2EfxUnitRt& live = snapshot->units[unit];
+  if (live.realization != config_.gs_efx_realization) return true;
+  if (live.stages.empty()) return true;  // Thru / unmapped -> no chain, rebuild
+  const GsEfx& efx = efx_[unit];
+  const auto push = [&](EfxUpdateKind kind, size_t stage, uint32_t param_id, float value) {
+    EfxParamUpdate update;
+    update.kind = kind;
+    update.unit = static_cast<uint8_t>(unit);
+    update.stage_index = static_cast<uint8_t>(stage);
+    update.param_id = param_id;
+    update.value = value;
+    update.generation = snapshot->generation;
+    return efx_param_queue_->push(update);
+  };
+  // An edit to a slot an EFX CONTROL drives moves the base it modulates from.
+  if (unit == 0) {
+    for (size_t k = 0; k < snapshot->controls.size(); ++k) {
+      const Sf2EfxControlRt& control = snapshot->controls[k];
+      if (control.n_dest == 0 || efx.params[control.slot] == previous_params[control.slot]) {
+        continue;
+      }
+      if (!push(EfxUpdateKind::kControlBase, k, 0, static_cast<float>(efx.params[control.slot]))) {
+        return true;
+      }
+    }
+  }
+
+  if (live.realization == GsEfxRealization::kClassic) {
+    // The classic unit reads the wire bytes themselves, so only the slots this
+    // message moved are sent.
+    for (size_t slot = 0; slot < efx.params.size(); ++slot) {
+      if (efx.params[slot] == previous_params[slot]) continue;
+      if (!push(EfxUpdateKind::kClassicByte, 0, static_cast<uint32_t>(slot),
+                static_cast<float>(efx.params[slot]))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const std::vector<GsEfxStage> stages = efx_stages(efx);
+  // Updates address stages by position, so a list shaped other than the
+  // published one would write a different stage: rebuild instead.
+  const bool same_shape =
+      stages.size() == live.stages.size() &&
+      std::equal(stages.begin(), stages.end(), live.stages.begin(),
+                 [](const GsEfxStage& a, const Sf2EfxStageRt& b) {
+                   return a.name == b.name && a.branch == b.branch && a.ordinal == b.ordinal;
+                 });
+  if (!same_shape) return true;
   size_t enqueued = 0;
-  for (size_t s = 0; s < count; ++s) {
-    const rt::ProcessorBase* proc = chain[s].get();
+  for (size_t s = 0; s < stages.size(); ++s) {
+    const rt::ProcessorBase* proc = live.stages[s].proc.get();
     if (proc == nullptr) continue;
     for (const rt::ParamDescriptor& d : proc->parameter_descriptors()) {
       float value = 0.0f;
@@ -754,43 +1006,102 @@ bool Sf2Player::enqueue_efx_param_updates(size_t unit) {
       // A parameter that is not realtime-safe would allocate/rebuild in
       // set_parameter, which is illegal on the audio thread -> rebuild instead.
       if (!proc->parameter_is_realtime_safe(d.id)) return true;
-      EfxParamUpdate update;
-      update.unit = static_cast<uint8_t>(unit);
-      update.stage_index = static_cast<uint8_t>(s);
-      update.param_id = d.id;
-      update.value = value;
-      if (efx_param_queue_->push(update)) ++enqueued;
+      if (push(EfxUpdateKind::kParam, s, d.id, value)) ++enqueued;
     }
+  }
+  for (size_t s = 0; s < stages.size(); ++s) {
+    const Sf2EfxStageRt& stage = live.stages[s];
+    if (stages[s].enabled == stage.enabled_target) continue;
+    if (!push(EfxUpdateKind::kEnable, s, 0, stages[s].enabled ? 1.0f : 0.0f)) return true;
+    stage.enabled_target = stages[s].enabled;
+    ++enqueued;
   }
   // Nothing matched an automatable parameter -> rebuild so the edit is not lost.
   return enqueued == 0;
 }
 
 void Sf2Player::drain_efx_param_updates() noexcept {
-  // AUDIO thread, at block start after acquire(): apply every pending parameter
-  // update to the current published chain. set_parameter runs here, serialized
-  // with process() on this same thread — the contract it honours — so there is
-  // no cross-thread race and no rebuild (the chain objects, and thus their
-  // reverb/delay tails, are preserved). Tuples whose indices no longer fit the
-  // current chain (a rebuild republished a different shape) are dropped: a
-  // rebuild already bakes the new parameter values in, so nothing is lost.
+  // AUDIO thread, at block start after acquire(): apply every pending update to
+  // the current published units. set_parameter runs here, serialized with
+  // process() on this same thread — the contract it honours — so there is no
+  // cross-thread race and no rebuild (the chain objects, and thus their
+  // reverb/delay tails, are preserved). An update resolved against another
+  // generation is dropped: the rebuild that replaced it baked the mirror in.
   const Sf2RealizedEfx* snapshot = efx_pub_->current();
   EfxParamUpdate update;
   while (efx_param_queue_->pop(update)) {
-    if (snapshot == nullptr || update.unit >= kGsEfxUnitCount) continue;
-    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
-        snapshot->unit_chains[update.unit];
-    if (update.stage_index >= chain.size()) continue;
-    rt::ProcessorBase* proc = chain[update.stage_index].get();
+    if (snapshot == nullptr || update.generation != snapshot->generation ||
+        update.unit >= kGsEfxUnitCount) {
+      continue;
+    }
+    if (update.kind == EfxUpdateKind::kControlBase) {
+      if (update.unit != 0 || update.stage_index >= snapshot->controls.size()) continue;
+      const Sf2EfxControlRt& control = snapshot->controls[update.stage_index];
+      control.base_byte = static_cast<uint8_t>(update.value);
+      control.dirty = true;
+      continue;
+    }
+    const std::vector<Sf2EfxStageRt>& stages = snapshot->units[update.unit].stages;
+    if (update.stage_index >= stages.size()) continue;
+    const Sf2EfxStageRt& stage = stages[update.stage_index];
+    rt::ProcessorBase* proc = stage.proc.get();
+    if (update.kind == EfxUpdateKind::kEnable) {
+      const bool on = update.value != 0.0f;
+      // A stage coming back from fully off resumes from clean state rather than
+      // from the delay lines and phases it froze with.
+      if (on && !stage.enabled_now && stage.fade <= 0.0f && proc != nullptr) proc->reset();
+      stage.enabled_now = on;
+      continue;
+    }
     if (proc == nullptr) continue;
     // Only touch parameters the processor declares realtime-safe. This read is on
     // the audio thread, serialized with set_parameter below, so it is race-free
     // here; it also guarantees we never take a non-noexcept rebuild/validate path
-    // (this function is noexcept) and skips a stale tuple that, after a type-change
-    // rebuild, would land on a different processor's non-realtime-safe parameter.
+    // (this function is noexcept).
     if (!proc->parameter_is_realtime_safe(update.param_id)) continue;
     proc->set_parameter(update.param_id, update.value);  // scalar set; bool ignored
+    // That rewrote a CONTROL's destination at its base; the apply that follows
+    // puts the modulated value back in the same block.
+    if (update.unit != 0) continue;
+    for (const Sf2EfxControlRt& control : snapshot->controls) {
+      for (uint8_t d = 0; d < control.n_dest; ++d) {
+        if (control.dest[d].stage_index == update.stage_index &&
+            control.dest[d].param_id == update.param_id) {
+          control.dirty = true;
+        }
+      }
+    }
   }
+}
+
+void Sf2Player::apply_efx_controls() noexcept {
+  const Sf2RealizedEfx* snapshot = efx_pub_->current();
+  if (snapshot == nullptr) return;
+  const std::vector<Sf2EfxStageRt>& stages = snapshot->units[0].stages;
+  for (const Sf2EfxControlRt& control : snapshot->controls) {
+    if (control.n_dest == 0) continue;
+    const uint8_t byte =
+        efx_control_byte(control, efx_control_position(control, channels_[control.part]));
+    if (!control.dirty && byte == control.applied_byte) continue;
+    control.dirty = false;
+    control.applied_byte = byte;
+    for (uint8_t d = 0; d < control.n_dest; ++d) {
+      const Sf2EfxControlDest& dest = control.dest[d];
+      if (dest.stage_index >= stages.size()) continue;
+      rt::ProcessorBase* proc = stages[dest.stage_index].proc.get();
+      if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) continue;
+      const float value =
+          dest.binding != nullptr ? gs_efx_binding_value(*dest.binding, byte) : byte;
+      proc->set_parameter(dest.param_id, value);
+    }
+  }
+}
+
+int Sf2Player::gs_efx_control_byte(size_t control) const noexcept {
+  const Sf2RealizedEfx* snapshot = efx_pub_->current();
+  if (snapshot == nullptr || control >= snapshot->controls.size()) return -1;
+  const Sf2EfxControlRt& c = snapshot->controls[control];
+  return c.n_dest == 0 ? -1 : c.applied_byte;
 }
 
 void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {

@@ -5,7 +5,8 @@
     "log": "lo to hi divided evenly on a logarithmic scale; both ends positive",
     "db": "lo to hi decibels on a straight line, read out as a linear multiplier",
     "bipolar": "-hi to +hi through the centre of the printed byte range",
-    "enum": "the byte is a state index; n_states is the printed state count"
+    "enum": "the byte is a state index; n_states is the printed state count",
+    "stepped": "a linear or log law carrying n_states reads the byte as a state index and puts state i at i/(n_states-1) of the way from lo to hi; lo and hi are the first and last printed state values, log where they form a geometric series"
   },
   "laws": {
     "d.feedback": {"form": "linear", "lo": 0, "hi": 0.95},
@@ -26,7 +27,15 @@
     "d.phase_cycle": {"form": "linear", "lo": 0, "hi": 0.5},
     "d.dev_ms": {"form": "linear", "lo": 0, "hi": 20},
     "d.dev_ratio": {"form": "bipolar", "lo": -0.2, "hi": 0.2},
-    "d.ring_hz": {"form": "log", "lo": 20, "hi": 2000}
+    "d.ring_hz": {"form": "log", "lo": 20, "hi": 2000},
+    "d.chorus_depth_ms": {"form": "linear", "lo": 0, "hi": 10},
+    "d.flanger_depth_ms": {"form": "linear", "lo": 0, "hi": 5},
+    "d.tremolo_depth": {"form": "linear", "lo": 0, "hi": 0.5},
+    "d.hum_hz": {"form": "linear", "lo": 50, "hi": 60, "n_states": 2},
+    "d.limiter_ratio": {"form": "log", "lo": 1.5, "hi": 100, "n_states": 4},
+    "d.lofi_filter_hz": {"form": "log", "lo": 16000, "hi": 2000, "n_states": 6},
+    "d.type_index6": {"form": "linear", "lo": 1, "hi": 6, "n_states": 6},
+    "d.type_index9": {"form": "linear", "lo": 1, "hi": 9, "n_states": 9}
   },
   "enum_family": {
     "prefix": "d.enum",
@@ -36,7 +45,7 @@
   "carried": {
     "drive.gain": "a byte-to-dB gain in front of a fixed curve, read by gs_efx_drive_db"
   },
-  "name_rules_contract": "Every rule is matched in full against the printed parameter name (name) and the printed values spelling (printed); unless excludes names. A printed row that is not translated must match exactly one rule, and a designed row's law must be the rule's. d.enum<n> takes n from the printed state count; enables means the row is an enables row.",
+  "name_rules_contract": "Every rule is matched in full against the printed parameter name (name) and the printed values spelling (printed); unless excludes names. A rule with a stage applies only to a row driving that stage, and where one applies the unqualified rules do not. A printed row that is not translated must match exactly one rule, and a designed row's law must be the rule's. d.enum<n> takes n from the printed state count; enables means the row is an enables row.",
   "name_rules": [
     {"printed": "\\*1", "law": "delay_time.pre_delay"},
     {"printed": "\\*2", "law": "delay_time.time1"},
@@ -51,7 +60,8 @@
     {"printed": "\\*11", "law": "d.cutoff_hz"},
     {"printed": "\\*12", "law": "d.manual_hz"},
     {"printed": "\\*13", "law": "azimuth.placement"},
-    {"printed": "\\*14", "law": "accel.rotor"},
+    {"printed": "\\*14", "law": "d.glide_ms"},
+    {"printed": "\\*14", "stage": "effects.modulation.rotary", "law": "accel.rotor"},
     {"printed": "34–4C", "law": "gain.tone"},
     {"printed": "0F–71", "law": "ratio.percent"},
     {"printed": "28–4C", "law": "ratio.semitone"},
@@ -64,13 +74,24 @@
     {"name": "Post Gain", "printed": "00/01/02/03", "law": "post_gain.makeup"},
     {"name": "(.* )?(Q|Width)", "printed": "00/01/02/03/04", "law": "width.section"},
     {"name": "(.* )?(Mod Wave|Mod WV)", "printed": "00/01/02/03/04", "law": "wave.modulator"},
-    {"name": "(?!W/P ).*\\b(Sw|Sel)", "printed": "[0-9A-F]{2}(/[0-9A-F]{2})+", "law": "enables"},
+    {
+      "name": "(?!W/P ).*\\b(Sw|Sel)",
+      "printed": "[0-9A-F]{2}(/[0-9A-F]{2})+",
+      "unless": "(.* )?(Amp|Drive) Sw",
+      "law": "enables"
+    },
     {
       "printed": "[0-9A-F]{2}(/[0-9A-F]{2})+",
-      "unless": "(?!W/P ).*\\b(Sw|Sel)|(.* )?(Q|Width|Mod Wave|Mod WV)|Post Gain",
+      "unless": "(?!W/P )(?!(.* )?(Amp|Drive) Sw$).*\\b(Sw|Sel)|(.* )?(Q|Width|Mod Wave|Mod WV)|Post Gain",
       "law": "d.enum<n>"
     },
-    {"name": "Lo-Fi Type|Pre Filter|Post Filter|M/S", "printed": "00–0[0-9A-F]", "law": "d.enum<n>"},
+    {"name": "M/S", "printed": "00–0[0-9A-F]", "law": "d.enum<n>"},
+    {"name": "Hum Type", "printed": "00/01", "stage": "saturation.bitcrusher", "law": "d.hum_hz"},
+    {"name": "Ratio", "printed": "00/01/02/03", "stage": "dynamics.limiter", "law": "d.limiter_ratio"},
+    {"name": "(Pre|Post) Filter", "printed": "00–05", "stage": "saturation.bitcrusher", "law": "d.lofi_filter_hz"},
+    {"name": "Lo-Fi Type", "printed": "00–05", "stage": "saturation.bitcrusher", "law": "d.type_index6"},
+    {"name": "Lo-Fi Type", "printed": "00–08", "stage": "saturation.bitcrusher", "law": "d.type_index9"},
+    {"name": "Type", "printed": "00/01/02/03/04/05", "stage": "effects.reverb.dattorro", "law": "d.type_index6"},
     {
       "name": ".*\\b(Level|Lev)( [0-9A-Z])?",
       "printed": "00–7F",
@@ -80,11 +101,42 @@
     {"name": "(.* )?Pan( [0-9])?|Pan\\(Mono\\)", "printed": "00–7F", "law": "pan.output"},
     {"name": "(.*[ .])?(Balance|Bal)", "printed": "00–7F", "law": "balance.effect"},
     {"name": "(.* )?Drive", "printed": "00–7F", "law": "drive.gain"},
+    {"name": "(.* )?Drive", "printed": "00–7F", "stage": "effects.filter.vowel", "law": "d.unit"},
     {"name": "(.* )?(Fb|Feedback)|(PH )?Reso", "printed": "00–7F", "law": "d.feedback"},
     {
       "name": "(.* )?(Depth|Dep|Sens|Amount|Mix|Sep|Sept|Separate)|(Hum|W/P|Disc Nz|R\\.Nz) (Level|Lev)|R\\.Detune",
       "printed": "00–7F",
       "law": "d.unit"
+    },
+    {
+      "name": "(.* )?(Depth|Dep)",
+      "printed": "00–7F",
+      "stage": "effects.modulation.chorus",
+      "law": "d.chorus_depth_ms"
+    },
+    {
+      "name": "(.* )?(Depth|Dep)",
+      "printed": "00–7F",
+      "stage": "effects.modulation.flanger",
+      "law": "d.flanger_depth_ms"
+    },
+    {
+      "name": "(.* )?(Depth|Dep)",
+      "printed": "00–7F",
+      "stage": "effects.modulation.ensemble",
+      "law": "d.chorus_depth_ms"
+    },
+    {
+      "name": "(.* )?(Depth|Dep)",
+      "printed": "00–7F",
+      "stage": "effects.modulation.ringModulator",
+      "law": "d.tremolo_depth"
+    },
+    {
+      "name": "(.* )?(Depth|Dep)",
+      "printed": "00–7F",
+      "stage": "effects.delay.stereo",
+      "law": "d.chorus_depth_ms"
     },
     {"name": "(.* )?(Attack|Atck)", "printed": "00–7F", "law": "d.attack_ms"},
     {"name": "(.* )?Release", "printed": "00–7F", "law": "d.release_ms"},
@@ -94,7 +146,7 @@
     {"name": "(AW |Wah )?Peak", "printed": "00–7F", "law": "d.q"},
     {"name": "Threshold", "printed": "00–7F", "law": "d.threshold_db"},
     {"name": "Time", "printed": "00–7F", "law": "d.tank_decay"},
-    {"name": "(.* )?Phase", "printed": "00–5A", "unless": "Trem Phase", "law": "d.phase_deg"},
-    {"name": "Trem Phase", "printed": "00–5A", "law": "d.phase_cycle"}
+    {"name": "(.* )?Phase", "printed": "00–5A", "law": "d.phase_deg"},
+    {"name": "(.* )?Phase", "printed": "00–5A", "stage": "stereo.autoPan", "law": "d.phase_cycle"}
   ]
 }

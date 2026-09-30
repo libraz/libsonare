@@ -14,6 +14,7 @@
 
 #include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/gs_efx_tables.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -311,5 +312,84 @@ TEST_CASE("designed stepped laws place each state evenly between the printed end
   const auto ladder = law_of(synth::kGsEfxFormLinear, 1.0f, 9.0f, 9);
   for (uint8_t i = 0; i < 9; ++i) {
     CHECK(synth::gs_efx_designed_value(ladder, i, 0, 8) == Approx(1.0 + i).margin(1e-6));
+  }
+}
+
+namespace {
+
+/// The left-over-right level in dB a balance position's constant-power pair
+/// carries, which is how the archive recorded a pan setting.
+double position_balance_db(float position) {
+  const double angle = (static_cast<double>(position) + 1.0) * 0.5 * sonare::constants::kHalfPiD;
+  return 20.0 * std::log10(std::cos(angle) / std::sin(angle));
+}
+
+}  // namespace
+
+TEST_CASE("binding_value reads a pan byte as the position of its measured pair",
+          "[gs-efx-designed]") {
+  // Raw readings of the left-over-right level at a pan setting (40 03 15, the
+  // broadband voice and 01 01), against the 0.54 dB floor the two sides of the
+  // measured table sit within.
+  constexpr double kPanFloorDb = 0.54;
+  struct Reading {
+    uint8_t value;
+    double balance_db;
+  };
+  for (const Reading& r :
+       {Reading{8, 13.09}, Reading{32, 4.51}, Reading{64, 0.06}, Reading{96, -4.56}}) {
+    INFO("pan setting " << int(r.value));
+    const float position =
+        synth::gs_efx_binding_value(class_row(synth::kGsEfxClassPan, 0), r.value);
+    CHECK(std::fabs(position_balance_db(position) - r.balance_db) <= kPanFloorDb);
+  }
+  // The measured ends keep a -24 dB residue on the far side, so the extreme
+  // positions sit short of -1 and +1, mirrored within the table's own floor.
+  const auto pan = [](uint8_t b) {
+    return synth::gs_efx_binding_value(class_row(synth::kGsEfxClassPan, 0), b);
+  };
+  CHECK(pan(0) < -0.9f);
+  CHECK(pan(126) > 0.9f);
+  CHECK(std::fabs(position_balance_db(pan(0)) + position_balance_db(pan(126))) <= kPanFloorDb);
+  CHECK(std::fabs(pan(64)) < 0.02f);
+  // Monotone up to 126; the table reads 127 0.03 dB under 126 on the near side.
+  float prev = -2.0f;
+  for_each_byte(0, 126, [&](uint8_t b) {
+    const float v = synth::gs_efx_binding_value(class_row(synth::kGsEfxClassPan, 0), b);
+    CHECK(v >= prev);
+    prev = v;
+  });
+}
+
+TEST_CASE("binding_value reads a balance byte as the effect's share", "[gs-efx-designed]") {
+  // All direct at 0, all effect at 127: the two ramps meet at full and each
+  // closes at its own end.
+  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassBalance, 0), 0) == 0.0f);
+  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassBalance, 0), 127) == 1.0f);
+  float prev = -1.0f;
+  for_each_byte(0, 127, [&](uint8_t b) {
+    float direct = 0.0f;
+    float effect = 0.0f;
+    synth::gs_efx_balance(b, &direct, &effect);
+    const float v = synth::gs_efx_binding_value(class_row(synth::kGsEfxClassBalance, 0), b);
+    INFO("balance byte " << int(b));
+    CHECK(v == Approx(effect / (direct + effect)));
+    CHECK(v >= prev);
+    prev = v;
+  });
+}
+
+TEST_CASE("binding_value reads wave and azimuth bytes through their own tables",
+          "[gs-efx-designed]") {
+  for (uint8_t b = 0; b < 5; ++b) {
+    CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassWave, 0), b) ==
+          static_cast<float>(synth::gs_efx_wave(b)));
+  }
+  // Wave 2 is the sine the harmonics identified (third 0.0586, fifth 0.0015).
+  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassWave, 0), 2) ==
+        static_cast<float>(synth::GsEfxWave::kSine));
+  for (const uint8_t b : {0, 1, 62, 64, 66, 127}) {
+    CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassAzimuth, 0), b) ==
+          static_cast<float>(synth::gs_efx_azimuth_deg(b)));
   }
 }

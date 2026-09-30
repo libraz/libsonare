@@ -37,6 +37,7 @@
 #include "midi/control_value.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/sf2_voice.h"
 
 namespace sonare::midi::synth {
@@ -437,6 +438,11 @@ struct GsEfx {
   uint8_t send_reverb = 40;
   uint8_t send_chorus = 0;  ///< EFX -> chorus send (40 03 18).
   uint8_t send_delay = 0;   ///< EFX -> delay send (40 03 19).
+  /// EFX CONTROL SOURCE 1/2 (40 03 1B / 1D), raw. Only unit 0's block has these
+  /// rows; the extension units hold the same fields and never receive a write.
+  std::array<uint8_t, 2> control_source = {0x00, 0x00};
+  /// EFX CONTROL DEPTH 1/2 (40 03 1C / 1E), raw; 40 is no modulation.
+  std::array<uint8_t, 2> control_depth = {0x40, 0x40};
   /// True once any EFX-block write has arrived (so an all-zero Thru that was
   /// explicitly set is distinguished from the never-touched power-on state).
   bool assigned = false;
@@ -470,9 +476,12 @@ int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept;
 /// the payload with or without F0/F7 framing. Never crashes.
 ///
 /// Returns true when at least one byte reached a GsEfx field. A write landing
-/// entirely on the block's IGNORE rows — the two control-source assignments and
-/// the send EQ switch (docs/gs.md) — addresses the block and still returns
-/// false, because nothing was applied and there is nothing to rebuild for.
+/// entirely on the block's one IGNORE row — the send EQ switch (docs/gs.md) —
+/// addresses the block and still returns false, because nothing was applied
+/// and there is nothing to rebuild for. The two control-source assignments
+/// (40 03 1B-1E) reach GsEfx::control_source / control_depth and return true:
+/// the destination a source drives is resolved when the unit is built, so an
+/// edit to either is a rebuild rather than a parameter edit.
 ///
 /// A TYPE resolves on its LSB (40 03 01), pairing the arriving byte with the
 /// stored MSB, and selecting a type loads that type's twenty power-on
@@ -516,11 +525,34 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 /// parameters. A type with nothing of the skeleton's returns "{}".
 std::string gs_efx_insert_params(const GsEfx& efx);
 
+/// @name EFX stage branches
+/// Where a stage sits in the unit's signal flow: the common front runs first,
+/// then the two halves of a parallel type side by side on copies of its output,
+/// summed into the common back.
+/// @{
+inline constexpr uint8_t kGsEfxBranchFront = 0;
+inline constexpr uint8_t kGsEfxBranchHalfA = 1;
+inline constexpr uint8_t kGsEfxBranchHalfB = 2;
+inline constexpr uint8_t kGsEfxBranchBack = 3;
+/// @}
+
+/// Which sound-making layer realises every insertion unit. Both share the
+/// protocol layer above; kModern runs the insert chain gs_efx_insert_chain
+/// describes, kClassic runs the generated 32 kHz graph of the type.
+enum class GsEfxRealization : uint8_t { kModern, kClassic };
+
 /// One stage of a realised EFX chain: an `insert_factory` processor name and
 /// its JSON params.
 struct GsEfxStage {
-  std::string name;         ///< insert-factory processor name.
-  std::string params_json;  ///< JSON params for make_insert ("{}" = defaults).
+  std::string name;                    ///< insert-factory processor name.
+  std::string params_json;             ///< JSON params for make_insert ("{}" = defaults).
+  uint8_t branch = kGsEfxBranchFront;  ///< One of the kGsEfxBranch* values.
+  /// Index among the chain's stages of the same name, in chain order. A binding
+  /// or enable row names a stage by (name, ordinal).
+  uint8_t ordinal = 0;
+  /// False where a switch or selector byte turns the stage off. The skeleton
+  /// places every stage a byte may select; the byte moves only this flag.
+  bool enabled = true;
 };
 
 /// The ordered insert chain that realises @p efx, in signal-flow order. A
@@ -528,20 +560,21 @@ struct GsEfxStage {
 /// `gs_efx_insert_params` mapping); a composite/multi type (e.g. SC-88Pro GTR
 /// Multi = Cmp-OD-EQ-CF) yields its block chain so a whole guitar rig — with a
 /// real tone/EQ stage — realises from one EFX unit. An empty vector means the
-/// type is unmapped (bypass + log). Stages whose factory build returns null
-/// (e.g. an FX-suite stage in a no-FX build) are skipped at realise time, so a
-/// partial chain still runs. The block STRUCTURE of the composite types is
-/// faithful to the hardware; each bound byte reaches the stage its binding row
-/// names, and a control no row reaches keeps the insert's default.
+/// type is unmapped (bypass + log). A stage names a processor whether or not
+/// this build's factory can make it; what runs in its place is the realiser's
+/// business. The block STRUCTURE of the composite types is faithful to the hardware; each bound
+/// byte reaches the stage its binding row names by (name, ordinal), and a control no row reaches
+/// keeps the insert's default. Enable rows set each stage's `enabled`; a stage two rules name is
+/// enabled only where both turn it on.
 ///
-/// The chain is a SERIES: the realiser runs the stages in order. The GS
-/// parallel-2 types (0x1100–0x1108) split the signal into two effects and sum
-/// them, which this shape cannot express, so they stay unmapped rather than
-/// being folded into a series that would sound like a different effect under
-/// the right type name. tests/midi/gs_efx_types_test.cpp enumerates all 64 types
-/// and carries the reason for each one left unmapped, so a refusal is a table
-/// row rather than a claim in a comment.
+/// Stages are ordered front, half A, half B, back (GsEfxStage::branch). The GS
+/// parallel-2 types (0x1100–0x1108) place each half as the skeleton of the
+/// single type it names, followed by its own level and pan stage.
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx);
+
+/// gs_efx_insert_chain over @p rows instead of the generated binding tables.
+/// Row stage and key indices still name entries of the generated name tables.
+std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx, const GsEfxRowView& rows);
 
 // --- NRPN offset scalings (documented approximations, see file header) ---
 

@@ -14,7 +14,7 @@ namespace sonare::mastering::spectral {
 
 struct PresenceEnhancerConfig {
   float amount = 0.2f;
-  float drive = 2.0f;
+  float drive = 2.0f;  ///< Harmonic drive; 0 is no enhancement.
   float center_frequency_hz = 3200.0f;
   float q = 1.2f;
   sonare::rt::AliasingControl aliasing = sonare::rt::AliasingControl::None;
@@ -34,7 +34,7 @@ class PresenceEnhancer : public rt::ProcessorBase {
   // preserving filter state). Ids follow the PresenceEnhancerConfig declaration
   // order:
   //   0 = amount (clamped to [0, 1])
-  //   1 = drive (clamped to > 0)
+  //   1 = drive (clamped to >= 0; 0 adds no harmonics)
   //   2 = center_frequency_hz (clamped to > 0; recomputes bandpass coefficients)
   //   3 = q (clamped to > 0; recomputes bandpass coefficients)
   // aliasing is an enum (not exposed): None, Adaa1 or Oversample4x.

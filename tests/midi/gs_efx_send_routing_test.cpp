@@ -354,10 +354,10 @@ struct Unautomated {
   std::string_view reason;
 };
 
-/// Two are lengths an insert sizes a buffer by in prepare(); the rest are the
-/// rotary's acceleration fields, the glide's shape rather than anything a
-/// running rotor rides.
-constexpr std::array<Unautomated, 6> kUnautomated = {{
+/// Lengths and modes an insert sizes or selects its state by in prepare(), and
+/// the rotary's acceleration fields, the glide's shape rather than anything a
+/// running rotor rides. An edit of any of these bytes rebuilds the chain.
+constexpr std::array<Unautomated, 11> kUnautomated = {{
     {"effects.reverb.dattorro", "preDelayMs",
      "the pre-delay line is sized by it in prepare(), so a live write would allocate on the audio "
      "thread; an edit of the byte rebuilds the reverb, which is the cost the insert already "
@@ -366,6 +366,17 @@ constexpr std::array<Unautomated, 6> kUnautomated = {{
      "the grain buffers are sized by it in prepare(), so a live write would allocate on the audio "
      "thread; an edit of the byte rebuilds the shifter, the same cost the reverb's pre-delay "
      "charges"},
+    {"effects.modulation.pitchShifter", "preDelayMs",
+     "the delay line ahead of the shifter is sized from it in prepare(), so it is "
+     "construction-only; an edit of the byte rebuilds the shifter"},
+    {"effects.modulation.pitchShifter", "preDelay2Ms", "the same line, sized for voice 2"},
+    {"effects.reverb.dattorro", "character",
+     "it picks the tank's delay set, which sizes the tank's buffers in prepare()"},
+    {"saturation.bitcrusher", "typeLadder",
+     "it replaces the hold cadence wholesale, a mode rather than a value a running crusher rides"},
+    {"effects.modulation.rotary", "stereoSpread",
+     "it places the microphones; the insert applies it on construction or reset only, so a live "
+     "write would move the pickups under a sounding rotor"},
     {"effects.modulation.rotary", "undershootHz",
      "one byte writes this with accelTauS and decelTauS, and a time constant read mid-glide has "
      "no defined arrival, so publishing this half alone would apply the byte partly in place and "
@@ -395,7 +406,7 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
   // actually name. This one asks the factory.
   std::map<std::string, std::set<std::string>> automatable;
   std::map<std::string, std::set<std::string>> accepted;
-  for (std::string_view stage : s::kGsEfxBindingStages) {
+  for (std::string_view stage : s::kGsEfxRowStages) {
     const std::string name(stage);
     const json::Value parsed =
         json::parse_strict(sonare::mastering::api::insert_param_info_json(name));
@@ -423,9 +434,9 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
   std::set<std::pair<std::string, std::string>> seen;
   std::set<std::size_t> used;
   int checked = 0;
-  for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
-    const std::string stage(s::kGsEfxBindingStages[row.stage]);
-    const std::string key(s::kGsEfxBindingKeys[row.key]);
+  for (const s::GsEfxBindingRow& row : s::kGsEfxBindingRows) {
+    const std::string stage(s::kGsEfxRowStages[row.stage]);
+    const std::string key(s::kGsEfxRowKeys[row.key]);
     if (!seen.emplace(stage, key).second) continue;  // one verdict per control
     ++checked;
 

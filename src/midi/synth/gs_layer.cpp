@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
@@ -58,6 +60,23 @@ constexpr bool gs_efx_starts_at_power_on() noexcept {
 
 static_assert(gs_efx_starts_at_power_on(),
               "GsEfx does not start in the state the EFX PARAMETER row calls its default");
+
+/// Whether GsEfx powers on holding the control-assignment rows' own defaults.
+constexpr bool gs_efx_controls_start_at_power_on() noexcept {
+  const GsEfx efx{};
+  for (const GsAddressEntry& entry : kGsAddressTable) {
+    uint8_t held = entry.def;
+    if (entry.param == GsParam::kEfxControlSource1) held = efx.control_source[0];
+    if (entry.param == GsParam::kEfxControlDepth1) held = efx.control_depth[0];
+    if (entry.param == GsParam::kEfxControlSource2) held = efx.control_source[1];
+    if (entry.param == GsParam::kEfxControlDepth2) held = efx.control_depth[1];
+    if (held != entry.def) return false;
+  }
+  return true;
+}
+
+static_assert(gs_efx_controls_start_at_power_on(),
+              "GsEfx does not start in the state the EFX CONTROL rows call their default");
 
 /// The size the TONE MODIFY row claims, for the same reason.
 constexpr uint8_t gs_tone_modify_row_size() noexcept {
@@ -422,6 +441,22 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
         efx.send_delay = write.value;
         touched = true;
         break;
+      case GsParam::kEfxControlSource1:
+        efx.control_source[0] = write.value;
+        touched = true;
+        break;
+      case GsParam::kEfxControlDepth1:
+        efx.control_depth[0] = write.value;
+        touched = true;
+        break;
+      case GsParam::kEfxControlSource2:
+        efx.control_source[1] = write.value;
+        touched = true;
+        break;
+      case GsParam::kEfxControlDepth2:
+        efx.control_depth[1] = write.value;
+        touched = true;
+        break;
       default:
         break;
     }
@@ -446,6 +481,8 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "eq.graphic";
     case 0x0102:  // Enhancer -> the high-overtone presence enhancer.
       return "spectral.presenceEnhancer";
+    case 0x0103:  // Humanizer -> the vowel formant filter.
+      return "effects.filter.vowel";
     case 0x0110:  // Overdrive -> the full guitar amp model (crunch voicing).
     case 0x0111:  // Distortion -> the amp model on its high-gain voicing.
       return "saturation.ampSim";
@@ -471,14 +508,14 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0141:  // Tremolo Chorus -> the chorus block; its tremolo is a chain stage.
     case 0x0142:  // Stereo Chorus
     case 0x0143:  // Space-D (an unmodulated stereo chorus)
-    case 0x0144:  // 3D Chorus (the widened chorus, without the binaural stage)
+    case 0x0144:  // 3D Chorus (the chorus; its binaural stage is a chain stage)
       return "effects.modulation.chorus";
     case 0x0150:  // Stereo Delay
     case 0x0151:  // Modulation Delay (delay with LFO -> the stereo delay insert)
     case 0x0152:  // 3-tap Delay
     case 0x0153:  // 4-tap Delay
     case 0x0154:  // Time Control Delay (all multi-tap variants -> the stereo delay)
-    case 0x0157:  // 3D Delay (without the binaural stage -> the stereo delay)
+    case 0x0157:  // 3D Delay (the stereo delay; its binaural stage is a chain stage)
       return "effects.delay.stereo";
     case 0x0155:  // Reverb (per-part insertion reverb)
     case 0x0156:  // Gate Reverb (approximated by the plate reverb; no gate stage yet)
@@ -486,19 +523,13 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0160:  // 2-voice Pitch Shifter
     case 0x0161:  // Feedback Pitch Shifter (the feedback loop is not modelled)
       return "effects.modulation.pitchShifter";
+    case 0x0170:  // 3D Auto
+    case 0x0171:  // 3D Manual -> the binaural panner, which is the whole effect.
+      return "stereo.binaural";
     case 0x0172:  // Lo-Fi 1
     case 0x0173:  // Lo-Fi 2 -> the bit-depth / sample-rate reducer.
       return "saturation.bitcrusher";
     default:
-      // A single-effect type is refused when its identity is carried by DSP
-      // this tree does not have:
-      //   0x0103 Humanizer: a vowel formant filter whose identity IS the vowel.
-      //     The vowel has a parameter position of its own — slot 2, a five-value
-      //     enumeration — so what is missing is the formant filter to receive
-      //     it. A fixed vowel would be a strong resonant filter chosen at random.
-      //   0x0170 3D Auto / 0x0171 3D Manual: binaural panners, no stock insert.
-      //     3D Chorus (0x0144) and 3D Delay (0x0157) map because their 3D stage
-      //     sits on an effect that exists; here the 3D stage IS the effect.
       // The SC-88Pro has no standalone Ring Modulator type; that DSP is reached
       // as Tremolo (0x0125, amplitude modulation) and inside Keyboard Multi.
       return {};
@@ -531,14 +562,6 @@ class ParamsJson {
 /// The wire byte at a slot of the EFX parameter block.
 uint8_t efx_byte(const GsEfx& efx, int slot) noexcept {
   return static_cast<uint8_t>(efx.params[static_cast<size_t>(slot)] & 0x7Fu);
-}
-
-/// An output-level byte as a gain in dB over a -24 dB floor. The multiplier is
-/// the unit's own measured table rather than the byte over 127, which reads a
-/// median 1.61 dB high (gs_efx_level_mul).
-float gs_efx_level_db(uint8_t value) noexcept {
-  // std::max returns its first argument for the silent byte's -inf.
-  return std::max(-24.0f, 20.0f * std::log10(gs_efx_level_mul(value)));
 }
 
 /// eq.parametric band-type selectors, in the order processor_params.h decodes.
@@ -577,9 +600,10 @@ std::string gs_stereo_eq_json() {
   return out.str();
 }
 
-/// The wet depth the tremolo voicing runs at. The ring modulator's dry and wet
-/// terms multiply the same input, so the pair collapses to one envelope whose
-/// minimum is 1 - 2*wet: 0.35 is a ~10 dB depth with a unity peak.
+/// The wet depth Tremolo Chorus's tremolo runs at, a type that prints no depth
+/// byte. The ring modulator's dry and wet terms multiply the same input, so the
+/// pair collapses to one envelope whose minimum is 1 - 2*wet: 0.35 is a ~10 dB
+/// depth with a unity peak.
 constexpr float kGsTremoloDryWet = 0.35f;
 
 /// Tremolo as sinusoidal amplitude modulation: dry*x + wet*x*sin = x*(dry +
@@ -591,66 +615,30 @@ std::string gs_tremolo_json() {
   return out.str();
 }
 
-/// Amp-sim JSON for the two drive types. Drive is EFX PARAMETER 1 and the byte
-/// beside it picks one of four fixed response curves whose values the archive
-/// does not hold, so the voicing's own curve stands and only the drive is
-/// translated. The output level is not this block's: every type carries it at
-/// the same slot and the output stage reads it once, for all of them.
-std::string gs_drive_json(const GsEfx& efx, int amp_model, float drive_floor, float drive_span) {
-  const float drive = static_cast<float>(efx_byte(efx, 0)) / 127.0f;
+/// Amp-sim JSON for the two drive types: the voicing alone. The Drive byte is a
+/// gain in front of that fixed curve and its row writes it (inputDb); the amp's
+/// own drive stays at the insert's default.
+std::string gs_amp_json(int amp_model) {
   ParamsJson out;
   out.integer("ampModel", amp_model);
-  out.number("drive", std::clamp(drive_floor + drive_span * drive, 0.0f, 1.0f));
-  return out.str();
-}
-
-/// Pitch-shifter mix (SC-88Pro 2-voice / feedback pitch shifter). Effect Balance
-/// (PARAMETER 16) maps the direct/effect mix to dry/wet; no measurement reaches
-/// this type's balance byte, so that mapping is the older linear reading rather
-/// than the measured two-ramp law. The byte does not read 0 as "unset":
-/// selecting the type loads its own defaults, so a zero here is a zero the file
-/// asked for. Coarse Pitch is bound.
-std::string gs_pitch_shift_json(const GsEfx& efx) {
-  ParamsJson out;
-  out.number("dryWet", static_cast<float>(efx_byte(efx, 15)) / 127.0f);
   return out.str();
 }
 
 }  // namespace
 
 std::string gs_efx_insert_params(const GsEfx& efx) {
-  // Every byte an archive law reaches is written by the binding table; what is
-  // left here is the skeleton's own: shapes, modes, and the bytes it reads
-  // under a law of its own.
+  // Every printed byte is written by the binding table; what is left here is
+  // the skeleton's own: shapes and voicings no byte reaches.
   switch (efx.type) {
     case 0x0100:  // Stereo-EQ -> four bands of the parametric EQ.
       return gs_stereo_eq_json();
     case 0x0110:
       // Overdrive -> the amp model on its classic-crunch voicing (ampModel 0).
-      // A light setting already breaks up (0.25 floor), the top reaches full
-      // crunch. The amp's cab EQ is left on so the tone is amp-shaped.
-      return gs_drive_json(efx, 0, 0.25f, 0.6f);
+      // The amp's cab EQ is left on so the tone is amp-shaped.
+      return gs_amp_json(0);
     case 0x0111:
-      // Distortion -> the amp model on its high-gain voicing (ampModel 2), which
-      // saturates earlier and harder; a higher drive floor than the overdrive.
-      return gs_drive_json(efx, 2, 0.45f, 0.55f);
-    case 0x0123:  // Stereo Flanger: its pre-filter was read to be the chorus's section.
-    case 0x0142: {
-      // Stereo Chorus. The section in front of the delay is one pole whose shape
-      // the type byte picks. Three of the byte's states were measured — 0 flat,
-      // 1 low pass, 2 high pass — and PreFilterMode is declared in that order. A
-      // fourth state exists and was not asked, so it writes no key and the
-      // section stays out of the path rather than taking whichever shape a cast
-      // would land on.
-      ParamsJson out;
-      if (efx_byte(efx, 0) <= 2) out.integer("preFilterMode", efx_byte(efx, 0));
-      return out.str();
-    }
-    case 0x0125:  // Tremolo -> the ring modulator at its fixed depth.
-      return gs_tremolo_json();
-    case 0x0160:  // 2-voice Pitch Shifter
-    case 0x0161:  // Feedback Pitch Shifter (feedback approximated as a plain shift).
-      return gs_pitch_shift_json(efx);
+      // Distortion -> the amp model on its high-gain voicing (ampModel 2).
+      return gs_amp_json(2);
     default:
       return "{}";
   }
@@ -658,99 +646,36 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
 
 namespace {
 
-/// The binding rows for one type. kGsEfxBindings is sorted by (type, slot, key),
-/// so a type's rows are one contiguous run.
-struct BindingRun {
-  const GsEfxBinding* first;
-  const GsEfxBinding* last;
-};
-
-BindingRun run_of(uint16_t type) noexcept {
-  const auto begin = kGsEfxBindings.begin();
-  const auto end = kGsEfxBindings.end();
-  const auto lower = std::lower_bound(
-      begin, end, type, [](const GsEfxBinding& row, uint16_t key) { return row.type < key; });
-  const auto upper = std::upper_bound(
-      lower, end, type, [](uint16_t key, const GsEfxBinding& row) { return key < row.type; });
-  return {kGsEfxBindings.data() + (lower - begin), kGsEfxBindings.data() + (upper - begin)};
-}
-
-BindingRun bindings_for(uint16_t type) noexcept {
-  const BindingRun run = run_of(type);
-  // The binding files spell Rotary Multi one way and the defaults table the
-  // other, so a lookup that found nothing has one more spelling to try before
-  // reporting that the type binds nothing.
-  if (run.first != run.last) return run;
-  const uint16_t alias = gs_efx_alias_type(type);
-  return alias == type ? run : run_of(alias);
-}
-
-/// Writes one bound byte as the quantity its conversion law names. Returns false
-/// for a law with no reader here, so a row that binds nothing is a row this
-/// refuses rather than one it silently drops on the insert's default.
-bool write_bound(ParamsJson& out, const char* key, const GsEfxBinding& row, uint8_t byte) {
-  switch (row.conversion_class) {
-    case kGsEfxClassRate:
-      out.number(key,
-                 gs_efx_rate_hz(byte, row.table == 1 ? GsRateRange::kWide : GsRateRange::kNarrow));
-      return true;
-    case kGsEfxClassDelayTime: {
-      constexpr std::array<GsTimeLadder, 5> kLadders = {
-          GsTimeLadder::kLadder0, GsTimeLadder::kLadder1, GsTimeLadder::kLadder2,
-          GsTimeLadder::kLadder3, GsTimeLadder::kLadder4};
-      if (row.table >= kLadders.size()) return false;
-      out.number(key, gs_efx_delay_ms(byte, kLadders[row.table]));
-      return true;
-    }
-    case kGsEfxClassFreq: {
-      constexpr std::array<GsFreqColumn, 3> kColumns = {
-          GsFreqColumn::kColumn0, GsFreqColumn::kColumn1, GsFreqColumn::kColumn2};
-      if (row.table >= kColumns.size()) return false;
-      out.number(key, gs_efx_freq_hz(byte, kColumns[row.table]));
-      return true;
-    }
-    case kGsEfxClassGain:
-      out.number(key, gs_efx_gain_db(byte));
-      return true;
-    case kGsEfxClassLevel:
-      out.number(key, gs_efx_level_db(byte));
-      return true;
-    case kGsEfxClassWidth:
-      out.number(key, gs_efx_width_q(byte));
-      return true;
-    case kGsEfxClassAccel: {
-      // One divisor table, two quantities, and the control's own suffix says
-      // which: the undershoot is a frequency, the time constant is a time.
-      const std::string_view name(key);
-      const bool hertz = name.size() > 2 && name.substr(name.size() - 2) == "Hz";
-      out.number(key, hertz ? gs_efx_accel_undershoot_hz(byte) : gs_efx_accel_tau_s(byte));
-      return true;
-    }
-    case kGsEfxClassPostGain:
-      out.number(key, gs_efx_post_gain_db(byte));
-      return true;
-    case kGsEfxClassWindow:
-      out.number(key, gs_efx_window_ms(byte));
-      return true;
-    case kGsEfxClassCorner:
-      out.number(key,
-                 gs_efx_corner_hz(byte, row.table == 1 ? GsShelfSide::kHigh : GsShelfSide::kLow));
-      return true;
-    case kGsEfxClassRatio: {
-      if (row.range >= kGsEfxBindingRanges.size()) return false;
-      const GsEfxBindingRange& ends = kGsEfxBindingRanges[row.range];
-      float units = 0.0f;
-      if (!gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit, &units)) {
-        return false;
-      }
-      // Table 0 is printed in percent and the controls take the fraction;
-      // table 1 is printed in semitones, which is what they take.
-      out.number(key, row.table == 0 ? units / 100.0f : units);
-      return true;
-    }
-    default:
-      return false;
+/// The type number @p view spells @p type as. The binding files spell Rotary
+/// Multi one way and the defaults table the other, so a type no row names has
+/// one more spelling to try before it binds nothing.
+uint16_t bound_type(const GsEfxRowView& view, uint16_t type) noexcept {
+  for (size_t i = 0; i < view.n_rows; ++i) {
+    if (view.rows[i].type == type) return type;
   }
+  for (size_t i = 0; i < view.n_enables; ++i) {
+    if (view.enables[i].type == type) return type;
+  }
+  return gs_efx_alias_type(type);
+}
+
+/// Writes one bound byte as the value the row's own law gives it.
+void write_bound(ParamsJson& out, const char* key, const GsEfxBindingRow& row, uint8_t byte) {
+  out.number(key, gs_efx_binding_value(row, byte));
+}
+
+/// The stage named @p name at @p ordinal, or end.
+std::vector<GsEfxStage>::iterator find_stage(std::vector<GsEfxStage>& chain, std::string_view name,
+                                             uint8_t ordinal) {
+  return std::find_if(chain.begin(), chain.end(), [name, ordinal](const GsEfxStage& s) {
+    return s.ordinal == ordinal && s.name == name;
+  });
+}
+
+/// How many stages of the chain carry @p name.
+uint8_t count_named(const std::vector<GsEfxStage>& chain, std::string_view name) {
+  return static_cast<uint8_t>(std::count_if(
+      chain.begin(), chain.end(), [name](const GsEfxStage& s) { return s.name == name; }));
 }
 
 /// The constants a stage the bindings alone bring into being needs beside its
@@ -763,12 +688,20 @@ void write_output_stage_constants(ParamsJson& out, std::string_view stage) {
   append_fixed_shelf(out, 1, kEqBandHighShelf, kGsEfxOutputToneHighHz);
 }
 
-/// Whether a params object already carries @p key. Keys are plain identifiers
-/// with no escaping, so the spelling a writer produces is the spelling to look
-/// for.
-bool carries_key(const std::string& params, std::string_view key) {
+/// Removes @p key and its value from a params object; the skeleton writes only
+/// flat numeric values, so a value ends at the next comma or closing brace.
+void drop_key(std::string& params, std::string_view key) {
   const std::string needle = "\"" + std::string(key) + "\":";
-  return params.find(needle) != std::string::npos;
+  const std::size_t at = params.find(needle);
+  if (at == std::string::npos) return;
+  std::size_t end = params.find_first_of(",}", at + needle.size());
+  if (params[end] == ',') {
+    ++end;
+  } else if (at > 1 && params[at - 1] == ',') {
+    params.erase(at - 1, end - (at - 1));
+    return;
+  }
+  params.erase(at, end - at);
 }
 
 /// Adds one key to a finished params object, which is either "{}" or a closed
@@ -782,8 +715,43 @@ void merge_key(std::string& params, const std::string& addition) {
   params += "," + addition + "}";
 }
 
-/// Writes every control the binding table gives this type, into the stage the
-/// row names -- appending the stage where the effect chain has none.
+/// Selects the modern method of each stage whose insert offers one: cubic
+/// Lagrange delay reads, the pitch shifter's pre-write anti-aliasing, the
+/// geometric rotary, octave-linear wah sweeps and ADAA on the enhancer's
+/// shaper. The inserts' own defaults stay today's behaviour; only this chain
+/// asks for the newer one, and it writes integer method keys and no constants.
+void write_method_keys(std::vector<GsEfxStage>& chain) {
+  constexpr int kLagrange3 = 1;        // DelayInterpolation::kLagrange3
+  constexpr int kGeometricRotary = 1;  // RotaryModel, the two-microphone model
+  constexpr int kOctaveSweep = 1;      // WahSweepLaw::kLinearOctave
+  constexpr int kAdaa1 = 1;            // rt::AliasingControl::Adaa1
+  for (GsEfxStage& stage : chain) {
+    ParamsJson keys;
+    const std::string& name = stage.name;
+    if (name == "effects.modulation.chorus" || name == "effects.modulation.flanger" ||
+        name == "effects.modulation.ensemble" || name == "effects.delay.stereo") {
+      keys.integer("interpolation", kLagrange3);
+    } else if (name == "effects.modulation.rotary") {
+      keys.integer("interpolation", kLagrange3);
+      keys.integer("model", kGeometricRotary);
+    } else if (name == "effects.modulation.pitchShifter") {
+      keys.integer("interpolation", kLagrange3);
+      keys.integer("antiAlias", 1);
+    } else if (name == "effects.modulation.wah" || name == "effects.modulation.autoWah") {
+      keys.integer("sweepLaw", kOctaveSweep);
+    } else if (name == "spectral.presenceEnhancer") {
+      keys.integer("aliasing", kAdaa1);
+    } else {
+      continue;
+    }
+    const std::string rendered = keys.str();
+    merge_key(stage.params_json, rendered.substr(1, rendered.size() - 2));
+  }
+}
+
+/// Writes every control the binding rows give this type, into the stage each
+/// row names by (name, ordinal) -- appending the stage where the effect chain
+/// has none.
 ///
 /// The skeleton writes shapes, modes and the bytes it reads under a law of its
 /// own, never a bound control, so no row finds its key already written; the
@@ -793,30 +761,116 @@ void merge_key(std::string& params, const std::string& addition) {
 /// and the output level sit at the same slots for every type rather than inside
 /// any one effect, which is why nineteen inserts do not each carry a copy of
 /// them: the module puts one stage after the effect and the table says so.
-void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx) {
-  const BindingRun run = bindings_for(efx.type);
+void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEfxRowView& view) {
+  const uint16_t type = bound_type(view, efx.type);
   // Rows arrive in slot order, which is the unit's own: an appended stage lands
   // where the unit puts it -- tone pair, pan, level.
-  for (const GsEfxBinding* row = run.first; row != run.last; ++row) {
-    const std::string_view stage = kGsEfxBindingStages[row->stage];
-    const std::string_view key = kGsEfxBindingKeys[row->key];
+  for (size_t i = 0; i < view.n_rows; ++i) {
+    const GsEfxBindingRow& row = view.rows[i];
+    if (row.type != type) continue;
+    assert(row.stage < kGsEfxRowStages.size() && row.key < kGsEfxRowKeys.size());
+    const std::string_view stage = kGsEfxRowStages[row.stage];
+    const std::string_view key = kGsEfxRowKeys[row.key];
 
-    auto found = std::find_if(chain.begin(), chain.end(),
-                              [stage](const GsEfxStage& s) { return s.name == stage; });
+    auto found = find_stage(chain, stage, row.ordinal);
     if (found == chain.end()) {
+      // A stage the rows bring into being takes the next ordinal of its name,
+      // so a row may only name the one that comes next.
+      if (row.ordinal != count_named(chain, stage)) continue;
       ParamsJson constants;
       write_output_stage_constants(constants, stage);
-      chain.push_back({std::string(stage), constants.str()});
+      chain.push_back({std::string(stage), constants.str(), kGsEfxBranchBack, row.ordinal});
       found = std::prev(chain.end());
     }
-    if (carries_key(found->params_json, key)) continue;
+    // A skeleton constant is only the default; the bound byte replaces it.
+    drop_key(found->params_json, key);
 
     ParamsJson one;
-    if (!write_bound(one, std::string(key).c_str(), *row, efx_byte(efx, row->slot))) continue;
+    write_bound(one, std::string(key).c_str(), row, efx_byte(efx, row.slot));
     const std::string rendered = one.str();
     // ParamsJson closes itself, so unwrap the single pair it just wrote.
     merge_key(found->params_json, rendered.substr(1, rendered.size() - 2));
   }
+}
+
+/// Sets each stage's `enabled` from the switch and selector rows. A stage two
+/// rules name is on only where both turn it on (a switch over a selector).
+void apply_enables(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEfxRowView& view) {
+  const uint16_t type = bound_type(view, efx.type);
+  for (size_t i = 0; i < view.n_enables; ++i) {
+    const GsEfxEnable& enable = view.enables[i];
+    if (enable.type != type) continue;
+    const uint8_t byte = efx_byte(efx, enable.slot);
+    for (uint8_t s = 0; s < enable.n_stages; ++s) {
+      assert(enable.stages[s] < kGsEfxRowStages.size());
+      const auto found = find_stage(chain, kGsEfxRowStages[enable.stages[s]], enable.ordinals[s]);
+      if (found == chain.end()) continue;
+      found->enabled = found->enabled && gs_efx_enable_on(enable, byte, s);
+    }
+  }
+}
+
+/// Numbers every stage among the stages sharing its name, in chain order.
+void number_ordinals(std::vector<GsEfxStage>& chain) {
+  for (size_t i = 0; i < chain.size(); ++i) {
+    uint8_t ordinal = 0;
+    for (size_t j = 0; j < i; ++j) {
+      if (chain[j].name == chain[i].name) ++ordinal;
+    }
+    chain[i].ordinal = ordinal;
+  }
+}
+
+std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx);
+
+/// One single type's effect stages as its own power-on bytes realise them.
+/// The bytes a parallel type prints for the half reach it through its rows.
+std::vector<GsEfxStage> gs_efx_single_chain(uint16_t type) {
+  GsEfx single;
+  single.type = type;
+  single.type_msb = static_cast<uint8_t>(type >> 8);
+  const GsEfxTypeDefaults* defaults = gs_efx_type_defaults(type);
+  if (defaults != nullptr) single.params = defaults->params;
+  return gs_efx_effect_chain(single);
+}
+
+/// A parallel-2 type: which single types realise each half, in the order the
+/// half runs them. Two entries place an overdrive/distortion selector's pair.
+struct GsEfxParallelHalves {
+  uint16_t type;
+  std::array<uint16_t, 2> a;
+  std::array<uint16_t, 2> b;
+};
+
+/// The halves the printed type names select (OD = the Overdrive/Distortion
+/// pair its OD Sel byte picks between). A zero entry is no second type.
+constexpr std::array<GsEfxParallelHalves, 9> kGsEfxParallelHalves = {{
+    {0x1100, {0x0142, 0}, {0x0150, 0}},            // Cho / Delay
+    {0x1101, {0x0123, 0}, {0x0150, 0}},            // FL / Delay
+    {0x1102, {0x0142, 0}, {0x0123, 0}},            // Cho / Flanger
+    {0x1103, {0x0110, 0x0111}, {0x0110, 0x0111}},  // OD1 / OD2
+    {0x1104, {0x0110, 0x0111}, {0x0122, 0}},       // OD / Rotary
+    {0x1105, {0x0110, 0x0111}, {0x0120, 0}},       // OD / Phaser
+    {0x1106, {0x0110, 0x0111}, {0x0121, 0}},       // OD / AutoWah
+    {0x1107, {0x0120, 0}, {0x0122, 0}},            // PH / Rotary
+    {0x1108, {0x0120, 0}, {0x0121, 0}},            // PH / AutoWah
+}};
+
+/// Appends one half: its single types' stages, then its own level and pan.
+void append_half(std::vector<GsEfxStage>& chain, const std::array<uint16_t, 2>& types,
+                 uint8_t branch) {
+  for (const uint16_t type : types) {
+    if (type == 0) continue;
+    for (GsEfxStage& stage : gs_efx_single_chain(type)) {
+      stage.branch = branch;
+      chain.push_back(std::move(stage));
+    }
+  }
+  chain.push_back({"utility.gain", "{}", branch});
+  // The raw constant-power law, so the half's pan byte moves its pair.
+  ParamsJson pan;
+  pan.integer("law", 1);
+  chain.push_back({"stereo.stereoBalance", pan.str(), branch});
 }
 
 /// The stages that realise the effect itself, before the unit's output stage.
@@ -830,12 +884,11 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   // A composite's parameter block is laid out per type, not per block, so a slot
   // number carries no meaning until the type says which block owns it. That
   // layout is the binding table's: each row names its stage, so the blocks
-  // here carry only what the skeleton owns.
+  // here carry only what the skeleton owns. A block the type's selector picks
+  // between (OD Sel, CF Sel, TP Sel) places both candidates side by side in the
+  // series; the selector's enable row turns one of them off.
   const auto comp = [] { return GsEfxStage{"dynamics.compressor", "{}"}; };
-  const auto od = [](bool bass) {
-    return GsEfxStage{"saturation.ampSim", bass ? "{\"ampModel\":0,\"drive\":0.6,\"cabModel\":1}"
-                                                : "{\"ampModel\":0,\"drive\":0.6}"};
-  };
+  const auto od = [] { return GsEfxStage{"saturation.ampSim", "{\"ampModel\":0,\"drive\":0.6}"}; };
   // Every combination type's equaliser: a low shelf, one peaking section, a
   // high shelf. It prints two gains and no corner, so the shelves sit on the
   // pair the archive measured on one such type; every byte the bands read is bound.
@@ -861,16 +914,20 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   const auto trem = [] {
     return GsEfxStage{"effects.modulation.ringModulator", gs_tremolo_json()};
   };
+  const auto binaural = [] { return GsEfxStage{"stereo.binaural", "{}"}; };
   switch (efx.type) {
     case 0x0141:  // Tremolo Chorus: the chorus with its output amplitude-modulated.
       return {cf(), trem()};
+    case 0x0144:  // 3D Chorus: the chorus placed by the binaural stage.
+    case 0x0157:  // 3D Delay: the stereo delay placed by the binaural stage.
+      return {{std::string(gs_efx_insert_name(efx.type)), gs_efx_insert_params(efx)}, binaural()};
     // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
     case 0x0200:  // OD -> Chorus
-      return {od(false), cf()};
+      return {od(), cf()};
     case 0x0201:  // OD -> Flanger
-      return {od(false), fl()};
+      return {od(), fl()};
     case 0x0202:  // OD -> Delay
-      return {od(false), delay()};
+      return {od(), delay()};
     case 0x0203:  // DS -> Chorus
       return {ds(), cf()};
     case 0x0204:  // DS -> Flanger
@@ -893,31 +950,35 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     // for it (chapter-4 body 03 00 vs appendix table 02 0C); accept both.
     case 0x020C:
     case 0x0300:
-      return {od(false), eq(), rot()};
+      return {od(), eq(), rot()};
     case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
-      return {comp(), od(false), cf(), delay()};
+      return {comp(), od(), ds(), cf(), fl(), delay()};
     case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
-      return {comp(), od(false), eq(), cf()};
+      return {comp(), od(), ds(), eq(), cf(), fl()};
     case 0x0402:  // GTR Multi 3: Wah-OD-CF-Dly
-      return {wah(), od(false), cf(), delay()};
+      return {wah(), od(), ds(), cf(), fl(), delay()};
     case 0x0403:  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD block)
-      return {comp(), eq(), cf(), delay()};
+      return {comp(), eq(), cf(), fl(), delay()};
     case 0x0404:  // Clean GTR Multi 2: AW-EQ-CF-Dly (Auto-Wah at the front)
-      return {autowah(), eq(), cf(), delay()};
-    case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (the OD block on the bass cab)
-      return {comp(), od(true), eq(), cf()};
+      return {autowah(), eq(), cf(), fl(), delay()};
+    case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (its OD Amp byte picks the cab)
+      return {comp(), od(), ds(), eq(), cf(), fl()};
     case 0x0406:  // Rhodes Multi: Enhancer -> Phaser -> Chorus -> Tremolo/Pan
-      return {eh(), ph(), cf(), pan()};
+      return {eh(), ph(), cf(), fl(), rm(), pan()};
     case 0x0500:  // Keyboard Multi: Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
                   // The only GS type that binds the ring-modulator insert.
       return {rm(), eq(), ps(), ph(), delay()};
     default: {
+      // Parallel-2 types (MSB 11): two halves side by side, each the skeleton of
+      // the single type its printed name selects.
+      for (const GsEfxParallelHalves& halves : kGsEfxParallelHalves) {
+        if (halves.type != efx.type) continue;
+        std::vector<GsEfxStage> chain;
+        append_half(chain, halves.a, kGsEfxBranchHalfA);
+        append_half(chain, halves.b, kGsEfxBranchHalfB);
+        return chain;
+      }
       // Single-effect types: a one-stage chain from the name/param mapping.
-      // The parallel-2 types (MSB 11) fall through here to the empty chain and
-      // stay there. They split the signal into two effects and sum them, which
-      // a series the realiser runs in order cannot express; folding one into a
-      // series would deliver a different effect under the right type name, and
-      // unlike a bypass — which the caller logs — that is invisible.
       const std::string_view name = gs_efx_insert_name(efx.type);
       if (name.empty()) return {};
       return {{std::string(name), gs_efx_insert_params(efx)}};
@@ -925,13 +986,25 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   }
 }
 
+/// The generated binding rows and enables.
+constexpr GsEfxRowView kGsEfxGeneratedRows{kGsEfxBindingRows.data(), kGsEfxBindingRows.size(),
+                                           kGsEfxEnables.data(), kGsEfxEnables.size()};
+
 }  // namespace
 
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
+  return gs_efx_insert_chain(efx, kGsEfxGeneratedRows);
+}
+
+std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx, const GsEfxRowView& rows) {
   std::vector<GsEfxStage> chain = gs_efx_effect_chain(efx);
   // An unmapped type bypasses whole: appending an output stage to nothing would
   // put a gain where the caller logged that it plays the part dry.
-  if (!chain.empty()) apply_bindings(chain, efx);
+  if (chain.empty()) return chain;
+  number_ordinals(chain);
+  write_method_keys(chain);
+  apply_bindings(chain, efx, rows);
+  apply_enables(chain, efx, rows);
   return chain;
 }
 

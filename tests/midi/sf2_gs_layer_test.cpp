@@ -467,22 +467,30 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
   REQUIRE(gs_efx_insert_name(0x0173) == "saturation.bitcrusher");            // Lo-Fi 2
   REQUIRE(gs_efx_insert_name(0x0000).empty());                               // Thru
   // Tremolo is the ring modulator run as amplitude modulation; the full
-  // per-type coverage and the reason for each unmapped type (3D Auto here) are
-  // in gs_efx_types_test.cpp.
+  // per-type coverage is in gs_efx_types_test.cpp.
   REQUIRE(gs_efx_insert_name(0x0125) == "effects.modulation.ringModulator");
-  REQUIRE(gs_efx_insert_name(0x0170).empty());
+  REQUIRE(gs_efx_insert_name(0x0103) == "effects.filter.vowel");  // Humanizer
+  REQUIRE(gs_efx_insert_name(0x0170) == "stereo.binaural");       // 3D Auto
+  REQUIRE(gs_efx_insert_name(0x0171) == "stereo.binaural");       // 3D Manual
 }
 
 TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
+  // Overdrive -> the amp model's classic-crunch voicing. EFX PARAMETER 1 is a
+  // gain in front of that curve, written by its binding row alone (inputDb):
+  // the skeleton's own object does not read the byte.
   GsEfx od;
-  od.type = 0x0110;  // Overdrive -> amp model, drive rising with EFX PARAMETER 1
+  od.type = 0x0110;
   od.params[0] = 0;
   const std::string low = gs_efx_insert_params(od);
+  const std::string low_chain = gs_efx_insert_chain(od).front().params_json;
   od.params[0] = 127;
   const std::string high = gs_efx_insert_params(od);
-  REQUIRE(low.find("\"drive\"") != std::string::npos);
-  REQUIRE(low.find("\"ampModel\":0") != std::string::npos);  // classic-crunch voicing
-  REQUIRE(low != high);                                      // more drive -> more drive knob
+  const std::string high_chain = gs_efx_insert_chain(od).front().params_json;
+  REQUIRE(low.find("\"drive\"") == std::string::npos);
+  REQUIRE(low.find("\"ampModel\":0") != std::string::npos);
+  REQUIRE(low == high);
+  REQUIRE(low_chain.find("\"inputDb\"") != std::string::npos);
+  REQUIRE(low_chain != high_chain);
 
   GsEfx dist;
   dist.type = 0x0111;  // Distortion -> amp model on its high-gain voicing
@@ -571,30 +579,59 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
   gtr.type = 0x0401;
   gtr.params[9] = 52;   // EQ Low Gain -12 dB (0x34, centre 64)
   gtr.params[13] = 76;  // EQ Hi Gain  +12 dB (0x4C)
+  // The OD block places both amps its OD Sel chooses between, and the CF block
+  // both the chorus and the flanger its CF Sel chooses between.
+  gtr.params[4] = 1;   // OD Sel: the distortion amp
+  gtr.params[8] = 1;   // OD Sw: on
+  gtr.params[14] = 1;  // CF Sel: the flanger
   const auto chain = gs_efx_insert_chain(gtr);
-  REQUIRE(chain.size() >= 4);  // the four blocks, then the unit's output stage
+  REQUIRE(chain.size() >= 6);  // the four blocks, then the unit's output stage
   REQUIRE(chain[0].name == "dynamics.compressor");
   REQUIRE(chain[1].name == "saturation.ampSim");
-  REQUIRE(chain[2].name == "eq.parametric");
-  REQUIRE(chain[3].name == "effects.modulation.chorus");
+  REQUIRE(chain[2].name == "saturation.ampSim");
+  REQUIRE(chain[3].name == "eq.parametric");
+  REQUIRE(chain[4].name == "effects.modulation.chorus");
+  REQUIRE(chain[5].name == "effects.modulation.flanger");
+  REQUIRE(chain[1].params_json.find("\"ampModel\":0") != std::string::npos);
+  REQUIRE(chain[2].params_json.find("\"ampModel\":2") != std::string::npos);
+  // The selectors switch exactly one of each pair on.
+  REQUIRE_FALSE(chain[1].enabled);
+  REQUIRE(chain[2].enabled);
+  REQUIRE_FALSE(chain[4].enabled);
+  REQUIRE(chain[5].enabled);
   // The EQ block is the composite's true tone control: Low/Hi Gain -> shelves.
-  REQUIRE(chain[2].params_json.find("\"band0.gainDb\":-12") != std::string::npos);
-  REQUIRE(chain[2].params_json.find("\"band2.gainDb\":12") != std::string::npos);
+  REQUIRE(chain[3].params_json.find("\"band0.gainDb\":-12") != std::string::npos);
+  REQUIRE(chain[3].params_json.find("\"band2.gainDb\":12") != std::string::npos);
 
   // A zero gain byte is the bottom of the window and not an absence: the type
   // loads its own twenty bytes when it is selected, so no state means "unset".
   GsEfx flat;
   flat.type = 0x0401;
   flat.params[9] = 0;
-  REQUIRE(gs_efx_insert_chain(flat)[2].params_json.find("\"band0.gainDb\":-12") !=
+  REQUIRE(gs_efx_insert_chain(flat)[3].params_json.find("\"band0.gainDb\":-12") !=
           std::string::npos);
 
-  // A type with no faithful mapping yields an empty chain (bypass). The
-  // parallel-2 composites (MSB 11) are intentionally left unmapped: they mix two
-  // effects in parallel, which the series insert chain cannot express faithfully.
-  GsEfx unknown;
-  unknown.type = 0x1100;  // Cho/Delay (parallel) -> unmapped
-  REQUIRE(gs_efx_insert_chain(unknown).empty());
+  // A parallel-2 type (MSB 11) realises its two halves side by side: Cho/Delay
+  // puts the chorus in half A and the delay in half B, each followed by its own
+  // level and pan.
+  GsEfx parallel;
+  parallel.type = 0x1100;
+  const auto halves = gs_efx_insert_chain(parallel);
+  REQUIRE(halves.size() >= 6);
+  REQUIRE(halves[0].name == "effects.modulation.chorus");
+  REQUIRE(halves[0].branch == sonare::midi::synth::kGsEfxBranchHalfA);
+  REQUIRE(halves[1].name == "utility.gain");
+  REQUIRE(halves[2].name == "stereo.stereoBalance");
+  REQUIRE(halves[2].branch == sonare::midi::synth::kGsEfxBranchHalfA);
+  REQUIRE(halves[3].name == "effects.delay.stereo");
+  REQUIRE(halves[3].branch == sonare::midi::synth::kGsEfxBranchHalfB);
+  REQUIRE(halves[4].name == "utility.gain");
+  REQUIRE(halves[5].name == "stereo.stereoBalance");
+  REQUIRE(halves[5].branch == sonare::midi::synth::kGsEfxBranchHalfB);
+
+  // Thru yields an empty chain (bypass).
+  GsEfx thru;
+  REQUIRE(gs_efx_insert_chain(thru).empty());
 }
 
 TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2][gslayer]") {
@@ -610,31 +647,33 @@ TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2]
     return out;
   };
   // The SC-88Pro MSB-04 guitar/bass multi block, each in its manual signal order
-  // (every block now has a matching insert: Wah / Auto-Wah are realised too).
-  REQUIRE(names(0x0400, 4) ==  // GTR Multi 1: Cmp-OD-CF-Dly
-          std::vector<std::string>{"dynamics.compressor", "saturation.ampSim",
-                                   "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0402, 4) ==  // GTR Multi 3: Wah-OD-CF-Dly
-          std::vector<std::string>{"effects.modulation.wah", "saturation.ampSim",
-                                   "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0403, 4) ==  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD)
-          std::vector<std::string>{"dynamics.compressor", "eq.parametric",
-                                   "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0404, 4) ==  // Clean GTR Multi 2: AW-EQ-CF-Dly
-          std::vector<std::string>{"effects.modulation.autoWah", "eq.parametric",
-                                   "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0405, 4) ==  // Bass Multi: Cmp-OD-EQ-CF
-          std::vector<std::string>{"dynamics.compressor", "saturation.ampSim", "eq.parametric",
-                                   "effects.modulation.chorus"});
+  // (every block now has a matching insert: Wah / Auto-Wah are realised too). An
+  // OD block is the overdrive and distortion amps its OD Sel chooses between,
+  // and a CF block the chorus and flanger its CF Sel chooses between.
+  const std::string od = "saturation.ampSim";
+  const std::string cho = "effects.modulation.chorus";
+  const std::string fl = "effects.modulation.flanger";
+  const std::string dly = "effects.delay.stereo";
+  REQUIRE(names(0x0400, 6) ==  // GTR Multi 1: Cmp-OD-CF-Dly
+          std::vector<std::string>{"dynamics.compressor", od, od, cho, fl, dly});
+  REQUIRE(names(0x0402, 6) ==  // GTR Multi 3: Wah-OD-CF-Dly
+          std::vector<std::string>{"effects.modulation.wah", od, od, cho, fl, dly});
+  REQUIRE(names(0x0403, 5) ==  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD)
+          std::vector<std::string>{"dynamics.compressor", "eq.parametric", cho, fl, dly});
+  REQUIRE(names(0x0404, 5) ==  // Clean GTR Multi 2: AW-EQ-CF-Dly
+          std::vector<std::string>{"effects.modulation.autoWah", "eq.parametric", cho, fl, dly});
+  REQUIRE(names(0x0405, 6) ==  // Bass Multi: Cmp-OD-EQ-CF
+          std::vector<std::string>{"dynamics.compressor", od, od, "eq.parametric", cho, fl});
 
-  // The bass multi puts its OD block on the bass cab; the guitar ones do not.
+  // The OD Amp byte picks the cabinet, and both amps of the pair sit on it.
   GsEfx bass;
   bass.type = 0x0405;
+  bass.params[6] = 2;
   const auto bass_chain = gs_efx_insert_chain(bass);
-  REQUIRE(bass_chain[1].params_json.find("\"cabModel\":1") != std::string::npos);
-  GsEfx guitar;
-  guitar.type = 0x0401;
-  REQUIRE(gs_efx_insert_chain(guitar)[1].params_json.find("cabModel") == std::string::npos);
+  REQUIRE(bass_chain[1].params_json.find("\"cabModel\":2") != std::string::npos);
+  REQUIRE(bass_chain[2].params_json.find("\"cabModel\":2") != std::string::npos);
+  bass.params[6] = 0;
+  REQUIRE(gs_efx_insert_chain(bass)[1].params_json.find("\"cabModel\":0") != std::string::npos);
 }
 
 TEST_CASE("gs_efx_insert_chain expands the series-2 and multi composites", "[midi][sf2][gslayer]") {
@@ -675,10 +714,19 @@ TEST_CASE("gs_efx_insert_chain expands the series-2 and multi composites", "[mid
   REQUIRE(names(0x0300, rotary_multi.size()) == rotary_multi);
   REQUIRE(names(0x020C, rotary_multi.size()) == rotary_multi);
 
-  // Rhodes Multi (04 06): Enhancer -> Phaser -> Chorus -> Tremolo/Pan.
-  REQUIRE(names(0x0406, 4) ==
+  // Rhodes Multi (04 06): Enhancer -> Phaser -> Chorus/Flanger -> Tremolo/Pan,
+  // each pair the one its CF Sel and TP Sel choose between.
+  REQUIRE(names(0x0406, 6) ==
           std::vector<std::string>{"spectral.presenceEnhancer", "effects.modulation.phaser",
-                                   "effects.modulation.chorus", "stereo.autoPan"});
+                                   "effects.modulation.chorus", "effects.modulation.flanger",
+                                   "effects.modulation.ringModulator", "stereo.autoPan"});
+  GsEfx rhodes;
+  rhodes.type = 0x0406;
+  rhodes.params[14] = 1;  // TP Sel: the auto-pan
+  rhodes.params[18] = 1;  // TP Sw: on
+  const auto rhodes_chain = gs_efx_insert_chain(rhodes);
+  REQUIRE_FALSE(rhodes_chain[4].enabled);
+  REQUIRE(rhodes_chain[5].enabled);
 
   // Keyboard Multi (05 00): Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
   // This is the only GS type that binds the ring-modulator insert.

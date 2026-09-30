@@ -4,13 +4,13 @@ The SC-8850 prints 770 (type, slot) parameters across its insertion-effect
 block. This reads the archive's own record of which of those 770 carry a
 printed value, and the hand-written binding files that say what each one
 does -- translated into an insert control, driven through a designed law,
-switching stages on, or one of the older forms a row may still be written
-in. Every printed row is adjudicated exactly once, in one of seven forms: the
-first line counts ``translated + state + unmapped + unreadable + builder``,
-the second ``translated + designed + enables``, and the run fails unless all
-seven add to printed.
+or switching stages on. Every printed row is adjudicated exactly once, in one
+of those three forms, and the run fails unless they add to printed. The older
+forms (``state``, ``unmapped``, ``unreadable``, ``builder``) are refused as
+syntax: a byte is always given something to drive.
 
-Of the archive, **only** ``data/units/*/efx-params/*.json`` is read. Only the
+Of the archive, **only** ``data/units/*/efx-params/*.json`` and the claims
+under ``inferences/<unit>/`` are read, both CC0. Only the
 mark transcription script ``marks_from_manual.py`` opens ``documents/``;
 this script and the table derivation do not -- that tree carries a licence
 this repo does not have (see ``tools/gs/docs/efx-tables.md``). The printed
@@ -59,10 +59,11 @@ TYPE_ALIASES = {"03 00": "02 0C"}
 
 # The binding-row forms, keyed by the field that names each one. A row carries
 # exactly one; a `stage` with no `designed` beside it is a translated row.
-FORM_KEYS = ("designed", "enables", "state", "unmapped", "unreadable", "builder")
-OLD_TERMS = ("translated", "state", "unmapped", "unreadable", "builder")
-NEW_TERMS = ("translated", "designed", "enables")
-ALL_TERMS = ("translated", "designed", "enables", "state", "unmapped", "unreadable", "builder")
+FORM_KEYS = ("designed", "enables")
+TERMS = ("translated", "designed", "enables")
+# Fields that named a form this vocabulary no longer has. A row carrying one is
+# refused by name rather than read as a row with no form.
+RETIRED_FORM_KEYS = ("state", "unmapped", "unreadable", "builder")
 
 TOOLS = Path(__file__).resolve().parent
 DEFAULT_LAWS = TOOLS / "efx-designed-laws.json"
@@ -71,9 +72,19 @@ DEFAULT_TABLES = TOOLS / "efx-tables.json"
 BASES = ("carried", "invented")
 # How the soundings drift check recognises that a carried or invented law has
 # been superseded by a measurement; a row names at least one.
-REPLACED_WHEN_KEYS = ("claim_names", "model_binding", "stage_passed", "covers")
+REPLACED_WHEN_KEYS = ("claim_names", "model_binding", "stage_passed", "covers", "table_reaches")
+# Keys whose value is a ["MM LL", "40 03 XX"] pair.
+PAIR_KEYS = ("claim_names", "model_binding", "table_reaches")
+# The unit whose claims a carried row may cite, and how a record path names a
+# pair: `MM-LL-AA` (type, address low byte), or `40-03-AA` for a record taken
+# across types, whose types are the claim's own.
+CLAIM_UNIT = "roland-sc8850-01"
+RECORD_TYPED = re.compile(r"/([0-9A-F]{2})-([0-9A-F]{2})-([0-9A-F]{2})(?:-|\.json)")
+RECORD_ADDRESS = re.compile(r"/40-03-([0-9A-F]{2})-")
 PRINTED_MARKS = ("+", "#")
 LAW_FORMS = ("linear", "log", "db", "bipolar", "enum")
+# Forms a law may read in steps: n_states makes the byte a state index.
+STEPPED_FORMS = ("linear", "log")
 # Laws the binding layer reads that no measured table holds. Their endpoints
 # are the row's own printed range, so only a translated row may name one.
 RATIO_LAWS = ("ratio.percent", "ratio.semitone", "ratio.cent")
@@ -247,6 +258,18 @@ def load_laws(path: Path) -> dict:
             sys.exit(f"{path}: {law_id} needs numeric lo and hi")
         if law["form"] == "log" and (law["lo"] <= 0 or law["hi"] <= 0):
             sys.exit(f"{path}: {law_id} is a log law and needs both ends positive")
+        if "n_states" in law:
+            count = law["n_states"]
+            if (
+                law["form"] not in STEPPED_FORMS
+                or isinstance(count, bool)
+                or not isinstance(count, int)
+                or not 2 <= count <= laws["enum_family"]["max_states"]
+            ):
+                sys.exit(
+                    f"{path}: {law_id} n_states steps only a {' or '.join(STEPPED_FORMS)} law, "
+                    f"over 2-{laws['enum_family']['max_states']} states"
+                )
     for index, rule in enumerate(laws["name_rules"]):
         if "law" not in rule or not ({"name", "printed"} & set(rule)):
             sys.exit(f"{path}: name_rules[{index}] needs a law and a name or printed pattern")
@@ -283,7 +306,12 @@ def designed_law(laws: dict, law_id: str) -> dict | None:
     law = laws["laws"].get(law_id)
     if law is None:
         return None
-    return {"form": law["form"], "lo": law["lo"], "hi": law["hi"], "n_states": 0}
+    return {
+        "form": law["form"],
+        "lo": law["lo"],
+        "hi": law["hi"],
+        "n_states": law.get("n_states", 0),
+    }
 
 
 def carried_laws(laws: dict, measured: set[str]) -> set[str]:
@@ -295,6 +323,8 @@ def check_rules(laws: dict, measured: set[str]) -> None:
     known = carried_laws(laws, measured) | set(RATIO_LAWS) | set(laws["laws"]) | {ENABLES_LAW}
     enum_rule = laws["enum_family"]["prefix"] + ENUM_PLACEHOLDER
     for index, rule in enumerate(laws["name_rules"]):
+        if "stage" in rule and not (isinstance(rule["stage"], str) and rule["stage"]):
+            sys.exit(f"name_rules[{index}].stage must name a receiving stage")
         if rule["law"] != enum_rule and rule["law"] not in known:
             sys.exit(f"name_rules[{index}] gives {rule['law']!r}, which no row could name")
 
@@ -320,11 +350,18 @@ def byte_domain(values: str) -> tuple[int, int]:
     return 0x00, 0x7F
 
 
-def rule_matches(laws: dict, name: str, values: str) -> list[str]:
-    """The law each name rule gives a printed (name, values), for every rule that matches."""
+def rule_matches(laws: dict, name: str, values: str, stage: str | None = None) -> list[str]:
+    """The law each name rule gives a printed (name, values) on a receiving stage.
+
+    A rule naming a stage applies only to a row driving that stage, and where
+    one applies the rules naming no stage are set aside.
+    """
     found: list[str] = []
+    qualified: list[str] = []
     enum_rule = laws["enum_family"]["prefix"] + ENUM_PLACEHOLDER
     for rule in laws["name_rules"]:
+        if "stage" in rule and rule["stage"] != stage:
+            continue
         if "name" in rule and not re.fullmatch(rule["name"], name):
             continue
         if "printed" in rule and not re.fullmatch(rule["printed"], values):
@@ -334,12 +371,15 @@ def rule_matches(laws: dict, name: str, values: str) -> list[str]:
         law = rule["law"]
         if law == enum_rule:
             law = laws["enum_family"]["prefix"] + str(state_count(values))
-        found.append(law)
-    return found
+        (qualified if "stage" in rule else found).append(law)
+    return qualified or found
 
 
 def row_form(row: dict, where: str) -> str:
     """Which form a row is written in. Shared with the two header generators."""
+    retired = [key for key in RETIRED_FORM_KEYS if key in row]
+    if retired:
+        sys.exit(f"{where}: {retired} is not a form; a row is translated, designed or enables")
     present = [key for key in FORM_KEYS if key in row]
     if "stage" in row and "designed" not in row:
         present.append("translated")
@@ -353,13 +393,162 @@ def row_form(row: dict, where: str) -> str:
     return form
 
 
+def ordinals_of(row: dict, where: str, form: str) -> list[int]:
+    """The same-named stages a row drives: one ordinal, or a list on a row reaching several.
+
+    Shared with the two header generators; a list still adjudicates its slot once.
+    """
+    ordinal = row.get("ordinal", 0)
+    listed = isinstance(ordinal, list)
+    if listed and form not in ("translated", "designed"):
+        sys.exit(f"{where}: only a translated or designed row lists several ordinals")
+    ordinals = ordinal if listed else [ordinal]
+    if (
+        not ordinals
+        or len(set(map(repr, ordinals))) != len(ordinals)
+        or any(
+            isinstance(o, bool) or not isinstance(o, int) or not 0 <= o <= 0xFF for o in ordinals
+        )
+    ):
+        sys.exit(f"{where}: ordinal must be an integer 0-255, or a list of distinct ones")
+    return ordinals
+
+
+# What one alternative target of a row may name: the stage, its control and,
+# on a designed row, a law of its own.
+ALTERNATIVE_FIELDS = ("stage", "key", "keys", "ordinal", "law")
+
+
+def targets_of(row: dict, where: str) -> list[dict]:
+    """The row, then one row per alternative target, each a complete row of the same form.
+
+    An alternative is the same printed byte driving another stage an enables
+    select chooses between -- the flanger beside the chorus a CF Sel picks from.
+    It names its own stage and control; a designed row's alternative may also
+    name its own law, which is held to the name rule of its own stage.
+    """
+    alternatives = row.get("alternatives")
+    primary = {k: v for k, v in row.items() if k != "alternatives"}
+    if alternatives is None:
+        return [primary]
+    if not isinstance(alternatives, list) or not alternatives:
+        sys.exit(f"{where}: alternatives must be a non-empty list of targets")
+    out = [primary]
+    for alternative in alternatives:
+        if (
+            not isinstance(alternative, dict)
+            or set(alternative) - set(ALTERNATIVE_FIELDS)
+            or not isinstance(alternative.get("stage"), str)
+            or ("key" in alternative) == ("keys" in alternative)
+        ):
+            sys.exit(
+                f"{where}: an alternative names a stage, 'key' or 'keys', and optionally "
+                "an ordinal and a law"
+            )
+        part = {k: v for k, v in primary.items() if k not in ("stage", "key", "keys", "ordinal")}
+        part.update(
+            {k: alternative[k] for k in ("stage", "key", "keys", "ordinal") if k in alternative}
+        )
+        if "law" in alternative:
+            if "designed" not in row:
+                sys.exit(f"{where}: only a designed row's alternative names a law of its own")
+            part["designed"] = dict(row["designed"], law=alternative["law"])
+        out.append(part)
+    return out
+
+
+def stage_refs(part: dict, where: str, form: str) -> set[tuple[str, int]]:
+    return {(part["stage"], ordinal) for ordinal in ordinals_of(part, where, form)}
+
+
+def check_selected_targets(rows: list[dict]) -> None:
+    """A byte driving one stage an enables select chooses between drives every one of them.
+
+    Otherwise the byte reaches nothing whenever the select picks another stage,
+    and every printed parameter has to sound.
+    """
+    selects: dict[str, list[set[tuple[str, int]]]] = {}
+    for row in rows:
+        enables = row.get("enables")
+        if isinstance(enables, dict) and "select" in enables:
+            refs = {(ref["stage"], ref.get("ordinal", 0)) for ref in enables["select"]}
+            selects.setdefault(row["type"], []).append(refs)
+    for row in rows:
+        where = row_label(row)
+        form = row_form(row, where)
+        if form not in ("translated", "designed"):
+            continue
+        driven: set[tuple[str, int]] = set()
+        for part in targets_of(row, where):
+            driven |= stage_refs(part, where, form)
+        if "alternatives" in row and not any(
+            driven <= refs for refs in selects.get(row["type"], [])
+        ):
+            sys.exit(f"{where}: its alternatives are not stages one enables select chooses between")
+        for refs in selects.get(row["type"], []):
+            if driven & refs and not refs <= driven:
+                missing = sorted(refs - driven)
+                sys.exit(f"{where}: drives a stage a select chooses and not the others: {missing}")
+
+
+def strings(node):
+    """Every string in a JSON value."""
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from strings(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from strings(value)
+
+
+def record_pairs(record: str, types: set[str]) -> set[tuple[str, str]]:
+    """The (type, address) pairs a measurement record's path names."""
+    if not record.startswith("data/units/"):
+        return set()
+    pairs = {
+        (TYPE_ALIASES.get(f"{msb} {lsb}", f"{msb} {lsb}"), f"40 03 {low}")
+        for msb, lsb, low in RECORD_TYPED.findall("/" + record)
+        if (msb, lsb) != ("40", "03")
+    }
+    for low in RECORD_ADDRESS.findall("/" + record):
+        pairs |= {(t, f"40 03 {low}") for t in types}
+    return pairs
+
+
+def load_claims(archive: Path) -> dict[str, set[tuple[str, str]]]:
+    """Each claim's id with the (type, address) pairs it stands on.
+
+    Only a standing claim that measures a quantity names a pair, and only at an
+    address the claim is about.
+    """
+    claims: dict[str, set[tuple[str, str]]] = {}
+    for path in sorted((archive / "inferences" / CLAIM_UNIT).glob("*.json")):
+        data = load(path)
+        inference = data.get("inference", {})
+        about = inference.get("about", {})
+        pairs: set[tuple[str, str]] = set()
+        if inference.get("state") == "standing" and about.get("quantities"):
+            types = {TYPE_ALIASES.get(t, t) for t in about.get("types", [])}
+            addresses = set(about.get("addresses", []))
+            for record in strings(data.get("rests_on", {})):
+                pairs |= {p for p in record_pairs(record, types) if p[1] in addresses}
+        claims[path.stem] = pairs
+    return claims
+
+
+def slot_address(slot: int) -> str:
+    return f"40 03 {slot + 3:02X}"
+
+
 def check_replaced_when(where: str, value: object) -> None:
     if not isinstance(value, dict) or not value:
         sys.exit(f"{where}: needs replaced_when naming one of {list(REPLACED_WHEN_KEYS)}")
     for key, spec in value.items():
         if key not in REPLACED_WHEN_KEYS:
             sys.exit(f"{where}: replaced_when key {key!r} is not one of {list(REPLACED_WHEN_KEYS)}")
-        if key in ("claim_names", "model_binding"):
+        if key in PAIR_KEYS:
             if not (
                 isinstance(spec, list)
                 and len(spec) == 2
@@ -411,14 +600,14 @@ def check_designed(row: dict, values: str, laws: dict, measured: set[str]) -> st
     if designed_law(laws, law) is None:
         sys.exit(f"{where}: designed law {law!r} is not in {DEFAULT_LAWS.name}")
     count = state_count(values)
-    states = enum_states(laws, law)
+    states = enum_states(laws, law) or designed_law(laws, law)["n_states"] or None
     if states is not None:
         if count is None or count > laws["enum_family"]["max_states"]:
-            sys.exit(f"{where}: {law} is an enum law and {values!r} is continuous")
+            sys.exit(f"{where}: {law} reads states and {values!r} is continuous")
         if count != states:
             sys.exit(f"{where}: {law} names {states} states and {values!r} prints {count}")
     elif STATE_LIST_RE.match(values):
-        sys.exit(f"{where}: {values!r} is a state list and {law} is not an enum law")
+        sys.exit(f"{where}: {values!r} is a state list and {law} is neither enum nor stepped")
     return basis
 
 
@@ -469,18 +658,28 @@ def check_enables(row: dict, values: str) -> str:
     return "invented"
 
 
-def check_name(row: dict, form: str, values: str, laws: dict) -> None:
-    """The one law the row's printed name gives, against what the row wrote."""
+def check_name(
+    row: dict, form: str, values: str, laws: dict, claims: dict[str, set[tuple[str, str]]]
+) -> None:
+    """The one law the row's printed name gives, against what the row wrote.
+
+    A carried law whose ``from`` claim stands on this very pair is a measurement
+    of it, and outranks whatever law the name would give.
+    """
     where = row_label(row)
     name = row.get("printed_name")
     if not isinstance(name, str) or not name:
         sys.exit(f"{where}: a {form} row needs printed_name, transcribed by marks_from_manual.py")
-    found = rule_matches(laws, name, values)
+    found = rule_matches(laws, name, values, row.get("stage"))
     if not found:
         sys.exit(f"{where}: no name rule matches printed name {name!r} ({values})")
     if len(found) > 1:
         sys.exit(f"{where}: {len(found)} name rules match printed name {name!r}: {found}")
     written = ENABLES_LAW if form == "enables" else row["designed"]["law"]
+    designed = row.get("designed", {})
+    pair = (row["type"], slot_address(row["slot"]))
+    if designed.get("basis") == "carried" and pair in claims.get(designed.get("from"), set()):
+        return
     if written != found[0]:
         sys.exit(
             f"{where}: written as {written!r}, and printed name {name!r} ({values}) follows "
@@ -493,9 +692,12 @@ def tally(
     printed: dict[str, dict[int, str]],
     laws: dict,
     measured: set[str],
+    claims: dict[str, set[tuple[str, str]]] | None = None,
 ) -> dict:
+    """Adjudicate every row; ``claims`` maps a claim id to the pairs it stands on."""
+    claims = claims or {}
     check_rules(laws, measured)
-    counts = {term: 0 for term in ALL_TERMS}
+    counts = {term: 0 for term in TERMS}
     basis = {name: 0 for name in BASES}
     per_msb_forms: dict[str, dict[str, int]] = {}
     declared_keys: set[tuple[str, str]] = set()
@@ -525,9 +727,7 @@ def tally(
                 f"{row_label(row)}: printed_values {row['printed_values']!r} is not the "
                 f"archive's {values!r}"
             )
-        ordinal = row.get("ordinal", 0)
-        if not isinstance(ordinal, int) or isinstance(ordinal, bool) or not 0 <= ordinal <= 0xFF:
-            sys.exit(f"{row_label(row)}: ordinal must be an integer 0-255")
+        ordinals_of(row, row_label(row), form)
         if "printed_name" in row and not (
             isinstance(row["printed_name"], str) and row["printed_name"]
         ):
@@ -541,28 +741,39 @@ def tally(
         claimed.add(key)
 
         counts[form] += 1
-        msb_forms = per_msb_forms.setdefault(gs_type.split()[0], {t: 0 for t in ALL_TERMS})
+        msb_forms = per_msb_forms.setdefault(gs_type.split()[0], {t: 0 for t in TERMS})
         msb_forms[form] += 1
 
+        parts = targets_of(row, row_label(row)) if form != "enables" else [row]
         if form in ("translated", "designed"):
-            stage = row["stage"]
-            keys = row["keys"] if "keys" in row else [row.get("key")]
-            if not keys or any(n is None for n in keys):
-                sys.exit(f"{row_label(row)}: an assigned row needs 'key' or 'keys'")
-            for name in keys:
-                declared_keys.add((stage, name))
+            for part in parts:
+                ordinals_of(part, row_label(row), form)
+                keys = part["keys"] if "keys" in part else [part.get("key")]
+                if not keys or any(n is None for n in keys):
+                    sys.exit(f"{row_label(row)}: an assigned row needs 'key' or 'keys'")
+                for name in keys:
+                    declared_keys.add((part["stage"], name))
         if form == "translated":
             check_class_against_printed(row, values)
         elif form == "designed":
+            # One slot, one basis; each target's law is checked on its own.
+            bases = {check_designed(part, values, laws, measured) for part in parts}
             basis[check_designed(row, values, laws, measured)] += 1
+            if len(bases) != 1:
+                sys.exit(f"{row_label(row)}: its targets carry different bases")
         elif form == "enables":
             basis[check_enables(row, values)] += 1
 
-        # Rows still in the older forms are not held to the name rules.
+        # A translated row's law is the archive's own; every other row's law is
+        # held to the rule its printed name, on each target's stage, selects.
         if form in ("designed", "enables"):
-            check_name(row, form, values, laws)
+            if "printed_name" not in row:
+                sys.exit(f"{row_label(row)}: a {form} row carries its printed_name")
+            for part in parts:
+                check_name(part, form, values, laws, claims)
             names_checked += 1
 
+    check_selected_targets(rows)
     total_printed = sum(len(slots) for slots in printed.values())
     unadjudicated = total_printed - len(claimed)
     return {
@@ -580,23 +791,18 @@ def summary_lines(result: dict, per_msb: dict[str, int]) -> list[str]:
     counts = result["counts"]
     basis = result["basis"]
     coverage_line = (
-        "GS EFX coverage: printed={printed} translated={translated} state={state} "
-        "unmapped={unmapped} unreadable={unreadable} builder={builder}".format(
-            printed=result["printed"], **counts
-        )
+        "GS EFX coverage: printed={printed} translated={translated} designed={designed} "
+        "enables={enables}".format(printed=result["printed"], **counts)
     )
-    forms_line = (
-        f"GS EFX forms: translated={counts['translated']} designed={counts['designed']} "
-        f"enables={counts['enables']} carried={basis['carried']} invented={basis['invented']}"
-    )
+    basis_line = f"GS EFX basis: carried={basis['carried']} invented={basis['invented']}"
     lines = [
         coverage_line,
-        forms_line,
+        basis_line,
         "per-MSB: " + " ".join(f"{msb}={per_msb[msb]}" for msb in sorted(per_msb)),
     ]
     for msb in sorted(set(per_msb) | set(result["per_msb_forms"])):
-        forms = result["per_msb_forms"].get(msb, {t: 0 for t in ALL_TERMS})
-        lines.append(f"forms[{msb}]: " + " ".join(f"{t}={forms[t]}" for t in ALL_TERMS))
+        forms = result["per_msb_forms"].get(msb, {t: 0 for t in TERMS})
+        lines.append(f"forms[{msb}]: " + " ".join(f"{t}={forms[t]}" for t in TERMS))
     lines.append(f"declared_keys={result['declared_keys']}")
     lines.append(f"unadjudicated={result['unadjudicated']}")
     lines.append(f"name_rules: checked={result['names_checked']}")
@@ -610,8 +816,8 @@ def rule_report(
 ) -> list[str]:
     """The law each printed name gives every row not written as translated.
 
-    A dry run over rows still in the old forms: it names the rows the rules do
-    not decide rather than stopping at the first.
+    A dry run: it names the rows the rules do not decide rather than stopping
+    at the first.
     """
     lines: list[str] = []
     tallies = {"one": 0, "none": 0, "several": 0}
@@ -620,7 +826,7 @@ def rule_report(
             continue
         values = printed[row["type"]][row["slot"]]
         name = row.get("printed_name")
-        found = rule_matches(laws, name, values) if name is not None else []
+        found = rule_matches(laws, name, values, row.get("stage")) if name is not None else []
         verdict = "one" if len(found) == 1 else "none" if not found else "several"
         tallies[verdict] += 1
         lines.append(f"rule {row['type']} slot {row['slot']} {name!r} {values} -> {found}")
@@ -690,11 +896,10 @@ def main() -> int:
         print("\n".join(rule_report(rows, canonical, laws)))
         return 0
 
-    result = tally(rows, canonical, laws, measured)
+    result = tally(rows, canonical, laws, measured, load_claims(archive))
     print("\n".join(summary_lines(result, per_msb_of(canonical))))
 
-    # Old and new forms may sit side by side; either way every printed row is
-    # adjudicated exactly once.
+    # Every printed row is adjudicated exactly once.
     equation_holds = sum(result["counts"].values()) == result["printed"]
     if not equation_holds:
         sys.exit(1)

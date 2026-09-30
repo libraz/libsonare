@@ -560,6 +560,36 @@ TEST_CASE("PresenceEnhancer does not hard clip when processing is bypassed",
   REQUIRE(signal[1] < -1.9f);
 }
 
+TEST_CASE("PresenceEnhancer drive 0 is no enhancement on every aliasing path",
+          "[mastering][spectral]") {
+  // Drive 0 constructs, renders finite and matches amount 0 exactly -- through
+  // the construction path and the realtime one alike.
+  using sonare::rt::AliasingControl;
+  for (const AliasingControl aliasing :
+       {AliasingControl::None, AliasingControl::Adaa1, AliasingControl::Oversample4x}) {
+    INFO("aliasing " << static_cast<int>(aliasing));
+    PresenceEnhancer silent({0.4f, 0.0f, 3000.0f, 1.2f, aliasing});
+    PresenceEnhancer unmixed({0.0f, 4.0f, 3000.0f, 1.2f, aliasing});
+    PresenceEnhancer ridden({0.4f, 4.0f, 3000.0f, 1.2f, aliasing});
+    silent.prepare(48000.0, 1024);
+    unmixed.prepare(48000.0, 1024);
+    ridden.prepare(48000.0, 1024);
+    REQUIRE(ridden.set_parameter(1, 0.0f));
+    REQUIRE(ridden.config().drive == 0.0f);
+
+    auto a = generate_sine_samples(3000.0f, 48000, 1024, 0.5f);
+    auto b = a;
+    auto c = a;
+    process(silent, a);
+    process(unmixed, b);
+    process(ridden, c);
+    REQUIRE(std::all_of(a.begin(), a.end(), [](float x) { return std::isfinite(x); }));
+    REQUIRE(a == b);
+    REQUIRE(c == b);
+  }
+  REQUIRE_THROWS(PresenceEnhancer({0.4f, -1.0f}));
+}
+
 TEST_CASE("PresenceEnhancer Oversample4x suppresses high-tone alias products",
           "[mastering][spectral]") {
   for (const int sample_rate : {44100, 48000}) {
@@ -664,7 +694,7 @@ TEST_CASE("Spectral processors validate configuration and state", "[mastering][s
   REQUIRE_THROWS(LowEndFocus({120.0f, 1.0f, 0.0f, 1.1f}));
   REQUIRE_THROWS(AirBand({-0.1f}));
   REQUIRE_THROWS(AirBand({0.1f, 0.0f}));
-  REQUIRE_THROWS(PresenceEnhancer({0.1f, 0.0f}));
+  REQUIRE_THROWS(PresenceEnhancer({0.1f, -0.1f}));
   REQUIRE_THROWS(PresenceEnhancer({0.1f, 1.0f, 0.0f}));
 
   SpectralShaper unprepared;

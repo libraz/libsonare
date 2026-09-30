@@ -401,13 +401,9 @@ def _row(slot: int, **fields) -> dict:
 
 
 def _designed(slot: int, law: str, printed: str, **fields) -> dict:
+    fields.setdefault("stage", "stereo.autoPan")
     return _row(
-        slot,
-        designed=dict(INVENTED, law=law),
-        printed_values=printed,
-        stage="effects.modulation.chorus",
-        key="depth",
-        **fields,
+        slot, designed=dict(INVENTED, law=law), printed_values=printed, key="depth", **fields
     )
 
 
@@ -423,7 +419,7 @@ def _row_dir(rows: list[dict]):
         yield Path(name)
 
 
-def _tally(rows: list[dict], names=NAMES, laws=None) -> dict:
+def _tally(rows: list[dict], names=NAMES, laws=None, claims=None) -> dict:
     """Tally rows that carry the name ``names`` prints for their slot, as transcribed rows do.
 
     A row that already sets ``printed_name`` keeps it; ``printed_name=None``
@@ -441,40 +437,27 @@ def _tally(rows: list[dict], names=NAMES, laws=None) -> dict:
         loaded = coverage.load_bindings(row_dir)
     laws = laws if laws is not None else coverage.load_laws(coverage.DEFAULT_LAWS)
     measured = coverage.measured_laws(coverage.DEFAULT_TABLES)
-    return coverage.tally(loaded, PRINTED, laws, measured)
+    return coverage.tally(loaded, PRINTED, laws, measured, claims)
 
 
 class CoverageVocabularyTest(unittest.TestCase):
-    """The designed / enables vocabulary is parsed, counted and checked beside the old forms."""
+    """The designed / enables vocabulary is parsed, counted and checked, and the retired forms refused."""
 
     def assertRefused(self, rows: list[dict], fragment: str, **kwargs) -> None:
         with self.assertRaises(SystemExit) as caught:
             _tally(rows, **kwargs)
         self.assertIn(fragment, str(caught.exception.code))
 
-    def test_old_forms_are_still_accepted(self) -> None:
-        result = _tally(
-            [
-                _row(3, **{"class": "rate", "table": "wide"}, stage="s", key="rateHz"),
-                _row(4, state="a bare 00-7F with no unit printed beside it"),
-                _row(5, builder="the skeleton reads it"),
-                _row(6, unreadable="not a form any rule reads"),
-                {"type": "04 00", "slot": 3, "unmapped": "no chain"},
-            ]
-        )
-        counts = result["counts"]
-        self.assertEqual(
-            (counts["translated"], counts["state"], counts["builder"], counts["unreadable"]),
-            (1, 1, 1, 1),
-        )
-        self.assertEqual(counts["unmapped"], 1)
+    def test_each_retired_form_is_refused(self) -> None:
+        for key in ("state", "unmapped", "unreadable", "builder"):
+            with self.subTest(form=key):
+                self.assertRefused([_row(4, **{key: "a reason"})], key)
 
-    def test_line_one_keeps_its_wording_and_line_two_counts_the_new_forms(self) -> None:
+    def test_line_one_counts_the_three_forms(self) -> None:
         result = _tally(
             [
                 _row(3, **{"class": "rate", "table": "wide"}, stage="s", key="rateHz"),
                 _designed(4, "d.unit", "00–7F"),
-                _row(5, state="a bare 00-7F with no unit printed beside it"),
                 {
                     "type": "04 00",
                     "slot": 3,
@@ -487,24 +470,10 @@ class CoverageVocabularyTest(unittest.TestCase):
             ]
         )
         lines = coverage.summary_lines(result, coverage.per_msb_of(PRINTED))
-        self.assertEqual(
-            lines[0],
-            "GS EFX coverage: printed=8 translated=1 state=1 unmapped=0 unreadable=0 builder=0",
-        )
-        self.assertEqual(
-            lines[1],
-            "GS EFX forms: translated=1 designed=1 enables=1 carried=0 invented=2",
-        )
-        self.assertIn(
-            "forms[01]: translated=1 designed=1 enables=0 state=1 unmapped=0 unreadable=0 "
-            "builder=0",
-            lines,
-        )
-        self.assertIn(
-            "forms[04]: translated=0 designed=0 enables=1 state=0 unmapped=0 unreadable=0 "
-            "builder=0",
-            lines,
-        )
+        self.assertEqual(lines[0], "GS EFX coverage: printed=8 translated=1 designed=1 enables=1")
+        self.assertEqual(lines[1], "GS EFX basis: carried=0 invented=2")
+        self.assertIn("forms[01]: translated=1 designed=1 enables=0", lines)
+        self.assertIn("forms[04]: translated=0 designed=0 enables=1", lines)
 
     def test_missing_replaced_when_is_refused(self) -> None:
         row = _designed(4, "d.unit", "00–7F")
@@ -577,10 +546,6 @@ class CoverageVocabularyTest(unittest.TestCase):
     def test_a_new_vocabulary_row_without_printed_name_is_refused(self) -> None:
         self.assertRefused([_designed(4, "d.unit", "00–7F", printed_name=None)], "printed_name")
 
-    def test_old_form_rows_need_no_printed_name(self) -> None:
-        state = _row(4, state="a bare 00-7F with no unit printed beside it", printed_name=None)
-        self.assertEqual(_tally([state])["names_checked"], 0)
-
     def test_a_law_other_than_the_rule_is_refused(self) -> None:
         self.assertRefused([_designed(4, "d.feedback", "00–7F")], "d.unit")
 
@@ -633,11 +598,10 @@ class BindingRowHeaderTest(unittest.TestCase):
     def _render(self, rows: list[dict]) -> str:
         with _row_dir(rows) as row_dir:
             loaded = bindings_header.load_rows(row_dir)
-        entries = bindings_header.collect(loaded, self.classes, self.order)
         row_entries, enables = bindings_header.collect_rows(
             loaded, self.classes, self.order, self.laws
         )
-        return bindings_header.render(entries, self.order, row_entries, enables)
+        return bindings_header.render(row_entries, enables)
 
     def test_translated_designed_and_enables_rows_are_emitted(self) -> None:
         carried = {
@@ -676,8 +640,9 @@ class BindingRowHeaderTest(unittest.TestCase):
                 },
             ]
         )
-        self.assertIn("struct GsEfxBinding {", text)
-        self.assertIn("kGsEfxBindings", text)
+        # The older table and its struct are gone; the rows are the only rendering.
+        self.assertNotIn("struct GsEfxBinding {", text)
+        self.assertNotIn("kGsEfxBindings ", text)
         self.assertIn('#include "midi/synth/gs_efx_convert.h"', text)
         self.assertIn("std::array<GsEfxBindingRow, 5> kGsEfxBindingRows", text)
         self.assertIn("std::array<GsEfxEnable, 2> kGsEfxEnables", text)
@@ -719,13 +684,62 @@ class BindingRowHeaderTest(unittest.TestCase):
                 },
             ]
         ) as row_dir:
-            entries, declared = join_header.collect(join_header.load_rows(row_dir))
-        text = join_header.render(entries, declared)
+            entries = join_header.collect(join_header.load_rows(row_dir))
+        text = join_header.render(entries)
         self.assertIn("kGsEfxJoinDesigned", text)
         self.assertIn("kGsEfxJoinEnables", text)
         self.assertIn("inline constexpr int kGsEfxJoinDesignedRows = 1;", text)
         self.assertIn("inline constexpr int kGsEfxJoinEnablesRows = 1;", text)
         self.assertIn("kGsEfxJoinInvented", text)
+
+
+class SelectedTargetsTest(unittest.TestCase):
+    """A byte driving one stage a select chooses between drives every one of them."""
+
+    @staticmethod
+    def _select() -> dict:
+        return {
+            "type": "04 00",
+            "slot": 11,
+            "enables": {
+                "select": [
+                    {"stage": "effects.modulation.chorus"},
+                    {"stage": "effects.modulation.flanger"},
+                ],
+                **INVENTED,
+            },
+        }
+
+    @staticmethod
+    def _mix(**fields) -> dict:
+        return {
+            "type": "04 00",
+            "slot": 12,
+            "class": "level",
+            "table": "output",
+            "stage": "effects.modulation.chorus",
+            "key": "dryWet",
+            **fields,
+        }
+
+    def test_a_row_reaching_one_selectable_stage_is_refused(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            _tally([self._select(), self._mix()])
+        self.assertIn("effects.modulation.flanger", str(caught.exception.code))
+
+    def test_alternatives_covering_the_select_are_accepted(self) -> None:
+        alternatives = [{"stage": "effects.modulation.flanger", "key": "dryWet"}]
+        result = _tally([self._select(), self._mix(alternatives=alternatives)])
+        self.assertEqual(result["counts"]["translated"], 1)
+
+    def test_alternatives_no_select_names_are_refused(self) -> None:
+        alternatives = [{"stage": "effects.modulation.phaser", "key": "dryWet"}]
+        with self.assertRaises(SystemExit) as caught:
+            _tally([self._select(), self._mix(alternatives=alternatives)])
+        self.assertIn("alternatives", str(caught.exception.code))
+
+    def test_the_committed_rows_pass(self) -> None:
+        coverage.check_selected_targets(coverage.load_bindings(GS_TOOLS / "efx-bindings"))
 
 
 class CoverageReportTest(unittest.TestCase):
@@ -735,6 +749,240 @@ class CoverageReportTest(unittest.TestCase):
         result = _tally([_designed(4, "d.unit", "00–7F")])
         lines = coverage.summary_lines(result, coverage.per_msb_of(PRINTED))
         self.assertIn("name_rules: checked=1", lines)
+
+
+class AmpSwitchRuleTest(unittest.TestCase):
+    """An amp switch turns the cabinet on and off; it is not a stage switch."""
+
+    def test_amp_sw_is_a_two_state_enum(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        for name in ("Amp Sw", "OD Amp Sw", "DS Amp Sw", "OD1 Amp Sw"):
+            with self.subTest(name=name):
+                self.assertEqual(coverage.rule_matches(laws, name, "00/01"), ["d.enum2"])
+        self.assertEqual(coverage.rule_matches(laws, "OD Sw", "00/01"), ["enables"])
+        self.assertEqual(coverage.rule_matches(laws, "CF Sel", "00/01"), ["enables"])
+
+
+class StageQualifiedRuleTest(unittest.TestCase):
+    """A rule narrowed to a receiving stage wins over the unqualified one it overlaps."""
+
+    CHORUS = "effects.modulation.chorus"
+    FLANGER = "effects.modulation.flanger"
+
+    def test_depth_follows_the_receiving_stage(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        match = coverage.rule_matches
+        self.assertEqual(match(laws, "Cho Depth", "00–7F", self.CHORUS), ["d.chorus_depth_ms"])
+        self.assertEqual(match(laws, "FL Depth", "00–7F", self.FLANGER), ["d.flanger_depth_ms"])
+        for stage in ("effects.modulation.ensemble", "effects.delay.stereo"):
+            self.assertEqual(match(laws, "Mod Depth", "00–7F", stage), ["d.chorus_depth_ms"])
+        self.assertEqual(match(laws, "Depth", "00–7F", "stereo.autoPan"), ["d.unit"])
+        self.assertEqual(match(laws, "Depth", "00–7F"), ["d.unit"])
+
+    def test_a_row_is_checked_against_its_own_stage(self) -> None:
+        on_chorus = _designed(4, "d.unit", "00–7F", stage=self.CHORUS)
+        with self.assertRaises(SystemExit) as caught:
+            _tally([on_chorus])
+        self.assertIn("d.chorus_depth_ms", str(caught.exception.code))
+        ok = _designed(4, "d.chorus_depth_ms", "00–7F", stage=self.CHORUS)
+        self.assertEqual(_tally([ok])["counts"]["designed"], 1)
+
+    def test_a_qualified_rule_names_a_stage(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        laws["name_rules"].append({"name": "X", "stage": 3, "law": "d.unit"})
+        with self.assertRaises(SystemExit):
+            coverage.check_rules(laws, coverage.measured_laws(coverage.DEFAULT_TABLES))
+
+
+class OrdinalListTest(unittest.TestCase):
+    """A row reaching both of two same-named stages lists both ordinals."""
+
+    def test_the_slot_is_counted_once(self) -> None:
+        result = _tally([_designed(4, "d.unit", "00–7F", ordinal=[0, 1])])
+        self.assertEqual(result["counts"]["designed"], 1)
+
+    def test_a_bad_ordinal_list_is_refused(self) -> None:
+        for bad in ([], [0, 0], [0, -1], [0, "1"]):
+            with self.subTest(ordinal=bad), self.assertRaises(SystemExit) as caught:
+                _tally([_designed(4, "d.unit", "00–7F", ordinal=bad)])
+            self.assertIn("ordinal", str(caught.exception.code))
+
+    def test_one_generated_row_per_ordinal_and_one_join_row(self) -> None:
+        row = _designed(4, "d.unit", "00–7F", ordinal=[0, 1])
+        order = bindings_header.class_order(GS_TOOLS / "derive_efx_tables.py")
+        classes = json.loads((GS_TOOLS / "efx-tables.json").read_text(encoding="utf-8"))
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        with _row_dir([row]) as row_dir:
+            loaded = bindings_header.load_rows(row_dir)
+            entries, _ = bindings_header.collect_rows(loaded, classes["classes"], order, laws)
+            joined = join_header.collect(join_header.load_rows(row_dir))
+        self.assertEqual(sorted(e["ordinal"] for e in entries), [0, 1])
+        self.assertEqual(len(joined), 1)
+        self.assertIn("kGsEfxJoinInvented,0x03,", join_header.render(joined).replace(" ", ""))
+
+
+class SteppedLawTest(unittest.TestCase):
+    """A linear or log law with n_states reads a state list's byte as a state index."""
+
+    STAGE = "stereo.autoPan"
+
+    def _laws(self, n_states: int = 3) -> dict:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        laws["laws"]["d.test_step"] = {"form": "linear", "lo": 1, "hi": 3, "n_states": n_states}
+        laws["name_rules"].append(
+            {"name": "Pre Filter|Depth", "stage": self.STAGE, "law": "d.test_step"}
+        )
+        return laws
+
+    def assertRefused(self, rows: list[dict], fragment: str, laws: dict) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            _tally(rows, laws=laws)
+        self.assertIn(fragment, str(caught.exception.code))
+
+    def test_a_stepped_law_is_accepted_on_a_state_list(self) -> None:
+        result = _tally([_designed(5, "d.test_step", "00/01/02")], laws=self._laws())
+        self.assertEqual(result["counts"]["designed"], 1)
+
+    def test_the_state_count_must_match_the_printed_list(self) -> None:
+        self.assertRefused([_designed(5, "d.test_step", "00/01/02")], "states", self._laws(4))
+
+    def test_a_stepped_law_is_refused_on_a_continuous_range(self) -> None:
+        self.assertRefused([_designed(4, "d.test_step", "00–7F")], "continuous", self._laws())
+
+    def test_a_continuous_law_is_still_refused_on_a_state_list(self) -> None:
+        self.assertRefused([_designed(5, "d.unit", "00/01/02")], "state list", self._laws())
+
+    def test_only_linear_and_log_laws_step(self) -> None:
+        for law in (
+            {"form": "db", "lo": -6, "hi": 0, "n_states": 3},
+            {"form": "linear", "lo": 0, "hi": 1, "n_states": 1},
+            {"form": "linear", "lo": 0, "hi": 1, "n_states": 17},
+        ):
+            with self.subTest(law=law), tempfile.TemporaryDirectory() as name:
+                laws = json.loads(coverage.DEFAULT_LAWS.read_text(encoding="utf-8"))
+                laws["laws"]["d.test_step"] = law
+                path = Path(name) / "laws.json"
+                path.write_text(json.dumps(laws), encoding="utf-8")
+                with self.assertRaises(SystemExit) as caught:
+                    coverage.load_laws(path)
+                self.assertIn("n_states", str(caught.exception.code))
+
+    def test_the_generated_row_carries_the_state_count(self) -> None:
+        law = coverage.designed_law(self._laws(), "d.test_step")
+        self.assertEqual(law, {"form": "linear", "lo": 1, "hi": 3, "n_states": 3})
+        self.assertEqual(coverage.designed_law(self._laws(), "d.unit")["n_states"], 0)
+
+
+class StateListLawRuleTest(unittest.TestCase):
+    """A state list landing on a physical key follows a stepped law, not a bare index."""
+
+    def test_state_lists_on_physical_keys_follow_stepped_laws(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        cases = (
+            ("Hum Type", "00/01", "saturation.bitcrusher", "d.hum_hz", 2),
+            ("Ratio", "00/01/02/03", "dynamics.limiter", "d.limiter_ratio", 4),
+            ("Pre Filter", "00–05", "saturation.bitcrusher", "d.lofi_filter_hz", 6),
+            ("Post Filter", "00–05", "saturation.bitcrusher", "d.lofi_filter_hz", 6),
+            ("Type", "00/01/02/03/04/05", "effects.reverb.dattorro", "d.type_index6", 6),
+            ("Lo-Fi Type", "00–08", "saturation.bitcrusher", "d.type_index9", 9),
+            ("Lo-Fi Type", "00–05", "saturation.bitcrusher", "d.type_index6", 6),
+        )
+        for name, printed, stage, law, n_states in cases:
+            with self.subTest(name=name, printed=printed):
+                self.assertEqual(coverage.rule_matches(laws, name, printed, stage), [law])
+                self.assertEqual(coverage.designed_law(laws, law)["n_states"], n_states)
+        gate = coverage.rule_matches(laws, "Type", "00/01/02/03", "effects.reverb.dattorro")
+        self.assertEqual(gate, ["d.enum4"])
+
+    def test_the_vowel_drive_is_a_fraction(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        vowel = coverage.rule_matches(laws, "Drive", "00–7F", "effects.filter.vowel")
+        self.assertEqual(vowel, ["d.unit"])
+        amp = coverage.rule_matches(laws, "OD Drive", "00–7F", "saturation.ampSim")
+        self.assertEqual(amp, ["drive.gain"])
+
+    def test_a_drive_switch_is_a_two_state_enum(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        self.assertEqual(coverage.rule_matches(laws, "Drive Sw", "00/01"), ["d.enum2"])
+
+    def test_accel_is_a_glide_except_on_the_rotary(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        match = coverage.rule_matches
+        self.assertEqual(match(laws, "Accel", "*14", "effects.delay.stereo"), ["d.glide_ms"])
+        self.assertEqual(match(laws, "Accel", "*14", "effects.filter.vowel"), ["d.glide_ms"])
+        rotary = "effects.modulation.rotary"
+        self.assertEqual(match(laws, "RT Hi Accl", "*14", rotary), ["accel.rotor"])
+
+    def test_tremolo_phase_is_in_degrees_on_the_ring_modulator(self) -> None:
+        laws = coverage.load_laws(coverage.DEFAULT_LAWS)
+        ring = "effects.modulation.ringModulator"
+        self.assertEqual(coverage.rule_matches(laws, "Trem Phase", "00–5A", ring), ["d.phase_deg"])
+
+
+class StandingClaimTest(unittest.TestCase):
+    """A carried law resting on a standing claim that names the pair outranks the name rule."""
+
+    CLAIM = "a-standing-claim"
+    PAIR = ("01 42", "40 03 07")
+
+    def _carried(self, **replaced_when) -> dict:
+        row = _designed(4, "level.output", "00–7F")
+        row["designed"] = {
+            "basis": "carried",
+            "law": "level.output",
+            "from": self.CLAIM,
+            "replaced_when": replaced_when or {"table_reaches": list(self.PAIR)},
+        }
+        return row
+
+    def test_a_standing_claim_naming_the_pair_is_accepted_over_the_rule(self) -> None:
+        result = _tally([self._carried()], claims={self.CLAIM: {self.PAIR}})
+        self.assertEqual(result["basis"]["carried"], 1)
+        self.assertEqual(result["names_checked"], 1)
+
+    def test_without_the_claim_the_rule_still_decides(self) -> None:
+        for claims in (None, {}, {self.CLAIM: {("01 42", "40 03 08")}}):
+            with self.subTest(claims=claims), self.assertRaises(SystemExit) as caught:
+                _tally([self._carried()], claims=claims)
+            self.assertIn("d.unit", str(caught.exception.code))
+
+    def test_table_reaches_names_a_type_and_an_address(self) -> None:
+        claims = {self.CLAIM: {self.PAIR}}
+        for bad in (["01 42"], ["01 42", "07"], "01 42", ["1 42", "40 03 07"]):
+            with self.subTest(bad=bad), self.assertRaises(SystemExit) as caught:
+                _tally([self._carried(table_reaches=bad)], claims=claims)
+            self.assertIn("table_reaches", str(caught.exception.code))
+
+    def test_claim_pairs_are_read_from_standing_claims_with_a_quantity(self) -> None:
+        def claim(state: str, quantities: list[str]) -> dict:
+            return {
+                "inference": {
+                    "state": state,
+                    "about": {
+                        "types": ["03 00"],
+                        "addresses": ["40 03 07"],
+                        "quantities": quantities,
+                    },
+                },
+                "rests_on": [
+                    "data/units/u/efx-params/40-03-07-x.json",
+                    "data/units/u/x/01-42-07.json",
+                ],
+            }
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name) / "inferences" / coverage.CLAIM_UNIT
+            root.mkdir(parents=True)
+            for stem, body in (
+                ("standing", claim("standing", ["rate_hz"])),
+                ("parked", claim("parked", ["rate_hz"])),
+                ("no-quantity", claim("standing", [])),
+            ):
+                (root / f"{stem}.json").write_text(json.dumps(body), encoding="utf-8")
+            pairs = coverage.load_claims(Path(name))
+        self.assertEqual(pairs["standing"], {("02 0C", "40 03 07"), ("01 42", "40 03 07")})
+        self.assertEqual(pairs["parked"], set())
+        self.assertEqual(pairs["no-quantity"], set())
 
 
 class CentRatioTest(unittest.TestCase):

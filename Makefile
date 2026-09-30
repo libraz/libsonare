@@ -350,8 +350,7 @@ import re
 import sys
 
 DOCS = ["CONTRIBUTING.md", "src/midi/synth/docs/gs.md", "tools/gs/docs/efx-tables.md"]
-LINE = ("GS EFX coverage: printed=<n> translated=<n> state=<n> unmapped=<n> "
-        "unreadable=<n> builder=<n>")
+LINE = "GS EFX coverage: printed=<n> translated=<n> designed=<n> enables=<n>"
 
 source = pathlib.Path("tools/gs/coverage.py").read_text()
 try:

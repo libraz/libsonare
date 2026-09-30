@@ -1086,8 +1086,8 @@ std::vector<uint8_t> faulted_message(uint32_t addr, std::vector<uint8_t> data, F
 
 /// The GsEfx field the byte at a block offset lands in. Written as the block
 /// layout rather than derived from the applier, so the two can disagree.
-/// Offsets with no field — the reserved 02 and 1A, and the control-source,
-/// control-depth and send-EQ addresses GsEfx does not model — are preserved.
+/// Offsets with no field — the reserved 02 and 1A, and the send-EQ addresses
+/// GsEfx does not model — are preserved.
 enum class EfxField : uint8_t {
   kNone,
   kTypeMsb,
@@ -1096,6 +1096,10 @@ enum class EfxField : uint8_t {
   kSendReverb,
   kSendChorus,
   kSendDelay,
+  kControlSource1,
+  kControlDepth1,
+  kControlSource2,
+  kControlDepth2,
 };
 
 EfxField efx_field_at(unsigned offset) {
@@ -1110,6 +1114,14 @@ EfxField efx_field_at(unsigned offset) {
       return EfxField::kSendChorus;
     case 0x19:
       return EfxField::kSendDelay;
+    case 0x1B:
+      return EfxField::kControlSource1;
+    case 0x1C:
+      return EfxField::kControlDepth1;
+    case 0x1D:
+      return EfxField::kControlSource2;
+    case 0x1E:
+      return EfxField::kControlDepth2;
     default:
       return offset >= 0x03 && offset <= 0x16 ? EfxField::kParameter : EfxField::kNone;
   }
@@ -1155,7 +1167,8 @@ unsigned efx_printed_states(uint16_t type, unsigned slot) {
 ///   - `01` resolves the type as (stored MSB, this LSB) and loads that type's
 ///     twenty power-on parameters. A type the archive never measured has none,
 ///     so the block stands.
-///   - `03`-`16` land in EFX PARAMETER 1-20, `17`-`19` in the three sends. A
+///   - `03`-`16` land in EFX PARAMETER 1-20, `17`-`19` in the three sends,
+///     `1B`-`1E` in CONTROL SOURCE 1, DEPTH 1, SOURCE 2 and DEPTH 2. A
 ///     parameter byte past the list of states its slot prints does not land;
 ///     the byte still counts as reaching a field.
 ///   - Every other offset is ignored, and never drops the message.
@@ -1194,6 +1207,18 @@ EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vecto
       case EfxField::kSendDelay:
         out.efx.send_delay = value;
         break;
+      case EfxField::kControlSource1:
+        out.efx.control_source[0] = value;
+        break;
+      case EfxField::kControlDepth1:
+        out.efx.control_depth[0] = value;
+        break;
+      case EfxField::kControlSource2:
+        out.efx.control_source[1] = value;
+        break;
+      case EfxField::kControlDepth2:
+        out.efx.control_depth[1] = value;
+        break;
       case EfxField::kNone:
         break;
     }
@@ -1205,7 +1230,8 @@ EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vecto
 bool same_efx(const GsEfx& a, const GsEfx& b) {
   return a.type == b.type && a.type_msb == b.type_msb && a.params == b.params &&
          a.send_reverb == b.send_reverb && a.send_chorus == b.send_chorus &&
-         a.send_delay == b.send_delay && a.assigned == b.assigned;
+         a.send_delay == b.send_delay && a.control_source == b.control_source &&
+         a.control_depth == b.control_depth && a.assigned == b.assigned;
 }
 
 struct EfxCase {
@@ -1285,8 +1311,13 @@ void check_efx_cases(const std::vector<EfxCase>& cases) {
   populated.send_reverb = 0x11;
   populated.send_chorus = 0x22;
   populated.send_delay = 0x33;
+  populated.control_source = {0x02, 0x03};
+  populated.control_depth = {0x44, 0x55};
   populated.assigned = true;
   const std::array<GsEfx, 2> starts{GsEfx{}, populated};
+  // The state a GS reset restores holds the CONTROL rows' defaults, 00/40/00/40.
+  REQUIRE(GsEfx{}.control_source == std::array<uint8_t, 2>{0x00, 0x00});
+  REQUIRE(GsEfx{}.control_depth == std::array<uint8_t, 2>{0x40, 0x40});
 
   for (const EfxCase& test : cases) {
     std::vector<uint8_t> data(test.len);

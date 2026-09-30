@@ -219,7 +219,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // audio thread routes bussed parts from the first block. build_realized_efx()
   // builds the kProcessor inserts via the factory.
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
-  efx_pub_->publish(build_realized_efx());
+  publish_realized_efx();
   gs_efx_dirty_ = false;
 }
 
@@ -244,7 +244,7 @@ void Sf2Player::reset() {
   // clean DSP state (the discontinuity's equivalent of resetting them), and the
   // old snapshot is retired/freed by the control thread, never the audio thread.
   if (prepared_) {
-    efx_pub_->publish(build_realized_efx());
+    publish_realized_efx();
     gs_efx_dirty_ = false;
   }
 #if defined(SONARE_MIDI_WITH_FX)

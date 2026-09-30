@@ -71,6 +71,8 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
 
+  // Drive 0 is no enhancement: the harmonic term is left out rather than scaled.
+  const float amount = config_.drive > 0.0f ? config_.amount : 0.0f;
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
     const bool adaa = config_.aliasing == sonare::rt::AliasingControl::Adaa1;
     bool discarded = false;
@@ -83,7 +85,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
         const float harmonic =
             adaa ? harmonic_adaa_[static_cast<size_t>(ch)].process(presence * config_.drive)
                  : std::tanh(presence * config_.drive);
-        channels[ch][i] += harmonic * config_.amount;
+        channels[ch][i] += harmonic * amount;
       }
       // Two floats per channel, once per block.
       discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2);
@@ -127,7 +129,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
 
     for (int i = 0; i < num_samples; ++i) {
       const float dry = dry_delays_[static_cast<size_t>(ch)].process(channels[ch][i]);
-      channels[ch][i] = dry + harmonic_scratch_[static_cast<size_t>(i)] * config_.amount;
+      channels[ch][i] = dry + harmonic_scratch_[static_cast<size_t>(i)] * amount;
     }
     auto& bandpass = bandpass_[static_cast<size_t>(ch)];
     discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2);
@@ -170,7 +172,7 @@ bool PresenceEnhancer::set_parameter(unsigned int param_id, float value) {
       config_.amount = std::clamp(value, 0.0f, 1.0f);
       return true;
     case 1:
-      config_.drive = std::max(value, 1.0e-6f);
+      config_.drive = std::max(value, 0.0f);
       return true;
     case 2:
     case 3: {
@@ -197,7 +199,8 @@ std::vector<rt::ParamDescriptor> PresenceEnhancer::parameter_descriptors() const
 }
 
 void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
-  if (!(config.amount >= 0.0f && config.amount <= 1.0f) || !(config.drive > 0.0f) ||
+  if (!(config.amount >= 0.0f && config.amount <= 1.0f) ||
+      !(config.drive >= 0.0f && std::isfinite(config.drive)) ||
       !(config.center_frequency_hz > 0.0f) || !(config.q > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid presence enhancer configuration");
   }

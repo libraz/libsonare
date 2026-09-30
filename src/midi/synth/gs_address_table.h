@@ -405,17 +405,12 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     {0x400318, 0, GsParam::kEfxSendToChorus, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x400319, 0, GsParam::kEfxSendToDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     // The two control assignments let a controller move an EFX parameter while
-    // the effect runs, which needs a value the chain reads every block. A
-    // parameter edit does reach a built chain, but as a setting handed over one
-    // value at a time; implementing these means giving it that input first.
-    {0x40031B, 0, GsParam::kEfxControlSource1, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x00,
-     "the insertion chain takes a parameter edit as a setting and has no block-rate input"},
-    {0x40031C, 0, GsParam::kEfxControlDepth1, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x40,
-     "the depth of a control source that has nothing to drive"},
-    {0x40031D, 0, GsParam::kEfxControlSource2, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x00,
-     "the insertion chain takes a parameter edit as a setting and has no block-rate input"},
-    {0x40031E, 0, GsParam::kEfxControlDepth2, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x40,
-     "the depth of a control source that has nothing to drive"},
+    // the effect runs: source 1 drives the type's `+` slot, source 2 its `#`
+    // slot. Held on GsEfx; the render thread applies them each block.
+    {0x40031B, 0, GsParam::kEfxControlSource1, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x40031C, 0, GsParam::kEfxControlDepth1, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
+    {0x40031D, 0, GsParam::kEfxControlSource2, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
+    {0x40031E, 0, GsParam::kEfxControlDepth2, GsLevel::kAudible, 1, 0x00, 0x7F, 0x40, nullptr},
     {0x40031F, 0, GsParam::kEfxSendEqSwitch, GsLevel::kIgnore, 1, 0x00, 0x01, 0x01,
      "one EQ stage, bypassed per part at 40 4x 20; an EFX return has no separate one to switch"},
 
@@ -676,9 +671,9 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     // the unit number IS the address nibble, so 40 30 xx is unit 0 and reaches
     // the same storage 40 03 xx writes. The manual gives 40 3u xx no row, which
     // is what keeps the extension unreachable from a spec-compliant file. Only
-    // the rows the realiser reads are here; the block's IGNORE rows are the spec
-    // block's alone, since a unit with no block-rate controller input does not
-    // acquire one by being numbered.
+    // the rows the realiser reads are here; the control assignments and the send
+    // EQ switch are the spec block's alone, since a unit does not acquire a
+    // controller input by being numbered.
     {0x403000, 0x000F00, GsParam::kEfxType, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
     {0x403003, 0x000F00, GsParam::kEfxParameter, GsLevel::kAudible, 20, 0x00, 0x7F, 0x00, nullptr},
     {0x403017, 0x000F00, GsParam::kEfxSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28,

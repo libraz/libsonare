@@ -62,14 +62,20 @@ GsEfx make_efx(uint16_t type) {
   return efx;
 }
 
-/// One line holding the whole chain: every stage name and its parameters, in
-/// order. An empty chain renders as the empty string, which is what an unmapped
-/// type is and is distinguishable from a one-stage chain with no parameters.
+/// One line holding the whole chain: every stage name, its branch where it is
+/// not the front (`@1`, `@2`, `@3`), `off` where a switch turns it off, and its
+/// parameters, in order. An empty chain renders as the empty string, which is
+/// what Thru is and is distinguishable from a one-stage chain with no parameters.
 std::string render(const std::vector<GsEfxStage>& chain) {
   std::string out;
   for (const GsEfxStage& stage : chain) {
     if (!out.empty()) out += " | ";
     out += stage.name;
+    if (stage.branch != sonare::midi::synth::kGsEfxBranchFront) {
+      out += '@';
+      out += std::to_string(stage.branch);
+    }
+    if (!stage.enabled) out += " off";
     out += ' ';
     out += stage.params_json;
   }
