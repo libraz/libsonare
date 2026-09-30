@@ -160,6 +160,7 @@ set(SONARE_SOURCES
   analysis/tempo_curve.cpp
   analysis/chord_analyzer.cpp
   analysis/chord_hmm.cpp
+  analysis/chord_naming.cpp
   analysis/downbeat_analyzer.cpp
   analysis/boundary_detector.cpp
   analysis/rhythm_analyzer.cpp
@@ -543,6 +544,7 @@ if(BUILD_MIXING)
     mixing/automation_lane.cpp
     mixing/bus.cpp
     mixing/channel_strip.cpp
+    mixing/channel_strip_automation.cpp
     mixing/channel_strip_eq.cpp
     mixing/fx_bus.cpp
     mixing/gain.cpp
@@ -637,6 +639,7 @@ if(BUILD_MIXING)
     engine/track_mixer.cpp
     engine/track_mixer_params.cpp
     engine/track_mixer_render.cpp
+    engine/track_mixer_routing.cpp
   )
 endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
@@ -1561,7 +1564,7 @@ if(BUILD_WASM)
   if(TARGET sonare_mixing)
     set_source_files_properties(
       mixing/alignment_delay.cpp
-      mixing/channel_strip.cpp
+      mixing/channel_strip_automation.cpp
       TARGET_DIRECTORY sonare_mixing
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()

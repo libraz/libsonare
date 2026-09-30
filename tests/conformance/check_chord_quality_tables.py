@@ -289,7 +289,7 @@ SUFFIX_TABLES = (
         "the suffix a template's own label carries, where the quality is always visible",
     ),
     SuffixTable(
-        "src/analysis/chord_analyzer.cpp",
+        "src/analysis/chord_naming.cpp",
         "Chord::to_string",
         "cpp_switch_appends",
         "symbol",
@@ -303,7 +303,7 @@ SUFFIX_TABLES = (
         "the chord symbol `Chord.name` renders on the Python surface",
     ),
     SuffixTable(
-        "src/analysis/chord_analyzer.cpp",
+        "src/analysis/chord_naming.cpp",
         "ChordAnalyzer::chord_to_roman_numeral",
         "cpp_switch_appends",
         "numeral",
