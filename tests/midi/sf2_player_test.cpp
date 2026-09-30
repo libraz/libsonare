@@ -818,12 +818,13 @@ TEST_CASE("Sf2Player hears a 32-bit volume, expression and pressure between the 
 
 TEST_CASE("Sf2Player hears a 32-bit modulation wheel between the 7-bit steps",
           "[midi][sf2][midi2]") {
-  // Route the wheel to AMPLITUDE CONTROL at -100 % (40 20 22) so that more wheel means less level.
+  // Route part 1's wheel to AMPLITUDE CONTROL at -100 % (40 21 02) so that more wheel means less
+  // level.
   constexpr uint8_t kV = 64;
   const uint32_t lo = Control32::from7(kV).raw;
   const uint32_t hi = Control32::from7(kV + 1).raw;
-  std::vector<uint8_t> route{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x20, 0x22, 0x00};
-  route.push_back(static_cast<uint8_t>((128 - ((0x40 + 0x20 + 0x22) % 128)) & 0x7F));
+  std::vector<uint8_t> route{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x21, 0x02, 0x00};
+  route.push_back(static_cast<uint8_t>((128 - ((0x40 + 0x21 + 0x02) % 128)) & 0x7F));
   route.push_back(0xF7);
   auto peak_at = [&](uint32_t raw) {
     return first_50ms_peak([&](Sf2Player& p) {
