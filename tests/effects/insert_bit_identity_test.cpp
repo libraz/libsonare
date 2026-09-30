@@ -191,7 +191,7 @@ TEST_CASE(
     const RenderResult empty = render("effects.modulation.rotary", "{}");
     const RenderResult explicit_defaults = render(
         "effects.modulation.rotary",
-        R"({"rateHz":6.0,"drumRateHz":4.44,"depthMs":1.2,"tremolo":0.5,"stereoSpread":1.0,"dryWet":1.0,"accelTauS":0.0,"decelTauS":0.0,"undershootHz":0.0,"drumUndershootHz":0.0,"hornSlowHz":0.8,"hornFastHz":6.0,"drumSlowHz":0.6,"drumFastHz":4.44,"speed":-1.0,"hornLevelDb":0.0,"drumLevelDb":0.0,"interpolation":0})");
+        R"({"rateHz":6.0,"drumRateHz":4.44,"depthMs":1.2,"tremolo":0.5,"stereoSpread":1.0,"dryWet":1.0,"accelTauS":0.0,"decelTauS":0.0,"undershootHz":0.0,"drumUndershootHz":0.0,"hornSlowHz":0.8,"hornFastHz":6.0,"drumSlowHz":0.6,"drumFastHz":4.44,"speed":-1.0,"hornLevelDb":0.0,"drumLevelDb":0.0,"interpolation":0,"model":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     const Scalars s = measure(empty.left);

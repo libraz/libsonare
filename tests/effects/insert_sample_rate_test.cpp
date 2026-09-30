@@ -35,6 +35,8 @@
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
 /// - rotary, acceleration time constant in seconds: the time constant itself.
 /// - rotary fast horn speed, tremolo rate in Hz: the rate asked for.
+/// - rotary geometric model, the horn low-pass corner 135 degrees off axis in Hz: the corner
+///   itself, with the 45-degree microphone's own low-pass divided out of the ratio.
 /// - auto-wah LFO, sweep rate in Hz: the rate asked for.
 /// - stereo delay tap 3, arrival time in ms: the time asked for.
 /// - stereo balance glide, settling time in ms: the 5 ms it is built for.
@@ -931,6 +933,49 @@ double horn_fast_rate_hz(double sample_rate) {
   return crossings > 1 ? static_cast<double>(crossings - 1) / (last - first) : 0.0;
 }
 
+// The geometric model's horn low-pass corner, read at the microphone 135 degrees off a still
+// horn's axis; the other microphone, 45 degrees off, is the reference that cancels the rest.
+constexpr double kRotaryCornerTolerance = 0.01;
+
+/// Far-over-near microphone gain of a still geometric horn at @p tone_hz.
+double rotary_mic_ratio(double tone_hz, double sample_rate) {
+  RotaryConfig config;
+  config.model = sonare::effects::modulation::RotaryModel::kGeometric;
+  config.rate_hz = 0.0f;
+  config.drum_rate_hz = 0.0f;
+  config.depth_ms = 0.0f;
+  config.tremolo = 0.0f;
+  config.drum_level_db = -200.0f;
+  Rotary rotary(config);
+  rotary.prepare(sample_rate, 4096);
+  const int samples = static_cast<int>(0.2 * sample_rate);
+  std::vector<float> left = sonare::test::generate_sine(samples, static_cast<float>(tone_hz),
+                                                        static_cast<int>(sample_rate), 0.5f);
+  std::vector<float> right = left;
+  sonare::test::process_stereo(rotary, left, right);
+  const auto skip = static_cast<std::size_t>(0.1 * sample_rate);
+  return static_cast<double>(sonare::test::rms(left, skip)) / sonare::test::rms(right, skip);
+}
+
+/// Half-power corner of the far microphone's low-pass in Hz: the measured ratio times the near
+/// microphone's own low-pass gain, bisected for 1/sqrt(2).
+double rotary_far_corner_hz(double sample_rate) {
+  namespace geo = sonare::effects::modulation::rotary_geometry;
+  const double near_corner = geo::horn_corner_hz(sonare::constants::kInvSqrt2);
+  auto far_gain = [&](double f) {
+    const double omega =
+        std::tan(kPiD * f / sample_rate) / std::tan(kPiD * near_corner / sample_rate);
+    return rotary_mic_ratio(f, sample_rate) / std::sqrt(1.0 + std::pow(omega, 4.0));
+  };
+  double lo = 500.0;
+  double hi = 6000.0;
+  for (int step = 0; step < 18; ++step) {
+    const double mid = 0.5 * (lo + hi);
+    (far_gain(mid) > 1.0 / std::sqrt(2.0) ? lo : hi) = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+
 // --- vowel filter -----------------------------------------------------------
 
 constexpr int kVowelProbeVowel = 1;
@@ -1658,6 +1703,26 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     }
     tally.within(measured[0], measured[1], kHornFastTolerance,
                  "the rotary's fast horn speed is the same rate in hertz at both rates");
+  }
+
+  // --- rotary geometric model: the horn's off-axis low-pass corner, in Hz ---
+  {
+    const double asked =
+        sonare::effects::modulation::rotary_geometry::horn_corner_hz(-sonare::constants::kInvSqrt2);
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = rotary_far_corner_hz(rates[r]);
+      WARN("rotary horn corner at 135 degrees" << at_rate(rates[r]) << ": " << measured[r]
+                                               << " Hz (asked " << asked << ")");
+      tally.at_least(measured[r], 600.0,
+                     "the rotary's horn corner" + at_rate(rates[r]) + ", is readable at all");
+      // Against what was asked for, per rate; the cross-rate check below is the
+      // other half of the pair and neither one covers the other.
+      tally.within(measured[r], asked, kRotaryCornerTolerance,
+                   "the rotary's horn corner" + at_rate(rates[r]) + ", against the corner asked");
+    }
+    tally.within(measured[0], measured[1], kRotaryCornerTolerance,
+                 "the rotary's horn corner lands on one frequency at both rates");
   }
 
   // --- stereo delay tap 3: the arrival time, in ms --------------------------

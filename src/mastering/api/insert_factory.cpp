@@ -961,6 +961,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.horn_level_db = f(params, "hornLevelDb", config.horn_level_db);
     config.drum_level_db = f(params, "drumLevelDb", config.drum_level_db);
     detail::read_field(params, "interpolation", config.interpolation);
+    detail::read_field(params, "model", config.model);
     return make<effects::modulation::Rotary>(config);
   }
   if (name == "effects.modulation.ringModulator") {

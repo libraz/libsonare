@@ -11,15 +11,55 @@
 /// the target, slowing down arrives on it. Both time constants are held in
 /// seconds and turned into per-sample coefficients in `prepare()`, so a glide
 /// lasts as long at any sample rate.
+///
+/// `RotaryModel::kGeometric` is a data-free alternative to the classic sine-swung
+/// path: one mono horn feed heard at two microphones through distance delay,
+/// inverse-distance gain and a low-pass whose corner follows the horn-to-mic
+/// angle, an LR4 crossover, a 2 kHz horn peak, and a drum baffle AM sinusoidal
+/// in decibels above 200 Hz. Corners, distances and depths are held in hertz,
+/// metres and decibels.
 
 #include <array>
+#include <cmath>
 #include <vector>
 
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
+#include "effects/modulation/svf_bandpass.h"
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 
 namespace sonare::effects::modulation {
+
+/// Which audio path the rotors drive.
+enum class RotaryModel {
+  kClassic,    ///< per-channel one-pole split, delay and gain swung by the rotor sine.
+  kGeometric,  ///< two microphones around one horn; see the file comment.
+};
+inline constexpr int kRotaryModelCount = 2;
+
+/// The geometric model's fixed quantities. The horn radius is `depth_ms` of sound travel, so the
+/// doppler swing keeps the meaning it has in the classic model.
+namespace rotary_geometry {
+inline constexpr float kCrossoverHz = 800.0f;    ///< horn/drum LR4 split.
+inline constexpr float kBaffleSplitHz = 200.0f;  ///< the drum band below this is not modulated.
+inline constexpr float kHornPeakHz = 2000.0f;    ///< the horn's band-pass character.
+inline constexpr float kHornPeakDb = 10.0f;
+inline constexpr float kHornPeakQ = 1.0f;
+inline constexpr float kMicGapM = 0.6f;             ///< microphone distance beyond the horn circle.
+inline constexpr float kMicCentreDeg = -90.0f;      ///< both microphones at `stereo_spread` 0.
+inline constexpr float kMicSpreadDeg = 45.0f;       ///< each microphone's offset at spread 1.
+inline constexpr float kOnAxisCornerHz = 10000.0f;  ///< horn mouth facing the microphone.
+inline constexpr float kOffAxisCornerHz = 1500.0f;  ///< horn mouth facing away.
+inline constexpr float kBaffleDepthDb = 12.0f;      ///< peak-to-peak drum AM at `tremolo` 1.
+
+/// Low-pass corner for a horn whose mouth points @p cos_angle away from the microphone:
+/// geometric between the off- and on-axis corners, in (1 + cos) / 2.
+inline float horn_corner_hz(float cos_angle) noexcept {
+  const float t = 0.5f * (1.0f + cos_angle);
+  return kOffAxisCornerHz * std::pow(kOnAxisCornerHz / kOffAxisCornerHz, t);
+}
+}  // namespace rotary_geometry
 
 struct RotaryConfig {
   /// Treble horn rotor target rate. The two rotors are independent; the drum's
@@ -62,6 +102,10 @@ struct RotaryConfig {
   float drum_level_db = 0.0f;  ///< drum rotor output level.
   /// How the delay lines read between samples; see DelayInterpolation.
   DelayInterpolation interpolation = DelayInterpolation::kLinear;
+  /// Audio path. In the geometric model `stereo_spread` is the angle between the two
+  /// microphones (0 one position, 1 at -135 and -45 degrees), `tremolo` the drum baffle depth,
+  /// and the input is summed to mono.
+  RotaryModel model = RotaryModel::kClassic;
 };
 
 /// A two-rotor rotary-speaker model: the signal is split by a crossover into a
@@ -87,6 +131,7 @@ class Rotary : public rt::ProcessorBase {
   //   9 = speed (-1 off, 0 slow, 1 fast)
   //   10 = horn_level_db, 11 = drum_level_db
   //   12 = interpolation (0 linear, 1 Lagrange3)
+  //   13 = model (0 classic, 1 geometric)
   bool set_parameter(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
@@ -107,6 +152,11 @@ class Rotary : public rt::ProcessorBase {
   /// Moves one rotor a sample closer to `target` and returns its new rate.
   float advance_rotor(float& rate, float target, float undershoot) const noexcept;
 
+  void process_geometric(float* const* channels, int active, int num_samples) noexcept;
+  void reset_geometric() noexcept;
+  /// Microphone azimuths, in radians, from the current stereo spread.
+  void place_mics() noexcept;
+
   static constexpr float kCrossoverHz = 800.0f;
 
   RotaryConfig config_{};
@@ -121,6 +171,18 @@ class Rotary : public rt::ProcessorBase {
   std::array<Lfo, 2> drum_lfo_;
   std::array<ModDelayLine, 2> horn_delay_;
   std::array<ModDelayLine, 2> drum_delay_;
+
+  // Geometric model. The horn feed is mono, so both delay lines of a pair carry the same
+  // signal and are read at each microphone's own distance.
+  std::array<rt::BiquadState, 2> xover_lp_;   ///< LR4 low half (drum band).
+  std::array<rt::BiquadState, 2> xover_hp_;   ///< LR4 high half (horn band).
+  std::array<rt::BiquadState, 2> baffle_lp_;  ///< drum band below the baffle split.
+  std::array<rt::BiquadState, 2> baffle_hp_;  ///< drum band the baffle modulates.
+  rt::BiquadState horn_peak_;
+  std::array<SvfBandpass, 2> horn_lp_;  ///< per-microphone angle low-pass.
+  std::array<float, 2> mic_cos_{{0.0f, 0.0f}};
+  std::array<float, 2> mic_sin_{{0.0f, 0.0f}};
+  std::array<float, 2> mic_rad_{{0.0f, 0.0f}};
 };
 
 }  // namespace sonare::effects::modulation

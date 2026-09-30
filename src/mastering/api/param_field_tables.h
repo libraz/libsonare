@@ -30,6 +30,7 @@
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/phaser.h"
+#include "effects/modulation/rotary.h"
 #include "effects/modulation/wah.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "mastering/dynamics/compressor.h"
@@ -307,6 +308,16 @@ constexpr const char* enum_choice_name(sonare::effects::modulation::DelayInterpo
       return "linear";
     case sonare::effects::modulation::DelayInterpolation::kLagrange3:
       return "lagrange3";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::RotaryModel value) {
+  switch (value) {
+    case sonare::effects::modulation::RotaryModel::kClassic:
+      return "classic";
+    case sonare::effects::modulation::RotaryModel::kGeometric:
+      return "geometric";
   }
   return nullptr;
 }

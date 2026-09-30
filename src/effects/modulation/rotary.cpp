@@ -67,7 +67,19 @@ void Rotary::prepare(double sample_rate, int) {
     drum_delay_[ch].prepare(max_delay);
     horn_delay_[ch].set_interpolation(config_.interpolation);
     drum_delay_[ch].set_interpolation(config_.interpolation);
+    horn_lp_[ch].prepare(sample_rate_);
   }
+  namespace geo = rotary_geometry;
+  const float crossover_w0 = rt::frequency_to_w0(geo::kCrossoverHz, sample_rate_);
+  const float baffle_w0 = rt::frequency_to_w0(geo::kBaffleSplitHz, sample_rate_);
+  for (int stage = 0; stage < 2; ++stage) {
+    xover_lp_[stage].set(rt::rbj_lowpass(crossover_w0, ::sonare::constants::kInvSqrt2));
+    xover_hp_[stage].set(rt::rbj_highpass(crossover_w0, ::sonare::constants::kInvSqrt2));
+    baffle_lp_[stage].set(rt::rbj_lowpass(baffle_w0, ::sonare::constants::kInvSqrt2));
+    baffle_hp_[stage].set(rt::rbj_highpass(baffle_w0, ::sonare::constants::kInvSqrt2));
+  }
+  horn_peak_.set(rt::rbj_peak(rt::frequency_to_w0(geo::kHornPeakHz, sample_rate_), geo::kHornPeakQ,
+                              geo::kHornPeakDb));
   reset();
 }
 
@@ -101,6 +113,11 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
   // so planes beyond the pair pass through dry (see the registry's
   // stereoPairOnly classification).
   const int active = std::min(num_channels, 2);
+  if (config_.model == RotaryModel::kGeometric) {
+    process_geometric(channels, active, num_samples);
+    discard_non_finite();
+    return;
+  }
   for (int i = 0; i < num_samples; ++i) {
     const float horn_rate = advance_rotor(horn_rate_, horn_target, config_.undershoot_hz);
     const float drum_rate = advance_rotor(drum_rate_, drum_target, config_.drum_undershoot_hz);
@@ -135,12 +152,102 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
   discard_non_finite();
 }
 
+void Rotary::process_geometric(float* const* channels, int active, int num_samples) noexcept {
+  namespace geo = rotary_geometry;
+  using ::sonare::constants::kSoundSpeedMps;
+  using ::sonare::constants::kTwoPiD;
+  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float dry = 1.0f - wet;
+  const float horn_target = horn_target_hz();
+  const float drum_target = drum_target_hz();
+  const float horn_level = db_to_linear(config_.horn_level_db);
+  const float drum_level = db_to_linear(config_.drum_level_db);
+  const float baffle_db = std::clamp(config_.tremolo, 0.0f, 1.0f) * geo::kBaffleDepthDb;
+  const float radius_m = config_.depth_ms * 0.001f * kSoundSpeedMps;
+  const float mic_m = radius_m + geo::kMicGapM;
+  const float samples_per_m = static_cast<float>(sample_rate_) / kSoundSpeedMps;
+  for (int i = 0; i < num_samples; ++i) {
+    const float horn_rate = advance_rotor(horn_rate_, horn_target, config_.undershoot_hz);
+    const float drum_rate = advance_rotor(drum_rate_, drum_target, config_.drum_undershoot_hz);
+    const double horn_az = kTwoPiD * horn_lfo_[0].phase();
+    const double baffle_az = kTwoPiD * drum_lfo_[0].phase();
+    for (int ch = 0; ch < 2; ++ch) {
+      horn_lfo_[ch].set_rate_hz(horn_rate);
+      drum_lfo_[ch].set_rate_hz(drum_rate);
+      horn_lfo_[ch].process();
+      drum_lfo_[ch].process();
+    }
+    float in = 0.0f;
+    int fed = 0;
+    for (int ch = 0; ch < active; ++ch) {
+      if (channels[ch] == nullptr) continue;
+      in += channels[ch][i];
+      ++fed;
+    }
+    if (fed > 1) in *= 0.5f;
+    const float drum_band = xover_lp_[1].process(xover_lp_[0].process(in));
+    const float horn_feed = horn_peak_.process(xover_hp_[1].process(xover_hp_[0].process(in)));
+    const float drum_still = baffle_lp_[1].process(baffle_lp_[0].process(drum_band));
+    const float drum_moved = baffle_hp_[1].process(baffle_hp_[0].process(drum_band));
+    const float face_x = static_cast<float>(std::cos(horn_az));
+    const float face_y = static_cast<float>(std::sin(horn_az));
+    for (int ch = 0; ch < active; ++ch) {
+      if (channels[ch] == nullptr) continue;
+      // Horn mouth to microphone: the distance sets delay and gain, its angle to the mouth's
+      // facing sets the low-pass corner.
+      const float dx = mic_m * mic_cos_[ch] - radius_m * face_x;
+      const float dy = mic_m * mic_sin_[ch] - radius_m * face_y;
+      const float dist = std::sqrt(dx * dx + dy * dy);
+      const float cos_angle = (dx * face_x + dy * face_y) / dist;
+      float horn = horn_delay_[ch].process(horn_feed, dist * samples_per_m) * (mic_m / dist);
+      horn = horn_lp_[ch].process(horn, geo::horn_corner_hz(cos_angle),
+                                  ::sonare::constants::kInvSqrt2, true);
+      const float baffle_gain = db_to_linear(
+          -0.5f * baffle_db *
+          (1.0f - static_cast<float>(std::cos(baffle_az - static_cast<double>(mic_rad_[ch])))));
+      const float drum =
+          drum_delay_[ch].process(drum_still + drum_moved * baffle_gain, mic_m * samples_per_m);
+      channels[ch][i] = dry * channels[ch][i] + wet * (horn * horn_level + drum * drum_level);
+    }
+  }
+}
+
 void Rotary::discard_non_finite() noexcept {
   // The rotor delay lines are fed by the crossover output alone, so a
   // non-finite sample leaves them within one line length.
-  if (discard_run_if_non_finite(lp_state_.begin(), lp_state_.end(), 0.0f)) {
-    note_non_finite_discard();
+  bool discarded = discard_run_if_non_finite(lp_state_.begin(), lp_state_.end(), 0.0f);
+  for (int stage = 0; stage < 2; ++stage) {
+    discarded |= discard_group_if_non_finite(xover_lp_[stage].z1, xover_lp_[stage].z2);
+    discarded |= discard_group_if_non_finite(xover_hp_[stage].z1, xover_hp_[stage].z2);
+    discarded |= discard_group_if_non_finite(baffle_lp_[stage].z1, baffle_lp_[stage].z2);
+    discarded |= discard_group_if_non_finite(baffle_hp_[stage].z1, baffle_hp_[stage].z2);
+    discarded |= horn_lp_[stage].discard_non_finite();
   }
+  discarded |= discard_group_if_non_finite(horn_peak_.z1, horn_peak_.z2);
+  if (discarded) note_non_finite_discard();
+}
+
+void Rotary::place_mics() noexcept {
+  namespace geo = rotary_geometry;
+  const float spread_deg = geo::kMicSpreadDeg * config_.stereo_spread;
+  const float deg[2] = {geo::kMicCentreDeg - spread_deg, geo::kMicCentreDeg + spread_deg};
+  for (int ch = 0; ch < 2; ++ch) {
+    mic_rad_[ch] = deg[ch] * ::sonare::constants::kPi / 180.0f;
+    mic_cos_[ch] = std::cos(mic_rad_[ch]);
+    mic_sin_[ch] = std::sin(mic_rad_[ch]);
+  }
+}
+
+void Rotary::reset_geometric() noexcept {
+  for (int stage = 0; stage < 2; ++stage) {
+    xover_lp_[stage].reset();
+    xover_hp_[stage].reset();
+    baffle_lp_[stage].reset();
+    baffle_hp_[stage].reset();
+    horn_lp_[stage].reset();
+  }
+  horn_peak_.reset();
+  place_mics();
 }
 
 void Rotary::reset() {
@@ -160,6 +267,7 @@ void Rotary::reset() {
     horn_delay_[ch].reset();
     drum_delay_[ch].reset();
   }
+  reset_geometric();
 }
 
 bool Rotary::set_parameter(unsigned int param_id, float value) {
@@ -209,16 +317,29 @@ bool Rotary::set_parameter(unsigned int param_id, float value) {
       }
       return true;
     }
+    case 13: {
+      // An unnamed value is refused rather than rounded onto a neighbour.
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(kRotaryModelCount)) {
+        return false;
+      }
+      const auto model = static_cast<RotaryModel>(static_cast<int>(value));
+      if (model != config_.model) {
+        config_.model = model;
+        reset_geometric();
+      }
+      return true;
+    }
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> Rotary::parameter_descriptors() const {
-  return {{"rateHz", 0},        {"depthMs", 1},    {"tremolo", 2},      {"dryWet", 3},
-          {"drumRateHz", 4},    {"hornSlowHz", 5}, {"hornFastHz", 6},   {"drumSlowHz", 7},
-          {"drumFastHz", 8},    {"speed", 9},      {"hornLevelDb", 10}, {"drumLevelDb", 11},
-          {"interpolation", 12}};
+  return {{"rateHz", 0},         {"depthMs", 1},    {"tremolo", 2},      {"dryWet", 3},
+          {"drumRateHz", 4},     {"hornSlowHz", 5}, {"hornFastHz", 6},   {"drumSlowHz", 7},
+          {"drumFastHz", 8},     {"speed", 9},      {"hornLevelDb", 10}, {"drumLevelDb", 11},
+          {"interpolation", 12}, {"model", 13}};
 }
 
 }  // namespace sonare::effects::modulation
