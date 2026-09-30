@@ -61,7 +61,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `01 00` | built-at-the-gain | 0 | - | 11 | 0 | 0 | 0.006 |
 | `01 01` | blended-with-the-dry | 0 | - | 11 | 0 | 0 | 0.899 |
 | `01 02` | first-order-tone-pair | 0 | - | 5 | 0 | 0 | 1.000 |
-| `01 03` | band-passes-in-parallel-drive-before | 0 | - | 8 | 1 | 1 | 0.850 |
+| `01 03` | band-passes-in-parallel-drive-before | 0 | - | 8 | 0 | 1 | 0.850 |
 | `01 10` | tanh | 0 | - | 7 | 0 | 0 | 1.000 |
 | `01 11` | tanh | 0 | - | 7 | 0 | 0 | 0.937 |
 | `01 20` | raised-sine-in-octaves | 0 | - | 8 | 0 | 0 | 0.019 |
@@ -77,7 +77,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `01 41` | triangle-tremolo-after-the-balance | 0 | - | 10 | 0 | 0 | 0.198 |
 | `01 42` | triangle-filter-before-the-split | 0 | - | 10 | 0 | 0 | 0.134 |
 | `01 43` | raised-sine-both-voices-crossed | 0 | - | 8 | 0 | 0 | 0.105 |
-| `01 44` | triangle-one-modulator | 0 | - | 8 | 1 | 0 | 0.298 |
+| `01 44` | triangle-one-modulator | 0 | - | 8 | 0 | 0 | 0.298 |
 | `01 50` | phase-on-the-way-out-loop-a-sample-late | 0 | - | 11 | 0 | 0 | 0.766 |
 | `01 51` | triangle-loop-on-the-ladder-entry | 0 | - | 12 | 0 | 2 | 0.242 |
 | `01 52` | fed-after-the-centre-level | 0 | - | 12 | 0 | 0 | 0.890 |
@@ -85,7 +85,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `01 54` | pan-on-the-delayed-copy | 0 | - | 9 | 0 | 1 | 1.022 |
 | `01 55` | parallel-combs-time-byte-a-decay-time | 0 | - | 8 | 0 | 2 | 1.095 |
 | `01 56` | diffused-taps-gate-five-ms-a-step | 0 | - | 7 | 0 | 1 | 0.997 |
-| `01 57` | fed-before-the-centre-level-loop-a-sample-late | 0 | - | 13 | 1 | 0 | 0.959 |
+| `01 57` | fed-before-the-centre-level-loop-a-sample-late | 0 | - | 13 | 0 | 0 | 0.959 |
 | `01 60` | pair-a-window-apart-raised-cosine-crossfade | 0 | - | 14 | 0 | 8 | 0.080 |
 | `01 61` | pair-a-window-apart-loop-through-the-pre-delay | 0 | - | 10 | 0 | 4 | 0.336 |
 | `01 70` | head-shadow-and-a-rear-cue-each-side-less-the-other | 0 | - | 6 | 0 | 0 | 0.001 |
@@ -123,7 +123,7 @@ Per type: the archive's leading candidate, the Parallel-2 arrangement read off i
 | `11 07` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 20 | 0 | 0 | 0.164 |
 | `11 08` | side-by-side-pan-moves-each-pair | 1 side-by-side | a: moves each channel; b: moves each channel | 17 | 0 | 0 | 2.011 |
 
-Unbound printed slots: 3 of 770 in 3 types.
+Unbound printed slots: 0 of 770 in 0 types.
 
 ### Document values
 
@@ -131,15 +131,15 @@ Unbound printed slots: 3 of 770 in 3 types.
 
 ### Shipping size
 
-The default configuration ships 219 de-duplicated map specs (183 in the raw configuration), 27 control curves, 2210 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
+The default configuration ships 235 de-duplicated map specs (183 in the raw configuration), 78 control curves, 2628 nodes and 8 point runs. Packed as the structs of `model_format.h`, gzip -9:
 
 | pool | raw bytes | gzip bytes |
 |---|---|---|
-| map specs | 94483 | 34575 |
-| control curves | 27864 | 21274 |
-| node tables | 124256 | 34231 |
-| total | 246603 | 90590 |
+| map specs | 95457 | 35404 |
+| control curves | 80496 | 71480 |
+| node tables | 153054 | 39918 |
+| total | 329007 | 147423 |
 
-Expanding the specs at registry construction puts 112128 bytes of LUTs on the heap per configuration.
+Expanding the specs at registry construction puts 120320 bytes of LUTs on the heap per configuration.
 
 <!-- END GENERATED: tools/gs/classic_models.py -->

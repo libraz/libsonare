@@ -372,11 +372,233 @@
     },
     {
       "node": {
+        "id": "od_cab2_hp",
+        "kind": "section",
+        "input": "od_post_curve",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 100.0
+        },
+        "q": {
+          "value": 0.7071067811865475
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 2, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab2_bump",
+        "kind": "section",
+        "input": "od_cab2_hp",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 170.0
+        },
+        "q": {
+          "value": 1.0
+        },
+        "gain_db": {
+          "value": 1.5
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 2, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab2_lp1",
+        "kind": "section",
+        "input": "od_cab2_bump",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 5000.0
+        },
+        "q": {
+          "value": 1.3065629648763766
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 2, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab2_lp2",
+        "kind": "section",
+        "input": "od_cab2_lp1",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 5000.0
+        },
+        "q": {
+          "value": 0.541196100146197
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 2, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab3_hp",
+        "kind": "section",
+        "input": "od_post_curve",
+        "stage": "pole",
+        "side": "high",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 85.0
+        },
+        "q": {
+          "value": 0.7071067811865475
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 3, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab3_bump",
+        "kind": "section",
+        "input": "od_cab3_hp",
+        "stage": "peaking",
+        "centre_hz": {
+          "value": 130.0
+        },
+        "q": {
+          "value": 1.0
+        },
+        "gain_db": {
+          "value": 2.5
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 3, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab3_lp1",
+        "kind": "section",
+        "input": "od_cab3_bump",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 4600.0
+        },
+        "q": {
+          "value": 1.3065629648763766
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 3, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
+        "id": "od_cab3_lp2",
+        "kind": "section",
+        "input": "od_cab3_lp1",
+        "stage": "pole",
+        "side": "low",
+        "form": "bilinear",
+        "corner_hz": {
+          "value": 4600.0
+        },
+        "q": {
+          "value": 0.541196100146197
+        },
+        "sections": {
+          "value": 1
+        }
+      },
+      "basis": "invented",
+      "rationale": "saturation.ampSim's cabinet for cab_model 3, as cab_voicing designs it with no microphone and presence at its 0 dB default: a Butterworth high-pass, the body peak and a fourth-order Butterworth roll-off. The one place an overlay holds numbers; tests/midi/gs_classic_types_other_test.cpp holds these sections to design_cab_stage.",
+      "replaced_when": {
+        "model_binding": [
+          "02 02",
+          "40 03 05"
+        ]
+      },
+      "covers": "a037ea0f6827"
+    },
+    {
+      "node": {
         "id": "od_cab_select",
         "kind": "mix",
         "inputs": [
           "od_cab0_lp2",
-          "od_cab1_lp2"
+          "od_cab1_lp2",
+          "od_cab2_lp2",
+          "od_cab3_lp2"
         ],
         "weights": {
           "od_cab0_lp2": {
@@ -385,7 +607,9 @@
               "kind": "states",
               "values": {
                 "0": 1.0,
-                "1": 0.0
+                "1": 0.0,
+                "2": 0.0,
+                "3": 0.0
               }
             }
           },
@@ -395,14 +619,40 @@
               "kind": "states",
               "values": {
                 "0": 0.0,
-                "1": 1.0
+                "1": 1.0,
+                "2": 0.0,
+                "3": 0.0
+              }
+            }
+          },
+          "od_cab2_lp2": {
+            "byte": "40 03 05",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 0.0,
+                "2": 1.0,
+                "3": 0.0
+              }
+            }
+          },
+          "od_cab3_lp2": {
+            "byte": "40 03 05",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 0.0,
+                "2": 0.0,
+                "3": 1.0
               }
             }
           }
         }
       },
       "basis": "invented",
-      "rationale": "Amp Type state i is cab_model i, the d.enum4 modern binds to ampSim `cabModel`. The states past 1 name cab models cab_voicing does not have yet, so they read the nearest named state.",
+      "rationale": "Amp Type state i is cab_model i, the d.enum4 modern binds to ampSim `cabModel`.",
       "replaced_when": {
         "model_binding": [
           "02 02",

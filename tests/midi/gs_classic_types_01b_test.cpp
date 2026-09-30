@@ -10,7 +10,9 @@
 /// first printed slot; the full sweep is slow and runs under `[gs-classic-types-01b-all]`.
 ///
 /// The Lo-Fi Type case holds the 01 73 overlay's hold rates to the 01 72 candidate's
-/// ladder: the overlay carries those numbers by hand, so this is what keeps the two one.
+/// ladder, and the 3D azimuth case holds the 01 70 / 01 71 overlays' azimuth sections to
+/// `stereo.binaural`'s response: the overlays carry those numbers by hand, so these are what
+/// keep the two sources one.
 
 #include <algorithm>
 #include <array>
@@ -27,6 +29,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "midi/gs_classic_sensitivity.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_classic/graph_engine.h"
@@ -46,11 +49,12 @@ using sonare::midi::synth::kGsEfxTypeDefaults;
 
 constexpr uint16_t kFirstType = 0x0140;
 constexpr uint16_t kLastType = 0x0173;
-constexpr uint16_t k3dChorus = 0x0144;
-constexpr uint16_t k3dDelay = 0x0157;
 constexpr uint16_t k3dAuto = 0x0170;
 constexpr uint16_t k3dManual = 0x0171;
+constexpr int k3dAzimuthSlot = 0;
+constexpr int k3dTurnSlot = 3;
 constexpr int k3dOutSlot = 14;
+constexpr uint8_t k3dPhones = 1;
 constexpr const char* kReferencePath = "tests/midi/gs_classic_reference.tsv";
 
 // Stimulus and digest as the reference TSV header states them.
@@ -79,13 +83,6 @@ struct Printed {
   uint8_t hi = 0;
 };
 
-/// Slots the binaural insert will carry: 3D types whole, and the Out slot of the 3D chorus
-/// and 3D delay. They are left out until `stereo.binaural` exists to bind them to.
-bool waits_for_binaural(uint16_t type, int slot) {
-  if (type == k3dAuto || type == k3dManual) return true;
-  return (type == k3dChorus || type == k3dDelay) && slot == k3dOutSlot;
-}
-
 /// (type, slot) -> the first and last printed byte, for each printed slot the reference
 /// TSV lists. A byte outside the printed range is a protocol question, not the model's.
 std::map<std::pair<uint16_t, int>, Printed> printed_slots() {
@@ -105,7 +102,6 @@ std::map<std::pair<uint16_t, int>, Printed> printed_slots() {
     const auto number = static_cast<uint16_t>(std::stoi(type.substr(0, 2), nullptr, 16) << 8 |
                                               std::stoi(type.substr(3, 2), nullptr, 16));
     if (number < kFirstType || number > kLastType) continue;
-    if (waits_for_binaural(number, std::stoi(slot))) continue;
     const gc::GsClassicType* model = registry.find(number);
     REQUIRE(model != nullptr);
     const auto at = static_cast<std::size_t>(std::stoi(slot));
@@ -340,4 +336,133 @@ TEST_CASE("GS classic types 01b: anchored overlays leave the power-on drawing as
     worst = std::max(worst, l2);
   }
   WARN("largest power-on relative L2 against the raw configuration " << worst);
+}
+
+namespace {
+
+namespace st = sonare::mastering::stereo;
+
+// Placement: 31 positions 12 degrees apart; byte 4 * (position + 16) - 2 names position.
+constexpr int kLastPosition = 15;
+constexpr double kDegreesPerPosition = 12.0;
+constexpr int kLowestAzimuthCentre = -13;
+constexpr int kHighestAzimuthCentre = 10;  // 24 third-octave centres, 49.6 Hz .. 10.1 kHz
+constexpr double kPannerRate = 48000.0;
+constexpr std::size_t kSettle = 4800;  // past both glides (20 ms) at either rate
+constexpr std::size_t kResponse = 16384;
+constexpr int kBandFft = 65536;
+
+/// Mean power over each third-octave band of @p ir at @p rate, in dB.
+std::vector<double> band_db(const std::vector<double>& ir, double rate) {
+  sonare::FFT fft(kBandFft);
+  std::vector<float> frame(static_cast<std::size_t>(kBandFft), 0.0f);
+  for (std::size_t i = 0; i < ir.size() && i < frame.size(); ++i) {
+    frame[i] = static_cast<float>(ir[i]);
+  }
+  std::vector<std::complex<float>> bins(static_cast<std::size_t>(fft.n_bins()));
+  fft.forward(frame.data(), bins.data());
+  const double hz_per_bin = rate / static_cast<double>(kBandFft);
+  std::vector<double> out;
+  for (int n = kLowestAzimuthCentre; n <= kHighestAzimuthCentre; ++n) {
+    const double centre = 1000.0 * std::pow(2.0, n / 3.0);
+    const double lo = centre * std::pow(2.0, -1.0 / 6.0);
+    const double hi = centre * std::pow(2.0, 1.0 / 6.0);
+    double power = 0.0;
+    int count = 0;
+    for (std::size_t k = 0; k < bins.size(); ++k) {
+      const double f = static_cast<double>(k) * hz_per_bin;
+      if (f < lo || f >= hi) continue;
+      power += std::norm(std::complex<double>(bins[k]));
+      ++count;
+    }
+    REQUIRE(count > 0);
+    out.push_back(10.0 * std::log10(power / count));
+  }
+  return out;
+}
+
+/// Per-ear band response of the classic graph at @p position, phones, turning off.
+std::array<std::vector<double>, 2> classic_response(const gc::GsClassicType& type, int position) {
+  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
+  std::array<uint8_t, 20> bytes = power_on(type.type);
+  bytes[k3dAzimuthSlot] = static_cast<uint8_t>(4 * (position + 16) - 2);
+  if (type.type == k3dAuto) bytes[k3dTurnSlot] = 0;
+  bytes[k3dOutSlot] = k3dPhones;
+  gc::GsClassicGraph graph;
+  REQUIRE(graph.prepare(registry.models(), type, kBlock, &gc::gs_classic_extension_kernels()));
+  graph.reset();
+  for (std::size_t slot = 0; slot < bytes.size(); ++slot) graph.set_byte(slot, bytes[slot]);
+  const std::size_t n = kSettle + kResponse;
+  std::vector<double> in(n, 0.0);
+  in[kSettle] = 1.0;
+  std::vector<double> l(n), r(n);
+  graph.process(in.data(), in.data(), l.data(), r.data(), n);
+  return {band_db({l.begin() + kSettle, l.end()}, gc::kGsClassicSampleRateHz),
+          band_db({r.begin() + kSettle, r.end()}, gc::kGsClassicSampleRateHz)};
+}
+
+/// Per-ear band response of `stereo.binaural` at @p degrees, phones.
+std::array<std::vector<double>, 2> panner_response(double degrees) {
+  st::BinauralPannerConfig config;
+  config.azimuth_deg = static_cast<float>(degrees);
+  st::BinauralPanner panner(config);
+  const std::size_t n = kSettle + kResponse;
+  panner.prepare(kPannerRate, static_cast<int>(n));
+  std::vector<float> l(n, 0.0f), r(n, 0.0f);
+  l[kSettle] = 1.0f;
+  r[kSettle] = 1.0f;
+  float* planes[2] = {l.data(), r.data()};
+  panner.process(planes, 2, static_cast<int>(n));
+  return {band_db({l.begin() + kSettle, l.end()}, kPannerRate),
+          band_db({r.begin() + kSettle, r.end()}, kPannerRate)};
+}
+
+}  // namespace
+
+TEST_CASE("GS classic types 01b: the 3D azimuth follows stereo.binaural's ring",
+          "[gs-classic-types-01b]") {
+  // Per ear and written position, the third-octave response relative to the front: the
+  // overlay's sections are fitted so the classic head's change matches the ring's.
+  constexpr double kRmsToleranceDb = 0.75;
+  constexpr double kMaxToleranceDb = 2.0;
+  constexpr double kShapedDb = 6.0;
+  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
+  REQUIRE(registry.valid());
+  const auto panner_front = panner_response(0.0);
+  double worst_rms = 0.0;
+  double worst_max = 0.0;
+  double largest_change = 0.0;
+  for (uint16_t number : {k3dAuto, k3dManual}) {
+    const gc::GsClassicType* type = registry.find(number);
+    REQUIRE(type != nullptr);
+    const auto classic_front = classic_response(*type, 0);
+    for (int position = -kLastPosition; position <= kLastPosition; ++position) {
+      const double degrees = kDegreesPerPosition * position;
+      const auto classic = classic_response(*type, position);
+      const auto panner = panner_response(degrees);
+      for (int ear = 0; ear < 2; ++ear) {
+        double sum = 0.0;
+        double most = 0.0;
+        const std::size_t bands = classic[ear].size();
+        for (std::size_t b = 0; b < bands; ++b) {
+          const double want = panner[ear][b] - panner_front[ear][b];
+          const double got = classic[ear][b] - classic_front[ear][b];
+          sum += (got - want) * (got - want);
+          most = std::max(most, std::fabs(got - want));
+          largest_change = std::max(largest_change, std::fabs(want));
+        }
+        const double rms = std::sqrt(sum / static_cast<double>(bands));
+        INFO("type " << std::hex << number << std::dec << " " << degrees << " degrees, ear " << ear
+                     << ": rms " << rms << " dB, largest " << most << " dB");
+        CHECK(rms <= kRmsToleranceDb);
+        CHECK(most <= kMaxToleranceDb);
+        worst_rms = std::max(worst_rms, rms);
+        worst_max = std::max(worst_max, most);
+      }
+    }
+  }
+  // The comparison is only worth something against a response that moves with azimuth.
+  CHECK(largest_change > kShapedDb);
+  WARN("3D azimuth against stereo.binaural: worst rms " << worst_rms << " dB, worst band "
+                                                        << worst_max << " dB");
 }

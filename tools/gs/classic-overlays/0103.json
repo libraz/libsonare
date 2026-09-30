@@ -1,6 +1,727 @@
 {
   "type": "01 03",
-  "what_this_is": "Covers only; the vowels past the first and the Accel byte have no designed source yet.",
+  "what_this_is": "The four vowels past the first and the Accel glide, as effects.filter.vowel's table and glide on the candidate's three peaks.",
+  "entries": [
+    {
+      "node": {
+        "id": "one",
+        "kind": "lfo",
+        "shape": "points",
+        "points": [
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.5,
+            1.0
+          ]
+        ],
+        "rate_hz": {
+          "value": 0.0
+        },
+        "phase_offset": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "A constant, the axis the Vowel byte places each peak's offset on.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "rise_1",
+        "kind": "gain",
+        "input": "one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 1.0,
+              "1": 1.0,
+              "2": 1.0,
+              "3": 1.0,
+              "4": 1.0,
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "Peak 1's frequency over vowel a's, where it rises; 1 elsewhere. effects.filter.vowel's table (vowel_filter.cpp): vowel a is the candidate's own fit, i u e o move each peak by that vowel's Japanese male mean formant over /a/ (Yazawa and Kondo), sharing the fit's q and weights. The one place this overlay holds numbers; tests/midi/gs_classic_types_01a_test.cpp holds them to vowel_table_hz.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "fall_1",
+        "kind": "gain",
+        "input": "one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 1.0,
+              "1": 2.282391995000934,
+              "2": 1.9741379418979204,
+              "3": 1.550790094109486,
+              "4": 1.4870129476826834,
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "Peak 1's frequency over vowel a's, where it falls (inverted); 1 elsewhere. effects.filter.vowel's table (vowel_filter.cpp): vowel a is the candidate's own fit, i u e o move each peak by that vowel's Japanese male mean formant over /a/ (Yazawa and Kondo), sharing the fit's q and weights. The one place this overlay holds numbers; tests/midi/gs_classic_types_01a_test.cpp holds them to vowel_table_hz.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "rise_1_glide",
+        "kind": "envelope",
+        "input": "rise_1",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "log",
+        "attack_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "floor_db": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "Accel as the time constant of effects.filter.vowel's glide, the d.glide_ms modern binds to its `accelMs`: a one-pole in the log of each peak's frequency, drawn as the log-domain envelope's level in dB. Up and down moves are two envelopes floored at vowel a, so the glide starts from the power-on vowel after a reset and power-on draws the candidate.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "fall_1_glide",
+        "kind": "envelope",
+        "input": "fall_1",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "log",
+        "attack_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "floor_db": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "Accel as the time constant of effects.filter.vowel's glide, the d.glide_ms modern binds to its `accelMs`: a one-pole in the log of each peak's frequency, drawn as the log-domain envelope's level in dB. Up and down moves are two envelopes floored at vowel a, so the glide starts from the power-on vowel after a reset and power-on draws the candidate.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "place_1",
+        "kind": "mix",
+        "inputs": [
+          "rise_1_glide",
+          "fall_1_glide"
+        ],
+        "weights": {
+          "rise_1_glide": {
+            "value": 1.0
+          },
+          "fall_1_glide": {
+            "value": -1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Peak 1's offset from vowel a in dB of frequency, gliding.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "rise_2",
+        "kind": "gain",
+        "input": "one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 1.0,
+              "1": 1.6788776899804347,
+              "2": 1.1184722977181019,
+              "3": 1.5175369773807423,
+              "4": 1.0,
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "Peak 2's frequency over vowel a's, where it rises; 1 elsewhere. effects.filter.vowel's table (vowel_filter.cpp): vowel a is the candidate's own fit, i u e o move each peak by that vowel's Japanese male mean formant over /a/ (Yazawa and Kondo), sharing the fit's q and weights. The one place this overlay holds numbers; tests/midi/gs_classic_types_01a_test.cpp holds them to vowel_table_hz.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "fall_2",
+        "kind": "gain",
+        "input": "one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 1.0,
+              "1": 1.0,
+              "2": 1.0,
+              "3": 1.0,
+              "4": 1.3519493604373074,
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "Peak 2's frequency over vowel a's, where it falls (inverted); 1 elsewhere. effects.filter.vowel's table (vowel_filter.cpp): vowel a is the candidate's own fit, i u e o move each peak by that vowel's Japanese male mean formant over /a/ (Yazawa and Kondo), sharing the fit's q and weights. The one place this overlay holds numbers; tests/midi/gs_classic_types_01a_test.cpp holds them to vowel_table_hz.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "rise_2_glide",
+        "kind": "envelope",
+        "input": "rise_2",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "log",
+        "attack_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "floor_db": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "Accel as the time constant of effects.filter.vowel's glide, the d.glide_ms modern binds to its `accelMs`: a one-pole in the log of each peak's frequency, drawn as the log-domain envelope's level in dB. Up and down moves are two envelopes floored at vowel a, so the glide starts from the power-on vowel after a reset and power-on draws the candidate.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "fall_2_glide",
+        "kind": "envelope",
+        "input": "fall_2",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "log",
+        "attack_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "floor_db": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "Accel as the time constant of effects.filter.vowel's glide, the d.glide_ms modern binds to its `accelMs`: a one-pole in the log of each peak's frequency, drawn as the log-domain envelope's level in dB. Up and down moves are two envelopes floored at vowel a, so the glide starts from the power-on vowel after a reset and power-on draws the candidate.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "place_2",
+        "kind": "mix",
+        "inputs": [
+          "rise_2_glide",
+          "fall_2_glide"
+        ],
+        "weights": {
+          "rise_2_glide": {
+            "value": 1.0
+          },
+          "fall_2_glide": {
+            "value": -1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Peak 2's offset from vowel a in dB of frequency, gliding.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "rise_3",
+        "kind": "gain",
+        "input": "one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 1.0,
+              "1": 1.1243762223655749,
+              "2": 1.0,
+              "3": 1.0023032776297431,
+              "4": 1.0,
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "Peak 3's frequency over vowel a's, where it rises; 1 elsewhere. effects.filter.vowel's table (vowel_filter.cpp): vowel a is the candidate's own fit, i u e o move each peak by that vowel's Japanese male mean formant over /a/ (Yazawa and Kondo), sharing the fit's q and weights. The one place this overlay holds numbers; tests/midi/gs_classic_types_01a_test.cpp holds them to vowel_table_hz.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "fall_3",
+        "kind": "gain",
+        "input": "one",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "map": {
+            "kind": "states",
+            "values": {
+              "0": 1.0,
+              "1": 1.0,
+              "2": 1.1061570497151156,
+              "3": 1.0,
+              "4": 1.0239779869308896,
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "Peak 3's frequency over vowel a's, where it falls (inverted); 1 elsewhere. effects.filter.vowel's table (vowel_filter.cpp): vowel a is the candidate's own fit, i u e o move each peak by that vowel's Japanese male mean formant over /a/ (Yazawa and Kondo), sharing the fit's q and weights. The one place this overlay holds numbers; tests/midi/gs_classic_types_01a_test.cpp holds them to vowel_table_hz.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "node": {
+        "id": "rise_3_glide",
+        "kind": "envelope",
+        "input": "rise_3",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "log",
+        "attack_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "floor_db": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "Accel as the time constant of effects.filter.vowel's glide, the d.glide_ms modern binds to its `accelMs`: a one-pole in the log of each peak's frequency, drawn as the log-domain envelope's level in dB. Up and down moves are two envelopes floored at vowel a, so the glide starts from the power-on vowel after a reset and power-on draws the candidate.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "fall_3_glide",
+        "kind": "envelope",
+        "input": "fall_3",
+        "detector": "peak",
+        "topology": "branching",
+        "domain": "log",
+        "attack_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "release_ms": {
+          "byte": "40 03 06",
+          "law": "d.glide_ms"
+        },
+        "floor_db": {
+          "value": 0.0
+        }
+      },
+      "basis": "invented",
+      "rationale": "Accel as the time constant of effects.filter.vowel's glide, the d.glide_ms modern binds to its `accelMs`: a one-pole in the log of each peak's frequency, drawn as the log-domain envelope's level in dB. Up and down moves are two envelopes floored at vowel a, so the glide starts from the power-on vowel after a reset and power-on draws the candidate.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "node": {
+        "id": "place_3",
+        "kind": "mix",
+        "inputs": [
+          "rise_3_glide",
+          "fall_3_glide"
+        ],
+        "weights": {
+          "rise_3_glide": {
+            "value": 1.0
+          },
+          "fall_3_glide": {
+            "value": -1.0
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "Peak 3's offset from vowel a in dB of frequency, gliding.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 06"
+        ]
+      },
+      "covers": "6f8f2c365682"
+    },
+    {
+      "replaces": "vowel",
+      "node": {
+        "id": "vowel",
+        "kind": "gain",
+        "input": "mono",
+        "unit": "ratio",
+        "gain": {
+          "byte": "40 03 05",
+          "source": "document",
+          "rests_on": [
+            "documents/roland-sc-8850-owners-manual-en/effect-list.json page 216: Humanizer Vowel, a/i/u/e/o over 00/01/02/03/04",
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json"
+          ],
+          "fitted_on": [],
+          "map": {
+            "kind": "states",
+            "values": {
+              "*": 1.0
+            }
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's Vowel reader, a unity gain, with vowels 01 to 04 named now that the peaks draw them.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "replaces": "peak_1",
+      "node": {
+        "id": "peak_1",
+        "kind": "section",
+        "input": "switched",
+        "stage": "peaking",
+        "centre_hz": {
+          "control": "place_1",
+          "map": {
+            "kind": "points",
+            "log": true,
+            "points": [
+              [
+                -12.7,
+                232.65993064404023
+              ],
+              [
+                12.8,
+                4382.496665184066
+              ]
+            ]
+          }
+        },
+        "q": {
+          "value": 1.582894,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-nought-and-one.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-nought-and-two.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-one-and-two.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-one-and-the-top.json"
+          ],
+          "fitted_on": [
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-one",
+              0
+            ],
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-two",
+              0
+            ],
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-two",
+              2
+            ]
+          ]
+        },
+        "gain_db": {
+          "value": 20.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "The candidate's peak 1 with its centre read from place_1: vowel a's fitted centre moved by the offset, exponential in dB, so an offset of 0 is the candidate's own section.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "replaces": "peak_2",
+      "node": {
+        "id": "peak_2",
+        "kind": "section",
+        "input": "switched",
+        "stage": "peaking",
+        "centre_hz": {
+          "control": "place_2",
+          "map": {
+            "kind": "points",
+            "log": true,
+            "points": [
+              [
+                -12.7,
+                304.2377648264733
+              ],
+              [
+                12.8,
+                5730.771887037986
+              ]
+            ]
+          }
+        },
+        "q": {
+          "value": 0.764481,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-nought-and-one.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-nought-and-two.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-one-and-two.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-one-and-the-top.json"
+          ],
+          "fitted_on": [
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-one",
+              0
+            ],
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-two",
+              0
+            ],
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-two",
+              2
+            ]
+          ]
+        },
+        "gain_db": {
+          "value": 20.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "The candidate's peak 2 with its centre read from place_2: vowel a's fitted centre moved by the offset, exponential in dB, so an offset of 0 is the candidate's own section.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    },
+    {
+      "replaces": "peak_3",
+      "node": {
+        "id": "peak_3",
+        "kind": "section",
+        "input": "switched",
+        "stage": "peaking",
+        "centre_hz": {
+          "control": "place_3",
+          "map": {
+            "kind": "points",
+            "log": true,
+            "points": [
+              [
+                -12.7,
+                441.0657746526566
+              ],
+              [
+                12.8,
+                8308.131448295902
+              ]
+            ]
+          }
+        },
+        "q": {
+          "value": 2.161686,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-nought-and-one.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-nought-and-two.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-one-and-two.json",
+            "data/units/roland-sc8850-01/contrast/40-03-04-humanizer-one-and-the-top.json"
+          ],
+          "fitted_on": [
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-one",
+              0
+            ],
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-two",
+              0
+            ],
+            [
+              "two-state-rule/humanizer/40-03-04-nought-and-two",
+              2
+            ]
+          ]
+        },
+        "gain_db": {
+          "value": 20.0,
+          "source": "law",
+          "rests_on": [],
+          "fitted_on": []
+        }
+      },
+      "basis": "carried",
+      "from": "src/effects/filter/vowel_filter.cpp (Yazawa and Kondo 2019)",
+      "rationale": "The candidate's peak 3 with its centre read from place_3: vowel a's fitted centre moved by the offset, exponential in dB, so an offset of 0 is the candidate's own section.",
+      "replaced_when": {
+        "model_binding": [
+          "01 03",
+          "40 03 05"
+        ]
+      },
+      "covers": "0b04a574fe7b"
+    }
+  ],
   "covers": [
     {
       "covers": "64e1db9df54c",

@@ -1,6 +1,1914 @@
 {
   "type": "01 57",
-  "what_this_is": "Covers only; the Out slot waits for the binaural insert, every other printed slot is bound.",
+  "what_this_is": "Out as the speaker rendering the unit's own 01 70 fit draws; every other printed slot is bound.",
+  "entries": [
+    {
+      "node": {
+        "id": "cross_from_l_delay",
+        "kind": "delay",
+        "input": "wet_l",
+        "interpolation": "none",
+        "time_ms": {
+          "value": 0.09375,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "cross_from_l_low_pass",
+        "kind": "section",
+        "input": "cross_from_l_delay",
+        "stage": "pole",
+        "side": "low",
+        "sections": {
+          "value": 1,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        },
+        "corner_hz": {
+          "value": 5735.18,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "cross_from_l",
+        "kind": "gain",
+        "input": "cross_from_l_low_pass",
+        "unit": "ratio",
+        "gain": {
+          "value": 0.670809,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "cross_from_r_delay",
+        "kind": "delay",
+        "input": "wet_r",
+        "interpolation": "none",
+        "time_ms": {
+          "value": 0.09375,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "cross_from_r_low_pass",
+        "kind": "section",
+        "input": "cross_from_r_delay",
+        "stage": "pole",
+        "side": "low",
+        "sections": {
+          "value": 1,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        },
+        "corner_hz": {
+          "value": 5735.18,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "cross_from_r",
+        "kind": "gain",
+        "input": "cross_from_r_low_pass",
+        "unit": "ratio",
+        "gain": {
+          "value": 0.670809,
+          "source": "measured",
+          "rests_on": [
+            "inferences/roland-sc8850-01/out-the-byte-picks-two-renderings-of-one-placement.json",
+            "data/units/roland-sc8850-01/balance/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json",
+            "data/units/roland-sc8850-01/balance-bands/40-03-03-where-the-azimuth-puts-it-01-71-speaker.json"
+          ],
+          "fitted_on": [
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "001"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "007"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "011"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "015"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "019"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "023"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "027"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "031"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "035"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "039"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "043"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "047"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "051"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "055"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "059"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "063"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "067"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "071"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "075"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "079"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "083"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "087"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "091"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "095"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "099"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "103"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "107"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "111"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "115"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "119"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker",
+              "123"
+            ],
+            [
+              "where-the-azimuth-puts-it/01-71-speaker-bypassed",
+              "bypassed"
+            ]
+          ]
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "heard_l",
+        "kind": "mix",
+        "inputs": [
+          "wet_l",
+          "cross_from_r"
+        ],
+        "weights": {
+          "wet_l": {
+            "value": 1.0
+          },
+          "cross_from_r": {
+            "byte": "40 03 11",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 1.0,
+                "*": 0.0
+              }
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "replaces": "out_l",
+      "node": {
+        "id": "out_l",
+        "kind": "mix",
+        "inputs": [
+          "in_l",
+          "heard_l"
+        ],
+        "weights": {
+          "in_l": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          },
+          "heard_l": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's output mix, reading the wet pair after Out.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "node": {
+        "id": "heard_r",
+        "kind": "mix",
+        "inputs": [
+          "wet_r",
+          "cross_from_l"
+        ],
+        "weights": {
+          "wet_r": {
+            "value": 1.0
+          },
+          "cross_from_l": {
+            "byte": "40 03 11",
+            "map": {
+              "kind": "states",
+              "values": {
+                "0": 0.0,
+                "1": 1.0,
+                "*": 0.0
+              }
+            }
+          }
+        }
+      },
+      "basis": "carried",
+      "from": "0170-whole-head-shadow-and-a-rear-cue-each-side-less-the-other",
+      "rationale": "Out as the speaker rendering stereo.binaural draws and the unit's own 01 70 fit states: the candidate's wet pair is the speaker rendering (power-on Speaker), and Phones adds back to each side the crosstalk path the 01 70 canceller subtracts, a filtered and delayed copy of the other.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    },
+    {
+      "replaces": "out_r",
+      "node": {
+        "id": "out_r",
+        "kind": "mix",
+        "inputs": [
+          "in_r",
+          "heard_r"
+        ],
+        "weights": {
+          "in_r": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                0.9765625,
+                0.953125,
+                0.9375,
+                0.9140625,
+                0.8984375,
+                0.875,
+                0.859375,
+                0.8359375,
+                0.8125,
+                0.796875,
+                0.7734375,
+                0.7578125,
+                0.734375,
+                0.71875,
+                0.6953125,
+                0.6796875,
+                0.65625,
+                0.6328125,
+                0.6171875,
+                0.59375,
+                0.578125,
+                0.5546875,
+                0.5390625,
+                0.515625,
+                0.5,
+                0.4765625,
+                0.453125,
+                0.4375,
+                0.4140625,
+                0.3984375,
+                0.375,
+                0.359375,
+                0.3359375,
+                0.3125,
+                0.296875,
+                0.2734375,
+                0.2578125,
+                0.234375,
+                0.21875,
+                0.1953125,
+                0.1796875,
+                0.15625,
+                0.1328125,
+                0.1171875,
+                0.09375,
+                0.078125,
+                0.0546875,
+                0.0390625,
+                0.015625,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          },
+          "heard_r": {
+            "byte": "40 03 12",
+            "map": {
+              "kind": "table",
+              "entries": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.015625,
+                0.0390625,
+                0.0546875,
+                0.078125,
+                0.09375,
+                0.1171875,
+                0.1328125,
+                0.15625,
+                0.1796875,
+                0.1953125,
+                0.21875,
+                0.234375,
+                0.2578125,
+                0.2734375,
+                0.296875,
+                0.3125,
+                0.3359375,
+                0.359375,
+                0.375,
+                0.3984375,
+                0.4140625,
+                0.4375,
+                0.453125,
+                0.4765625,
+                0.5,
+                0.515625,
+                0.5390625,
+                0.5546875,
+                0.578125,
+                0.59375,
+                0.6171875,
+                0.6328125,
+                0.65625,
+                0.6796875,
+                0.6953125,
+                0.71875,
+                0.734375,
+                0.7578125,
+                0.7734375,
+                0.796875,
+                0.8125,
+                0.8359375,
+                0.859375,
+                0.875,
+                0.8984375,
+                0.9140625,
+                0.9375,
+                0.953125,
+                0.9765625,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "out_of_range": 127
+            },
+            "source": "law",
+            "rests_on": [
+              "inferences/roland-sc8850-01/balance-two-ramps-that-meet-at-full.json"
+            ],
+            "fitted_on": []
+          }
+        }
+      },
+      "basis": "invented",
+      "rationale": "The candidate's output mix, reading the wet pair after Out.",
+      "replaced_when": {
+        "model_binding": [
+          "01 57",
+          "40 03 11"
+        ]
+      },
+      "covers": "b314a2e0b175"
+    }
+  ],
   "covers": [
     {
       "covers": "3eaaee41fa11",

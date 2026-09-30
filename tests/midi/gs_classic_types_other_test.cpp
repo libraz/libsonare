@@ -326,10 +326,11 @@ double section_db(const gc::GsClassicModelSet& m, const gc::GsClassicNode& node,
   return db;
 }
 
-/// Amp Type's selecting mix on `amp_slot`: model index -> the sections of that model's chain.
+/// Amp Type's selecting mix on `amp_slot`, read over its `printed` states: model index -> the
+/// sections of that model's chain.
 std::map<int, std::vector<const gc::GsClassicNode*>> cab_chains(const gc::GsClassicModelSet& m,
                                                                 const gc::GsClassicType& t,
-                                                                uint8_t amp_slot) {
+                                                                uint8_t amp_slot, int printed) {
   std::map<uint16_t, const gc::GsClassicNode*> by_signal;
   uint16_t signal = 2;
   for (uint16_t i = t.node_begin; i < t.node_end; ++i) {
@@ -345,10 +346,15 @@ std::map<int, std::vector<const gc::GsClassicNode*>> cab_chains(const gc::GsClas
       if (w.kind != gc::GsClassicValueKind::kByte || w.slot != amp_slot) continue;
       const gc::GsClassicLut& lut = m.luts[w.table];
       int model = -1;
-      for (int state = 0; state < 2; ++state) {
-        if (lut.v[state] == 1.0f) model = state;
+      int states = 0;
+      for (int state = 0; state < printed; ++state) {
+        if (lut.v[state] == 1.0f) {
+          model = state;
+          ++states;
+        }
       }
-      REQUIRE(model >= 0);
+      // Each Amp Type state selects exactly one cabinet chain.
+      REQUIRE(states == 1);
       std::vector<const gc::GsClassicNode*> chain;
       uint16_t at = m.inputs[node.input_begin + k].signal;
       while (by_signal.count(at) != 0 && by_signal[at]->kind == gc::GsClassicNodeKind::kSection) {
@@ -371,12 +377,16 @@ TEST_CASE("GS classic types other: the amp overlays' cabinet sections are cab_vo
   struct Amp {
     uint16_t type;
     uint8_t amp_slot;
+    int states;  ///< printed Amp Type states, each its own cab_model
   };
-  // Every Amp Type slot these overlays bind; 11 03 has one per half.
-  constexpr Amp kAmps[] = {{0x0200, 2}, {0x0201, 2}, {0x0202, 2}, {0x0203, 2}, {0x0204, 2},
-                           {0x0205, 2}, {0x0400, 6}, {0x0401, 6}, {0x0402, 6}, {0x0405, 6},
-                           {0x1103, 2}, {0x1103, 7}, {0x1104, 2}, {0x1105, 2}, {0x1106, 2}};
-  constexpr sat::CabModel kModels[] = {sat::CabModel::kGuitar4x12, sat::CabModel::kBass8x10};
+  // Every Amp Type slot these overlays bind; 11 03 has one per half, 04 05 prints three.
+  constexpr Amp kAmps[] = {{0x0200, 2, 4}, {0x0201, 2, 4}, {0x0202, 2, 4}, {0x0203, 2, 4},
+                           {0x0204, 2, 4}, {0x0205, 2, 4}, {0x0400, 6, 4}, {0x0401, 6, 4},
+                           {0x0402, 6, 4}, {0x0405, 6, 3}, {0x1103, 2, 4}, {0x1103, 7, 4},
+                           {0x1104, 2, 4}, {0x1105, 2, 4}, {0x1106, 2, 4}};
+  constexpr sat::CabModel kModels[] = {sat::CabModel::kGuitar4x12, sat::CabModel::kBass8x10,
+                                       sat::CabModel::kGuitar1x12Combo,
+                                       sat::CabModel::kGuitar2x12Open};
   constexpr std::size_t kSectionsPerCab = 4;
   constexpr int kLowestCentre = -13;
   constexpr int kHighestCentre = 10;  // 24 third-octave centres, 49.6 Hz .. 10.1 kHz
@@ -385,9 +395,9 @@ TEST_CASE("GS classic types other: the amp overlays' cabinet sections are cab_vo
   for (const Amp& amp : kAmps) {
     const gc::GsClassicType* t = registry.find(amp.type);
     REQUIRE(t != nullptr);
-    const auto chains = cab_chains(m, *t, amp.amp_slot);
+    const auto chains = cab_chains(m, *t, amp.amp_slot, amp.states);
     INFO("type " << std::hex << amp.type << std::dec << " slot " << int(amp.amp_slot));
-    REQUIRE(chains.size() == std::size(kModels));
+    REQUIRE(chains.size() == static_cast<std::size_t>(amp.states));
     for (const auto& [index, chain] : chains) {
       INFO("cab_model " << index);
       REQUIRE(chain.size() == kSectionsPerCab);

@@ -10,8 +10,9 @@
 /// first printed slot; the full sweep is slow and runs under `[gs-classic-types-01a-all]`.
 ///
 /// The amp-section case holds the cabinet sections the 01 10 / 01 11 overlays write to
-/// `cab_voicing`'s design of the same model: the overlays carry those numbers by hand, so
-/// this is what keeps the two sources one.
+/// `cab_voicing`'s design of the same model, and the vowel case holds the 01 03 overlay's
+/// peak offsets to the vowel filter's table: the overlays carry those numbers by hand, so
+/// these are what keep the two sources one.
 
 #include <algorithm>
 #include <array>
@@ -28,6 +29,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "effects/filter/vowel_filter.h"
 #include "mastering/saturation/cab_voicing.h"
 #include "midi/gs_classic_sensitivity.h"
 #include "midi/synth/gs_address_table.h"
@@ -101,9 +103,6 @@ std::map<std::pair<uint16_t, int>, Printed> printed_slots() {
     const auto number = static_cast<uint16_t>(std::stoi(type.substr(0, 2), nullptr, 16) << 8 |
                                               std::stoi(type.substr(3, 2), nullptr, 16));
     if (number < kFirstType || number > kLastType) continue;
-    // 01 03 is left out until the vowel filter insert exists: its vowels and Accel have
-    // nothing to bind to before then.
-    if (number == kHumanizer) continue;
     const gc::GsClassicType* model = registry.find(number);
     REQUIRE(model != nullptr);
     const auto at = static_cast<std::size_t>(std::stoi(slot));
@@ -277,10 +276,15 @@ std::map<int, std::vector<const gc::GsClassicNode*>> cab_chains(const gc::GsClas
       if (w.kind != gc::GsClassicValueKind::kByte || w.slot != kAmpTypeSlot) continue;
       const gc::GsClassicLut& lut = m.luts[w.table];
       int model = -1;
-      for (int state = 0; state < 2; ++state) {
-        if (lut.v[state] == 1.0f) model = state;
+      int states = 0;
+      for (int state = 0; state < sat::kCabModelCount; ++state) {
+        if (lut.v[state] == 1.0f) {
+          model = state;
+          ++states;
+        }
       }
-      REQUIRE(model >= 0);
+      // Each Amp Type state selects exactly one cabinet chain.
+      REQUIRE(states == 1);
       std::vector<const gc::GsClassicNode*> chain;
       uint16_t at = m.inputs[node.input_begin + k].signal;
       while (by_signal.count(at) != 0 && by_signal[at]->kind == gc::GsClassicNodeKind::kSection) {
@@ -337,7 +341,9 @@ TEST_CASE("GS classic types 01a: the amp overlay's cabinet sections are cab_voic
   const gc::GsClassicModelSet& m = registry.models();
   // The amp types' cabinets, one chain per cab_model the overlay draws.
   constexpr uint16_t kAmpTypes[] = {0x0110, 0x0111};
-  constexpr sat::CabModel kModels[] = {sat::CabModel::kGuitar4x12, sat::CabModel::kBass8x10};
+  constexpr sat::CabModel kModels[] = {sat::CabModel::kGuitar4x12, sat::CabModel::kBass8x10,
+                                       sat::CabModel::kGuitar1x12Combo,
+                                       sat::CabModel::kGuitar2x12Open};
   constexpr std::size_t kSectionsPerCab = 4;
   constexpr int kLowestCentre = -13;
   constexpr int kHighestCentre = 10;  // 24 third-octave centres, 49.6 Hz .. 10.1 kHz
@@ -392,15 +398,21 @@ std::size_t byte_reads(const gc::GsClassicModelSet& m, const gc::GsClassicType& 
 TEST_CASE("GS classic types 01a: anchored overlays leave the power-on drawing as p0 draws it",
           "[gs-classic-types-01a]") {
   // These overlays either add paths their power-on bytes keep silent (Sens 0, Pre Filter
-  // Off) or replace a fitted constant with a law anchored to it at the power-on byte (D33).
-  constexpr uint16_t kUntouchedAtPowerOn[] = {0x0121, 0x0122, 0x0123, 0x0130, 0x0131};
-  constexpr double kSameDrawing = 1e-9;
+  // Off, vowel a) or replace a fitted constant with a law anchored to it at the power-on byte
+  // (D33). 01 03 reads its peak centres through a float control curve, so its tolerance is
+  // float rounding of the fitted centres rather than none.
+  struct Untouched {
+    uint16_t type;
+    double tolerance;
+  };
+  constexpr Untouched kUntouchedAtPowerOn[] = {{0x0103, 1e-6}, {0x0121, 1e-9}, {0x0122, 1e-9},
+                                               {0x0123, 1e-9}, {0x0130, 1e-9}, {0x0131, 1e-9}};
   static const gc::GsClassicModelRegistry raw(gc::gs_classic_models_raw_01a());
   const gc::GsClassicModelRegistry& overlaid = gc::gs_classic_default_registry();
   REQUIRE(raw.valid());
   REQUIRE(overlaid.valid());
   double worst = 0.0;
-  for (uint16_t type : kUntouchedAtPowerOn) {
+  for (const auto& [type, tolerance] : kUntouchedAtPowerOn) {
     INFO("type " << std::hex << type);
     const gc::GsClassicType* r = raw.find(type);
     const gc::GsClassicType* d = overlaid.find(type);
@@ -412,8 +424,97 @@ TEST_CASE("GS classic types 01a: anchored overlays leave the power-on drawing as
     const double l2 =
         relative_l2(draw(raw.models(), *r, bytes), draw(overlaid.models(), *d, bytes));
     INFO("relative L2 " << l2);
-    CHECK(l2 <= kSameDrawing);
+    CHECK(l2 <= tolerance);
     worst = std::max(worst, l2);
   }
   WARN("largest power-on relative L2 against the raw configuration " << worst);
+}
+
+namespace {
+
+/// Linear read of a control curve, as the graph engine reads it.
+double curve_value(const gc::GsClassicCurve& c, double x) {
+  const double t = (x - c.lo) / (c.hi - c.lo) * static_cast<double>(gc::kGsClassicCurveSize - 1);
+  if (!(t > 0.0)) return c.v[0];
+  if (t >= static_cast<double>(gc::kGsClassicCurveSize - 1))
+    return c.v[gc::kGsClassicCurveSize - 1];
+  const auto j = static_cast<std::size_t>(t);
+  const double f = t - static_cast<double>(j);
+  return c.v[j] + f * (static_cast<double>(c.v[j + 1]) - c.v[j]);
+}
+
+}  // namespace
+
+TEST_CASE("GS classic types 01a: the 01 03 vowels are the vowel filter's table",
+          "[gs-classic-types-01a]") {
+  namespace vf = sonare::effects::filter;
+  constexpr uint8_t kVowelSlot = 2;
+  constexpr uint8_t kAccelSlot = 3;
+  constexpr double kRelativeHz = 1e-4;
+  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
+  REQUIRE(registry.valid());
+  const gc::GsClassicModelSet& m = registry.models();
+  const gc::GsClassicType* t = registry.find(kHumanizer);
+  REQUIRE(t != nullptr);
+  std::map<uint16_t, const gc::GsClassicNode*> by_signal;
+  uint16_t signal = 2;
+  for (uint16_t i = t->node_begin; i < t->node_end; ++i) {
+    by_signal[signal] = &m.nodes[i];
+    signal += m.nodes[i].kind == gc::GsClassicNodeKind::kPan ? 2 : 1;
+  }
+  const auto node_at = [&](uint16_t at) {
+    REQUIRE(by_signal.count(at) == 1);
+    return by_signal.at(at);
+  };
+  // A gliding envelope's input: the Vowel byte's multiplier over vowel a, per vowel.
+  const auto vowel_multiplier = [&](const gc::GsClassicNode& envelope, int vowel) {
+    REQUIRE(envelope.kind == gc::GsClassicNodeKind::kEnvelope);
+    REQUIRE((envelope.flags & gc::kGsClassicEnvelopeLogDomain) != 0);
+    for (uint8_t k = 0; k < 2; ++k) {
+      const gc::GsClassicValue& time = m.values[envelope.value_begin + k];
+      REQUIRE(time.kind == gc::GsClassicValueKind::kByte);
+      CHECK(time.slot == kAccelSlot);
+      CHECK(m.luts[time.table].v[0] < m.luts[time.table].v[127]);
+    }
+    const gc::GsClassicNode* gain = node_at(m.inputs[envelope.input_begin].signal);
+    REQUIRE(gain->kind == gc::GsClassicNodeKind::kGain);
+    const gc::GsClassicValue& v = m.values[gain->value_begin];
+    REQUIRE(v.kind == gc::GsClassicValueKind::kByte);
+    REQUIRE(v.slot == kVowelSlot);
+    return static_cast<double>(m.luts[v.table].v[vowel]);
+  };
+
+  int peaks = 0;
+  for (uint16_t i = t->node_begin; i < t->node_end; ++i) {
+    const gc::GsClassicNode& node = m.nodes[i];
+    if (node.kind != gc::GsClassicNodeKind::kSection) continue;
+    const gc::GsClassicSection& s = m.sections[node.aux];
+    if (s.stage != gc::GsClassicStage::kPeaking) continue;
+    const gc::GsClassicValue& centre = m.values[node.value_begin + s.corner];
+    REQUIRE(centre.kind == gc::GsClassicValueKind::kControl);
+    const gc::GsClassicNode* place = node_at(centre.control_ref);
+    REQUIRE(place->kind == gc::GsClassicNodeKind::kMix);
+    REQUIRE(place->n_inputs == 2);
+    // At vowel a both offsets are 0, which names the band the peak carries.
+    const double at_a = curve_value(m.curves[centre.table], 0.0);
+    int band = -1;
+    for (int b = 0; b < vf::kVowelBandCount; ++b) {
+      if (std::fabs(at_a / vf::vowel_table_hz(0, b) - 1.0) <= kRelativeHz) band = b;
+    }
+    REQUIRE(band >= 0);
+    for (int vowel = 0; vowel < vf::kVowelCount; ++vowel) {
+      double offset_db = 0.0;
+      for (uint8_t k = 0; k < 2; ++k) {
+        const double weight = m.values[place->value_begin + k].constant;
+        const gc::GsClassicNode* envelope = node_at(m.inputs[place->input_begin + k].signal);
+        offset_db += weight * 20.0 * std::log10(vowel_multiplier(*envelope, vowel));
+      }
+      const double hz = curve_value(m.curves[centre.table], offset_db);
+      const double want = vf::vowel_table_hz(vowel, band);
+      INFO("band " << band << " vowel " << vowel << ": overlay " << hz << " Hz, table " << want);
+      CHECK(std::fabs(hz / want - 1.0) <= kRelativeHz);
+    }
+    ++peaks;
+  }
+  CHECK(peaks == vf::kVowelBandCount);
 }
