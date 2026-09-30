@@ -15,7 +15,8 @@ starts under any python and re-executes itself under ``<archive>/.venv/bin/pytho
 
 Stops (exit 1) on: a ``source: document`` value that none of the four document
 forms reproduces; a node kind or reference type outside the vocabulary the C++
-engine draws; an ``x-`` kind on the archive side; an overlay entry that rewrites an
+engine draws; an ``x-`` kind on the archive side; a section whose ``gain_db`` or
+``sections`` a control drives, which the renderer refuses; an overlay entry that rewrites an
 existing node without ``replaces``; and, except under ``--raw``, a printed slot no
 node reads (denominator 770, ``02 0C`` being the archive's ``03 00``).
 
@@ -143,6 +144,9 @@ FIELDS = {
     "x-noise": {"noise", "level", "parameter", "seed"},
 }
 COMMENTARY = re.compile(r"^(why.*|is|.*_is|.*_from)$")
+# Section values that decide which sections a stage is built from; the renderer's
+# `_scalar` refuses a control on them, so the engine never draws one.
+SECTION_FIXED = ("gain_db", "sections")
 
 INTERPOLATION = {"none": 0, "linear": 1}
 CROSSFADE = {"hann": 0, "linear": 1, "s_curve": 2}
@@ -417,6 +421,13 @@ def check_vocabulary(model: dict, where: str, *, overlay: bool) -> None:
             if key in ("id", "kind") or key in FIELDS[kind] or COMMENTARY.match(key):
                 continue
             stop(f"{label} carries `{key}`, a field the classic data format has no place for")
+        if kind == "section":
+            for key in SECTION_FIXED:
+                if isinstance(node.get(key), dict) and "control" in node[key]:
+                    stop(
+                        f"{label} drives `{key}` by a control, which the renderer refuses: "
+                        "it decides the sections the stage is built from"
+                    )
         for key in ("model", "record"):
             if key in node:
                 stop(

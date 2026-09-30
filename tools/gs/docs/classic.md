@@ -24,7 +24,7 @@ Modes:
 - `--scope MSB[:LSB-LSB],…`: the default configuration; the unbound-slot check covers the scope and reports the rest per MSB. An empty scope checks no type.
 - `--check`: regenerates what the chosen mode writes into a scratch directory and diffs it against the committed files, reporting a different archive revision on its own line first.
 
-The generator stops on a `source: document` value that is none of the four document forms (at most three points, at most five states, a semitone-ratio, cent-ratio or linear-step formula, a constant column), on a node kind or reference type the engine does not draw (the renderer's `lti` and `response` kinds among them), on an `x-` kind written by the archive, and on an overlay entry that rewrites an existing node without `replaces`. A formula or constant column is re-derived from the formula rather than copied.
+The generator stops on a `source: document` value that is none of the four document forms (at most three points, at most five states, a semitone-ratio, cent-ratio or linear-step formula, a constant column), on a node kind or reference type the engine does not draw (the renderer's `lti` and `response` kinds among them), on an `x-` kind written by the archive, on a section whose `gain_db` or `sections` is driven by a control (the renderer refuses both, since they decide which sections the stage is built from), and on an overlay entry that rewrites an existing node without `replaces`. A formula or constant column is re-derived from the formula rather than copied.
 
 `load_graph()` validates each model with `_check_rows`, which reads soundings' own `documents/<doc>/effect-list.json` to confirm the model accounts for every printed row; no value from that file enters any generated output.
 
@@ -34,11 +34,48 @@ Two kinds of setting are refused by the archive's renderer and drawn by the engi
 
 ## Invented behaviour that changes the power-on sound
 
-An overlay that replaces a constant `p0` fitted is anchored so the power-on byte still reads that constant. An overlay that adds structure `p0` has no path for is not, and it sounds at power-on whenever the power-on bytes turn it on. `01 73` (Lo-Fi 2) is one such case: its Lo-Fi Type powers up at state 1, which the overlay draws as the first Lo-Fi type's hold of three samples (10.7 kHz), so the default configuration's power-on drawing differs from `p0`'s. This is invented, not measured. Its noise generators stay silent at power-on, because R.Detune, W/P Level, Disc Nz Lev and Hum Level all power up at 0.
+An overlay that replaces a constant `p0` fitted is anchored so the power-on byte still reads that constant. An overlay that adds structure `p0` has no path for is not, and it sounds at power-on whenever the power-on bytes turn it on. Every such addition is invented or carried from a modern insert, never measured on the unit, so for the types below the default configuration's power-on sound is not the archive candidate's.
+
+The last column is the largest third-octave band difference between the default and the raw configuration at power-on (bands at −60 dBFS or above, the reference stimulus and digest), measured at archive revision `fcef26d`. Every other type draws its power-on state as `p0` does.
+
+| type | what sounds at power-on that `p0` does not draw | dB |
+|---|---|---|
+| `01 02` | the enhancer path (band-pass, drive, tanh, added to the dry signal) | 3.5 |
+| `01 10`, `01 11` | Amp Sw powers up on: the amp type's cabinet after the curve | 60.9, 54.1 |
+| `01 70` | the azimuth's timbre, the binaural ring's sections on the candidate's head | 6.7 |
+| `01 73` | Lo-Fi Type powers up at state 1, the first Lo-Fi type's hold of three samples (10.7 kHz); the noise generators stay silent, since R.Detune, W/P Level, Disc Nz Lev and Hum Level all power up at 0 | 14.2 |
+| `02 06`, `02 07`, `02 08` | the enhancer path | 3.5 |
+| `02 0C` | the rotary's acceleration as the `01 22` candidate's rate gap, so the high rotor runs at a different rate, and Separate as a stereo spread | 2.8 |
+| `04 00`, `04 01`, `04 02` | Amp Sw on: the cabinet after the drive; `04 00` and `04 02` also the delay's feedback loop, `04 00` and `04 01` the compressor's designed detector times | 56.8, 49.3, 39.8 |
+| `04 03` | the compressor's designed detector times and the delay's feedback loop | 0.8 |
+| `04 04` | the delay's feedback loop | 1.1 |
+| `04 06` | the enhancer path | 1.9 |
+| `05 00` | the ring modulator (the input times a sine carrier, balanced against the dry signal) and the delay's feedback loop | 15.2 |
+| `11 03`–`11 06` | the drive half's Amp Sw on: its cabinet; in `11 04` also the rotary half's acceleration and Separate, in `11 06` the auto-wah half's Sens | 60.9 |
+| `11 07` | the rotary half's acceleration and Separate, so the high rotor's rate differs | 4.1 |
 
 ## Reference digests
 
 The stimulus, digest and state list are stated in the header lines of `tests/midi/gs_classic_reference.tsv`, which is the definition the conformance test follows. The states are the power-on state and each printed slot at its lowest and highest accepted byte; a slot no raw-model node reads is recorded as `unbound`, and a byte equal to the power-on byte as `same-as-power-on`, instead of being drawn again.
+
+## Host-rate agreement
+
+`tests/midi/gs_classic_conformance_test.cpp` holds the classic unit to drawing the same at 44.1 and 48 kHz: within 0.5 dB in every third-octave band below 12.5 kHz that either rate puts at −60 dBFS or above. The reference stimulus, repeated, is resampled up from 32 kHz, drawn through a `GsClassicUnit` at power-on, and advanced by the unit's round trip. A digest of one drawing is the wrong statistic for this, because the graph's output from a clipping, stepped or lfo-swept path depends on where the input falls against the 32 kHz grid and the lfo's start, which moves with the resamplers' latency; a single host sample of input delay at one rate moves such a type by as much as 11 dB. The statistic is therefore made alignment-invariant: each rate draws the type with its input delayed by K offsets (K = 8) spread evenly over 0.5 ms, or over the longest power-on pitch window where that is longer, since a pitch node's output cycles with its window. Each drawing is Welch-averaged over half-overlapping 0.2 s Hann windows, and the band power is averaged across the K offsets before it becomes decibels. A type is drawn for three periods of its slowest power-on lfo, between 2 and 6 s. The same statistic taken at 48 kHz over a second, interleaved set of K offsets is the estimator's own noise, reported beside the cross-rate figure. Where that noise exceeds 0.25 dB, K doubles (up to 64) rather than the tolerance widening.
+
+## CPU cost
+
+One classic unit at a 48 kHz host rate, 128-sample stereo blocks, power-on bytes, a Release build on an Apple M5 Max, as a percentage of real time (the best of three 5 s runs, two sessions a few minutes apart on a loaded machine):
+
+| types | % of real time |
+|---|---|
+| `01 00`–`01 31` | 0.26–1.13 |
+| `01 40`–`01 73` | 0.29–1.67 (`01 70` 1.67–1.84, `01 71` 1.46–1.60) |
+| `02 00`–`02 0C` | 0.38–0.74 |
+| `04 00`–`04 06` | 0.71–1.65 (`04 06` 1.65–1.80) |
+| `05 00` | 1.77–1.98 |
+| `11 00`–`11 08` | 0.43–1.50 (`11 05` 1.50–1.62, `11 08` 1.49–1.61) |
+
+The mean over the 64 types is 0.68 %. `05 00`, the heaviest, puts sixteen units at about 30 % of one core. The figure includes the two resampler pairs around the 32 kHz graph. Settings away from power-on are not measured.
 
 ## Current state
 

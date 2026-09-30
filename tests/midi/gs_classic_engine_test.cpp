@@ -416,6 +416,28 @@ TEST_CASE("a block longer than the longest delay reads back what the block wrote
   require_close(run(m, 1, d0, kN, 4).r, kDelayNone, 0.0);
 }
 
+TEST_CASE("a delay a float curve puts just under a whole sample reads that sample",
+          "[gs-classic-engine]") {
+  Model m;
+  // Three samples at 32 kHz, stored as the float just under it.
+  gc::GsClassicCurve curve{};
+  for (float& v : curve.v) v = std::nextafter(static_cast<float>(3.0 * 1000.0 / 32000.0), 0.0f);
+  curve.lo = -1.0f;
+  curve.hi = 1.0f;
+  m.curves.push_back(curve);
+  REQUIRE(static_cast<double>(curve.v[0]) * 32.0 < 3.0);
+  const uint16_t a = m.add(GsClassicNodeKind::kLfo, {}, {konst(0.0), konst(0.0)}, 0,
+                           lfo_flags(gc::GsClassicLfoShape::kSine));
+  const uint16_t d = m.add(GsClassicNodeKind::kDelay, {0}, {control(a, 0)}, 0,
+                           static_cast<uint8_t>(gc::GsClassicInterpolation::kNone));
+  m.singles();
+  const Rendered r = run(m, d, 1);
+  for (std::size_t n = 0; n < kN; ++n) {
+    INFO("sample " << n);
+    REQUIRE(r.l[n] == (n < 3 ? 0.0 : in_l(n - 3)));
+  }
+}
+
 TEST_CASE("lfo draws each shape from phase zero plus its offset", "[gs-classic-engine]") {
   const std::pair<gc::GsClassicLfoShape, const double*> shapes[] = {
       {gc::GsClassicLfoShape::kSine, kLfo_sine},
