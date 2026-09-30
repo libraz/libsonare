@@ -42,9 +42,21 @@ _VALUES_PER_LINE = 12
 def read_shrf(path: Path) -> tuple[dict, np.ndarray, np.ndarray]:
     """Header fields, the ITD table [el][az] and the HRIRs [el][az][ear][tap]."""
     raw = path.read_bytes()
-    (magic, version, quant, _, sample_rate, taps, n_az, n_el, _, az_step, el_min, el_step, scale) = (
-        struct.unpack(_SHRF_HEADER_FORMAT, raw[:_SHRF_HEADER_BYTES])
-    )
+    (
+        magic,
+        version,
+        quant,
+        _,
+        sample_rate,
+        taps,
+        n_az,
+        n_el,
+        _,
+        az_step,
+        el_min,
+        el_step,
+        scale,
+    ) = struct.unpack(_SHRF_HEADER_FORMAT, raw[:_SHRF_HEADER_BYTES])
     if magic != _SHRF_MAGIC or version != 1:
         raise ValueError(f"{path} is not SHRF v1")
     offset = _SHRF_HEADER_BYTES
@@ -84,7 +96,7 @@ def minimum_phase(h: np.ndarray) -> np.ndarray:
 def build_ring(source: Path, taps: int) -> tuple[int, float, np.ndarray, np.ndarray, float]:
     """(sample rate, azimuth step, int16 right-ear ring, half ITD table, int16 scale)."""
     header, itd, hrir = read_shrf(source)
-    row = int(round((0.0 - header["el_min"]) / header["el_step"]))
+    row = round((0.0 - header["el_min"]) / header["el_step"])
     if not 0 <= row < header["n_el"]:
         raise ValueError("the set has no elevation-0 row")
     n_az = header["n_az"]
