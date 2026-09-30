@@ -29,7 +29,6 @@ namespace {
 
 using sonare::midi::synth::apply_gs_efx_sysex;
 using sonare::midi::synth::gs_efx_insert_chain;
-using sonare::midi::synth::gs_efx_insert_params;
 using sonare::midi::synth::gs_efx_parameter_reset_default;
 using sonare::midi::synth::gs_efx_power_on_params;
 using sonare::midi::synth::gs_efx_type_defaults;
@@ -234,7 +233,8 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
     GsEfx shifter;
     REQUIRE(write_type(shifter, 0x0160));
     REQUIRE(write_param(shifter, 16, 0));
-    tally.same(gs_efx_insert_params(shifter).find("\"dryWet\":0.0") != std::string::npos,
+    tally.same(stage_params(gs_efx_insert_chain(shifter), "effects.modulation.pitchShifter")
+                       .find("\"dryWet\":0.000000") != std::string::npos,
                "effect balance 0 translates to all-direct rather than to no key");
   }
 
