@@ -604,8 +604,9 @@ void TrackMixerRuntime::add_with_width_rule(const float* const* source, int from
   const auto standard = [](int count) {
     return count == 1 || count == 2 || is_surround_channel_count(count);
   };
+  // Outlives the branch: source points into it for the accumulation below.
+  std::array<float*, kMaxBusChannels> fold{};
   if (from_channels > to_channels && standard(from_channels) && standard(to_channels)) {
-    std::array<float*, kMaxBusChannels> fold{};
     for (int ch = 0; ch < to_channels; ++ch) fold[static_cast<size_t>(ch)] = bus_fold_channel(ch);
     mixing::downmix(layout_from_channel_count(from_channels),
                     layout_from_channel_count(to_channels), source, fold.data(),
