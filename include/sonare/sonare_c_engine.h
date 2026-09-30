@@ -1007,9 +1007,9 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
 /// @details Same zero-init contract as the project-bounce SF2 instruments:
 ///          every field uses "0 => default" (struct_version 0 => version 1).
 ///          Version 2 adds @c prefer_model_for_modeled_families; version 3 adds
-///          @c clear_bank_rig.
+///          @c clear_bank_rig; version 4 adds @c gs_efx_realization.
 typedef struct {
-  int struct_version; /* 0 or 1 => version 1; 3 => current version */
+  int struct_version; /* 0 or 1 => version 1; 4 => current version */
   float gain;         /* master output gain (linear); 0 => 0.5. A negative or non-finite gain is
                          rejected with SONARE_ERROR_INVALID_PARAMETER, not promoted to the default */
   int polyphony;      /* max simultaneous voices; 0 => 48, clamped to [1, 64]. A negative count is
@@ -1020,6 +1020,10 @@ typedef struct {
                                             amplifier the bank binds after an electric guitar's
                                             voice; 0 keeps it, so a file that asks for nothing
                                             still sounds complete */
+  int gs_efx_realization;                /* v4: how the GS insertion effects are realised --
+                                            0 modern (the library's own inserts), 1 classic
+                                            (the measured hardware models); any other value is
+                                            rejected with SONARE_ERROR_INVALID_PARAMETER */
 } SonareEngineSf2InstrumentConfig;
 
 /// @brief Binds/replaces a GS-compatible SoundFont player on a realtime MIDI

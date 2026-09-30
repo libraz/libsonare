@@ -424,6 +424,7 @@ export class RealtimeEngine {
       polyphony?: number;
       preferModelForModeledFamilies?: boolean;
       clearBankRig?: boolean;
+      gsEfxRealization?: 'modern' | 'classic';
     } = {},
     destinationId = config.destinationId ?? 0,
   ): void {

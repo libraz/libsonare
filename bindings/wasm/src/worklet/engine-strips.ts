@@ -546,6 +546,7 @@ export function setSf2Instrument(
     polyphony?: number;
     preferModelForModeledFamilies?: boolean;
     clearBankRig?: boolean;
+    gsEfxRealization?: 'modern' | 'classic';
   },
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);

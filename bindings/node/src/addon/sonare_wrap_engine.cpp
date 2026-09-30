@@ -1103,6 +1103,8 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
       config.struct_version = 3;
       config.clear_bank_rig = clear_rig.ToBoolean().Value() ? 1 : 0;
     }
+    config.struct_version = 4;
+    config.gs_efx_realization = sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
     if (env.IsExceptionPending()) return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_sf2_instrument(engine_, destination_id, &config));

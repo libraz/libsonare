@@ -14,6 +14,7 @@ from libsonare import (
     Sf2InstrumentConfig,
     Sf2ProgramStatus,
     SonareError,
+    SonareValueError,
 )
 from libsonare._project import SOURCE_BACKEND_SF2, SOURCE_BACKEND_SYNTH
 
@@ -212,3 +213,54 @@ def test_engine_sf2_instrument_renders_live_midi() -> None:
         assert engine.midi_instrument_count() == 0
     finally:
         engine.close()
+
+
+def _gs_dt1(a0: int, a1: int, a2: int, data: list[int]) -> bytes:
+    """A GS data-set (DT1) SysEx frame writing ``data`` at the three address bytes."""
+    total = a0 + a1 + a2 + sum(data)
+    return bytes([0xF0, 0x41, 0x10, 0x42, 0x12, a0, a1, a2, *data, (128 - total % 128) % 128, 0xF7])
+
+
+def _render_overdrive(realization: str | None) -> np.ndarray:
+    """One held note on part 1 through an Overdrive insertion effect, realised as asked."""
+    engine = RealtimeEngine(48000.0, 128)
+    try:
+        engine.load_soundfont(_SF2_BYTES)
+        config = (
+            Sf2InstrumentConfig()
+            if realization is None
+            else Sf2InstrumentConfig(gs_efx_realization=realization)
+        )
+        engine.set_sf2_instrument(config, destination_id=7)
+        engine.push_midi_sysex(7, _gs_dt1(0x40, 0x03, 0x00, [0x01, 0x10]))
+        engine.push_midi_sysex(7, _gs_dt1(0x40, 0x41, 0x22, [0x01]))
+        engine.push_midi_note_on(7, 0, 0, 60, 100)
+        blocks = [engine.process([[0.0] * 128, [0.0] * 128])[0] for _ in range(64)]
+        return np.concatenate([np.asarray(b, dtype=np.float64) for b in blocks])
+    finally:
+        engine.close()
+
+
+def test_gs_efx_realization_defaults_to_modern_and_refuses_other_names() -> None:
+    assert Sf2InstrumentConfig().gs_efx_realization == "modern"
+    assert Sf2InstrumentConfig()._to_c().gs_efx_realization == 0
+    assert Sf2InstrumentConfig(gs_efx_realization="classic")._to_c().gs_efx_realization == 1
+    for bad in ("Classic", "", "vintage"):
+        with pytest.raises(SonareValueError, match="gs_efx_realization"):
+            Sf2InstrumentConfig(gs_efx_realization=bad)._to_c()
+
+
+def test_sf2_patch_selects_how_gs_insertion_effects_are_realised() -> None:
+    modern = _render_overdrive("modern")
+    classic = _render_overdrive("classic")
+    # The default is the modern realisation, and a render repeats exactly, so any
+    # difference below is the switch's alone.
+    assert np.array_equal(_render_overdrive(None), modern)
+    assert np.array_equal(_render_overdrive("modern"), modern)
+    assert modern.shape == classic.shape
+    modern_energy = float(np.sum(modern * modern))
+    classic_energy = float(np.sum(classic * classic))
+    difference = float(np.sum((modern - classic) ** 2))
+    assert modern_energy > 0.0
+    assert classic_energy > 1e-3 * modern_energy
+    assert difference > 1e-3 * modern_energy

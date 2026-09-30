@@ -192,6 +192,7 @@ PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = AUTOMATION_TARGET_TRACK_FADER_DB
 PROJECT_AUTOMATION_TARGET_TRACK_PAN = AUTOMATION_TARGET_TRACK_PAN
 
 ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "track-fader-db", "track-pan", 0, 1, 2]
+GsEfxRealization: TypeAlias = Literal["modern", "classic"]
 
 _AUTOMATION_TARGET_KIND_NAMES = {
     "opaque": AUTOMATION_TARGET_OPAQUE,
@@ -539,22 +540,37 @@ class Sf2InstrumentConfig:
     to false, so a MIDI file that selects a distorted guitar and asks for
     nothing else still comes out amplified. Set it to render the instrument
     alone, which is what a calibration fit measures against a direct reference.
+
+    ``gs_efx_realization`` selects how the GS insertion effects are realised:
+    ``"modern"`` (the default) or ``"classic"``. Any other value raises
+    :class:`SonareValueError`.
     """
 
     gain: float = 0.0
     polyphony: int = 0
     prefer_model_for_modeled_families: bool = False
     clear_bank_rig: bool = False
+    gs_efx_realization: GsEfxRealization = "modern"
 
     def _to_c(self) -> SonareSf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
-            struct_version=3,
+            struct_version=4,
             gain=float(self.gain),
             # Same sentinel as BuiltinSynthConfig.polyphony, at a different default (48).
             polyphony=_validate_c_int_field("Sf2InstrumentConfig", self.polyphony, "polyphony"),
             prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
             clear_bank_rig=int(self.clear_bank_rig),
+            gs_efx_realization=_gs_efx_realization_value(self.gs_efx_realization),
         )
+
+
+_GS_EFX_REALIZATIONS = {"modern": 0, "classic": 1}
+
+
+def _gs_efx_realization_value(name: str) -> int:
+    if not isinstance(name, str) or name not in _GS_EFX_REALIZATIONS:
+        raise SonareValueError(f"gs_efx_realization must be 'modern' or 'classic', got {name!r}")
+    return _GS_EFX_REALIZATIONS[name]
 
 
 @dataclass(frozen=True)

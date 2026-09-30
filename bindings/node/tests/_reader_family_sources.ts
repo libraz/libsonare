@@ -84,6 +84,7 @@ export const READER_FAMILIES: Readonly<
     DoubleProperty: 'refuse',
     FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
+    GsEfxRealizationProperty: 'refuse',
     Int32Property: 'refuse',
     Int64Property: 'refuse',
     IntProperty: 'refuse',
@@ -120,6 +121,7 @@ export const READER_FAMILIES: Readonly<
     // Type-checked first, so a wrong type is refused rather than converted.
     enumProperty: 'refuse',
     floatOption: 'refuse',
+    gsEfxRealizationProperty: 'refuse',
     onsetWindowFrames: 'refuse', // extra: wraps typedIntProperty, then bounds it
     typedBoolProperty: 'refuse',
     typedDoubleProperty: 'refuse',

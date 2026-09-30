@@ -596,6 +596,16 @@ bool typedBoolProperty(val object, const char* key, bool default_value) {
   return value.isUndefined() ? default_value : value.as<bool>();
 }
 
+int gsEfxRealizationProperty(val object, const char* key) {
+  val value = typedPropertyValue(object, key, "string");
+  if (value.isUndefined()) return 0;
+  const std::string name = value.as<std::string>();
+  if (name == "modern") return 0;
+  if (name == "classic") return 1;
+  throw SonareException(ErrorCode::InvalidParameter,
+                        std::string(key) + " must be 'modern' or 'classic', got '" + name + "'");
+}
+
 std::string stringProperty(val object, const char* key, const std::string& default_value) {
   val value = objectProperty(object, key);
   return value.isUndefined() ? default_value : value.as<std::string>();

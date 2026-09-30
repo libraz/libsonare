@@ -375,6 +375,17 @@ inline std::string StringProperty(const Napi::Object& obj, const char* key, cons
   return value.As<Napi::String>().Utf8Value();
 }
 
+/// @brief Read the GS insertion-effect realisation ("modern" or "classic") as
+///        its C ABI ordinal: undefined/null is modern, a non-string is a
+///        TypeError and any other name a RangeError, both naming @p key.
+inline int GsEfxRealizationProperty(const Napi::Object& obj, const char* key) {
+  const std::string name = StringProperty(obj, key, "modern");
+  if (name == "modern") return 0;
+  if (name == "classic") return 1;
+  throw Napi::RangeError::New(
+      obj.Env(), std::string(key) + " must be 'modern' or 'classic', got '" + name + "'");
+}
+
 /// @brief Read a float-array property off a record object (a Float32Array, or a
 ///        plain number array whose non-numeric entries read as NaN).
 /// @details undefined/null is an empty vector rather than an error, so an

@@ -319,6 +319,9 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
         binding.config.struct_version = 3;
         binding.config.clear_bank_rig = clear_rig.ToBoolean().Value() ? 1 : 0;
       }
+      binding.config.struct_version = 4;
+      binding.config.gs_efx_realization =
+          sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
       bindings.push_back(binding);
     }
   }

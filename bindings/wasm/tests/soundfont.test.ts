@@ -187,3 +187,85 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     engine.destroy();
   });
 });
+
+function gsDt1(a0: number, a1: number, a2: number, data: number[]): Uint8Array {
+  const total = a0 + a1 + a2 + data.reduce((sum, b) => sum + b, 0);
+  return new Uint8Array([
+    0xf0,
+    0x41,
+    0x10,
+    0x42,
+    0x12,
+    a0,
+    a1,
+    a2,
+    ...data,
+    (128 - (total % 128)) % 128,
+    0xf7,
+  ]);
+}
+
+// One held note on part 1 through an Overdrive insertion effect, realised as asked.
+function renderOverdrive(gsEfxRealization?: 'modern' | 'classic'): Float32Array {
+  const engine = new RealtimeEngine(48000, 128);
+  try {
+    engine.loadSoundFont(sf2Bytes);
+    engine.setSf2Instrument(gsEfxRealization === undefined ? {} : { gsEfxRealization }, 7);
+    engine.pushMidiSysex(7, gsDt1(0x40, 0x03, 0x00, [0x01, 0x10]));
+    engine.pushMidiSysex(7, gsDt1(0x40, 0x41, 0x22, [0x01]));
+    engine.pushMidiNoteOn(7, 0, 0, 60, 100);
+    const out = new Float32Array(64 * 128);
+    for (let block = 0; block < 64; block++) {
+      const [left] = engine.process([new Float32Array(128), new Float32Array(128)]);
+      out.set(left, block * 128);
+    }
+    return out;
+  } finally {
+    engine.destroy();
+  }
+}
+
+describe('SF2 instrument gsEfxRealization', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('refuses a value other than modern or classic by name', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    for (const bad of ['Classic', '', 'vintage', 1, true]) {
+      expect(() => engine.setSf2Instrument({ gsEfxRealization: bad as never }, 7)).toThrow(
+        /gsEfxRealization/,
+      );
+    }
+    engine.setSf2Instrument({ gsEfxRealization: 'classic' }, 7);
+    engine.destroy();
+    const project = new Project();
+    for (const bad of ['vintage', 1]) {
+      expect(() =>
+        project.bounceWithSf2Instrument(
+          { gsEfxRealization: bad as never },
+          { totalFrames: 128, numChannels: 2, sampleRate: 48000 },
+        ),
+      ).toThrow(/gsEfxRealization/);
+    }
+    project.delete();
+  });
+
+  it('defaults to modern and the classic realisation renders differently', () => {
+    const modern = renderOverdrive('modern');
+    const classic = renderOverdrive('classic');
+    expect(renderOverdrive()).toEqual(modern);
+    expect(renderOverdrive('modern')).toEqual(modern);
+    let modernEnergy = 0;
+    let classicEnergy = 0;
+    let difference = 0;
+    for (let i = 0; i < modern.length; i++) {
+      modernEnergy += modern[i] * modern[i];
+      classicEnergy += classic[i] * classic[i];
+      difference += (modern[i] - classic[i]) ** 2;
+    }
+    expect(modernEnergy).toBeGreaterThan(0);
+    expect(classicEnergy).toBeGreaterThan(1e-3 * modernEnergy);
+    expect(difference).toBeGreaterThan(1e-3 * modernEnergy);
+  });
+});

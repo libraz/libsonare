@@ -393,6 +393,11 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
     binding.config.struct_version = 3;
     binding.config.clear_bank_rig = desc["clearBankRig"].as<bool>() ? 1 : 0;
   }
+  // Version 4 reads every earlier field too.
+  if (hasProperty(desc, "gsEfxRealization")) {
+    binding.config.struct_version = 4;
+    binding.config.gs_efx_realization = gsEfxRealizationProperty(desc, "gsEfxRealization");
+  }
   return binding;
 }
 

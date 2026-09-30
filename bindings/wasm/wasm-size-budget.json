@@ -1,23 +1,23 @@
 {
   "artifacts": {
     "sonare-analysis.wasm": {
-      "code": 944773,
-      "data": 55089,
-      "gzip": 411224,
-      "raw": 1104800,
-      "sha256": "7c00632b19e39abfc12ca3829b38326ae20bd4fbe685bd3078940b39fbb3edb2"
+      "code": 962773,
+      "data": 56180,
+      "gzip": 420448,
+      "raw": 1125921,
+      "sha256": "bee07f1ecd4a3813af0a1172480c61b399e0e580398013ed3b92c6a528913e3c"
     },
     "sonare.wasm": {
-      "code": 4884023,
-      "data": 301227,
-      "gzip": 1902944,
-      "raw": 5724275,
-      "sha256": "0076212126040764c0d068521b05e473909d83a297ea8ef2758f2a801ca97593"
+      "code": 5479367,
+      "data": 583532,
+      "gzip": 2229940,
+      "raw": 6691222,
+      "sha256": "4b8f793a822096f19ca587c1e4d5825c5526dcfa81077a912c78ef798e6c77c4"
     }
   },
   "format": 1,
   "note": "raw and gzip are a ceiling, set 10% above the artifact the sha256 names; the other fields still describe that artifact. Only raw and gzip are enforced. Rewriting this file from a measurement drops the headroom back to the +2% per-change tolerance.",
   "toolchain": {
-    "emsdk": "5.0.2"
+    "emsdk": "6.0.10"
   }
 }

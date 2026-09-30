@@ -895,6 +895,7 @@ export class SonareEngine {
       polyphony?: number;
       preferModelForModeledFamilies?: boolean;
       clearBankRig?: boolean;
+      gsEfxRealization?: 'modern' | 'classic';
     } = {},
   ): void {
     strips.setSf2Instrument(this.stripContext, trackId, config);

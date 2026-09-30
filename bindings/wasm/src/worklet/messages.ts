@@ -683,6 +683,7 @@ export interface SonareEngineSyncSf2InstrumentMessage {
     polyphony?: number;
     preferModelForModeledFamilies?: boolean;
     clearBankRig?: boolean;
+    gsEfxRealization?: 'modern' | 'classic';
   };
 }
 

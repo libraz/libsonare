@@ -417,6 +417,11 @@ bool boolProperty(val object, const char* key, bool default_value);
 ///          boolean is already the value, so the type test is the whole check.
 /// @throws SonareException(InvalidParameter) naming @p key.
 bool typedBoolProperty(val object, const char* key, bool default_value);
+/// @brief Reads the GS insertion-effect realisation ("modern" or "classic") as
+///        its C ABI ordinal (0 or 1): absent, `undefined` or `null` is modern.
+/// @throws SonareException(InvalidParameter) naming @p key for a non-string or
+///         any other name.
+int gsEfxRealizationProperty(val object, const char* key);
 std::string stringProperty(val object, const char* key, const std::string& default_value);
 /// @brief Type-checked optional reader: returns the numeric value only when @p v
 /// is present (not undefined/null) and is a JS number, otherwise std::nullopt.

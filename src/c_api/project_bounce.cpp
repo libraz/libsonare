@@ -341,8 +341,8 @@ sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthCon
 
 // Maps the public versioned SF2 patch to the player config ("0 => default";
 // struct_version 0/1 preserve the original layout; version 2 enables the
-// model-first field and version 3 the rig clear. Anything newer is rejected by
-// the caller). The player clamps polyphony itself.
+// model-first field, version 3 the rig clear and version 4 the EFX realisation. Anything newer is
+// rejected by the caller). The player clamps polyphony itself.
 sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(const SonareSf2InstrumentConfig& c) {
   sonare::midi::synth::Sf2PlayerConfig cfg;
   // Passed through, the player's constructor would substitute for it in silence.
@@ -354,6 +354,14 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(const SonareSf2Instrument
     cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
   }
   if (c.struct_version >= 3 && c.clear_bank_rig != 0) cfg.bank_rig_binding = false;
+  if (c.struct_version >= 4) {
+    SONARE_CHECK_MSG(c.gs_efx_realization == 0 || c.gs_efx_realization == 1,
+                     sonare::ErrorCode::InvalidParameter,
+                     "gs_efx_realization must be 0 (modern) or 1 (classic)");
+    if (c.gs_efx_realization == 1) {
+      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
+    }
+  }
 #if defined(SONARE_WITH_MASTERING)
   // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
   // mastering factory itself, so the host injects it. An EFX SysEx on the
@@ -525,7 +533,7 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   // the data-free floor (every program still sounds; the manifest reports the
   // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
-    if (instruments[i].config.struct_version > 3) return SONARE_ERROR_INVALID_PARAMETER;
+    if (instruments[i].config.struct_version > 4) return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
   std::vector<HostedInstrument> hosted;

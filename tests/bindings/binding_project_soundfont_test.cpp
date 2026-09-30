@@ -508,7 +508,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
               engine, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_FORMAT);
 
-  config.struct_version = 4;
+  config.struct_version = 5;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
   // Version 3 clears the bank's default rig. Accepted here rather than only in
   // the bounce, since a host driving live MIDI wants the direct signal on the
@@ -626,4 +626,88 @@ TEST_CASE("an SF2 patch gain outside the domain is refused, not replaced", "[c_a
 
   sonare_engine_destroy(engine);
 }
+#if defined(SONARE_WITH_MASTERING)
+namespace {
+
+/// A GS data-set (DT1) frame writing @p data at the three address bytes.
+std::vector<uint8_t> gs_dt1(uint8_t a0, uint8_t a1, uint8_t a2, std::vector<uint8_t> data) {
+  std::vector<uint8_t> frame = {0xF0, 0x41, 0x10, 0x42, 0x12, a0, a1, a2};
+  int sum = a0 + a1 + a2;
+  for (uint8_t byte : data) {
+    frame.push_back(byte);
+    sum += byte;
+  }
+  frame.push_back(static_cast<uint8_t>((128 - sum % 128) % 128));
+  frame.push_back(0xF7);
+  return frame;
+}
+
+/// Renders one held note on part 1 through an Overdrive insertion effect, realised as asked.
+std::vector<float> render_overdrive(int realization) {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  const std::vector<uint8_t> sf2 = make_sf2_bytes();
+  REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
+  SonareEngineSf2InstrumentConfig config{};
+  config.struct_version = 4;
+  config.gs_efx_realization = realization;
+  REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+  for (const std::vector<uint8_t>& frame :
+       {gs_dt1(0x40, 0x03, 0x00, {0x01, 0x10}), gs_dt1(0x40, 0x41, 0x22, {0x01})}) {
+    REQUIRE(sonare_engine_push_midi_sysex(engine, 7, frame.data(), frame.size(), -1) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) == SONARE_OK);
+  std::vector<float> out;
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  for (int block = 0; block < 64; ++block) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    out.insert(out.end(), left.begin(), left.end());
+  }
+  sonare_engine_destroy(engine);
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("an SF2 patch selects how the GS insertion effects are realised", "[c_api][sf2]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  SonareEngineSf2InstrumentConfig config{};
+  config.struct_version = 4;
+  for (int bad : {-1, 2, 7}) {
+    CAPTURE(bad);
+    config.gs_efx_realization = bad;
+    CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  // A version-3 patch never reads the field, so what it holds is not refused.
+  config.struct_version = 3;
+  CHECK(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
+  sonare_engine_destroy(engine);
+
+  const std::vector<float> modern = render_overdrive(0);
+  const std::vector<float> classic = render_overdrive(1);
+  // The render repeats exactly, so any difference below is the switch's alone.
+  REQUIRE(render_overdrive(0) == modern);
+  REQUIRE(modern.size() == classic.size());
+  double modern_energy = 0.0;
+  double classic_energy = 0.0;
+  double difference = 0.0;
+  for (size_t i = 0; i < modern.size(); ++i) {
+    modern_energy += static_cast<double>(modern[i]) * modern[i];
+    classic_energy += static_cast<double>(classic[i]) * classic[i];
+    const double d = static_cast<double>(modern[i]) - classic[i];
+    difference += d * d;
+  }
+  REQUIRE(modern_energy > 0.0);
+  REQUIRE(classic_energy > 1e-3 * modern_energy);
+  // The two realisations are different circuits, so the same bytes must not render the same audio.
+  CHECK(difference > 1e-3 * modern_energy);
+}
+#endif
 #endif

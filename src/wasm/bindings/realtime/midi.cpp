@@ -340,6 +340,9 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
     cfg.prefer_model_for_modeled_families =
         boolProperty(config, "preferModelForModeledFamilies", false);
     cfg.bank_rig_binding = !boolProperty(config, "clearBankRig", false);
+    if (gsEfxRealizationProperty(config, "gsEfxRealization") == 1) {
+      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
+    }
   }
   // Inject the mastering insert factory so live GS insertion effects (EFX)
   // realise their processing chain on the control thread (mirrors the C-ABI

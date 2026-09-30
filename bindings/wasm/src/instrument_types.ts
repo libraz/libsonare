@@ -71,6 +71,11 @@ export interface Sf2InstrumentConfig {
    * direct signal, which is what a voice is calibrated against.
    */
   clearBankRig?: boolean;
+  /**
+   * How the GS insertion effects (EFX) are realised: 'modern' (default) or
+   * 'classic'. Any other value is refused by name.
+   */
+  gsEfxRealization?: 'modern' | 'classic';
 }
 
 /** Source backend a resolved MIDI program renders through. */
