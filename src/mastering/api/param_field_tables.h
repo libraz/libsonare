@@ -44,6 +44,7 @@
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/cab_voicing.h"
 #include "mastering/saturation/waveshaper.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/stereo_balance.h"
 #include "rt/aliasing_control.h"
 #include "util/exception.h"
@@ -220,6 +221,16 @@ constexpr const char* enum_choice_name(sonare::mastering::stereo::StereoBalanceL
       return "normalized";
     case sonare::mastering::stereo::StereoBalanceLaw::kRawConstantPower:
       return "rawConstantPower";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::stereo::BinauralOutput value) {
+  switch (value) {
+    case sonare::mastering::stereo::BinauralOutput::kPhones:
+      return "phones";
+    case sonare::mastering::stereo::BinauralOutput::kSpeakers:
+      return "speakers";
   }
   return nullptr;
 }
@@ -975,6 +986,14 @@ inline double field_as_double(Enum value) {
   X("depth", depth)               \
   X("phase", phase)               \
   X("shape", shape)
+
+#define SONARE_FIELDS_BINAURAL_PANNER(X) \
+  X("azimuthDeg", azimuth_deg)           \
+  X("autoTurn", auto_turn)               \
+  X("turnRateHz", turn_rate_hz)          \
+  X("clockwise", clockwise)              \
+  X("output", output)                    \
+  X("dryWet", dry_wet)
 
 #define SONARE_FIELDS_HAAS_ENHANCER(X) \
   X("delayMs", delay_ms)               \

@@ -98,6 +98,9 @@ constexpr float kVowelCentroidHz = 262.751984f;
 constexpr float kPresenceRms = 0.206874207f;
 constexpr float kPresenceCentroidHz = 249.200775f;
 
+constexpr float kBinauralRms = 0.19003509f;
+constexpr float kBinauralCentroidHz = 246.194824f;
+
 constexpr float kDattorroRms = 0.119705729f;
 constexpr float kDattorroCentroidHz = 273.524597f;
 
@@ -154,6 +157,23 @@ TEST_CASE(
       REQUIRE(empty.left[i] == in[i] * g.left);
       REQUIRE(empty.right[i] == in[i] * g.right);
     }
+  }
+
+  SECTION("stereo.binaural") {
+    const RenderResult empty = render("stereo.binaural", "{}");
+    const RenderResult explicit_defaults = render(
+        "stereo.binaural",
+        R"({"azimuthDeg":0.0,"autoTurn":false,"turnRateHz":1.0,"clockwise":true,"output":0,"dryWet":1.0})");
+    REQUIRE(empty.left == explicit_defaults.left);
+    REQUIRE(empty.right == explicit_defaults.right);
+    // The turn rate and direction are inert while the source is held.
+    const RenderResult other_turn =
+        render("stereo.binaural", R"({"turnRateHz":7.0,"clockwise":false})");
+    REQUIRE(empty.left == other_turn.left);
+    // A source straight ahead reaches both ears alike.
+    REQUIRE(empty.left == empty.right);
+    const Scalars s = measure(empty.left);
+    require_pinned(s, kBinauralRms, kBinauralCentroidHz);
   }
 
   SECTION("effects.modulation.ensemble") {

@@ -74,6 +74,7 @@
 #include "mastering/spectral/presence_enhancer.h"
 #include "mastering/spectral/spectral_shaper.h"
 #include "mastering/stereo/auto_pan.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/haas_enhancer.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
@@ -1136,6 +1137,12 @@ inline stereo::AutoPanConfig auto_pan_config(const ParamMap& params) {
   return config;
 }
 
+inline stereo::BinauralPannerConfig binaural_panner_config(const ParamMap& params) {
+  stereo::BinauralPannerConfig config;
+  SONARE_FIELDS_BINAURAL_PANNER(SONARE_READ_FIELD)
+  return config;
+}
+
 inline stereo::HaasEnhancerConfig haas_enhancer_config(const ParamMap& params) {
   stereo::HaasEnhancerConfig config;
   SONARE_FIELDS_HAAS_ENHANCER(SONARE_READ_FIELD)
@@ -1248,6 +1255,7 @@ SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PRESENCE_ENHANCER, spectral::PresenceEn
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_SPECTRAL_SHAPER, spectral::SpectralShaperConfig, 0);
 
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_AUTO_PAN, stereo::AutoPanConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_BINAURAL_PANNER, stereo::BinauralPannerConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_HAAS_ENHANCER, stereo::HaasEnhancerConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_IMAGER, stereo::ImagerConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_MONO_MAKER, stereo::MonoMakerConfig, 0);

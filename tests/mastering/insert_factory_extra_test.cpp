@@ -236,6 +236,11 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
                       R"({"shape":2,"phaseDeg":90,"stereoSpread":0.5})") != nullptr);
   REQUIRE(make_insert("stereo.autoPan", R"({"shape":3})") != nullptr);
   REQUIRE(make_insert("stereo.stereoBalance", R"({"balance":0.3,"law":1})") != nullptr);
+  REQUIRE(
+      make_insert(
+          "stereo.binaural",
+          R"({"azimuthDeg":30,"autoTurn":true,"turnRateHz":2,"clockwise":false,"output":1,"dryWet":0.5})") !=
+      nullptr);
   REQUIRE(make_insert("dynamics.limiter", R"({"ratio":4,"postGainDb":-3})") != nullptr);
   REQUIRE(make_insert("eq.graphic", R"({"band10GainDb":3,"q":5})") != nullptr);
   REQUIRE(
@@ -1363,12 +1368,13 @@ TEST_CASE(
   // The inherently-stereo set: stereo-image processors, eq.midSide,
   // multiband.imager, and every reverb/modulation/delay effect operate on the
   // front L/R pair and pass surround planes through dry.
-  const std::array<const char*, 25> spo = {"stereo.imager",
+  const std::array<const char*, 26> spo = {"stereo.imager",
                                            "stereo.monoMaker",
                                            "stereo.stereoBalance",
                                            "stereo.haasEnhancer",
                                            "stereo.phaseAlign",
                                            "stereo.autoPan",
+                                           "stereo.binaural",
                                            "eq.midSide",
                                            "multiband.imager",
                                            "effects.reverb.plate",

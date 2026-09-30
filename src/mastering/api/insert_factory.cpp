@@ -65,6 +65,7 @@
 #include "mastering/spectral/presence_enhancer.h"
 #include "mastering/spectral/spectral_shaper.h"
 #include "mastering/stereo/auto_pan.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/haas_enhancer.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
@@ -459,6 +460,9 @@ std::unique_ptr<Processor> build_spectral(const std::string& name, const ParamMa
 std::unique_ptr<Processor> build_stereo(const std::string& name, const ParamMap& params) {
   if (name == "stereo.autoPan") {
     return make<stereo::AutoPan>(detail::auto_pan_config(params));
+  }
+  if (name == "stereo.binaural") {
+    return make<stereo::BinauralPanner>(detail::binaural_panner_config(params));
   }
   if (name == "stereo.haasEnhancer") {
     return make<stereo::HaasEnhancer>(detail::haas_enhancer_config(params));
@@ -1157,6 +1161,7 @@ std::vector<std::string> insert_factory_names() {
       "spectral.presenceEnhancer",
       "spectral.spectralShaper",
       "stereo.autoPan",
+      "stereo.binaural",
       "stereo.haasEnhancer",
       "stereo.imager",
       "stereo.monoMaker",

@@ -144,6 +144,7 @@ export const SOLO_PROCESSORS = [
   'spectral.presenceEnhancer',
   'spectral.spectralShaper',
   'stereo.autoPan',
+  'stereo.binaural',
   'stereo.haasEnhancer',
   'stereo.imager',
   'stereo.monoMaker',

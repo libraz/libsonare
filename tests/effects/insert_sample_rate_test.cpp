@@ -44,6 +44,8 @@
 /// - amp cabinet (1x12 combo), the top roll-off's -3 dB corner in Hz: the corner itself.
 /// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
 ///   corner itself, which the section's design places exactly at every rate.
+/// - binaural panner, the ITD at 90 degrees in microseconds: the ring's stored ITD,
+///   read as the difference of the two ears' excess delays.
 ///
 /// Reach is an output: the case reports how many comparisons it made, because
 /// a run that compared nothing looks exactly like a run that passed.
@@ -72,8 +74,10 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/cab_voicing.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/stereo_balance.h"
 #include "support/audio_fixtures.h"
+#include "support/excess_delay.h"
 #include "util/constants.h"
 
 namespace {
@@ -962,6 +966,33 @@ double vowel_f1_peak_hz(double sample_rate) {
   return best_hz;
 }
 
+// --- binaural panner ---------------------------------------------------------
+
+namespace binaural_ring {
+#include "mastering/stereo/binaural_ring.inc"
+}  // namespace binaural_ring
+
+constexpr double kBinauralItdTolerance = 0.02;
+constexpr double kBinauralItdRateTolerance = 0.01;
+constexpr double kMicrosecondsPerSecond = 1.0e6;
+
+/// The ITD at 90 degrees in microseconds: the far (left) ear's excess delay less
+/// the near ear's, from the panner's impulse response.
+double binaural_itd_90_us(double sample_rate) {
+  sonare::mastering::stereo::BinauralPannerConfig config;
+  config.azimuth_deg = 90.0f;
+  sonare::mastering::stereo::BinauralPanner panner(config);
+  panner.prepare(sample_rate, 4096);
+  std::vector<float> left(4096, 0.0f);
+  std::vector<float> right(4096, 0.0f);
+  left[0] = 1.0f;
+  right[0] = 1.0f;
+  sonare::test::process_stereo(panner, left, right);
+  const double samples = sonare::test::excess_delay_samples(left, sample_rate) -
+                         sonare::test::excess_delay_samples(right, sample_rate);
+  return samples / sample_rate * kMicrosecondsPerSecond;
+}
+
 // --- auto-wah LFO -----------------------------------------------------------
 
 constexpr float kAutoWahLfoHz = 3.0f;
@@ -1666,6 +1697,23 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                       << rates[1] << ", table " << asked);
   }
 
+  // --- binaural panner: the ITD at 90 degrees, in microseconds --------------
+  {
+    const std::string asked = "the binaural ITD at 90 degrees";
+    const double stored = static_cast<double>(binaural_ring::kRingItdSamples[18]) /
+                          binaural_ring::kRingSampleRate * kMicrosecondsPerSecond;
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = binaural_itd_90_us(rates[r]);
+      tally.within(measured[r], stored, kBinauralItdTolerance,
+                   asked + at_rate(rates[r]) + ", against the ring's ITD");
+    }
+    tally.within(measured[0], measured[1], kBinauralItdRateTolerance,
+                 asked + " is one time at both rates");
+    WARN(asked << ": " << measured[0] << " us at " << rates[0] << ", " << measured[1] << " us at "
+               << rates[1] << ", ring " << stored << " us");
+  }
+
   // --- stereo balance: the glide's settling time, in ms ---------------------
   {
     double measured[2] = {0.0, 0.0};
@@ -1745,5 +1793,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 215);
+  REQUIRE(tally.count() >= 218);
 }

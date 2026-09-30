@@ -77,6 +77,7 @@ std::vector<std::string> processor_names() {
       "spectral.presenceEnhancer",
       "spectral.spectralShaper",
       "stereo.autoPan",
+      "stereo.binaural",
       "stereo.haasEnhancer",
       "stereo.imager",
       "stereo.monoMaker",
@@ -116,7 +117,7 @@ ChannelPolicy channel_policy(const std::string& id) {
   // in a single full-buffer call (Multichannel), which is also the safe default
   // for any unlisted/legacy id. LowEndFocus is intentionally Multichannel: its
   // width stage couples only planes 0/1 while low-end enhancement is per-plane.
-  // Mirrors the per-process() channel-handling audit (the 6 stereo-image
+  // Mirrors the per-process() channel-handling audit (the 7 stereo-image
   // processors, eq.midSide, multiband.imager, and every reverb/modulation/delay
   // effect).
   static const std::set<std::string> kStereoPairOnly = {
@@ -126,6 +127,7 @@ ChannelPolicy channel_policy(const std::string& id) {
       "stereo.haasEnhancer",
       "stereo.phaseAlign",
       "stereo.autoPan",
+      "stereo.binaural",
       "eq.midSide",
       "multiband.imager",
       "effects.reverb.plate",
@@ -230,6 +232,8 @@ const char* realtime_cost(const std::string& id) noexcept {
       id == "eq.linearPhase") {
     return "moderate";
   }
+  // Four direct-form HRIR FIRs per sample, plus the canceller's two in speakers mode.
+  if (id == "stereo.binaural") return "moderate";
   return "low";
 }
 

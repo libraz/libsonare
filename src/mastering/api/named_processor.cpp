@@ -80,6 +80,7 @@
 #include "mastering/spectral/presence_enhancer.h"
 #include "mastering/spectral/spectral_shaper.h"
 #include "mastering/stereo/auto_pan.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/haas_enhancer.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_compat_check.h"
@@ -899,6 +900,9 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     // shared LUFS measurement at the end of the function.
   } else if (name == "stereo.autoPan") {
     stereo::AutoPan p(detail::auto_pan_config(map));
+    run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
+  } else if (name == "stereo.binaural") {
+    stereo::BinauralPanner p(detail::binaural_panner_config(map));
     run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "stereo.haasEnhancer") {
     stereo::HaasEnhancer p(detail::haas_enhancer_config(map));

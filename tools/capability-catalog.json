@@ -83656,6 +83656,101 @@
     {
       "category": "stereo",
       "channelPolicy": "stereoPairOnly",
+      "id": "stereo.binaural",
+      "kind": "realtime",
+      "latencySamples": 64,
+      "params": [
+        {
+          "choices": null,
+          "default": 0,
+          "id": 0,
+          "max": null,
+          "min": null,
+          "name": "azimuthDeg",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": false,
+          "id": 1,
+          "max": null,
+          "min": null,
+          "name": "autoTurn",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 1,
+          "id": 2,
+          "max": 10,
+          "min": 0,
+          "name": "turnRateHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": true,
+          "id": 3,
+          "max": null,
+          "min": null,
+          "name": "clockwise",
+          "rtSafe": true,
+          "slot": null,
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "choices": [
+            {
+              "name": "phones",
+              "value": 0
+            },
+            {
+              "name": "speakers",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "output",
+          "rtSafe": true,
+          "slot": null,
+          "type": "enum",
+          "unit": null
+        },
+        {
+          "choices": null,
+          "default": 1,
+          "id": 5,
+          "max": 1,
+          "min": 0,
+          "name": "dryWet",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": null
+        }
+      ],
+      "realtimeCost": "moderate",
+      "realtimeInsertable": true,
+      "slots": [],
+      "stereoOnly": true,
+      "tailSamples": 235
+    },
+    {
+      "category": "stereo",
+      "channelPolicy": "stereoPairOnly",
       "id": "stereo.haasEnhancer",
       "kind": "realtime",
       "latencySamples": 0,

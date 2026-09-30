@@ -49,8 +49,8 @@ the browser to see what libsonare can power.
   blind recording does not have). Where it overlaps librosa, defaults match
   and are validated against librosa reference values in CI — so results port
   over without surprises.
-- **Mastering** — 90 distinct named DSP processors (EQ, dynamics, multiband,
-  stereo, saturation, repair, maximizer, reference matching), or 72 with
+- **Mastering** — 91 distinct named DSP processors (EQ, dynamics, multiband,
+  stereo, saturation, repair, maximizer, reference matching), or 73 with
   `BUILD_FX=OFF` (the creative streaming effects are omitted), built against
   published
   references: ITU-R BS.1770-4 loudness and true-peak limiting, Linkwitz-Riley

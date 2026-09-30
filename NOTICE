@@ -150,6 +150,10 @@ SADIE II HRTF Database
 
   Embedded as: src/playback/default.shrf
 
+  The stereo.binaural insert embeds a further reduction of that set's
+  elevation-0 row: left/right mirror-averaged 64-tap minimum-phase filters and
+  ITDs (src/mastering/stereo/binaural_ring.inc).
+
 ================================================================================
 Japanese vowel formant data (Yazawa and Kondo)
 ================================================================================
