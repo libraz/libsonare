@@ -120,7 +120,7 @@ void Chorus::discard_non_finite() noexcept {
   note_non_finite_discard();
 }
 
-bool Chorus::set_parameter(unsigned int param_id, float value) {
+bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
   // Reject before the clamps below: std::clamp leaves NaN intact and the delay
   // ids feed the fractional read index (see delay_param_acceptable).
   if (!delay_param_acceptable(value)) return false;

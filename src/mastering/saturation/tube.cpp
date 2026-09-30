@@ -173,23 +173,18 @@ float Tube::process_model(float sample, const TubeConfig& config) {
   return config.harmonic_drive * clipped + (1.0f - config.harmonic_drive) * current_delta;
 }
 
-bool Tube::set_parameter(unsigned int param_id, float value) {
+bool Tube::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       tube_config_.drive_db = value;
       return true;
     case 1:
-      // validate_config requires bias to be finite; a non-finite grid bias would
-      // otherwise poison plate_current_ma() and turn the whole render into NaN.
-      if (!std::isfinite(value)) return false;
       tube_config_.bias = value;
       return true;
     case 2:
       tube_config_.mix = std::clamp(value, 0.0f, 1.0f);
       return true;
     case 3:
-      // validate_config requires bias_v to be finite; reject non-finite values.
-      if (!std::isfinite(value)) return false;
       tube_config_.bias_v = value;
       return true;
     case 4:

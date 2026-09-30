@@ -70,7 +70,7 @@ void Transformer::set_config(const TransformerConfig& config) {
   hysteresis_.set_config(make_ja_config(config));
 }
 
-bool Transformer::set_parameter(unsigned int param_id, float value) {
+bool Transformer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       transformer_config_.drive_db = value;

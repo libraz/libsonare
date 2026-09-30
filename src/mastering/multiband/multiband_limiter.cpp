@@ -121,7 +121,7 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   }
 }
 
-bool MultibandLimiter::set_parameter(unsigned int param_id, float value) {
+bool MultibandLimiter::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int band = param_id / kBandStride;
   if (band >= limiters_.size()) {
     return false;

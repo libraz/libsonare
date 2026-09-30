@@ -33,7 +33,7 @@ class GainProcessor final : public ProcessorBase {
     }
   }
   void reset() override {}
-  bool set_parameter(unsigned int, float value) override {
+  bool set_parameter_impl(unsigned int, float value) override {
     // GainProcessor exposes a single gain parameter. The graph/automation layer
     // routes by node binding and forwards its own external param_id (which is not
     // a node-local index), so every id maps to this one gain control.

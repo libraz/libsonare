@@ -152,7 +152,7 @@ void SidechainRouter::clear_sidechain() {
   sidechain_num_samples_ = 0;
 }
 
-bool SidechainRouter::set_parameter(unsigned int param_id, float value) {
+bool SidechainRouter::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe in-place automation: mutate the audio thread's working config and
   // re-derive coefficients. No shared_ptr publish, no allocation; the published
   // snapshot stays untouched and the control-thread mirror (config_) is updated

@@ -52,7 +52,7 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   // dynamic band; see DynamicEq::set_parameter for the field order). Dynamic
   // bands that are disabled (the default) are no-ops until enabled via config.
   // Ids past the last crossover band are rejected (return false).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: keyed band{cb}.dyn{db}.<field> mirroring the
   // construction keys (see populate_dynamic_eq_bands). Crossover band `cb`
   // occupies kParamsPerCrossoverBand ids; within each block the DynamicEq band

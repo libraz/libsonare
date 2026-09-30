@@ -47,7 +47,7 @@ class Waveshaper : public rt::ProcessorBase {
   //   2 = output_gain_db
   // bias is NOT automatable: it shifts the ADAA operating point, which would
   // require clearing the antiderivative history. curve/aliasing are enums.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=driveDb, 1=mix, 2=outputGainDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

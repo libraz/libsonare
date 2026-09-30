@@ -31,7 +31,7 @@ class MidSideEq : public rt::ProcessorBase {
   //   mid band b  -> ids 3*b               .. 3*b + 2   {freq, gain_db, Q}
   //   side band b -> ids 3*kMaxBands + 3*b .. +2        {freq, gain_db, Q}
   // (with kMaxBands = 24: mid = ids 0..71, side = ids 72..143).
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     constexpr unsigned int kSideBase = 3u * static_cast<unsigned int>(kMaxBands);
     if (param_id < kSideBase) {
       return mid_eq_.set_parameter(param_id, value);

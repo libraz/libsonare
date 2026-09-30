@@ -46,7 +46,7 @@ class Maximizer : public rt::ProcessorBase {
   //   0 = input_gain_db (applied per block, no coefficients)
   //   1 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
   //   2 = release_ms (clamped to >= 0; in-place via inner limiter)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=inputGainDb, 1=ceilingDb, 2=releaseMs
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;

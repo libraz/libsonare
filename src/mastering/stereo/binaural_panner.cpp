@@ -370,8 +370,7 @@ void BinauralPanner::process(float* const* channels, int num_channels, int num_s
   if (discarded) note_non_finite_discard();
 }
 
-bool BinauralPanner::set_parameter(unsigned int param_id, float value) {
-  if (!std::isfinite(value)) return false;
+bool BinauralPanner::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.azimuth_deg = wrap_signed_deg(value);

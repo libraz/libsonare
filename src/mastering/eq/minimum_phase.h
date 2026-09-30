@@ -30,7 +30,7 @@ class MinimumPhaseEq : public rt::ProcessorBase {
   // Automatable parameters: identical block-of-3 layout to ParametricEq (band
   // `b` -> ids 3*b freq, 3*b+1 gain_db, 3*b+2 Q). RT-safe; recomputes only the
   // affected band's biquad coefficients in place. Delegates to ParametricEq.
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     return eq_.set_parameter(param_id, value);
   }
 

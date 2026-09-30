@@ -122,7 +122,7 @@ class BitCrusher : public rt::ProcessorBase {
   // enum, quantizer_mode selects whether the quantizer is in the path at all,
   // and type_ladder replaces the hold cadence wholesale, so none of the four is
   // exposed here.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   // Automatable parameters: 0=bitDepth, 1=mix, 2=holdHz, 3=radioNoiseLevel,
   // 4=wpNoiseLevel, 5=discNoiseLevel, 6=humLevel, 7=noiseDetune, 8=noiseLpfHz,

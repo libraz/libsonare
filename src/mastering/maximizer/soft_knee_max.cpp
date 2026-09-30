@@ -71,7 +71,7 @@ void SoftKneeMax::set_config(const SoftKneeMaxConfig& config) {
   if (prepared_) prepare(sample_rate_, max_block_size_);
 }
 
-bool SoftKneeMax::set_parameter(unsigned int param_id, float value) {
+bool SoftKneeMax::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Drive applied per sample in process(); no coefficients to recompute.

@@ -181,7 +181,7 @@ void ConvolutionReverb::load_ir_unit_energy(const float* impulse_response, int n
   rebuild_convolvers();
 }
 
-bool ConvolutionReverb::set_parameter(unsigned int param_id, float value) {
+bool ConvolutionReverb::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // process() clamps dry_wet to [0, 1]; store the raw target.

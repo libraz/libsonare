@@ -34,7 +34,7 @@ class GraphicEq : public rt::ProcessorBase {
   //                             band Q is derived from gain via
   //                             band_q_for_gain_db()).
   //   id kNumBands            = q shared by all bands (0 = the gain-derived default).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: id b (0 .. kNumBands-1) = "band<b>GainDb"; id kNumBands = "q".
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

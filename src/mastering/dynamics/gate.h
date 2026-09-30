@@ -51,7 +51,7 @@ class Gate : public rt::ProcessorBase, public rt::RtConfigLifecycle<Gate, GateCo
   //   1 = attack_ms (clamped to >= 0)
   //   2 = release_ms (clamped to >= 0)
   //   3 = range_db (clamped to <= 0)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=thresholdDb, 1=attackMs, 2=releaseMs, 3=rangeDb.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

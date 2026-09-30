@@ -138,7 +138,7 @@ class CountingInsert final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override { ++counters_->prepares; }
   void process(float* const*, int, int) override {}
   void reset() override { ++counters_->resets; }
-  bool set_parameter(unsigned int, float) override {
+  bool set_parameter_impl(unsigned int, float) override {
     ++counters_->set_params;
     return true;
   }

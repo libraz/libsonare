@@ -132,7 +132,7 @@ class Rotary : public rt::ProcessorBase {
   //   10 = horn_level_db, 11 = drum_level_db
   //   12 = interpolation (0 linear, 1 Lagrange3)
   //   13 = model (0 classic, 1 geometric)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   /// The rate each rotor is turning at now, which is what drives its LFO. It

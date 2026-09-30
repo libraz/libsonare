@@ -66,8 +66,8 @@ class AutomatableGainProcessor final : public sonare::rt::ProcessorBase {
     }
   }
   void reset() override {}
-  bool set_parameter(unsigned int param_id, float value) override {
-    if (param_id != 0 || !std::isfinite(value)) return false;
+  bool set_parameter_impl(unsigned int param_id, float value) override {
+    if (param_id != 0) return false;
     gain_ = value;
     return true;
   }

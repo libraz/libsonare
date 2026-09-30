@@ -42,7 +42,7 @@ void DuckingProcessor::set_config(const DuckingConfig& config) {
   config_ = config;
 }
 
-bool DuckingProcessor::set_parameter(unsigned int param_id, float value) {
+bool DuckingProcessor::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.threshold_db = value;

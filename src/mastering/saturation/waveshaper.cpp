@@ -111,7 +111,7 @@ void Waveshaper::set_config(const WaveshaperConfig& config) {
   if (reset_state) reset();
 }
 
-bool Waveshaper::set_parameter(unsigned int param_id, float value) {
+bool Waveshaper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.drive_db = value;

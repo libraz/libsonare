@@ -65,7 +65,7 @@ class TransientShaper : public rt::ProcessorBase,
   //   7 = max_gain_db (clamped to >= 0)
   //   8 = gain_smoothing_ms (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=attackGainDb, 1=sustainGainDb, 2=fastAttackMs,
   //   3=fastReleaseMs, 4=slowAttackMs, 5=slowReleaseMs, 6=sensitivity,
   //   7=maxGainDb, 8=gainSmoothingMs.

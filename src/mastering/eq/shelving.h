@@ -34,7 +34,7 @@ class ShelvingEq : public rt::ProcessorBase {
   //   3 = high-shelf frequency_hz (clamped to (0 Hz, Nyquist))
   //   4 = high-shelf gain_db
   //   5 = high-shelf Q (clamped to > 0)
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     return param_id <= 5u && eq_.set_parameter(param_id, value);
   }
   // Automatable parameters: 0=lowFrequencyHz, 1=lowGainDb, 2=lowQ,

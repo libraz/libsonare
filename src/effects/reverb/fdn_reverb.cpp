@@ -125,7 +125,7 @@ int FdnReverb::tail_samples() const noexcept {
   return static_cast<int>(std::ceil(samples));
 }
 
-bool FdnReverb::set_parameter(unsigned int param_id, float value) {
+bool FdnReverb::set_parameter_impl(unsigned int param_id, float value) {
   // Store the update even before prepare() so a host that configures the effect
   // ahead of graph preparation does not lose it; update_absorption() (which
   // depends on the prepared delay lengths and sample rate) is deferred to

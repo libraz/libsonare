@@ -14,7 +14,7 @@ class TelemetryCaptureProcessor final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     last_param = param_id;
     last_value = value;
     return true;
@@ -233,7 +233,7 @@ TEST_CASE("RealtimeEngine records non realtime-safe automation rejection", "[eng
     void prepare(double, int) override {}
     void process(float* const*, int, int) override {}
     void reset() override {}
-    bool set_parameter(unsigned int, float) override { return true; }
+    bool set_parameter_impl(unsigned int, float) override { return true; }
     bool parameter_is_realtime_safe(unsigned int) const noexcept override { return false; }
   };
 

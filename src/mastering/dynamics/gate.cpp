@@ -155,7 +155,7 @@ void Gate::reset() {
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
 }
 
-bool Gate::set_parameter(unsigned int param_id, float value) {
+bool Gate::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe in-place automation: mutate the audio thread's live working config
   // and re-derive its coefficients. No shared_ptr publish, no allocation; the
   // control-thread mirror (config_) and the published snapshot stay untouched.

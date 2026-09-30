@@ -28,7 +28,7 @@ class Transformer : public rt::ProcessorBase {
   //   2 = mix (clamped to [0, 1]; read per sample)
   // The J-A config update only touches coefficients; the per-channel
   // magnetization state in states_ is preserved.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=driveDb, 1=asymmetry, 2=mix
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

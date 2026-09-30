@@ -270,7 +270,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   if (non_finite) reset();
 }
 
-bool PitchShifter::set_parameter(unsigned int param_id, float value) {
+bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
   // Reject before the clamp below: std::clamp leaves NaN intact and `semitones`
   // drives the read-tap phase (see delay_param_acceptable).
   if (!delay_param_acceptable(value)) return false;

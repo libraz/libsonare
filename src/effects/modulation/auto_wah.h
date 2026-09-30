@@ -60,7 +60,7 @@ class AutoWah : public rt::ProcessorBase {
   //   8 = direction (AutoWahDirection; same refusal)
   //   9 = sweep_law (WahSweepLaw; same refusal)
   // attack/release are construction-time (they set per-sample smoothing coeffs).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

@@ -97,7 +97,7 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
   if (prepared_) prepare(sample_rate_, max_block_size_, max_working_channels_);
 }
 
-bool MultibandExciter::set_parameter(unsigned int param_id, float value) {
+bool MultibandExciter::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int band = param_id / kBandStride;
   if (band >= exciters_.size()) {
     return false;

@@ -116,7 +116,7 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   /// Parameters (RT-safe):
   ///   0 = wet (target-room mix, [0,1])
   ///   1 = source_tail_suppression ([0,1])
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=dryWet, 1=sourceTailSuppression
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

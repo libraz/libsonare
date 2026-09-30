@@ -46,7 +46,7 @@ void Gain::set_config(const GainConfig& config) {
   config_ = config;
 }
 
-bool Gain::set_parameter(unsigned int param_id, float value) {
+bool Gain::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       if (!numeric::finite(value)) return false;

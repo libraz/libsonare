@@ -65,7 +65,7 @@ class SidechainRouter : public rt::ProcessorBase,
   //   4 = range_db (clamped to >= 0)
   // lookahead_ms and the sidechain HPF settings are omitted because they resize
   // buffers or are gated by mode switches.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

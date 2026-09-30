@@ -427,7 +427,7 @@ class AmpSim : public rt::ProcessorBase {
   // mid-stream without a click), `doppler` (it would move the reported
   // latency), `topology` (same, plus it selects which state was prepared) nor
   // `preamp_stages` (it changes how many filter states are in the signal path).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb,
   // 5=levelDb, 6=power, 7=sag, 8=transformer, 9=nfb, 10=micAxis, 11=micBAxis,
   // 12=micBlend, 13=cone, 14=crossover, 15=biasShift, 16=inputDb, 17=cab, 18=cabModel.

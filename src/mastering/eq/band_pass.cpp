@@ -24,7 +24,7 @@ void BandPassEq::set_notch(float frequency_hz, float q, bool enabled) {
   eq_.set_band(1, {EqBandType::Notch, frequency_hz, 0.0f, q, enabled});
 }
 
-bool BandPassEq::set_parameter(unsigned int param_id, float value) {
+bool BandPassEq::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       return eq_.set_parameter(0, value);  // band-pass frequency

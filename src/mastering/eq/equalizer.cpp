@@ -264,7 +264,7 @@ bool EqualizerProcessor::discard_non_finite_dynamic_state() noexcept {
   return any_discarded;
 }
 
-bool EqualizerProcessor::set_parameter(unsigned int param_id, float value) {
+bool EqualizerProcessor::set_parameter_impl(unsigned int param_id, float value) {
   const size_t band_index = param_id / 3u;
   if (band_index >= kMaxBands) {
     return false;

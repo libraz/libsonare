@@ -39,7 +39,7 @@ class AutoPan : public rt::ProcessorBase {
   //   1 = depth (clamped to [0, 1])
   //   2 = phase
   //   3 = shape (LfoShape; a fractional or unnamed value is refused)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=rateHz, 1=depth, 2=phase, 3=shape
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

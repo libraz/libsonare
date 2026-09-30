@@ -172,7 +172,7 @@ void CutFilter::clear() {
   apply_low_pass();
 }
 
-bool CutFilter::set_parameter(unsigned int param_id, float value) {
+bool CutFilter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       high_pass_.frequency_hz = clamp_frequency(value, sample_rate_);

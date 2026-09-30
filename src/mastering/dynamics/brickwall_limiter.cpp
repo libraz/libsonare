@@ -146,7 +146,7 @@ void BrickwallLimiter::set_release_ms_in_place(float release_ms) noexcept {
   limiter_.set_release_ms_in_place(release_ms);
 }
 
-bool BrickwallLimiter::set_parameter(unsigned int param_id, float value) {
+bool BrickwallLimiter::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe in-place automation: mutate the audio thread's live working config
   // (active_) and forward ceiling/release to the inner limiter via its in-place
   // setters (update_coefficients). No shared_ptr publish, no allocation; the

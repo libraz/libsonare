@@ -49,7 +49,7 @@ void TiltEq::set_pivot_hz(float pivot_hz) {
   }
 }
 
-bool TiltEq::set_parameter(unsigned int param_id, float value) {
+bool TiltEq::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       tilt_db_ = value;

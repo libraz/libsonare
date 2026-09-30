@@ -211,7 +211,7 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   }
 }
 
-bool MultibandSaturation::set_parameter(unsigned int param_id, float value) {
+bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value) {
   const size_t band = param_id / kBandStride;
   if (band >= config_.bands.size()) {
     return false;

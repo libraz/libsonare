@@ -43,7 +43,7 @@ class HardClipper : public rt::ProcessorBase {
   // those objects, clearing their 1-2 sample antiderivative history. For a
   // clipper this momentary discontinuity is inaudible and acceptable.
   // aliasing is an enum (not exposed).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
 
   // Automatable parameters: 0=ceiling
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

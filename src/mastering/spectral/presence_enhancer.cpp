@@ -166,7 +166,7 @@ void PresenceEnhancer::reset() {
   for (auto& adaa : harmonic_adaa_) adaa.reset();
 }
 
-bool PresenceEnhancer::set_parameter(unsigned int param_id, float value) {
+bool PresenceEnhancer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.amount = std::clamp(value, 0.0f, 1.0f);

@@ -66,7 +66,7 @@ class AdaptiveRelease : public rt::ProcessorBase {
   //   5 = crest_high (clamped to > crest_low)
   //   6 = release_smoothing_ms (clamped to >= 0)
   // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=ceilingDb, 1=minReleaseMs, 2=maxReleaseMs,
   // 3=crestWindowMs, 4=crestLow, 5=crestHigh, 6=releaseSmoothingMs.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

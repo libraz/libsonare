@@ -107,7 +107,7 @@ void MultibandExpander::set_config(const MultibandExpanderConfig& config) {
   }
 }
 
-bool MultibandExpander::set_parameter(unsigned int param_id, float value) {
+bool MultibandExpander::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int band = param_id / kBandStride;
   if (band >= expanders_.size()) {
     return false;

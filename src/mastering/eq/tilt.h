@@ -26,7 +26,7 @@ class TiltEq : public rt::ProcessorBase {
   // via update_bands(), preserves filter state):
   //   0 = tilt_db (positive boosts highs / cuts lows; signed)
   //   1 = pivot_hz (clamped to (0 Hz, Nyquist))
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=tiltDb, 1=pivotHz
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

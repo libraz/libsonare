@@ -73,13 +73,13 @@ void MonoMaker::set_config(const MonoMakerConfig& config) {
   update_coefficient();
 }
 
-bool MonoMaker::set_parameter(unsigned int param_id, float value) {
+bool MonoMaker::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.amount = std::clamp(value, 0.0f, 1.0f);
       return true;
     case 1:
-      if (!std::isfinite(value) || value <= 0.0f) return false;
+      if (value <= 0.0f) return false;
       config_.frequency_hz = value;
       update_coefficient();
       return true;

@@ -49,7 +49,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   /// @param param_id Encoded band/parameter selector (see above).
   /// @param value New parameter value.
   /// @return true if the id maps to a valid band/parameter and was applied.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   // Automatable parameters per band b (ids 3*b + field), keyed as
   // "band<b>.<key>": field 0=frequencyHz, 1=gainDb, 2=q.

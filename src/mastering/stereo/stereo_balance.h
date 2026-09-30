@@ -43,7 +43,7 @@ class StereoBalance : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = balance (clamped to [-1, 1])
   //   1 = law (StereoBalanceLaw; a fractional or unnamed value is refused)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=balance, 1=law
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

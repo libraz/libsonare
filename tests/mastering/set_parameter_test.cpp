@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -233,4 +234,36 @@ TEST_CASE("All factory inserts expose set_parameter contract",
       }
     }
   }
+}
+
+namespace {
+
+// Accepts every id and counts how often a value actually reaches it.
+class CountingProcessor : public ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int calls = 0;
+
+ protected:
+  bool set_parameter_impl(unsigned int, float) override {
+    ++calls;
+    return true;
+  }
+};
+
+}  // namespace
+
+TEST_CASE("set_parameter refuses a non-finite value before any processor sees it",
+          "[mastering][set_parameter]") {
+  CountingProcessor processor;
+  for (float value :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    CHECK_FALSE(processor.set_parameter(0, value));
+  }
+  CHECK(processor.calls == 0);
+  CHECK(processor.set_parameter(0, std::numeric_limits<float>::max()));
+  CHECK(processor.calls == 1);
 }

@@ -102,7 +102,7 @@ class Chorus : public rt::ProcessorBase {
   //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
   //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
   //   8 = interpolation (0 linear, 1 Lagrange3)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

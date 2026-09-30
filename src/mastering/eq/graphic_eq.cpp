@@ -54,7 +54,7 @@ void GraphicEq::set_gain_db(size_t index, float gain_db) {
   rebuild_band(index);
 }
 
-bool GraphicEq::set_parameter(unsigned int param_id, float value) {
+bool GraphicEq::set_parameter_impl(unsigned int param_id, float value) {
   if (param_id == kNumBands) {
     set_q(value);
     return true;

@@ -70,7 +70,7 @@ class PitchShifter : public rt::ProcessorBase {
   //   9 = mix_law (a whole number naming a law, refused otherwise)
   //   10 = interpolation (0 linear, 1 Lagrange3), 11 = anti_alias (0 or 1)
   // The pre-delays have no id: they size the delay line.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

@@ -88,7 +88,7 @@ void StereoBalance::set_config(const StereoBalanceConfig& config) {
   config_ = config;
 }
 
-bool StereoBalance::set_parameter(unsigned int param_id, float value) {
+bool StereoBalance::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.balance = std::clamp(value, -1.0f, 1.0f);

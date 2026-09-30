@@ -270,7 +270,7 @@ void Rotary::reset() {
   reset_geometric();
 }
 
-bool Rotary::set_parameter(unsigned int param_id, float value) {
+bool Rotary::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.rate_hz = std::max(0.0f, value);

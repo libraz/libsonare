@@ -119,7 +119,7 @@ void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
   if (prepared_) prepare(sample_rate_, max_block_size_);
 }
 
-bool AdaptiveRelease::set_parameter(unsigned int param_id, float value) {
+bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.ceiling_db = std::min(0.0f, value);

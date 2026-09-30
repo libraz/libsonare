@@ -136,7 +136,7 @@ void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
   }
 }
 
-bool MultibandDynamicEq::set_parameter(unsigned int param_id, float value) {
+bool MultibandDynamicEq::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int crossover_band = param_id / kParamsPerCrossoverBand;
   if (crossover_band >= processors_.size()) {
     return false;

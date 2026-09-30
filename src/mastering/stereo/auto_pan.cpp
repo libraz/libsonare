@@ -67,7 +67,7 @@ void AutoPan::set_config(const AutoPanConfig& config) {
   config_ = config;
 }
 
-bool AutoPan::set_parameter(unsigned int param_id, float value) {
+bool AutoPan::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.rate_hz = std::max(0.0f, value);

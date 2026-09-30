@@ -61,7 +61,7 @@ class CutFilter : public rt::ProcessorBase {
   //   2 = low-pass frequency_hz (clamped to (0 Hz, Nyquist))
   //   3 = low-pass Q (same resonance rule as id 1)
   // The slope enum is not automatable.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=highPassFrequencyHz, 1=highPassQ, 2=lowPassFrequencyHz, 3=lowPassQ.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

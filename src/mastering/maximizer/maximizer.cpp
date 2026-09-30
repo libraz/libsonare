@@ -48,7 +48,7 @@ void Maximizer::set_config(const MaximizerConfig& config) {
   if (prepared_) prepare(sample_rate_, max_block_size_);
 }
 
-bool Maximizer::set_parameter(unsigned int param_id, float value) {
+bool Maximizer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Applied per block as a linear gain; no coefficients to recompute.

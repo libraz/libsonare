@@ -287,7 +287,7 @@ void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
   }
 }
 
-bool LinearPhaseEq::set_parameter(unsigned int param_id, float value) {
+bool LinearPhaseEq::set_parameter_impl(unsigned int param_id, float value) {
   const size_t band_index = param_id / 3u;
   if (band_index >= kMaxBands) {
     return false;

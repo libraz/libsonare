@@ -68,7 +68,7 @@ class DynamicEq : public rt::ProcessorBase {
   // Band type and the enabled flag are not automatable. A param change on a
   // DISABLED band updates config only and has no audible effect until the band
   // is enabled (via set_band). Ids for b >= kMaxBands are rejected (false).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters, per band b in [0, kMaxBands): 0=frequencyHz,
   // 1=staticGainDb, 2=q, 3=thresholdDb, 4=ratio, 5=rangeDb, 6=sidechainQ,
   // 7=sidechainFreqHz, 8=attackMs, 9=releaseMs, 10=detectorDelayMs, each offset by

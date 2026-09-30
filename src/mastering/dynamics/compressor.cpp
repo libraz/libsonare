@@ -241,7 +241,7 @@ void Compressor::reset() {
   minimum_gain_reduction_db_ = 0.0f;
 }
 
-bool Compressor::set_parameter(unsigned int param_id, float value) {
+bool Compressor::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe in-place automation: mutate the audio thread's live working config
   // and re-derive its coefficients. No shared_ptr publish, no allocation; the
   // control-thread mirror (config_) and the published snapshot stay untouched.

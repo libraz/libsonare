@@ -42,7 +42,7 @@ class PultecEq : public rt::ProcessorBase {
   //   6 = highAttenuationFrequencyHz (clamped to > 0)
   //   7 = highAttenuation (clamped to [0, 10])
   //   8 = outputDrive (clamped to [0, 10])
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   float low_frequency() const { return low_frequency_hz_; }

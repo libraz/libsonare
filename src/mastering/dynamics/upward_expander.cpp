@@ -94,7 +94,7 @@ void UpwardExpander::reset() {
   last_gain_db_ = 0.0f;
 }
 
-bool UpwardExpander::set_parameter(unsigned int param_id, float value) {
+bool UpwardExpander::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe in-place automation: mutate the audio thread's working config and
   // re-derive coefficients. No shared_ptr publish, no allocation; the published
   // snapshot stays untouched and the control-thread mirror (config_) is updated

@@ -197,7 +197,7 @@ void Limiter::set_threshold_in_place(float threshold_db) noexcept {
   threshold_db_ = threshold_db;
 }
 
-bool Limiter::set_parameter(unsigned int param_id, float value) {
+bool Limiter::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe: route to the in-place setters, which update the scalar coefficients
   // the per-sample loop reads (threshold_db_ / release_coeff_) WITHOUT publishing
   // a new shared_ptr snapshot. adopt_snapshot_for_block() only re-derives those
@@ -214,11 +214,10 @@ bool Limiter::set_parameter(unsigned int param_id, float value) {
       return true;
     case 2:
       // 0 is the brick-wall; anything else must be a finite ratio of at least 1.
-      if (!std::isfinite(value) || (value != 0.0f && value < 1.0f)) return false;
+      if ((value != 0.0f && value < 1.0f)) return false;
       set_ratio_in_place(value);
       return true;
     case 3:
-      if (!std::isfinite(value)) return false;
       set_post_gain_db_in_place(value);
       return true;
     default:

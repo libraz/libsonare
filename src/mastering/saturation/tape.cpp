@@ -165,7 +165,7 @@ void Tape::set_config(const TapeConfig& config) {
   }
 }
 
-bool Tape::set_parameter(unsigned int param_id, float value) {
+bool Tape::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.drive_db = value;

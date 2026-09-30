@@ -31,7 +31,7 @@ class Gain : public rt::ProcessorBase {
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = levelDb
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=levelDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

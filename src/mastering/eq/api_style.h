@@ -38,7 +38,7 @@ class ApiStyleEq : public rt::ProcessorBase {
   //             non-zero, matching set_band())
   // Values are snapped exactly as set_band() does, preserving the stepped
   // proportional-Q character; Q is still derived from gain via proportional_q().
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=lowFrequencyHz, 1=lowGainDb, 2=lowMidFrequencyHz,
   // 3=lowMidGainDb, 4=highMidFrequencyHz, 5=highMidGainDb, 6=highFrequencyHz,
   // 7=highGainDb.

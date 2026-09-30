@@ -159,7 +159,7 @@ void PultecEq::rebuild() {
                    0.7f, high_atten_enabled});
 }
 
-bool PultecEq::set_parameter(unsigned int param_id, float value) {
+bool PultecEq::set_parameter_impl(unsigned int param_id, float value) {
   // Keep frequencies inside (0 Hz, Nyquist) so coefficient design never throws
   // on the audio thread. Band 1 derives its center as low_frequency_hz * 1.45,
   // so the low frequency is clamped against Nyquist / 1.45.

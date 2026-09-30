@@ -157,7 +157,7 @@ void RoomMorphProcessor::reset() {
   for (SuppressorState& s : suppressor_) s = SuppressorState{};
 }
 
-bool RoomMorphProcessor::set_parameter(unsigned int param_id, float value) {
+bool RoomMorphProcessor::set_parameter_impl(unsigned int param_id, float value) {
   if (!numeric::finite_in_closed_range(value, 0.0f, 1.0f)) return false;
   switch (param_id) {
     case 0:

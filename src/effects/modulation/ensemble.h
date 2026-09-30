@@ -67,7 +67,7 @@ class Ensemble : public rt::ProcessorBase {
   //   9 = depth_dev      (clamped to [-1, 1])
   //  10 = pan_dev        (clamped to [0, 1])
   //  11 = interpolation  (0 linear, 1 Lagrange3)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

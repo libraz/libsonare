@@ -52,7 +52,7 @@ class VelvetReverb : public rt::ProcessorBase {
   // Note: decay, reverb_time_s and density_hz are NOT lock-free / RT-safe;
   // changing any of them rebuilds the velvet-noise tap tables and ring buffers
   // (offline reconfiguration). dry_wet is RT-safe and only read in process().
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

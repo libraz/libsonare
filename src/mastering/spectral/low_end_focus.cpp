@@ -109,7 +109,7 @@ void LowEndFocus::set_config(const LowEndFocusConfig& config) {
   config_ = config;
 }
 
-bool LowEndFocus::set_parameter(unsigned int param_id, float value) {
+bool LowEndFocus::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.cutoff_hz = std::max(value, 1.0e-3f);

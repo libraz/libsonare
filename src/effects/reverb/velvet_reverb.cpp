@@ -221,7 +221,7 @@ int VelvetReverb::tail_samples() const noexcept {
   return static_cast<int>(std::ceil(samples));
 }
 
-bool VelvetReverb::set_parameter(unsigned int param_id, float value) {
+bool VelvetReverb::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Rebuilds tap tables / ring buffers (not RT-safe). prepare() clamps.

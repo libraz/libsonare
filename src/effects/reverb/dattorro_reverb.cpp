@@ -433,7 +433,7 @@ int DattorroReverb::tail_samples() const noexcept {
   return static_cast<int>(std::ceil(samples));
 }
 
-bool DattorroReverb::set_parameter(unsigned int param_id, float value) {
+bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // process() clamps decay to [0, 0.98]; store the raw target.

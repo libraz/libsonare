@@ -197,7 +197,7 @@ class Recorder final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
-  bool set_parameter(unsigned int id, float value) override {
+  bool set_parameter_impl(unsigned int id, float value) override {
     log_->entries.push_back({stage_, std::string(s::kGsEfxRowKeys.at(id)), value});
     return true;
   }

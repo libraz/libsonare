@@ -99,7 +99,7 @@ class ScaleProcessor final : public sonare::rt::ProcessorBase {
   void reset() override {}
 
   // Param 0 = linear scale, so insert automation can drive this processor.
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     if (param_id == 0) {
       scale_ = value;
       return true;

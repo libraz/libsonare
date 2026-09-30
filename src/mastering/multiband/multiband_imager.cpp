@@ -192,7 +192,7 @@ void MultibandImager::set_config(const MultibandImagerConfig& config) {
   }
 }
 
-bool MultibandImager::set_parameter(unsigned int param_id, float value) {
+bool MultibandImager::set_parameter_impl(unsigned int param_id, float value) {
   const size_t band = param_id / kBandStride;
   if (band >= config_.bands.size()) {
     return false;

@@ -66,8 +66,7 @@ void PhaseAlign::set_config(const PhaseAlignConfig& config) {
   }
 }
 
-bool PhaseAlign::set_parameter(unsigned int param_id, float value) {
-  if (!std::isfinite(value)) return false;
+bool PhaseAlign::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Keep within [0, 1): the whole-sample delay (delay_samples_) is fixed, so

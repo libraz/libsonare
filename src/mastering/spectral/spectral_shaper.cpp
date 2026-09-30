@@ -121,7 +121,7 @@ void SpectralShaper::set_config(const SpectralShaperConfig& config) {
   }
 }
 
-bool SpectralShaper::set_parameter(unsigned int param_id, float value) {
+bool SpectralShaper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.threshold = std::max(0.0f, value);

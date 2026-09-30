@@ -164,7 +164,7 @@ void GsClassicUnit::process(float* const* channels, int num_channels, int num_sa
   }
 }
 
-bool GsClassicUnit::set_parameter(unsigned int param_id, float value) {
+bool GsClassicUnit::set_parameter_impl(unsigned int param_id, float value) {
   if (param_id >= kGsClassicByteSlots || std::isnan(value)) return false;
   const float clamped = std::min(std::max(value, 0.0f), kLargestByte);
   graph_.set_byte(param_id, static_cast<uint8_t>(std::lround(clamped)));

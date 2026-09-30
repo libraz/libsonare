@@ -87,7 +87,7 @@ class StereoDelay : public rt::ProcessorBase {
   //   6/7 = tap3_ms/tap4_ms, 8..11 = tap1..4_level_db, 12/13 = tap3/4_pan
   //   14/15 = invert_l/r, 16..18 = mod_rate_hz/depth_ms/phase_deg, 19 = glide_ms
   //   20 = cross_mode, 21 = mix_law, 22 = interpolation (0 linear, 1 Lagrange3)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

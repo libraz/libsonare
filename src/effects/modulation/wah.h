@@ -62,7 +62,7 @@ class Wah : public rt::ProcessorBase {
   //   4 = dry_wet
   //   5 = filter_type (WahFilterType; a fractional or unnamed value is refused)
   //   6 = sweep_law (WahSweepLaw; same refusal)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

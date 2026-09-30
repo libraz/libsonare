@@ -74,7 +74,7 @@ class DattorroReverb : public rt::ProcessorBase {
   //   7 = gate_hold_ms, 8 = gate_type (a whole number naming a type, refused otherwise)
   // Note: pre_delay_samples and character are not automatable; they size buffers
   // and require prepare().
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

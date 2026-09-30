@@ -59,7 +59,7 @@ class BinauralPanner : public rt::ProcessorBase {
   //   3 = clockwise (0 or 1)
   //   4 = output (0 speakers, 1 phones; a fractional or unnamed value is refused; fades over 20 ms)
   //   5 = dry_wet (clamped to [0, 1])
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

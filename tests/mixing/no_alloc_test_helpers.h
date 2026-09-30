@@ -120,8 +120,8 @@ class ScaleProcessor final : public sonare::rt::ProcessorBase {
     }
   }
   void reset() override {}
-  bool set_parameter(unsigned int param_id, float value) override {
-    if (param_id > 64u || !std::isfinite(value)) return false;
+  bool set_parameter_impl(unsigned int param_id, float value) override {
+    if (param_id > 64u) return false;
     scale_ = value;
     return true;
   }
@@ -146,7 +146,7 @@ class ParameterCaptureProcessor final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     last_param = param_id;
     last_value = value;
     return true;

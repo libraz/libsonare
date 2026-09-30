@@ -228,7 +228,7 @@ void Exciter::update_coeff() {
   for (auto& delay : aligned_delays_) delay.reset();
 }
 
-bool Exciter::set_parameter(unsigned int param_id, float value) {
+bool Exciter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.frequency_hz = std::max(value, std::numeric_limits<float>::min());

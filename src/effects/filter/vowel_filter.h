@@ -51,7 +51,7 @@ class VowelFilter : public rt::ProcessorBase {
   //   2 = drive (clamped to [0, 1])
   //   3 = drive_on (0 or 1)
   //   4 = dry_wet (clamped to [0, 1])
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

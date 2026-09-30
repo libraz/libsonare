@@ -49,7 +49,7 @@ class MultibandExpander : public rt::ProcessorBase {
   // Crossover cutoff frequencies are not automatable here: changing them
   // requires rebuilding the crossover filters and would reset audio state.
   static constexpr unsigned int kBandStride = 5;
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: band b id [b*kBandStride .. +kBandStride) maps to
   // keys band{b}.thresholdDb, band{b}.ratio, band{b}.attackMs, band{b}.releaseMs,
   // band{b}.rangeDb.

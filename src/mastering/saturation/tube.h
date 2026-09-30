@@ -41,7 +41,7 @@ class Tube : public rt::ProcessorBase {
   //   3 = bias_v (must stay finite)
   //   4 = harmonic_drive (clamped to [0, 1])
   // oversample_factor is a discrete mode and is not exposed.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=driveDb, 1=bias, 2=mix, 3=biasV, 4=harmonicDrive.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

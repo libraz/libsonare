@@ -125,7 +125,7 @@ void HardClipper::set_config(const HardClipperConfig& config) {
   }
 }
 
-bool HardClipper::set_parameter(unsigned int param_id, float value) {
+bool HardClipper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0: {
       const float ceiling = std::max(value, std::numeric_limits<float>::min());

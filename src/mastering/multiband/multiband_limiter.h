@@ -43,7 +43,7 @@ class MultibandLimiter : public rt::ProcessorBase {
   // lookahead_ms and crossover cutoffs are not automatable: both resize buffers
   // and would reset audio state.
   static constexpr unsigned int kBandStride = 2;
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters per band b: b*kBandStride+0=band{b}.thresholdDb,
   // b*kBandStride+1=band{b}.releaseMs (one block per configured band).
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

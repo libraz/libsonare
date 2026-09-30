@@ -91,7 +91,7 @@ class Limiter : public rt::ProcessorBase {
   //   2 = ratio (0 = brick-wall, otherwise clamped to >= 1)
   //   3 = post_gain_db
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=thresholdDb, 1=releaseMs, 2=ratio, 3=postGainDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

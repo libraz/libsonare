@@ -243,7 +243,7 @@ void DynamicEq::clear_sidechain() {
   sidechain_num_samples_ = 0;
 }
 
-bool DynamicEq::set_parameter(unsigned int param_id, float value) {
+bool DynamicEq::set_parameter_impl(unsigned int param_id, float value) {
   const size_t band_index = param_id / kParamsPerBand;
   if (band_index >= kMaxBands) {
     return false;

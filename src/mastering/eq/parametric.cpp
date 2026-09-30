@@ -131,7 +131,7 @@ void ParametricEq::set_band(size_t index, const EqBand& band) {
   update_coefficients(index);
 }
 
-bool ParametricEq::set_parameter(unsigned int param_id, float value) {
+bool ParametricEq::set_parameter_impl(unsigned int param_id, float value) {
   const size_t band_index = param_id / 3u;
   if (band_index >= kMaxBands) {
     return false;

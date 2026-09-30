@@ -56,7 +56,7 @@ void RingModulator::process(float* const* channels, int num_channels, int num_sa
 
 void RingModulator::reset() { phase_ = 0.0; }
 
-bool RingModulator::set_parameter(unsigned int param_id, float value) {
+bool RingModulator::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.carrier_hz = std::max(0.0f, value);

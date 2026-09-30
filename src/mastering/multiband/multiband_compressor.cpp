@@ -149,7 +149,7 @@ void MultibandCompressor::set_config(const MultibandCompressorConfig& config) {
   }
 }
 
-bool MultibandCompressor::set_parameter(unsigned int param_id, float value) {
+bool MultibandCompressor::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int band = param_id / kBandStride;
   if (band >= compressors_.size()) {
     return false;

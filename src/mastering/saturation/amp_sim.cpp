@@ -994,8 +994,7 @@ void AmpSim::rest_disabled_stages() noexcept {
   }
 }
 
-bool AmpSim::set_parameter(unsigned int param_id, float value) {
-  if (!std::isfinite(value)) return false;
+bool AmpSim::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.drive = std::clamp(value, 0.0f, 1.0f);

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -190,12 +191,11 @@ class ProcessorBase {
   }
 
   // Set a processor-specific scalar parameter by id. Returns false if the id is
-  // not recognized. Default: no automatable parameters. Implementations must be
-  // RT-safe (no allocation, no blocking).
-  virtual bool set_parameter(unsigned int param_id, float value) {
-    (void)param_id;
-    (void)value;
-    return false;
+  // not recognized or the value is not finite; no processor sees a non-finite
+  // value, so no override has to guard for one or can launder one into range.
+  bool set_parameter(unsigned int param_id, float value) {
+    if (!std::isfinite(value)) return false;
+    return set_parameter_impl(param_id, value);
   }
 
   // Returns whether set_parameter(param_id, ...) is safe to call from an audio
@@ -259,6 +259,15 @@ class ProcessorBase {
   }
 
  protected:
+  /// Applies a finite @p value to parameter @p param_id; returns false for an
+  /// unrecognized id. Default: no automatable parameters. Implementations must
+  /// be RT-safe (no allocation, no blocking).
+  virtual bool set_parameter_impl(unsigned int param_id, float value) {
+    (void)param_id;
+    (void)value;
+    return false;
+  }
+
   /// Returns a valid excluded detector plane for this block, or -1 when every
   /// plane participates. Keeping the range check here lets processors retain
   /// their existing behavior for mono/stereo and arbitrary direct calls.

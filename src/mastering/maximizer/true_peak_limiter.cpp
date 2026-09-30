@@ -472,7 +472,7 @@ void TruePeakLimiter::set_release_ms_in_place(float release_ms) noexcept {
   limiter_.set_release_ms_in_place(config_.release_ms);
 }
 
-bool TruePeakLimiter::set_parameter(unsigned int param_id, float value) {
+bool TruePeakLimiter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.ceiling_db = std::min(0.0f, value);

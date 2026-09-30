@@ -103,7 +103,7 @@ void SoftClipper::set_config(const SoftClipperConfig& config) {
   if (reset_state) reset();
 }
 
-bool SoftClipper::set_parameter(unsigned int param_id, float value) {
+bool SoftClipper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.drive_db = value;

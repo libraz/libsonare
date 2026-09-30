@@ -43,7 +43,7 @@ class Exciter : public rt::ProcessorBase {
   //   4 = even_odd_mix (clamped to [0, 1]; read per sample)
   // Coefficient updates preserve the per-channel biquad delay state.
   // aliasing is an enum (not exposed).
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=frequencyHz, 1=driveDb, 2=amount, 3=q, 4=evenOddMix
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

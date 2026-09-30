@@ -110,7 +110,7 @@ void Imager::set_config(const ImagerConfig& config) {
   config_ = config;
 }
 
-bool Imager::set_parameter(unsigned int param_id, float value) {
+bool Imager::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.width = std::max(0.0f, value);

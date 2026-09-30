@@ -188,8 +188,7 @@ void VowelFilter::process(float* const* channels, int num_channels, int num_samp
   if (discarded) note_non_finite_discard();
 }
 
-bool VowelFilter::set_parameter(unsigned int param_id, float value) {
-  if (!std::isfinite(value)) return false;
+bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.vowel = std::clamp(value, 0.0f, static_cast<float>(kVowelCount - 1));

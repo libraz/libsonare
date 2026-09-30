@@ -88,7 +88,7 @@ class BrickwallLimiter : public rt::ProcessorBase,
   //   0 = ceiling_db
   //   1 = release_ms (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=ceilingDb, 1=releaseMs
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

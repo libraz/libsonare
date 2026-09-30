@@ -62,7 +62,7 @@ class Flanger : public rt::ProcessorBase {
   //   7 = step_rate_hz (clamped to >= 0; 0 = continuous LFO)
   //   8 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
   //   9 = interpolation (0 linear, 1 Lagrange3)
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

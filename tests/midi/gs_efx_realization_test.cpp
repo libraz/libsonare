@@ -113,7 +113,7 @@ class StandIn final : public sonare::rt::ProcessorBase {
     counters_->probe.assign(ch[0], ch[0] + n);
   }
   void reset() override { ++counters_->resets; }
-  bool set_parameter(unsigned int id, float value) override {
+  bool set_parameter_impl(unsigned int id, float value) override {
     counters_->set_params.emplace_back(name_ + "." + keys_.at(id), value);
     return true;
   }

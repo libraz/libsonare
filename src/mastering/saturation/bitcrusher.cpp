@@ -196,7 +196,7 @@ void BitCrusher::set_config(const BitCrusherConfig& config) {
   update_coefficients();
 }
 
-bool BitCrusher::set_parameter(unsigned int param_id, float value) {
+bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Match validate_config's [1, 24] integer range for bit_depth.
@@ -209,7 +209,7 @@ bool BitCrusher::set_parameter(unsigned int param_id, float value) {
       // Refused rather than clamped: a rate the increment cannot be derived from
       // would otherwise arrive as an in-domain hold nothing downstream can
       // separate from one that was asked for.
-      if (!std::isfinite(value) || value < 0.0f) return false;
+      if (value < 0.0f) return false;
       config_.hold_hz = value;
       // In place, and the phase runs on: a moved rate changes when the next
       // sample is latched, not which one is being held now.
@@ -220,7 +220,6 @@ bool BitCrusher::set_parameter(unsigned int param_id, float value) {
     case 5:
     case 6:
     case 7: {
-      if (!std::isfinite(value)) return false;
       float& level = param_id == 3   ? config_.radio_noise_level
                      : param_id == 4 ? config_.wp_noise_level
                      : param_id == 5 ? config_.disc_noise_level
@@ -250,14 +249,13 @@ bool BitCrusher::set_parameter(unsigned int param_id, float value) {
     }
     case 15:
     case 18:
-      if (!std::isfinite(value)) return false;
       (param_id == 15 ? config_.wp_noise_pink : config_.mono) = value >= 0.5f;
       return true;
     case 16:
     case 17: {
       // Refused rather than clamped, like the other enumerations.
       const float rounded = std::round(value);
-      if (!std::isfinite(value) || rounded != value) return false;
+      if (rounded != value) return false;
       if (param_id == 16) {
         if (rounded < 0.0f || rounded >= static_cast<float>(kBitCrusherDiscTypeCount)) return false;
         config_.disc_type = static_cast<BitCrusherDiscType>(static_cast<int>(rounded));

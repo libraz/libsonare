@@ -46,7 +46,7 @@ void ApiStyleEq::set_band(Band band, float frequency_hz, float gain_db) {
   rebuild_band(band);
 }
 
-bool ApiStyleEq::set_parameter(unsigned int param_id, float value) {
+bool ApiStyleEq::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int band_index = param_id / 2u;
   if (band_index >= bands_.size()) {
     return false;

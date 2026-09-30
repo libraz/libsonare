@@ -65,8 +65,7 @@ void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {
   }
 }
 
-bool HaasEnhancer::set_parameter(unsigned int param_id, float value) {
-  if (!std::isfinite(value)) return false;
+bool HaasEnhancer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       if (value > 1000.0f) return false;

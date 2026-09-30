@@ -120,7 +120,7 @@ void Phaser::discard_non_finite() noexcept {
   if (discarded) note_non_finite_discard();
 }
 
-bool Phaser::set_parameter(unsigned int param_id, float value) {
+bool Phaser::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.rate_hz = std::max(0.0f, value);

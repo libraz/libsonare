@@ -35,7 +35,7 @@ class MixingRuntime final : public rt::ProcessorBase {
   void reset() override;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
-  bool set_parameter(unsigned int param_id, float value) override;
+  bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
   mixing::ChannelStrip* strip() const noexcept { return strip_; }

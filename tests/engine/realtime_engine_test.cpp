@@ -115,7 +115,7 @@ class CaptureProcessor final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     params[static_cast<size_t>(count)] = param_id;
     values[static_cast<size_t>(count)] = value;
     ++count;
@@ -133,7 +133,7 @@ class InsertCommandProbe final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
-  bool set_parameter(unsigned int param_id, float value) override {
+  bool set_parameter_impl(unsigned int param_id, float value) override {
     if (param_id == 0) {
       insert_value = value;
       ++insert_count;
