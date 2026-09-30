@@ -85,7 +85,9 @@ jobs:
           python3 -m pip install --disable-pip-version-check ruff==0.16.8
           python3 -m ruff check .
       - name: Drift gates
-        # The mechanical cross-surface gates, all stdlib-only and read-only.
+        # The mechanical cross-surface gates, all read-only and stdlib-only
+        # except numpy: the bank-policy gate imports the shipping
+        # `tools/voicematch/status.py`, which reaches numpy through `capture.py`.
         # Invoked through the Makefile so this list cannot drift from it: a
         # hand-copied one silently omits whatever gate is added to `conformance`
         # next, and reports green while doing it.
@@ -103,6 +105,7 @@ jobs:
         # skips itself when no built CLI is present, as it is here.
         working-directory: .
         run: |
+          python3 -m pip install --disable-pip-version-check numpy==2.4.6
           python3 tools/abi/gen_abi_layout.py --check
           make check-abi-version
           make processor-types-check

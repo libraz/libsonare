@@ -193,8 +193,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 
     const float target_db = gain_reduction_db(level_db, cfg);
     pdr_state_db_ = pdr_coeff_ * pdr_state_db_ + (1.0f - pdr_coeff_) * target_db;
-    const float pdr_amount = cfg.pdr_time_ms > 0.0f
-                                 ? std::clamp(-pdr_state_db_ / kPdrNormalizationDb, 0.0f, 1.0f)
+    // Ordered so a NaN state reads as 0: it indexes the release table below.
+    const float pdr_amount = cfg.pdr_time_ms > 0.0f && pdr_state_db_ < 0.0f
+                                 ? std::min(-pdr_state_db_ / kPdrNormalizationDb, 1.0f)
                                  : 0.0f;
     const float release_position = pdr_amount * static_cast<float>(kReleaseTableSteps);
     const size_t release_index =

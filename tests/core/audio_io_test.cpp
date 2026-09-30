@@ -892,7 +892,8 @@ TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]")
 // so the adoption is currently unguarded. Do not read a pass here as covering
 // it, and do not rename this back without a fixture that goes red.
 TEST_CASE("load_audio decodes an HE-AAC stream", "[audio_io][ffmpeg][he-aac]") {
-  if (std::system("ffmpeg -hide_banner -h encoder=aac_at >/dev/null 2>&1") != 0) {
+  // `-h encoder=` exits 0 for an unknown encoder, so the probe reads the list.
+  if (std::system("ffmpeg -hide_banner -encoders 2>/dev/null | grep -q ' aac_at '") != 0) {
     SKIP("ffmpeg AudioToolbox HE-AAC encoder is unavailable");
   }
 
