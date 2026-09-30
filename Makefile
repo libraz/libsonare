@@ -6,6 +6,7 @@
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
+       gs-classic-models gs-classic-check gs-classic-overlays-check gs-efx-soundings-drift \
        gs-efx-bindings gs-efx-bindings-check gs-efx-join gs-efx-join-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
@@ -425,6 +426,7 @@ lint:
 # them and a drifted one is a static fact rather than something a build reports.
 	$(MAKE) gs-efx-bindings-check
 	$(MAKE) gs-efx-join-check
+	$(MAKE) gs-classic-overlays-check
 
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
@@ -766,6 +768,29 @@ gs-efx-tables-check: gs-efx-archive-set
 	fi; \
 	diff -u tools/gs/efx-tables.json "$$scratch/gs_efx_tables_check.json"; \
 	diff -u src/midi/synth/gs_efx_tables.h "$$scratch/gs_efx_tables_check.h"
+
+# Writes the classic-realisation models, reference digests and classic.md.
+gs-classic-models: gs-efx-archive-set
+	python3 tools/gs/classic_models.py --archive $(GS_EFX_ARCHIVE)
+
+# Archive-free: the overlay set against the digest recorded in the committed
+# .inc, so an overlay edited without regenerating is a static fact. Run by lint.
+gs-classic-overlays-check:
+	python3 tools/gs/classic_models.py --check-overlays
+
+# Regenerates the classic-realisation models and the reference digests into a
+# scratch directory and diffs them against the committed files; the script
+# reports an archive_revision difference on one line ahead of the diff, as
+# gs-efx-tables-check does. Needs the archive (and its venv), so like that
+# target it is not part of `make lint`.
+gs-classic-check: gs-efx-archive-set
+	python3 tools/gs/classic_models.py --archive $(GS_EFX_ARCHIVE) --check
+
+# One line per recorded key (designed row, enables row, classic overlay entry,
+# classic model hash) the archive has moved past; exit 3 when any is found.
+# Archive required, so not part of `make lint`.
+gs-efx-soundings-drift: gs-efx-archive-set
+	python3 tools/gs/soundings_drift.py --archive $(GS_EFX_ARCHIVE)
 
 # The binding table the insert chain walks, rendered from the hand-written
 # tools/gs/efx-bindings/*.json. Both inputs are committed, so this one needs no

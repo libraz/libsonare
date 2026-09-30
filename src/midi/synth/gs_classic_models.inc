@@ -3,6 +3,7 @@
 // archive_revision: fcef26df0d03d05725e39747e6cfd8e0a817fbcc
 // archive_revision_source: git rev-parse HEAD
 // archive_inputs_dirty: false
+// overlay_digest: 7ad2c0d5927f3732af444d9093db556849361e86b161e18e58df7bf1e0cd9f73
 // types 64, nodes 2628, map specs 235, curves 78, point runs 8
 
 namespace {
