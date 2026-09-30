@@ -664,9 +664,11 @@ uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcep
 
 }  // namespace
 
+#if defined(SONARE_MIDI_WITH_FX)
 /// The one stage a classic unit realises, named so the shape check can tell it
 /// apart from a modern stage list.
 constexpr std::string_view kClassicStageName = "gs.classic";
+#endif
 
 Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>& stages,
                                 GsEfxRealization realization,
@@ -693,6 +695,9 @@ Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>&
       stage.proc = std::move(unit);
       out.stages.push_back(std::move(stage));
     }
+#else
+    // The classic models are built only with the effects; without them the unit stays empty.
+    (void)efx;
 #endif
   } else {
     out.stages.reserve(stages.size());
