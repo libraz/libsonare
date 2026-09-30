@@ -6,7 +6,9 @@
 /// by the archive's own `_from_map` (the nearest-state rule where a states map names
 /// nothing), rounded to float, as `tools/gs/classic_models.py` wrote it.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <iterator>
@@ -48,11 +50,19 @@ void check_expansion(const gc::GsClassicModelRegistry& registry, const uint16_t*
     const gc::GsClassicMapSpec& spec = m.map_specs[i];
     const bool log_points = spec.kind == gc::GsClassicMapKind::kPoints && spec.log != 0;
     const float* expected = kGsClassicMapExpansion[rows[i]];
+    // A value that cancels to near zero keeps a residue whose size depends on FMA contraction, so
+    // it is compared against one float rounding of the LUT's own magnitude.
+    float magnitude = 0.0f;
+    for (std::size_t b = 0; b < gc::kGsClassicLutSize; ++b) {
+      magnitude = std::max(magnitude, std::fabs(expected[b]));
+    }
+    const float cancellation = FLT_EPSILON * magnitude;
     for (std::size_t b = 0; b < gc::kGsClassicLutSize; ++b) {
       const float got = m.luts[i].v[b];
       const float want = expected[b];
-      const bool same = got == want || (log_points && (std::nextafter(want, INFINITY) == got ||
-                                                       std::nextafter(want, -INFINITY) == got));
+      const bool same = got == want || std::fabs(got - want) <= cancellation ||
+                        (log_points && (std::nextafter(want, INFINITY) == got ||
+                                        std::nextafter(want, -INFINITY) == got));
       if (!same) {
         ++mismatches;
         UNSCOPED_INFO("spec " << i << " byte " << b << ": " << got << " != " << want);

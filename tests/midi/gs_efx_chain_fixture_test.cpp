@@ -14,8 +14,11 @@
 /// differs from the type's own power-on chain, which is what keeps the file
 /// readable: a byte no type reads changes nothing and says so by its absence.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cfloat>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -108,6 +111,40 @@ struct Cell {
 
 using Sweep = std::map<Cell, std::string>;
 
+/// Splits a rendering into its text with every JSON value replaced by '#', and the values.
+std::string split_numbers(const std::string& text, std::vector<double>* numbers) {
+  std::string shape;
+  size_t i = 0;
+  while (i < text.size()) {
+    const bool value_start =
+        i > 0 && text[i - 1] == ':' && (text[i] == '-' || (text[i] >= '0' && text[i] <= '9'));
+    if (!value_start) {
+      shape += text[i++];
+      continue;
+    }
+    size_t end = i + 1;
+    while (end < text.size() && (text[end] == '.' || (text[end] >= '0' && text[end] <= '9'))) ++end;
+    numbers->push_back(std::stod(text.substr(i, end - i)));
+    shape += '#';
+    i = end;
+  }
+  return shape;
+}
+
+/// Same stages, keys and order, and every value within one printed digit plus a few float
+/// roundings, since the last printed digit of a transcendental result differs across libm builds.
+bool same_rendering(const std::string& a, const std::string& b) {
+  if (a == b) return true;
+  std::vector<double> va;
+  std::vector<double> vb;
+  if (split_numbers(a, &va) != split_numbers(b, &vb) || va.size() != vb.size()) return false;
+  for (size_t k = 0; k < va.size(); ++k) {
+    const double scale = std::max(std::fabs(va[k]), std::fabs(vb[k]));
+    if (std::fabs(va[k] - vb[k]) > 1.5e-6 + 4.0 * FLT_EPSILON * scale) return false;
+  }
+  return true;
+}
+
 Sweep compute_sweep() {
   Sweep sweep;
   for (const auto& row : kGsEfxTypeDefaults) {
@@ -196,7 +233,10 @@ TEST_CASE("the EFX chain skeleton renders the same bytes over every slot and bou
     CAPTURE(cell.type, cell.slot, cell.value);
     const auto it = expected.find(cell);
     CHECK(it != expected.end());
-    if (it != expected.end()) CHECK(it->second == chain);
+    if (it != expected.end()) {
+      CAPTURE(it->second, chain);
+      CHECK(same_rendering(it->second, chain));
+    }
   }
   for (const auto& [cell, chain] : expected) {
     (void)chain;
