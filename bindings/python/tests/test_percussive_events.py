@@ -179,6 +179,16 @@ def _covering(events: list[libsonare.PercussiveEvent], sample: int) -> libsonare
     return covering[0]
 
 
+def _measured(
+    events: list[libsonare.PercussiveEvent],
+) -> list[tuple[int, int, float, float, float]]:
+    """Every field an extraction measures, so two separations compare on all of them."""
+    return [
+        (e.onset_sample, e.offset_sample, e.strength, e.peak_amplitude, e.percussive_ratio)
+        for e in events
+    ]
+
+
 def _assert_edited(out: NDArray[np.float32], source: NDArray[np.float32]) -> None:
     """Assert the edit moved the output off ``source`` and left a signal behind.
 
@@ -417,7 +427,8 @@ def test_the_separation_fields_reach_both_configs() -> None:
     ):
         moved = libsonare.extract_percussive_events(audio, SR, **{field: value})
         # A different separation is a different measurement of the same audio.
-        assert [e.peak_amplitude for e in moved] != [e.peak_amplitude for e in baseline], field
+        # The peak alone can survive it bit-exactly (hop_length on Linux aarch64).
+        assert _measured(moved) != _measured(baseline), field
 
         # On the render side the same field decides which signal is lifted out of
         # the span, so a gain change renders differently under it.
