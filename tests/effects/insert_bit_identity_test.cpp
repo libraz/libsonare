@@ -163,7 +163,7 @@ TEST_CASE(
     const RenderResult empty = render("stereo.binaural", "{}");
     const RenderResult explicit_defaults = render(
         "stereo.binaural",
-        R"({"azimuthDeg":0.0,"autoTurn":false,"turnRateHz":1.0,"clockwise":true,"output":0,"dryWet":1.0})");
+        R"({"azimuthDeg":0.0,"autoTurn":false,"turnRateHz":1.0,"clockwise":true,"output":1,"dryWet":1.0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);
     // The turn rate and direction are inert while the source is held.

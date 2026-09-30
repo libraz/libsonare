@@ -228,10 +228,10 @@ constexpr const char* enum_choice_name(sonare::mastering::stereo::StereoBalanceL
 
 constexpr const char* enum_choice_name(sonare::mastering::stereo::BinauralOutput value) {
   switch (value) {
-    case sonare::mastering::stereo::BinauralOutput::kPhones:
-      return "phones";
     case sonare::mastering::stereo::BinauralOutput::kSpeakers:
       return "speakers";
+    case sonare::mastering::stereo::BinauralOutput::kPhones:
+      return "phones";
   }
   return nullptr;
 }

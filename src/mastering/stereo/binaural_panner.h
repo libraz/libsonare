@@ -23,10 +23,10 @@
 
 namespace sonare::mastering::stereo {
 
-/// Where the rendered pair is heard.
+/// Where the rendered pair is heard. Ordinals follow the GS 3D `Out` byte (0 Speaker, 1 Phones).
 enum class BinauralOutput {
-  kPhones,    ///< the binaural pair as is; the default.
   kSpeakers,  ///< crosstalk-cancelled for a +/-30 degree loudspeaker pair.
+  kPhones,    ///< the binaural pair as is; the default.
 };
 inline constexpr int kBinauralOutputCount = 2;
 
@@ -57,7 +57,7 @@ class BinauralPanner : public rt::ProcessorBase {
   //   1 = auto_turn (0 or 1)
   //   2 = turn_rate_hz (clamped to [0, 10])
   //   3 = clockwise (0 or 1)
-  //   4 = output (BinauralOutput; a fractional or unnamed value is refused; fades over 20 ms)
+  //   4 = output (0 speakers, 1 phones; a fractional or unnamed value is refused; fades over 20 ms)
   //   5 = dry_wet (clamped to [0, 1])
   bool set_parameter(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

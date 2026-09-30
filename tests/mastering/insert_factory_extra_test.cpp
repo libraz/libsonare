@@ -239,7 +239,7 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
   REQUIRE(
       make_insert(
           "stereo.binaural",
-          R"({"azimuthDeg":30,"autoTurn":true,"turnRateHz":2,"clockwise":false,"output":1,"dryWet":0.5})") !=
+          R"({"azimuthDeg":30,"autoTurn":true,"turnRateHz":2,"clockwise":false,"output":0,"dryWet":0.5})") !=
       nullptr);
   REQUIRE(make_insert("dynamics.limiter", R"({"ratio":4,"postGainDb":-3})") != nullptr);
   REQUIRE(make_insert("eq.graphic", R"({"band10GainDb":3,"q":5})") != nullptr);

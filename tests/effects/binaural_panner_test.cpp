@@ -257,8 +257,12 @@ TEST_CASE("binaural autoTurn rotates at turnRateHz in the direction asked", "[bi
 TEST_CASE("binaural is built by the insert factory with every key", "[binaural]") {
   auto insert = sonare::mastering::api::make_insert(
       "stereo.binaural",
-      R"({"azimuthDeg":-45,"autoTurn":true,"turnRateHz":0.5,"clockwise":false,"output":1,"dryWet":0.8})");
+      R"({"azimuthDeg":-45,"autoTurn":true,"turnRateHz":0.5,"clockwise":false,"output":0,"dryWet":0.8})");
   REQUIRE(insert != nullptr);
+  // The ordinals are the GS 3D `Out` byte: 0 Speaker, 1 Phones.
+  CHECK(static_cast<int>(BinauralOutput::kSpeakers) == 0);
+  CHECK(static_cast<int>(BinauralOutput::kPhones) == 1);
+  CHECK(BinauralPannerConfig{}.output == BinauralOutput::kPhones);
   CHECK_THROWS(sonare::mastering::api::make_insert("stereo.binaural", R"({"turnRateHz":11})"));
   CHECK_THROWS(sonare::mastering::api::make_insert("stereo.binaural", R"({"output":2})"));
   insert->prepare(kRate, 256);
