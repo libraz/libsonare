@@ -611,9 +611,12 @@ bool GsClassicGraph::prepare(const GsClassicModelSet& models, const GsClassicTyp
   }
   state_.assign(state_size, 0.0);
 
-  // Capacity covers the longest read-back plus the linear interpolator's extra sample.
+  // A block is pushed whole before its reads, so capacity covers the block, the longest
+  // read-back and the linear interpolator's extra sample.
   std::size_t capacity = 1;
-  while (capacity < static_cast<std::size_t>(type.max_delay_samples) + 3) capacity <<= 1;
+  while (capacity < max_block_ + static_cast<std::size_t>(type.max_delay_samples) + 3) {
+    capacity <<= 1;
+  }
   history_mask_ = capacity - 1;
   history_offset_.assign(count, kNoHistory);
   std::size_t history_size = 0;

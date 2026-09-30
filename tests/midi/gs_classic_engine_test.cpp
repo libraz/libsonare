@@ -406,6 +406,16 @@ TEST_CASE("delay reads back through its interpolator and its modulating control"
   require_close(r.r, kDelayNone, 0.0);
 }
 
+TEST_CASE("a block longer than the longest delay reads back what the block wrote",
+          "[gs-classic-engine]") {
+  Model m;
+  const uint16_t d0 = m.add(GsClassicNodeKind::kDelay, {1}, {konst(0.1)}, 0,
+                            static_cast<uint8_t>(gc::GsClassicInterpolation::kNone));
+  m.singles();
+  // 0.1 ms is 3.2 samples; a longest delay of 4 alone would size the ring to 8, under kN.
+  require_close(run(m, 1, d0, kN, 4).r, kDelayNone, 0.0);
+}
+
 TEST_CASE("lfo draws each shape from phase zero plus its offset", "[gs-classic-engine]") {
   const std::pair<gc::GsClassicLfoShape, const double*> shapes[] = {
       {gc::GsClassicLfoShape::kSine, kLfo_sine},
