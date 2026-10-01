@@ -129,3 +129,37 @@ TEST_CASE("BoundarySplitter uses prepared block capacity and merges duplicates b
   REQUIRE(boundaries[96].offset == 96);
   REQUIRE(has_source(boundaries[96], sonare::engine::BoundarySource::kBlockEnd));
 }
+
+TEST_CASE("BoundarySplitter reuses a prepared list across shifted blocks", "[engine][boundary]") {
+  using sonare::engine::BoundarySource;
+  sonare::engine::BoundarySplitter splitter;
+  splitter.prepare(97);
+
+  // The first block leaves offset 70 indexed at point 1 after finishing.
+  splitter.begin({0, 0, 96});
+  REQUIRE(splitter.add_marker(70));
+  const auto& first = splitter.finish();
+  REQUIRE(first.size() == 3);
+  REQUIRE(first[1].offset == 70);
+
+  // A stale index would resolve 70 to the second point of this block (offset 30)
+  // and merge into it instead of appending.
+  splitter.begin({96, 96, 96});
+  REQUIRE(splitter.add_command(5));
+  REQUIRE(splitter.add_command(30));
+  REQUIRE(splitter.add_command(70));
+  REQUIRE(splitter.add_marker(70));
+
+  const auto& second = splitter.finish();
+  REQUIRE_FALSE(second.overflowed());
+  REQUIRE(second.size() == 5);
+  REQUIRE(second[1].offset == 5);
+  REQUIRE(second[2].offset == 30);
+  REQUIRE(has_source(second[2], BoundarySource::kCommand));
+  REQUIRE_FALSE(has_source(second[2], BoundarySource::kMarker));
+  REQUIRE(second[3].offset == 70);
+  REQUIRE(second[3].render_frame == 166);
+  REQUIRE(has_source(second[3], BoundarySource::kCommand));
+  REQUIRE(has_source(second[3], BoundarySource::kMarker));
+  REQUIRE(second[4].offset == 96);
+}

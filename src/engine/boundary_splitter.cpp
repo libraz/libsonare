@@ -28,14 +28,16 @@ void BoundaryList::prepare(size_t capacity) {
   prepared_points_.swap(next_points);
   prepared_offset_indices_.swap(next_offset_indices);
   capacity_limit_ = next_capacity;
+  // The fresh index table is already zeroed; the old points address the old one.
+  size_ = 0;
   clear();
 }
 
 void BoundaryList::clear() noexcept {
+  forget_offset_indices();
   size_ = 0;
   overflowed_ = false;
   dropped_count_ = 0;
-  std::fill(prepared_offset_indices_.begin(), prepared_offset_indices_.end(), 0);
 }
 
 bool BoundaryList::add_offset(int offset, BoundarySource source,
@@ -48,6 +50,7 @@ bool BoundaryList::add_offset(int offset, BoundarySource source,
 bool BoundaryList::add_point(BoundaryPoint point) noexcept { return append(point); }
 
 void BoundaryList::sort_unique() noexcept {
+  forget_offset_indices();
   BoundaryPoint* storage = points();
   std::sort(storage, storage + size_, [](const BoundaryPoint& a, const BoundaryPoint& b) {
     if (a.offset != b.offset) return a.offset < b.offset;
@@ -147,9 +150,21 @@ size_t BoundaryList::find_offset(int offset) const noexcept {
   return size_;
 }
 
-void BoundaryList::rebuild_offset_indices() noexcept {
+void BoundaryList::forget_offset_index(int offset) noexcept {
+  if (offset < 0) return;
+  const size_t index = static_cast<size_t>(offset);
+  if (index < prepared_offset_indices_.size()) prepared_offset_indices_[index] = 0;
+}
+
+void BoundaryList::forget_offset_indices() noexcept {
   if (capacity_limit_ <= kCapacity) return;
-  std::fill(prepared_offset_indices_.begin(), prepared_offset_indices_.end(), 0);
+  const BoundaryPoint* storage = points();
+  for (size_t i = 0; i < size_; ++i) forget_offset_index(storage[i].offset);
+}
+
+void BoundaryList::rebuild_offset_indices() noexcept {
+  // sort_unique() already reset the entries of every point it was given.
+  if (capacity_limit_ <= kCapacity) return;
   const BoundaryPoint* storage = points();
   for (size_t i = 0; i < size_; ++i) {
     if (storage[i].offset < 0) continue;
@@ -177,6 +192,7 @@ bool BoundaryList::ensure_block_start(const BoundaryBuildContext& context) noexc
     return true;
   }
 
+  forget_offset_index(points()[0].offset);
   points()[0] = start;
   sort_unique();
   overflowed_ = true;
@@ -203,6 +219,7 @@ bool BoundaryList::ensure_block_end(const BoundaryBuildContext& context) noexcep
     return true;
   }
 
+  forget_offset_index(points()[capacity_limit_ - 1].offset);
   points()[capacity_limit_ - 1] = end;
   sort_unique();
   overflowed_ = true;

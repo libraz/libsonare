@@ -72,6 +72,10 @@ class BoundaryList {
   bool ensure_block_start(const BoundaryBuildContext& context) noexcept;
   bool ensure_block_end(const BoundaryBuildContext& context) noexcept;
   size_t find_offset(int offset) const noexcept;
+  // Reset the prepared index entry of one offset, or of every stored point, so
+  // a per-block reset costs the stored point count rather than the capacity.
+  void forget_offset_index(int offset) noexcept;
+  void forget_offset_indices() noexcept;
   void rebuild_offset_indices() noexcept;
   BoundaryPoint* points() noexcept {
     return capacity_limit_ > kCapacity ? prepared_points_.data() : inline_points_.data();
@@ -86,7 +90,8 @@ class BoundaryList {
   std::array<BoundaryPoint, kCapacity> inline_points_{};
   std::vector<BoundaryPoint> prepared_points_{};
   // For a prepared block, store offset -> (point index + 1); zero means absent.
-  // The inline/default and out-of-range paths use the bounded linear scan.
+  // Only stored points have a nonzero entry. The inline/default and
+  // out-of-range paths use the bounded linear scan.
   std::vector<size_t> prepared_offset_indices_{};
   size_t size_ = 0;
   size_t capacity_limit_ = kCapacity;
