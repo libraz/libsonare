@@ -123,6 +123,15 @@ float gs_reverb_time_seconds(uint8_t value) noexcept;
 /// REVERB PREDELAY TIME 0-127 → milliseconds (the manual's unit is ms).
 float gs_reverb_predelay_ms(uint8_t value) noexcept;
 
+/// REVERB TIME 0-127 → milliseconds for the modern CHARACTER 6/7 delay.
+///
+/// The SC-8850 archive gives CHARACTER 6/7's delay routing and feedback
+/// controls, but it does not give a delay-time curve. This is an explicit
+/// library design: a linear 1--1000 ms span keeps every wire value audible,
+/// gives the full control range a bounded delay line, and does not claim to
+/// reproduce an unmeasured hardware curve.
+float gs_reverb_delay_time_ms_designed(uint8_t value) noexcept;
+
 /// REVERB DELAY FEEDBACK 0-127 → an unsigned feedback coefficient, [0, 0.95].
 float gs_reverb_delay_feedback_coefficient(uint8_t value) noexcept;
 

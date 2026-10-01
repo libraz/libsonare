@@ -22,6 +22,7 @@
 
 #if defined(SONARE_MIDI_WITH_FX)
 #include "midi/synth/gs_effects.h"
+#include "support/alloc_guard.h"
 #endif
 
 namespace {
@@ -320,6 +321,23 @@ TEST_CASE("GS scalar conversions span their documented ranges", "[midi][synth][g
   }
 }
 
+TEST_CASE("GS CHARACTER delay time uses the named designed law", "[midi][synth][gs]") {
+  using sonare::midi::synth::gs_delay_time_ms;
+  using sonare::midi::synth::gs_reverb_delay_time_ms_designed;
+
+  CHECK(gs_reverb_delay_time_ms_designed(0) == Approx(1.0f));
+  CHECK(gs_reverb_delay_time_ms_designed(127) == Approx(1000.0f));
+  CHECK(gs_reverb_delay_time_ms_designed(64) == Approx(1.0f + 999.0f * 64.0f / 127.0f));
+  for (int value = 0; value < 127; ++value) {
+    INFO("value " << value);
+    CHECK(gs_reverb_delay_time_ms_designed(static_cast<uint8_t>(value)) <
+          gs_reverb_delay_time_ms_designed(static_cast<uint8_t>(value + 1)));
+  }
+  // This law is a deliberate modern design for an unmeasured curve; it must
+  // remain distinct from the manual's DELAY TIME CENTER table.
+  CHECK(gs_reverb_delay_time_ms_designed(64) != Approx(gs_delay_time_ms(0x61)).margin(1.0e-3f));
+}
+
 TEST_CASE("GS macro blocks are distinct and reproduce the power-on state", "[midi][synth][gs]") {
   using sonare::midi::synth::gs_chorus_macro_params;
   using sonare::midi::synth::gs_delay_macro_params;
@@ -575,7 +593,11 @@ TEST_CASE("a return level is unity at its reset value, not at full scale", "[mid
 }
 
 TEST_CASE("GS system effects bridge onto the effect bus config", "[midi][synth][gs]") {
+  using sonare::midi::synth::gs_delay_feedback_coefficient;
+  using sonare::midi::synth::gs_delay_time_ms;
   using sonare::midi::synth::gs_effects_config_from;
+  using sonare::midi::synth::gs_reverb_delay_feedback_coefficient;
+  using sonare::midi::synth::gs_reverb_delay_time_ms_designed;
   using sonare::midi::synth::GsEffectsConfig;
 
   SECTION("a default config is still what the bus shipped with") {
@@ -617,6 +639,9 @@ TEST_CASE("GS system effects bridge onto the effect bus config", "[midi][synth][
     CHECK(cfg.chorus_rate_hz > 0.0f);
     CHECK(cfg.chorus_depth_ms == Approx(6.25f).epsilon(1e-3));
     CHECK(cfg.reverb_pre_lpf_hz == Approx(kGsPreLpfThruHz));
+    CHECK(cfg.reverb_character == 4);
+    CHECK(cfg.reverb_delay_time_ms == Approx(gs_reverb_delay_time_ms_designed(64)));
+    CHECK(cfg.reverb_delay_feedback == Approx(0.0f));
   }
 
   SECTION("a longer reverb time gives a longer tank decay") {
@@ -626,6 +651,23 @@ TEST_CASE("GS system effects bridge onto the effect bus config", "[midi][synth][
     longer.reverb_time = 112;
     CHECK(gs_effects_config_from(shorter).reverb_decay <
           gs_effects_config_from(longer).reverb_decay);
+  }
+
+  SECTION("character delay controls map without borrowing system delay controls") {
+    GsSystemEffects fx;
+    fx.reverb_character = 7;
+    fx.reverb_time = 12;
+    fx.reverb_delay_feedback = 96;
+    fx.reverb_predelay = 5;
+    fx.delay_time_center = 0x01;
+    fx.delay_feedback = 0x7F;
+    const GsEffectsConfig cfg = gs_effects_config_from(fx);
+    CHECK(cfg.reverb_character == 7);
+    CHECK(cfg.reverb_delay_time_ms == Approx(gs_reverb_delay_time_ms_designed(12)));
+    CHECK(cfg.reverb_delay_feedback == Approx(gs_reverb_delay_feedback_coefficient(96)));
+    CHECK(cfg.reverb_predelay_ms == Approx(5.0f));
+    CHECK(cfg.delay_time_ms == Approx(gs_delay_time_ms(0x01)));
+    CHECK(cfg.delay_feedback == Approx(gs_delay_feedback_coefficient(0x7F)));
   }
 
   SECTION("each macro reaches the config") {
@@ -806,6 +848,395 @@ TEST_CASE("GS delay tail remains conservative while feedback is lowered", "[midi
     const auto [tail, peak] = tail_peak_after_lowering(feedback);
     CHECK(tail > kDelaySamples);
     CHECK(peak <= 1.0e-4f);
+  }
+}
+
+TEST_CASE("GS CHARACTER 6 and 7 use an independent delay return", "[midi][synth][gs]") {
+  using sonare::midi::synth::GsEffectBus;
+  using sonare::midi::synth::GsEffectsConfig;
+
+  constexpr double kSampleRate = 1000.0;
+  constexpr int kDelaySamples = 10;
+  constexpr int kFirstEcho = kDelaySamples;
+  constexpr int kSecondEcho = 2 * kDelaySamples + 1;
+  constexpr int kRenderSamples = 64;
+
+  struct Rendered {
+    std::vector<float> left;
+    std::vector<float> right;
+    int64_t tail = 0;
+  };
+
+  auto render = [&](uint8_t character, float feedback, float delay_ms, float predelay_ms,
+                    const std::vector<int>& partitions, float impulse_l = 1.0f,
+                    float impulse_r = 0.0f) {
+    GsEffectsConfig config;
+    config.enable_reverb = true;
+    config.enable_chorus = false;
+    config.enable_delay = false;
+    config.reverb_character = character;
+    config.reverb_delay_time_ms = delay_ms;
+    config.reverb_delay_feedback = feedback;
+    config.reverb_predelay_ms = predelay_ms;
+    config.reverb_level = 1.0f;
+
+    GsEffectBus bus(config);
+    bus.prepare(kSampleRate);
+    Rendered output{std::vector<float>(kRenderSamples, 0.0f),
+                    std::vector<float>(kRenderSamples, 0.0f), 0};
+    int offset = 0;
+    for (const int requested : partitions) {
+      const int n = std::min(requested, kRenderSamples - offset);
+      if (n <= 0) break;
+      bus.begin_chunk();
+      if (offset == 0) {
+        bus.reverb_in(0)[0] = impulse_l;
+        bus.reverb_in(1)[0] = impulse_r;
+      }
+      bus.render_returns(output.left.data() + offset, output.right.data() + offset, n);
+      offset += n;
+    }
+    output.tail = bus.tail_samples(kSampleRate);
+    return output;
+  };
+
+  SECTION("character 6 is a normal stereo delay and ignores the system delay") {
+    const Rendered output = render(6, 0.5f, 10.0f, 0.0f, {kRenderSamples});
+    CHECK(output.left[kFirstEcho] > 0.0f);
+    CHECK(std::abs(output.right[kFirstEcho]) < 1.0e-6f);
+    CHECK(output.left[kSecondEcho] > 0.0f);
+    CHECK(output.tail > kDelaySamples);
+  }
+
+  SECTION("character 7 alternates the return between left and right") {
+    const Rendered output = render(7, 0.5f, 10.0f, 0.0f, {kRenderSamples});
+    CHECK(output.left[kFirstEcho] > 0.0f);
+    CHECK(std::abs(output.right[kFirstEcho]) < 1.0e-6f);
+    CHECK(std::abs(output.left[kSecondEcho]) < 1.0e-6f);
+    CHECK(output.right[kSecondEcho] > 0.0f);
+  }
+
+  SECTION("character 7 seeds centered and right-only stereo as a mono ping-pong source") {
+    const Rendered centered = render(7, 0.5f, 10.0f, 5.0f, {kRenderSamples}, 1.0f, 1.0f);
+    CHECK(centered.left[15] > 0.9f);
+    CHECK(std::abs(centered.right[15]) < 1.0e-6f);
+    CHECK(std::abs(centered.left[26]) < 1.0e-6f);
+    CHECK(centered.right[26] > 0.4f);
+
+    const Rendered right_only = render(7, 0.5f, 10.0f, 5.0f, {kRenderSamples}, 0.0f, 1.0f);
+    CHECK(right_only.left[15] > 0.4f);  // midpoint seed keeps a right-only send audible.
+    CHECK(std::abs(right_only.right[15]) < 1.0e-6f);
+    CHECK(std::abs(right_only.left[26]) < 1.0e-6f);
+    CHECK(right_only.right[26] > 0.2f);
+  }
+
+  SECTION("the reverb pre-delay is part of the independent delay timing") {
+    const Rendered output = render(6, 0.0f, 10.0f, 5.0f, {kRenderSamples});
+    CHECK(std::abs(output.left[10]) < 1.0e-6f);
+    CHECK(output.left[15] > 0.0f);
+    CHECK(output.tail >= 15);
+  }
+
+  SECTION("pre-delay shifts only the first echo, not the feedback loop") {
+    const Rendered output = render(6, 0.5f, 10.0f, 5.0f, {kRenderSamples});
+    const Rendered without_predelay = render(6, 0.5f, 10.0f, 0.0f, {kRenderSamples});
+    CHECK(output.left[15] > 0.0f);
+    CHECK(output.left[26] > 0.0f);  // 15 ms first echo, then 10 ms + one feedback frame.
+    CHECK(std::abs(output.left[31]) < 1.0e-6f);
+    CHECK(output.tail - without_predelay.tail == 5);
+  }
+
+  SECTION("the old unit drains when the character changes") {
+    GsEffectsConfig config;
+    config.enable_reverb = true;
+    config.enable_chorus = false;
+    config.enable_delay = false;
+    config.reverb_character = 6;
+    config.reverb_delay_time_ms = 10.0f;
+    config.reverb_delay_feedback = 0.5f;
+
+    GsEffectBus bus(config);
+    bus.prepare(kSampleRate);
+    std::vector<float> first(12, 0.0f);
+    std::vector<float> first_r(12, 0.0f);
+    bus.begin_chunk();
+    bus.reverb_in(0)[0] = 1.0f;
+    bus.render_returns(first.data(), first_r.data(), static_cast<int>(first.size()));
+
+    config.reverb_character = 4;
+    bus.set_config(config);
+    std::vector<float> drained(32, 0.0f);
+    std::vector<float> drained_r(32, 0.0f);
+    bus.begin_chunk();
+    bus.render_returns(drained.data(), drained_r.data(), static_cast<int>(drained.size()));
+    CHECK(drained[9] > 0.0f);  // global sample 21: the previous delay tail
+  }
+
+  SECTION("a pending input pre-delay drains after the character changes") {
+    GsEffectsConfig config;
+    config.enable_reverb = true;
+    config.enable_chorus = false;
+    config.enable_delay = false;
+    config.reverb_character = 6;
+    config.reverb_delay_time_ms = 10.0f;
+    config.reverb_delay_feedback = 0.0f;
+    config.reverb_predelay_ms = 5.0f;
+
+    GsEffectBus bus(config);
+    bus.prepare(kSampleRate);
+    std::array<float, 2> first{};
+    std::array<float, 2> first_r{};
+    bus.begin_chunk();
+    bus.reverb_in(0)[0] = 1.0f;
+    bus.render_returns(first.data(), first_r.data(), static_cast<int>(first.size()));
+
+    config.reverb_character = 4;
+    bus.set_config(config);
+    std::vector<float> drained(32, 0.0f);
+    std::vector<float> drained_r(32, 0.0f);
+    bus.begin_chunk();
+    bus.render_returns(drained.data(), drained_r.data(), static_cast<int>(drained.size()));
+    CHECK(drained[13] > 0.0f);  // global sample 15: input pre-delay 5 + delay 10.
+  }
+
+  SECTION("the result is invariant to send block partitions") {
+    const Rendered whole = render(7, 0.5f, 10.0f, 0.0f, {kRenderSamples});
+    const Rendered split = render(7, 0.5f, 10.0f, 0.0f, {1, 7, 13, 5, 19, 19});
+    for (int i = 0; i < kRenderSamples; ++i) {
+      INFO("sample " << i);
+      CHECK(split.left[static_cast<size_t>(i)] ==
+            Approx(whole.left[static_cast<size_t>(i)]).margin(1.0e-6f));
+      CHECK(split.right[static_cast<size_t>(i)] ==
+            Approx(whole.right[static_cast<size_t>(i)]).margin(1.0e-6f));
+    }
+  }
+
+  SECTION("prepared character changes do not allocate on the audio path") {
+    GsEffectsConfig config;
+    config.enable_reverb = true;
+    config.enable_chorus = false;
+    config.enable_delay = false;
+    config.reverb_character = 6;
+    config.reverb_delay_time_ms = 10.0f;
+    config.reverb_delay_feedback = 0.5f;
+    GsEffectBus bus(config);
+    bus.prepare(kSampleRate);
+    std::array<float, GsEffectBus::kBlockFrames> left{};
+    std::array<float, GsEffectBus::kBlockFrames> right{};
+
+    size_t allocations = 0;
+    {
+      sonare::test::AllocationGuard guard;
+      for (int block = 0; block < 4; ++block) {
+        bus.begin_chunk();
+        if (block == 0) bus.reverb_in(0)[0] = 1.0f;
+        bus.render_returns(left.data(), right.data(), 32);
+        config.reverb_character = block % 2 == 0 ? 7 : 4;
+        bus.set_config(config);
+      }
+      allocations = guard.count();
+    }
+    CHECK(allocations == 0);
+  }
+
+  SECTION("the host reverb gate owns both character returns") {
+    const Rendered output = [&] {
+      GsEffectsConfig config;
+      config.enable_reverb = false;
+      config.enable_chorus = false;
+      config.enable_delay = true;
+      config.reverb_character = 7;
+      config.reverb_delay_time_ms = 10.0f;
+      config.reverb_delay_feedback = 0.5f;
+      GsEffectBus bus(config);
+      bus.prepare(kSampleRate);
+      std::vector<float> left(kRenderSamples, 0.0f);
+      std::vector<float> right(kRenderSamples, 0.0f);
+      bus.begin_chunk();
+      bus.reverb_in(0)[0] = 1.0f;
+      bus.render_returns(left.data(), right.data(), kRenderSamples);
+      return Rendered{std::move(left), std::move(right), bus.tail_samples(kSampleRate)};
+    }();
+    for (int i = 0; i < kRenderSamples; ++i) {
+      CHECK(output.left[static_cast<size_t>(i)] == 0.0f);
+      CHECK(output.right[static_cast<size_t>(i)] == 0.0f);
+    }
+  }
+}
+
+TEST_CASE("GS reverb macro transitions preserve each active unit", "[midi][synth][gs]") {
+  using sonare::midi::synth::gs_apply_reverb_macro;
+  using sonare::midi::synth::gs_effects_config_from;
+  using sonare::midi::synth::GsEffectBus;
+  using sonare::midi::synth::GsEffectsConfig;
+  using sonare::midi::synth::GsSystemEffects;
+
+  constexpr double kSampleRate = 1000.0;
+  constexpr int kBlock = 2;
+  constexpr int kRender = 64;
+
+  auto macro_config = [](uint8_t macro, float delay_ms, float feedback, float predelay_ms) {
+    GsSystemEffects fx;
+    gs_apply_reverb_macro(fx, macro);
+    GsEffectsConfig config = gs_effects_config_from(fx);
+    config.enable_reverb = true;
+    config.enable_chorus = false;
+    config.enable_delay = false;
+    // Keep the mode and GS macro mapping under test, while using short,
+    // distinct physical times that make both old echoes fit this fixture.
+    config.reverb_delay_time_ms = delay_ms;
+    config.reverb_delay_feedback = feedback;
+    config.reverb_predelay_ms = predelay_ms;
+    config.reverb_level = 1.0f;
+    return config;
+  };
+
+  auto transition = [&](const GsEffectsConfig& old_config, const GsEffectsConfig& new_config,
+                        bool inject_new_input) {
+    GsEffectBus bus(old_config);
+    bus.prepare(kSampleRate);
+    std::vector<float> left(kRender, 0.0f);
+    std::vector<float> right(kRender, 0.0f);
+    bus.begin_chunk();
+    bus.reverb_in(0)[0] = 1.0f;
+    bus.render_returns(left.data(), right.data(), kBlock);
+    bus.set_config(new_config);
+    bus.begin_chunk();
+    if (inject_new_input) bus.reverb_in(0)[0] = 1.0f;
+    bus.render_returns(left.data() + kBlock, right.data() + kBlock, kRender - kBlock);
+    return std::pair<std::vector<float>, std::vector<float>>{std::move(left), std::move(right)};
+  };
+
+  SECTION("delay to normal keeps the old first and feedback echoes") {
+    const GsEffectsConfig old_config = macro_config(6, 10.0f, 0.5f, 5.0f);
+    const GsEffectsConfig new_config = macro_config(4, 40.0f, 0.0f, 0.0f);
+    const auto output = transition(old_config, new_config, false);
+    CHECK(output.first[15] > 0.9f);  // old pre-delay + TIME.
+    CHECK(output.first[26] > 0.4f);  // old TIME + old feedback.
+  }
+
+  SECTION("normal delay to panning delay keeps the old line and arms the new one") {
+    const GsEffectsConfig old_config = macro_config(6, 10.0f, 0.5f, 5.0f);
+    const GsEffectsConfig new_config = macro_config(7, 20.0f, 0.0f, 0.0f);
+    const auto output = transition(old_config, new_config, true);
+    CHECK(output.first[15] > 0.9f);  // old CHARACTER 6 first echo.
+    CHECK(output.first[26] > 0.4f);  // old CHARACTER 6 feedback echo.
+    CHECK(output.first[20] > 0.1f);  // new CHARACTER 7 input at its new TIME.
+    CHECK(std::abs(output.second[20]) < 1.0e-6f);
+  }
+
+  SECTION("normal tank coefficients survive a switch to either delay character") {
+    GsEffectsConfig old_config = macro_config(4, 10.0f, 0.0f, 0.0f);
+    old_config.reverb_damping = 0.4f;
+    old_config.reverb_decay = 0.7f;
+
+    for (const uint8_t macro : {uint8_t{6}, uint8_t{7}}) {
+      GsEffectsConfig new_config = macro_config(macro, 10.0f, 0.0f, 0.0f);
+      GsEffectBus switched(old_config);
+      GsEffectBus reference(old_config);
+      switched.prepare(kSampleRate);
+      reference.prepare(kSampleRate);
+
+      constexpr int kFirstBlock = GsEffectBus::kBlockFrames;
+      constexpr int kAfterSwitch = 2048;
+      std::vector<float> switched_l(kAfterSwitch, 0.0f);
+      std::vector<float> switched_r(kAfterSwitch, 0.0f);
+      std::vector<float> reference_l(kAfterSwitch, 0.0f);
+      std::vector<float> reference_r(kAfterSwitch, 0.0f);
+      switched.begin_chunk();
+      reference.begin_chunk();
+      switched.reverb_in(0)[0] = 1.0f;
+      reference.reverb_in(0)[0] = 1.0f;
+      switched.render_returns(switched_l.data(), switched_r.data(), kFirstBlock);
+      reference.render_returns(reference_l.data(), reference_r.data(), kFirstBlock);
+      switched.set_config(new_config);
+      for (int offset = kFirstBlock; offset < kAfterSwitch; offset += GsEffectBus::kBlockFrames) {
+        const int n = std::min(GsEffectBus::kBlockFrames, kAfterSwitch - offset);
+        switched.begin_chunk();
+        reference.begin_chunk();
+        switched.render_returns(switched_l.data() + offset, switched_r.data() + offset, n);
+        reference.render_returns(reference_l.data() + offset, reference_r.data() + offset, n);
+      }
+      double wet_energy = 0.0;
+      double max_difference = 0.0;
+      for (int i = kFirstBlock; i < kAfterSwitch; ++i) {
+        wet_energy += std::abs(reference_l[static_cast<size_t>(i)]);
+        wet_energy += std::abs(reference_r[static_cast<size_t>(i)]);
+        max_difference = std::max(
+            max_difference, static_cast<double>(std::abs(switched_l[static_cast<size_t>(i)] -
+                                                         reference_l[static_cast<size_t>(i)])));
+        max_difference = std::max(
+            max_difference, static_cast<double>(std::abs(switched_r[static_cast<size_t>(i)] -
+                                                         reference_r[static_cast<size_t>(i)])));
+      }
+      INFO("macro " << static_cast<int>(macro));
+      CHECK(max_difference < 1.0e-6);
+      CHECK(wet_energy > 1.0e-5);
+    }
+  }
+}
+
+TEST_CASE("GS normal reverb preserves the previous PCM path", "[midi][synth][gs]") {
+  using sonare::effects::reverb::DattorroReverb;
+  using sonare::effects::reverb::DattorroReverbConfig;
+  using sonare::midi::synth::gs_apply_reverb_macro;
+  using sonare::midi::synth::gs_effects_config_from;
+  using sonare::midi::synth::GsEffectBus;
+  using sonare::midi::synth::GsEffectsConfig;
+  using sonare::midi::synth::GsSystemEffects;
+
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kSamples = 8192;
+  for (int character = 0; character <= 5; ++character) {
+    GsSystemEffects fx;
+    gs_apply_reverb_macro(fx, static_cast<uint8_t>(character));
+    GsEffectsConfig config = gs_effects_config_from(fx);
+    config.enable_reverb = true;
+    config.enable_chorus = false;
+    config.enable_delay = false;
+    config.reverb_level = 1.0f;
+
+    GsEffectBus bus(config);
+    bus.prepare(kSampleRate);
+
+    DattorroReverbConfig baseline_config;
+    baseline_config.decay = config.reverb_decay;
+    baseline_config.damping = config.reverb_damping;
+    baseline_config.dry_wet = 1.0f;
+    DattorroReverb baseline(baseline_config);
+    baseline.prepare(kSampleRate, GsEffectBus::kBlockFrames);
+
+    std::vector<float> actual_l(kSamples, 0.0f);
+    std::vector<float> actual_r(kSamples, 0.0f);
+    std::vector<float> expected_l(kSamples, 0.0f);
+    std::vector<float> expected_r(kSamples, 0.0f);
+    for (int offset = 0; offset < kSamples; offset += GsEffectBus::kBlockFrames) {
+      const int n = std::min(GsEffectBus::kBlockFrames, kSamples - offset);
+      bus.begin_chunk();
+      if (offset == 0) bus.reverb_in(0)[0] = 1.0f;
+      bus.render_returns(actual_l.data() + offset, actual_r.data() + offset, n);
+
+      std::array<float, GsEffectBus::kBlockFrames> baseline_l{};
+      std::array<float, GsEffectBus::kBlockFrames> baseline_r{};
+      if (offset == 0) baseline_l[0] = 1.0f;
+      float* channels[2] = {baseline_l.data(), baseline_r.data()};
+      baseline.process(channels, 2, n);
+      std::copy_n(baseline_l.data(), n, expected_l.data() + offset);
+      std::copy_n(baseline_r.data(), n, expected_r.data() + offset);
+    }
+
+    INFO("character " << character);
+    for (int i = 0; i < kSamples; ++i) {
+      INFO("sample " << i);
+      CHECK(actual_l[static_cast<size_t>(i)] == expected_l[static_cast<size_t>(i)]);
+      CHECK(actual_r[static_cast<size_t>(i)] == expected_r[static_cast<size_t>(i)]);
+    }
+    double expected_wet_energy = 0.0;
+    for (int i = 0; i < kSamples; ++i) {
+      expected_wet_energy += std::abs(expected_l[static_cast<size_t>(i)]);
+      expected_wet_energy += std::abs(expected_r[static_cast<size_t>(i)]);
+    }
+    CHECK(expected_wet_energy > 1.0e-6);
   }
 }
 

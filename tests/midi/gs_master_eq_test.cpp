@@ -189,6 +189,7 @@ double tone_power(const std::vector<float>& buf, double hz, size_t from, size_t 
   return s1 * s1 + s2 * s2 - coeff * s1 * s2;
 }
 
+#if defined(SONARE_MIDI_WITH_FX)
 double rms(const std::vector<float>& buf, size_t from, size_t to) {
   double acc = 0.0;
   size_t n = 0;
@@ -199,6 +200,7 @@ double rms(const std::vector<float>& buf, size_t from, size_t to) {
   }
   return n > 0 ? std::sqrt(acc / static_cast<double>(n)) : 0.0;
 }
+#endif
 
 /// The four master-EQ bytes plus the part switch, as one point in the parameter
 /// space the cases below enumerate.
@@ -730,6 +732,21 @@ double wet_tail_with_send(const std::vector<std::vector<uint8_t>>& writes, uint8
   return rms(out.left, 24000, 48000) + rms(out.right, 24000, 48000);
 }
 
+StereoRender wet_stereo_render(const std::vector<std::vector<uint8_t>>& writes) {
+  Sf2Player player = make_offline_player();
+  for (const std::vector<uint8_t>& msg : writes) {
+    REQUIRE(player.handle_sysex(msg.data(), msg.size()));
+  }
+  player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 1)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 91, 127)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 93, 0)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 94, 0)));
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  render(player, 2400);
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+  return render(player, 48000);
+}
+
 double wet_tail(const std::vector<std::vector<uint8_t>>& writes) {
   return wet_tail_with_send(writes, 127);
 }
@@ -784,16 +801,28 @@ TEST_CASE("the reverb macros select distinguishable rooms", "[midi][synth][gs]")
   for (uint8_t macro = 0; macro < 8; ++macro) {
     tails[macro] = wet_tail({dt1(0x40, 0x01, 0x30, {macro})});
   }
-  for (size_t a = 0; a < 7; ++a) {
-    for (size_t b = a + 1; b < 7; ++b) {
+  for (size_t a = 0; a < 6; ++a) {
+    for (size_t b = a + 1; b < 6; ++b) {
       INFO("macros " << a << " and " << b);
       REQUIRE(std::fabs(tails[a] - tails[b]) > 1e-9);
     }
   }
-  // Delay and Panning Delay write identical parameter blocks and differ only in
-  // a REVERB CHARACTER that selects the delay unit — a routing decision the bus
-  // does not make yet, so the two are the same room today.
-  REQUIRE(tails[7] == tails[6]);
+  // Delay and Panning Delay write the same timing/feedback block. Their
+  // character selects a different stereo routing, so compare the actual PCM
+  // returns rather than relying on an energy aggregate that could coincide.
+  const StereoRender delay = wet_stereo_render({dt1(0x40, 0x01, 0x30, {6})});
+  const StereoRender panning = wet_stereo_render({dt1(0x40, 0x01, 0x30, {7})});
+  double wet_energy = 0.0;
+  double pcm_difference = 0.0;
+  for (size_t i = 0; i < delay.left.size(); ++i) {
+    wet_energy += std::fabs(delay.left[i]) + std::fabs(delay.right[i]);
+    pcm_difference += std::fabs(delay.left[i] - panning.left[i]);
+    pcm_difference += std::fabs(delay.right[i] - panning.right[i]);
+  }
+  REQUIRE(wet_energy > 1.0e-6);
+  REQUIRE(pcm_difference > 1.0e-6);
+  const bool pcm_differs = delay.left != panning.left || delay.right != panning.right;
+  REQUIRE(pcm_differs);
 }
 
 TEST_CASE("a live system-effect edit reaches the audio without allocating",

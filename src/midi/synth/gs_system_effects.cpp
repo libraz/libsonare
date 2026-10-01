@@ -17,6 +17,12 @@ constexpr float kReturnLevelUnity = 64.0f;
 constexpr float kMaxDelayFeedback = 0.9f;
 constexpr float kMaxUnsignedFeedback = 0.95f;
 
+/// CHARACTER 6/7 has no archived delay-time curve. Keep this law named and
+/// local to the value layer so callers cannot mistake it for the DELAY TIME
+/// CENTER table, whose nine measured/manual endpoints are unrelated.
+constexpr float kReverbDelayTimeMinMs = 1.0f;
+constexpr float kReverbDelayTimeMaxMs = 1000.0f;
+
 /// REVERB TIME. The manual gives no time scale, so the span carries a
 /// measurement: an SC-8850 at power-on Hall 2 (64) decays 1.97 s over
 /// 500 Hz-1 kHz. That is the RT60 asked of the tank, which rings ~0.2 s longer.
@@ -84,6 +90,11 @@ float gs_reverb_time_seconds(uint8_t value) noexcept {
 }
 
 float gs_reverb_predelay_ms(uint8_t value) noexcept { return static_cast<float>(value & 0x7Fu); }
+
+float gs_reverb_delay_time_ms_designed(uint8_t value) noexcept {
+  const float t = static_cast<float>(value & 0x7Fu) / kMax7Bit;
+  return kReverbDelayTimeMinMs + (kReverbDelayTimeMaxMs - kReverbDelayTimeMinMs) * t;
+}
 
 float gs_reverb_delay_feedback_coefficient(uint8_t value) noexcept {
   return static_cast<float>(value & 0x7Fu) / kMax7Bit * kMaxUnsignedFeedback;

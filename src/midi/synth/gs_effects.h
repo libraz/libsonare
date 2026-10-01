@@ -20,13 +20,16 @@
 /// Only compiled when the FX suite is built (SONARE_MIDI_WITH_FX); without it
 /// the player simply renders dry.
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
+#include "effects/modulation/mod_delay_line.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "midi/synth/gs_system_effects.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -41,7 +44,8 @@ struct GsEffectsConfig {
   bool enable_reverb = true;
   bool enable_chorus = true;
   bool enable_delay = true;
-  float reverb_decay = 0.7f;  ///< Tank feedback, [0, 0.98].
+  uint8_t reverb_character = 4;  ///< GS REVERB CHARACTER (0-7).
+  float reverb_decay = 0.7f;     ///< Tank feedback, [0, 0.98].
   /// Tank one-pole coefficient, [0, 1] — a brightness, not a damping: 1 passes
   /// everything and 0 stops the feedback path. gs_system_effects.h has what a
   /// measured unit says about the column that feeds it.
@@ -53,6 +57,8 @@ struct GsEffectsConfig {
 
   float reverb_level = 1.0f;        ///< Return gain; the reset value is unity, full scale ~+6 dB.
   float reverb_predelay_ms = 0.0f;  ///< Input pre-delay.
+  float reverb_delay_time_ms = 340.0f;        ///< Designed CHARACTER 6/7 delay time.
+  float reverb_delay_feedback = 0.0f;         ///< CHARACTER 6/7 feedback, [0, 0.95].
   float reverb_pre_lpf_hz = kGsPreLpfThruHz;  ///< Input LPF cutoff.
   float chorus_level = 1.0f;      ///< Return gain; the reset value is unity, full scale ~+6 dB.
   float chorus_feedback = 0.0f;   ///< [0, 0.95]; flangers need it.
@@ -119,10 +125,25 @@ class GsEffectBus {
 
  private:
   GsEffectsConfig config_{};
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   effects::reverb::DattorroReverb reverb_;
+  /// CHARACTER 6 (Delay) and CHARACTER 7 (Panning Delay) have independent
+  /// lines. Keeping both prepared lets a live character change drain the old
+  /// mode instead of freezing its tail or moving it into the new routing.
+  effects::delay::StereoDelay reverb_delay_;
+  effects::delay::StereoDelay reverb_panning_delay_;
+  std::array<effects::modulation::ModDelayLine, 2> reverb_delay_predelay_;
+  std::array<effects::modulation::ModDelayLine, 2> reverb_panning_delay_predelay_;
+  // Each delay line keeps the pre-delay target that was active when that
+  // character was selected. A live macro change must not retime an inactive
+  // line while its old input is still travelling through the pre-delay.
+  float reverb_delay_predelay_ms_ = 0.0f;
+  float reverb_panning_delay_predelay_ms_ = 0.0f;
   effects::modulation::Chorus chorus_;
   effects::delay::StereoDelay delay_;
   std::vector<float> reverb_bus_[2];
+  std::vector<float> reverb_delay_bus_[2];
+  std::vector<float> reverb_panning_delay_bus_[2];
   std::vector<float> chorus_bus_[2];
   std::vector<float> delay_bus_[2];
   /// set_config() slews delay feedback/time, so a new target can be shorter
@@ -130,9 +151,25 @@ class GsEffectBus {
   /// last prepare/reset as a conservative bound for that state.
   double max_delay_feedback_abs_ = 0.0;
   double max_delay_time_ms_ = 1.0;
+  /// Same conservative history for either CHARACTER 6/7 line. It remains
+  /// after a mode change until reset(), because the inactive line is draining.
+  double max_reverb_delay_feedback_ = 0.0;
+  double max_reverb_delay_time_ms_ = 0.0;
+  double max_reverb_predelay_ms_ = 0.0;
+  /// Dattorro also drains across a live character change. The separate flag
+  /// distinguishes an observed zero-decay normal mode from no tank history.
+  double max_reverb_decay_ = 0.0;
+  bool has_reverb_decay_history_ = false;
+  bool reverb_tank_used_ = false;
+  bool reverb_delay_used_ = false;
+  bool reverb_panning_delay_used_ = false;
 
   void observe_delay_config(const GsEffectsConfig& config) noexcept;
   void reset_delay_history() noexcept;
+  void observe_reverb_config(const GsEffectsConfig& config) noexcept;
+  void reset_reverb_history() noexcept;
+  void activate_reverb_mode(uint8_t character) noexcept;
+  void reset_reverb_activation() noexcept;
 };
 
 }  // namespace sonare::midi::synth
