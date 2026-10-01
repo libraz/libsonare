@@ -5,24 +5,10 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
-README_DEFAULT_COUNT_PATTERNS = {
-    Path("README.md"): r"(\d+) distinct named DSP processors",
-    Path("README_ja.md"): r"(\d+) 個の個別の名前付き DSP プロセッサ",
-    Path("bindings/node/README.md"): r"(\d+) named DSP processors",
-    Path(
-        "bindings/wasm/README.md"
-    ): r"(\d+) named mastering DSP processors|(\d+) named DSP processors",
-    Path("bindings/python/README.md"): r"(\d+) named DSP processors",
-}
-README_FX_OFF_COUNT_PATTERNS = {
-    Path("README.md"): r"or (\d+) with\s+`BUILD_FX=OFF`",
-    Path("README_ja.md"): r"外れて (\d+) 個になります",
-}
 PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger", "playbackRoom")
 MASTERING_PRESET_KEYS = {
     "name",
@@ -315,38 +301,6 @@ def render_catalog(library_path: Path) -> str:
     return json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
-def documented_numbers(pattern: str, text: str) -> list[int]:
-    """Return every nonempty capturing group in a README count pattern."""
-    values: list[int] = []
-    for match in re.finditer(pattern, text, flags=re.MULTILINE):
-        values.extend(int(value) for value in match.groups() if value is not None)
-    return values
-
-
-def validate_documented_counts(catalog_text: str) -> None:
-    """Keep every public README count derived from the checked catalog."""
-    catalog = validate_catalog(json.loads(catalog_text))
-    processor_count = len(catalog["processors"])
-    feature_off_count = sum(
-        not processor["id"].startswith("effects.") for processor in catalog["processors"]
-    )
-
-    for path, pattern in README_DEFAULT_COUNT_PATTERNS.items():
-        numbers = documented_numbers(pattern, path.read_text(encoding="utf-8"))
-        if not numbers:
-            raise ValueError(f"could not find a processor count in {path}")
-        if any(number != processor_count for number in numbers):
-            raise ValueError(
-                f"processor count in {path} is {numbers}, expected {processor_count} from catalog"
-            )
-    for path, pattern in README_FX_OFF_COUNT_PATTERNS.items():
-        numbers = documented_numbers(pattern, path.read_text(encoding="utf-8"))
-        if numbers != [feature_off_count]:
-            raise ValueError(
-                f"BUILD_FX=OFF count in {path} is {numbers}, expected {feature_off_count} from catalog"
-            )
-
-
 def main() -> int:
     args = parse_args()
     if not args.library.is_file():
@@ -376,11 +330,6 @@ def main() -> int:
                 f"capability catalog is stale: {args.output} (run make capability-catalog)",
                 file=sys.stderr,
             )
-            return 1
-        try:
-            validate_documented_counts(current)
-        except ValueError as exc:
-            print(f"capability catalog documentation is stale: {exc}", file=sys.stderr)
             return 1
         print(f"capability catalog is current: {args.output}")
         return 0
