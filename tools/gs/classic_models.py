@@ -236,6 +236,17 @@ def load_sibling(name: str, file: str):
 
 def archive_revision(root: Path, inputs: list[Path]) -> dict:
     """What identifies the inputs read, in the form ``derive_efx_tables.py`` records."""
+    root = root.resolve()
+    inside: list[Path] = []
+    for path in inputs:
+        resolved = Path(path).resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            # A dependency outside the archive is not archive input.
+            continue
+        inside.append(resolved)
+    inputs = sorted(set(inside))
     try:
         rev = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "HEAD"],
@@ -254,7 +265,15 @@ def archive_revision(root: Path, inputs: list[Path]) -> dict:
             "archive_inputs_dirty": False,
         }
     status = subprocess.run(
-        ["git", "-C", str(root), "status", "--porcelain", "--", *[str(p) for p in inputs]],
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain",
+            "--",
+            *[p.relative_to(root).as_posix() for p in inputs],
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -431,6 +450,13 @@ def check_vocabulary(model: dict, where: str, *, overlay: bool) -> None:
                         f"{label} drives `{key}` by a control, which the renderer refuses: "
                         "it decides the sections the stage is built from"
                     )
+        if kind == "shaper":
+            oversample = node.get("oversample")
+            if isinstance(oversample, bool) or not isinstance(oversample, int) or oversample != 1:
+                stop(
+                    f"{label} oversamples by {oversample!r}, but the classic engine supports "
+                    "only the integer factor 1"
+                )
         for key in ("model", "record"):
             if key in node:
                 stop(
@@ -991,8 +1017,11 @@ class Converter:
         elif kind == "shaper":
             curve = self._enum(SHAPER_CURVE, node["curve"], node, "curve")
             oversample = node["oversample"]
-            if not isinstance(oversample, int) or not 1 <= oversample <= 15:
-                stop(f"{self.where} {node['id']} oversamples by {oversample!r}")
+            if isinstance(oversample, bool) or not isinstance(oversample, int) or oversample != 1:
+                stop(
+                    f"{self.where} {node['id']} oversamples by {oversample!r}, but the classic "
+                    "engine supports only the integer factor 1"
+                )
             flags = curve | oversample << 4
             values = [self.value(node["drive"])]
             if node["curve"] == "points":
@@ -1088,14 +1117,38 @@ class Archive:
     """The archive's code and data, read once."""
 
     def __init__(self, root: Path) -> None:
-        self.root = root
+        self.root = root.resolve()
+        self.read: set[Path] = set()
         from soundings import reproduce
         from soundings.render import graph
 
         self.reproduce = reproduce
         self.graph = graph
         self.coverage = load_sibling("gs_coverage", "coverage.py")
-        self.read: set[Path] = set()
+        self.record_imported_sources()
+
+    def record_imported_sources(self) -> None:
+        """Record loaded soundings source modules that live inside this archive.
+
+        The archive revision must identify the renderer implementation as well as the
+        JSON it reads.  A module installed from a sibling checkout or a third-party
+        package is deliberately outside the archive input set.
+        """
+        root = self.root.resolve()
+        for name, module in tuple(sys.modules.items()):
+            if name != "soundings" and not name.startswith("soundings."):
+                continue
+            source = getattr(module, "__file__", None)
+            if not isinstance(source, (str, os.PathLike)):
+                continue
+            path = Path(source).resolve()
+            if path.suffix != ".py":
+                continue
+            try:
+                path.relative_to(root)
+            except ValueError:
+                continue
+            self.read.add(path)
 
     def json(self, rel) -> dict:
         path = self.root / rel
@@ -1214,6 +1267,8 @@ def read_models(archive: Archive) -> tuple[list[dict], dict[str, int]]:
                     if checked is not value:
                         replace_value(node, field, checked)
         loaded = archive.graph.load_graph(model, models_dir=models_dir, root=archive.root)
+        # load_graph may import renderer modules lazily.
+        archive.record_imported_sources()
         digest = hashlib.sha256(model_path.read_bytes())
         for name in laws:
             digest.update((models_dir / name).read_bytes())
@@ -2056,6 +2111,7 @@ def main() -> int:
     ctx.laws_by_name = {name: law for t in types for name, law in t["laws"].items()}
     _, printed = archive.coverage.load_printed(root)
     archive.read |= set((root / "data" / "units").glob("*/efx-params/*.json"))
+    archive.record_imported_sources()
     total = sum(len(v) for v in printed.values())
     if total != archive.coverage.EXPECTED_PRINTED:
         stop(
@@ -2094,6 +2150,8 @@ def main() -> int:
             f"read by no node (write overlays, or run --raw / --scope): {listed}"
         )
 
+    # Picks up renderer modules the conversion above imported lazily.
+    archive.record_imported_sources()
     revision = archive_revision(root, sorted(archive.read))
     if revision["archive_inputs_dirty"]:
         print(

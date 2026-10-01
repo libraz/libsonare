@@ -866,6 +866,8 @@ conformance:
 	python3 -m unittest tests/conformance/test_bank_policy.py
 	python3 -m unittest tests/conformance/test_gs_program_census.py
 	python3 -m unittest tests/conformance/test_gs_efx_coverage.py
+	python3 -m unittest tests/conformance/test_gs_classic_models.py
+	python3 -m unittest tests/conformance/test_gs_classic_overlays.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
 	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
