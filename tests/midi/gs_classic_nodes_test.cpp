@@ -602,6 +602,25 @@ TEST_CASE("the shaper applies its drive and curve", "[gs-classic-nodes]") {
   }
 }
 
+TEST_CASE("the graph refuses shapers outside the implemented format", "[gs-classic-nodes]") {
+  auto prepare_shaper = [](uint8_t flags, std::initializer_list<uint16_t> inputs,
+                           std::initializer_list<GsClassicValue> values) {
+    Model m;
+    const uint16_t s = m.add(GsClassicNodeKind::kShaper, inputs, values, 0, flags);
+    m.singles();
+    const auto set = m.set(s, s);
+    gc::GsClassicGraph graph;
+    return graph.prepare(set, m.type, kN, &gc::gs_classic_extension_kernels());
+  };
+  const auto valid =
+      static_cast<uint8_t>(static_cast<uint8_t>(gc::GsClassicShaperCurve::kTanh) | (1u << 4));
+  REQUIRE(prepare_shaper(valid, {0}, {konst(0.0)}));
+  REQUIRE_FALSE(prepare_shaper(static_cast<uint8_t>(valid + (1u << 4)), {0}, {konst(0.0)}));
+  REQUIRE_FALSE(prepare_shaper(static_cast<uint8_t>(4u | (1u << 4)), {0}, {konst(0.0)}));
+  REQUIRE_FALSE(prepare_shaper(valid, {}, {konst(0.0)}));
+  REQUIRE_FALSE(prepare_shaper(valid, {0}, {}));
+}
+
 TEST_CASE("the envelope follows each detector, topology and domain", "[gs-classic-nodes]") {
   const uint8_t kRms = gc::kGsClassicEnvelopeRms;
   const uint8_t kDecoupled = gc::kGsClassicEnvelopeDecoupled;

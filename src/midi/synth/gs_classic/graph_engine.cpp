@@ -446,6 +446,9 @@ bool well_formed(const GsClassicNode& n) {
     case GsClassicNodeKind::kXNoise:
       return n.n_inputs == 0 && n.value_count == 2 &&
              n.flags <= static_cast<uint8_t>(GsClassicNoise::kHum);
+    case GsClassicNodeKind::kShaper:
+      return n.n_inputs == 1 && n.value_count == 1 && (n.flags >> 4) == 1 &&
+             (n.flags & 0x0F) <= static_cast<uint8_t>(GsClassicShaperCurve::kPoints);
     default:
       return n.n_inputs <= kGsClassicMaxInputs;
   }
