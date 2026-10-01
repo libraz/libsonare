@@ -453,6 +453,12 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
     *out_h = nullptr;
     *out_h_length = 0;
   }
+  if (channels == nullptr || channel_count == 0 ||
+      channel_count > kMaxDecomposeStemsLinkedChannels) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
   if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -474,11 +480,6 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
   }
   if (core_config.mask_power < 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
 
-  if (channels == nullptr || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  // channel_count > kMaxDecomposeStemsLinkedChannels is left to the core throw
-  // below (SONARE_C_CATCH maps it to SONARE_ERROR_INVALID_PARAMETER), same as
-  // every other bound the core owns for this entry.
-
   std::vector<Audio> audio;
   audio.reserve(channel_count);
   for (size_t c = 0; c < channel_count; ++c) {
@@ -490,7 +491,6 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
   pointers.reserve(channel_count);
   for (const Audio& one : audio) pointers.push_back(one.data());
 
-  SONARE_C_TRY
   DecomposeStemsLinkedResult result =
       decompose_stems_linked(pointers.data(), channel_count, length, sample_rate, core_config);
   if (result.components.empty()) return SONARE_OK;

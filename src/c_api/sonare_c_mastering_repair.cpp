@@ -337,7 +337,12 @@ SonareError run_linked(const float* const* channels, size_t channel_count, size_
   *out_report = CReport{};
   if (!channels || !out_channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
 
+  SONARE_C_TRY
   std::vector<Audio> inputs;
+  // The API accepts arbitrary positive counts; reject only counts the containers
+  // cannot represent before indexing caller pointers, preserving the C error
+  // contract instead of exposing vector::length_error.
+  if (channel_count > inputs.max_size()) return SONARE_ERROR_INVALID_PARAMETER;
   inputs.reserve(channel_count);
   for (size_t c = 0; c < channel_count; ++c) {
     if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
@@ -346,10 +351,10 @@ SonareError run_linked(const float* const* channels, size_t channel_count, size_
     inputs.push_back(Audio::from_buffer(channels[c], length, sample_rate));
   }
   std::vector<const Audio*> pointers;
+  if (channel_count > pointers.max_size()) return SONARE_ERROR_INVALID_PARAMETER;
   pointers.reserve(channel_count);
   for (const Audio& channel : inputs) pointers.push_back(&channel);
 
-  SONARE_C_TRY
   std::vector<Audio> produced;
   *out_report = process(pointers.data(), &produced);
   if (produced.size() != channel_count) return SONARE_ERROR_INVALID_STATE;

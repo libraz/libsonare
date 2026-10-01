@@ -1725,6 +1725,45 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
   }
 }
 
+TEST_CASE("sonare_mastering_repair_linked_rejects_impossible_channel_count", "[c_api][mastering]") {
+  const float input = 0.25f;
+  const float* channels[1] = {&input};
+  constexpr float kOutputSentinel = -7.25f;
+  float output = kOutputSentinel;
+  float* out_channels[1] = {&output};
+  const size_t impossible_channel_count = std::numeric_limits<size_t>::max();
+
+  SECTION("denoise rejects impossible channel count without throwing") {
+    SonareDenoiseReport report{};
+    report.detected.floor_dbfs = 91.0f;
+    report.mean_reduction_db = 92.0f;
+    SonareError error = SONARE_OK;
+
+    REQUIRE_NOTHROW(
+        error = sonare_mastering_repair_denoise_classical_linked(
+            channels, impossible_channel_count, 1, 22050, nullptr, out_channels, &report));
+    REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(report.detected.floor_dbfs == 0.0f);
+    CHECK(report.mean_reduction_db == 0.0f);
+    CHECK(output == kOutputSentinel);
+  }
+
+  SECTION("dereverb rejects impossible channel count without throwing") {
+    SonareDereverbReport report{};
+    report.detected.late_decay_ratio_db = 91.0f;
+    report.mean_reduction_db = 92.0f;
+    SonareError error = SONARE_OK;
+
+    REQUIRE_NOTHROW(
+        error = sonare_mastering_repair_dereverb_classical_linked(
+            channels, impossible_channel_count, 1, 48000, nullptr, out_channels, &report));
+    REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(report.detected.late_decay_ratio_db == 0.0f);
+    CHECK(report.mean_reduction_db == 0.0f);
+    CHECK(output == kOutputSentinel);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
   const int sr = 48000;
   const size_t silent_pad = 2400;  // 50 ms

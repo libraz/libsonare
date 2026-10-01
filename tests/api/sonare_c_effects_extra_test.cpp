@@ -786,6 +786,35 @@ TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
   }
 }
 
+TEST_CASE("linked stems rejects an overflowing channel count before allocation",
+          "[c_api][effects][regression]") {
+  const float sample = 0.0f;
+  const float* channels[] = {&sample};
+  float* out = non_null_sentinel_float_ptr();
+  float* w = non_null_sentinel_float_ptr();
+  float* h = non_null_sentinel_float_ptr();
+  size_t component_count = 99;
+  size_t channel_count = 99;
+  size_t component_length = 99;
+  size_t w_length = 99;
+  size_t h_length = 99;
+  SonareError error = SONARE_OK;
+
+  CHECK_NOTHROW(error = sonare_decompose_stems_linked(channels, std::numeric_limits<size_t>::max(),
+                                                      1, 48000, nullptr, &out, &component_count,
+                                                      &channel_count, &component_length, &w,
+                                                      &w_length, &h, &h_length));
+  CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  CHECK(w == nullptr);
+  CHECK(h == nullptr);
+  CHECK(component_count == 0);
+  CHECK(channel_count == 0);
+  CHECK(component_length == 0);
+  CHECK(w_length == 0);
+  CHECK(h_length == 0);
+}
+
 TEST_CASE("sonare_hpss_with_residual", "[c_api][effects]") {
   const int sr = 22050;
   auto samples = generate_sine(440.0f, sr, 1.0f);
