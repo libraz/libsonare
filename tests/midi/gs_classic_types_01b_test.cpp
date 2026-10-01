@@ -8,6 +8,8 @@
 /// slots are the rows of `gs_classic_reference.tsv`, their printed ends the model's, and the
 /// stimulus and digest are the ones its header states. The default run draws each type's
 /// first printed slot; the full sweep is slow and runs under `[gs-classic-types-01b-all]`.
+/// Endpoint pairs are checked first; for a range of more than two bytes whose ends alias, the
+/// shared sensitivity helper also checks the nearest accepted midpoint.
 ///
 /// The Lo-Fi Type case holds the 01 73 overlay's hold rates to the 01 72 candidate's
 /// ladder, and the 3D azimuth case holds the 01 70 / 01 71 overlays' azimuth sections to
@@ -336,6 +338,34 @@ TEST_CASE("GS classic types 01b: anchored overlays leave the power-on drawing as
     worst = std::max(worst, l2);
   }
   WARN("largest power-on relative L2 against the raw configuration " << worst);
+}
+
+TEST_CASE("GS classic 01 41: wet tremolo preserves p0 at power-on and on dry balance",
+          "[gs-classic-types-01b]") {
+  constexpr uint16_t kType = 0x0141;
+  constexpr std::size_t kBalanceSlot = 0x12 - 0x03;
+  constexpr double kSameDrawing = 1e-9;
+  const gc::GsClassicModelRegistry& raw = raw_registry();
+  const gc::GsClassicModelRegistry& overlaid = gc::gs_classic_default_registry();
+  REQUIRE(raw.valid());
+  REQUIRE(overlaid.valid());
+  const gc::GsClassicType* raw_type = raw.find(kType);
+  const gc::GsClassicType* default_type = overlaid.find(kType);
+  REQUIRE(raw_type != nullptr);
+  REQUIRE(default_type != nullptr);
+
+  auto check_same = [&](const std::array<uint8_t, 20>& bytes, const char* state) {
+    INFO(state);
+    const double l2 = relative_l2(draw(raw.models(), *raw_type, bytes),
+                                  draw(overlaid.models(), *default_type, bytes));
+    CHECK(l2 <= kSameDrawing);
+  };
+
+  const std::array<uint8_t, 20> power = power_on(kType);
+  check_same(power, "power-on");
+  auto dry = power;
+  dry[kBalanceSlot] = 0;
+  check_same(dry, "dry balance");
 }
 
 namespace {

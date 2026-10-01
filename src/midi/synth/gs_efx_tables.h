@@ -18,7 +18,7 @@ namespace sonare::midi::synth {
 
 inline constexpr std::string_view kGsEfxUnitId = "roland-sc8850-01";
 inline constexpr std::string_view kGsEfxArchiveRevision =
-    "0860b74681d4e6f4f0f8ab2fe84d0abf69e9edb0";
+    "bda68ccb3463361a64dd9783ffb8dd8adc8a203f";
 
 /// A (setting, value) knot of a piecewise-linear table.
 struct GsEfxBreakpoint {

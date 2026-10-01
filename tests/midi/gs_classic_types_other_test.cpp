@@ -8,11 +8,12 @@
 /// slots are the rows of `gs_classic_reference.tsv`, their printed ends the model's, and the
 /// stimulus and digest are the ones its header states. The default run draws each type's
 /// first printed slot; the full sweep is slow and runs under `[gs-classic-types-other-all]`.
+/// Endpoint pairs are checked first; for a range of more than two bytes whose ends alias, the
+/// shared sensitivity helper also checks the nearest accepted midpoint.
 ///
 /// The carried cases hold what these overlays write by hand to its source: the cabinet
-/// sections to `cab_voicing`, the rotary acceleration gaps to the 01 22 candidate, the ring
-/// modulator's balance ramps to the 05 00 candidate's PS Bal, and the enhancer band to the
-/// 01 02 overlay.
+/// sections to `cab_voicing`, the ring modulator's balance ramps to the 05 00 candidate's
+/// PS Bal, and the enhancer band to the 01 02 overlay.
 
 #include <algorithm>
 #include <array>
@@ -246,11 +247,55 @@ TEST_CASE("GS classic types 02 00-11 08: every printed byte is heard",
   gs_classic_require_heard(printed_slots(), [](bool) { return true; }, power_on, heard_in);
 }
 
+TEST_CASE("GS classic 11 05: OD Pan is heard at its interior", "[gs-classic-types-other]") {
+  constexpr uint16_t kType = 0x1105;
+  constexpr std::size_t kOdPanSlot = 15;
+  const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
+  REQUIRE(registry.valid());
+  const gc::GsClassicType* type = registry.find(kType);
+  REQUIRE(type != nullptr);
+  const gc::GsClassicModelRegistry raw(gc::gs_classic_models_raw_other());
+  REQUIRE(raw.valid());
+  const gc::GsClassicType* raw_type = raw.find(kType);
+  REQUIRE(raw_type != nullptr);
+  const auto power = power_on(kType);
+  auto end = power;
+  auto interior = power;
+  end[kOdPanSlot] = 0;
+  interior[kOdPanSlot] = 64;
+  const double l2 =
+      relative_l2(draw(registry.models(), *type, end), draw(registry.models(), *type, interior));
+  INFO("11 05 OD Pan relative L2 at 0 versus 64: " << l2);
+  CHECK(l2 >= kHeardRelativeL2);
+  const double raw_l2 =
+      relative_l2(draw(raw.models(), *raw_type, end), draw(raw.models(), *raw_type, interior));
+  INFO("11 05 raw OD Pan relative L2 at 0 versus 64: " << raw_l2);
+  CHECK(raw_l2 >= kHeardRelativeL2);
+}
+
 namespace {
 
 const gc::GsClassicModelRegistry& raw_registry() {
   static const gc::GsClassicModelRegistry raw(gc::gs_classic_models_raw_other());
   return raw;
+}
+
+TEST_CASE("GS classic 11 07: Separate anchor preserves the p0 power-on drawing",
+          "[gs-classic-types-other]") {
+  constexpr uint16_t kType = 0x1107;
+  constexpr double kSameDrawing = 1e-9;
+  const gc::GsClassicModelRegistry& raw = raw_registry();
+  const gc::GsClassicModelRegistry& overlaid = gc::gs_classic_default_registry();
+  REQUIRE(raw.valid());
+  REQUIRE(overlaid.valid());
+  const gc::GsClassicType* raw_type = raw.find(kType);
+  const gc::GsClassicType* default_type = overlaid.find(kType);
+  REQUIRE(raw_type != nullptr);
+  REQUIRE(default_type != nullptr);
+  const double l2 = relative_l2(draw(raw.models(), *raw_type, power_on(kType)),
+                                draw(overlaid.models(), *default_type, power_on(kType)));
+  INFO("11 07 raw/default power-on relative L2: " << l2);
+  CHECK(l2 <= kSameDrawing);
 }
 
 /// The byte tables every value of a type reads `slot` through.
@@ -424,7 +469,7 @@ TEST_CASE("GS classic types other: the amp overlays' cabinet sections are cab_vo
   CHECK(worst <= kCabToleranceDb);
 }
 
-TEST_CASE("GS classic types other: the rotary acceleration gaps are the 01 22 candidate's",
+TEST_CASE("GS classic types other: the rotary acceleration gaps match the 01 22 candidate's",
           "[gs-classic-types-other]") {
   constexpr uint16_t kRotary = 0x0122;
   constexpr uint8_t kRotaryLowAccel = 2;

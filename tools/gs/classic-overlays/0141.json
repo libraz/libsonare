@@ -1,6 +1,6 @@
 {
   "type": "01 41",
-  "what_this_is": "Trem Sep as a stereo spread over the two tremolo modulators.",
+  "what_this_is": "Trem Sep as a stereo spread over the two wet tremolo lines.",
   "entries": [
     {
       "node": {
@@ -98,7 +98,7 @@
           "trem_side_l": {
             "byte": "40 03 08",
             "law": "d.unit",
-            "anchor": "moved_l.weights.out_l"
+            "anchor": "wet_l.weights.line_l"
           }
         }
       },
@@ -127,7 +127,7 @@
           "trem_side_r": {
             "byte": "40 03 08",
             "law": "d.unit",
-            "anchor": "moved_r.weights.out_r"
+            "anchor": "wet_r.weights.line_r"
           }
         }
       },
@@ -145,7 +145,7 @@
       "node": {
         "id": "dip_l",
         "kind": "vca",
-        "input": "out_l",
+        "input": "line_l",
         "control": "trem_spread_l"
       },
       "basis": "invented",
@@ -163,7 +163,7 @@
       "node": {
         "id": "dip_r",
         "kind": "vca",
-        "input": "out_r",
+        "input": "line_r",
         "control": "trem_spread_r"
       },
       "basis": "invented",

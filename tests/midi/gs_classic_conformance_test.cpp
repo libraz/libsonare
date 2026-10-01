@@ -17,9 +17,10 @@
 /// that either puts at -60 dBFS or above. One drawing's digest moves with where the input
 /// falls against the 32 kHz grid and the lfo's start, so each rate's statistic averages band
 /// power over eight input offsets spread over half a millisecond, or a pitch node's window,
-/// each Welch-averaged over the drawing; the same statistic over a disjoint, interleaved
-/// offset set at one rate is the estimator's noise, which must stay under
-/// 0.25 dB (the offset count doubles until it does). The default run holds the first type;
+/// each Welch-averaged over the drawing. Both interleaved offset sets must meet the
+/// 0.5 dB rate bound. Where both sets are audible, their paired rate differences must
+/// agree within 0.25 dB (the offset count doubles until they do). Common phase variation
+/// is shared by both rates and does not measure a rate error. The default run holds the first type;
 /// every type runs under `[gs-classic-conformance-all]`.
 
 #include <algorithm>
@@ -524,8 +525,30 @@ double host_difference(const std::vector<double>& a, const std::vector<double>& 
   return worst;
 }
 
+struct HostComparison {
+  double across_even;
+  double across_odd;
+  double residual_noise;
+};
+
+HostComparison host_comparison(const std::vector<double>& even44, const std::vector<double>& even48,
+                               const std::vector<double>& odd44, const std::vector<double>& odd48) {
+  double residual = 0.0;
+  for (std::size_t i = 0; i < even44.size(); ++i) {
+    const bool even_active = even44[i] >= kComparedFloorDb || even48[i] >= kComparedFloorDb;
+    const bool odd_active = odd44[i] >= kComparedFloorDb || odd48[i] >= kComparedFloorDb;
+    // Below the floor a phase set shows no rate difference; its absolute check still runs.
+    if (!even_active || !odd_active) continue;
+    const double delta_even = even44[i] - even48[i];
+    const double delta_odd = odd44[i] - odd48[i];
+    residual = std::max(residual, std::fabs(delta_even - delta_odd));
+  }
+  return {host_difference(even44, even48, nullptr), host_difference(odd44, odd48, nullptr),
+          residual};
+}
+
 /// Requires each type @p pick keeps to draw alike at 44.1 and 48 kHz, against the
-/// estimator's own noise at one rate.
+/// stability of the paired rate differences across phase sets.
 template <typename Pick>
 void require_rate_independent(Pick pick) {
   const gc::GsClassicModelRegistry& registry = gc::gs_classic_default_registry();
@@ -541,28 +564,32 @@ void require_rate_independent(Pick pick) {
     if (!pick(t)) continue;
     INFO("type " << std::hex << type.type);
     const double seconds = render_seconds(m, type);
-    // The estimator's noise: the same statistic at one rate over two disjoint offset sets.
+    // Same phases at both rates, so modulation is not read as rate error.
     std::size_t offsets = kHostOffsets;
     const double span = offset_span_s(m, type);
     std::vector<double> at48;
-    double noise = 0.0;
+    std::vector<double> at44;
+    HostComparison comparison{};
     for (;; offsets *= 2) {
       at48 = host_digest(m, type, rates[1], 0, offsets, span, seconds);
-      noise =
-          host_difference(at48, host_digest(m, type, rates[1], 1, offsets, span, seconds), nullptr);
-      if (noise <= kHostNoiseCeilingDb || offsets >= kHostMaxOffsets) break;
+      at44 = host_digest(m, type, rates[0], 0, offsets, span, seconds);
+      const auto odd48 = host_digest(m, type, rates[1], 1, offsets, span, seconds);
+      const auto odd44 = host_digest(m, type, rates[0], 1, offsets, span, seconds);
+      comparison = host_comparison(at44, at48, odd44, odd48);
+      if (comparison.residual_noise <= kHostNoiseCeilingDb || offsets >= kHostMaxOffsets) break;
     }
-    CHECK(noise <= kHostNoiseCeilingDb);
-    const std::vector<double> at44 = host_digest(m, type, rates[0], 0, offsets, span, seconds);
+    CHECK(comparison.residual_noise <= kHostNoiseCeilingDb);
     std::size_t at = 0;
     const double across = host_difference(at44, at48, &at);
     WARN("type " << std::hex << type.type << std::dec << ": " << seconds << " s, " << offsets
                  << " offsets over " << span * 1000.0 << " ms, across rates " << across
-                 << " dB, estimator noise " << noise << " dB");
+                 << " dB even / " << comparison.across_odd << " dB odd, residual noise "
+                 << comparison.residual_noise << " dB");
     INFO("worst at channel " << at / kHostBands << " band " << at % kHostBands << ": " << at44[at]
                              << " / " << at48[at] << " dB");
-    CHECK(across <= kHostRateToleranceDb);
-    worst_across = std::max(worst_across, across);
+    CHECK(comparison.across_even <= kHostRateToleranceDb);
+    CHECK(comparison.across_odd <= kHostRateToleranceDb);
+    worst_across = std::max({worst_across, comparison.across_even, comparison.across_odd});
     ++compared;
   }
   CHECK(compared > 0);
@@ -571,6 +598,46 @@ void require_rate_independent(Pick pick) {
 }
 
 }  // namespace
+
+TEST_CASE("GS classic host comparison distinguishes phase variation from rate error",
+          "[gs-classic-conformance]") {
+  SECTION("common phase variation cancels in the paired rate residual") {
+    const auto result = host_comparison({-20.0}, {-20.1}, {-40.0}, {-40.1});
+    CHECK(result.across_even <= kHostRateToleranceDb);
+    CHECK(result.across_odd <= kHostRateToleranceDb);
+    CHECK(result.residual_noise <= kHostNoiseCeilingDb);
+  }
+  SECTION("unstable rate error fails the residual ceiling") {
+    const auto result = host_comparison({-20.0}, {-20.0}, {-20.0}, {-20.3});
+    CHECK(result.across_even <= kHostRateToleranceDb);
+    CHECK(result.across_odd <= kHostRateToleranceDb);
+    CHECK(result.residual_noise > kHostNoiseCeilingDb);
+  }
+  SECTION("stable rate error still fails the absolute ceiling") {
+    const auto result = host_comparison({-20.0}, {-20.6}, {-40.0}, {-40.6});
+    CHECK(result.across_even > kHostRateToleranceDb);
+    CHECK(result.across_odd > kHostRateToleranceDb);
+    CHECK(result.residual_noise <= kHostNoiseCeilingDb);
+  }
+  SECTION("the odd set is independently checked") {
+    const auto result = host_comparison({-20.0}, {-20.0}, {-20.0}, {-20.6});
+    CHECK(result.across_even <= kHostRateToleranceDb);
+    CHECK(result.across_odd > kHostRateToleranceDb);
+    CHECK(result.residual_noise > kHostNoiseCeilingDb);
+  }
+  SECTION("inactive rate pairs contribute no below-floor error") {
+    const auto result = host_comparison({-70.0}, {-100.0}, {-20.0}, {-20.0});
+    CHECK(result.across_even == 0.0);
+    CHECK(result.across_odd == 0.0);
+    CHECK(result.residual_noise == 0.0);
+  }
+  SECTION("an active phase set keeps its absolute check when the other is inactive") {
+    const auto result = host_comparison({-70.0}, {-100.0}, {-20.0}, {-20.6});
+    CHECK(result.across_even == 0.0);
+    CHECK(result.across_odd > kHostRateToleranceDb);
+    CHECK(result.residual_noise == 0.0);
+  }
+}
 
 TEST_CASE("GS classic conformance: the reference lists every printed state of the raw models",
           "[gs-classic-conformance]") {

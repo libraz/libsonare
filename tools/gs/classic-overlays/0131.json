@@ -7,11 +7,11 @@
         "id": "detect_l",
         "kind": "envelope",
         "input": "in_l",
-        "detector": "peak",
+        "detector": "rms",
         "topology": "branching",
         "domain": "linear",
         "attack_ms": {
-          "value": 0.5,
+          "value": 1.0,
           "source": "measured",
           "rests_on": [
             "data/units/roland-sc8850-01/efx-orders/01-31-03-the-threshold-byte-at-the-fourth-of-four-ratio-settings.json",
@@ -53,11 +53,11 @@
         "id": "detect_r",
         "kind": "envelope",
         "input": "in_r",
-        "detector": "peak",
+        "detector": "rms",
         "topology": "branching",
         "domain": "linear",
         "attack_ms": {
-          "value": 0.5,
+          "value": 1.0,
           "source": "measured",
           "rests_on": [
             "data/units/roland-sc8850-01/efx-orders/01-31-03-the-threshold-byte-at-the-fourth-of-four-ratio-settings.json",

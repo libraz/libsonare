@@ -8,6 +8,8 @@
 /// slots are the rows of `gs_classic_reference.tsv`, their printed ends the model's, and the
 /// stimulus and digest are the ones its header states. The default run draws each type's
 /// first printed slot; the full sweep is slow and runs under `[gs-classic-types-01a-all]`.
+/// Endpoint pairs are checked first; for a range of more than two bytes whose ends alias, the
+/// shared sensitivity helper also checks the nearest accepted midpoint.
 ///
 /// The amp-section case holds the cabinet sections the 01 10 / 01 11 overlays write to
 /// `cab_voicing`'s design of the same model, and the vowel case holds the 01 03 overlay's
