@@ -98,7 +98,10 @@ class _EngineMidiMixin:
         ``data`` is the full SysEx frame including the leading ``0xF0`` and
         trailing ``0xF7`` (1..512 bytes). ``render_frame`` is the render-frame
         time to apply, or ``-1`` for immediate. Raises :class:`SonareError`
-        if the payload exceeds the accepted size.
+        with code ``INVALID_PARAMETER`` if the payload exceeds the accepted
+        size or the destination instrument cannot prepare it (retrying cannot
+        help), and with code ``OUT_OF_MEMORY`` if the payload slots or the
+        command queue are full (retry after a processed block).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_sysex"):

@@ -28,6 +28,8 @@ constexpr float kResidualTauSeconds = 0.5f;
 }  // namespace
 
 Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
+  direct_system_patch_reader_ =
+      std::make_unique<DirectSystemPatchCell::Reader>(direct_system_patch_->reader());
   per_note_bend_sensitivity_.fill(kDefaultPerNoteBendSensitivity);
   // An explicit 0 is silence; only a negative or non-finite gain is not a level.
   if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
@@ -49,6 +51,126 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
 }
 
 Sf2Player::~Sf2Player() = default;
+
+void Sf2Player::clear_control_owned_gs_state() {
+  // prepare() and reset() are quiescent boundaries; no stale delta may cross one.
+  efx_ = {};
+  efx_part_assign_ = {};
+  direct_legacy_efx_fallback_.fill(false);
+  gs_efx_dirty_ = false;
+  sys_fx_ = {};
+  master_eq_ = {};
+  eq_part_bypassed_ = {};
+  gs_system_dirty_ = false;
+  efx_param_queue_ = std::make_unique<EfxParamQueue>();
+  clear_direct_gs_queue();
+  direct_system_patch_control_ = {};
+  direct_system_audio_fx_ = {};
+  direct_system_audio_eq_ = {};
+  direct_system_audio_bypassed_ = {};
+  last_system_direct_seq_ = 0;
+  direct_system_patch_->store(direct_system_patch_control_);
+  clear_prepared_audio_state();
+  seed_prepared_from_control_state();
+  prepared_audio_domain_ = prepared_domain_;
+  release_prepared_nodes();
+}
+
+void Sf2Player::clear_prepared_audio_state() noexcept {
+  for (PreparedEfxNode*& node : prepared_active_nodes_) {
+    if (node != nullptr) {
+      node->audio_pins.fetch_sub(1, std::memory_order_acq_rel);
+      node = nullptr;
+    }
+  }
+  prepared_unit_overridden_.fill(false);
+  for (GsEfx& efx : prepared_efx_) efx = {};
+  prepared_assign_.fill(0);
+  prepared_sys_fx_ = {};
+  prepared_master_eq_ = {};
+  prepared_eq_part_bypassed_ = {};
+  prepared_part_unit_.fill(Sf2RealizedEfx::kNoUnit);
+  prepared_part_bussed_.fill(false);
+  prepared_default_bank_rig_.fill(false);
+  prepared_default_bank_rig_mono_prefix_.fill(0);
+  prepared_unit_fed_.fill(false);
+  prepared_host_part_bussed_.fill(false);
+  prepared_host_default_bank_rig_.fill(false);
+  prepared_host_default_bank_rig_mono_prefix_.fill(0);
+  prepared_host_any_bussed_ = false;
+  prepared_any_unit_ = false;
+  prepared_any_bussed_ = false;
+  prepared_runtime_active_ = false;
+  prepared_base_synced_ = false;
+  prepared_empty_unit_ = {};
+}
+
+void Sf2Player::seed_prepared_from_control_state() noexcept {
+  prepared_efx_ = efx_;
+  prepared_assign_ = efx_part_assign_;
+  prepared_sys_fx_ = sys_fx_;
+  prepared_master_eq_ = master_eq_;
+  prepared_eq_part_bypassed_ = eq_part_bypassed_;
+}
+
+void Sf2Player::release_prepared_nodes() noexcept {
+  // CONTROL only: erase nodes neither a token lease nor an audio pin holds.
+  for (auto it = prepared_nodes_.begin(); it != prepared_nodes_.end();) {
+    PreparedEfxNode* node = it->get();
+    if (it->use_count() == 1 && node->audio_pins.load(std::memory_order_acquire) == 0) {
+      it = prepared_nodes_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void Sf2Player::rebuild_prepared_routing() noexcept {
+  prepared_part_unit_.fill(Sf2RealizedEfx::kNoUnit);
+  prepared_part_bussed_ = prepared_host_part_bussed_;
+  prepared_default_bank_rig_ = prepared_host_default_bank_rig_;
+  prepared_default_bank_rig_mono_prefix_ = prepared_host_default_bank_rig_mono_prefix_;
+  prepared_unit_fed_.fill(false);
+  prepared_any_unit_ = false;
+  prepared_any_bussed_ = prepared_host_any_bussed_;
+  if (!config_.insert_factory) return;
+  for (size_t part = 0; part < prepared_assign_.size(); ++part) {
+    const int unit = gs_efx_assign_unit(prepared_assign_[part]);
+    if (unit < 0 || !prepared_efx_[static_cast<size_t>(unit)].assigned) continue;
+    prepared_part_unit_[part] = static_cast<uint8_t>(unit);
+    prepared_part_bussed_[part] = true;
+    // A routed part feeds its unit the DI; render_chunk() skips the rig chain.
+    prepared_default_bank_rig_[part] = false;
+    prepared_default_bank_rig_mono_prefix_[part] = 0;
+    prepared_unit_fed_[static_cast<size_t>(unit)] = true;
+    prepared_any_unit_ = true;
+    prepared_any_bussed_ = true;
+  }
+}
+
+void Sf2Player::sync_prepared_base() noexcept {
+  if (!prepared_runtime_active_) return;
+  // Recomputed per boundary: a program change can publish a new default rig.
+  prepared_host_part_bussed_.fill(false);
+  prepared_host_default_bank_rig_.fill(false);
+  prepared_host_default_bank_rig_mono_prefix_.fill(0);
+  prepared_host_any_bussed_ = false;
+  const Sf2RealizedEfx* snapshot = efx_pub_->current();
+  for (size_t part = 0; part < prepared_host_part_bussed_.size(); ++part) {
+    // The snapshot's tags, never gm_rig_chain(), which allocates.
+    const bool host_bussed = snapshot != nullptr && snapshot->host_part_bussed[part];
+    const bool bank_rig = snapshot != nullptr && snapshot->default_bank_rig[part];
+    prepared_host_default_bank_rig_[part] = bank_rig;
+    if (bank_rig) {
+      prepared_host_default_bank_rig_mono_prefix_[part] =
+          snapshot->default_bank_rig_mono_prefix[part];
+    }
+    prepared_host_part_bussed_[part] = host_bussed;
+    prepared_host_any_bussed_ = prepared_host_any_bussed_ || prepared_host_part_bussed_[part];
+  }
+  rebuild_prepared_routing();
+  prepared_base_synced_ = true;
+}
 
 void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   soundfont_ = std::move(soundfont);
@@ -79,6 +201,11 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   // one that is unloaded puts it back on.
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
   if (prepared_) {
+    // Tokens prepared for the previous instrument fail their domain check.
+    ++prepared_domain_;
+    clear_prepared_audio_state();
+    seed_prepared_from_control_state();
+    prepared_audio_domain_ = prepared_domain_;
     recompute_tail();
     realize_gs_efx();
   }
@@ -101,6 +228,8 @@ void Sf2Player::recompute_tail() noexcept {
 }
 
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
+  ++prepared_domain_;
+  release_prepared_nodes();
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
   residual_splitter_.reset();
@@ -186,6 +315,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(fallback_harpsichord_stride_)
           : 0,
       0.0f);
+  clear_control_owned_gs_state();
   // Power-on matches GS defaults (reverb send 40): a bare SMF that never
   // sends a reset SysEx should still land in the default room, as on
   // hardware, instead of rendering bone dry.
@@ -210,7 +340,6 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // file that sends GS Reset and nothing else gets the state it is entitled to
   // (docs/gs.md, "Reset defaults are part of the contract").
   eq_.prepare(sample_rate_);
-  sys_queue_->reserve(8);
   apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
   recompute_tail();
   prepared_ = true;
@@ -239,6 +368,7 @@ void Sf2Player::reset() {
   for (SourceResidualSplitter& s : unit_splitters_) s.reset();
   send_residual_splitter_.reset();
   for (SourceResidualSplitter& s : body_residual_splitters_) s.reset();
+  clear_control_owned_gs_state();
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the
@@ -264,8 +394,8 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
   // GS/GM reset selects EFX "Thru" and clears the part EFX switches. The EFX
   // mirror is owned by whichever thread realises it: offline (inline) clears it
   // here on the render thread; live leaves it to the control thread's
-  // on_control_sysex (which parses the same reset and republishes empty), so the
-  // audio thread never writes the mirror the builder reads.
+  // on_control_sysex, so the audio thread never writes the mirror the builder
+  // reads. Live system state is similarly published by on_control_sysex.
   if (config_.realize_efx_inline) {
     efx_ = {};
     efx_part_assign_ = {};

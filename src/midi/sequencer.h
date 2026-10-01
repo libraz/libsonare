@@ -26,6 +26,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_clip.h"
@@ -43,7 +45,11 @@ class MidiEventSink {
  public:
   virtual ~MidiEventSink() = default;
   /// Receives one dispatched event at sample-accurate `render_frame`. Called on
-  /// the audio thread; must not allocate.
+  /// the audio thread; must not allocate. For SysEx, `sysex_payload` and
+  /// `prepared_sysex` are borrowed views valid only for this callback. Consume
+  /// them synchronously and never retain either pointer; a published clip bank
+  /// keeps them alive through the callback, while live/direct callers own their
+  /// corresponding storage.
   virtual void on_event(uint32_t destination_id, const MidiEvent& event) noexcept = 0;
 };
 
@@ -96,11 +102,26 @@ class MidiSequencer {
   /// start before process_block. RT-safe, no alloc.
   void acquire_midi_clips() noexcept { clips_.acquire(); }
 
+  /// CONTROL thread between audio blocks: drain and adopt every accepted clip
+  /// publication, including a replacement waiting in the publisher's pending
+  /// slot. This is stronger than one audio-boundary acquire and is required
+  /// when a control transaction must make its prepared clip bank current before
+  /// it returns.
+  void acquire_midi_clips_control_quiescent() noexcept { clips_.acquire_control_quiescent(); }
+
   /// AUDIO thread: the clip set most recently adopted by acquire_midi_clips(),
   /// or nullptr before any set has been published. Lets a caller (the
   /// per-destination gain/fade envelope, midi_clip_envelope.h) read the same
   /// snapshot process_block() scans without re-deriving or copying it.
   const std::vector<MidiClipSchedule>* current_clips() const noexcept { return clips_.current(); }
+
+  /// CONTROL thread: the newest accepted clip set, including a publication that
+  /// is still waiting in the RtPublisher hand-off ring. The returned owner is
+  /// copied by control-thread callers that need to stage a replacement; this
+  /// accessor must not be called concurrently with another control publisher.
+  const std::shared_ptr<const std::vector<MidiClipSchedule>>& control_clips() const noexcept {
+    return clips_.control_current();
+  }
 
   /// AUDIO thread: dispatch every event whose render frame falls in
   /// [block_start_frame, block_start_frame + num_frames). RT-safe, no alloc.
@@ -131,10 +152,13 @@ class MidiSequencer {
   /// destination at `render_frame`. `sysex_payload`/`sysex_payload_size` view
   /// control-thread-owned bytes that must outlive the dispatch (the engine's
   /// bounded SysEx payload store keeps them valid until the instrument consumes
-  /// them synchronously). Routed through the same process_event path as clip
-  /// SysEx, so a destination MIDI-FX chain sees it too. RT-safe, no alloc.
+  /// them synchronously). `prepared_sysex`, when non-null, is the corresponding
+  /// immutable control-thread operation retained by the caller. Routed through
+  /// the same process_event path as clip SysEx, so it bypasses MIDI FX and is
+  /// dispatched synchronously. RT-safe, no alloc.
   void inject_event(uint32_t destination_id, int64_t render_frame, const Ump& ump,
-                    const uint8_t* sysex_payload, size_t sysex_payload_size) noexcept;
+                    const uint8_t* sysex_payload, size_t sysex_payload_size,
+                    const PreparedMidiSysEx* prepared_sysex = nullptr) noexcept;
 
   /// Number of clips currently scheduled (lock-free poll for the host thread).
   size_t clip_count() const noexcept { return clip_count_.load(std::memory_order_relaxed); }
@@ -153,11 +177,48 @@ class MidiSequencer {
   /// Collect the render-frame offsets of MIDI events in this block as sub-block
   /// boundary candidates (offsets relative to block_start_frame). Mirrors
   /// engine::ClipPlayer::collect_boundaries. RT-safe, no alloc.
-  struct BoundaryOffsets {
+  ///
+  /// An unprepared set holds kCapacity offsets inline; prepare() reserves a
+  /// larger table on CONTROL so the audio collector never grows it.
+  class BoundaryOffsets {
+   public:
     static constexpr size_t kCapacity = 64;
-    std::array<int, kCapacity> offsets{};
-    size_t size = 0;
-    bool overflowed = false;
+
+    /// CONTROL thread: reserve room for @p capacity offsets (at least
+    /// kCapacity). A failed allocation keeps the previous storage.
+    void prepare(size_t capacity);
+    size_t capacity() const noexcept { return capacity_; }
+    size_t size() const noexcept { return size_; }
+    bool overflowed() const noexcept { return overflowed_; }
+    /// Offsets ascend; @p index must be below size().
+    int operator[](size_t index) const noexcept { return offsets()[index]; }
+
+   private:
+    friend class MidiSequencer;
+
+    int* offsets() noexcept {
+      return capacity_ > kCapacity ? prepared_offsets_.data() : inline_offsets_.data();
+    }
+    const int* offsets() const noexcept {
+      return capacity_ > kCapacity ? prepared_offsets_.data() : inline_offsets_.data();
+    }
+    uint8_t* seen() noexcept {
+      return capacity_ > kCapacity ? prepared_seen_.data() : inline_seen_.data();
+    }
+    // AUDIO thread: empty the set, resetting only the marks the last block set.
+    void clear() noexcept;
+    // AUDIO thread: insert @p offset in order unless already present.
+    void push(int offset) noexcept;
+
+    std::array<int, kCapacity> inline_offsets_{};
+    // Per-offset deduplication marks; an offset at or past capacity_ is found
+    // by a scan instead.
+    std::array<uint8_t, kCapacity> inline_seen_{};
+    std::vector<int> prepared_offsets_;
+    std::vector<uint8_t> prepared_seen_;
+    size_t capacity_ = kCapacity;
+    size_t size_ = 0;
+    bool overflowed_ = false;
   };
   void collect_boundaries(int64_t block_start_frame, int num_frames,
                           BoundaryOffsets* out) const noexcept;
@@ -199,6 +260,16 @@ class MidiSequencer {
     MidiEvent event;
     uint32_t clip_id = 0;
     bool from_clip = false;
+  };
+  // The MIDI FX work buffers are large enough that keeping them inline makes
+  // every engine instance unnecessarily expensive to construct on the stack.
+  // They are allocated once by prepare() on the control thread and then only
+  // dereferenced by the audio thread. Keeping the owner stable across reset()
+  // and repeated prepare() calls makes the RT path allocation-free while also
+  // avoiding a control/audio lifetime race.
+  struct RuntimeStorage {
+    std::array<DestinationFx, kMaxMidiFxInserts> midi_fx{};
+    std::array<PendingFxEvent, kMaxPendingFxEvents> pending_fx{};
   };
 
   // Records a sounding note; returns false on capacity overflow (bumps counter).
@@ -259,8 +330,7 @@ class MidiSequencer {
   mutable rt::RtPublisher<MidiFxSnapshot> midi_fx_snapshots_;
   const MidiFxSnapshot* last_midi_fx_snapshot_ = nullptr;
   uint64_t next_midi_fx_generation_ = 1;  // control-thread only
-  std::array<DestinationFx, kMaxMidiFxInserts> midi_fx_{};
-  std::array<PendingFxEvent, kMaxPendingFxEvents> pending_fx_{};
+  std::unique_ptr<RuntimeStorage> runtime_storage_;
   size_t pending_fx_count_ = 0;
   std::atomic<uint32_t> midi_fx_pending_overflow_count_{0};
 };

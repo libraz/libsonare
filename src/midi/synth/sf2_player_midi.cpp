@@ -1186,6 +1186,9 @@ bool Sf2Player::relative_controller(uint8_t ch, const ChannelVoiceEvent& ev) noe
 
 void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) noexcept {
   if (!prepared_) return;
+  // Drain direct writes first, so one queued before a same-frame event applies first.
+  drain_direct_system_patch();
+  drain_direct_gs_nodes();
   const Ump& u = event.ump;
   if (u.message_type() != UmpMessageType::kMidi1ChannelVoice &&
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {
@@ -1193,7 +1196,15 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     // itself only carries a handle): feed the GS layer so GS Reset / GM System
     // On / "use for rhythm part" inside an arrangement take effect.
     if (event.sysex_payload != nullptr && event.sysex_payload_size > 0) {
-      handle_sysex(event.sysex_payload, event.sysex_payload_size);
+      // A null token (prepared before prepare()) takes the unprepared handle_sysex path.
+      const PreparedSysEx* prepared = dynamic_cast<const PreparedSysEx*>(event.prepared_sysex);
+      if (prepared != nullptr && prepared_owner_identity_ != nullptr &&
+          prepared->owner_identity != nullptr &&
+          prepared->owner_identity.get() == prepared_owner_identity_.get()) {
+        apply_prepared_gs_delta(*prepared, event.sysex_payload, event.sysex_payload_size, true);
+      } else {
+        handle_sysex(event.sysex_payload, event.sysex_payload_size);
+      }
     }
     return;
   }

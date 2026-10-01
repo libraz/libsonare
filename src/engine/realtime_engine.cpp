@@ -100,7 +100,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   drain_commands(state.render_frame, frames);
 #if defined(SONARE_WITH_ARRANGEMENT)
   // Same hang-note release as a wrap inside the block.
-  if (wrapped_at_block_start) midi_sequencer_.all_notes_off(state.render_frame);
+  if (wrapped_at_block_start) {
+    publish_instrument_transport();
+    midi_sequencer_.all_notes_off(state.render_frame);
+  }
 #endif
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
   const uint32_t non_rt_rejection_count_before = automation_.non_realtime_safe_rejection_count();
@@ -190,22 +193,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
   // Insert control-period boundaries so automation lanes and engine-level
   // parameter smoothers are re-evaluated at a bounded cadence within the block.
-  // The boundary list is fixed-capacity, so for blocks larger than
-  // kControlPeriod * budget we widen the period to spread the boundaries evenly
-  // across the whole block instead of packing the first ~budget*64 samples and
-  // dropping the rest (which would freeze automation/smoothing in the block's
-  // tail and reintroduce zipper artifacts). Smaller blocks keep the nominal
-  // 64-sample cadence unchanged.
+  // Boundary storage covers every offset of the prepared block (prepare_impl), so
+  // the nominal cadence cannot evict MIDI/SysEx boundaries.
   if (automation_.lane_count() > 0 || any_smoothed_param_active()) {
-    // Reserve headroom for the mandatory boundaries (block start/end, loop,
-    // clip, command, marker, automation breakpoints) so control boundaries do
-    // not consume the entire list.
-    constexpr int kControlBoundaryBudget = static_cast<int>(BoundaryList::kCapacity) - 12;
-    int period = kControlPeriod;
-    if (frames > kControlPeriod * kControlBoundaryBudget) {
-      period = (frames + kControlBoundaryBudget - 1) / kControlBoundaryBudget;
-    }
-    for (int offset = period; offset < frames; offset += period) {
+    for (int offset = kControlPeriod; offset < frames; offset += kControlPeriod) {
       boundary_splitter_.add_automation(offset);
     }
   }
@@ -225,10 +216,9 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // the sequencer dispatches each event at its sample-accurate boundary rather
   // than at block granularity. Uses a distinct BoundarySource::kMidi (added via
   // add_midi) so dense-MIDI overflow stays distinguishable in telemetry.
-  midi::MidiSequencer::BoundaryOffsets midi_boundaries;
-  midi_sequencer_.collect_boundaries(state.sample_position, frames, &midi_boundaries);
-  for (size_t i = 0; i < midi_boundaries.size; ++i) {
-    boundary_splitter_.add_midi(midi_boundaries.offsets[i]);
+  midi_sequencer_.collect_boundaries(state.sample_position, frames, &midi_boundary_offsets_);
+  for (size_t i = 0; i < midi_boundary_offsets_.size(); ++i) {
+    boundary_splitter_.add_midi(midi_boundary_offsets_[i]);
   }
   for (size_t i = 0; i < live_midi_input_count_; ++i) {
     const int64_t event_frame = live_midi_input_events_[i].render_frame;
@@ -270,6 +260,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     // exclusive block end belongs to the next process() call, so leave those
     // commands pending.
     if (offset < frames) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+      // Live command events of the next sub-block must see its transport first.
+      publish_instrument_transport();
+#endif
       apply_due_commands(boundaries[i].render_frame);
     }
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -367,6 +361,16 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
                      end_state.sample_position, audible_timeline_sample(end_state.sample_position),
                      graph_latency_samples_q8_, static_cast<uint32_t>(frames)});
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+void RealtimeEngine::publish_instrument_transport() noexcept {
+  if (instrument_rack_.empty()) return;
+  const transport::TransportState state = transport_.snapshot();
+  instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) noexcept {
+    instrument->set_transport(state);
+  });
+}
+#endif
 
 void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_out, int num_channels,
                                       int offset, int num_frames,
@@ -531,6 +535,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     }
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
+    // Republish after this boundary's commands, which may have moved the transport.
+    publish_instrument_transport();
     // While stopped, scanning the same window every block would also
     // re-dispatch the same note-ons (saturating the active-note table and
     // re-triggering the instrument) and capture a sustained note with no choke.
@@ -544,7 +550,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // When an instrument is registered it IS the sequencer's sink, so this call
     // feeds the block's events to the instrument at their sample-accurate DEVICE
     // render frames, from which the intra-block offset is event.render_frame
-    // minus the TransportState::render_frame pushed by set_transport below. The
+    // minus the TransportState::render_frame pushed by set_transport above. The
     // instrument buffers them; rendering happens immediately below so the events
     // and the audio they drive stay in the same sub-block.
     if (transport_rolling) {
@@ -571,12 +577,10 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // is sized in prepare(); the audio thread only zero-fills and sums it.
     if (!instrument_rack_.empty() &&
         (transport_rolling || midi_sequencer_.active_note_count() > 0)) {
-      // Per-block transport snapshot pushed to each instrument before it renders
-      // A tempo-synced delay / arpeggiator / LFO follows the host
-      // transport instead of free-running. Each instrument renders into the
-      // shared scratch (zero, set_transport, process) and is summed into the
-      // sub-block, so multitrack MIDI routed to distinct destinations mixes here.
-      const transport::TransportState inst_state = transport_.snapshot();
+      // A tempo-synced delay / arpeggiator / LFO follows the transport snapshot
+      // published above instead of free-running. Each instrument renders into the
+      // shared scratch (zero, process) and is summed into the sub-block, so
+      // multitrack MIDI routed to distinct destinations mixes here.
 #if defined(SONARE_WITH_MIXING)
       // The lane accumulators and buses were cleared once for the whole block
       // (begin_block above, shared with the clip pass when it ran). Each
@@ -622,7 +626,6 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                   0.0f);
             }
           }
-          instrument->set_transport(inst_state);
           if (instrument->process_source_tracks(outputs.data(), source_track_count + 1, channels,
                                                 num_frames)) {
             if (has_clip_envelope) {
@@ -664,7 +667,6 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
                     midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
         }
-        instrument->set_transport(inst_state);
         instrument->process(midi_instrument_channels_.data(), channels, num_frames);
         if (has_clip_envelope) {
           midi::apply_midi_clip_envelope(envelope_block, *clip_schedule, destination_id,

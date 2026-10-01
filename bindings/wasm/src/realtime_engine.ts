@@ -883,8 +883,11 @@ export class RealtimeEngine {
   /**
    * Queue an immediate (live) MIDI SysEx frame to a MIDI destination. `data` is
    * the full message including the leading 0xF0 and trailing 0xF7 (1..512
-   * bytes). `renderFrame` is the frame to fire at, or -1 for immediate. Mirrors
-   * the Node/Python/C-ABI `pushMidiSysex`.
+   * bytes). `renderFrame` is the frame to fire at, or -1 for immediate. Throws
+   * `InvalidParameter` when the destination instrument cannot prepare
+   * the SysEx (retrying cannot help), and `OutOfMemory` when the payload
+   * slots or the command queue are full (retry after a processed block).
+   * Mirrors the Node/Python/C-ABI `pushMidiSysex`.
    */
   pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame = -1): void {
     this.native.pushMidiSysex(destinationId, data, renderFrame);

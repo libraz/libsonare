@@ -72,6 +72,10 @@ class LayeredInstrument final : public MidiInstrument {
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   void set_transport(const transport::TransportState& state) noexcept override;
   void on_control_sysex(const uint8_t* data, size_t size) noexcept override;
+  bool prepare_sysex(const uint8_t* data, size_t size,
+                     std::shared_ptr<const PreparedMidiSysEx>& out) override;
+  void on_prepared_sysex_accepted(const uint8_t* data, size_t size,
+                                  const PreparedMidiSysEx* prepared) noexcept override;
   int latency_samples() const noexcept override;
   int tail_samples() const noexcept override;
   int parameter_id_for_key(const std::string& key) const noexcept override;
@@ -87,6 +91,21 @@ class LayeredInstrument final : public MidiInstrument {
     float gain_right = 1.0f;
   };
 
+  /// Stable identity shared by this instrument and every composite operation
+  /// it prepares. Unlike `this`, it survives the implicit move of the owning
+  /// LayeredInstrument while remaining cheap to inspect on the audio thread.
+  struct PreparedLayeredSysExIdentity {};
+
+  /// Composite operation for one SysEx event. The identity/domain pair
+  /// prevents a token prepared for another layered patch (or an old layer
+  /// layout) from crossing the audio/control boundary; every child lease stays
+  /// alive until the composite operation is retired.
+  struct PreparedLayeredSysEx final : PreparedMidiSysEx {
+    std::shared_ptr<const PreparedLayeredSysExIdentity> identity;
+    uint64_t domain = 0;
+    std::vector<std::shared_ptr<const PreparedMidiSysEx>> children;
+  };
+
   /// Bit per layer, per (channel, note): who took the sounding note.
   static constexpr size_t kNoteSlots = 16u * 128u;
 
@@ -94,8 +113,14 @@ class LayeredInstrument final : public MidiInstrument {
   /// @p ump with its note number replaced; both protocols store it in the same
   /// bits of word 0.
   static Ump retune(const Ump& ump, uint8_t note) noexcept;
-  void send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
-                 uint32_t destination_id) noexcept;
+  void send_note(size_t layer_index, const MidiEvent& event, uint8_t note, uint32_t destination_id,
+                 const PreparedLayeredSysEx* prepared) noexcept;
+  const PreparedLayeredSysEx* valid_prepared_sysex(
+      const PreparedMidiSysEx* prepared) const noexcept;
+  void invalidate_prepared_domain() noexcept {
+    ++prepared_domain_;
+    if (prepared_domain_ == 0) ++prepared_domain_;
+  }
   /// Adds one layer's rendered legs to @p target at the layer's balance, with
   /// the mono fold-down on every channel past two.
   static void add_layer_output(float* const* target, int num_channels, int legs, const float* left,
@@ -127,6 +152,8 @@ class LayeredInstrument final : public MidiInstrument {
   std::vector<float> source_scratch_;
   int max_block_size_ = 0;
   bool prepared_ = false;
+  uint64_t prepared_domain_ = 1;
+  std::shared_ptr<const PreparedLayeredSysExIdentity> prepared_identity_;
 };
 
 }  // namespace sonare::midi

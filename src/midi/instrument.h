@@ -19,9 +19,9 @@
 ///
 ///     offset = event.render_frame - state.render_frame
 ///
-/// is the intra-block offset. Two traps: a block's events are delivered BEFORE
-/// its set_transport(), so placement belongs in process() and not in on_event();
-/// and an instrument-accumulated counter is not a substitute, because the engine
+/// is the intra-block offset. A sub-block's events are delivered after its
+/// set_transport(), yet placement still belongs in process(). One trap: an
+/// instrument-accumulated counter is not a substitute, because the engine
 /// renders an instrument only while the transport rolls or a note is sounding,
 /// so such a counter drifts the first time playback stops.
 /// TransportState::sample_position is the timeline coordinate and must not place
@@ -31,11 +31,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "automation/parameter.h"
 #include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
+#include "midi/prepared_sysex.h"
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
 #include "transport/transport_state.h"
@@ -89,6 +91,28 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   virtual void on_control_sysex(const uint8_t* data, size_t size) noexcept {
     (void)data;
     (void)size;
+  }
+
+  /// CONTROL thread: accepts the operation prepared for one live SysEx
+  /// dispatch. The default forwards an unprepared payload to on_control_sysex();
+  /// a non-null operation is already immutable state for the audio event path
+  /// and must not be rebuilt here.
+  virtual void on_prepared_sysex_accepted(const uint8_t* data, size_t size,
+                                          const PreparedMidiSysEx* prepared) noexcept {
+    if (prepared == nullptr) on_control_sysex(data, size);
+  }
+
+  /// CONTROL thread: prepares an immutable operation for a scheduled SysEx
+  /// payload. The default instrument has no prepared operation to attach but
+  /// accepts the payload, so the raw-byte dispatch path is used.
+  /// Implementations may allocate and may throw; the caller converts failure
+  /// into an unpublished schedule while retaining the previous snapshot.
+  virtual bool prepare_sysex(const uint8_t* data, size_t size,
+                             std::shared_ptr<const PreparedMidiSysEx>& out) {
+    (void)data;
+    (void)size;
+    out.reset();
+    return true;
   }
 
   /// CONTROL thread: adopts a device's spelling of the expression axes, so a

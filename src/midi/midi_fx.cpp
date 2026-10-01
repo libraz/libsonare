@@ -275,6 +275,11 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
   for (size_t i = 0; i < count; ++i) {
     const size_t input_ordinal = input_ordinal_base + i;
     MidiEvent ev = in[i];
+    // SysEx passes through untouched: original frame and prepared operation.
+    if (is_sysex_event(ev)) {
+      push_or_overflow(ev, out);
+      continue;
+    }
     const bool channel_voice = is_midi_channel_voice(ev.ump);
     const bool note_on = channel_voice && ev.ump.is_note_on();
     const bool note_off = channel_voice && ev.ump.is_note_off();

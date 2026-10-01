@@ -3,7 +3,9 @@
 ///        reporting, malformed JSON and the per-thread last-error channel.
 
 #include "mastering/api/insert_factory.h"
+#include "midi/synth/sf2_player.h"
 #include "sonare_c_engine_test_helpers.h"
+#include "support/alloc_guard.h"
 
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {
@@ -173,6 +175,173 @@ TEST_CASE("sonare_engine_push_midi_sysex enforces the documented payload ceiling
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
+}
+
+TEST_CASE("C SysEx distinguishes unsupported prepared controls from queue pressure",
+          "[c_api][engine][midi][gs]") {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MASTERING)
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  sonare::midi::synth::Sf2PlayerConfig config;
+  config.bank_rig_binding = false;
+  // A real gain processor lacks the controls required by the GS overdrive
+  // stage. Retrying an identical operation cannot repair that capability.
+  config.insert_factory = [](std::string_view, std::string_view) {
+    return sonare::mastering::api::make_insert("utility.gain", "{}");
+  };
+  sonare::midi::synth::Sf2Player player(config);
+  REQUIRE(engine->engine.set_midi_instrument(7, &player));
+  const uint8_t type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 7, type, sizeof(type), 4096) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 7, type, sizeof(type), 4096) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(engine->engine.midi_instrument(7) == &player);
+
+  // Queue pressure on a destination with nothing to prepare is retryable.
+  const uint8_t gm_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  SonareError pressure = SONARE_OK;
+  for (int i = 0; i < 64 && pressure == SONARE_OK; ++i) {
+    pressure = sonare_engine_push_midi_sysex(engine, 9, gm_on, sizeof(gm_on), 4096);
+  }
+  REQUIRE(pressure == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(engine->engine.last_midi_sysex_push_status() ==
+          sonare::engine::MidiSysExPushStatus::kQueueFull);
+  REQUIRE(engine->engine.set_midi_instrument(7, nullptr));
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("C MIDI instrument bind maps an allocation failure to OUT_OF_MEMORY",
+          "[c_api][engine][midi]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  SonareEngineBuiltinSynthConfig synth{};
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
+  auto* const original = engine->engine.midi_instrument(7);
+  REQUIRE(original != nullptr);
+
+  // A rebind restages the accepted clip bank; failing that copy is a resource
+  // failure, not a refusal, and leaves the original binding and owner in place.
+  // The payload dwarfs every allocation the replacement synth itself makes.
+  std::vector<uint8_t> payload(size_t{1} << 20, 0);
+  payload.front() = 0xF0;
+  payload.back() = 0xF7;
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 7;
+  clip.length_samples = 48000;
+  sonare::midi::MidiEvent event;
+  event.render_frame = 4096;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  clip.events.push_back(event);
+  engine->engine.set_midi_clips({clip});
+
+  SonareError result = SONARE_OK;
+  {
+    sonare::test::AllocationFailureGuard guard(payload.size());
+    result = sonare_engine_set_builtin_instrument(engine, 7, &synth);
+  }
+  CHECK(result == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(engine->engine.last_midi_instrument_bind_status() ==
+        sonare::engine::MidiInstrumentBindStatus::kOutOfMemory);
+  REQUIRE(engine->builtin_instruments.size() == 1);
+  REQUIRE(engine->builtin_instruments.front().second.get() == original);
+  REQUIRE(engine->engine.midi_instrument(7) == original);
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("MIDI instrument bind reports a refused scheduled SysEx as a preparation failure",
+          "[c_api][engine][midi][gs]") {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MASTERING)
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  // The C bind entries map kPreparationFailed to SONARE_ERROR_INVALID_PARAMETER;
+  // no shipped C-constructed instrument refuses a valid GS frame, so the status
+  // itself is asserted on a player whose inserts lack the overdrive controls.
+  const uint8_t type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 7;
+  clip.length_samples = 48000;
+  sonare::midi::MidiEvent event;
+  event.render_frame = 4096;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = type;
+  event.sysex_payload_size = sizeof(type);
+  clip.events.push_back(event);
+  engine->engine.set_midi_clips({clip});
+
+  sonare::midi::synth::Sf2PlayerConfig config;
+  config.bank_rig_binding = false;
+  config.insert_factory = [](std::string_view, std::string_view) {
+    return sonare::mastering::api::make_insert("utility.gain", "{}");
+  };
+  sonare::midi::synth::Sf2Player player(config);
+  REQUIRE_FALSE(engine->engine.set_midi_instrument(7, &player));
+  REQUIRE(engine->engine.last_midi_instrument_bind_status() ==
+          sonare::engine::MidiInstrumentBindStatus::kPreparationFailed);
+  REQUIRE(engine->engine.midi_instrument(7) == nullptr);
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("failed MIDI instrument clear retains the C-owned instrument",
+          "[c_api][engine][midi][gs]") {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  SonareEngineBuiltinSynthConfig synth{};
+  synth.gain = 0.5f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
+  auto* const original = engine->engine.midi_instrument(7);
+  REQUIRE(original != nullptr);
+
+  // Clearing reparses the accepted clip bank transactionally. Fail its payload
+  // allocation so the rack must retain the original binding and its owner.
+  std::vector<uint8_t> payload(8192, 0);
+  payload.front() = 0xF0;
+  payload.back() = 0xF7;
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 7;
+  clip.length_samples = 48000;
+  sonare::midi::MidiEvent event;
+  event.render_frame = 4096;
+  event.ump.words[0] = 0x30000000u;
+  event.ump.word_count = 2;
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  clip.events.push_back(event);
+  engine->engine.set_midi_clips({clip});
+
+  SonareError result = SONARE_OK;
+  {
+    sonare::test::AllocationFailureGuard guard(payload.size());
+    result = sonare_engine_clear_midi_instrument(engine, 7);
+  }
+  CHECK(result == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(engine->builtin_instruments.size() == 1);
+  REQUIRE(engine->builtin_instruments.front().second.get() == original);
+  REQUIRE(engine->engine.midi_instrument(7) == original);
+  REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) == SONARE_OK);
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(std::any_of(left.begin(), left.end(), [](float sample) { return sample != 0.0f; }));
+  REQUIRE(sonare_engine_clear_midi_instrument(engine, 7) == SONARE_OK);
+  REQUIRE(engine->builtin_instruments.empty());
+  sonare_engine_destroy(engine);
+#endif
 }
 
 TEST_CASE("sonare_engine_set_warp_voice_capacity enforces the documented ceiling",

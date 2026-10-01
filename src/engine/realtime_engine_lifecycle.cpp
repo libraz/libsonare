@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <memory>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -13,8 +14,10 @@ namespace sonare::engine {
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity, int max_channels) {
+  bool clip_sysex_prepared = true;
   try {
-    prepare_impl(sample_rate, max_block_size, command_capacity, telemetry_capacity, max_channels);
+    clip_sysex_prepared = prepare_impl(sample_rate, max_block_size, command_capacity,
+                                       telemetry_capacity, max_channels);
   } catch (...) {
     // Roll forward rather than back. The sequence below adopts the new sample
     // rate, block size and channel count before it sizes the scratch that
@@ -25,6 +28,12 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
     // does not own, so undoing it would re-run the same fallible steps.
     reset_to_unprepared();
     throw;
+  }
+  // Raised only after prepare_impl() committed, so the engine stays prepared.
+  if (!clip_sysex_prepared) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "prepare: a bound instrument refused a scheduled MIDI SysEx; the MIDI "
+                          "clip schedule was cleared");
   }
 }
 
@@ -42,6 +51,14 @@ void RealtimeEngine::reset_to_unprepared() noexcept {
   input_capture_storage_.clear();
   input_capture_channels_.fill(nullptr);
 #if defined(SONARE_WITH_ARRANGEMENT)
+  for (SysExPayloadSlot& slot : sysex_payload_slots_) {
+    // Quiescent CONTROL: no AUDIO command can still borrow these tokens.
+    slot.prepared.reset();
+    slot.destination_id = 0;
+    slot.accepted_order = 0;
+    slot.released.store(slot.generation.load(std::memory_order_relaxed), std::memory_order_release);
+  }
+  sysex_accepted_order_ = 0;
   midi_instrument_storage_.clear();
   midi_instrument_channels_.fill(nullptr);
 #if defined(SONARE_WITH_MIXING)
@@ -71,8 +88,9 @@ void RealtimeEngine::reset_to_unprepared() noexcept {
   // a refused block is visible, and the next prepare() re-reserves both.
 }
 
-void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t command_capacity,
+bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity, int max_channels) {
+  bool clip_sysex_prepared = true;
   // Clamp the queue capacities the same way max_block_size and max_channels are
   // clamped below. The telemetry number is multiplied by the metered lane count
   // before the meter tap reserves, so an unbounded value here is an unbounded
@@ -95,8 +113,11 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   // host to fetch and supply the next pages before the audio thread reads them
   // at any sane page size, and inert for a fully resident (or non-paged) clip.
   clip_player_.set_page_prefetch_frames(static_cast<int64_t>(sample_rate_ * 0.5));
+  // Reserve every offset of the block so AUDIO boundary collection never allocates.
+  boundary_splitter_.prepare(static_cast<size_t>(max_block_size_) + 1u);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
+  midi_boundary_offsets_.prepare(static_cast<size_t>(max_block_size_) + 1u);
   midi_clock_.prepare(active_tempo_map_);
   // Pre-size the host-instrument render scratch (channel-planar) so the audio
   // path never allocates when an instrument is registered. Re-prepare an
@@ -143,6 +164,22 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) {
     instrument->prepare(sample_rate_, max_block_size_);
   });
+  // Re-prepare clip SysEx against the freshly prepared instruments, all or none.
+  midi_sequencer_.acquire_midi_clips_control_quiescent();
+  if (const auto& current = midi_sequencer_.control_clips()) {
+    std::vector<midi::MidiClipSchedule> refreshed = *current;
+    midi::MidiSysExPayloadError error = midi::MidiSysExPayloadError::kNone;
+    if (midi::own_sysex_payloads(refreshed, &error, rack_sysex_preparer())) {
+      midi_sequencer_.set_midi_clips(std::move(refreshed));
+    } else if (error == midi::MidiSysExPayloadError::kOutOfMemory) {
+      throw SonareException(ErrorCode::OutOfMemory,
+                            "prepare: could not allocate MIDI SysEx operations");
+    } else {
+      midi_sequencer_.set_midi_clips({});
+      clip_sysex_prepared = false;
+    }
+    midi_sequencer_.acquire_midi_clips_control_quiescent();
+  }
   // Size the PDC delays from whatever instruments are already bound (their
   // latency is known now that they have been prepared). A failure here is an
   // allocation failure like any other in prepare(): report it the same way, so
@@ -220,10 +257,19 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   clip_page_request_overflow_count_.store(0, std::memory_order_relaxed);
   pending_active_.fill(false);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  // The commands dropped above can no longer release their UMP slots, so hand every slot back.
+  // The commands dropped above can no longer release their slots; hand them all back.
   for (UmpSlot& slot : ump_slots_) {
     slot.released.store(slot.generation.load(std::memory_order_relaxed), std::memory_order_release);
   }
+  for (SysExPayloadSlot& slot : sysex_payload_slots_) {
+    slot.prepared.reset();
+    slot.destination_id = 0;
+    slot.accepted_order = 0;
+    slot.released.store(slot.generation.load(std::memory_order_relaxed), std::memory_order_release);
+  }
+  sysex_payload_cursor_ = 0;
+  sysex_accepted_order_ = 0;
+  last_midi_sysex_push_status_.store(MidiSysExPushStatus::kNotAttempted, std::memory_order_relaxed);
 #endif
   // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
   // the audio thread; mark all slots inactive.
@@ -263,6 +309,7 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   telemetry_overflow_count_ = 0;
   automation_bind_overflow_reported_ = automation_.bind_target_overflow_count();
   automation_stale_lane_reported_ = automation_.stale_lane_apply_count();
+  return clip_sysex_prepared;
 }
 
 void RealtimeEngine::publish_tempo_map_snapshot() {

@@ -1,10 +1,15 @@
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <memory>
+#include <new>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "engine/realtime_engine.h"
+#include "util/exception.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace sonare::engine {
@@ -48,14 +53,56 @@ size_t RealtimeEngine::midi_cc_binding_count() const noexcept {
   return current ? current->binding_count() : 0;
 }
 
+void RealtimeEngine::reclaim_released_sysex_slots() noexcept {
+  // Only CONTROL destroys a token, once AUDIO has published released == generation.
+  for (SysExPayloadSlot& slot : sysex_payload_slots_) {
+    const uint32_t generation = slot.generation.load(std::memory_order_acquire);
+    if (slot.released.load(std::memory_order_acquire) != generation) continue;
+    slot.prepared.reset();
+    slot.destination_id = 0;
+    slot.accepted_order = 0;
+  }
+}
+
+bool RealtimeEngine::prepare_instrument_sysex(
+    midi::MidiInstrument* instrument, const uint8_t* payload, size_t size,
+    std::shared_ptr<const midi::PreparedMidiSysEx>& prepared) {
+  prepared.reset();
+  if (instrument == nullptr) return true;
+  try {
+    return instrument->prepare_sysex(payload, size, prepared);
+  } catch (const std::bad_alloc&) {
+    throw;
+  } catch (...) {
+    return false;
+  }
+}
+
+midi::MidiSysExPreparer RealtimeEngine::rack_sysex_preparer() const {
+  return [this](uint32_t destination, const uint8_t* payload, size_t size,
+                std::shared_ptr<const midi::PreparedMidiSysEx>& prepared) {
+    return prepare_instrument_sysex(instrument_rack_.get(destination), payload, size, prepared);
+  };
+}
+
 void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
+  reclaim_released_sysex_slots();
+  // own_sysex_payloads stages a complete bank, so a failure publishes nothing.
+  midi::MidiSysExPayloadError error = midi::MidiSysExPayloadError::kNone;
+  if (!midi::own_sysex_payloads(clips, &error, rack_sysex_preparer())) {
+    throw SonareException(error == midi::MidiSysExPayloadError::kOutOfMemory
+                              ? ErrorCode::OutOfMemory
+                              : ErrorCode::InvalidParameter,
+                          midi::describe(error));
+  }
+  // The sequencer's own ownership pass keeps each event's bank-owned token.
   midi_sequencer_.set_midi_clips(std::move(clips));
 }
 
 bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
                                      int64_t render_frame) noexcept {
-  // CONTROL thread. Copy the SysEx bytes into the next round-robin store slot as
-  // a seqlock writer, then enqueue a scalar-only command referencing the slot.
+  // CONTROL thread. Copy the SysEx bytes into the next store slot as a seqlock
+  // writer, then enqueue a scalar-only command referencing the slot.
   // The slot generation is a per-slot even/odd sequence: an ODD value marks a
   // write in progress and an EVEN value marks a completed (published) payload.
   // The control thread is the sole writer of a slot's generation, so reading its
@@ -64,16 +111,58 @@ bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* dat
   // acquire loads of the generation and accepts only a stable even value that
   // matches the command's generation, so a slot recycled mid-read (torn payload)
   // or actively being rewritten (odd) is dropped.
-  if (data == nullptr || size == 0 || size > kMaxSysExPayloadBytes) return false;
-  const uint32_t slot_index = sysex_payload_cursor_ % kSysExPayloadSlots;
-  sysex_payload_cursor_++;
+  last_midi_sysex_push_status_.store(MidiSysExPushStatus::kNotAttempted, std::memory_order_relaxed);
+  if (data == nullptr || size == 0 || size > kMaxSysExPayloadBytes) {
+    last_midi_sysex_push_status_.store(MidiSysExPushStatus::kInvalidPayload,
+                                       std::memory_order_relaxed);
+    return false;
+  }
+  reclaim_released_sysex_slots();
+  // The slot keeps the token alive until AUDIO releases its generation.
+  std::shared_ptr<const midi::PreparedMidiSysEx> prepared;
+  midi::MidiInstrument* instrument = instrument_rack_.get(destination_id);
+  try {
+    if (!prepare_instrument_sysex(instrument, data, size, prepared)) {
+      last_midi_sysex_push_status_.store(MidiSysExPushStatus::kPreparationFailed,
+                                         std::memory_order_relaxed);
+      return false;
+    }
+  } catch (...) {
+    last_midi_sysex_push_status_.store(MidiSysExPushStatus::kOutOfMemory,
+                                       std::memory_order_relaxed);
+    return false;
+  }
+  const uint32_t cursor = sysex_payload_cursor_;
+  uint32_t slot_index = 0;
+  uint32_t base = 0;
+  size_t probe = 0;
+  for (; probe < kSysExPayloadSlots; ++probe) {
+    const uint32_t candidate_index =
+        static_cast<uint32_t>((static_cast<size_t>(cursor) + probe) % kSysExPayloadSlots);
+    SysExPayloadSlot& candidate = sysex_payload_slots_[candidate_index];
+    const uint32_t candidate_base = candidate.generation.load(std::memory_order_relaxed);
+    // Never recycle an in-flight payload; scan past a still-pending future slot.
+    if (candidate.released.load(std::memory_order_acquire) == candidate_base) {
+      slot_index = candidate_index;
+      base = candidate_base;
+      break;
+    }
+  }
+  if (probe == kSysExPayloadSlots) {
+    last_midi_sysex_push_status_.store(MidiSysExPushStatus::kPayloadSlotsFull,
+                                       std::memory_order_relaxed);
+    return false;
+  }
   SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
-  const uint32_t base = slot.generation.load(std::memory_order_relaxed);  // last even (this thread)
-  const uint32_t generation = base + 2u;                                  // even: published value
-  slot.generation.store(base + 1u, std::memory_order_relaxed);            // odd: write in progress
+  sysex_payload_cursor_ += static_cast<uint32_t>(probe + 1);
+  const uint32_t generation = base + 2u;                        // even: published value
+  slot.generation.store(base + 1u, std::memory_order_relaxed);  // odd: write in progress
+  slot.accepted_order = 0;
   // Order the in-progress mark before the payload writes so a reader can never
   // observe fresh payload bytes still tagged with the previous (even) generation.
   std::atomic_thread_fence(std::memory_order_release);
+  slot.prepared = std::move(prepared);
+  slot.destination_id = destination_id;
   slot.store_payload(data, static_cast<uint32_t>(size));
   // Release-store the even (done) generation; it publishes the payload writes to
   // the audio thread's acquire load.
@@ -82,24 +171,31 @@ bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* dat
   // must not run unless the audio thread will actually adopt the matching
   // channel/EFX state, or a full queue would leave a half-applied SysEx: the new
   // effect chain adopted while the queued channel state never arrives, diverging
-  // from an offline bounce. On overflow the staged payload slot is simply left
-  // unreferenced (recycled by a later writer) and nothing is realised.
+  // from an offline bounce. On overflow the staged payload slot is handed back
+  // immediately and nothing is realised.
   rt::Command command{};
   command.type = rt::CommandType::kMidiSysExImmediate;
   command.target_id = destination_id;
   command.sample_time = render_frame;
   command.arg.i =
       static_cast<int64_t>((static_cast<uint64_t>(generation) << 32) | uint64_t{slot_index});
-  if (!push_command(command)) return false;
-  // The command is queued: realise any control-thread-built effect of this SysEx
-  // (e.g. a GS insertion effect) off the audio thread now, on this control
-  // thread; the audio thread swaps the rebuilt chains in wait-free at its next
-  // block (a one-block lag relative to the queued state is acceptable).
-  // Instruments that do not realise control-thread state (default MidiInstrument)
-  // no-op here.
-  if (midi::MidiInstrument* instrument = instrument_rack_.get(destination_id)) {
-    instrument->on_control_sysex(data, size);
+  if (!push_command(command)) {
+    // Never queued, so the audio thread will never hand it back.
+    slot.prepared.reset();
+    slot.destination_id = 0;
+    slot.accepted_order = 0;
+    slot.released.store(generation, std::memory_order_release);
+    last_midi_sysex_push_status_.store(MidiSysExPushStatus::kQueueFull, std::memory_order_relaxed);
+    return false;
   }
+  // Queueing is the acceptance point; scheduled clip SysEx has no such callback.
+  uint64_t accepted_order = ++sysex_accepted_order_;
+  if (accepted_order == 0) accepted_order = ++sysex_accepted_order_;
+  slot.accepted_order = accepted_order;
+  if (instrument != nullptr) {
+    instrument->on_prepared_sysex_accepted(data, size, slot.prepared.get());
+  }
+  last_midi_sysex_push_status_.store(MidiSysExPushStatus::kAccepted, std::memory_order_relaxed);
   return true;
 }
 
@@ -208,6 +304,19 @@ void RealtimeEngine::release_midi_ump_slot(const rt::Command& command) noexcept 
   slot.released.store(generation, std::memory_order_release);
 }
 
+void RealtimeEngine::release_midi_sysex_slot(const rt::Command& command) noexcept {
+  if (command.type != rt::CommandType::kMidiSysExImmediate) return;
+  const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+  const uint64_t slot_index = packed & 0xFFFFFFFFu;
+  const auto generation = static_cast<uint32_t>(packed >> 32);
+  if (slot_index >= sysex_payload_slots_.size()) return;
+  SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
+  // Only the command that owns the slot's current payload may hand it back.
+  if (slot.generation.load(std::memory_order_acquire) != generation) return;
+  if (slot.released.load(std::memory_order_relaxed) == generation) return;
+  slot.released.store(generation, std::memory_order_release);
+}
+
 bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {
   return midi_sequencer_.set_midi_fx(destination_id, chain, transport_.render_frame());
 }
@@ -307,154 +416,254 @@ void RealtimeEngine::set_midi_instrument(midi::MidiInstrument* instrument) {
 
 bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
                                          midi::MidiInstrument* instrument) {
-  // Hang-note safety on swap/clear: if this destination currently has a bound
-  // instrument that is about to be replaced or removed, release every note
-  // sounding on it first. The note-offs route through the rack to the OUTGOING
-  // instrument (still bound at this point) before the binding changes, so it
-  // does not leave a hanging note. set_midi_instrument is control-thread only
-  // and called between blocks, matching the sequencer's mutation contract.
+  const auto report = [this](MidiInstrumentBindStatus status) {
+    last_midi_instrument_bind_status_.store(status, std::memory_order_relaxed);
+    return status == MidiInstrumentBindStatus::kBound;
+  };
   midi::MidiInstrument* const previous = instrument_rack_.get(destination_id);
-  if (previous != nullptr && previous != instrument) {
+  if (previous == instrument) return report(MidiInstrumentBindStatus::kBound);
+  reclaim_released_sysex_slots();
+  if (previous == nullptr && instrument != nullptr &&
+      instrument_rack_.size() >= InstrumentRack::kMaxInstruments) {
+    return report(MidiInstrumentBindStatus::kRackFull);
+  }
+
+  // One instance holds one destination's voice state; refuse a second binding.
+  bool already_bound_elsewhere = false;
+  if (instrument != nullptr) {
+    instrument_rack_.for_each(
+        [&](uint32_t bound_destination, midi::MidiInstrument* bound_instrument) {
+          if (bound_destination != destination_id && bound_instrument == instrument) {
+            already_bound_elsewhere = true;
+          }
+        });
+  }
+  if (already_bound_elsewhere) return report(MidiInstrumentBindStatus::kAlreadyBoundElsewhere);
+
+  // Prepared SysEx tokens are only valid against the prepared instrument format.
+  try {
+    if (instrument != nullptr && max_block_size_ > 0) {
+      instrument->prepare(sample_rate_, max_block_size_);
+    }
+  } catch (const std::bad_alloc&) {
+    return report(MidiInstrumentBindStatus::kOutOfMemory);
+  } catch (...) {
+    return report(MidiInstrumentBindStatus::kPreparationFailed);
+  }
+
+  struct PendingTokenUpdate {
+    size_t slot_index = 0;
+    uint32_t generation = 0;
+    uint64_t accepted_order = 0;
+    std::shared_ptr<const midi::PreparedMidiSysEx> prepared;
+  };
+  std::vector<midi::MidiClipSchedule> next_clips;
+  std::vector<PendingTokenUpdate> pending_updates;
+  PreparedPdc next_pdc;
+
+  try {
+    const auto& control_clips = midi_sequencer_.control_clips();
+    next_clips = control_clips != nullptr ? *control_clips : std::vector<midi::MidiClipSchedule>{};
+
+    // Other destinations keep their tokens, keyed by the bank-owned payload span.
+    std::unordered_map<const uint8_t*, std::shared_ptr<const midi::PreparedMidiSysEx>>
+        existing_prepared;
+    std::unordered_set<const midi::MidiSysExPayloadBank*> seen_banks;
+    for (const midi::MidiClipSchedule& schedule : next_clips) {
+      const midi::MidiSysExPayloadBank* bank = schedule.sysex_payload_bank.get();
+      if (bank == nullptr || !seen_banks.insert(bank).second) continue;
+      for (size_t i = 0; i < bank->payloads.size() && i < bank->prepared_operations.size(); ++i) {
+        existing_prepared.emplace(bank->payloads[i].data(), bank->prepared_operations[i]);
+      }
+    }
+
+    const midi::MidiSysExPreparer prepare =
+        [&](uint32_t destination, const uint8_t* payload, size_t size,
+            std::shared_ptr<const midi::PreparedMidiSysEx>& prepared) {
+          if (destination == destination_id) {
+            return prepare_instrument_sysex(instrument, payload, size, prepared);
+          }
+          prepared.reset();
+          const auto existing = existing_prepared.find(payload);
+          if (existing != existing_prepared.end()) prepared = existing->second;
+          return true;
+        };
+    midi::MidiSysExPayloadError clip_error = midi::MidiSysExPayloadError::kNone;
+    if (!midi::own_sysex_payloads(next_clips, &clip_error, prepare)) {
+      return report(clip_error == midi::MidiSysExPayloadError::kOutOfMemory
+                        ? MidiInstrumentBindStatus::kOutOfMemory
+                        : MidiInstrumentBindStatus::kPreparationFailed);
+    }
+
+    std::array<uint8_t, kMaxSysExPayloadBytes> payload{};
+    for (size_t slot_index = 0; slot_index < sysex_payload_slots_.size(); ++slot_index) {
+      SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
+      const uint32_t generation = slot.generation.load(std::memory_order_acquire);
+      const uint32_t released = slot.released.load(std::memory_order_acquire);
+      if (generation == released) continue;
+      if ((generation & 1u) != 0u || slot.destination_id != destination_id) continue;
+      const uint32_t payload_size = slot.load_payload(payload);
+      if (payload_size == 0) return report(MidiInstrumentBindStatus::kPreparationFailed);
+      std::shared_ptr<const midi::PreparedMidiSysEx> prepared;
+      if (!prepare_instrument_sysex(instrument, payload.data(), payload_size, prepared)) {
+        return report(MidiInstrumentBindStatus::kPreparationFailed);
+      }
+      pending_updates.push_back({slot_index, generation, slot.accepted_order, std::move(prepared)});
+    }
+
+    std::sort(pending_updates.begin(), pending_updates.end(),
+              [](const PendingTokenUpdate& left, const PendingTokenUpdate& right) {
+                return left.accepted_order < right.accepted_order;
+              });
+
+    // Stage the latency banks too, so a failure leaves the old PDC and binding.
+    if (!prepare_pdc_for(true, destination_id, instrument, next_pdc)) {
+      return report(MidiInstrumentBindStatus::kOutOfMemory);
+    }
+  } catch (const std::bad_alloc&) {
+    return report(MidiInstrumentBindStatus::kOutOfMemory);
+  } catch (...) {
+    return report(MidiInstrumentBindStatus::kPreparationFailed);
+  }
+
+  try {
+    // Last fallible step: publish while the old rack is still live.
+    midi_sequencer_.set_midi_clips(std::move(next_clips));
+  } catch (const SonareException& e) {
+    return report(e.code() == ErrorCode::OutOfMemory
+                      ? MidiInstrumentBindStatus::kOutOfMemory
+                      : MidiInstrumentBindStatus::kPreparationFailed);
+  } catch (...) {
+    return report(MidiInstrumentBindStatus::kOutOfMemory);
+  }
+
+  // From here every step commits; release notes through the outgoing instrument first.
+  if (previous != nullptr) {
     midi_sequencer_.all_notes_off_for_destination(destination_id, transport_.render_frame());
   }
   if (!instrument_rack_.set(destination_id, instrument)) {
-    return false;  // rack full: leave existing bindings untouched
+    return report(MidiInstrumentBindStatus::kRackFull);
   }
-  // The sequencer's sink is the rack itself (set in prepare); no per-instrument
-  // sink wiring is needed. Prepare the freshly-registered instrument to the
-  // engine's sample rate / block size. prepare() may allocate, so this stays a
-  // control-thread operation.
-  if (instrument != nullptr && max_block_size_ > 0) {
-    instrument->prepare(sample_rate_, max_block_size_);
+  commit_pdc(next_pdc);
+  // Adopt now so a full hand-off ring cannot strand the prepared bank as pending.
+  midi_sequencer_.acquire_midi_clips_control_quiescent();
+
+  // Token replacement is CONTROL-only; AUDIO release never destroys a token.
+  for (PendingTokenUpdate& update : pending_updates) {
+    SysExPayloadSlot& slot = sysex_payload_slots_[update.slot_index];
+    if (slot.generation.load(std::memory_order_acquire) == update.generation &&
+        slot.released.load(std::memory_order_acquire) != update.generation) {
+      slot.prepared = std::move(update.prepared);
+    }
   }
-  // The bound set (and thus the maximum instrument latency) changed: refresh the
-  // PDC delays so clip + instrument audio stays phase-aligned. Control-thread
-  // only, matching the delay lines' reallocation contract.
-  if (!recompute_pdc()) {
-    // Compensation could not be reallocated, so the engine has fallen back to
-    // none at all and this binding would render misaligned against the clip bus.
-    // Undo it and report. The INCOMING pointer must not stay in the rack: the
-    // C-ABI and WASM wrappers free it as soon as they see the false, which would
-    // strand it. But the OUTGOING one was never the caller's to free, so restore
-    // it rather than clearing the destination — a failed swap that unbinds a
-    // working instrument is a silent capability loss, and the rack-full branch
-    // above already leaves existing bindings untouched. When there is no
-    // distinct outgoing instrument, previous IS the caller's pointer, so clear.
-    instrument_rack_.set(destination_id, previous != instrument ? previous : nullptr);
-    // Result deliberately discarded: this recompute targets the configuration
-    // that was already in place before the failed bind, so it asks for storage
-    // the engine has already held. Checking it would only offer a second
-    // failure with no better answer available — the binding is already back and
-    // the caller is already being told false.
-    (void)recompute_pdc();
-    return false;
+  if (instrument != nullptr) {
+    std::array<uint8_t, kMaxSysExPayloadBytes> payload{};
+    for (const PendingTokenUpdate& update : pending_updates) {
+      SysExPayloadSlot& slot = sysex_payload_slots_[update.slot_index];
+      if (slot.generation.load(std::memory_order_acquire) != update.generation ||
+          slot.released.load(std::memory_order_acquire) == update.generation) {
+        continue;
+      }
+      if (update.accepted_order == 0 || slot.prepared != nullptr) continue;
+      const uint32_t payload_size = slot.load_payload(payload);
+      if (payload_size != 0) {
+        instrument->on_prepared_sysex_accepted(payload.data(), payload_size, nullptr);
+      }
+    }
   }
-  if (previous != instrument) {
-    // Retire this destination's automation smoothers, but only now that the
-    // swap has actually taken: param ids are per instrument implementation, so
-    // carrying a slot across a swap would push the outgoing instrument's value
-    // into an unrelated parameter of the incoming one. Releasing before the PDC
-    // result was known left a failed swap with the previous instrument bound
-    // and its automation already retired. The host re-resolves after a rebind.
-    release_instrument_automations(destination_id);
-  }
-  return true;
+  release_instrument_automations(destination_id);
+  return report(MidiInstrumentBindStatus::kBound);
 }
 
-bool RealtimeEngine::recompute_pdc() {
-  // The whole project's reported latency is the slowest bound instrument: every
-  // source must be delayed to meet it. Clip audio (zero latency) is delayed by
-  // the full total; an instrument that already self-delays by L_i needs only the
-  // remaining (total - L_i). After both, all sources coincide at +total. Tracked
-  // in Q8.8 so an instrument's sub-sample latency is compensated too.
-  const int next_total_q8 = instrument_rack_.max_latency_samples_q8();
-  constexpr size_t kSlots = InstrumentRack::kMaxInstruments;
-  // Derive the target arrangement first, without touching a single bank: one
-  // slot per bound instrument, in rack order, each carrying (total - its own).
-  std::array<uint32_t, kSlots> next_instrument_pdc_dest{};
+bool RealtimeEngine::prepare_pdc_for(bool replace_destination, uint32_t destination_id,
+                                     midi::MidiInstrument* replacement,
+                                     PreparedPdc& out) const noexcept {
+  constexpr size_t kSlots = PreparedPdc::kSlots;
+  constexpr size_t kNoReuse = kSlots;
   std::array<int, kSlots> next_delay_q8{};
   size_t next_count = 0;
-  instrument_rack_.for_each([&](uint32_t destination_id, midi::MidiInstrument* instrument) {
-    if (next_count >= kSlots) return;
-    next_instrument_pdc_dest[next_count] = destination_id;
-    next_delay_q8[next_count] = next_total_q8 - instrument->latency_samples_q8();
-    ++next_count;
-  });
+  bool replaced = false;
 
-  // Carry a bank over whenever the destination it already serves still needs the
-  // very same storage shape. A bind names one destination, but every source's
-  // compensation is derived from the same maximum, so most binds leave the other
-  // banks' shapes untouched -- and rebuilding one zero-fills it, which is a
-  // dropout the length of that compensation on an instrument the bind never
-  // mentioned. Matching by destination id rather than by slot keeps that true
-  // when an unbind packs the remaining instruments down into lower slots.
-  constexpr size_t kNoReuse = kSlots;
-  std::array<size_t, kSlots> reuse_from{};
-  reuse_from.fill(kNoReuse);
-  for (size_t slot = 0; slot < next_count; ++slot) {
+  auto append = [&](uint32_t id, midi::MidiInstrument* instrument) {
+    if (instrument == nullptr || next_count >= kSlots) return;
+    out.destinations[next_count] = id;
+    next_delay_q8[next_count] = instrument->latency_samples_q8();
+    out.total_q8 = std::max(out.total_q8, next_delay_q8[next_count]);
+    ++next_count;
+  };
+  instrument_rack_.for_each([&](uint32_t id, midi::MidiInstrument* instrument) {
+    if (replace_destination && id == destination_id) {
+      replaced = true;
+      instrument = replacement;
+    }
+    append(id, instrument);
+  });
+  if (replace_destination && !replaced) append(destination_id, replacement);
+  out.count = next_count;
+  out.reuse_from.fill(kNoReuse);
+  out.reuse_clip = clip_pdc_delay_.matches_storage(prepared_channels_, out.total_q8);
+
+  bool configured = out.reuse_clip || out.clip.configure(prepared_channels_, out.total_q8);
+  for (size_t slot = 0; slot < next_count && configured; ++slot) {
     for (size_t live = 0; live < pdc_instrument_count_ && live < kSlots; ++live) {
-      if (instrument_pdc_dest_[live] != next_instrument_pdc_dest[slot]) continue;
-      if (instrument_pdc_delays_[live].matches_storage(prepared_channels_, next_delay_q8[slot])) {
-        reuse_from[slot] = live;
+      if (instrument_pdc_dest_[live] != out.destinations[slot]) continue;
+      if (instrument_pdc_delays_[live].matches_storage(prepared_channels_,
+                                                       out.total_q8 - next_delay_q8[slot])) {
+        out.reuse_from[slot] = live;
       }
       break;
     }
+    if (out.reuse_from[slot] == kNoReuse) {
+      configured =
+          out.instruments[slot].configure(prepared_channels_, out.total_q8 - next_delay_q8[slot]);
+    }
+  }
+  return configured;
+}
+
+void RealtimeEngine::commit_pdc(PreparedPdc& prepared) noexcept {
+  constexpr size_t kSlots = PreparedPdc::kSlots;
+  constexpr size_t kNoReuse = kSlots;
+  if (prepared.reuse_clip) {
+    (void)clip_pdc_delay_.configure(prepared_channels_, prepared.total_q8);
+  } else {
+    prepared.clip.swap(clip_pdc_delay_);
   }
 
-  // Build the replacements the shape changes genuinely require off to the side.
-  // In particular, do not configure the live clip bank before an instrument bank
-  // has succeeded: an allocation failure must leave the old delay/count pair
-  // internally consistent and still usable.
-  const bool reuse_clip = clip_pdc_delay_.matches_storage(prepared_channels_, next_total_q8);
-  ChannelDelay<kMaxAudioChannels> next_clip_pdc_delay;
-  std::array<ChannelDelay<kMaxAudioChannels>, kSlots> next_instrument_pdc_delays{};
-  bool configured = reuse_clip || next_clip_pdc_delay.configure(prepared_channels_, next_total_q8);
-  for (size_t slot = 0; slot < next_count && configured; ++slot) {
-    if (reuse_from[slot] != kNoReuse) continue;
-    configured =
-        next_instrument_pdc_delays[slot].configure(prepared_channels_, next_delay_q8[slot]);
-  }
-  if (!configured) {
-    // Fail closed if any replacement allocation failed. configure(0, 0) only
-    // swaps empty vectors, so this reclamation path remains non-allocating even
-    // when the control-thread allocation failure is being deliberately tested.
-    clip_pdc_delay_.configure(0, 0);
-    for (ChannelDelay<kMaxAudioChannels>& delay : instrument_pdc_delays_) {
-      delay.configure(0, 0);
+  // Carry each kept bank into its staging slot so history follows its destination.
+  for (size_t slot = 0; slot < prepared.count; ++slot) {
+    if (prepared.reuse_from[slot] != kNoReuse) {
+      prepared.instruments[slot].swap(instrument_pdc_delays_[prepared.reuse_from[slot]]);
     }
-    pdc_total_q8_ = 0;
-    pdc_instrument_count_ = 0;
-    instrument_pdc_dest_.fill(0);
-    update_reported_graph_latency();
-    return false;
   }
-  // Commit. Allocation-free from here: a carried bank is moved by swap and then
-  // only has its scalars republished (configure() takes its no-op path for a
-  // shape it already holds), so its delay history survives the recompute.
-  if (reuse_clip) {
-    clip_pdc_delay_.configure(prepared_channels_, next_total_q8);
-  } else {
-    next_clip_pdc_delay.swap(clip_pdc_delay_);
+  for (size_t live = 0; live < kSlots; ++live) {
+    bool carried = false;
+    for (size_t slot = 0; slot < prepared.count; ++slot) {
+      if (prepared.reuse_from[slot] == live) {
+        carried = true;
+        break;
+      }
+    }
+    if (!carried) {
+      ChannelDelay<kMaxAudioChannels> empty;
+      empty.swap(instrument_pdc_delays_[live]);
+    }
   }
-  // Lift every carried bank out of the live array before anything is written
-  // back into it, so a slot reshuffle cannot overwrite one that has not moved.
-  for (size_t slot = 0; slot < next_count; ++slot) {
-    if (reuse_from[slot] == kNoReuse) continue;
-    next_instrument_pdc_delays[slot].swap(instrument_pdc_delays_[reuse_from[slot]]);
+  for (size_t slot = 0; slot < prepared.count; ++slot) {
+    prepared.instruments[slot].swap(instrument_pdc_delays_[slot]);
   }
-  for (size_t slot = 0; slot < instrument_pdc_delays_.size(); ++slot) {
-    next_instrument_pdc_delays[slot].swap(instrument_pdc_delays_[slot]);
-  }
-  for (size_t slot = 0; slot < next_count; ++slot) {
-    if (reuse_from[slot] == kNoReuse) continue;
-    instrument_pdc_delays_[slot].configure(prepared_channels_, next_delay_q8[slot]);
-  }
-  instrument_pdc_dest_ = next_instrument_pdc_dest;
-  pdc_total_q8_ = next_total_q8;
-  pdc_instrument_count_ = next_count;
-  // Surface the applied compensation as the engine's graph latency so transport
-  // telemetry (audible_timeline_sample) reflects the real output delay.
+
+  instrument_pdc_dest_ = prepared.destinations;
+  pdc_total_q8_ = prepared.total_q8;
+  pdc_instrument_count_ = prepared.count;
   update_reported_graph_latency();
+}
+
+bool RealtimeEngine::recompute_pdc() {
+  // Stage every bank first; a failed recompute leaves the audible PDC untouched.
+  PreparedPdc prepared;
+  if (!prepare_pdc_for(false, 0, nullptr, prepared)) return false;
+  commit_pdc(prepared);
   return true;
 }
 

@@ -3,15 +3,21 @@
 ///        PPQ->frame rendering, and the RT MidiSequencer dispatch +
 ///        hang-note safety + overflow + boundary collection.
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <memory>
+#include <new>
+#include <type_traits>
 #include <vector>
 
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
+#include "midi/prepared_sysex.h"
 #include "midi/sequencer.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -22,7 +28,14 @@ using sonare::midi::MidiEvent;
 using sonare::midi::MidiEventSink;
 using sonare::midi::MidiFxChain;
 using sonare::midi::MidiSequencer;
+using sonare::midi::MidiSysExPayloadBank;
+using sonare::midi::PreparedMidiSysEx;
 using sonare::midi::Ump;
+
+struct TestPreparedMidiSysEx final : PreparedMidiSysEx {
+  explicit TestPreparedMidiSysEx(int value) : value(value) {}
+  int value = 0;
+};
 
 MidiClipEvent ev(double ppq, const Ump& ump) {
   MidiClipEvent e;
@@ -57,6 +70,258 @@ void init_tempo_map(sonare::transport::TempoMap* map, double bpm = 120.0,
 }
 
 }  // namespace
+
+static_assert(std::is_trivially_copyable_v<MidiEvent>);
+static_assert(sizeof(MidiSequencer) < 64u * 1024u,
+              "MidiSequencer must keep its large MIDI-FX work buffers off the stack");
+
+TEST_CASE("MidiClip SysEx preparation survives source bank destruction", "[midi][sysex]") {
+  const std::vector<uint8_t> expected{0xF0, 0x7D, 0x41, 0x42, 0xF7};
+  std::weak_ptr<const TestPreparedMidiSysEx> weak_prepared;
+  std::vector<MidiClipSchedule> schedules(1);
+  {
+    auto source_bank = std::make_shared<MidiSysExPayloadBank>();
+    source_bank->payloads.push_back(expected);
+    auto prepared = std::make_shared<TestPreparedMidiSysEx>(17);
+    weak_prepared = prepared;
+    source_bank->prepared_operations.push_back(prepared);
+    MidiEvent event;
+    event.render_frame = 10;
+    event.ump = sonare::midi::make_sysex_handle(0, 1);
+    event.sysex_payload = source_bank->payloads.front().data();
+    event.sysex_payload_size = expected.size();
+    event.prepared_sysex = prepared.get();
+    schedules.front().events = {event};
+    schedules.front().sysex_payload_bank = source_bank;
+    REQUIRE(sonare::midi::own_sysex_payloads(schedules));
+  }
+
+  REQUIRE_FALSE(weak_prepared.expired());
+  REQUIRE(schedules.front().events.front().prepared_sysex != nullptr);
+  REQUIRE(static_cast<const TestPreparedMidiSysEx*>(schedules.front().events.front().prepared_sysex)
+              ->value == 17);
+  REQUIRE(std::vector<uint8_t>(schedules.front().events.front().sysex_payload,
+                               schedules.front().events.front().sysex_payload + expected.size()) ==
+          expected);
+}
+
+TEST_CASE("MidiClip SysEx preparation preserves a token borrowed by a later schedule",
+          "[midi][sysex]") {
+  const std::vector<uint8_t> expected{0xF0, 0x7D, 0x31, 0x32, 0xF7};
+  std::vector<MidiClipSchedule> schedules(1);
+  auto source_bank = std::make_shared<MidiSysExPayloadBank>();
+  source_bank->payloads.push_back(expected);
+  auto prepared = std::make_shared<TestPreparedMidiSysEx>(31);
+  source_bank->prepared_operations.push_back(prepared);
+
+  MidiEvent first;
+  first.render_frame = 10;
+  first.ump = sonare::midi::make_sysex_handle(0, 2);
+  first.sysex_payload = source_bank->payloads.front().data();
+  first.sysex_payload_size = expected.size();
+  first.prepared_sysex = prepared.get();
+  schedules.front().events = {first};
+  schedules.front().sysex_payload_bank = source_bank;
+
+  MidiClipSchedule second;
+  MidiEvent borrowed = first;
+  borrowed.render_frame = 20;
+  borrowed.ump = sonare::midi::make_sysex_handle(0, 3);
+  second.events = {borrowed};
+  schedules.push_back(std::move(second));
+
+  REQUIRE(sonare::midi::own_sysex_payloads(schedules));
+  for (const MidiClipSchedule& schedule : schedules) {
+    REQUIRE(schedule.events.front().prepared_sysex != nullptr);
+    REQUIRE(
+        static_cast<const TestPreparedMidiSysEx*>(schedule.events.front().prepared_sysex)->value ==
+        31);
+    REQUIRE(std::vector<uint8_t>(schedule.events.front().sysex_payload,
+                                 schedule.events.front().sysex_payload + expected.size()) ==
+            expected);
+  }
+}
+
+TEST_CASE("MidiClip SysEx preparation failure leaves schedules untouched", "[midi][sysex]") {
+  const std::vector<uint8_t> source{0xF0, 0x7D, 0x55, 0xF7};
+  MidiClipSchedule schedule;
+  MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 4);
+  event.sysex_payload = source.data();
+  event.sysex_payload_size = source.size();
+  schedule.events = {event};
+  std::vector<MidiClipSchedule> schedules{schedule};
+  const uint8_t* original_pointer = schedules.front().events.front().sysex_payload;
+  sonare::midi::MidiSysExPayloadError error = sonare::midi::MidiSysExPayloadError::kNone;
+  REQUIRE_FALSE(sonare::midi::own_sysex_payloads(
+      schedules, &error,
+      [](uint32_t, const uint8_t*, size_t, std::shared_ptr<const PreparedMidiSysEx>&) {
+        return false;
+      }));
+  REQUIRE(error == sonare::midi::MidiSysExPayloadError::kPreparationFailed);
+  REQUIRE(schedules.front().events.front().sysex_payload == original_pointer);
+  REQUIRE(schedules.front().events.front().sysex_payload_size == source.size());
+  REQUIRE(schedules.front().events.front().prepared_sysex == nullptr);
+}
+
+TEST_CASE("MidiClip SysEx allocation failure is reported separately", "[midi][sysex]") {
+  const std::vector<uint8_t> source{0xF0, 0x7D, 0x56, 0xF7};
+  MidiClipSchedule schedule;
+  MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 5);
+  event.sysex_payload = source.data();
+  event.sysex_payload_size = source.size();
+  schedule.events = {event};
+  std::vector<MidiClipSchedule> schedules{schedule};
+  const uint8_t* original_pointer = schedules.front().events.front().sysex_payload;
+  sonare::midi::MidiSysExPayloadError error = sonare::midi::MidiSysExPayloadError::kNone;
+
+  REQUIRE_FALSE(sonare::midi::own_sysex_payloads(
+      schedules, &error,
+      [](uint32_t, const uint8_t*, size_t, std::shared_ptr<const PreparedMidiSysEx>&) -> bool {
+        throw std::bad_alloc();
+      }));
+  REQUIRE(error == sonare::midi::MidiSysExPayloadError::kOutOfMemory);
+  REQUIRE(schedules.front().events.front().sysex_payload == original_pointer);
+  REQUIRE(schedules.front().events.front().sysex_payload_size == source.size());
+  REQUIRE(schedules.front().events.front().prepared_sysex == nullptr);
+}
+
+TEST_CASE("MidiSequencer bypasses MIDI FX timing for SysEx", "[midi][sysex]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x66, 0xF7};
+  MidiClipSchedule clip;
+  clip.destination_id = 9;
+  MidiEvent sysex;
+  sysex.render_frame = 60;
+  sysex.ump = sonare::midi::make_sysex_handle(0, 5);
+  sysex.sysex_payload = payload.data();
+  sysex.sysex_payload_size = payload.size();
+  MidiEvent note;
+  note.render_frame = 60;
+  note.ump = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  clip.events = {sysex, note};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.ump.message_type() == sonare::midi::UmpMessageType::kData64);
+  REQUIRE(sink.events[0].event.render_frame == 60);
+  REQUIRE(sink.events[1].event.ump.is_note_on());
+  REQUIRE(sink.events[1].event.render_frame == 100);
+}
+
+TEST_CASE("MidiFxChain keeps SysEx opaque and synchronous", "[midi][sysex]") {
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x67, 0xF7};
+  TestPreparedMidiSysEx prepared(23);
+  MidiEvent input;
+  input.render_frame = 60;
+  input.ump = sonare::midi::make_sysex_handle(0, 6);
+  input.sysex_payload = payload.data();
+  input.sysex_payload_size = payload.size();
+  input.prepared_sysex = &prepared;
+
+  sonare::midi::MidiFxBuffer output;
+  fx.process(&input, 1, &output);
+
+  REQUIRE(output.size == 1);
+  REQUIRE(output.events[0].render_frame == 60);
+  REQUIRE(output.events[0].sysex_payload == payload.data());
+  REQUIRE(output.events[0].sysex_payload_size == payload.size());
+  REQUIRE(output.events[0].prepared_sysex == &prepared);
+}
+
+TEST_CASE("MidiSequencer collects more than the default boundary capacity after prepare",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  MidiClipSchedule clip;
+  for (int frame = 0; frame < 80; ++frame) {
+    clip.events.push_back({frame, sonare::midi::make_midi1_control_change(
+                                      0, 0, static_cast<uint8_t>(frame & 0x7F), 1)});
+  }
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  MidiSequencer::BoundaryOffsets boundaries;
+  REQUIRE(boundaries.capacity() == MidiSequencer::BoundaryOffsets::kCapacity);
+  boundaries.prepare(128);
+  REQUIRE(boundaries.capacity() == 128);
+  seq.collect_boundaries(0, 80, &boundaries);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 80);
+  REQUIRE(boundaries[0] == 0);
+  REQUIRE(boundaries[79] == 79);
+
+  // The prepared mark table is reset for every collection, so reusing the
+  // same control-side scratch cannot hide offsets seen in the previous block.
+  seq.collect_boundaries(0, 80, &boundaries);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 80);
+
+  // A shifted block maps every event onto an offset the previous block marked.
+  seq.collect_boundaries(40, 40, &boundaries);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 40);
+  for (size_t i = 0; i < boundaries.size(); ++i) REQUIRE(boundaries[i] == static_cast<int>(i));
+}
+
+TEST_CASE("MidiSequencer boundary marks survive an overflowed collection", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  constexpr int kCapacity = static_cast<int>(MidiSequencer::BoundaryOffsets::kCapacity);
+  // The first clip fills the inline set with offsets past its mark table; the
+  // second clip's offsets are markable but arrive once the set is full.
+  MidiClipSchedule late;
+  late.id = 1;
+  for (int frame = kCapacity; frame < 2 * kCapacity; ++frame) {
+    late.events.push_back({frame, sonare::midi::make_midi1_control_change(0, 0, 1, 1)});
+  }
+  MidiClipSchedule early;
+  early.id = 2;
+  for (int frame = 0; frame < 16; ++frame) {
+    early.events.push_back({frame, sonare::midi::make_midi1_control_change(0, 0, 2, 1)});
+  }
+  seq.set_midi_clips({late, early});
+  seq.acquire_midi_clips();
+
+  MidiSequencer::BoundaryOffsets boundaries;
+  seq.collect_boundaries(0, 2 * kCapacity, &boundaries);
+  REQUIRE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == MidiSequencer::BoundaryOffsets::kCapacity);
+  REQUIRE(boundaries[0] == kCapacity);
+
+  // An offset refused for capacity must not stay marked as a duplicate.
+  seq.collect_boundaries(0, 16, &boundaries);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 16);
+  for (size_t i = 0; i < boundaries.size(); ++i) REQUIRE(boundaries[i] == static_cast<int>(i));
+}
 
 TEST_CASE("MidiClip sort_stable orders by ppq, note-off before note-on, stable tiebreak",
           "[midi]") {
@@ -443,7 +708,8 @@ TEST_CASE("MidiSequencer dispatches pre-resolved SysEx payload views", "[midi]")
   seq.prepare(48000.0);
   seq.set_sink(&sink);
 
-  const std::vector<uint8_t> payload = {0xF0, 0x7D, 0x20, 0x21, 0xF7};
+  const std::vector<uint8_t> expected = {0xF0, 0x7D, 0x20, 0x21, 0xF7};
+  std::vector<uint8_t> payload = expected;
   MidiEvent sysex;
   sysex.render_frame = 120;
   sysex.ump = sonare::midi::make_sysex_handle(/*group=*/0, /*handle=*/77);
@@ -455,6 +721,9 @@ TEST_CASE("MidiSequencer dispatches pre-resolved SysEx payload views", "[midi]")
   clip.destination_id = 7;
   clip.events = {sysex};
   seq.set_midi_clips({clip});
+  // The control setter must snapshot caller-owned bytes. Mutating the source
+  // after publication must not alter the event adopted by the audio thread.
+  payload[2] = 0x55;
   seq.acquire_midi_clips();
 
   seq.process_block(0, 256);
@@ -462,11 +731,129 @@ TEST_CASE("MidiSequencer dispatches pre-resolved SysEx payload views", "[midi]")
   REQUIRE(sink.events.front().destination == 7);
   REQUIRE(sink.events.front().event.render_frame == 120);
   REQUIRE(sink.events.front().event.ump.sysex_handle == 77);
-  REQUIRE(sink.events.front().event.sysex_payload == payload.data());
-  REQUIRE(sink.events.front().event.sysex_payload_size == payload.size());
+  REQUIRE(seq.current_clips() != nullptr);
+  REQUIRE(seq.current_clips()->front().sysex_payload_bank != nullptr);
+  REQUIRE(sink.events.front().event.sysex_payload_size == expected.size());
   REQUIRE(std::vector<uint8_t>(sink.events.front().event.sysex_payload,
                                sink.events.front().event.sysex_payload +
-                                   sink.events.front().event.sysex_payload_size) == payload);
+                                   sink.events.front().event.sysex_payload_size) == expected);
+}
+
+TEST_CASE("MidiSequencer rejects null SysEx payload without replacing its snapshot", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  const std::vector<uint8_t> good_payload = {0xF0, 0x7D, 0x01, 0xF7};
+  MidiEvent good_event;
+  good_event.ump = sonare::midi::make_sysex_handle(0, 1);
+  good_event.sysex_payload = good_payload.data();
+  good_event.sysex_payload_size = good_payload.size();
+  MidiClipSchedule good_clip;
+  good_clip.id = 7;
+  good_clip.events = {good_event};
+  seq.set_midi_clips({good_clip});
+  seq.acquire_midi_clips();
+
+  SECTION("null pointer with a nonzero size") {
+    MidiEvent invalid = good_event;
+    invalid.sysex_payload = nullptr;
+    invalid.sysex_payload_size = 1;
+    MidiClipSchedule invalid_clip = good_clip;
+    invalid_clip.events = {invalid};
+    REQUIRE_THROWS_AS(seq.set_midi_clips({invalid_clip}), sonare::SonareException);
+  }
+
+  REQUIRE(seq.current_clips() != nullptr);
+  REQUIRE(seq.current_clips()->size() == 1);
+  const MidiEvent& retained = seq.current_clips()->front().events.front();
+  REQUIRE(retained.sysex_payload_size == good_payload.size());
+  REQUIRE(std::vector<uint8_t>(retained.sysex_payload,
+                               retained.sysex_payload + retained.sysex_payload_size) ==
+          good_payload);
+}
+
+TEST_CASE("MidiSequencer owns an arbitrary-size scheduled SysEx payload", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  std::vector<uint8_t> payload(513);
+  for (size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<uint8_t>(i);
+  }
+  const std::vector<uint8_t> expected = payload;
+  MidiEvent event;
+  event.render_frame = 120;
+  event.ump = sonare::midi::make_sysex_handle(0, 2);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  MidiClipSchedule clip;
+  clip.events = {event};
+  seq.set_midi_clips({clip});
+  payload[37] ^= 0xFFu;
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events.front().event.sysex_payload_size == expected.size());
+  REQUIRE(std::vector<uint8_t>(sink.events.front().event.sysex_payload,
+                               sink.events.front().event.sysex_payload + expected.size()) ==
+          expected);
+}
+
+TEST_CASE("MidiSequencer preserves payloads borrowed by later schedules", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  const std::vector<uint8_t> expected = {0xF0, 0x7D, 0x31, 0x32, 0xF7};
+  std::weak_ptr<const TestPreparedMidiSysEx> weak_prepared;
+  std::vector<MidiClipSchedule> schedules(1);
+  {
+    auto source_bank = std::make_shared<MidiSysExPayloadBank>();
+    source_bank->payloads.push_back(expected);
+    auto prepared = std::make_shared<TestPreparedMidiSysEx>(37);
+    weak_prepared = prepared;
+    source_bank->prepared_operations.push_back(prepared);
+    MidiEvent first_event;
+    first_event.render_frame = 100;
+    first_event.ump = sonare::midi::make_sysex_handle(0, 3);
+    first_event.sysex_payload = source_bank->payloads.front().data();
+    first_event.sysex_payload_size = expected.size();
+    first_event.prepared_sysex = prepared.get();
+    schedules.front().events = {first_event};
+    schedules.front().sysex_payload_bank = source_bank;
+  }
+
+  // The second schedule borrows the first schedule's bank. This is valid while
+  // the vector is handed to set_midi_clips; publication must not release the
+  // first owner before copying the later event.
+  MidiClipSchedule second;
+  MidiEvent second_event = schedules.front().events.front();
+  second_event.render_frame = 140;
+  second_event.ump = sonare::midi::make_sysex_handle(0, 4);
+  second_event.sysex_payload = schedules.front().events.front().sysex_payload;
+  second_event.sysex_payload_size = schedules.front().events.front().sysex_payload_size;
+  second.events = {second_event};
+  schedules.push_back(std::move(second));
+
+  seq.set_midi_clips(std::move(schedules));
+  REQUIRE_FALSE(weak_prepared.expired());
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+
+  REQUIRE(sink.events.size() == 2);
+  for (const auto& captured : sink.events) {
+    REQUIRE(captured.event.sysex_payload_size == expected.size());
+    REQUIRE(std::vector<uint8_t>(captured.event.sysex_payload,
+                                 captured.event.sysex_payload + expected.size()) == expected);
+    REQUIRE(captured.event.prepared_sysex != nullptr);
+    REQUIRE(static_cast<const TestPreparedMidiSysEx*>(captured.event.prepared_sysex)->value == 37);
+  }
 }
 
 TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", "[midi]") {
@@ -885,11 +1272,11 @@ TEST_CASE("MidiSequencer one-shot clip end releases only that clip's sounding no
 
   MidiSequencer::BoundaryOffsets boundaries;
   seq.collect_boundaries(0, 96, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed);
-  REQUIRE(boundaries.size == 3);
-  REQUIRE(boundaries.offsets[0] == 10);
-  REQUIRE(boundaries.offsets[1] == 20);
-  REQUIRE(boundaries.offsets[2] == 50);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 3);
+  REQUIRE(boundaries[0] == 10);
+  REQUIRE(boundaries[1] == 20);
+  REQUIRE(boundaries[2] == 50);
 
   seq.process_block(0, 96);
 
@@ -940,18 +1327,18 @@ TEST_CASE("MidiSequencer loops MIDI clip schedules on the RT path", "[midi]") {
 
   MidiSequencer::BoundaryOffsets boundaries;
   seq.collect_boundaries(0, 128, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed);
-  REQUIRE(boundaries.size == 10);
-  REQUIRE(boundaries.offsets[0] == 0);
-  REQUIRE(boundaries.offsets[1] == 20);
-  REQUIRE(boundaries.offsets[2] == 30);
-  REQUIRE(boundaries.offsets[3] == 40);
-  REQUIRE(boundaries.offsets[4] == 60);
-  REQUIRE(boundaries.offsets[5] == 70);
-  REQUIRE(boundaries.offsets[6] == 80);
-  REQUIRE(boundaries.offsets[7] == 100);
-  REQUIRE(boundaries.offsets[8] == 110);
-  REQUIRE(boundaries.offsets[9] == 120);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 10);
+  REQUIRE(boundaries[0] == 0);
+  REQUIRE(boundaries[1] == 20);
+  REQUIRE(boundaries[2] == 30);
+  REQUIRE(boundaries[3] == 40);
+  REQUIRE(boundaries[4] == 60);
+  REQUIRE(boundaries[5] == 70);
+  REQUIRE(boundaries[6] == 80);
+  REQUIRE(boundaries[7] == 100);
+  REQUIRE(boundaries[8] == 110);
+  REQUIRE(boundaries[9] == 120);
 
   seq.process_block(0, 128);
 
@@ -1116,11 +1503,11 @@ TEST_CASE("MidiSequencer collect_boundaries returns in-block event offsets", "[m
 
   MidiSequencer::BoundaryOffsets out;
   seq.collect_boundaries(0, 256, &out);
-  REQUIRE_FALSE(out.overflowed);
-  REQUIRE(out.size == 3);
-  REQUIRE(out.offsets[0] == 0);
-  REQUIRE(out.offsets[1] == 64);
-  REQUIRE(out.offsets[2] == 200);
+  REQUIRE_FALSE(out.overflowed());
+  REQUIRE(out.size() == 3);
+  REQUIRE(out[0] == 0);
+  REQUIRE(out[1] == 64);
+  REQUIRE(out[2] == 200);
 }
 
 TEST_CASE("MidiSequencer takes a clip event's UMP group from its own word0", "[midi]") {

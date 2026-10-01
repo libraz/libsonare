@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <new>
 
 #include "midi/channel_voice_decode.h"
 #include "midi/source_residual.h"
@@ -37,6 +38,7 @@ bool LayeredInstrument::add_layer(std::unique_ptr<MidiInstrument> instrument,
   layer.gain_right = gains.right * spec.level;
   layers_.push_back(std::move(layer));
   prepared_ = false;
+  invalidate_prepared_domain();
   return true;
 }
 
@@ -62,7 +64,11 @@ void LayeredInstrument::prepare(double sample_rate, int max_block_size) {
   scratch_.assign(static_cast<size_t>(max_block_size_) * 2u, 0.0f);
   source_scratch_.assign(kMaxResidualSources * 2u * static_cast<size_t>(max_block_size_), 0.0f);
   note_owners_.assign(kNoteSlots, 0u);
+  if (prepared_identity_.get() == nullptr) {
+    prepared_identity_ = std::make_shared<const PreparedLayeredSysExIdentity>();
+  }
   prepared_ = true;
+  invalidate_prepared_domain();
 }
 
 void LayeredInstrument::reset() {
@@ -82,18 +88,51 @@ Ump LayeredInstrument::retune(const Ump& ump, uint8_t note) noexcept {
 }
 
 void LayeredInstrument::send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
-                                  uint32_t destination_id) noexcept {
+                                  uint32_t destination_id,
+                                  const PreparedLayeredSysEx* prepared) noexcept {
   MidiEvent copy = event;
   copy.ump = retune(event.ump, note);
+  if (prepared != nullptr) {
+    copy.prepared_sysex = prepared->children[layer_index].get();
+  }
   layers_[layer_index].instrument->on_event(destination_id, copy);
 }
 
+const LayeredInstrument::PreparedLayeredSysEx* LayeredInstrument::valid_prepared_sysex(
+    const PreparedMidiSysEx* prepared) const noexcept {
+  if (prepared == nullptr) return nullptr;
+  const auto* composite = dynamic_cast<const PreparedLayeredSysEx*>(prepared);
+  if (composite == nullptr || composite->identity.get() == nullptr ||
+      prepared_identity_.get() == nullptr ||
+      composite->identity.get() != prepared_identity_.get() ||
+      composite->domain != prepared_domain_ || !prepared_ ||
+      composite->children.size() != layers_.size()) {
+    return nullptr;
+  }
+  return composite;
+}
+
 void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event) noexcept {
+  const PreparedLayeredSysEx* prepared = valid_prepared_sysex(event.prepared_sysex);
+  if (event.prepared_sysex != nullptr && prepared == nullptr) return;
+
   const Ump& u = event.ump;
   const bool note_on = u.is_note_on();
   const bool note_off = u.is_note_off();
   if (!note_on && !note_off) {
-    for (Layer& layer : layers_) layer.instrument->on_event(destination_id, event);
+    if (prepared == nullptr) {
+      // Unprepared events broadcast unchanged, including borrowed SysEx views.
+      for (Layer& layer : layers_) layer.instrument->on_event(destination_id, event);
+    } else {
+      // A layered token is a lease bundle, not a child token. Each child must
+      // receive its own operation domain; forwarding the composite to Sf2 (or
+      // another child) makes its owner check reject the event.
+      for (size_t i = 0; i < layers_.size(); ++i) {
+        MidiEvent copy = event;
+        copy.prepared_sysex = prepared->children[i].get();
+        layers_[i].instrument->on_event(destination_id, copy);
+      }
+    }
     return;
   }
 
@@ -109,7 +148,7 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
       const int transposed = static_cast<int>(note) + layers_[i].spec.transpose;
       if (transposed < 0 || transposed > 127) continue;
       owners |= 1u << i;
-      send_note(i, event, static_cast<uint8_t>(transposed), destination_id);
+      send_note(i, event, static_cast<uint8_t>(transposed), destination_id, prepared);
     }
     // A retrigger before the note-off replaces the owner set; the layers that
     // held the previous strike are exactly the ones that just received a
@@ -124,7 +163,7 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
     if ((owners & (1u << i)) == 0) continue;
     const int transposed = static_cast<int>(note) + layers_[i].spec.transpose;
     if (transposed < 0 || transposed > 127) continue;
-    send_note(i, event, static_cast<uint8_t>(transposed), destination_id);
+    send_note(i, event, static_cast<uint8_t>(transposed), destination_id, prepared);
   }
 }
 
@@ -230,6 +269,59 @@ void LayeredInstrument::set_transport(const transport::TransportState& state) no
 
 void LayeredInstrument::on_control_sysex(const uint8_t* data, size_t size) noexcept {
   for (Layer& layer : layers_) layer.instrument->on_control_sysex(data, size);
+}
+
+bool LayeredInstrument::prepare_sysex(const uint8_t* data, size_t size,
+                                      std::shared_ptr<const PreparedMidiSysEx>& out) {
+  out.reset();
+  if (!prepared_) return false;
+
+  try {
+    // A moved-from LayeredInstrument retains its prepared flag but loses the
+    // shared identity along with the move. Stage a replacement locally so an
+    // allocation or child-preparation failure leaves the object unchanged.
+    std::shared_ptr<const PreparedLayeredSysExIdentity> identity = prepared_identity_;
+    if (identity.get() == nullptr) {
+      identity = std::make_shared<const PreparedLayeredSysExIdentity>();
+    }
+    auto composite = std::make_shared<PreparedLayeredSysEx>();
+    composite->identity = identity;
+    composite->domain = prepared_domain_;
+    composite->children.reserve(layers_.size());
+    for (const Layer& layer : layers_) {
+      std::shared_ptr<const PreparedMidiSysEx> child;
+      if (!layer.instrument->prepare_sysex(data, size, child)) {
+        out.reset();
+        return false;
+      }
+      // Keep one slot per layer even when a child deliberately accepts the
+      // payload without an opaque operation. The composite remains non-null,
+      // and the null slot selects the child's raw-byte path on acceptance.
+      composite->children.push_back(std::move(child));
+    }
+    out = std::shared_ptr<const PreparedMidiSysEx>(std::move(composite));
+    if (prepared_identity_.get() == nullptr) prepared_identity_ = std::move(identity);
+    return true;
+  } catch (const std::bad_alloc&) {
+    out.reset();
+    throw;
+  } catch (...) {
+    out.reset();
+    return false;
+  }
+}
+
+void LayeredInstrument::on_prepared_sysex_accepted(const uint8_t* data, size_t size,
+                                                   const PreparedMidiSysEx* prepared) noexcept {
+  if (prepared == nullptr) {
+    on_control_sysex(data, size);
+    return;
+  }
+  const PreparedLayeredSysEx* composite = valid_prepared_sysex(prepared);
+  if (composite == nullptr) return;
+  for (size_t i = 0; i < layers_.size(); ++i) {
+    layers_[i].instrument->on_prepared_sysex_accepted(data, size, composite->children[i].get());
+  }
 }
 
 int LayeredInstrument::latency_samples() const noexcept {

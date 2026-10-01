@@ -14,7 +14,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -39,6 +41,11 @@ using sonare::midi::synth::NativeSynthConfig;
 constexpr double kRate = 48000.0;
 
 using sonare::test::event;
+
+struct ProbePreparedSysEx final : sonare::midi::PreparedMidiSysEx {
+  explicit ProbePreparedSysEx(uint32_t serial) : serial(serial) {}
+  uint32_t serial = 0;
+};
 
 /// Records what reached it and emits a constant so the mix is measurable.
 /// Not final: DiscardingProbe below extends it to reach the protected
@@ -70,6 +77,11 @@ class ProbeInstrument : public MidiInstrument {
   int latency_samples() const noexcept override { return latency_; }
   int tail_samples() const noexcept override { return tail_; }
   void on_event(uint32_t, const MidiEvent& e) noexcept override {
+    if (e.sysex_payload_size > 0 || e.prepared_sysex != nullptr) {
+      ++sysex_events;
+      last_event_prepared = e.prepared_sysex;
+      return;
+    }
     const sonare::midi::Ump& u = e.ump;
     if (u.is_note_on()) {
       notes.push_back({u.note_number(), u.data2_7bit(), true});
@@ -78,6 +90,35 @@ class ProbeInstrument : public MidiInstrument {
     } else {
       ++other_events;
     }
+  }
+  bool prepare_sysex(const uint8_t*, size_t,
+                     std::shared_ptr<const sonare::midi::PreparedMidiSysEx>& out) override {
+    ++prepare_calls;
+    if (throw_bad_alloc) throw std::bad_alloc();
+    if (fail_prepare) {
+      out.reset();
+      return false;
+    }
+    if (return_null_prepared) {
+      out.reset();
+      last_prepared = nullptr;
+      return true;
+    }
+    auto token = std::make_shared<ProbePreparedSysEx>(next_serial_++);
+    last_prepared = token.get();
+    weak_prepared = token;
+    out = std::move(token);
+    return true;
+  }
+  void on_control_sysex(const uint8_t*, size_t) noexcept override { ++legacy_sysex_calls; }
+  void on_prepared_sysex_accepted(
+      const uint8_t*, size_t, const sonare::midi::PreparedMidiSysEx* prepared) noexcept override {
+    ++accepted_calls;
+    if (prepared == nullptr) {
+      ++accepted_null_calls;
+      on_control_sysex(nullptr, 0);
+    }
+    last_accepted_prepared = prepared;
   }
   int parameter_id_for_key(const std::string& key) const noexcept override {
     if (key == "cutoff") return 7;
@@ -93,6 +134,18 @@ class ProbeInstrument : public MidiInstrument {
 
   std::vector<Note> notes;
   int other_events = 0;
+  int sysex_events = 0;
+  int prepare_calls = 0;
+  int accepted_calls = 0;
+  int accepted_null_calls = 0;
+  int legacy_sysex_calls = 0;
+  bool fail_prepare = false;
+  bool throw_bad_alloc = false;
+  bool return_null_prepared = false;
+  std::weak_ptr<const sonare::midi::PreparedMidiSysEx> weak_prepared;
+  const sonare::midi::PreparedMidiSysEx* last_prepared = nullptr;
+  const sonare::midi::PreparedMidiSysEx* last_accepted_prepared = nullptr;
+  const sonare::midi::PreparedMidiSysEx* last_event_prepared = nullptr;
   int process_calls = 0;
   int applied_id = -1;
   float applied_value = 0.0f;
@@ -101,6 +154,7 @@ class ProbeInstrument : public MidiInstrument {
   float level_ = 1.0f;
   int latency_ = 0;
   int tail_ = 0;
+  uint32_t next_serial_ = 1;
   bool prepared_ = false;
 };
 
@@ -265,6 +319,237 @@ TEST_CASE("Everything that is not a note reaches every layer", "[midi][layered]"
 
   CHECK(a_p->other_events == 3);
   CHECK(b_p->other_events == 3);
+}
+
+TEST_CASE("Layered SysEx uses one child operation per layer", "[midi][layered][sysex]") {
+  LayeredInstrument inst;
+  auto prepared_child = std::make_unique<ProbeInstrument>();
+  auto raw_child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* prepared_child_p = prepared_child.get();
+  ProbeInstrument* raw_child_p = raw_child.get();
+  raw_child_p->return_null_prepared = true;
+  REQUIRE(inst.add_layer(std::move(prepared_child), InstrumentLayerSpec{}));
+  REQUIRE(inst.add_layer(std::move(raw_child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x31, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> composite;
+  REQUIRE(inst.prepare_sysex(payload.data(), payload.size(), composite));
+  REQUIRE(composite != nullptr);
+
+  MidiEvent sysex = event(sonare::midi::make_sysex_handle(0, 1));
+  sysex.sysex_payload = payload.data();
+  sysex.sysex_payload_size = payload.size();
+  sysex.prepared_sysex = composite.get();
+  inst.on_event(0, sysex);
+
+  REQUIRE(prepared_child_p->sysex_events == 1);
+  REQUIRE(raw_child_p->sysex_events == 1);
+  REQUIRE(prepared_child_p->last_event_prepared == prepared_child_p->last_prepared);
+  REQUIRE(prepared_child_p->last_event_prepared != composite.get());
+  CHECK(raw_child_p->last_event_prepared == nullptr);
+
+  inst.on_prepared_sysex_accepted(payload.data(), payload.size(), composite.get());
+  REQUIRE(prepared_child_p->accepted_calls == 1);
+  CHECK(prepared_child_p->accepted_null_calls == 0);
+  CHECK(prepared_child_p->last_accepted_prepared == prepared_child_p->last_prepared);
+  REQUIRE(raw_child_p->accepted_calls == 1);
+  CHECK(raw_child_p->accepted_null_calls == 1);
+  CHECK(raw_child_p->legacy_sysex_calls == 1);
+}
+
+TEST_CASE("Layered SysEx composite retains every child lease", "[midi][layered][sysex]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x42, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> composite;
+  REQUIRE(inst.prepare_sysex(payload.data(), payload.size(), composite));
+  const std::weak_ptr<const sonare::midi::PreparedMidiSysEx> weak_child = child_p->weak_prepared;
+  auto bank = std::make_shared<sonare::midi::MidiSysExPayloadBank>();
+  bank->prepared_operations.push_back(composite);
+  composite.reset();
+
+  REQUIRE_FALSE(weak_child.expired());
+  MidiEvent sysex = event(sonare::midi::make_sysex_handle(0, 2));
+  sysex.sysex_payload = payload.data();
+  sysex.sysex_payload_size = payload.size();
+  sysex.prepared_sysex = bank->prepared_operations.front().get();
+  inst.on_event(0, sysex);
+  CHECK(child_p->last_event_prepared == child_p->last_prepared);
+
+  bank.reset();
+  CHECK(weak_child.expired());
+}
+
+TEST_CASE("Layered SysEx preparation failure keeps the old composite usable",
+          "[midi][layered][sysex]") {
+  LayeredInstrument inst;
+  auto first = std::make_unique<ProbeInstrument>();
+  auto second = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* first_p = first.get();
+  ProbeInstrument* second_p = second.get();
+  REQUIRE(inst.add_layer(std::move(first), InstrumentLayerSpec{}));
+  REQUIRE(inst.add_layer(std::move(second), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x53, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> old_composite;
+  REQUIRE(inst.prepare_sysex(payload.data(), payload.size(), old_composite));
+  const sonare::midi::PreparedMidiSysEx* old_first = first_p->last_prepared;
+  const int legacy_before = second_p->legacy_sysex_calls;
+
+  second_p->fail_prepare = true;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> failed = old_composite;
+  REQUIRE_FALSE(inst.prepare_sysex(payload.data(), payload.size(), failed));
+  CHECK(failed == nullptr);
+  CHECK(second_p->legacy_sysex_calls == legacy_before);
+
+  inst.on_prepared_sysex_accepted(payload.data(), payload.size(), old_composite.get());
+  CHECK(first_p->accepted_calls == 1);
+  CHECK(first_p->last_accepted_prepared == old_first);
+  CHECK(second_p->accepted_calls == 1);
+}
+
+TEST_CASE("Layered SysEx allocation failure propagates", "[midi][layered][sysex]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  child_p->throw_bad_alloc = true;
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x57, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> prepared;
+  REQUIRE_THROWS_AS(inst.prepare_sysex(payload.data(), payload.size(), prepared), std::bad_alloc);
+  CHECK(prepared == nullptr);
+  CHECK(child_p->legacy_sysex_calls == 0);
+}
+
+TEST_CASE("Layered SysEx rejects stale and foreign composite domains", "[midi][layered][sysex]") {
+  LayeredInstrument owner;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(owner.add_layer(std::move(child), InstrumentLayerSpec{}));
+  owner.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x64, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+  REQUIRE(owner.prepare_sysex(payload.data(), payload.size(), token));
+  MidiEvent sysex = event(sonare::midi::make_sysex_handle(0, 3));
+  sysex.sysex_payload = payload.data();
+  sysex.sysex_payload_size = payload.size();
+  sysex.prepared_sysex = token.get();
+
+  LayeredInstrument foreign;
+  auto foreign_child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* foreign_child_p = foreign_child.get();
+  REQUIRE(foreign.add_layer(std::move(foreign_child), InstrumentLayerSpec{}));
+  foreign.prepare(kRate, 128);
+  foreign.on_event(0, sysex);
+  CHECK(foreign_child_p->sysex_events == 0);
+
+  REQUIRE(owner.add_layer(std::make_unique<ProbeInstrument>(), InstrumentLayerSpec{}));
+  owner.on_event(0, sysex);
+  CHECK(child_p->sysex_events == 0);
+}
+
+TEST_CASE("Layered SysEx composite follows implicit move construction", "[midi][layered][sysex]") {
+  LayeredInstrument source;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(source.add_layer(std::move(child), InstrumentLayerSpec{}));
+  source.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x6A, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+  REQUIRE(source.prepare_sysex(payload.data(), payload.size(), token));
+
+  MidiEvent sysex = event(sonare::midi::make_sysex_handle(0, 4));
+  sysex.sysex_payload = payload.data();
+  sysex.sysex_payload_size = payload.size();
+  sysex.prepared_sysex = token.get();
+
+  LayeredInstrument moved(std::move(source));
+  moved.on_event(0, sysex);
+  REQUIRE(child_p->sysex_events == 1);
+}
+
+TEST_CASE("Layered SysEx move assignment keeps only the source identity",
+          "[midi][layered][sysex]") {
+  LayeredInstrument source;
+  auto source_child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* source_child_p = source_child.get();
+  REQUIRE(source.add_layer(std::move(source_child), InstrumentLayerSpec{}));
+  source.prepare(kRate, 128);
+
+  LayeredInstrument destination;
+  auto destination_child = std::make_unique<ProbeInstrument>();
+  REQUIRE(destination.add_layer(std::move(destination_child), InstrumentLayerSpec{}));
+  destination.prepare(kRate, 128);
+
+  LayeredInstrument foreign;
+  auto foreign_child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* foreign_child_p = foreign_child.get();
+  REQUIRE(foreign.add_layer(std::move(foreign_child), InstrumentLayerSpec{}));
+  foreign.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x6B, 0xF7};
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> source_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> destination_token;
+  REQUIRE(source.prepare_sysex(payload.data(), payload.size(), source_token));
+  REQUIRE(destination.prepare_sysex(payload.data(), payload.size(), destination_token));
+
+  auto make_event = [&](const sonare::midi::PreparedMidiSysEx* prepared) {
+    MidiEvent sysex = event(sonare::midi::make_sysex_handle(0, 5));
+    sysex.sysex_payload = payload.data();
+    sysex.sysex_payload_size = payload.size();
+    sysex.prepared_sysex = prepared;
+    return sysex;
+  };
+
+  destination = std::move(source);
+  destination.on_event(0, make_event(source_token.get()));
+  REQUIRE(source_child_p->sysex_events == 1);
+
+  // The destination's old token must not become valid merely because the
+  // destination now has one layer and the same prepared domain value.
+  destination.on_event(0, make_event(destination_token.get()));
+  CHECK(source_child_p->sysex_events == 1);
+
+  // A moved-from object can be prepared and reused; its old token remains
+  // foreign to that new identity.
+  auto replacement_child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* replacement_child_p = replacement_child.get();
+  REQUIRE(source.add_layer(std::move(replacement_child), InstrumentLayerSpec{}));
+  source.prepare(kRate, 128);
+  source.on_event(0, make_event(source_token.get()));
+  CHECK(replacement_child_p->sysex_events == 0);
+
+  foreign.on_event(0, make_event(source_token.get()));
+  CHECK(foreign_child_p->sysex_events == 0);
+}
+
+TEST_CASE("Layered legacy SysEx broadcast remains available", "[midi][layered][sysex]") {
+  LayeredInstrument inst;
+  auto first = std::make_unique<ProbeInstrument>();
+  auto second = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* first_p = first.get();
+  ProbeInstrument* second_p = second.get();
+  REQUIRE(inst.add_layer(std::move(first), InstrumentLayerSpec{}));
+  REQUIRE(inst.add_layer(std::move(second), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x75, 0xF7};
+  inst.on_control_sysex(payload.data(), payload.size());
+  CHECK(first_p->legacy_sysex_calls == 1);
+  CHECK(second_p->legacy_sysex_calls == 1);
+  inst.on_prepared_sysex_accepted(payload.data(), payload.size(), nullptr);
+  CHECK(first_p->legacy_sysex_calls == 2);
+  CHECK(second_p->legacy_sysex_calls == 2);
 }
 
 TEST_CASE("Layer level and balance shape the sum", "[midi][layered]") {

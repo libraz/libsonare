@@ -212,7 +212,8 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
   arr::apply_to_engine(filtered, engine);
   for (const HostedInstrument& hosted : instruments) {
     hosted.instrument->reset();
-    engine.set_midi_instrument(hosted.destination_id, hosted.instrument);
+    // A refused bind (e.g. a scheduled SysEx the instrument cannot prepare) fails the bounce.
+    if (!engine.set_midi_instrument(hosted.destination_id, hosted.instrument)) return false;
   }
 
   // Prime the parameter smoothers before the audible render so a non-default

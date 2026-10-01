@@ -364,6 +364,23 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// Mirrors the C ABI's bind mapping: a permanent refusal is InvalidParameter, a
+// full rack or failed allocation is OutOfMemory.
+[[noreturn]] void throwMidiInstrumentBindFailure(const sonare::engine::RealtimeEngine& engine,
+                                                 const char* message) {
+  switch (engine.last_midi_instrument_bind_status()) {
+    case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
+    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+    default:
+      throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
+  }
+}
+
+}  // namespace
+
 // Binds (or replaces) an engine-owned instrument on a destination, keeping
 // the ownership table and the engine's instrument rack in sync. Shared by
 // the built-in synth and SF2 instrument entries.
@@ -373,8 +390,7 @@ void RealtimeEngineWasm::bindInstrument(uint32_t destination_id,
     if (entry.first == destination_id) {
       sonare::midi::MidiInstrument* raw = instrument.get();
       if (!engine_.set_midi_instrument(destination_id, raw)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                      "failed to bind MIDI instrument");
+        throwMidiInstrumentBindFailure(engine_, "failed to bind MIDI instrument");
       }
       entry.second = std::move(instrument);
       return;
@@ -384,8 +400,7 @@ void RealtimeEngineWasm::bindInstrument(uint32_t destination_id,
   sonare::midi::MidiInstrument* raw = builtin_instruments_.back().second.get();
   if (!engine_.set_midi_instrument(destination_id, raw)) {
     builtin_instruments_.pop_back();
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to bind MIDI instrument");
+    throwMidiInstrumentBindFailure(engine_, "failed to bind MIDI instrument");
   }
 }
 #endif
@@ -393,7 +408,10 @@ void RealtimeEngineWasm::bindInstrument(uint32_t destination_id,
 void RealtimeEngineWasm::clearMidiInstrument(const val& destination_id_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  engine_.set_midi_instrument(destination_id, nullptr);
+  // A failed clear leaves the instrument bound, so its owner must stay alive.
+  if (!engine_.set_midi_instrument(destination_id, nullptr)) {
+    throwMidiInstrumentBindFailure(engine_, "failed to clear MIDI instrument");
+  }
   builtin_instruments_.erase(
       std::remove_if(builtin_instruments_.begin(), builtin_instruments_.end(),
                      [&](const auto& entry) { return entry.first == destination_id; }),
@@ -1377,7 +1395,8 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
   // C-ABI translation unit here, so the mapping is reproduced): malformed or
-  // oversized requests are InvalidParameter, while a full command queue is
+  // oversized requests and payloads the destination cannot prepare are
+  // InvalidParameter, while full payload slots or a full command queue are
   // transient OutOfMemory back-pressure. The ceiling is the engine's own
   // constant, not a copy of its value, so raising it moves this guard with it.
   constexpr size_t kMaxSysExBytes = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
@@ -1388,8 +1407,15 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
   }
   if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(),
                                renderFrameFromVal(render_frame_val))) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to queue MIDI SysEx command");
+    switch (engine_.last_midi_sysex_push_status()) {
+      case sonare::engine::MidiSysExPushStatus::kInvalidPayload:
+      case sonare::engine::MidiSysExPushStatus::kPreparationFailed:
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "pushMidiSysex: the destination cannot prepare this SysEx");
+      default:
+        throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                      "failed to queue MIDI SysEx command");
+    }
   }
 }
 

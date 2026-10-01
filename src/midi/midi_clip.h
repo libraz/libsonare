@@ -9,7 +9,10 @@
 /// midi, never the reverse), so it can be linked into sonare_engine without a
 /// dependency cycle.
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <vector>
 
 #include "core/fade_curve.h"
@@ -121,6 +124,35 @@ enum class MidiLoopMode : uint8_t {
   kLoop = 1,
 };
 
+/// Immutable control-thread storage for the SysEx byte spans referenced by a
+/// published MIDI schedule. MidiEvent stays a trivially-copyable pointer view
+/// for the audio thread; this bank owns the pointed-to bytes for the complete
+/// lifetime of the schedule snapshot.
+struct MidiSysExPayloadBank {
+  std::vector<std::vector<uint8_t>> payloads;
+  /// One optional prepared operation per non-empty payload, in the same order
+  /// as payloads. Shared ownership keeps the raw pointer carried by MidiEvent
+  /// valid until the complete published schedule is retired.
+  std::vector<std::shared_ptr<const PreparedMidiSysEx>> prepared_operations;
+};
+
+enum class MidiSysExPayloadError : uint8_t {
+  kNone = 0,
+  kNullPayload = 1,
+  kPreparationFailed = 2,
+  kOutOfMemory = 3,
+};
+
+/// Human-readable reason for @p error, shared by every caller that reports a
+/// rejected SysEx schedule.
+const char* describe(MidiSysExPayloadError error) noexcept;
+
+/// Control-thread hook used by an instrument to turn one raw SysEx payload
+/// into immutable state that can be consumed synchronously on the audio path.
+using MidiSysExPreparer =
+    std::function<bool(uint32_t destination, const uint8_t* payload, size_t size,
+                       std::shared_ptr<const PreparedMidiSysEx>& prepared)>;
+
 /// The RT-facing compiled MIDI clip. Owned value data handed to the engine via
 /// the RtPublisher path (like engine::ClipSchedule). Events are already in
 /// absolute render frames (PPQ->frame baked by the compiler). The RT sequencer
@@ -168,6 +200,11 @@ struct MidiClipSchedule {
   FadeCurve fade_in_curve = FadeCurve::Linear;
   FadeCurve fade_out_curve = FadeCurve::Linear;
 
+  /// Shared immutable owner for this schedule's SysEx event payload views.
+  /// The sequencer replaces it with a fresh bank when publishing, which also
+  /// makes direct caller-created schedules independent of their source buffers.
+  std::shared_ptr<const MidiSysExPayloadBank> sysex_payload_bank;
+
   bool operator==(const MidiClipSchedule& o) const noexcept {
     return id == o.id && track_id == o.track_id && start_sample == o.start_sample &&
            start_ppq == o.start_ppq && length_samples == o.length_samples &&
@@ -177,5 +214,15 @@ struct MidiClipSchedule {
            fade_in_curve == o.fade_in_curve && fade_out_curve == o.fade_out_curve;
   }
 };
+
+/// Validates and deep-copies every non-empty SysEx view in @p schedules into a
+/// fresh immutable bank. This is CONTROL-thread-only and must run before a
+/// schedule vector is handed to an RT publisher. On failure, no publication is
+/// possible and @p error identifies the rejected shape. Zero-length views are
+/// canonicalized to a null pointer. @p prepare, when set, builds each event's
+/// token; without it a token survives only if a bank in @p schedules owns it.
+bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules,
+                        MidiSysExPayloadError* error = nullptr,
+                        const MidiSysExPreparer& prepare = {});
 
 }  // namespace sonare::midi

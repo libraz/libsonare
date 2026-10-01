@@ -17,6 +17,7 @@
 #include "engine/realtime_engine.h"
 #include "midi/ump.h"
 #include "rt/command.h"
+#include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -477,6 +478,41 @@ TEST_CASE("MIDI compile trims events outside the EditClip length", "[arrangement
   REQUIRE(events[1].render_frame == 66000);
 }
 
+TEST_CASE("MIDI compile reports a failed SysEx payload allocation", "[arrangement][midi][sysex]") {
+  arr::Project project;
+  project.set_sample_rate(kProjectSr);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+  const arr::SourceId source = project.add_midi_source(arr::MidiSourceRef{});
+  arr::Track track;
+  track.kind = arr::Track::Kind::kMidi;
+  const arr::TrackId track_id = project.add_track(track);
+  arr::EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source;
+  clip.length_ppq = 1.0;
+  const arr::ClipId clip_id = project.add_clip(clip);
+
+  arr::MidiContentStore midi;
+  std::vector<uint8_t> payload(8192, 0);
+  payload.front() = 0xF0;
+  payload.back() = 0xF7;
+  midi.sysex_payloads.emplace(42, payload);
+  const auto sysex = sonare::midi::make_sysex_handle(0, 42);
+  midi.events[clip_id] = {{0.0, sysex.words[0], sysex.words[1], 42}};
+
+  arr::CompileResult result;
+  {
+    sonare::test::AllocationFailureGuard guard(payload.size());
+    result = arr::compile(project, midi, arr::AudioContentStore{});
+  }
+  REQUIRE(result.has_errors());
+  REQUIRE_FALSE(result.timeline.has_value());
+  REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
+    return diag.severity == arr::Diagnostic::Severity::kError &&
+           diag.message == "MIDI SysEx payload allocation failed";
+  }));
+}
+
 TEST_CASE("MIDI compile resolves SysEx handles to stable payload views", "[arrangement]") {
   arr::Project project;
   project.set_sample_rate(kProjectSr);
@@ -501,21 +537,29 @@ TEST_CASE("MIDI compile resolves SysEx handles to stable payload views", "[arran
   const std::vector<uint8_t> payload = {0xF0, 0x7D, 0x10, 0x11, 0xF7};
   const auto sysex = sonare::midi::make_sysex_handle(/*group=*/0, kHandle);
 
-  arr::MidiContentStore midi;
-  midi.sysex_payloads.emplace(kHandle, payload);
-  midi.events[cid] = {{0.0, sysex.words[0], sysex.words[1], kHandle}};
+  arr::CompiledTimeline copied;
+  {
+    arr::MidiContentStore midi;
+    midi.sysex_payloads.emplace(kHandle, payload);
+    midi.events[cid] = {{0.0, sysex.words[0], sysex.words[1], kHandle}};
 
-  arr::CompileResult r = arr::compile(project, midi, arr::AudioContentStore{});
-  REQUIRE_FALSE(r.has_errors());
-  REQUIRE(r.timeline.has_value());
-  REQUIRE(r.timeline->midi_clips.size() == 1);
+    arr::CompileResult r = arr::compile(project, midi, arr::AudioContentStore{});
+    REQUIRE_FALSE(r.has_errors());
+    REQUIRE(r.timeline.has_value());
+    REQUIRE(r.timeline->midi_clips.size() == 1);
 
-  const auto& schedule = r.timeline->midi_clips.front();
+    // The compiled timeline is an independent snapshot. Its bytes must remain
+    // unchanged when the caller mutates the source store after compilation.
+    midi.sysex_payloads.at(kHandle)[2] = 0x55;
+    copied = *r.timeline;
+  }
+
+  const auto& schedule = copied.midi_clips.front();
   REQUIRE(schedule.destination_id == 31);
   REQUIRE(schedule.events.size() == 1);
   const auto& event = schedule.events.front();
   REQUIRE(event.ump.sysex_handle == kHandle);
-  REQUIRE(event.sysex_payload == midi.sysex_payloads.at(kHandle).data());
+  REQUIRE(schedule.sysex_payload_bank != nullptr);
   REQUIRE(event.sysex_payload_size == payload.size());
   REQUIRE(std::vector<uint8_t>(event.sysex_payload,
                                event.sysex_payload + event.sysex_payload_size) == payload);

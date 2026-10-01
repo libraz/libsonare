@@ -42,6 +42,15 @@
 
 namespace sonare::host {
 
+/// Returns whether an event carries a view into runtime-owned SysEx storage.
+/// Such views are valid only during the synchronous rack callback; an output
+/// queue must reject them before copying the fixed event record, because the
+/// pointer or prepared token would otherwise outlive its owner.
+inline bool midi_event_has_borrowed_sysex(const midi::MidiEvent& event) noexcept {
+  return event.sysex_payload != nullptr || event.sysex_payload_size != 0 ||
+         event.prepared_sysex != nullptr;
+}
+
 /// Lock-free correlation between a monotonic host clock and the engine's
 /// absolute render-frame timeline. A device backend publishes an anchor at the
 /// first frame of each audio callback; timestamped MIDI backends read the latest
@@ -209,7 +218,10 @@ class MidiOutputSink {
   virtual ~MidiOutputSink() = default;
 
   /// AUDIO/RT thread: send one event, sample-accurately at `event.render_frame`.
-  /// Returns false if the internal fixed queue overflowed (event dropped).
+  /// Returns false if the internal fixed queue overflowed or if the event
+  /// carries a borrowed SysEx payload or prepared token (event dropped).
+  /// Implementations must reject those borrowed views before queueing. A pure
+  /// UMP event with no borrowed SysEx fields may be queued normally.
   /// RT-safe: no allocation, no lock-wait, no I/O. The host's port thread
   /// flushes queued events to the device later.
   virtual bool send(const midi::MidiEvent& event) noexcept = 0;
@@ -376,6 +388,10 @@ class FixedMidiOutputSink final : public MidiOutputSink {
   static_assert(Capacity > 0, "FixedMidiOutputSink capacity must be positive");
 
   bool send(const midi::MidiEvent& event) noexcept override {
+    if (midi_event_has_borrowed_sysex(event)) {
+      dropped_count_.fetch_add(1, std::memory_order_relaxed);
+      return false;
+    }
     const size_t write = write_index_.load(std::memory_order_relaxed);
     const size_t next = increment(write);
     if (next == read_index_.load(std::memory_order_acquire)) {
@@ -523,9 +539,15 @@ class FixedExternalMidiOutputQueue {
   static_assert(Capacity > 0, "FixedExternalMidiOutputQueue capacity must be positive");
 
   /// AUDIO/RT thread: enqueue one destination-tagged event. Returns false if the
-  /// fixed queue overflowed (event dropped, dropped_count() bumped). RT-safe: no
-  /// allocation, no lock-wait, no I/O.
+  /// fixed queue overflowed or the event carries a borrowed SysEx payload or
+  /// prepared token (event dropped, dropped_count() bumped). Borrowed views are
+  /// rejected before the queue record is written. RT-safe: no allocation, no
+  /// lock-wait, no I/O.
   bool send(uint32_t destination_id, const midi::MidiEvent& event) noexcept {
+    if (midi_event_has_borrowed_sysex(event)) {
+      dropped_count_.fetch_add(1, std::memory_order_relaxed);
+      return false;
+    }
     const size_t write = write_index_.load(std::memory_order_relaxed);
     const size_t next = increment(write);
     if (next == read_index_.load(std::memory_order_acquire)) {

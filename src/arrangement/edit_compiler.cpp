@@ -1150,6 +1150,14 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     }
   }
 
+  // Re-own SysEx views: the caller's MidiContentStore may die right after compile().
+  midi::MidiSysExPayloadError payload_error = midi::MidiSysExPayloadError::kNone;
+  if (!midi::own_sysex_payloads(timeline.midi_clips, &payload_error)) {
+    // By contract an allocation failure is reported as kDanglingSourceRef too.
+    add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+             first_midi_clip_id, midi::describe(payload_error));
+  }
+
   // Best-effort hint: a compiled MIDI clip renders to silence unless the caller
   // binds an instrument at bounce time (the compiler runs before instruments are
   // registered, so it cannot know whether one will be — hence a warning, not an

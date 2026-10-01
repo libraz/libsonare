@@ -34,6 +34,7 @@ namespace {
 
 using Catch::Approx;
 using sonare::midi::MidiEvent;
+using sonare::midi::PreparedMidiSysEx;
 using sonare::midi::synth::GsMasterEq;
 using sonare::midi::synth::GsSystemEffects;
 using sonare::midi::synth::Sf2File;
@@ -61,6 +62,29 @@ std::vector<uint8_t> dt1(uint8_t hi, uint8_t mid, uint8_t lo, const std::vector<
   msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
   msg.push_back(0xF7);
   return msg;
+}
+
+void set_live_nondefault_gs_state(Sf2Player& player) {
+  const std::vector<uint8_t> efx_type = dt1(0x40, 0x03, 0x00, {0x01, 0x50});
+  const std::vector<uint8_t> efx_assign = dt1(0x40, kPart1Block, 0x22, {0x01});
+  const std::vector<uint8_t> system_fx = dt1(0x40, 0x01, 0x52, {0x09});
+  const std::vector<uint8_t> master_eq = dt1(0x40, 0x02, 0x00, {0x01, 0x4C, 0x01, 0x34});
+  const std::vector<uint8_t> part_eq_off = dt1(0x40, kPart1Block, 0x20, {0x00});
+  for (const std::vector<uint8_t>* msg :
+       {&efx_type, &efx_assign, &system_fx, &master_eq, &part_eq_off}) {
+    player.on_control_sysex(msg->data(), msg->size());
+  }
+}
+
+void check_gs_power_on_state(const Sf2Player& player) {
+  const GsSystemEffects fx_defaults;
+  const GsMasterEq eq_defaults;
+  CHECK(player.gs_efx().type == 0x0000);
+  CHECK_FALSE(player.gs_efx().assigned);
+  CHECK(player.gs_efx_assign(0) == 0x00);
+  CHECK(std::memcmp(&player.gs_system_effects(), &fx_defaults, sizeof(GsSystemEffects)) == 0);
+  CHECK(std::memcmp(&player.gs_master_eq(), &eq_defaults, sizeof(GsMasterEq)) == 0);
+  for (uint8_t ch = 0; ch < 16; ++ch) CHECK(player.gs_part_eq_enabled(ch));
 }
 
 /// Fixture: program 0 = a looped 1 kHz sine at root key 60, so a note selects
@@ -128,6 +152,16 @@ StereoRender render(Sf2Player& player, int num_samples) {
   float* chans[2] = {out.left.data(), out.right.data()};
   player.process(chans, 2, num_samples);
   return out;
+}
+
+void dispatch_prepared(Sf2Player& player, const std::vector<uint8_t>& payload,
+                       const std::shared_ptr<const PreparedMidiSysEx>& token) {
+  MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  event.prepared_sysex = token.get();
+  player.on_event(0, event);
 }
 
 /// Silences the send-return units for channel 0, so a measurement sees the dry
@@ -414,6 +448,262 @@ TEST_CASE("GS Reset restores the system-effect and master-EQ defaults", "[midi][
   CHECK(std::memcmp(&player.gs_system_effects(), &fx_defaults, sizeof(GsSystemEffects)) == 0);
   CHECK(std::memcmp(&player.gs_master_eq(), &eq_defaults, sizeof(GsMasterEq)) == 0);
   for (uint8_t ch = 0; ch < 16; ++ch) CHECK(player.gs_part_eq_enabled(ch));
+}
+
+TEST_CASE("a live reset lifecycle clears EFX and system-effect mirrors", "[midi][synth][gs]") {
+  SECTION("public reset") {
+    Sf2Player player;
+    player.prepare(kOutRate, 256);
+    set_live_nondefault_gs_state(player);
+    REQUIRE(player.gs_efx().type == 0x0150);
+    REQUIRE(player.gs_efx_assign(0) == 0x01);
+    REQUIRE(player.gs_system_effects().delay_time_center == 0x09);
+    REQUIRE_FALSE(player.gs_part_eq_enabled(0));
+
+    player.reset();
+    render(player, 256);
+    check_gs_power_on_state(player);
+  }
+
+  SECTION("reprepare") {
+    Sf2Player player;
+    player.prepare(kOutRate, 256);
+    set_live_nondefault_gs_state(player);
+    REQUIRE(player.gs_efx().type == 0x0150);
+    REQUIRE(player.gs_efx_assign(0) == 0x01);
+    REQUIRE(player.gs_system_effects().delay_time_center == 0x09);
+    REQUIRE_FALSE(player.gs_part_eq_enabled(0));
+
+    player.prepare(kOutRate, 256);
+    render(player, 256);
+    check_gs_power_on_state(player);
+  }
+}
+
+TEST_CASE("a live lifecycle reset drops pending GS coefficients before rendering",
+          "[midi][synth][gs]") {
+  auto render_fresh_default = [] {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    mute_sends(player);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return render(player, kToneSamples);
+  };
+
+  auto render_after_lifecycle = [](bool reprepare) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    // Publish a nondefault live state, but leave it pending until the
+    // lifecycle boundary. The next render must start from GS power-on EQ.
+    const std::vector<uint8_t> nondefault = dt1(0x40, 0x02, 0x00, {0x00, 0x4C, 0x00, 0x40});
+    player.on_control_sysex(nondefault.data(), nondefault.size());
+    if (reprepare) {
+      player.prepare(kOutRate, 256);
+    } else {
+      player.reset();
+    }
+    mute_sends(player);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return render(player, kToneSamples);
+  };
+
+  const StereoRender fresh = render_fresh_default();
+  CHECK(render_after_lifecycle(false).left == fresh.left);
+  CHECK(render_after_lifecycle(false).right == fresh.right);
+  CHECK(render_after_lifecycle(true).left == fresh.left);
+  CHECK(render_after_lifecycle(true).right == fresh.right);
+}
+
+TEST_CASE("a live ninth master-EQ write reaches the rendered block", "[midi][synth][gs]") {
+  auto render_live = [](bool burst) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    mute_sends(player);
+
+    // Every write before the last is -12 dB and the last is the distinct
+    // +12 dB state; the audio must apply the latest value however many precede it.
+    const std::vector<uint8_t> old_state = dt1(0x40, 0x02, 0x01, {0x34});
+    const std::vector<uint8_t> ninth_state = dt1(0x40, 0x02, 0x01, {0x4C});
+    if (burst) {
+      const std::size_t allocations = [&] {
+        AllocationGuard guard;
+        for (int i = 0; i < 10000; ++i) {
+          player.on_control_sysex(old_state.data(), old_state.size());
+        }
+        player.on_control_sysex(ninth_state.data(), ninth_state.size());
+        return guard.count();
+      }();
+      REQUIRE(allocations == 0);
+    } else {
+      player.on_control_sysex(ninth_state.data(), ninth_state.size());
+    }
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return render(player, kToneSamples);
+  };
+
+  const StereoRender burst = render_live(true);
+  const StereoRender fresh = render_live(false);
+  REQUIRE(burst.left == fresh.left);
+  REQUIRE(burst.right == fresh.right);
+}
+
+TEST_CASE("an unrelated direct EQ field does not reset an older field", "[midi][synth][gs]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player actual(cfg);
+  Sf2Player reference(cfg);
+  const std::shared_ptr<Sf2File> sf2 = make_fixture();
+  actual.set_soundfont(sf2);
+  reference.set_soundfont(sf2);
+  actual.prepare(kOutRate, 256);
+  reference.prepare(kOutRate, 256);
+  mute_sends(actual);
+  mute_sends(reference);
+
+  const std::vector<uint8_t> low_gain = dt1(0x40, 0x02, 0x01, {0x34});
+  const std::vector<uint8_t> high_gain = dt1(0x40, 0x02, 0x03, {0x4C});
+  const std::vector<uint8_t> combined = dt1(0x40, 0x02, 0x00, {0x40, 0x34, 0x40, 0x4C});
+
+  // Consume the first publication before the unrelated field arrives. The
+  // second publication must leave low gain at -12 dB; only a new reset may
+  // default a field whose write sequence is already behind the watermark.
+  actual.on_control_sysex(low_gain.data(), low_gain.size());
+  const StereoRender silence = render(actual, 256);
+  (void)silence;
+  actual.on_control_sysex(high_gain.data(), high_gain.size());
+  reference.on_control_sysex(combined.data(), combined.size());
+  for (Sf2Player* player : {&actual, &reference}) {
+    player->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 24, 100)));
+  }
+
+  const StereoRender out = render(actual, kToneSamples);
+  const StereoRender expected = render(reference, kToneSamples);
+  REQUIRE(out.left == expected.left);
+  REQUIRE(out.right == expected.right);
+}
+
+TEST_CASE("a same-value direct EQ write repairs a scheduled overlay", "[midi][synth][gs]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player scheduled(cfg);
+  Sf2Player reference(cfg);
+  const std::shared_ptr<Sf2File> sf2 = make_fixture();
+  scheduled.set_soundfont(sf2);
+  reference.set_soundfont(sf2);
+  scheduled.prepare(kOutRate, 256);
+  reference.prepare(kOutRate, 256);
+  mute_sends(scheduled);
+  mute_sends(reference);
+
+  const std::vector<uint8_t> scheduled_low = dt1(0x40, 0x02, 0x00, {0x00, 0x34, 0x00, 0x40});
+  std::shared_ptr<const PreparedMidiSysEx> token;
+  REQUIRE(scheduled.prepare_sysex(scheduled_low.data(), scheduled_low.size(), token));
+  dispatch_prepared(scheduled, scheduled_low, token);
+
+  // The direct message writes the power-on value already present in the live
+  // direct mailbox. It must still stamp the field and repair the prepared
+  // overlay changed by the scheduled event.
+  const GsMasterEq defaults;
+  const std::vector<uint8_t> direct_defaults =
+      dt1(0x40, 0x02, 0x00,
+          {defaults.low_freq, defaults.low_gain, defaults.high_freq, defaults.high_gain});
+  scheduled.on_control_sysex(direct_defaults.data(), direct_defaults.size());
+  reference.on_control_sysex(direct_defaults.data(), direct_defaults.size());
+
+  for (Sf2Player* player : {&scheduled, &reference}) {
+    player->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 24, 100)));
+  }
+  const StereoRender out = render(scheduled, kToneSamples);
+  const StereoRender expected = render(reference, kToneSamples);
+  REQUIRE(out.left == expected.left);
+  REQUIRE(out.right == expected.right);
+}
+
+TEST_CASE("a direct EQ write leaves the other scheduled fields in effect", "[midi][synth][gs]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player scheduled(cfg);
+  Sf2Player reference(cfg);
+  const std::shared_ptr<Sf2File> sf2 = make_fixture();
+  scheduled.set_soundfont(sf2);
+  reference.set_soundfont(sf2);
+  scheduled.prepare(kOutRate, 256);
+  reference.prepare(kOutRate, 256);
+  mute_sends(scheduled);
+  mute_sends(reference);
+
+  // Low band +12 dB, high band -12 dB, both through the scheduled overlay.
+  const GsMasterEq defaults;
+  const std::vector<uint8_t> scheduled_eq =
+      dt1(0x40, 0x02, 0x00, {defaults.low_freq, 0x4C, defaults.high_freq, 0x34});
+  for (Sf2Player* player : {&scheduled, &reference}) {
+    std::shared_ptr<const PreparedMidiSysEx> token;
+    REQUIRE(player->prepare_sysex(scheduled_eq.data(), scheduled_eq.size(), token));
+    dispatch_prepared(*player, scheduled_eq, token);
+  }
+
+  // The direct write repeats the high gain the overlay already holds. The
+  // direct mirror never saw the low-band boost, so applying it would drop it.
+  const std::vector<uint8_t> direct_high = dt1(0x40, 0x02, 0x03, {0x34});
+  scheduled.on_control_sysex(direct_high.data(), direct_high.size());
+
+  for (Sf2Player* player : {&scheduled, &reference}) {
+    player->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 24, 100)));
+  }
+  const StereoRender out = render(scheduled, kToneSamples);
+  const StereoRender expected = render(reference, kToneSamples);
+  REQUIRE(out.left == expected.left);
+  REQUIRE(out.right == expected.right);
+}
+
+TEST_CASE("a scheduled reset does not resurrect an old direct EQ field", "[midi][synth][gs]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player scheduled(cfg);
+  Sf2Player reference(cfg);
+  const std::shared_ptr<Sf2File> sf2 = make_fixture();
+  scheduled.set_soundfont(sf2);
+  reference.set_soundfont(sf2);
+  scheduled.prepare(kOutRate, 256);
+  reference.prepare(kOutRate, 256);
+  mute_sends(scheduled);
+  mute_sends(reference);
+
+  const std::vector<uint8_t> stale_low = dt1(0x40, 0x02, 0x00, {0x00, 0x34, 0x00, 0x40});
+  scheduled.on_control_sysex(stale_low.data(), stale_low.size());
+
+  constexpr uint8_t kGmResetBytes[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  const std::vector<uint8_t> gm_reset(std::begin(kGmResetBytes), std::end(kGmResetBytes));
+  std::shared_ptr<const PreparedMidiSysEx> scheduled_reset;
+  std::shared_ptr<const PreparedMidiSysEx> reference_reset;
+  REQUIRE(scheduled.prepare_sysex(gm_reset.data(), gm_reset.size(), scheduled_reset));
+  REQUIRE(reference.prepare_sysex(gm_reset.data(), gm_reset.size(), reference_reset));
+  dispatch_prepared(scheduled, gm_reset, scheduled_reset);
+  dispatch_prepared(reference, gm_reset, reference_reset);
+
+  // This unrelated field is the only direct state that should survive the
+  // reset. The old low-band publication must be skipped by its per-field
+  // sequence watermark.
+  const std::vector<uint8_t> high_gain = dt1(0x40, 0x02, 0x03, {0x4C});
+  scheduled.on_control_sysex(high_gain.data(), high_gain.size());
+  reference.on_control_sysex(high_gain.data(), high_gain.size());
+  for (Sf2Player* player : {&scheduled, &reference}) {
+    player->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 24, 100)));
+  }
+
+  const StereoRender out = render(scheduled, kToneSamples);
+  const StereoRender expected = render(reference, kToneSamples);
+  REQUIRE(out.left == expected.left);
+  REQUIRE(out.right == expected.right);
 }
 
 // The system-effect units only exist on a build with the FX suite; without it

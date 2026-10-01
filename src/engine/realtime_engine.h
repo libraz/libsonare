@@ -72,6 +72,34 @@ enum class MidiUmpPushResult : uint8_t {
   kQueueFull,
 };
 
+/// Diagnostic retained by the most recent @ref RealtimeEngine::push_midi_sysex
+/// call. Callers that need to distinguish retryable slot or queue pressure from
+/// a permanent preparation failure read this control-thread status immediately
+/// after the call.
+enum class MidiSysExPushStatus : uint8_t {
+  kNotAttempted,
+  kAccepted,
+  kInvalidPayload,
+  kPreparationFailed,
+  kPayloadSlotsFull,
+  kQueueFull,
+  kOutOfMemory,
+};
+
+/// Diagnostic retained by the most recent @ref RealtimeEngine::set_midi_instrument
+/// call, read on the control thread immediately after it. kAlreadyBoundElsewhere
+/// and kPreparationFailed (the instrument failed to prepare, or refused a
+/// scheduled or queued SysEx) are permanent for that instrument and schedule;
+/// kRackFull and kOutOfMemory are resource failures.
+enum class MidiInstrumentBindStatus : uint8_t {
+  kNotAttempted,
+  kBound,
+  kAlreadyBoundElsewhere,
+  kRackFull,
+  kPreparationFailed,
+  kOutOfMemory,
+};
+
 enum class CaptureSource {
   kOutput = 0,
   kInput = 1,
@@ -186,6 +214,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @c TelemetryErrorCode::kNotPrepared, and @c render_offline returns without
   /// writing to the caller's buffer. A later @c prepare starts over and commits
   /// fully, so recovery is one more call and needs no other cleanup.
+  ///
+  /// One refusal is reported without that rollback: when a bound instrument
+  /// cannot prepare a SysEx in the scheduled MIDI clips, prepare completes, the
+  /// clip schedule is cleared (all or none), and a @c SonareException with
+  /// @c ErrorCode::InvalidParameter is thrown. The engine stays prepared with
+  /// its instruments bound and prepared.
   ///
   /// The previous configuration is deliberately NOT restored. Preparing rebuilds
   /// sub-objects in place and re-prepares every bound instrument, so undoing a
@@ -384,17 +418,24 @@ class RealtimeEngine : private ClipPageRequestSink {
     midi_input_source_.store(source, std::memory_order_release);
   }
   // Control-thread: enqueue a live MIDI SysEx message for `destination_id`. The
-  // bytes are copied into a bounded, allocation-free payload store slot and a
+  // bytes are copied into a bounded payload slot (preparation may allocate) and a
   // kMidiSysExImmediate command carrying only a scalar slot reference is pushed,
   // so no pointer crosses the SharedArrayBuffer-shared command queue. The audio
   // thread resolves the slot, dispatches a MidiEvent viewing the slot bytes
   // (consumed synchronously by the destination instrument inside apply_command),
   // and never allocates. `data`/`size` are the full SysEx frame (leading 0xF0 /
   // trailing 0xF7 included, as the GS layer expects). Returns false when the
-  // arguments are invalid, the payload exceeds kMaxSysExPayloadBytes, or the
-  // command queue is full. render_frame < 0 fires at the block head.
+  // arguments are invalid, preparation fails, the slot ring is full, or the
+  // command queue is full. All CONTROL writers that prepare or replace MIDI
+  // tokens must be serialized with this call; it is not safe to run alongside
+  // set_midi_instrument(), set_midi_clips(), prepare(), or reset().
+  // @ref last_midi_sysex_push_status() reports the reason for the most recent
+  // call. render_frame < 0 fires at the block head.
   bool push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
                        int64_t render_frame) noexcept;
+  MidiSysExPushStatus last_midi_sysex_push_status() const noexcept {
+    return last_midi_sysex_push_status_.load(std::memory_order_relaxed);
+  }
   /// @brief Whether @p words / @p count form a UMP the live path accepts.
   /// @details @p count must equal the word count the message type of
   ///   `words[0]` fixes, and the type must not be Data (MT 0x3 SysEx7, MT 0x5
@@ -500,15 +541,19 @@ class RealtimeEngine : private ClipPageRequestSink {
   // instrument that renders MIDI routed to `destination_id` (the compiler stamps
   // each MidiClipSchedule with its track's Track.midi_destination_id). The
   // single-argument overload above binds the default destination 0, preserving
-  // the prior single-instrument behavior. Returns false when the binding did not
-  // take: either the rack is full (kMaxInstruments), or the latency compensation
-  // could not be reallocated for the new instrument set. Either way @p instrument
-  // is NOT bound to @p destination_id when this returns false, so a caller that
-  // owns it is free to destroy it. Control-thread only; swapping/clearing first
-  // releases notes sounding on that destination so the outgoing instrument does
-  // not hang. May prepare() the instrument (allocates) when the engine is
-  // already prepared.
+  // the prior single-instrument behavior. Each instrument instance may be bound
+  // to one destination. Returns false if the instance is already bound elsewhere,
+  // the rack is full, or instrument/token/PDC preparation fails;
+  // @ref last_midi_instrument_bind_status() reports which. Failure preserves the
+  // previous destination binding and any binding of the incoming instance at
+  // another destination. Control-thread only, with process() stopped;
+  // swapping/clearing first releases notes sounding on that destination so the
+  // outgoing instrument does not hang. May prepare() the instrument (allocates)
+  // when the engine is already prepared.
   bool set_midi_instrument(uint32_t destination_id, midi::MidiInstrument* instrument);
+  MidiInstrumentBindStatus last_midi_instrument_bind_status() const noexcept {
+    return last_midi_instrument_bind_status_.load(std::memory_order_relaxed);
+  }
   midi::MidiInstrument* midi_instrument() const noexcept { return instrument_rack_.get(0); }
   midi::MidiInstrument* midi_instrument(uint32_t destination_id) const noexcept {
     return instrument_rack_.get(destination_id);
@@ -894,6 +939,20 @@ class RealtimeEngine : private ClipPageRequestSink {
   // than to a half-updated set, and the caller has to say so -- silently
   // rendering a misaligned mix is the one outcome this must not have. Mirrors
   // TrackMixerRuntime::recompute_lane_pdc, whose callers all propagate.
+  struct PreparedPdc {
+    static constexpr size_t kSlots = InstrumentRack::kMaxInstruments;
+    int total_q8 = 0;
+    ChannelDelay<kMaxAudioChannels> clip{};
+    std::array<ChannelDelay<kMaxAudioChannels>, kSlots> instruments{};
+    std::array<uint32_t, kSlots> destinations{};
+    std::array<size_t, kSlots> reuse_from{};
+    size_t count = 0;
+    bool reuse_clip = false;
+  };
+  [[nodiscard]] bool prepare_pdc_for(bool replace_destination, uint32_t destination_id,
+                                     midi::MidiInstrument* replacement,
+                                     PreparedPdc& out) const noexcept;
+  void commit_pdc(PreparedPdc& prepared) noexcept;
   [[nodiscard]] bool recompute_pdc();
   // AUDIO thread: flush the PDC delay lines on a transport discontinuity so no
   // stale clip/instrument audio rings out across a stop/seek/loop.
@@ -912,6 +971,22 @@ class RealtimeEngine : private ClipPageRequestSink {
   // AUDIO thread: returns the slot a kMidiUmpSlotImmediate command references to
   // the control thread when the command is dropped rather than applied.
   void release_midi_ump_slot(const rt::Command& command) noexcept;
+  // AUDIO thread: returns the slot a kMidiSysExImmediate command references to
+  // the control thread when the command is consumed or dropped.
+  void release_midi_sysex_slot(const rt::Command& command) noexcept;
+  // CONTROL thread: releases strong token owners for slots whose AUDIO command
+  // has handed the generation back. AUDIO only publishes that hand-back; it
+  // never destroys the prepared operation.
+  void reclaim_released_sysex_slots() noexcept;
+  // CONTROL thread: prepares @p payload for @p instrument (a null instrument
+  // accepts with no token). Returns false on refusal; rethrows only bad_alloc.
+  static bool prepare_instrument_sysex(midi::MidiInstrument* instrument, const uint8_t* payload,
+                                       size_t size,
+                                       std::shared_ptr<const midi::PreparedMidiSysEx>& prepared);
+  // CONTROL thread: a preparer resolving each destination through the rack.
+  midi::MidiSysExPreparer rack_sysex_preparer() const;
+  // AUDIO thread: hands the current transport snapshot to every bound instrument.
+  void publish_instrument_transport() noexcept;
   void emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept;
   void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
                              int num_frames) noexcept;
@@ -920,9 +995,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   void publish_tempo_map_snapshot();
   void adopt_tempo_map_snapshot() noexcept;
   // The whole of prepare()'s acquisition sequence. prepare() wraps it so a
-  // throw from any step lands in one place.
-  void prepare_impl(double sample_rate, int max_block_size, size_t command_capacity,
-                    size_t telemetry_capacity, int max_channels);
+  // throw from any step lands in one place. Returns false when a bound
+  // instrument refused a scheduled SysEx and the clip schedule was cleared.
+  [[nodiscard]] bool prepare_impl(double sample_rate, int max_block_size, size_t command_capacity,
+                                  size_t telemetry_capacity, int max_channels);
   // Puts the engine back into the state a freshly constructed one is in as far
   // as rendering is concerned: no scratch, no configuration claimed, and no
   // pointer left addressing a buffer a partial prepare may have reallocated.
@@ -1014,6 +1090,14 @@ class RealtimeEngine : private ClipPageRequestSink {
     }
 
     void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
+      // A SysEx event borrows its payload and token only for this synchronous
+      // callback, while both output queues retain the record. The merged sink
+      // receives the UMP alone, whose store handle the device backend resolves,
+      // unless the bytes exist only in the borrowed view; the external drain
+      // cannot lower SysEx at all, so it drops every SysEx event.
+      const bool sysex = midi::is_sysex_event(event);
+      const bool view_only = sysex && event.ump.sysex_handle == 0 &&
+                             (event.sysex_payload != nullptr || event.sysex_payload_size != 0);
       // Translate once, for every route: an instrument, a merged output sink and
       // an external device all receive DEVICE render frames, so none of them has
       // to know which engine path stamped the event. The offset is 0 on the paths
@@ -1025,12 +1109,18 @@ class RealtimeEngine : private ClipPageRequestSink {
         // routed there INSTEAD of the rack and is not also mirrored to the
         // merged output sink, otherwise a host using both would emit the event
         // twice to the device path.
-        if (external != nullptr) external->send(destination_id, device_event);
+        if (!sysex && external != nullptr) external->send(destination_id, device_event);
         return;
       }
       if (rack != nullptr) rack->on_event(destination_id, device_event);
       host::MidiOutputSink* sink = output.load(std::memory_order_acquire);
-      if (sink != nullptr) sink->send(device_event);
+      if (sink == nullptr || view_only) return;
+      if (sysex) {
+        device_event.sysex_payload = nullptr;
+        device_event.sysex_payload_size = 0;
+        device_event.prepared_sysex = nullptr;
+      }
+      sink->send(device_event);
     }
   };
 
@@ -1063,19 +1153,20 @@ class RealtimeEngine : private ClipPageRequestSink {
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
   size_t live_midi_input_count_ = 0;
   // Bounded SysEx payload store for live (queued) SysEx commands. The control
-  // thread (push_midi_sysex) copies bytes into a round-robin slot and enqueues a
-  // kMidiSysExImmediate command carrying the slot index + generation; the audio
-  // thread reads the slot, dispatches a MidiEvent from a torn-free local copy of
-  // the slot bytes, and never allocates. Each slot is published as a seqlock: the
-  // per-slot atomic generation is an even/odd sequence where an ODD value marks a
-  // write in progress and an EVEN value a completed payload. The writer marks the
-  // slot odd, writes the bytes, then release-stores the even (done) generation;
-  // the audio thread brackets its payload copy with two acquire loads of the
-  // generation and accepts only a stable even value matching the command's
-  // generation. This drops a slot the control thread recycled or is actively
-  // rewriting mid-read (a burst deeper than kSysExPayloadSlots before the audio
-  // thread drains it), so a torn payload is never fed to an instrument. SysEx is
-  // a sparse control-rate message, so the ring depth is ample in practice.
+  // thread (push_midi_sysex) prepares a token and copies bytes into a bounded
+  // slot, then enqueues a kMidiSysExImmediate command carrying the slot index +
+  // generation. The audio thread borrows the token through the event and also
+  // dispatches a torn-free local byte view for instruments that read the raw
+  // payload fields; it never allocates or destroys the token. Each slot is
+  // published as a seqlock and handed back after its command is consumed or
+  // dropped. A slot whose released generation has not caught up is still in
+  // flight, so the control thread refuses the push rather than recycling its
+  // payload. Each slot's generation is an even/odd sequence where an ODD value
+  // marks a write in progress and an EVEN value a completed payload. The writer
+  // marks the slot odd, writes the bytes, then release-stores the even (done)
+  // generation; the audio thread brackets its payload copy with two acquire
+  // loads of the generation and accepts only a stable even value matching the
+  // command's generation.
   static constexpr size_t kSysExPayloadSlots = 64;
   struct SysExPayloadSlot {
     // The generation seqlock (release/acquire) supplies all cross-thread
@@ -1089,6 +1180,15 @@ class RealtimeEngine : private ClipPageRequestSink {
     std::atomic<uint32_t> size{0};
     std::array<std::atomic<uint32_t>, kPayloadWords> byte_words{};
     std::atomic<uint32_t> generation{0};
+    std::atomic<uint32_t> released{0};
+    // CONTROL-thread ownership. The audio path only borrows this token through
+    // MidiEvent::prepared_sysex while dispatching the command synchronously;
+    // release_midi_sysex_slot() never resets it.
+    std::shared_ptr<const midi::PreparedMidiSysEx> prepared;
+    uint32_t destination_id = 0;
+    // CONTROL-only order of successful queue acceptance. It lets a rebind
+    // replay null-token operations in their original push order.
+    uint64_t accepted_order = 0;
 
     /// Control-thread writer: pack @p n bytes into the relaxed word store.
     /// Callers guarantee n <= kMaxSysExPayloadBytes.
@@ -1119,6 +1219,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   };
   std::array<SysExPayloadSlot, kSysExPayloadSlots> sysex_payload_slots_{};
   uint32_t sysex_payload_cursor_ = 0;  // control-thread only
+  uint64_t sysex_accepted_order_ = 0;  // control-thread only
+  std::atomic<MidiSysExPushStatus> last_midi_sysex_push_status_{MidiSysExPushStatus::kNotAttempted};
+  std::atomic<MidiInstrumentBindStatus> last_midi_instrument_bind_status_{
+      MidiInstrumentBindStatus::kNotAttempted};
   // Slot ring for live multi-word UMPs (push_midi_ump). Same seqlock as the
   // SysEx store, plus a hand-back: the audio thread stores the generation it
   // consumed (or dropped) into `released`, and the control thread writes a slot
@@ -1240,6 +1344,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
   std::atomic<uint32_t> clip_page_request_overflow_count_{0};
   BoundarySplitter boundary_splitter_{};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // CONTROL-prepared scratch for MIDI event boundaries. collect_boundaries() is
+  // called on AUDIO and must never grow a default-capacity container there.
+  midi::MidiSequencer::BoundaryOffsets midi_boundary_offsets_{};
+#endif
   std::array<rt::Command, kMaxPendingCommands> pending_{};
   std::array<bool, kMaxPendingCommands> pending_active_{};
 #if defined(SONARE_WITH_GRAPH)

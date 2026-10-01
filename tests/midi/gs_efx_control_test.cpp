@@ -604,9 +604,11 @@ TEST_CASE("an edit to a CONTROL's slot keeps the modulation", "[midi][synth][gs]
     CHECK(unit.byte() < before);
   }
 
-  SECTION("a source or depth edit rebuilds, and the rebuilt unit is modulated") {
+  SECTION("a source or depth edit is relative, and the live unit stays modulated") {
     rig.sysex(efx_write(depth_offset(0), 0x60));
-    REQUIRE(rig.generation() == generation + 1);
+    // Live CONTROL edits are relative audio deltas. They update the selected
+    // node in place, so unrelated tails and the published generation survive.
+    REQUIRE(rig.generation() == generation);
     rig.render(1);
     CHECK(rig.byte() > kBase);
     CHECK(rig.byte() < modulated);

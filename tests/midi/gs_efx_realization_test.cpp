@@ -24,6 +24,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/processor_base.h"
+#include "support/alloc_guard.h"
 #include "support/midi_render.h"
 #include "support/sf2_builder.h"
 #if defined(SONARE_MIDI_WITH_FX)
@@ -65,6 +66,26 @@ std::array<uint8_t, 12> type_write(uint16_t type) {
   return m;
 }
 
+/// A type write at the uniform extension address (40 30-3F 00). The spec
+/// block uses 40 03, while 40 31 addresses unit 1.
+std::array<uint8_t, 12> type_write_at(uint8_t address, uint16_t type) {
+  const auto msb = static_cast<uint8_t>(type >> 8);
+  const auto lsb = static_cast<uint8_t>(type & 0x7F);
+  std::array<uint8_t, 12> m = {0xF0,    0x41, 0x10, 0x42, 0x12, 0x40,
+                               address, 0x00, msb,  lsb,  0x00, 0xF7};
+  const uint32_t sum = m[5] + m[6] + m[7] + m[8] + m[9];
+  m[10] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
+  return m;
+}
+
+/// Part 1 routed to an EFX assignment value. Value 2 selects extension unit 1.
+std::array<uint8_t, 11> part_efx_assign(uint8_t value) {
+  std::array<uint8_t, 11> m = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, value, 0x00, 0xF7};
+  const uint32_t sum = m[5] + m[6] + m[7] + m[8];
+  m[9] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
+  return m;
+}
+
 /// Part 1 (channel 0) routed into the spec unit.
 constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
 
@@ -89,6 +110,10 @@ struct Counters {
   int prepares = 0;
   int resets = 0;
   int processes = 0;
+  bool log_set_params = true;
+  int parameter_sets = 0;
+  std::array<float, 128> last_parameter_by_id{};
+  std::array<bool, 128> has_parameter_by_id{};
   std::vector<std::pair<std::string, float>> set_params;
   std::vector<float> probe;  ///< Left channel of the probe's last block.
 };
@@ -114,7 +139,13 @@ class StandIn final : public sonare::rt::ProcessorBase {
   }
   void reset() override { ++counters_->resets; }
   bool set_parameter_impl(unsigned int id, float value) override {
-    counters_->set_params.emplace_back(name_ + "." + keys_.at(id), value);
+    ++counters_->parameter_sets;
+    if (id < counters_->last_parameter_by_id.size()) {
+      counters_->last_parameter_by_id[id] = value;
+      counters_->has_parameter_by_id[id] = true;
+    }
+    if (counters_->log_set_params)
+      counters_->set_params.emplace_back(name_ + "." + keys_.at(id), value);
     return true;
   }
   std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
@@ -453,11 +484,15 @@ TEST_CASE("a classic unit is the type's graph and takes byte edits live", "[gs-e
     REQUIRE(quiet < loud * 1e-2f);
   }
 
-  SECTION("a byte edit the queue cannot hold rebuilds") {
+  SECTION("a long direct edit burst keeps its final raw and realtime values") {
+    auto counters = std::make_shared<Counters>();
     s::Sf2PlayerConfig cfg;
-    cfg.gs_efx_realization = s::GsEfxRealization::kClassic;
-    cfg.insert_factory = [](std::string_view, std::string_view) {
-      return std::unique_ptr<sonare::rt::ProcessorBase>();
+    cfg.insert_factory = [counters](std::string_view name, std::string_view) {
+      std::vector<std::string> keys;
+      keys.reserve(s::kGsEfxRowKeys.size());
+      for (const std::string_view key : s::kGsEfxRowKeys) keys.emplace_back(key);
+      return std::unique_ptr<sonare::rt::ProcessorBase>(
+          new StandIn(counters, std::string(name), true, std::move(keys)));
     };
     s::Sf2Player player(cfg);
     player.prepare(kRate, kBlock);
@@ -465,16 +500,116 @@ TEST_CASE("a classic unit is the type's graph and takes byte edits live", "[gs-e
     send(player, type_write(kOverdrive));
     const uint8_t slot = switchable_slot(kOverdrive);
     const uint32_t generation = player.gs_efx_generation();
-    // No block renders, so nothing drains: each edit holds one queue entry until
-    // the ring is full, and the edit that finds it full is rebuilt instead.
-    uint32_t rebuilt_at = 0;
-    for (uint32_t edit = 1; edit <= 1000 && rebuilt_at == 0; ++edit) {
-      send(player, slot_write(slot, (edit & 1u) != 0 ? 0x7F : 0x00));
-      if (player.gs_efx_generation() != generation) rebuilt_at = edit;
+    // No block renders, so every accepted edit stays queued in publication
+    // order and none of them forces a rebuild of the snapshot.
+    constexpr uint8_t kFinal = 0x00;
+    for (uint32_t edit = 1; edit <= 1000; ++edit) {
+      send(player, slot_write(slot, (edit == 1000 || (edit & 1u) != 0) ? kFinal : 0x7F));
     }
-    REQUIRE(rebuilt_at > 1);
-    REQUIRE(player.gs_efx_generation() == generation + 1);
-    REQUIRE(player.gs_efx(0).params[slot] == ((rebuilt_at & 1u) != 0 ? 0x7F : 0x00));
+    REQUIRE(player.gs_efx_generation() == generation);
+    REQUIRE(player.gs_efx(0).params[slot] == kFinal);
+
+    const s::GsEfxBindingRow* final_row = nullptr;
+    for (const s::GsEfxBindingRow& row : s::kGsEfxBindingRows) {
+      if (row.type == kOverdrive && row.slot == slot) {
+        final_row = &row;
+        break;
+      }
+    }
+    REQUIRE(final_row != nullptr);
+    const float expected = s::gs_efx_binding_value(*final_row, kFinal);
+    counters->log_set_params = false;
+    std::array<float, kBlock> left{};
+    std::array<float, kBlock> right{};
+    float* channels[2] = {left.data(), right.data()};
+    sonare::test::AllocationGuard guard;
+    player.process(channels, 2, kBlock);
+    REQUIRE(guard.count() == 0);
+    REQUIRE(player.gs_efx_generation() == generation);
+    REQUIRE(counters->parameter_sets > 0);
+    REQUIRE(counters->has_parameter_by_id[final_row->key]);
+    REQUIRE(std::abs(counters->last_parameter_by_id[final_row->key] - expected) < 1e-6f);
   }
+}
+
+TEST_CASE("a classic direct parameter survives another unit's legacy fallback",
+          "[gs-efx-realization]") {
+  const auto& registry = s::gs_classic::gs_classic_default_registry();
+  REQUIRE(registry.valid());
+  const s::gs_classic::GsClassicType* model = registry.find(kOverdrive);
+  REQUIRE(model != nullptr);
+  constexpr uint8_t kLevelSlot = 19;
+  REQUIRE(model->printed_lo[kLevelSlot] < model->printed_hi[kLevelSlot]);
+
+  auto custom_calls = std::make_shared<int>(0);
+  auto custom_counters = std::make_shared<Counters>();
+  s::Sf2PlayerConfig fallback_config;
+  fallback_config.gain = 1.0f;
+  fallback_config.dc_block = false;
+  fallback_config.insert_factory = [custom_calls, custom_counters](std::string_view name,
+                                                                   std::string_view) {
+    if (name == "saturation.ampSim") {
+      ++*custom_calls;
+      // The modern amp-sim graph deliberately lacks the complete GS metadata,
+      // which makes unit 1 take the direct legacy snapshot path.
+      return std::unique_ptr<sonare::rt::ProcessorBase>(
+          new StandIn(custom_counters, std::string(name), false, {"levelDb"}));
+    }
+    return std::unique_ptr<sonare::rt::ProcessorBase>{};
+  };
+  s::Sf2Player player(fallback_config);
+  player.set_soundfont(sine_fixture());
+  player.prepare(kRate, kBlock);
+  send(player, part_efx_assign(2));
+  send(player, type_write_at(0x31, kOverdrive));
+  REQUIRE(*custom_calls > 0);
+
+  // Leave unit 1's fallback marker alive, then switch the active part to the
+  // classic spec unit. Its following direct parameter edit must be committed
+  // through the classic byte queue rather than silently returning before the
+  // batch publication.
+  player.set_gs_efx_realization(s::GsEfxRealization::kClassic);
+  player.on_control_sysex(kPartOn, sizeof(kPartOn));
+  send(player, type_write(kOverdrive));
+  send(player, efx_write(0x17, 0x00));
+  send(player, slot_write(kLevelSlot, model->printed_hi[kLevelSlot]));
+  player.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+
+  std::vector<float> loud_signal;
+  for (int b = 0; b < 40; ++b) render_block(player, &loud_signal);
+  const uint32_t generation = player.gs_efx_generation();
+  send(player, slot_write(kLevelSlot, model->printed_lo[kLevelSlot]));
+  REQUIRE(player.gs_efx_generation() == generation);
+  std::vector<float> quiet_signal;
+  for (int b = 0; b < 40; ++b) render_block(player, &quiet_signal);
+
+  s::Sf2PlayerConfig reference_config;
+  reference_config.gain = 1.0f;
+  reference_config.dc_block = false;
+  reference_config.gs_efx_realization = s::GsEfxRealization::kClassic;
+  reference_config.insert_factory = [](std::string_view, std::string_view) {
+    return std::unique_ptr<sonare::rt::ProcessorBase>{};
+  };
+  s::Sf2Player reference(reference_config);
+  reference.set_soundfont(sine_fixture());
+  reference.prepare(kRate, kBlock);
+  reference.on_control_sysex(kPartOn, sizeof(kPartOn));
+  send(reference, type_write(kOverdrive));
+  send(reference, efx_write(0x17, 0x00));
+  send(reference, slot_write(kLevelSlot, model->printed_hi[kLevelSlot]));
+  reference.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  std::vector<float> reference_loud;
+  for (int b = 0; b < 40; ++b) render_block(reference, &reference_loud);
+  send(reference, slot_write(kLevelSlot, model->printed_lo[kLevelSlot]));
+  std::vector<float> reference_quiet;
+  for (int b = 0; b < 40; ++b) render_block(reference, &reference_quiet);
+
+  const float loud = rms(loud_signal, loud_signal.size() / 2);
+  const float quiet = rms(quiet_signal, quiet_signal.size() / 2);
+  const float reference_quiet_rms = rms(reference_quiet, reference_quiet.size() / 2);
+  INFO("loud " << loud << " quiet " << quiet << " reference " << reference_quiet_rms);
+  REQUIRE(loud > 1e-3f);
+  REQUIRE(quiet < loud * 1e-2f);
+  REQUIRE(std::abs(quiet - reference_quiet_rms) < 1e-5f);
 }
 #endif  // SONARE_MIDI_WITH_FX

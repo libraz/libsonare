@@ -2,9 +2,34 @@
 
 #include <algorithm>
 #include <array>
+#include <new>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace sonare::midi {
+
+namespace {
+
+using PreparedOwners =
+    std::unordered_map<const PreparedMidiSysEx*, std::shared_ptr<const PreparedMidiSysEx>>;
+
+// Indexes every prepared token owned by a distinct source bank, so retaining a
+// token costs one lookup instead of a scan over every schedule's bank.
+PreparedOwners index_prepared_owners(const std::vector<MidiClipSchedule>& schedules) {
+  PreparedOwners owners;
+  std::unordered_set<const MidiSysExPayloadBank*> seen_banks;
+  for (const MidiClipSchedule& schedule : schedules) {
+    const MidiSysExPayloadBank* bank = schedule.sysex_payload_bank.get();
+    if (bank == nullptr || !seen_banks.insert(bank).second) continue;
+    for (const std::shared_ptr<const PreparedMidiSysEx>& prepared : bank->prepared_operations) {
+      if (prepared != nullptr) owners.emplace(prepared.get(), prepared);
+    }
+  }
+  return owners;
+}
+
+}  // namespace
 
 // A deterministic ordering rank for events sharing the same timestamp. Note-off
 // must precede note-on so a same-timestamp re-trigger releases before
@@ -160,6 +185,104 @@ void MidiClip::to_render_events(const transport::TempoMap& tempo_map, double cli
     rendered.sysex_payload = ev.sysex_payload;
     rendered.sysex_payload_size = ev.sysex_payload_size;
     out->push_back(rendered);
+  }
+}
+
+const char* describe(MidiSysExPayloadError error) noexcept {
+  switch (error) {
+    case MidiSysExPayloadError::kNone:
+      return "no MIDI SysEx payload error";
+    case MidiSysExPayloadError::kNullPayload:
+      return "MIDI SysEx payload has a null pointer with nonzero size";
+    case MidiSysExPayloadError::kPreparationFailed:
+      return "MIDI SysEx preparation was refused by the destination instrument";
+    case MidiSysExPayloadError::kOutOfMemory:
+      return "MIDI SysEx payload allocation failed";
+  }
+  return "unknown MIDI SysEx payload error";
+}
+
+bool own_sysex_payloads(std::vector<MidiClipSchedule>& schedules, MidiSysExPayloadError* error,
+                        const MidiSysExPreparer& prepare) {
+  if (error != nullptr) *error = MidiSysExPayloadError::kNone;
+
+  size_t payload_count = 0;
+  for (const MidiClipSchedule& schedule : schedules) {
+    for (const MidiEvent& event : schedule.events) {
+      if (!is_sysex_event(event)) continue;
+      if (event.sysex_payload_size == 0) continue;
+      if (event.sysex_payload == nullptr) {
+        if (error != nullptr) *error = MidiSysExPayloadError::kNullPayload;
+        return false;
+      }
+      ++payload_count;
+    }
+  }
+
+  if (payload_count == 0) {
+    for (MidiClipSchedule& schedule : schedules) {
+      schedule.sysex_payload_bank.reset();
+      for (MidiEvent& event : schedule.events) {
+        event.sysex_payload = nullptr;
+        event.sysex_payload_size = 0;
+        event.prepared_sysex = nullptr;
+      }
+    }
+    return true;
+  }
+
+  // A later event may borrow from an earlier source bank, so mutate nothing yet.
+  try {
+    PreparedOwners owners;
+    if (!prepare) owners = index_prepared_owners(schedules);
+    auto bank = std::make_shared<MidiSysExPayloadBank>();
+    bank->payloads.reserve(payload_count);
+    bank->prepared_operations.reserve(payload_count);
+    for (const MidiClipSchedule& schedule : schedules) {
+      for (const MidiEvent& event : schedule.events) {
+        if (!is_sysex_event(event) || event.sysex_payload_size == 0) continue;
+        bank->payloads.emplace_back(event.sysex_payload,
+                                    event.sysex_payload + event.sysex_payload_size);
+
+        std::shared_ptr<const PreparedMidiSysEx> prepared;
+        if (prepare) {
+          if (!prepare(schedule.destination_id, event.sysex_payload, event.sysex_payload_size,
+                       prepared)) {
+            if (error != nullptr) *error = MidiSysExPayloadError::kPreparationFailed;
+            return false;
+          }
+        } else if (event.prepared_sysex != nullptr) {
+          // A raw pointer does not establish lifetime; keep only a bank-owned token.
+          const auto owner = owners.find(event.prepared_sysex);
+          if (owner != owners.end()) prepared = owner->second;
+        }
+        bank->prepared_operations.push_back(std::move(prepared));
+      }
+    }
+
+    // Retarget only after every source span and prepared token has been copied.
+    size_t payload_index = 0;
+    for (MidiClipSchedule& schedule : schedules) {
+      for (MidiEvent& event : schedule.events) {
+        if (!is_sysex_event(event) || event.sysex_payload_size == 0) {
+          event.sysex_payload = nullptr;
+          event.sysex_payload_size = 0;
+          event.prepared_sysex = nullptr;
+          continue;
+        }
+        event.sysex_payload = bank->payloads[payload_index].data();
+        event.prepared_sysex = bank->prepared_operations[payload_index].get();
+        ++payload_index;
+      }
+    }
+    for (MidiClipSchedule& schedule : schedules) schedule.sysex_payload_bank = bank;
+    return true;
+  } catch (const std::bad_alloc&) {
+    if (error != nullptr) *error = MidiSysExPayloadError::kOutOfMemory;
+    return false;
+  } catch (...) {
+    if (error != nullptr) *error = MidiSysExPayloadError::kPreparationFailed;
+    return false;
   }
 }
 

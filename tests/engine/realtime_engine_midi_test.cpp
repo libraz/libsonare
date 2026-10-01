@@ -10,25 +10,33 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <string>
 #include <vector>
 
+#include "automation/automation_lane.h"
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
+#include "mastering/api/insert_factory.h"
 #include "midi/clock_sync.h"
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
+#include "midi/prepared_sysex.h"
+#include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/command.h"
 #include "support/alloc_guard.h"
+#include "support/sf2_builder.h"
+#include "util/exception.h"
 
 namespace {
 
 using sonare::engine::RealtimeEngine;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrument;
+using sonare::midi::PreparedMidiSysEx;
 
 // A minimal instrument that counts events and emits DC while a note sounds, so
 // audio output (peak) reflects whether a note is still ringing.
@@ -95,6 +103,106 @@ class SysExRecordingInstrument final : public MidiInstrument {
     }
   }
   std::vector<std::vector<uint8_t>> payloads_;
+};
+
+// Captures the transport frame most recently pushed when each event arrives,
+// alongside the event frame. A dense SysEx schedule is sample-accurate only when
+// every event starts a sub-block, which event.render_frame alone cannot show.
+class BoundaryTimingInstrument final : public MidiInstrument {
+ public:
+  struct Observation {
+    int64_t event_frame = 0;
+    int64_t callback_frame = 0;
+  };
+
+  void prepare(double, int) override {
+    count_ = 0;
+    callback_frame_ = 0;
+  }
+  void process(float* const*, int, int) override {}
+  void reset() override { count_ = 0; }
+  void set_transport(const sonare::transport::TransportState& state) noexcept override {
+    callback_frame_ = state.render_frame;
+  }
+  void on_event(uint32_t, const MidiEvent& event) noexcept override {
+    if (event.ump.message_type() != sonare::midi::UmpMessageType::kData64 ||
+        event.sysex_payload_size == 0 || count_ >= observations_.size()) {
+      return;
+    }
+    observations_[count_++] = {event.render_frame, callback_frame_};
+  }
+
+  std::array<Observation, 128> observations_{};
+  size_t count_ = 0;
+
+ private:
+  int64_t callback_frame_ = 0;
+};
+
+struct TestPreparedMidiSysEx final : sonare::midi::PreparedMidiSysEx {
+  TestPreparedMidiSysEx(uint32_t domain, uint32_t serial) : domain(domain), serial(serial) {}
+  uint32_t domain = 0;
+  uint32_t serial = 0;
+};
+
+// A small instrument whose SysEx preparation identifies the instrument domain.
+// It also records the raw event pointer, proving the audio path borrows the
+// CONTROL-owned token without copying or dropping it.
+class PreparedTokenInstrument final : public MidiInstrument {
+ public:
+  explicit PreparedTokenInstrument(uint32_t domain, bool fail = false, bool throw_bad_alloc = false,
+                                   bool legacy = false)
+      : domain_(domain), fail_(fail), throw_bad_alloc_(throw_bad_alloc), legacy_(legacy) {}
+
+  void prepare(double, int) override {
+    ++prepare_calls_;
+    observed_count_ = 0;
+  }
+  void process(float* const*, int, int) override { ++process_calls_; }
+  void reset() override { observed_count_ = 0; }
+  bool prepare_sysex(const uint8_t*, size_t,
+                     std::shared_ptr<const PreparedMidiSysEx>& out) override {
+    if (throw_bad_alloc_) throw std::bad_alloc();
+    if (fail_) {
+      out.reset();
+      return false;
+    }
+    if (legacy_) {
+      out.reset();
+      return true;
+    }
+    auto token = std::make_shared<TestPreparedMidiSysEx>(domain_, next_serial_++);
+    prepared_.push_back(token);
+    out = std::move(token);
+    return true;
+  }
+  void on_control_sysex(const uint8_t* data, size_t size) noexcept override {
+    ++control_calls_;
+    if (legacy_ && data != nullptr && size > 2) control_markers_.push_back(data[2]);
+  }
+  void on_event(uint32_t, const MidiEvent& event) noexcept override {
+    if (event.prepared_sysex == nullptr || observed_count_ >= observed_.size()) return;
+    const auto* token = static_cast<const TestPreparedMidiSysEx*>(event.prepared_sysex);
+    observed_[observed_count_++] = {event.render_frame, token->domain, token->serial};
+  }
+
+  struct Observation {
+    int64_t render_frame = 0;
+    uint32_t domain = 0;
+    uint32_t serial = 0;
+  };
+  uint32_t domain_ = 0;
+  bool fail_ = false;
+  bool throw_bad_alloc_ = false;
+  bool legacy_ = false;
+  uint32_t next_serial_ = 0;
+  int prepare_calls_ = 0;
+  int process_calls_ = 0;
+  int control_calls_ = 0;
+  std::vector<uint8_t> control_markers_;
+  std::vector<std::weak_ptr<const TestPreparedMidiSysEx>> prepared_;
+  std::array<Observation, 128> observed_{};
+  size_t observed_count_ = 0;
 };
 
 class SyncByteSink final : public RealtimeEngine::MidiSyncSink {
@@ -540,32 +648,542 @@ TEST_CASE("RealtimeEngine delivers a live SysEx to the addressed destination", "
   REQUIRE(other.payloads_.empty());
 }
 
-TEST_CASE("RealtimeEngine realises a live GS EFX SysEx on the control thread", "[engine][midi]") {
+TEST_CASE("RealtimeEngine does not retain borrowed SysEx in asynchronous MIDI sinks",
+          "[engine][midi][sysex]") {
   RealtimeEngine engine;
   engine.prepare(48000.0, 64);
-  sonare::midi::synth::Sf2Player player;
-  player.prepare(48000.0, 64);
-  REQUIRE(engine.set_midi_instrument(2, &player));
-  REQUIRE_FALSE(player.gs_efx().assigned);
+  PreparedTokenInstrument internal(61);
+  REQUIRE(engine.set_midi_instrument(0, &internal));
 
-  // Select Overdrive (01 10) on the single EFX unit (Roland DT1, address 40 03 00).
-  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
-                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
-  REQUIRE(engine.push_midi_sysex(2, od_type, sizeof(od_type), /*render_frame=*/-1));
+  sonare::host::FixedMidiOutputSink<8> merged_output;
+  engine.set_midi_output_sink(&merged_output);
+  std::vector<uint8_t> payload{0xF0, 0x7D, 0x61, 0xF7};
+  REQUIRE(engine.push_midi_sysex(0, payload.data(), payload.size(), -1));
 
-  // push_midi_sysex runs the instrument's control-thread realise as soon as the
-  // audio-thread event is enqueued, so on success the EFX mirror is already live
-  // when the call returns.
-  REQUIRE(player.gs_efx().assigned);
-  REQUIRE(player.gs_efx().type == 0x0110);
+  // The instrument consumes the borrowed view synchronously, while the
+  // retained output queue must not receive a pointer into the slot or its
+  // stack-local copy.
+  std::fill(payload.begin(), payload.end(), 0x00);
+  std::array<float, 64> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, 64);
+  REQUIRE(internal.observed_count_ == 1);
+  REQUIRE(merged_output.queued_count() == 0);
+
+  // External routing uses a second asynchronous fixed queue. Its record must
+  // be dropped for the same lifetime reason, including after the slot is
+  // released and reused by a later push.
+  REQUIRE(engine.set_midi_destination_external(7, true));
+  REQUIRE(engine.push_midi_sysex(7, payload.data(), payload.size(), -1));
+  engine.process(io, 1, 64);
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+}
+
+TEST_CASE("Fixed MIDI output queues reject borrowed SysEx views", "[engine][midi][sysex]") {
+  sonare::host::FixedMidiOutputSink<4> merged_output;
+  sonare::host::FixedExternalMidiOutputQueue<4> external_output;
+  const std::array<uint8_t, 4> stack_payload{0xF0, 0x7D, 0x63, 0xF7};
+  const TestPreparedMidiSysEx prepared(63, 1);
+
+  MidiEvent borrowed{};
+  borrowed.ump = sonare::midi::make_sysex_handle(0, 1);
+  borrowed.sysex_payload = stack_payload.data();
+  borrowed.sysex_payload_size = stack_payload.size();
+  borrowed.prepared_sysex = &prepared;
+  REQUIRE_FALSE(merged_output.send(borrowed));
+  REQUIRE_FALSE(external_output.send(9, borrowed));
+  REQUIRE(merged_output.queued_count() == 0);
+  REQUIRE(external_output.pending_count() == 0);
+
+  MidiEvent token_only = borrowed;
+  token_only.sysex_payload = nullptr;
+  token_only.sysex_payload_size = 0;
+  REQUIRE_FALSE(merged_output.send(token_only));
+  REQUIRE_FALSE(external_output.send(9, token_only));
+
+  MidiEvent size_only = borrowed;
+  size_only.sysex_payload = nullptr;
+  size_only.prepared_sysex = nullptr;
+  REQUIRE_FALSE(merged_output.send(size_only));
+  REQUIRE_FALSE(external_output.send(9, size_only));
+
+  const MidiEvent normal{12, sonare::midi::make_midi1_note_on(0, 0, 60, 100)};
+  REQUIRE(merged_output.send(normal));
+  REQUIRE(external_output.send(9, normal));
+  REQUIRE(merged_output.queued_count() == 1);
+  REQUIRE(external_output.pending_count() == 1);
+}
+
+TEST_CASE("RealtimeEngine reports the live SysEx rejection reason", "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4096);
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x62, 0xF7};
+
+  REQUIRE_FALSE(engine.push_midi_sysex(0, nullptr, payload.size(), -1));
+  REQUIRE(engine.last_midi_sysex_push_status() ==
+          sonare::engine::MidiSysExPushStatus::kInvalidPayload);
+
+  PreparedTokenInstrument rejected(62, true);
+  REQUIRE(engine.set_midi_instrument(0, &rejected));
+  REQUIRE_FALSE(engine.push_midi_sysex(0, payload.data(), payload.size(), -1));
+  REQUIRE(engine.last_midi_sysex_push_status() ==
+          sonare::engine::MidiSysExPushStatus::kPreparationFailed);
+
+  PreparedTokenInstrument out_of_memory(63, false, true);
+  REQUIRE(engine.set_midi_instrument(0, &out_of_memory));
+  REQUIRE_FALSE(engine.push_midi_sysex(0, payload.data(), payload.size(), -1));
+  REQUIRE(engine.last_midi_sysex_push_status() ==
+          sonare::engine::MidiSysExPushStatus::kOutOfMemory);
+}
+
+TEST_CASE("RealtimeEngine preserves dense scheduled SysEx sub-block boundaries",
+          "[engine][midi][boundary]") {
+  constexpr int kFrames = 4096;
+  constexpr int kEvents = 60;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  BoundaryTimingInstrument instrument;
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+
+  // Any automation lane activates the control-period boundary path, whose 64
+  // cadence points share the block's boundary storage with every MIDI event.
+  sonare::automation::AutomationLane lane(0);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {1.0, 1.0f, sonare::automation::CurveType::Linear}});
+  engine.automation().set_lanes({lane});
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x55, 0xF7};
+  sonare::midi::MidiClipSchedule clip;
+  clip.destination_id = 0;
+  clip.length_samples = kFrames;
+  for (int i = 1; i <= kEvents; ++i) {
+    MidiEvent event;
+    event.render_frame = static_cast<int64_t>(i * 64);
+    event.ump = sonare::midi::make_sysex_handle(0, static_cast<uint32_t>(i));
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    clip.events.push_back(event);
+  }
+  engine.set_midi_clips({clip});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kFrames> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, kFrames);
+
+  REQUIRE(instrument.count_ == kEvents);
+  for (size_t i = 0; i < instrument.count_; ++i) {
+    REQUIRE(instrument.observations_[i].callback_frame == instrument.observations_[i].event_frame);
+  }
+}
+
+TEST_CASE("RealtimeEngine keeps prepared SysEx tokens alive across 64 out-of-order slots",
+          "[engine][midi][sysex]") {
+  constexpr int kFrames = 4096;
+  constexpr int kMessages = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  PreparedTokenInstrument instrument(17);
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+
+  for (int i = 0; i < kMessages; ++i) {
+    const std::array<uint8_t, 4> payload{0xF0, 0x7D, static_cast<uint8_t>(i), 0xF7};
+    // Reverse enqueue order. The command queue must still dispatch by the
+    // sample timestamp while each slot retains its own prepared domain.
+    REQUIRE(engine.push_midi_sysex(0, payload.data(), payload.size(), (kMessages - 1 - i) * 64));
+  }
+
+  std::array<float, kFrames> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, kFrames);
+
+  REQUIRE(instrument.control_calls_ == 0);
+  REQUIRE(instrument.observed_count_ == kMessages);
+  for (size_t i = 0; i < instrument.observed_count_; ++i) {
+    REQUIRE(instrument.observed_[i].domain == 17);
+    if (i > 0) {
+      REQUIRE(instrument.observed_[i - 1].render_frame < instrument.observed_[i].render_frame);
+    }
+  }
+  // AUDIO release only hands the generations back; token destruction waits for
+  // CONTROL reuse, so all 64 event-time domains remain alive after the block.
+  REQUIRE(instrument.prepared_.size() == kMessages);
+  for (const auto& token : instrument.prepared_) REQUIRE_FALSE(token.expired());
+
+  // Reuse is the CONTROL-side reclamation point. The next push may rebuild a
+  // fresh operation, but consumed slots must release every old strong owner
+  // before that preparation starts.
+  const std::vector<uint8_t> reused{0xF0, 0x7D, 0x5A, 0xF7};
+  REQUIRE(engine.push_midi_sysex(0, reused.data(), reused.size(), -1));
+  REQUIRE(instrument.prepared_.size() == kMessages + 1);
+  for (size_t i = 0; i < kMessages; ++i) REQUIRE(instrument.prepared_[i].expired());
+  REQUIRE_FALSE(instrument.prepared_.back().expired());
+}
+
+TEST_CASE("RealtimeEngine replays accepted legacy SysEx in push order on rebind",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+  PreparedTokenInstrument old_instrument(1, false, false, true);
+  PreparedTokenInstrument new_instrument(2, false, false, true);
+  REQUIRE(engine.set_midi_instrument(0, &old_instrument));
+
+  const std::vector<uint8_t> first{0xF0, 0x7D, 0x31, 0xF7};
+  const std::vector<uint8_t> second{0xF0, 0x7D, 0x32, 0xF7};
+  REQUIRE(engine.push_midi_sysex(0, first.data(), first.size(), 128));
+  REQUIRE(engine.push_midi_sysex(0, second.data(), second.size(), 64));
+  REQUIRE(old_instrument.control_markers_ == std::vector<uint8_t>{0x31, 0x32});
+
+  REQUIRE(engine.set_midi_instrument(0, &new_instrument));
+  REQUIRE(new_instrument.control_markers_ == std::vector<uint8_t>{0x31, 0x32});
+}
+
+TEST_CASE("RealtimeEngine preserves the latest control clip snapshot on rebind",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument old_instrument(1);
+  PreparedTokenInstrument new_instrument(2);
+  REQUIRE(engine.set_midi_instrument(0, &old_instrument));
+
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x70, 0xF7};
+  const auto make_schedule = [&](uint32_t id) {
+    MidiEvent event;
+    event.render_frame = 0;
+    event.ump = sonare::midi::make_sysex_handle(0, id + 1);
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    sonare::midi::MidiClipSchedule clip;
+    clip.id = id;
+    clip.destination_id = 0;
+    clip.events = {event};
+    return std::vector<sonare::midi::MidiClipSchedule>{clip};
+  };
+
+  engine.set_midi_clips(make_schedule(0));
+  engine.midi_sequencer().acquire_midi_clips();
+  for (uint32_t id = 1; id <= 70; ++id) engine.set_midi_clips(make_schedule(id));
+  // The audio view may still be part-way through its retire ring. Rebinding
+  // must stage from the latest accepted CONTROL snapshot instead.
+  engine.midi_sequencer().acquire_midi_clips();
+
+  REQUIRE(engine.set_midi_instrument(0, &new_instrument));
+  const auto* clips = engine.midi_sequencer().current_clips();
+  REQUIRE(clips != nullptr);
+  REQUIRE(clips->size() == 1);
+  REQUIRE(clips->front().id == 70);
+  REQUIRE(clips->front().events.size() == 1);
+  const auto* prepared =
+      static_cast<const TestPreparedMidiSysEx*>(clips->front().events.front().prepared_sysex);
+  REQUIRE(prepared != nullptr);
+  REQUIRE(prepared->domain == 2);
+}
+
+TEST_CASE("RealtimeEngine adopts a pending rebind after an exactly full clip ring",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument old_instrument(1);
+  PreparedTokenInstrument new_instrument(2);
+  REQUIRE(engine.set_midi_instrument(0, &old_instrument));
+
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x71, 0xF7};
+  const auto make_schedule = [&](uint32_t id) {
+    MidiEvent event;
+    event.render_frame = 0;
+    event.ump = sonare::midi::make_sysex_handle(0, id + 1);
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    sonare::midi::MidiClipSchedule clip;
+    clip.id = id;
+    clip.destination_id = 0;
+    clip.events = {event};
+    return std::vector<sonare::midi::MidiClipSchedule>{clip};
+  };
+
+  engine.set_midi_clips(make_schedule(0));
+  engine.midi_sequencer().acquire_midi_clips();
+  // Leave the exactly full hand-off ring unacquired. The rebind publication
+  // then occupies the pending slot, which a single ordinary acquire cannot
+  // adopt after it fills the retire ring with all 64 older snapshots.
+  for (uint32_t id = 1; id <= sonare::rt::RtPublisher<int>::kCapacity; ++id) {
+    engine.set_midi_clips(make_schedule(id));
+  }
+
+  REQUIRE(engine.set_midi_instrument(0, &new_instrument));
+  const auto* clips = engine.midi_sequencer().current_clips();
+  REQUIRE(clips != nullptr);
+  REQUIRE(clips->size() == 1);
+  REQUIRE(clips->front().id == sonare::rt::RtPublisher<int>::kCapacity);
+  const auto* prepared =
+      static_cast<const TestPreparedMidiSysEx*>(clips->front().events.front().prepared_sysex);
+  REQUIRE(prepared != nullptr);
+  REQUIRE(prepared->domain == 2);
+}
+
+TEST_CASE("RealtimeEngine rejects binding one instrument to two destinations", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument shared(7);
+  PreparedTokenInstrument distinct(8);
+  REQUIRE(engine.set_midi_instrument(1, &shared));
+  const int prepare_calls = shared.prepare_calls_;
+
+  REQUIRE_FALSE(engine.set_midi_instrument(2, &shared));
+  REQUIRE(engine.midi_instrument(1) == &shared);
+  REQUIRE(engine.midi_instrument(2) == nullptr);
+  REQUIRE(engine.midi_instrument_count() == 1);
+  REQUIRE(shared.prepare_calls_ == prepare_calls);
+
+  REQUIRE(engine.set_midi_instrument(2, &distinct));
+  REQUIRE(engine.midi_instrument(1) == &shared);
+  REQUIRE(engine.midi_instrument(2) == &distinct);
+  REQUIRE(engine.midi_instrument_count() == 2);
+}
+
+TEST_CASE("RealtimeEngine rebinds clip and queued SysEx domains transactionally",
+          "[engine][midi][sysex]") {
+  constexpr int kFrames = 256;
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x21, 0xF7};
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  PreparedTokenInstrument old_instrument(11);
+  PreparedTokenInstrument new_instrument(22);
+  REQUIRE(engine.set_midi_instrument(0, &old_instrument));
+
+  sonare::midi::MidiClipSchedule clip;
+  clip.destination_id = 0;
+  clip.length_samples = kFrames;
+  MidiEvent scheduled;
+  scheduled.render_frame = 64;
+  scheduled.ump = sonare::midi::make_sysex_handle(0, 9);
+  scheduled.sysex_payload = payload.data();
+  scheduled.sysex_payload_size = payload.size();
+  clip.events = {scheduled};
+  engine.set_midi_clips({clip});
+  REQUIRE(engine.push_midi_sysex(0, payload.data(), payload.size(), 64));
+
+  REQUIRE(engine.set_midi_instrument(0, &new_instrument));
+  REQUIRE(engine.midi_instrument(0) == &new_instrument);
+  push_play(engine);
+
+  std::array<float, kFrames> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, kFrames);
+
+  REQUIRE(old_instrument.observed_count_ == 0);
+  REQUIRE(new_instrument.observed_count_ == 2);
+  for (size_t i = 0; i < new_instrument.observed_count_; ++i) {
+    REQUIRE(new_instrument.observed_[i].domain == 22);
+  }
+}
+
+TEST_CASE("RealtimeEngine rejects a failed SysEx rebind without replacing its domain",
+          "[engine][midi][sysex]") {
+  constexpr int kFrames = 256;
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x31, 0xF7};
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  PreparedTokenInstrument old_instrument(31);
+  PreparedTokenInstrument failing_instrument(42, true);
+  REQUIRE(engine.set_midi_instrument(0, &old_instrument));
+
+  sonare::midi::MidiClipSchedule clip;
+  clip.destination_id = 0;
+  clip.length_samples = kFrames;
+  MidiEvent scheduled;
+  scheduled.render_frame = 64;
+  scheduled.ump = sonare::midi::make_sysex_handle(0, 10);
+  scheduled.sysex_payload = payload.data();
+  scheduled.sysex_payload_size = payload.size();
+  clip.events = {scheduled};
+  engine.set_midi_clips({clip});
+
+  REQUIRE_FALSE(engine.set_midi_instrument(0, &failing_instrument));
+  REQUIRE(engine.midi_instrument(0) == &old_instrument);
+  push_play(engine);
+
+  std::array<float, kFrames> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, kFrames);
+
+  REQUIRE(old_instrument.observed_count_ == 1);
+  REQUIRE(old_instrument.observed_[0].domain == 31);
+  REQUIRE(failing_instrument.observed_count_ == 0);
+}
+
+TEST_CASE("RealtimeEngine hands live SysEx slots back after audio consumption", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4096);
+  SysExRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  constexpr size_t kSlotCount = 64;
+  std::array<std::vector<uint8_t>, kSlotCount> expected;
+  for (size_t i = 0; i < expected.size(); ++i) {
+    expected[i] = {0xF0, 0x7E, 0x7F, 0x09, static_cast<uint8_t>(i), 0xF7};
+    REQUIRE(engine.push_midi_sysex(0, expected[i].data(), expected[i].size(), -1));
+  }
+
+  // A slot remains owned by its queued command until the audio thread consumes
+  // that command. The next push must fail without overwriting the first frame.
+  const std::vector<uint8_t> rejected = {0xF0, 0x7E, 0x7F, 0x09, 0x40, 0xF7};
+  REQUIRE_FALSE(engine.push_midi_sysex(0, rejected.data(), rejected.size(), -1));
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  for (int block = 0; block < 2; ++block) engine.process(channels, 2, 64);
+
+  REQUIRE(target.payloads_.size() == expected.size());
+  REQUIRE(target.payloads_ == std::vector<std::vector<uint8_t>>(expected.begin(), expected.end()));
+
+  // Once consumed, the first slot can be reused by a subsequent push.
+  const std::vector<uint8_t> reused = {0xF0, 0x7E, 0x7F, 0x09, 0x41, 0xF7};
+  REQUIRE(engine.push_midi_sysex(0, reused.data(), reused.size(), -1));
+  engine.process(channels, 2, 64);
+  REQUIRE(target.payloads_.size() == expected.size() + 1);
+  REQUIRE(target.payloads_.back() == reused);
+}
+
+TEST_CASE("RealtimeEngine skips a future SysEx slot when finding free storage", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4096);
+  SysExRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  const auto make_payload = [](uint8_t marker) {
+    return std::vector<uint8_t>{0xF0, 0x7E, 0x7F, 0x09, marker, 0xF7};
+  };
+  const std::vector<uint8_t> future = make_payload(0x70);
+  REQUIRE(engine.push_midi_sysex(0, future.data(), future.size(), /*render_frame=*/128));
+
+  std::array<std::vector<uint8_t>, 63> immediate;
+  for (size_t i = 0; i < immediate.size(); ++i) {
+    immediate[i] = make_payload(static_cast<uint8_t>(i));
+    REQUIRE(engine.push_midi_sysex(0, immediate[i].data(), immediate[i].size(), -1));
+  }
+
+  // Slot zero is still occupied by the future command, while every other slot
+  // is occupied by an immediate command. A 65th command has no free storage.
+  const std::vector<uint8_t> rejected = make_payload(0x72);
+  REQUIRE_FALSE(engine.push_midi_sysex(0, rejected.data(), rejected.size(), -1));
 
   std::vector<float> left(64, 0.0f);
   std::vector<float> right(64, 0.0f);
   float* channels[] = {left.data(), right.data()};
   engine.process(channels, 2, 64);
+  REQUIRE(target.payloads_.size() == immediate.size());
+  for (size_t i = 0; i < immediate.size(); ++i) REQUIRE(target.payloads_[i] == immediate[i]);
 
-  engine.set_midi_instrument(2, nullptr);
+  // The cursor is at the still-busy future slot, so finding the first released
+  // slot requires a bounded scan rather than recycling slot zero.
+  const std::vector<uint8_t> reused = make_payload(0x71);
+  REQUIRE(engine.push_midi_sysex(0, reused.data(), reused.size(), -1));
+  engine.process(channels, 2, 64);
+  REQUIRE(target.payloads_.size() == immediate.size() + 1);
+  REQUIRE(target.payloads_.back() == reused);
+
+  // The future payload remains pending and arrives intact at its due frame.
+  engine.process(channels, 2, 64);
+  REQUIRE(target.payloads_.size() == immediate.size() + 2);
+  REQUIRE(target.payloads_.back() == future);
 }
+
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
+TEST_CASE("RealtimeEngine applies live GS EFX to audible audio at its due frame",
+          "[engine][midi]") {
+  using sonare::midi::synth::Sf2Player;
+  sonare::test::Sf2Builder builder;
+  std::vector<float> tone(8192);
+  for (size_t i = 0; i < tone.size(); ++i)
+    tone[i] = static_cast<float>(std::sin(6.28318530717958647692 * i / 64.0));
+  const int sample = builder.add_sample("tone", tone, 48000, 60, 0, tone.size());
+  sonare::test::Sf2Builder::ZoneSpec zone;
+  zone.target = sample;
+  const int instrument = builder.add_instrument("tone", {zone});
+  zone.target = instrument;
+  builder.add_preset("tone", 0, 1, {zone});
+  const auto bytes = builder.build();
+  auto sf2 = std::make_shared<sonare::midi::synth::Sf2File>();
+  std::string error;
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+
+  sonare::midi::synth::Sf2PlayerConfig config;
+  config.gain = 1.0f;
+  config.bank_rig_binding = false;
+  config.effects.enable_reverb = false;
+  config.effects.enable_chorus = false;
+  config.effects.enable_delay = false;
+  config.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player(config);
+  Sf2Player dry(config);
+  player.set_soundfont(sf2);
+  dry.set_soundfont(sf2);
+  RealtimeEngine engine;
+  RealtimeEngine oracle;
+  engine.prepare(48000.0, 256);
+  oracle.prepare(48000.0, 256);
+  REQUIRE(engine.set_midi_instrument(2, &player));
+  REQUIRE(oracle.set_midi_instrument(2, &dry));
+  for (Sf2Player* target : {&player, &dry}) {
+    MidiEvent program{};
+    program.ump = sonare::midi::make_midi1_program_change(0, 0, 1);
+    target->on_event(0, program);
+    MidiEvent note{};
+    note.ump = sonare::midi::make_midi1_note_on(0, 0, 60, 127);
+    target->on_event(0, note);
+  }
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  REQUIRE(oracle.push_command(play));
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  REQUIRE(engine.push_midi_sysex(2, part_on, sizeof(part_on), 4096));
+  REQUIRE(engine.push_midi_sysex(2, od_type, sizeof(od_type), 4096));
+
+  std::array<float, 256> left{}, right{}, dry_left{}, dry_right{};
+  float* channels[] = {left.data(), right.data()};
+  float* dry_channels[] = {dry_left.data(), dry_right.data()};
+  double early_energy = 0.0, early_error = 0.0;
+  double due_energy = 0.0, due_error = 0.0;
+  for (int block = 0; block <= 16; ++block) {
+    engine.process(channels, 2, 256);
+    oracle.process(dry_channels, 2, 256);
+    for (size_t i = 0; i < left.size(); ++i) {
+      const double energy = static_cast<double>(dry_left[i]) * dry_left[i] +
+                            static_cast<double>(dry_right[i]) * dry_right[i];
+      const double dl = static_cast<double>(left[i]) - dry_left[i];
+      const double dr = static_cast<double>(right[i]) - dry_right[i];
+      if (block < 16) {
+        early_energy += energy;
+        early_error += dl * dl + dr * dr;
+      } else {
+        due_energy += energy;
+        due_error += dl * dl + dr * dr;
+      }
+    }
+  }
+  REQUIRE(early_energy > 1e-8);
+  REQUIRE(std::sqrt(early_error / early_energy) < 1e-6);
+  REQUIRE(due_energy > 1e-8);
+  REQUIRE(std::sqrt(due_error / due_energy) > 1e-3);
+  // The diagnostic getter is CONTROL-owned. AUDIO dispatch must change the
+  // audible processor without mutating that cross-thread diagnostic mirror.
+  REQUIRE_FALSE(player.gs_efx().assigned);
+}
+#endif
 
 TEST_CASE("push_midi_sysex leaves the EFX mirror unrealised when the command queue is full",
           "[engine][midi]") {
@@ -582,20 +1200,228 @@ TEST_CASE("push_midi_sysex leaves the EFX mirror unrealised when the command que
   sonare::rt::Command filler{};
   filler.type = sonare::rt::CommandType::kTransportPlay;
   filler.sample_time = -1;
-  while (engine.push_command(filler)) {
-    // Keep pushing until the bounded queue reports overflow.
-  }
+  size_t capacity = 0;
+  while (engine.push_command(filler)) ++capacity;
+  REQUIRE(capacity > 0);
 
   // A GS EFX-select SysEx now cannot enqueue its audio-thread command. It must
-  // report failure AND leave the control-side EFX mirror untouched: realising it
-  // here would adopt the new effect chain while the queued channel state never
-  // arrives -- a half-applied SysEx that diverges from an offline bounce.
+  // report queue pressure AND leave the control-side EFX mirror untouched:
+  // realising it here would adopt the new effect chain while the queued channel
+  // state never arrives -- a half-applied SysEx that diverges from a bounce.
   const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                              0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
   REQUIRE_FALSE(engine.push_midi_sysex(2, od_type, sizeof(od_type), /*render_frame=*/-1));
+  REQUIRE(engine.last_midi_sysex_push_status() == sonare::engine::MidiSysExPushStatus::kQueueFull);
   REQUIRE_FALSE(player.gs_efx().assigned);
 
+  // Draining the queue frees it, and the rejected push held no slot: the full
+  // queue capacity is accepted again.
+  std::array<float, 64> left{}, right{};
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+  const uint8_t gm_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  for (size_t i = 0; i < capacity; ++i) {
+    REQUIRE(engine.push_midi_sysex(2, gm_on, sizeof(gm_on), /*render_frame=*/-1));
+  }
+
+  engine.process(channels, 2, 64);
   engine.set_midi_instrument(2, nullptr);
+}
+
+TEST_CASE("a SysEx push refused for queue pressure hands its payload slot back",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4, /*telemetry_capacity=*/4);
+  SysExRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  sonare::rt::Command filler{};
+  filler.type = sonare::rt::CommandType::kTransportPlay;
+  filler.sample_time = -1;
+  while (engine.push_command(filler)) {
+  }
+
+  // More refusals than there are payload slots: a leaked slot would turn the
+  // later ones into kPayloadSlotsFull instead of kQueueFull.
+  const std::vector<uint8_t> payload{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  for (int i = 0; i < 2 * 64 + 1; ++i) {
+    REQUIRE_FALSE(engine.push_midi_sysex(0, payload.data(), payload.size(), -1));
+    REQUIRE(engine.last_midi_sysex_push_status() ==
+            sonare::engine::MidiSysExPushStatus::kQueueFull);
+  }
+
+  std::array<float, 64> left{}, right{};
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+  REQUIRE(engine.push_midi_sysex(0, payload.data(), payload.size(), -1));
+  REQUIRE(engine.last_midi_sysex_push_status() == sonare::engine::MidiSysExPushStatus::kAccepted);
+  engine.process(channels, 2, 64);
+  REQUIRE(target.payloads_.size() == 1);
+  REQUIRE(target.payloads_.front() == payload);
+}
+
+TEST_CASE("prepare re-prepares the newest clip snapshot after more than 64 publishes",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument instrument(5);
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x72, 0xF7};
+  const auto make_schedule = [&](uint32_t id) {
+    MidiEvent event;
+    event.render_frame = 0;
+    event.ump = sonare::midi::make_sysex_handle(0, id + 1);
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    sonare::midi::MidiClipSchedule clip;
+    clip.id = id;
+    clip.destination_id = 0;
+    clip.events = {event};
+    return std::vector<sonare::midi::MidiClipSchedule>{clip};
+  };
+
+  // Overrun the hand-off ring without an audio acquire in between.
+  constexpr auto kPublishes = static_cast<uint32_t>(sonare::rt::RtPublisher<int>::kCapacity + 6);
+  for (uint32_t id = 1; id <= kPublishes; ++id) engine.set_midi_clips(make_schedule(id));
+
+  engine.prepare(48000.0, 64);
+  const auto* clips = engine.midi_sequencer().current_clips();
+  REQUIRE(clips != nullptr);
+  REQUIRE(clips->size() == 1);
+  REQUIRE(clips->front().id == kPublishes);
+  const auto* prepared = clips->front().events.front().prepared_sysex;
+  REQUIRE(prepared != nullptr);
+  // The surviving token is the one prepare() built after re-preparing the instrument.
+  REQUIRE_FALSE(instrument.prepared_.empty());
+  REQUIRE(prepared == instrument.prepared_.back().lock().get());
+}
+
+TEST_CASE("prepare reports a scheduled SysEx the bound instrument refuses",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument instrument(6);
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x73, 0xF7};
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 0;
+  MidiEvent event;
+  event.render_frame = 0;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  clip.events = {event};
+  engine.set_midi_clips({clip});
+
+  // The re-prepared instrument now refuses: prepare commits, clears the clips
+  // (all or none) and reports the refusal instead of returning normally.
+  instrument.fail_ = true;
+  const int prepare_calls = instrument.prepare_calls_;
+  bool refused = false;
+  try {
+    engine.prepare(48000.0, 64);
+  } catch (const sonare::SonareException& error) {
+    refused = error.code() == sonare::ErrorCode::InvalidParameter;
+  }
+  REQUIRE(refused);
+  REQUIRE(instrument.prepare_calls_ == prepare_calls + 1);
+  REQUIRE(engine.midi_instrument(0) == &instrument);
+  const auto* clips = engine.midi_sequencer().current_clips();
+  REQUIRE((clips == nullptr || clips->empty()));
+
+  // The engine stayed prepared: a block renders through the bound instrument.
+  const int process_calls = instrument.process_calls_;
+  push_play(engine);
+  std::array<float, 64> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, 64);
+  REQUIRE(instrument.process_calls_ > process_calls);
+}
+
+TEST_CASE("RealtimeEngine reports why an instrument bind was refused", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument shared(1);
+  REQUIRE(engine.set_midi_instrument(1, &shared));
+  REQUIRE(engine.last_midi_instrument_bind_status() ==
+          sonare::engine::MidiInstrumentBindStatus::kBound);
+  REQUIRE_FALSE(engine.set_midi_instrument(2, &shared));
+  REQUIRE(engine.last_midi_instrument_bind_status() ==
+          sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere);
+
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x74, 0xF7};
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 3;
+  MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  clip.events = {event};
+  engine.set_midi_clips({clip});
+
+  PreparedTokenInstrument refusing(2, /*fail=*/true);
+  REQUIRE_FALSE(engine.set_midi_instrument(3, &refusing));
+  REQUIRE(engine.last_midi_instrument_bind_status() ==
+          sonare::engine::MidiInstrumentBindStatus::kPreparationFailed);
+  PreparedTokenInstrument out_of_memory(3, false, /*throw_bad_alloc=*/true);
+  REQUIRE_FALSE(engine.set_midi_instrument(3, &out_of_memory));
+  REQUIRE(engine.last_midi_instrument_bind_status() ==
+          sonare::engine::MidiInstrumentBindStatus::kOutOfMemory);
+  REQUIRE(engine.midi_instrument(3) == nullptr);
+}
+
+TEST_CASE("live command events reach an instrument after their sub-block's transport",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+  BoundaryTimingInstrument instrument;
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+
+  const std::vector<uint8_t> payload{0xF0, 0x7D, 0x56, 0xF7};
+  REQUIRE(engine.push_midi_sysex(0, payload.data(), payload.size(), /*render_frame=*/128));
+  std::array<float, 256> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, 256);
+
+  REQUIRE(instrument.count_ == 1);
+  REQUIRE(instrument.observations_[0].event_frame == 128);
+  REQUIRE(instrument.observations_[0].callback_frame == 128);
+}
+
+TEST_CASE("RealtimeEngine forwards a handle-carrying clip SysEx to the merged output sink",
+          "[engine][midi][sysex]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  PreparedTokenInstrument internal(64);
+  REQUIRE(engine.set_midi_instrument(0, &internal));
+  sonare::host::FixedMidiOutputSink<8> merged_output;
+  engine.set_midi_output_sink(&merged_output);
+
+  const std::array<uint8_t, 4> payload{0xF0, 0x7D, 0x64, 0xF7};
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 0;
+  MidiEvent event;
+  event.render_frame = 16;
+  event.ump = sonare::midi::make_sysex_handle(0, 42);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  clip.events = {event};
+  engine.set_midi_clips({clip});
+  push_play(engine);
+
+  std::array<float, 64> audio{};
+  float* io[] = {audio.data()};
+  engine.process(io, 1, 64);
+
+  // The rack consumes the borrowed token; the queue keeps only the handle UMP.
+  REQUIRE(internal.observed_count_ == 1);
+  REQUIRE(merged_output.queued_count() == 1);
+  REQUIRE(merged_output.dropped_count() == 0);
 }
 
 TEST_CASE("RealtimeEngine rejects an invalid live SysEx payload", "[engine][midi]") {

@@ -52,6 +52,18 @@ sonare::midi::BuiltinSynthConfig engine_synth_config_from_c(
   return sonare::midi::clamp_synth_config(cfg);
 }
 
+// Maps a refused set_midi_instrument() to its C status: a permanent refusal is
+// an invalid parameter, a full rack or failed allocation is out of memory.
+SonareError midi_instrument_bind_error(const sonare::engine::RealtimeEngine& engine) noexcept {
+  switch (engine.last_midi_instrument_bind_status()) {
+    case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
+    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
+      return SONARE_ERROR_INVALID_PARAMETER;
+    default:
+      return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+}
+
 // Binds (or replaces) an engine-owned instrument on a destination, keeping the
 // ownership table and the engine's instrument rack in sync. Shared by the
 // built-in synth and SF2 instrument entries.
@@ -61,7 +73,7 @@ SonareError bind_engine_instrument(SonareRealtimeEngine* engine, uint32_t destin
     if (entry.first == destination_id) {
       sonare::midi::MidiInstrument* raw = instrument.get();
       if (!engine->engine.set_midi_instrument(destination_id, raw)) {
-        return SONARE_ERROR_OUT_OF_MEMORY;
+        return midi_instrument_bind_error(engine->engine);
       }
       entry.second = std::move(instrument);
       return SONARE_OK;
@@ -71,7 +83,7 @@ SonareError bind_engine_instrument(SonareRealtimeEngine* engine, uint32_t destin
   sonare::midi::MidiInstrument* raw = engine->builtin_instruments.back().second.get();
   if (!engine->engine.set_midi_instrument(destination_id, raw)) {
     engine->builtin_instruments.pop_back();
-    return SONARE_ERROR_OUT_OF_MEMORY;
+    return midi_instrument_bind_error(engine->engine);
   }
   return SONARE_OK;
 }
@@ -345,10 +357,9 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
       cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
     }
   }
-  // Make the live player EFX-capable: a GS insertion-effect SysEx pushed via
-  // sonare_engine_push_midi_sysex is realised on the control thread and swapped
-  // in wait-free (realize_efx_inline stays false, the live default). An unknown
-  // name or an FX-less build yields a null insert that is bypassed.
+  // Prepare GS insertion-effect processors on CONTROL; scheduled SysEx selects
+  // and updates them at its render frame. An unknown name or an FX-less build
+  // yields a null insert that is bypassed.
 #if defined(SONARE_WITH_MASTERING)
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
@@ -369,12 +380,16 @@ SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  engine->engine.set_midi_instrument(destination_id, nullptr);
+  SONARE_C_TRY
+  if (!engine->engine.set_midi_instrument(destination_id, nullptr)) {
+    return midi_instrument_bind_error(engine->engine);
+  }
   engine->builtin_instruments.erase(
       std::remove_if(engine->builtin_instruments.begin(), engine->builtin_instruments.end(),
                      [&](const auto& entry) { return entry.first == destination_id; }),
       engine->builtin_instruments.end());
   return SONARE_OK;
+  SONARE_C_CATCH
 #endif
 }
 
@@ -905,11 +920,15 @@ SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t
   (void)render_frame;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  // Copies the bytes into the engine's bounded SysEx store and enqueues a
-  // scalar-only kMidiSysExImmediate command. The C-ABI guard above rejects an
-  // oversized payload; a failure here is transient queue back-pressure.
+  // Preparation precedes publication into the bounded payload/command stores.
   if (!engine->engine.push_midi_sysex(destination_id, data, size, render_frame)) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
+    switch (engine->engine.last_midi_sysex_push_status()) {
+      case sonare::engine::MidiSysExPushStatus::kInvalidPayload:
+      case sonare::engine::MidiSysExPushStatus::kPreparationFailed:
+        return SONARE_ERROR_INVALID_PARAMETER;
+      default:
+        return SONARE_ERROR_OUT_OF_MEMORY;
+    }
   }
   return SONARE_OK;
 #endif

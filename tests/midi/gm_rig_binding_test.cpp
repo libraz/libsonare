@@ -87,6 +87,116 @@ std::vector<float> render_program(Sf2PlayerConfig cfg, uint8_t program,
   return left;
 }
 
+struct StereoRender {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+StereoRender render_program_stereo(Sf2PlayerConfig cfg, uint8_t program, uint8_t pan,
+                                   int num_samples = 24000) {
+  if (!(cfg.gain > 0.0f)) cfg.gain = 1.0f;
+  cfg.realize_efx_inline = true;
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);
+  player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, program)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 10, pan)));
+  // Keep the measurement on the instrument/rig path. GS power-on reverb is
+  // useful for normal playback but its tail would mask the amp's pan response.
+  for (const uint8_t controller : {uint8_t{91}, uint8_t{93}, uint8_t{94}}) {
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, controller, 0)));
+  }
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 52, 110)));
+  StereoRender rendered;
+  rendered.left.assign(static_cast<size_t>(num_samples), 0.0f);
+  rendered.right.assign(static_cast<size_t>(num_samples), 0.0f);
+  float* chans[2] = {rendered.left.data(), rendered.right.data()};
+  player.process(chans, 2, num_samples);
+  return rendered;
+}
+
+Sf2PlayerConfig with_factory();
+
+constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+constexpr uint8_t kOdType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                               0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+
+/// A factory whose GS unit amp is a no-op while the bank rig's amp is real. The
+/// unit's JSON has ampModel and the rig's has preset, which tells them apart.
+Sf2PlayerConfig with_identity_unit() {
+  Sf2PlayerConfig cfg = with_factory();
+  cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    if (name == "saturation.ampSim" && json.find("\"preset\"") == std::string_view::npos) {
+      return std::unique_ptr<sonare::rt::ProcessorBase>{};
+    }
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  return cfg;
+}
+
+StereoRender render_through_unit(Sf2Player& player, uint8_t pan, int num_samples) {
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 10, pan)));
+  for (const uint8_t controller : {uint8_t{91}, uint8_t{93}, uint8_t{94}}) {
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, controller, 0)));
+  }
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 52, 110)));
+  StereoRender rendered;
+  rendered.left.assign(static_cast<size_t>(num_samples), 0.0f);
+  rendered.right.assign(static_cast<size_t>(num_samples), 0.0f);
+  float* chans[2] = {rendered.left.data(), rendered.right.data()};
+  player.process(chans, 2, num_samples);
+  return rendered;
+}
+
+/// Program 30 routed into the identity unit by plain SysEx, realised inline.
+StereoRender render_program_stereo_through_direct_unit(uint8_t pan, int num_samples = 24000) {
+  Sf2PlayerConfig cfg = with_identity_unit();
+  cfg.realize_efx_inline = true;
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);
+  const auto dispatch = [&](const uint8_t* payload, size_t size) {
+    MidiEvent plain;
+    plain.ump = sonare::midi::make_sysex_handle(0, 1);
+    plain.sysex_payload = payload;
+    plain.sysex_payload_size = size;
+    player.on_event(0, plain);
+  };
+  dispatch(kOdType, sizeof(kOdType));
+  dispatch(kPartOn, sizeof(kPartOn));
+  player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 30)));
+  return render_through_unit(player, pan, num_samples);
+}
+
+/// The same route as scheduled prepared SysEx over a live player whose
+/// published snapshot carries the bank rig for program 30.
+StereoRender render_program_stereo_through_prepared_unit(uint8_t pan, int num_samples = 24000) {
+  Sf2Player player(with_identity_unit());
+  player.prepare(kOutRate, 256);
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> type_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> assign_token;
+  REQUIRE(player.prepare_sysex(kOdType, sizeof(kOdType), type_token));
+  REQUIRE(player.prepare_sysex(kPartOn, sizeof(kPartOn), assign_token));
+  const auto dispatch = [&](const uint8_t* payload, size_t size,
+                            const std::shared_ptr<const sonare::midi::PreparedMidiSysEx>& token) {
+    MidiEvent prepared;
+    prepared.ump = sonare::midi::make_sysex_handle(0, 1);
+    prepared.sysex_payload = payload;
+    prepared.sysex_payload_size = size;
+    prepared.prepared_sysex = token.get();
+    player.on_event(0, prepared);
+  };
+  dispatch(kOdType, sizeof(kOdType), type_token);
+  dispatch(kPartOn, sizeof(kPartOn), assign_token);
+  player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 30)));
+  player.realize_gs_efx();
+  return render_through_unit(player, pan, num_samples);
+}
+
 Sf2PlayerConfig with_factory() {
   Sf2PlayerConfig cfg;
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
@@ -108,6 +218,27 @@ double crest_db(const std::vector<float>& buf) {
   const double r = std::sqrt(acc / static_cast<double>(std::max<size_t>(buf.size(), 1)));
   if (!(r > 0.0) || !(peak > 0.0)) return 0.0;
   return 20.0 * std::log10(peak / r);
+}
+
+double peak_abs(const std::vector<float>& buf) {
+  double peak = 0.0;
+  for (const float sample : buf) peak = std::max(peak, static_cast<double>(std::fabs(sample)));
+  return peak;
+}
+
+double relative_rms_difference(const std::vector<float>& reference,
+                               const std::vector<float>& candidate, float candidate_scale) {
+  REQUIRE(reference.size() == candidate.size());
+  double error = 0.0;
+  double energy = 0.0;
+  for (size_t i = 0; i < reference.size(); ++i) {
+    const double expected = static_cast<double>(reference[i]);
+    const double actual = static_cast<double>(candidate[i]) * candidate_scale;
+    const double delta = expected - actual;
+    error += delta * delta;
+    energy += expected * expected;
+  }
+  return std::sqrt(error / std::max(energy, 1e-30));
 }
 
 }  // namespace
@@ -177,6 +308,86 @@ TEST_CASE("a file that selects program 30 and asks for nothing comes out amplifi
   // Not a level change: an amplifier compresses, so the rigged signal sits
   // closer to its own average however the trim is set.
   REQUIRE(crest_db(rigged) < crest_db(di) - 3.0);
+}
+
+TEST_CASE("the default guitar amplifier sees a mono pickup before CC10 pan", "[midi][sf2][rig]") {
+  const StereoRender center = render_program_stereo(with_factory(), 30, 64);
+  const StereoRender left = render_program_stereo(with_factory(), 30, 0);
+  const StereoRender right = render_program_stereo(with_factory(), 30, 127);
+  const double center_crest = crest_db(center.left);
+  const double left_crest = crest_db(left.left);
+  const double center_right_crest = crest_db(center.right);
+  const double right_crest = crest_db(right.right);
+  const double left_waveform_error =
+      relative_rms_difference(center.left, left.left, sonare::constants::kInvSqrt2);
+  const double right_waveform_error =
+      relative_rms_difference(center.right, right.right, sonare::constants::kInvSqrt2);
+  INFO("center-left crest=" << center_crest << " hard-left crest=" << left_crest
+                            << " center-right crest=" << center_right_crest << " hard-right crest="
+                            << right_crest << " left waveform error=" << left_waveform_error
+                            << " right waveform error=" << right_waveform_error);
+
+  // Pan is downstream of the nonlinear amp. Constant-power/pan-law level
+  // changes do not change crest, so this catches a stereo amp being fed the
+  // already-panned pickup: its hard-panned leg would be driven harder and
+  // have a different distortion curve than the centred pair.
+  REQUIRE(std::fabs(center_crest - left_crest) < 0.25);
+  REQUIRE(std::fabs(center_right_crest - right_crest) < 0.25);
+  REQUIRE(left_waveform_error < 1.0e-4);
+  REQUIRE(right_waveform_error < 1.0e-4);
+
+  // A cleared rig remains a positive control: the direct physical-model voice
+  // is linear with respect to pan and therefore has the same crest at every
+  // position. This also guards the clear_bank_rig path while the amp routing
+  // is changed.
+  Sf2PlayerConfig clear = with_factory();
+  clear.bank_rig_binding = false;
+  const StereoRender clear_center = render_program_stereo(clear, 30, 64);
+  const StereoRender clear_left = render_program_stereo(clear, 30, 0);
+  REQUIRE(std::fabs(crest_db(clear_center.left) - crest_db(clear_left.left)) < 0.25);
+  REQUIRE(relative_rms_difference(clear_center.left, clear_left.left,
+                                  sonare::constants::kInvSqrt2) < 1.0e-4);
+}
+
+TEST_CASE("every electric guitar default rig keeps body pickup pan invariant", "[midi][sf2][rig]") {
+  // Program 31 carries the keyed guitar body/halo path; keep all six bindings
+  // in this regression so a future body model cannot reintroduce a pan-dependent
+  // amplifier input in one of the neighboring electric-guitar programs.
+  for (const uint8_t program :
+       {uint8_t{26}, uint8_t{27}, uint8_t{28}, uint8_t{29}, uint8_t{30}, uint8_t{31}}) {
+    const StereoRender center = render_program_stereo(with_factory(), program, 64);
+    const StereoRender left = render_program_stereo(with_factory(), program, 0);
+    const StereoRender right = render_program_stereo(with_factory(), program, 127);
+    INFO("program=" << static_cast<int>(program));
+    REQUIRE(peak_abs(center.left) > 1.0e-4);
+    REQUIRE(peak_abs(center.right) > 1.0e-4);
+    REQUIRE(relative_rms_difference(center.left, left.left, sonare::constants::kInvSqrt2) < 1.0e-4);
+    REQUIRE(relative_rms_difference(center.right, right.right, sonare::constants::kInvSqrt2) <
+            1.0e-4);
+  }
+}
+
+TEST_CASE("a prepared GS route takes the DI in place of the default guitar amp",
+          "[midi][sf2][rig][prepared]") {
+  // docs/voicing.md: a live GS EFX route outranks the default rig, so the unit
+  // receives the DI with no bank amp in front of it, as the direct path does.
+  for (const uint8_t pan : {uint8_t{64}, uint8_t{0}, uint8_t{127}}) {
+    const StereoRender direct = render_program_stereo_through_direct_unit(pan);
+    const StereoRender prepared = render_program_stereo_through_prepared_unit(pan);
+    INFO("pan=" << static_cast<int>(pan) << " direct crest=" << crest_db(direct.left)
+                << " prepared crest=" << crest_db(prepared.left));
+    REQUIRE(peak_abs(direct.left) + peak_abs(direct.right) > 1.0e-4);
+    if (peak_abs(direct.left) > 1.0e-4) {
+      REQUIRE(relative_rms_difference(direct.left, prepared.left, 1.0f) < 1.0e-4);
+    }
+    if (peak_abs(direct.right) > 1.0e-4) {
+      REQUIRE(relative_rms_difference(direct.right, prepared.right, 1.0f) < 1.0e-4);
+    }
+  }
+  // Positive control: the same program unrouted is amplified, the routed DI is not.
+  const StereoRender amped = render_program_stereo(with_factory(), 30, 64);
+  const StereoRender routed = render_program_stereo_through_prepared_unit(64);
+  REQUIRE(crest_db(routed.left) > crest_db(amped.left) + 3.0);
 }
 
 TEST_CASE("each bound rig drives its amplifier where the bank's own level puts it",

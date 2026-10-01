@@ -35,6 +35,9 @@ inline constexpr int64_t kMidiFxPpqScale = 960000;
 
 /// Fixed-capacity output buffer for MIDI FX. Lives on the caller's stack (or a
 /// pre-allocated member); process() only ever writes into `events[0..size)`.
+/// The event records copy SysEx payload and prepared-operation pointers without
+/// taking ownership; the input owner must keep those borrowed views valid until
+/// the consumer has finished with this output buffer.
 ///
 /// Capacity rationale: the worst-case fan-out stage is the arpeggiator/chord
 /// expansion. A single input note-on can expand to a chord of up to

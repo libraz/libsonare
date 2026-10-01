@@ -298,6 +298,7 @@ void RealtimeEngine::store_pending(const rt::Command& command, bool prefer_curre
     if (furthest < pending_.size()) {
 #if defined(SONARE_WITH_ARRANGEMENT)
       release_midi_ump_slot(pending_[furthest]);
+      release_midi_sysex_slot(pending_[furthest]);
 #endif
       pending_[furthest] = command;
       pending_active_[furthest] = true;
@@ -310,6 +311,7 @@ void RealtimeEngine::store_pending(const rt::Command& command, bool prefer_curre
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   release_midi_ump_slot(command);
+  release_midi_sysex_slot(command);
 #endif
   enqueue_error(TelemetryErrorCode::kPendingCommandOverflow, transport_.render_frame(),
                 transport_.sample_position(), 1);
@@ -621,16 +623,18 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
         std::atomic_thread_fence(std::memory_order_acquire);
         const uint32_t seq_after = slot.generation.load(std::memory_order_relaxed);
         if (seq_before == seq_after && (seq_before & 1u) == 0u && seq_before == generation &&
-            payload_size > 0) {
+            slot.released.load(std::memory_order_relaxed) != generation &&
+            slot.destination_id == command.target_id && payload_size > 0) {
           // The UMP carries only a SysEx marker (non-channel-voice message type);
           // the torn-free local payload copy drives the instrument's SysEx
           // handler, the same shape the offline clip path dispatches. The local
           // buffer stays in scope for the synchronous dispatch below.
           const midi::Ump ump = midi::make_sysex_handle(0, /*handle=*/0);
           midi_sequencer_.inject_event(command.target_id, command.sample_time, ump, payload.data(),
-                                       payload_size);
+                                       payload_size, slot.prepared.get());
         }
       }
+      release_midi_sysex_slot(command);
 #endif
       break;
     }

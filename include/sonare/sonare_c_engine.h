@@ -56,6 +56,10 @@ extern "C" {
 ///   `sonare_engine_clear_midi_cc_bindings`. These four publish immutable state
 ///   adopted at the next block, so they MAY run while `process` is active;
 ///   callbacks and note flushes stay on the audio thread.
+/// - Live SysEx: `sonare_engine_push_midi_sysex` may allocate while preparing
+///   instrument state and MAY run while `process` is active. Call it from the
+///   serialized control thread; dispatch at the requested frame remains
+///   allocation-free.
 /// - Offline render: `sonare_engine_render_offline`,
 ///   `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline`. They own
 ///   the audio role internally, so never call them from a render callback.
@@ -88,6 +92,9 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 ///          value returns SONARE_ERROR_INVALID_PARAMETER and leaves the engine
 ///          untouched. Both are rounded up to a power of two internally, and 0
 ///          selects the internal minimum rather than disabling the queue.
+/// @return SONARE_ERROR_INVALID_PARAMETER also when a bound instrument cannot
+///         prepare a SysEx in the scheduled MIDI clips; the engine is then
+///         prepared, but its MIDI clip schedule has been cleared.
 SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity);
@@ -876,6 +883,11 @@ typedef struct {
 } SonareEngineMidiClipSchedule;
 
 /// @brief Replaces the engine's realtime MIDI clip schedule snapshot.
+/// @details Copies SysEx payloads and prepares instrument operations on the
+///          serialized control thread before publishing the snapshot. Failure
+///          leaves the previously accepted schedule in place.
+/// @return SONARE_ERROR_INVALID_PARAMETER if a bound instrument cannot prepare a
+///         scheduled SysEx; SONARE_ERROR_OUT_OF_MEMORY if allocation fails.
 SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
                                          const SonareEngineMidiClipSchedule* clips,
                                          size_t clip_count);
@@ -902,6 +914,10 @@ typedef struct {
 ///          note/CC commands and scheduled MIDI clips routed to @p destination_id
 ///          render through this instrument. This is a control-thread structural
 ///          mutation; do not call concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER if the instrument cannot prepare a
+///         SysEx already scheduled or queued for @p destination_id;
+///         SONARE_ERROR_OUT_OF_MEMORY if the rack is full or allocation fails.
+///         Either way the previous binding stays in place.
 SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config);
@@ -918,6 +934,10 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 ///        @p destination_id render through it. This is a control-thread
 ///        structural mutation; do not call concurrently with
 ///        @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER if the synth cannot prepare a SysEx
+///         already scheduled or queued for @p destination_id;
+///         SONARE_ERROR_OUT_OF_MEMORY if the rack is full or allocation fails.
+///         Either way the previous binding stays in place.
 SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch);
@@ -1038,12 +1058,20 @@ typedef struct {
 ///        parts as drums; GS NRPN part edits,
 ///        GS/GM SysEx resets). This is a control-thread structural mutation;
 ///        do not call concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER if the player cannot prepare a SysEx
+///         already scheduled or queued for @p destination_id;
+///         SONARE_ERROR_OUT_OF_MEMORY if the rack is full or allocation fails.
+///         Either way the previous binding stays in place.
 SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
                                              const SonareEngineSf2InstrumentConfig* config);
 
 /// @brief Clears any realtime instrument bound to @p destination_id.
 /// @details This is a control-thread structural mutation; do not call
 ///          concurrently with @ref sonare_engine_process.
+///          If preparation of the replacement state fails, the existing
+///          instrument remains bound and owned by the engine.
+/// @return SONARE_ERROR_OUT_OF_MEMORY if restaging the clip schedule fails to
+///         allocate.
 SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id);
 SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count);
@@ -1390,7 +1418,8 @@ SonareError sonare_engine_push_midi_poly_pressure(SonareRealtimeEngine* engine,
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
 SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame);
 /// @brief Queues an immediate (live) MIDI SysEx message to a MIDI destination.
-/// @details The bytes are copied into a bounded, allocation-free engine store and
+/// @details Instrument state is prepared on the control thread, then the bytes
+///          are copied into a bounded engine store and
 ///          a scalar-only command referencing the store slot is enqueued (no
 ///          pointer crosses the realtime queue, keeping it WASM
 ///          SharedArrayBuffer-safe). The audio thread dispatches the SysEx to the
@@ -1402,6 +1431,10 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 /// @param data SysEx bytes (0xF0..0xF7 frame). Must be non-NULL.
 /// @param size Byte count; must be 1..512.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
+/// @return SONARE_ERROR_INVALID_PARAMETER if the payload is malformed or the
+///         destination instrument cannot prepare it (permanent);
+///         SONARE_ERROR_OUT_OF_MEMORY if allocation fails or the bounded payload
+///         store or command queue is full (retry after a processed block).
 SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
                                           const uint8_t* data, size_t size, int64_t render_frame);
 /// @brief Queues one immediate (live) raw UMP message to a MIDI destination.
