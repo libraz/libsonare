@@ -21,6 +21,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "editing/polyphony/f0_salience.h"
+#include "feature/pitch.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -331,6 +333,132 @@ TEST_CASE("reference_hz moves the note numbers it is measured against", "[note_t
   CHECK_THAT(lowered[0].median_hz, WithinRel(standard[0].median_hz, 1.0e-3f));
 }
 
+TEST_CASE("polyphonic fmin and fmax constrain the selected tracker range", "[note_transcriber]") {
+  const sonare::Audio audio = sustained(69);
+
+  TranscribeConfig inclusive;
+  inclusive.source = TranscribeSource::kPolyphonic;
+  inclusive.fmin = 400.0f;
+  inclusive.fmax = 500.0f;
+  const std::vector<TranscribedNote> in_range = transcribe_notes(audio, inclusive);
+  REQUIRE(!in_range.empty());
+  bool found_a4 = false;
+  for (const TranscribedNote& note : in_range) {
+    INFO("median " << note.median_hz);
+    CHECK(note.median_hz >= inclusive.fmin);
+    CHECK(note.median_hz <= inclusive.fmax);
+    if (note.note == 69) found_a4 = true;
+  }
+  REQUIRE(found_a4);
+
+  TranscribeConfig exclusive = inclusive;
+  exclusive.fmin = 600.0f;
+  exclusive.fmax = 700.0f;
+  const std::vector<TranscribedNote> out_of_range = transcribe_notes(audio, exclusive);
+  for (const TranscribedNote& note : out_of_range) {
+    INFO("median " << note.median_hz);
+    CHECK(note.median_hz >= exclusive.fmin);
+    CHECK(note.median_hz <= exclusive.fmax);
+    CHECK(note.note != 69);
+  }
+}
+
+TEST_CASE("omitted tracker bounds resolve from the selected source", "[note_transcriber]") {
+  const sonare::PitchConfig mono_defaults;
+  const sonare::editing::polyphony::SalienceConfig poly_defaults;
+
+  for (const int midi_note : {33, 35}) {
+    INFO("MIDI " << midi_note);
+    const sonare::Audio audio = sustained(midi_note);
+
+    TranscribeConfig poly_default;
+    poly_default.source = TranscribeSource::kPolyphonic;
+    poly_default.fmin = 0.0f;
+    poly_default.fmax = 0.0f;
+    const std::vector<TranscribedNote> default_notes = transcribe_notes(audio, poly_default);
+
+    TranscribeConfig poly_explicit = poly_default;
+    poly_explicit.fmin = poly_defaults.f0_min_hz;
+    poly_explicit.fmax = poly_defaults.f0_max_hz;
+    const std::vector<TranscribedNote> explicit_notes = transcribe_notes(audio, poly_explicit);
+    REQUIRE(!explicit_notes.empty());
+    require_same_notes(default_notes, explicit_notes);
+
+    bool found_target = false;
+    for (const TranscribedNote& note : default_notes) {
+      if (note.note == midi_note) found_target = true;
+    }
+    REQUIRE(found_target);
+
+    // The monophonic lower bound is the exclusion boundary for both A1 and B1.
+    // A polyphonic default that accidentally inherited the monophonic range
+    // would drop these notes before it could report them.
+    TranscribeConfig mono_boundary = poly_default;
+    mono_boundary.fmin = mono_defaults.fmin;
+    mono_boundary.fmax = poly_defaults.f0_max_hz;
+    const std::vector<TranscribedNote> boundary_notes = transcribe_notes(audio, mono_boundary);
+    for (const TranscribedNote& note : boundary_notes) {
+      INFO("boundary median " << note.median_hz);
+      CHECK(note.median_hz >= mono_boundary.fmin);
+      CHECK(note.median_hz <= mono_boundary.fmax);
+      CHECK(note.note != midi_note);
+    }
+  }
+}
+
+TEST_CASE("a partial tracker range resolves and validates against source defaults",
+          "[note_transcriber]") {
+  const sonare::PitchConfig mono_defaults;
+  const sonare::editing::polyphony::SalienceConfig poly_defaults;
+  const sonare::Audio audio = sustained(69);
+
+  SECTION("polyphonic omitted endpoints use salience defaults") {
+    TranscribeConfig expected;
+    expected.source = TranscribeSource::kPolyphonic;
+    expected.fmin = poly_defaults.f0_min_hz;
+    expected.fmax = poly_defaults.f0_max_hz;
+    const std::vector<TranscribedNote> explicit_notes = transcribe_notes(audio, expected);
+    REQUIRE(!explicit_notes.empty());
+
+    TranscribeConfig omitted_low = expected;
+    omitted_low.fmin = 0.0f;
+    require_same_notes(transcribe_notes(audio, omitted_low), explicit_notes);
+
+    TranscribeConfig omitted_high = expected;
+    omitted_high.fmax = 0.0f;
+    require_same_notes(transcribe_notes(audio, omitted_high), explicit_notes);
+  }
+
+  SECTION("the same partial values resolve against monophonic defaults") {
+    TranscribeConfig expected;
+    expected.fmin = mono_defaults.fmin;
+    expected.fmax = mono_defaults.fmax;
+    const std::vector<TranscribedNote> explicit_notes = transcribe_notes(audio, expected);
+    REQUIRE(!explicit_notes.empty());
+
+    TranscribeConfig omitted_low = expected;
+    omitted_low.fmin = 0.0f;
+    require_same_notes(transcribe_notes(audio, omitted_low), explicit_notes);
+
+    TranscribeConfig omitted_high = expected;
+    omitted_high.fmax = 0.0f;
+    require_same_notes(transcribe_notes(audio, omitted_high), explicit_notes);
+  }
+
+  SECTION("ordering is checked after the source default is resolved") {
+    TranscribeConfig polyphonic;
+    polyphonic.source = TranscribeSource::kPolyphonic;
+    polyphonic.fmin = 1800.0f;
+    polyphonic.fmax = 0.0f;
+    REQUIRE_THROWS_AS(transcribe_notes(audio, polyphonic), sonare::SonareException);
+
+    TranscribeConfig monophonic;
+    monophonic.fmin = 1800.0f;
+    monophonic.fmax = 0.0f;
+    REQUIRE_NOTHROW(transcribe_notes(audio, monophonic));
+  }
+}
+
 TEST_CASE("fixed_velocity replaces the measurement and velocity_floor_db changes it",
           "[note_transcriber]") {
   const Sequence sequence = sequence_of({60, 64, 67, 72});
@@ -470,14 +598,18 @@ TEST_CASE("transcribe_notes refuses audio and config it cannot read", "[note_tra
     }
   }
 
-  SECTION("a non-positive reference, range or threshold") {
+  SECTION("a non-positive reference, negative range or threshold") {
     TranscribeConfig reference;
     reference.reference_hz = 0.0f;
     refused(reference);
 
     TranscribeConfig low;
-    low.fmin = 0.0f;
+    low.fmin = -1.0f;
     refused(low);
+
+    TranscribeConfig high;
+    high.fmax = -1.0f;
+    refused(high);
 
     TranscribeConfig shortest;
     shortest.min_note_ms = -1.0f;

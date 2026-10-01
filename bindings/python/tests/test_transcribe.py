@@ -96,6 +96,25 @@ def test_transcribes_the_played_notes_in_order(
     assert transcription.tempo_bpm == pytest.approx(120.0)
 
 
+@pytest.mark.parametrize("frequency,midi_note", [(55.0, 33), (61.7354, 35)])
+def test_polyphonic_default_range_retains_low_notes(frequency: float, midi_note: int) -> None:
+    audio = _tone(frequency, duration=1.0)
+    omitted = libsonare.transcribe(audio, SR, polyphonic=True, tempo_bpm=120.0)
+    explicit = libsonare.transcribe(
+        audio, SR, polyphonic=True, tempo_bpm=120.0, fmin=55.0, fmax=1760.0
+    )
+    assert any(_note_number(data0) == midi_note for _, data0, _ in explicit.events)
+    assert omitted.events == explicit.events
+
+
+def test_partial_range_uses_the_selected_tracker_default() -> None:
+    audio = _tone(440.0)
+    libsonare.transcribe(audio, SR, tempo_bpm=120.0, fmin=1800.0)
+    with pytest.raises(libsonare.SonareError, match="fmax") as failure:
+        libsonare.transcribe(audio, SR, polyphonic=True, tempo_bpm=120.0, fmin=1800.0)
+    assert failure.value.code == 4  # InvalidParameter from the core range resolver.
+
+
 def test_events_are_in_canonical_ppq_order(transcription: libsonare.TranscribeResult) -> None:
     """Non-decreasing in PPQ, and a note-off precedes a note-on sharing its tick.
 

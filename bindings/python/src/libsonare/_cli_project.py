@@ -937,13 +937,13 @@ def register_project_parsers(
         "--fmin",
         type=_finite_float,
         default=None,
-        help="Lowest pitch the monophonic tracker looks for, in Hz (default: 65)",
+        help="Low end of the F0 tracker range in Hz; omitted uses 65 mono or 55 poly",
     )
     transcribe_p.add_argument(
         "--fmax",
         type=_finite_float,
         default=None,
-        help="Highest pitch the monophonic tracker looks for, in Hz (default: 2093)",
+        help="High end of the F0 tracker range in Hz; omitted uses 2093 mono or 1760 poly",
     )
     transcribe_p.add_argument(
         "--min-note-ms",

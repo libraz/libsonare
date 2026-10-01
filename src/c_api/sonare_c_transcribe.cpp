@@ -5,6 +5,8 @@
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "analysis/bpm_analyzer.h"
 #include "editing/note_model/note_transcriber.h"
+#include "editing/polyphony/f0_salience.h"
+#include "feature/pitch.h"
 #endif
 
 // ============================================================================
@@ -44,6 +46,19 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   out->source =
       in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic : ntm::TranscribeSource::kMonophonic;
 
+  struct TrackerDefaults {
+    float fmin;
+    float fmax;
+  };
+  const TrackerDefaults defaults = [&] {
+    if (out->source == ntm::TranscribeSource::kPolyphonic) {
+      const sonare::editing::polyphony::SalienceConfig source;
+      return TrackerDefaults{source.f0_min_hz, source.f0_max_hz};
+    }
+    const sonare::PitchConfig source;
+    return TrackerDefaults{source.fmin, source.fmax};
+  }();
+
   // Each of these is "0 keeps the default, anything else must be valid on its
   // own terms". The core validates again; refusing here is what names the
   // offending field before the audio is touched.
@@ -59,7 +74,9 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
     if (!finite_positive(in->fmax)) return refuse("fmax must be a positive number");
     out->fmax = in->fmax;
   }
-  if (out->fmax <= out->fmin) return refuse("fmax must be above fmin");
+  const float resolved_fmin = in->fmin == 0.0f ? defaults.fmin : in->fmin;
+  const float resolved_fmax = in->fmax == 0.0f ? defaults.fmax : in->fmax;
+  if (resolved_fmax <= resolved_fmin) return refuse("fmax must be above fmin");
   if (in->min_note_ms != 0.0f) {
     if (!finite_positive(in->min_note_ms)) return refuse("min_note_ms must be a positive number");
     out->min_note_ms = in->min_note_ms;
@@ -163,8 +180,8 @@ SonareTranscribeConfig sonare_transcribe_config_default(void) {
   const ntm::TranscribeConfig defaults;
   config.polyphonic = defaults.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0;
   config.reference_hz = defaults.reference_hz;
-  config.fmin = defaults.fmin;
-  config.fmax = defaults.fmax;
+  // fmin/fmax intentionally remain 0: the selected source resolves each
+  // omitted endpoint, so flipping polyphonic must not pin the monophonic range.
   config.min_note_ms = defaults.min_note_ms;
   config.segmentation_threshold_cents = defaults.segmentation_threshold_cents;
   config.velocity_floor_db = defaults.velocity_floor_db;

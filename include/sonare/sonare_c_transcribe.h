@@ -64,8 +64,11 @@ typedef struct {
   int32_t polyphonic;
   /// Tuning reference the MIDI note numbers are measured against; 0 => 440.
   float reference_hz;
-  /// Monophonic tracker range in Hz; 0 => 65 and 2093 respectively. The
-  /// polyphonic chain sets its own range and reads neither.
+  /// F0 tracker range in Hz. A zero endpoint uses the selected source's
+  /// default: PitchConfig's range (65..2093 Hz) for the monophonic path, or
+  /// SalienceConfig's range (55..1760 Hz) for the polyphonic path. Both paths
+  /// use the resolved bounds. The polyphonic path applies them to its salience
+  /// estimator's F0 axis; its cent-spectrum bounds remain independent.
   float fmin;
   float fmax;
   /// Shortest span kept as a note, in milliseconds; 0 => 30.

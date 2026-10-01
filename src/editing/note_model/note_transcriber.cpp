@@ -7,6 +7,7 @@
 
 #include "editing/note_model/note_extractor.h"
 #include "editing/pitch_editor/f0_provider.h"
+#include "editing/polyphony/f0_salience.h"
 #include "editing/polyphony/polyphonic_edit.h"
 #include "feature/pitch.h"
 #include "util/constants.h"
@@ -26,18 +27,14 @@ void require(bool condition, const char* message) {
   if (!condition) throw SonareException(ErrorCode::InvalidParameter, message);
 }
 
-void validate(const Audio& audio, const TranscribeConfig& config) {
+TranscribeConfig validate_and_resolve(const Audio& audio, const TranscribeConfig& config) {
   // No sample-rate check: Audio::from_buffer / from_vector refuse a non-positive
   // rate, and the only Audio that carries one is the default-constructed one,
-  // which the emptiness check above already refuses. A guard here could never
+  // which the emptiness check below already refuses. A guard here could never
   // fire.
   require(!audio.empty(), "transcribe_notes: audio must not be empty");
   require(std::isfinite(config.reference_hz) && config.reference_hz > 0.0f,
           "transcribe_notes: reference_hz must be finite and positive");
-  require(std::isfinite(config.fmin) && config.fmin > 0.0f,
-          "transcribe_notes: fmin must be finite and positive");
-  require(std::isfinite(config.fmax) && config.fmax > config.fmin,
-          "transcribe_notes: fmax must be finite and greater than fmin");
   require(std::isfinite(config.min_note_ms) && config.min_note_ms >= 0.0f,
           "transcribe_notes: min_note_ms must be finite and non-negative");
   require(std::isfinite(config.segmentation_threshold_cents) &&
@@ -51,6 +48,25 @@ void validate(const Audio& audio, const TranscribeConfig& config) {
   require(config.source == TranscribeSource::kMonophonic ||
               config.source == TranscribeSource::kPolyphonic,
           "transcribe_notes: source is not a known TranscribeSource");
+
+  // A zero endpoint is the internal spelling of an omitted endpoint. Resolve
+  // it from the selected tracker configuration before checking the ordering;
+  // the two chains intentionally have different calibrated ranges.
+  TranscribeConfig resolved = config;
+  if (config.source == TranscribeSource::kMonophonic) {
+    const PitchConfig defaults;
+    if (resolved.fmin == 0.0f) resolved.fmin = defaults.fmin;
+    if (resolved.fmax == 0.0f) resolved.fmax = defaults.fmax;
+  } else {
+    const polyphony::SalienceConfig defaults;
+    if (resolved.fmin == 0.0f) resolved.fmin = defaults.f0_min_hz;
+    if (resolved.fmax == 0.0f) resolved.fmax = defaults.f0_max_hz;
+  }
+  require(std::isfinite(resolved.fmin) && resolved.fmin > 0.0f,
+          "transcribe_notes: fmin must be finite and positive");
+  require(std::isfinite(resolved.fmax) && resolved.fmax > resolved.fmin,
+          "transcribe_notes: fmax must be finite and greater than fmin");
+  return resolved;
 }
 
 /// Peak of a note's per-frame RMS curve. 0 for a note carrying no curve, which
@@ -82,6 +98,10 @@ std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeCon
 
 std::vector<NoteObject> polyphonic_notes(const Audio& audio, const TranscribeConfig& config) {
   polyphony::PolyphonicEditConfig poly;
+  // The range belongs to the estimator's F0 axis. The cent spectrum keeps its
+  // own frequency ceiling, because it also has to hold the harmonics it sums.
+  poly.extraction.estimation.salience.f0_min_hz = config.fmin;
+  poly.extraction.estimation.salience.f0_max_hz = config.fmax;
   // min_note_ms is deliberately not forwarded here: the polyphonic path builds
   // exactly one note per ridge and never consults segmenter.min_note_ms (see
   // masked_notes.h), so writing it would claim an effect this path does not
@@ -120,21 +140,22 @@ std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const Transcri
   // No pitch-editor guard here: this unit is compiled into the pitch-editor
   // archive, so its existence is the gate. The NOT_SUPPORTED answer belongs to
   // the C-ABI entry, which is compiled either way.
-  validate(audio, config);
+  const TranscribeConfig resolved = validate_and_resolve(audio, config);
 
-  const std::vector<NoteObject> measured = config.source == TranscribeSource::kPolyphonic
-                                               ? polyphonic_notes(audio, config)
-                                               : monophonic_notes(audio, config);
+  const std::vector<NoteObject> measured = resolved.source == TranscribeSource::kPolyphonic
+                                               ? polyphonic_notes(audio, resolved)
+                                               : monophonic_notes(audio, resolved);
 
   std::vector<TranscribedNote> notes;
   notes.reserve(measured.size());
   for (const NoteObject& note : measured) {
     if (note.offset_sample <= note.onset_sample) continue;
-    const int midi_note = midi_note_for_hz(note.median_hz, config.reference_hz);
+    const int midi_note = midi_note_for_hz(note.median_hz, resolved.reference_hz);
     if (midi_note < 0) continue;
-    const uint8_t velocity = config.fixed_velocity != 0
-                                 ? static_cast<uint8_t>(config.fixed_velocity)
-                                 : velocity_for_peak_rms(peak_rms(note), config.velocity_floor_db);
+    const uint8_t velocity =
+        resolved.fixed_velocity != 0
+            ? static_cast<uint8_t>(resolved.fixed_velocity)
+            : velocity_for_peak_rms(peak_rms(note), resolved.velocity_floor_db);
     notes.push_back(TranscribedNote{note.onset_sample, note.offset_sample,
                                     static_cast<uint8_t>(midi_note), velocity, note.median_hz});
   }

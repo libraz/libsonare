@@ -45,10 +45,14 @@ struct TranscribeConfig {
   /// error here, so it is worth passing a measured value rather than the default.
   float reference_hz = constants::kA4Hz;
 
-  /// Monophonic tracker range in Hz. The polyphonic chain sets its own range
-  /// from its framing and ignores both.
-  float fmin = 65.0f;
-  float fmax = 2093.0f;
+  /// F0 tracker range in Hz. Zero means use the selected chain's own default:
+  /// @c PitchConfig for monophonic notes, or @c polyphony::SalienceConfig for
+  /// polyphonic notes. Explicit endpoints override that source default. Both
+  /// chains use the resolved bounds; the polyphonic path applies them to its
+  /// salience estimator's F0 axis while its cent-spectrum bounds remain
+  /// independent.
+  float fmin = 0.0f;
+  float fmax = 0.0f;
 
   /// Shortest span kept as a note. Monophonic only: the polyphonic chain
   /// builds exactly one note per tracked ridge and never reads this field.
@@ -104,8 +108,9 @@ uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 /// @throws SonareException(InvalidParameter) on empty @p audio, on a non-finite
 ///         or out-of-range config field, on a @c fixed_velocity outside
 ///         {0} U [1, 127], on a
-///         @c velocity_floor_db that is not finite and negative, or on
-///         @c fmin >= @c fmax.
+///         @c velocity_floor_db that is not finite and negative, or on a
+///         resolved @c fmin >= @c fmax. A zero range endpoint selects the
+///         source-specific default before that ordering check.
 std::vector<TranscribedNote> transcribe_notes(const Audio& audio,
                                               const TranscribeConfig& config = {});
 

@@ -21,26 +21,28 @@ namespace {
 // for -- indistinguishable downstream from a deliberate one. hasProperty-class
 // knowledge is what makes this reachable here and not there.
 //
-// The bound is checked on the resulting value rather than on presence, which is
-// sound because every fallback below is the C ABI's own default and all of them
-// are in domain: a refusal can only ever name a value the caller wrote.
-// fixedVelocity is the exception and is handled at its read instead, because its
-// default IS the 0 under discussion. group and channel are absent on purpose --
-// there 0 is a value a caller can mean, and that is the distinction deciding the
-// whole set.
-bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config) {
+// fmin and fmax are the one pair whose C defaults are themselves 0 sentinels: an
+// omitted key must stay 0 so the C layer can resolve it from the selected source.
+// Their presence is therefore carried separately and only present values are
+// checked here. fixedVelocity is handled at its read for the same reason. group
+// and channel are absent on purpose -- there 0 is a value a caller can mean, and
+// that is the distinction deciding the whole set.
+bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool has_fmin,
+                       bool has_fmax) {
   struct PositiveField {
     const char* key;
     float value;
+    bool present;
   };
   const PositiveField positive[] = {
-      {"referenceHz", config.reference_hz},
-      {"fmin", config.fmin},
-      {"fmax", config.fmax},
-      {"minNoteMs", config.min_note_ms},
-      {"segmentationThresholdCents", config.segmentation_threshold_cents},
+      {"referenceHz", config.reference_hz, true},
+      {"fmin", config.fmin, has_fmin},
+      {"fmax", config.fmax, has_fmax},
+      {"minNoteMs", config.min_note_ms, true},
+      {"segmentationThresholdCents", config.segmentation_threshold_cents, true},
   };
   for (const PositiveField& field : positive) {
+    if (!field.present) continue;
     if (!(field.value > 0.0f)) {
       ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
                               std::string(field.key) + " must be a positive number");
@@ -58,7 +60,8 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config) {
 // Seeds the C ABI's own defaults, then applies whichever keys the caller wrote.
 // Seeding rather than zeroing keeps the documented default of every field in one
 // place — sonare_transcribe_config_default() — so this file cannot drift from
-// the header a caller reads.
+// the header a caller reads. fmin/fmax intentionally remain zero when omitted:
+// the C layer resolves those sentinels against the selected tracker source.
 //
 // The floats take the finite reader: none of these fields documents an infinity
 // or a NaN as selecting anything, so a non-finite value is refused by name here
@@ -74,7 +77,11 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   *out = sonare_transcribe_config_default();
   out->polyphonic = BoolProperty(request, "polyphonic", out->polyphonic != 0) ? 1 : 0;
   out->reference_hz = FiniteFloatProperty(request, "referenceHz", out->reference_hz);
+  const Napi::Value fmin = request.Get("fmin");
+  const bool wrote_fmin = !fmin.IsUndefined() && !fmin.IsNull();
   out->fmin = FiniteFloatProperty(request, "fmin", out->fmin);
+  const Napi::Value fmax = request.Get("fmax");
+  const bool wrote_fmax = !fmax.IsUndefined() && !fmax.IsNull();
   out->fmax = FiniteFloatProperty(request, "fmax", out->fmax);
   out->min_note_ms = FiniteFloatProperty(request, "minNoteMs", out->min_note_ms);
   out->segmentation_threshold_cents =
@@ -97,7 +104,7 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
                             "fixedVelocity must be an integer in [1, 127]");
     return false;
   }
-  return RefuseOutOfDomain(env, *out);
+  return RefuseOutOfDomain(env, *out, wrote_fmin, wrote_fmax);
 }
 
 // The request shape both entry points share: mono audio plus its rate. Returns

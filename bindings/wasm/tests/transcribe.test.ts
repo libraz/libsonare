@@ -80,6 +80,14 @@ function decode(event: ProjectMidiEvent): DecodedEvent {
 
 const NOTE_ON = 0x9;
 const NOTE_OFF = 0x8;
+const A1 = 33;
+
+function noteNumbers(result: ReturnType<typeof transcribe>): number[] {
+  return result.events
+    .map(decode)
+    .filter((event) => event.status === NOTE_ON)
+    .map((event) => event.note);
+}
 
 /** One fixture and one baseline run, shared by every case that does not vary an option. */
 let samples: Float32Array;
@@ -224,6 +232,40 @@ describe('WASM transcribe', () => {
         expect(asKey(result), `${key}: ${String(absent)}`).toBe(expected);
       }
     }
+  });
+
+  it('resolves omitted tracker bounds from the selected source', () => {
+    const lowNote = richTone(55, 1.0);
+    const omitted = transcribe({
+      samples: lowNote,
+      sampleRate,
+      polyphonic: true,
+      tempoBpm: 120,
+    });
+    const explicit = transcribe({
+      samples: lowNote,
+      sampleRate,
+      polyphonic: true,
+      fmin: 55,
+      fmax: 1760,
+      tempoBpm: 120,
+    });
+
+    // The explicit target makes equality meaningful: both calls must retain a
+    // real A1 rather than agree on an empty transcription.
+    expect(noteNumbers(explicit)).toContain(A1);
+    expect(omitted).toEqual(explicit);
+  });
+
+  it('resolves a partial tracker range against the selected source', () => {
+    // Mono uses its 2093 Hz upper default, so this is a valid high lower bound
+    // even though the fixture contains no note in that range. Polyphonic uses
+    // the salience tracker's 1760 Hz upper default and must refuse the same
+    // partial request after resolving it.
+    expect(() => transcribe({ samples, sampleRate, fmin: 1800, tempoBpm: 120 })).not.toThrow();
+    expect(() =>
+      transcribe({ samples, sampleRate, polyphonic: true, fmin: 1800, tempoBpm: 120 }),
+    ).toThrow(/fmax must be above fmin/);
   });
 
   it('emits on the requested group and channel', () => {

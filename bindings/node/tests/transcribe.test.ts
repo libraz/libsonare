@@ -8,6 +8,7 @@ const SR = 22050;
 const C4 = 60;
 const E4 = 64;
 const G4 = 67;
+const A1 = 33;
 const NOTE_HZ = [261.626, 329.628, 391.995];
 
 /**
@@ -28,6 +29,19 @@ function line(seconds = 0.4, gapSeconds = 0.05): Float32Array {
       out[write++] = 0.5 * envelope * Math.sin((2 * Math.PI * hz * i) / SR);
     }
     write += gap;
+  }
+  return out;
+}
+
+/** A single sustained note, with the same raised-cosine edges as the core fixture. */
+function sustained(hz: number, seconds = 0.5): Float32Array {
+  const sampleCount = Math.round(SR * seconds);
+  const edgeSamples = 0.005 * SR;
+  const out = new Float32Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) {
+    const edge = Math.min(1, i / edgeSamples, (sampleCount - 1 - i) / edgeSamples);
+    const envelope = 0.5 - 0.5 * Math.cos(2 * Math.PI * 0.5 * edge);
+    out[i] = 0.5 * envelope * Math.sin((2 * Math.PI * hz * i) / SR);
   }
   return out;
 }
@@ -197,6 +211,46 @@ describe('transcribe', () => {
     }
     // Omitting the key is what asks for the default, so it must land on -48.
     expect(transcribe({ samples: audio, sampleRate: SR })).toEqual(wide);
+  });
+
+  it('resolves omitted tracker bounds from the selected source', () => {
+    const lowNote = sustained(55);
+    const polyphonic = transcribe({
+      samples: lowNote,
+      sampleRate: SR,
+      polyphonic: true,
+      tempoBpm: 120,
+    });
+    expect(noteNumbers(polyphonic)).toContain(A1);
+
+    const explicitPolyphonic = transcribe({
+      samples: lowNote,
+      sampleRate: SR,
+      polyphonic: true,
+      fmin: 55,
+      fmax: 1760,
+      tempoBpm: 120,
+    });
+    expect(polyphonic).toEqual(explicitPolyphonic);
+  });
+
+  it('resolves a partial tracker range against the selected source', () => {
+    // Mono uses its 2093 Hz upper default, so this is a valid high lower bound
+    // even though the fixture contains no note in that range. Polyphonic uses
+    // the salience tracker's 1760 Hz upper default and must refuse the same
+    // partial request after resolving it.
+    expect(() =>
+      transcribe({ samples: audio, sampleRate: SR, fmin: 1800, tempoBpm: 120 }),
+    ).not.toThrow();
+    expect(() =>
+      transcribe({
+        samples: audio,
+        sampleRate: SR,
+        polyphonic: true,
+        fmin: 1800,
+        tempoBpm: 120,
+      }),
+    ).toThrow(/^fmax must be above fmin$/);
   });
 
   it('refuses a zero the C ABI would have read as its default', () => {

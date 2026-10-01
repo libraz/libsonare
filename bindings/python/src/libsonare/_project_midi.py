@@ -132,9 +132,14 @@ class _ProjectMidiMixin:
                 take lands correctly on a 48 kHz project's grid.
             polyphonic: Read the multi-F0 chain instead of pYIN cut into notes.
             reference_hz: Tuning reference; ``None`` keeps the default (440 Hz).
-            fmin: Lowest pitch the monophonic tracker looks for; ``None`` keeps
-                the default (65 Hz).
-            fmax: Highest pitch it looks for; ``None`` keeps the default (2093).
+            fmin: Low end of the F0 tracker's range; ``None`` uses 65 Hz for the
+                monophonic path or 55 Hz for the polyphonic path. Both paths use
+                this bound. The polyphonic path applies it to the salience
+                estimator's F0 axis; its cent-spectrum bounds remain independent.
+            fmax: High end of the F0 tracker's range; ``None`` uses 2093 Hz for
+                the monophonic path or 1760 Hz for the polyphonic path. Both
+                paths use this bound, with the same polyphonic salience-axis
+                behavior as ``fmin``.
             min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms.
             segmentation_threshold_cents: Pitch movement that ends one note and
                 starts the next; ``None`` keeps 50 cents.

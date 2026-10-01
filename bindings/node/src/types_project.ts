@@ -694,14 +694,19 @@ export interface TranscribeOptions {
    */
   referenceHz?: number;
   /**
-   * Low end of the monophonic tracker's range, in Hz. Must be finite and
-   * positive, and below {@link fmax}. The polyphonic chain sets its own range
-   * and reads neither. Default `65`.
+   * Low end of the F0 tracker's range, in Hz. Both paths use this bound; the
+   * polyphonic path applies it to the salience estimator's F0 axis while its
+   * cent-spectrum bounds remain independent. When omitted, the monophonic
+   * default is `65` and the polyphonic default is `55`. An explicit value must
+   * be finite and positive, and below {@link fmax}.
    */
   fmin?: number;
   /**
-   * High end of the monophonic tracker's range, in Hz. Must be finite and
-   * above {@link fmin}. Default `2093`.
+   * High end of the F0 tracker's range, in Hz. Both paths use this bound; the
+   * polyphonic path applies it to the salience estimator's F0 axis while its
+   * cent-spectrum bounds remain independent. When omitted, the monophonic
+   * default is `2093` and the polyphonic default is `1760`. An explicit value
+   * must be finite and above {@link fmin}.
    */
   fmax?: number;
   /**

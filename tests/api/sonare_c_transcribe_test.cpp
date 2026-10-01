@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -25,6 +26,8 @@
 
 #include "c_api/project_internal.h"
 #include "editing/note_model/note_transcriber.h"
+#include "editing/polyphony/f0_salience.h"
+#include "feature/pitch.h"
 
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -206,10 +209,12 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   CHECK(config.channel == 0);
 
   // Every one of those is a value, not a zero the struct happened to arrive
-  // with: a default seeder that stopped copying would leave these at 0.
+  // with: a default seeder that stopped copying would leave these at 0. The
+  // tracker endpoints are the two intentional exceptions: zero means the
+  // selected source supplies that endpoint when the config is read.
   CHECK(config.reference_hz > 0.0f);
-  CHECK(config.fmin > 0.0f);
-  CHECK(config.fmax > config.fmin);
+  CHECK(config.fmin == 0.0f);
+  CHECK(config.fmax == 0.0f);
   CHECK(config.min_note_ms > 0.0f);
   CHECK(config.segmentation_threshold_cents > 0.0f);
   CHECK(config.velocity_floor_db < 0.0f);
@@ -622,6 +627,55 @@ TEST_CASE("a config field the C door forwards changes the events", "[c_api][tran
       CHECK(event.channel == 9u);
     }
   }
+}
+
+TEST_CASE("the C door forwards the polyphonic tracker range", "[c_api][transcribe]") {
+  const std::vector<float> samples = separated_notes({69});
+
+  SonareTranscribeConfig inclusive = sonare_transcribe_config_default();
+  inclusive.polyphonic = 1;
+  inclusive.fmin = 400.0f;
+  inclusive.fmax = 500.0f;
+  Result in_range;
+  transcribe_into(&in_range, samples, 120.0f, &inclusive);
+  bool found_a4 = false;
+  for (const SonareMidiEventPod& pod : in_range.events()) {
+    const Decoded event = decode(pod);
+    if (event.status == kNoteOn && event.note == 69) found_a4 = true;
+  }
+  REQUIRE(found_a4);
+
+  SonareTranscribeConfig exclusive = inclusive;
+  exclusive.fmin = 600.0f;
+  exclusive.fmax = 700.0f;
+  Result out_of_range;
+  REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &exclusive,
+                            out_of_range.out()) == SONARE_OK);
+  if (out_of_range.get().events != nullptr) {
+    for (const SonareMidiEventPod& pod : out_of_range.events()) {
+      const Decoded event = decode(pod);
+      if (event.status == kNoteOn) CHECK(event.note != 69);
+    }
+  }
+}
+
+TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api][transcribe]") {
+  const std::vector<float> samples = separated_notes({69});
+
+  SonareTranscribeConfig monophonic = sonare_transcribe_config_default();
+  monophonic.fmin = 1800.0f;
+  monophonic.fmax = 0.0f;
+  Result mono_result;
+  REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &monophonic,
+                            mono_result.out()) == SONARE_OK);
+
+  SonareTranscribeConfig polyphonic = monophonic;
+  polyphonic.polyphonic = 1;
+  Result poly_result;
+  CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &polyphonic,
+                          poly_result.out()) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(poly_result.get().events == nullptr);
+  CHECK(std::string(sonare_last_error_message()) == "fmax must be above fmin");
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR
