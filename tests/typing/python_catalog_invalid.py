@@ -12,6 +12,8 @@ entry: libsonare.MasteringProcessorCatalogEntry = {
     "channelPolicy": "multichannel",
     "category": "dynamics",
     "params": [],
+    "realtimeCost": "low",
+    "slots": [],
 }
 
 typo = entry["latencySample"]  # unknown TypedDict key
