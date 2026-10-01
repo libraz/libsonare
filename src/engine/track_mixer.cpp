@@ -142,6 +142,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   if (!lane_config_valid(lanes)) return false;
   const auto snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
   if (!lanes_.publish(snapshot)) return false;
+  settle_insert_automations();
   clear_lane_insert_automations();
   acquire_lanes();
   prepare_lanes_from_snapshot(*snapshot);
@@ -162,6 +163,10 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   source.fill(-1);
   std::array<bool, kMaxBusLanes> kept{};
   std::array<bool, kMaxBusLanes> moved_out{};
+  std::array<ChannelLayout, kMaxBusLanes> previous_layout{};
+  for (size_t index = 0; index < bus_configs_.size() && index < previous_layout.size(); ++index) {
+    previous_layout[index] = bus_configs_[index].layout;
+  }
   bool any_move = false;
   for (size_t index = 0; index < buses.size(); ++index) {
     const int previous = configured_bus_index(buses[index].bus_id);
@@ -311,6 +316,14 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     if (!state.bus) {
       state.bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
     }
+    // Dedicated EQ state is per output plane. A retained bus can change width
+    // under the same identity, so a plane skipped while the bus was narrower
+    // must not resume with its old filter history when that plane returns.
+    // Reorders keep the history because the bus state follows its id.
+    if (source[index] >= 0 &&
+        previous_layout[static_cast<size_t>(source[index])] != bus_configs_[index].layout) {
+      state.eq.reset();
+    }
     state.bus->set_channel_layout(bus_configs_[index].layout);
     if (max_block_size_ > 0) {
       state.bus->prepare(sample_rate_, max_block_size_);
@@ -347,10 +360,10 @@ void TrackMixerRuntime::transfer_bus_state(BusState& from, BusState& to) {
   to.panner.set_pan(from.panner.pan());
   to.panner.set_dual_pan(from.panner.dual_pan_left(), from.panner.dual_pan_right());
   to.panner.reset();
-  for (size_t band = 0; band < mastering::eq::ParametricEq::kMaxBands; ++band) {
-    to.eq.set_band(band, from.eq.band(band));
-  }
-  to.eq.reset();
+  // The state belongs to the bus identity, so a positional move must carry it
+  // across with the rest of the retained bus state. set_buses() resets it after
+  // this transfer only when the destination layout changes.
+  to.eq = from.eq;
   to.eq_enabled.store(from.eq_enabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
   to.eq_active.store(from.eq_active.load(std::memory_order_relaxed), std::memory_order_relaxed);
   to.bus = std::move(from.bus);

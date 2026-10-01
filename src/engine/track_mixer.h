@@ -700,7 +700,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // The configured bus @p bus_id when its layout is at most two channels wide.
   BusState* pannable_bus_state_for(uint32_t bus_id) noexcept;
   // Moves one bus's contents into another slot (set_buses keys buses by id).
-  // The destination's panner and EQ are rebuilt from the moved settings and reset.
+  // The destination's panner and smoothers are rebuilt from the moved settings;
+  // dedicated EQ history follows the bus identity and is reset only when
+  // set_buses changes that bus's channel layout.
   static void transfer_bus_state(BusState& from, BusState& to);
   // Returns a slot to the state of a bus that was never configured.
   static void retire_bus_state(BusState& state);

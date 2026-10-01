@@ -77,6 +77,7 @@ class AutomatableGainProcessor final : public sonare::rt::ProcessorBase {
   std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
     return {{"gain", 0}};
   }
+  float gain() const noexcept { return gain_; }
 
  private:
   float gain_ = 1.0f;
@@ -284,6 +285,101 @@ TEST_CASE("TrackMixerRuntime clears lane insert automation slots when lanes chan
 
   REQUIRE(out[0] == Catch::Approx(1.0f).margin(1.0e-6f));
   REQUIRE(out[3] == Catch::Approx(1.0f).margin(1.0e-6f));
+}
+
+TEST_CASE("TrackMixerRuntime settles a pending lane insert target before an accepted snapshot",
+          "[engine][track_mixer]") {
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 64);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  auto* processor = new AutomatableGainProcessor();
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::unique_ptr<sonare::rt::ProcessorBase>(processor));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.25f));
+
+  // Publishing the same lane is accepted, but clears the temporary smoother
+  // slot. The target must be applied to the live processor before that clear.
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  REQUIRE(processor->gain() == Catch::Approx(0.25f).margin(1.0e-6f));
+}
+
+TEST_CASE("TrackMixerRuntime does not settle a lane insert target for a rejected snapshot",
+          "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  std::array<float, kBlock> source{};
+  source.fill(1.0f);
+  const float* source_channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, source_channels, 1, kBlock)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  auto* processor = new AutomatableGainProcessor();
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::unique_ptr<sonare::rt::ProcessorBase>(processor));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+
+  std::array<float, kBlock> output{};
+  float* output_channels[] = {output.data()};
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 1.0f));
+  REQUIRE(mixer.render_clips(player, output_channels, 1, kBlock, 0));
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.25f));
+  output.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, output_channels, 1, kBlock, 0));
+  const float midramp = processor->gain();
+  REQUIRE(midramp > 0.25f);
+  REQUIRE(midramp < 1.0f);
+
+  // An invalid output bus rejects before publication. It must not consume the
+  // pending target or snap the processor while the current lane remains live.
+  sonare::engine::TrackLaneConfig invalid{10};
+  invalid.output_bus_id = 99;
+  REQUIRE_FALSE(mixer.set_track_lanes({invalid}));
+  CHECK(processor->gain() == Catch::Approx(midramp).margin(1.0e-6f));
+
+  // Positive control: an explicit settle does apply the still-pending target.
+  mixer.settle_smoothers();
+  CHECK(processor->gain() == Catch::Approx(0.25f).margin(1.0e-6f));
+}
+
+TEST_CASE("TrackMixerRuntime retains a midramp lane insert target on same-lane resend",
+          "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  std::array<float, kBlock> source{};
+  source.fill(1.0f);
+  const float* source_channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, source_channels, 1, kBlock)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  auto* processor = new AutomatableGainProcessor();
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::unique_ptr<sonare::rt::ProcessorBase>(processor));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+
+  std::array<float, kBlock> output{};
+  float* output_channels[] = {output.data()};
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 1.0f));
+  REQUIRE(mixer.render_clips(player, output_channels, 1, kBlock, 0));
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.25f));
+  output.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, output_channels, 1, kBlock, 0));
+  REQUIRE(processor->gain() > 0.25f);
+  REQUIRE(processor->gain() < 1.0f);
+
+  // The accepted resend clears lane slots, so it must settle the target first
+  // or the processor would remain forever at the midramp value.
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  REQUIRE(processor->gain() == Catch::Approx(0.25f).margin(1.0e-6f));
 }
 
 TEST_CASE("TrackMixerRuntime ramps fader on an in-place strip update instead of jumping",
@@ -1218,6 +1314,115 @@ TEST_CASE("TrackMixerRuntime surround group bus feeds eq.midSide a 2-plane view"
   // Ls energy passes through the bus untouched on plane 4.
   REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
   REQUIRE(planes[4].back() > 0.9f);
+}
+
+TEST_CASE("TrackMixerRuntime clears retained bus EQ state when its layout changes",
+          "[engine][track_mixer][surround]") {
+  constexpr int kBlock = 64;
+  using TrackMixerRuntime = sonare::engine::TrackMixerRuntime;
+  using TrackBusConfig = sonare::engine::TrackBusConfig;
+  using TrackLaneConfig = sonare::engine::TrackLaneConfig;
+  using EqBand = sonare::mastering::eq::EqBand;
+  using EqBandType = sonare::mastering::eq::EqBandType;
+
+  const auto peak_after = [](const std::array<float, kBlock>& plane, int first) {
+    float peak = 0.0f;
+    for (int i = first; i < kBlock; ++i) {
+      peak = std::max(peak, std::abs(plane[static_cast<size_t>(i)]));
+    }
+    return peak;
+  };
+  const auto rear_peak = [&](const std::array<std::array<float, kBlock>, 6>& planes, int first) {
+    return std::max(peak_after(planes[4], first), peak_after(planes[5], first));
+  };
+  const auto configure = [&](TrackMixerRuntime& mixer, std::vector<TrackBusConfig> buses) {
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses(std::move(buses)));
+    TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+
+    sonare::mixing::api::Strip strip;
+    strip.surround_pan.azimuth = -110.0f;  // Ls in 5.1.
+    REQUIRE(mixer.set_track_strip(10, strip));
+
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    // AllPass has unit magnitude, so any nonzero output after the impulse is
+    // filter state rather than a gain-path artifact. A high Q keeps that state
+    // measurable across the layout transition below.
+    bus.eq.bands.push_back(EqBand{EqBandType::AllPass, 1000.0f, 0.0f, 50.0f, true});
+    REQUIRE(mixer.set_bus_strip(1, bus));
+    mixer.settle_smoothers();
+  };
+  const auto prime_with_rear_impulse = [&](TrackMixerRuntime& mixer) {
+    std::array<float, kBlock> impulse{};
+    impulse[0] = 1.0f;
+    float* source[] = {impulse.data(), impulse.data()};
+    std::array<std::array<float, kBlock>, 6> planes{};
+    std::array<float*, 6> output{};
+    for (int channel = 0; channel < 6; ++channel) {
+      output[static_cast<size_t>(channel)] = planes[static_cast<size_t>(channel)].data();
+    }
+    REQUIRE(mixer.mix_source(10, source, output.data(), 6, kBlock));
+    return std::pair{planes, rear_peak(planes, 1)};
+  };
+  const auto render_wide_silence = [&](TrackMixerRuntime& mixer) {
+    std::array<float, kBlock> silence{};
+    float* source[] = {silence.data(), silence.data()};
+    std::array<std::array<float, kBlock>, 6> planes{};
+    std::array<float*, 6> output{};
+    for (int channel = 0; channel < 6; ++channel) {
+      output[static_cast<size_t>(channel)] = planes[static_cast<size_t>(channel)].data();
+    }
+    REQUIRE(mixer.mix_source(10, source, output.data(), 6, kBlock));
+    return rear_peak(planes, 0);
+  };
+
+  TrackMixerRuntime changed_layout;
+  configure(changed_layout, {{1, 0.0f, sonare::ChannelLayout::FivePointOne}});
+  const auto primed = prime_with_rear_impulse(changed_layout);
+  REQUIRE(primed.second > 1.0e-4f);  // The rear all-pass tail is observable.
+
+  // The same bus id is narrowed for one silent block. The EQ processes only
+  // the active stereo pair, leaving its old rear-channel state untouched.
+  REQUIRE(changed_layout.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+  changed_layout.settle_smoothers();
+  std::array<float, kBlock> silence{};
+  float* silence_source[] = {silence.data(), silence.data()};
+  std::array<std::array<float, kBlock>, 2> narrow{};
+  std::array<float*, 2> narrow_output{{narrow[0].data(), narrow[1].data()}};
+  REQUIRE(changed_layout.mix_source(10, silence_source, narrow_output.data(), 2, kBlock));
+  REQUIRE(std::max(peak_after(narrow[0], 0), peak_after(narrow[1], 0)) < 1.0e-7f);
+
+  // Widening the same bus id must start all six EQ planes from silence. The
+  // unfixed path revives the rear state that was skipped while it was stereo.
+  REQUIRE(changed_layout.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  changed_layout.settle_smoothers();
+  const float changed_layout_rear = render_wide_silence(changed_layout);
+  CHECK(changed_layout_rear < 1.0e-7f);
+
+  // Negative control: a same-layout re-send is a retained state update, so an
+  // EQ tail must continue through it rather than being reset unconditionally.
+  TrackMixerRuntime same_layout;
+  configure(same_layout, {{1, 0.0f, sonare::ChannelLayout::FivePointOne}});
+  const auto same_layout_primed = prime_with_rear_impulse(same_layout);
+  REQUIRE(same_layout_primed.second > 1.0e-4f);
+  REQUIRE(same_layout.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  same_layout.settle_smoothers();
+  CHECK(render_wide_silence(same_layout) > 1.0e-4f);
+
+  // Negative control: the state follows the bus id when buses reorder, so its
+  // dedicated EQ tail must survive the slot move as well.
+  TrackMixerRuntime reordered;
+  configure(reordered, {{1, 0.0f, sonare::ChannelLayout::FivePointOne},
+                        {2, 0.0f, sonare::ChannelLayout::Stereo}});
+  const auto reordered_primed = prime_with_rear_impulse(reordered);
+  REQUIRE(reordered_primed.second > 1.0e-4f);
+  REQUIRE(reordered.set_buses(
+      {{2, 0.0f, sonare::ChannelLayout::Stereo}, {1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  reordered.settle_smoothers();
+  CHECK(render_wide_silence(reordered) > 1.0e-4f);
 }
 
 // Requires the FX suite: the shared bus insert is an FDN reverb
