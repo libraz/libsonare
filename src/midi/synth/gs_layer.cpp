@@ -319,8 +319,9 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
     --body_size;
   }
   if (body_size > 0 && body[body_size - 1] == 0xF7) --body_size;
-  if (body_size >= 4 && body[0] == 0x7E && body[2] == 0x09 &&
-      (body[3] == 0x01 || body[3] == 0x03)) {
+  const bool body_is_7bit = body_size == 4 && (body[0] & 0x80u) == 0 && (body[1] & 0x80u) == 0 &&
+                            (body[2] & 0x80u) == 0 && (body[3] & 0x80u) == 0;
+  if (body_is_7bit && body[0] == 0x7E && body[2] == 0x09 && (body[3] == 0x01 || body[3] == 0x03)) {
     out.kind = body[3] == 0x01 ? GsSysExKind::kGm1Reset : GsSysExKind::kGm2Reset;
     return out;
   }

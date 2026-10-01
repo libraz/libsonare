@@ -1037,14 +1037,28 @@ const std::vector<ParseCase>& parse_universal_cases() {
   static const std::vector<ParseCase> cases = {
       {{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7}, GsSysExKind::kGm1Reset, 0, 0},
       {{0x7E, 0x7F, 0x09, 0x01}, GsSysExKind::kGm1Reset, 0, 0},
+      {{0xF0, 0x7E, 0x00, 0x09, 0x01, 0xF7}, GsSysExKind::kGm1Reset, 0, 0},
+      {{0x7E, 0x00, 0x09, 0x01}, GsSysExKind::kGm1Reset, 0, 0},
       // GM2 is its own kind rather than GM1's: the two leave the bank-select
       // switches differently, which is measured on a unit and not a reading.
       {{0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7}, GsSysExKind::kGm2Reset, 0, 0},
       {{0x7E, 0x7F, 0x09, 0x03}, GsSysExKind::kGm2Reset, 0, 0},
+      {{0xF0, 0x7E, 0x00, 0x09, 0x03, 0xF7}, GsSysExKind::kGm2Reset, 0, 0},
+      {{0x7E, 0x00, 0x09, 0x03}, GsSysExKind::kGm2Reset, 0, 0},
       // GM System Off is not a reset.
       {{0xF0, 0x7E, 0x7F, 0x09, 0x02, 0xF7}, GsSysExKind::kNone, 0, 0},
       {{0xF0, 0x7E, 0x7F, 0x09}, GsSysExKind::kNone, 0, 0},
       {{0x7E, 0x7F, 0x09}, GsSysExKind::kNone, 0, 0},
+      // GM resets have exactly four body bytes. An extra data byte must not be
+      // ignored by either the framed or bare spelling.
+      {{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0x00, 0xF7}, GsSysExKind::kNone, 0, 0},
+      {{0x7E, 0x7F, 0x09, 0x01, 0x00}, GsSysExKind::kNone, 0, 0},
+      {{0xF0, 0x7E, 0x7F, 0x09, 0x03, 0x00, 0xF7}, GsSysExKind::kNone, 0, 0},
+      {{0x7E, 0x7F, 0x09, 0x03, 0x00}, GsSysExKind::kNone, 0, 0},
+      // The device ID is a MIDI data byte. Values with bit 7 set are malformed
+      // and must not be accepted as universal GM resets.
+      {{0xF0, 0x7E, 0xFF, 0x09, 0x01, 0xF7}, GsSysExKind::kNone, 0, 0},
+      {{0x7E, 0xFF, 0x09, 0x03}, GsSysExKind::kNone, 0, 0},
   };
   return cases;
 }
