@@ -1157,15 +1157,44 @@ TEST_CASE("PitchCorrector accepts a float-spelled lower endpoint",
   constexpr int sample_rate = 44100;
   constexpr int n_samples = 1000;
   constexpr int hop_length = n_samples;
-  constexpr float source_f0 = 100.0f;
   const float target_f0 = static_cast<float>(sample_rate) / static_cast<float>(n_samples);
+  for (const float source_f0 : {100.0f, 351.942871f, 440.0f, 10000.0f, 21798.728515625f}) {
+    CAPTURE(source_f0);
+    const sonare::Audio audio =
+        sonare::Audio::from_vector(sine(source_f0, sample_rate, n_samples), sample_rate);
+    const F0Track track = constant_track(source_f0, sample_rate, hop_length, 1);
+    const float target_delta = 12.0f * std::log2(target_f0 / source_f0);
+    const sonare::Audio corrected =
+        PitchCorrector().resynthesize(audio, track, std::vector<float>{target_delta});
+
+    REQUIRE(corrected.size() == audio.size());
+    double maximum_difference = 0.0;
+    for (size_t i = 0; i < corrected.size(); ++i) {
+      CHECK(std::isfinite(corrected[i]));
+      maximum_difference = std::max(maximum_difference, std::abs(static_cast<double>(corrected[i]) -
+                                                                 static_cast<double>(audio[i])));
+    }
+    CHECK(maximum_difference > 1.0e-4);
+
+    const float below_bound_delta = 12.0f * std::log2(44.0f / source_f0);
+    const sonare::Audio dry =
+        PitchCorrector().resynthesize(audio, track, std::vector<float>{below_bound_delta});
+    REQUIRE(dry.size() == audio.size());
+    for (size_t i = 0; i < dry.size(); ++i) CHECK(dry[i] == audio[i]);
+  }
+}
+
+TEST_CASE("PitchCorrector accepts a float-spelled Nyquist endpoint",
+          "[pitch_editor][pitch_revision]") {
+  constexpr int sample_rate = 44100;
+  constexpr int n_samples = 1000;
+  constexpr float source_f0 = 84.94380187988281f;
+  constexpr float target_f0 = sample_rate / 2.0f;
   const sonare::Audio audio =
       sonare::Audio::from_vector(sine(source_f0, sample_rate, n_samples), sample_rate);
-  const F0Track track = constant_track(source_f0, sample_rate, hop_length, 1);
-  const float target_delta = 12.0f * std::log2(target_f0 / source_f0);
-  const sonare::Audio corrected =
-      PitchCorrector().resynthesize(audio, track, std::vector<float>{target_delta});
-
+  const F0Track track = constant_track(source_f0, sample_rate, n_samples, 1);
+  const float delta = 12.0f * std::log2(target_f0 / source_f0);
+  const sonare::Audio corrected = PitchCorrector().resynthesize(audio, track, {delta});
   REQUIRE(corrected.size() == audio.size());
   double maximum_difference = 0.0;
   for (size_t i = 0; i < corrected.size(); ++i) {
@@ -1174,6 +1203,11 @@ TEST_CASE("PitchCorrector accepts a float-spelled lower endpoint",
                                                                static_cast<double>(audio[i])));
   }
   CHECK(maximum_difference > 1.0e-4);
+
+  const float above_bound_delta = 12.0f * std::log2((target_f0 + 1.0f) / source_f0);
+  const sonare::Audio dry = PitchCorrector().resynthesize(audio, track, {above_bound_delta});
+  REQUIRE(dry.size() == audio.size());
+  for (size_t i = 0; i < dry.size(); ++i) CHECK(dry[i] == audio[i]);
 }
 
 TEST_CASE("PitchCorrector dry-passes ineligible mixed frames without a large-shift loop",

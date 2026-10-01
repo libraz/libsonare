@@ -36,6 +36,7 @@ constexpr float kCrossfadeMs = 10.0f;
 float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
 
 void validate_f0_track(const Audio& audio, const F0Track& track) {
+  // Validate in the core so every public surface inherits the same track contract.
   SONARE_CHECK(!track.f0_hz.empty() && track.hop_length > 0 &&
                    track.f0_hz.size() == track.voiced.size() &&
                    (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
@@ -72,32 +73,55 @@ int rounded_sample(double position, int n_samples) noexcept {
   return static_cast<int>(rounded);
 }
 
-// Log-frequency bounds are computed independently from the float F0/delta
-// inputs. Allow only a few representational float ULPs at an inclusive
-// endpoint; an audible out-of-range target remains ineligible and is
-// dry-passed.
-constexpr int kRepresentabilityUlps = 2;
-
-double representability_tolerance(double bound) noexcept {
-  const float bound_hz = static_cast<float>(std::exp2(bound));
-  if (!std::isfinite(bound_hz) || bound_hz <= 0.0f) return 0.0;
-  const double encoded_log = std::log2(static_cast<double>(bound_hz));
-  const float lower_hz = std::nextafter(bound_hz, -std::numeric_limits<float>::infinity());
-  const float upper_hz = std::nextafter(bound_hz, std::numeric_limits<float>::infinity());
-  const double lower_step = std::abs(encoded_log - std::log2(static_cast<double>(lower_hz)));
-  const double upper_step = std::abs(std::log2(static_cast<double>(upper_hz)) - encoded_log);
-  const double encoding_error = std::abs(bound - encoded_log);
-  return static_cast<double>(kRepresentabilityUlps) *
-         std::max({lower_step, upper_step, encoding_error});
+// Return the larger adjacent float gap around a stored value.
+double float_spacing(float value) noexcept {
+  double spacing = 0.0;
+  for (const float direction :
+       {-std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()}) {
+    const float neighbour = std::nextafter(value, direction);
+    if (std::isfinite(neighbour)) {
+      spacing = std::max(spacing, std::abs(static_cast<double>(neighbour) - value));
+    }
+  }
+  return spacing;
 }
 
-bool clamp_log2_to_bounds(double& value, double lower, double upper) noexcept {
+// Return the larger log2 gap represented by adjacent positive floats.
+double log2_spacing(float value) noexcept {
+  const double encoded_log = std::log2(static_cast<double>(value));
+  double spacing = 0.0;
+  for (const float direction :
+       {-std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()}) {
+    const float neighbour = std::nextafter(value, direction);
+    if (neighbour > 0.0f && std::isfinite(neighbour)) {
+      spacing =
+          std::max(spacing, std::abs(std::log2(static_cast<double>(neighbour)) - encoded_log));
+    }
+  }
+  return spacing;
+}
+
+// Budget the rounding steps used to encode a requested endpoint.
+double representability_tolerance(double bound, float source_hz, float delta) noexcept {
+  const float bound_hz = static_cast<float>(std::exp2(bound));
+  const double encoding_error = std::abs(bound - std::log2(static_cast<double>(bound_hz)));
+  if (source_hz == 0.0f) return encoding_error + log2_spacing(bound_hz);
+
+  // Budget rounding in the float endpoint expression: 12 * log2(bound_hz / source_hz).
+  const float ratio = bound_hz / source_hz;
+  const float octaves = std::log2(ratio);
+  return encoding_error + log2_spacing(ratio) + float_spacing(octaves) +
+         float_spacing(delta) / kSemitonesPerOctave;
+}
+
+bool clamp_log2_to_bounds(double& value, double lower, double upper, float source_hz = 0.0f,
+                          float delta = 0.0f) noexcept {
   if (!std::isfinite(value)) return false;
   if (value < lower) {
-    if (lower - value > representability_tolerance(lower)) return false;
+    if (lower - value > representability_tolerance(lower, source_hz, delta)) return false;
     value = lower;
   } else if (value > upper) {
-    if (value - upper > representability_tolerance(upper)) return false;
+    if (value - upper > representability_tolerance(upper, source_hz, delta)) return false;
     value = upper;
   }
   return true;
@@ -318,11 +342,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
     return std::clamp(frame, 0, n_frames - 1);
   };
 
-  // Interpolate only across eligible voiced frames. If the nearest active
-  // frame has an ineligible/unvoiced neighbour, hold that active value until
-  // the nearest-frame boundary instead of tapering it through dry audio.
-  // Stable a+(b-a)*t arithmetic plus the clamp keeps a bounded pass within its
-  // inclusive six-semitone contract despite floating-point FMA rounding.
+  // Hold an active frame at a dry boundary instead of tapering its correction through dry audio.
   auto interp_frame = [&](const std::vector<float>& curve, double sample_pos) -> float {
     const double ff = frame_at(sample_pos);
     int f0 = static_cast<int>(std::floor(ff));
@@ -335,6 +355,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
     if (first_active && second_active) {
       const float first = curve[static_cast<size_t>(f0)];
       const float second = curve[static_cast<size_t>(f1)];
+      // a+(b-a)*t keeps equal ±6 endpoints exact; FMA can make a*(1-t)+b*t overshoot by one ULP.
       value = first + (second - first) * frac;
     } else if (first_active) {
       value = curve[static_cast<size_t>(f0)];
@@ -513,6 +534,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
 Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
                                    const std::vector<float>& deltas_semitones) const {
   SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
+  // One delta per track frame prevents interpolation from reading past the correction curve.
   SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
                ErrorCode::InvalidParameter);
   SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
@@ -525,9 +547,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   const double max_target_log2 = std::log2(0.5 * sample_rate);
   const int n_frames = track.n_frames();
 
-  // Unvoiced and unrepresentable deltas are intentionally normalized to zero
-  // before interpolation. A caller may leave arbitrary values in those slots,
-  // but they must never bleed into the first eligible grain on either side.
+  // Normalize dry-frame deltas to zero so arbitrary values cannot bleed into eligible grains.
   std::vector<float> effective_deltas(static_cast<size_t>(n_frames), 0.0f);
   std::vector<double> source_log2(static_cast<size_t>(n_frames), 0.0);
   std::vector<bool> eligible(static_cast<size_t>(n_frames), false);
@@ -539,15 +559,14 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     if (!track.voiced[index]) continue;
 
     double source = std::log2(static_cast<double>(track.f0_hz[index]));
-    // A valid source F0 whose period is longer than the buffer has no complete
-    // analysis grain. It remains a dry frame; malformed source F0 values were
-    // already rejected by validate_f0_track above.
+    // Leave overlong source periods dry; validate_f0_track already rejected malformed F0.
     if (!clamp_log2_to_bounds(source, min_target_log2, max_target_log2)) continue;
 
     double target = source + static_cast<double>(requested) / kSemitonesPerOctave;
-    // A finite request can still target an unrepresentable pitch. Keep the
-    // frame dry rather than rejecting or deriving an unbounded pass count.
-    if (!clamp_log2_to_bounds(target, min_target_log2, max_target_log2)) continue;
+    // Dry-pass out-of-range targets before calculating the number of passes.
+    if (!clamp_log2_to_bounds(target, min_target_log2, max_target_log2, track.f0_hz[index],
+                              requested))
+      continue;
 
     const double effective = (target - source) * kSemitonesPerOctave;
     if (!std::isfinite(effective)) continue;
@@ -557,9 +576,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     max_abs_delta = std::max(max_abs_delta, std::abs(effective));
   }
 
-  // Validation above is deliberately complete before this identity return:
-  // malformed tracks and non-finite parameters must not become a silent
-  // success just because no eligible frame needs a correction.
+  // Complete validation before the identity return so malformed input cannot silently succeed.
   if (!(max_abs_delta > 0.0)) return audio;
 
   const double pass_count = std::ceil(max_abs_delta / static_cast<double>(kPsolaMaxSemitones));
@@ -588,10 +605,9 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       double current_log2 = source_log2[index] + progress *
                                                      static_cast<double>(effective_deltas[index]) /
                                                      kSemitonesPerOctave;
-      // Keep intermediate values inside the same inclusive range. This also
-      // absorbs a last-bit drift at an exact Nyquist/lower-bound endpoint.
-      SONARE_CHECK(clamp_log2_to_bounds(current_log2, min_target_log2, max_target_log2),
-                   ErrorCode::InvalidParameter);
+      // Clamp intermediate F0 rounding at the inclusive synthesis bounds.
+      SONARE_CHECK(std::isfinite(current_log2), ErrorCode::InvalidParameter);
+      current_log2 = std::clamp(current_log2, min_target_log2, max_target_log2);
       const double current_hz = std::exp2(current_log2);
       SONARE_CHECK(std::isfinite(current_hz) && current_hz > 0.0, ErrorCode::InvalidParameter);
       working_track.voiced[index] = true;

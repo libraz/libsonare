@@ -32,9 +32,7 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
                        std::to_string(target_onset_sample) + " for " +
                        std::to_string(audio.size()) + " samples");
 
-  // Validate the region and target before taking the identity fast path.  A
-  // no-op edit still has to reject malformed input consistently with edits
-  // that do modify the samples.
+  // Validate before the identity return so no-op edits also reject malformed input.
   if (target_onset_sample == clipped.onset_sample) {
     return audio;
   }
@@ -67,9 +65,7 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
   const int length = clipped.offset_sample - clipped.onset_sample;
   SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
 
-  // Ratio one is an exact identity.  Avoid sending an unchanged region
-  // through either spectral backend, which can introduce phase and edge
-  // differences even when its requested duration is unchanged.
+  // Bypass spectral processing at ratio one to preserve the original phase and edges exactly.
   if (stretch_ratio == 1.0f) {
     return audio;
   }
