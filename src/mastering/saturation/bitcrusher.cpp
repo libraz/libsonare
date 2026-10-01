@@ -423,10 +423,11 @@ float BitCrusher::quantize(float sample, int bit_depth, int channel) {
     }
   }
   const float dithered = sample + dither_noise(channel) / std::max(levels, 1.0f) + shaped / levels;
-  const float quantized = std::round(std::clamp(dithered, -1.0f, 1.0f) * levels) / levels;
+  const float clamped = std::clamp(dithered, -1.0f, 1.0f);
+  const float quantized = std::round(clamped * levels) / levels;
   if (config_.dither_type == final::DitherType::NoiseShaped) {
     auto& history = error_history_[static_cast<size_t>(channel)];
-    const float error = (dithered - quantized) * levels;
+    const float error = (clamped - quantized) * levels;
     for (size_t i = history.size() - 1; i > 0; --i) {
       history[i] = history[i - 1];
     }

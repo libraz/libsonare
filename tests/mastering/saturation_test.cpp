@@ -749,6 +749,80 @@ TEST_CASE("BitCrusher can apply deterministic dither before quantization",
   REQUIRE(std::any_of(a.begin(), a.end(), [](float sample) { return sample != 0.0f; }));
 }
 
+TEST_CASE("BitCrusher NoiseShaped dither does not leak clipped input across blocks",
+          "[mastering][saturation]") {
+  constexpr float kLevels = 32767.0f;
+  constexpr float kStep = 1.0f / kLevels;
+
+  BitCrusherConfig config{};
+  config.bit_depth = 16;
+  config.downsample_factor = 1;
+  config.mix = 1.0f;
+  config.dither_type = sonare::mastering::final::DitherType::NoiseShaped;
+  config.dither_seed = 1234;
+
+  BitCrusher crusher(config);
+  crusher.prepare(48000.0, 64);
+  std::vector<float> clipped = {2.0f};
+  process(crusher, clipped);
+  REQUIRE(clipped[0] == 1.0f);
+
+  std::vector<float> silence(64, 0.0f);
+  process(crusher, silence);
+  float suffix_peak = 0.0f;
+  size_t off_grid = 0;
+  size_t non_finite = 0;
+  for (const float sample : silence) {
+    if (!std::isfinite(sample)) ++non_finite;
+    const float code = sample / kStep;
+    if (code != std::round(code)) ++off_grid;
+    suffix_peak = std::max(suffix_peak, std::abs(sample));
+  }
+  CAPTURE(suffix_peak, suffix_peak / kStep, non_finite, off_grid);
+  REQUIRE(non_finite == 0);
+  REQUIRE(off_grid == 0);
+  REQUIRE(suffix_peak <= 16.0f * kStep);
+}
+
+TEST_CASE("BitCrusher NoiseShaped dither stays deterministic without clipping",
+          "[mastering][saturation]") {
+  BitCrusherConfig config{};
+  config.bit_depth = 16;
+  config.downsample_factor = 1;
+  config.mix = 1.0f;
+  config.dither_type = sonare::mastering::final::DitherType::NoiseShaped;
+  config.dither_seed = 1234;
+
+  BitCrusher first(config);
+  BitCrusher second(config);
+  auto tpdf_config = config;
+  tpdf_config.dither_type = sonare::mastering::final::DitherType::Tpdf;
+  BitCrusher tpdf(tpdf_config);
+  first.prepare(48000.0, 256);
+  second.prepare(48000.0, 256);
+  tpdf.prepare(48000.0, 256);
+  std::vector<float> a(256);
+  std::vector<float> b(256);
+  std::vector<float> tpdf_output(256);
+  for (size_t i = 0; i < a.size(); ++i) {
+    const float time = static_cast<float>(i) / 48000.0f;
+    a[i] = b[i] = tpdf_output[i] = 0.4f * std::sin(sonare::constants::kTwoPi * 220.0f * time);
+  }
+
+  process(first, a);
+  process(second, b);
+  process(tpdf, tpdf_output);
+
+  REQUIRE(a == b);
+  bool differs_from_tpdf = false;
+  for (size_t i = 0; i < a.size(); ++i) {
+    differs_from_tpdf = differs_from_tpdf || a[i] != tpdf_output[i];
+  }
+  REQUIRE(differs_from_tpdf);
+  REQUIRE(std::all_of(a.begin(), a.end(), [](float sample) { return std::isfinite(sample); }));
+  REQUIRE(std::any_of(a.begin(), a.end(), [](float sample) { return sample != 0.0f; }));
+}
+
 TEST_CASE("Exciter adds high-frequency enhancement", "[mastering][saturation]") {
   auto signal = generate_sine_samples(8000.0f, 48000, 48000, 0.2f);
   const float before = rms_tail(signal, 4096);
