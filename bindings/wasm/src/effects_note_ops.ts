@@ -3,7 +3,7 @@
  * rendering an edited set back, and the split/merge operations over it.
  */
 
-import { toVoicedFloat32 } from './_effects_common';
+import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common';
 import { getSonareModule } from './module_state';
 import type {
   NoteExtractorOptions,
@@ -19,7 +19,7 @@ import type {
   VoicedFlags,
 } from './public_types';
 import type { ValidateOptions } from './validation';
-import { assertSampleRate, assertSamples } from './validation';
+import { assertFiniteScalar, assertSampleRate, assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -35,17 +35,8 @@ function assertNoteTrack(
 ): Float32Array | undefined {
   assertSamples(fnName, request.samples, request.validate !== false);
   assertSampleRate(fnName, request.sampleRate);
-  const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
-  if (voicedF32 != null && voicedF32.length !== request.f0Hz.length) {
-    throw new RangeError(`${fnName}: voiced length must match f0Hz length`);
-  }
-  if (
-    request.voiced == null &&
-    request.voicedProb &&
-    request.voicedProb.length !== request.f0Hz.length
-  ) {
-    throw new RangeError(`${fnName}: voicedProb length must match f0Hz length`);
-  }
+  const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
+  assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
   return voicedF32;
 }
 
@@ -366,9 +357,11 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * @param request - Source audio, the notes to render, the cross-fade length, and
  *   the F0 track a vibrato or drift edit reads
  * @returns The rendered audio, the same length and sample rate as the input
- * @throws TypeError when `voiced` is not a supported flag array
- * @throws RangeError when `voiced` is supplied without `f0Hz`, when its length
- *   differs from `f0Hz`, or when the samples or sample rate fail shared checks
+ * @throws TypeError when `notes` is not an array, `f0Hz` is not a
+ *   `Float32Array`, or `voiced` is not a supported flag array
+ * @throws RangeError when `frameRate` is non-finite, `voiced` is supplied
+ *   without `f0Hz`, when its length differs from `f0Hz`, or when the samples or
+ *   sample rate fail shared checks
  * @throws SonareError (`InvalidParameter`) on a note whose span is empty,
  *   reversed or missing, overlapping source spans, a non-finite or non-positive
  *   edit field, a negative or non-finite envelope value, a negative `fadeMs` or
@@ -399,16 +392,26 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * ```
  */
 export function renderNotes(request: RenderNotesRequest): Float32Array {
-  assertSamples('renderNotes', request.samples, request.validate !== false);
   assertSampleRate('renderNotes', request.sampleRate);
+  if (!Array.isArray(request.notes)) {
+    throw new TypeError('renderNotes: notes must be an array');
+  }
+  const f0Hz = request.f0Hz;
+  if (f0Hz !== undefined && !(f0Hz instanceof Float32Array)) {
+    throw new TypeError('renderNotes: f0Hz must be a Float32Array');
+  }
+  if (f0Hz !== undefined) {
+    assertFiniteScalar('renderNotes', request.frameRate as number, 'frameRate');
+  }
   const { voiced: publicVoiced, ...withoutVoiced } = request;
-  if (publicVoiced != null && request.f0Hz == null) {
+  const voiced = publicVoiced == null ? undefined : toVoicedFloat32('renderNotes', publicVoiced);
+  if (publicVoiced != null && f0Hz === undefined) {
     throw new RangeError('renderNotes: voiced requires f0Hz');
   }
-  const voiced = publicVoiced == null ? undefined : toVoicedFloat32(publicVoiced);
-  if (voiced != null && voiced.length !== request.f0Hz?.length) {
-    throw new RangeError('renderNotes: voiced length must match f0Hz length');
+  if (f0Hz !== undefined) {
+    assertPitchTrackLengths('renderNotes', f0Hz, publicVoiced);
   }
+  assertSamples('renderNotes', request.samples, request.validate !== false);
   const options = { ...withoutVoiced, voiced };
   return requireModule().renderNotes(request.samples, request.sampleRate, request.notes, options);
 }
@@ -425,8 +428,8 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * Frames whose F0 is unusable carry no measurement, so the curve is held at the
  * nearest usable neighbour across them. Both curves therefore have an entry
  * everywhere; when `voiced` is supplied, a host marking held frames should
- * retain both arrays because a positive F0 can be explicitly suppressed.
- * When `voiced` is supplied, a false flag suppresses that frame and a true flag
+ * retain both the `f0Hz` and `voiced` arrays because a positive F0 can be
+ * explicitly suppressed. A false flag suppresses that frame and a true flag
  * cannot make an unusable F0 valid.
  *
  * A note with no usable pitch is reported as a zero `centreHz` and two empty
@@ -436,9 +439,10 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * @param request - The note's slice of the F0 track, its cadence, its centre, and
  *   the cutoff
  * @returns The centre and the two curves, each one entry per frame of `f0Hz`
- * @throws TypeError when `voiced` is not a supported flag array
- * @throws RangeError when `voiced` is supplied without `f0Hz` or differs in
- *   length from it
+ * @throws TypeError when `f0Hz` is not a `Float32Array` or `voiced` is not a
+ *   supported flag array
+ * @throws RangeError when `frameRate` is not finite or `voiced` differs in
+ *   length from `f0Hz`
  * @throws SonareError (`InvalidParameter`) on an empty `f0Hz`, a non-positive
  *   `frameRate`, a negative `medianHz`, or a negative `vibratoCutoffHz`
  *
@@ -453,13 +457,13 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * ```
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
-  if (request.voiced != null && request.f0Hz == null) {
-    throw new RangeError('decomposeNotePitch: voiced requires f0Hz');
+  if (!(request.f0Hz instanceof Float32Array)) {
+    throw new TypeError('decomposeNotePitch: f0Hz must be a Float32Array');
   }
-  const voiced = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
-  if (voiced != null && voiced.length !== request.f0Hz?.length) {
-    throw new RangeError('decomposeNotePitch: voiced length must match f0Hz length');
-  }
+  assertFiniteScalar('decomposeNotePitch', request.frameRate, 'frameRate');
+  const voiced =
+    request.voiced == null ? undefined : toVoicedFloat32('decomposeNotePitch', request.voiced);
+  assertPitchTrackLengths('decomposeNotePitch', request.f0Hz, request.voiced);
   return requireModule().decomposeNotePitch(
     request.f0Hz,
     voiced,

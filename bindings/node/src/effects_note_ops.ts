@@ -198,8 +198,8 @@ function assertNoteTrackRequest(fnName: string, request: NoteTrackRequest): Int3
   }
   // Normalize first so an unsupported container cannot be mistaken for a
   // length error merely because it happens to expose a matching `length`.
-  const nativeVoiced = request.voiced != null ? toVoicedInt32(request.voiced) : undefined;
-  assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
+  const nativeVoiced = request.voiced != null ? toVoicedInt32(fnName, request.voiced) : undefined;
+  assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
   return nativeVoiced;
 }
 
@@ -361,12 +361,12 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   if (options.f0Hz !== undefined) {
     assertFiniteScalar('renderNotes', options.frameRate as number, 'frameRate');
   }
-  const nativeVoiced = voiced != null ? toVoicedInt32(voiced) : undefined;
+  const nativeVoiced = voiced != null ? toVoicedInt32('renderNotes', voiced) : undefined;
   if (nativeVoiced !== undefined) {
     if (options.f0Hz === undefined) {
       throw new RangeError('renderNotes: voiced requires f0Hz');
     }
-    assertPitchTrackLengths(options.f0Hz, voiced);
+    assertPitchTrackLengths('renderNotes', options.f0Hz, voiced);
   }
   assertEditTimeOffsets('renderNotes', notes, 'notes');
   const nativeOptions = nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
@@ -419,8 +419,8 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
   assertFiniteScalar('decomposeNotePitch', frameRate, 'frameRate');
   let nativeVoiced: Int32Array | undefined;
   if (voiced != null) {
-    nativeVoiced = toVoicedInt32(voiced);
-    assertPitchTrackLengths(f0Hz, voiced);
+    nativeVoiced = toVoicedInt32('decomposeNotePitch', voiced);
+    assertPitchTrackLengths('decomposeNotePitch', f0Hz, voiced);
   }
   return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz, nativeVoiced);
 }

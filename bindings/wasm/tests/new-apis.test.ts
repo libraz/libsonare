@@ -70,6 +70,11 @@ function allFinite(arr: Float32Array | number[]): boolean {
   return true;
 }
 
+function expectVoicedTypeError(operation: () => unknown, fnName: string): void {
+  expect(operation).toThrowError(TypeError);
+  expect(operation).toThrowError(new RegExp(`^${fnName}: voiced`));
+}
+
 describe('v1.2 feature additions (WASM)', () => {
   beforeAll(async () => {
     await init();
@@ -372,18 +377,18 @@ describe('v1.2 feature additions (WASM)', () => {
       const f0 = new Float32Array(nFrames).fill(220);
       const tooShortVoiced = new Int32Array(nFrames - 1).fill(1);
       const tooShortProb = new Float32Array(nFrames - 1).fill(1);
-      expect(() =>
-        pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, tooShortVoiced),
-      ).toThrow();
+      expect(() => pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, tooShortVoiced)).toThrow(
+        'pitchCorrectToMidiTimevarying: voiced must have the same length as f0Hz',
+      );
       expect(() =>
         pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, undefined, tooShortProb),
-      ).toThrow();
+      ).toThrow('pitchCorrectToMidiTimevarying: voicedProb must have the same length as f0Hz');
       expect(() =>
         pitchCorrectTimevarying(signal, f0, SR, hop, { voiced: tooShortVoiced }),
-      ).toThrow();
+      ).toThrow('pitchCorrectTimevarying: voiced must have the same length as f0Hz');
       expect(() =>
         pitchCorrectTimevarying(signal, f0, SR, hop, { voicedProb: tooShortProb }),
-      ).toThrow();
+      ).toThrow('pitchCorrectTimevarying: voicedProb must have the same length as f0Hz');
     });
 
     it('pitchCorrectToMidiTimevarying derives voicing from voicedProb when voiced is omitted', () => {
@@ -542,17 +547,21 @@ describe('v1.2 feature additions (WASM)', () => {
       ];
 
       for (const voiced of invalid) {
-        expect(() =>
-          pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
-            validate: false,
-          }),
-        ).toThrow(TypeError);
-        expect(() =>
-          pitchCorrectTimevarying(signal, f0, SR, hop, {
-            voiced: voiced as never,
-            validate: false,
-          }),
-        ).toThrow(TypeError);
+        expectVoicedTypeError(
+          () =>
+            pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
+              validate: false,
+            }),
+          'pitchCorrectToMidiTimevarying',
+        );
+        expectVoicedTypeError(
+          () =>
+            pitchCorrectTimevarying(signal, f0, SR, hop, {
+              voiced: voiced as never,
+              validate: false,
+            }),
+          'pitchCorrectTimevarying',
+        );
       }
     });
 
@@ -563,17 +572,21 @@ describe('v1.2 feature additions (WASM)', () => {
       const invalid = ['1', new Float64Array(nFrames - 1).fill(1), {}];
 
       for (const voiced of invalid) {
-        expect(() =>
-          pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
-            validate: false,
-          }),
-        ).toThrow(TypeError);
-        expect(() =>
-          pitchCorrectTimevarying(signal, f0, SR, hop, {
-            voiced: voiced as never,
-            validate: false,
-          }),
-        ).toThrow(TypeError);
+        expectVoicedTypeError(
+          () =>
+            pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
+              validate: false,
+            }),
+          'pitchCorrectToMidiTimevarying',
+        );
+        expectVoicedTypeError(
+          () =>
+            pitchCorrectTimevarying(signal, f0, SR, hop, {
+              voiced: voiced as never,
+              validate: false,
+            }),
+          'pitchCorrectTimevarying',
+        );
       }
     });
 

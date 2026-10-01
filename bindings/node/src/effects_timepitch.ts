@@ -213,8 +213,16 @@ export function pitchCorrectToMidiTimevarying(
           voicedProb,
         }
       : samples;
-  const nativeVoiced = request.voiced != null ? toVoicedInt32(request.voiced) : undefined;
-  assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
+  const nativeVoiced =
+    request.voiced != null
+      ? toVoicedInt32('pitchCorrectToMidiTimevarying', request.voiced)
+      : undefined;
+  assertPitchTrackLengths(
+    'pitchCorrectToMidiTimevarying',
+    request.f0Hz,
+    request.voiced,
+    request.voicedProb,
+  );
   // Positivity only: the corrector requires a positive hop to place the contour
   // and carries no further domain.
   const resolvedHopLength = resolvePositiveIntegerOption(
@@ -286,8 +294,15 @@ export function pitchCorrectTimevarying(
     ...requestOptions
   } = request;
   const nativeVoiced =
-    requestOptions.voiced != null ? toVoicedInt32(requestOptions.voiced) : undefined;
-  assertPitchTrackLengths(requestF0Hz, requestOptions.voiced, requestOptions.voicedProb);
+    requestOptions.voiced != null
+      ? toVoicedInt32('pitchCorrectTimevarying', requestOptions.voiced)
+      : undefined;
+  assertPitchTrackLengths(
+    'pitchCorrectTimevarying',
+    requestF0Hz,
+    requestOptions.voiced,
+    requestOptions.voicedProb,
+  );
   // Positivity only, as pitchCorrectToMidiTimevarying: the same corrector.
   const resolvedHopLength = resolvePositiveIntegerOption(
     'pitchCorrectTimevarying',

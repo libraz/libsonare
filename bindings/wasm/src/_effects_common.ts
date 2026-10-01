@@ -7,7 +7,7 @@ import type { VoicedFlags } from './public_types';
 // The embind layer reads the companion voicing array as Float32Array. Keep the
 // public union a runtime contract before conversion: strings, Float64Arrays and
 // arbitrary array-like objects must not become flags through truthiness.
-export function toVoicedFloat32(voiced: VoicedFlags): Float32Array {
+export function toVoicedFloat32(fnName: string, voiced: VoicedFlags): Float32Array {
   if (
     !(
       voiced instanceof Int32Array ||
@@ -17,16 +17,30 @@ export function toVoicedFloat32(voiced: VoicedFlags): Float32Array {
     )
   ) {
     throw new TypeError(
-      'voiced must be an Int32Array, Uint8Array, Float32Array, number[], or boolean[]',
+      `${fnName}: voiced must be an Int32Array, Uint8Array, Float32Array, number[], or boolean[]`,
     );
   }
   const out = new Float32Array(voiced.length);
   for (let index = 0; index < voiced.length; index += 1) {
     const value = voiced[index];
     if (typeof value !== 'number' && typeof value !== 'boolean') {
-      throw new TypeError('voiced array entries must be numbers or booleans');
+      throw new TypeError(`${fnName}: voiced array entries must be numbers or booleans`);
     }
     out[index] = value ? 1 : 0;
   }
   return out;
+}
+
+export function assertPitchTrackLengths(
+  fnName: string,
+  f0Hz: Float32Array,
+  voiced?: VoicedFlags | null,
+  voicedProb?: Float32Array | null,
+): void {
+  if (voiced != null && voiced.length !== f0Hz.length) {
+    throw new RangeError(`${fnName}: voiced must have the same length as f0Hz`);
+  }
+  if (voiced == null && voicedProb != null && voicedProb.length !== f0Hz.length) {
+    throw new RangeError(`${fnName}: voicedProb must have the same length as f0Hz`);
+  }
 }

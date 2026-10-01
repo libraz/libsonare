@@ -215,6 +215,34 @@ describe('editing effects', () => {
     }
   });
 
+  it('prefixes voiced validation errors with the operation name', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    const malformed = new Float64Array(nFrames);
+    const short = new Int32Array(nFrames - 1);
+    const shortProb = new Float32Array(nFrames - 1);
+
+    expect(() => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, malformed as never)).toThrow(
+      /pitchCorrectToMidiTimevarying: voiced must be/,
+    );
+    expect(() =>
+      pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: malformed as never }),
+    ).toThrow(/pitchCorrectTimevarying: voiced must be/);
+    expect(() => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, short)).toThrow(
+      'pitchCorrectToMidiTimevarying: voiced must have the same length as f0Hz',
+    );
+    expect(() =>
+      pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
+    ).toThrow('pitchCorrectToMidiTimevarying: voicedProb must have the same length as f0Hz');
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: short })).toThrow(
+      'pitchCorrectTimevarying: voiced must have the same length as f0Hz',
+    );
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb })).toThrow(
+      'pitchCorrectTimevarying: voicedProb must have the same length as f0Hz',
+    );
+  });
+
   it('explicit voiced flags ignore invalid voicedProb shape and values', () => {
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;

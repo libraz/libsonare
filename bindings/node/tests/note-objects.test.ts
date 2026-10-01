@@ -216,8 +216,12 @@ describe('extractNotes', () => {
     };
     expect(() => extractNotes({ ...request, frameRate: Number.NaN })).toThrow(RangeError);
     expect(() => extractNotes({ ...request, sampleRate: 0 })).toThrow(RangeError);
-    expect(() => extractNotes({ ...request, voiced: new Int32Array(3) })).toThrow(RangeError);
-    expect(() => extractNotes({ ...request, voicedProb: new Float32Array(3) })).toThrow(RangeError);
+    expect(() => extractNotes({ ...request, voiced: new Int32Array(3) })).toThrow(
+      'extractNotes: voiced must have the same length as f0Hz',
+    );
+    expect(() => extractNotes({ ...request, voicedProb: new Float32Array(3) })).toThrow(
+      'extractNotes: voicedProb must have the same length as f0Hz',
+    );
   });
 
   it('treats null voicing options as omitted', () => {
@@ -314,7 +318,7 @@ describe('extractNotes', () => {
           frameRate: FRAME_RATE,
           voiced: voiced as never,
         }),
-      ).toThrow(TypeError);
+      ).toThrow(/extractNotes: voiced/);
 
       const notes = extractTone();
       expect(() =>
@@ -327,7 +331,7 @@ describe('extractNotes', () => {
           index: 0,
           frame: SPLIT_FRAME / 2,
         }),
-      ).toThrow(TypeError);
+      ).toThrow(/splitNote: voiced/);
       expect(() =>
         mergeNotes({
           ...tone,
@@ -338,7 +342,7 @@ describe('extractNotes', () => {
           first: 0,
           last: 1,
         }),
-      ).toThrow(TypeError);
+      ).toThrow(/mergeNotes: voiced/);
     }
   });
 });
@@ -773,14 +777,16 @@ describe('renderNotes pitch curve edits', () => {
     validFlags[13] = 0;
     expect(() =>
       renderNotes({ samples, sampleRate: SR, notes: [{ ...note, edit }], voiced: validFlags }),
-    ).toThrow(RangeError);
+    ).toThrow('renderNotes: voiced requires f0Hz');
     for (const malformed of [
       '0'.repeat(SET_FRAMES),
       new Float64Array(SET_FRAMES),
       new Array(SET_FRAMES).fill('0'),
       new Array(SET_FRAMES).fill({}),
     ]) {
-      expect(() => renderNotes({ ...request, voiced: malformed as never })).toThrow(TypeError);
+      expect(() => renderNotes({ ...request, voiced: malformed as never })).toThrow(
+        /renderNotes: voiced/,
+      );
     }
 
     expect(() =>
@@ -1018,7 +1024,7 @@ describe('decomposeNotePitch', () => {
           frameRate: CURVE_RATE,
           medianHz: CENTRE,
         }),
-      ).toThrow(TypeError);
+      ).toThrow(/decomposeNotePitch: voiced/);
     }
     expect(() =>
       rawAddon.decomposeNotePitch(f0Hz, FRAME_RATE, CENTRE, 3, new Uint8Array(CURVE_FRAMES)),

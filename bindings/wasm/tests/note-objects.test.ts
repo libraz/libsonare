@@ -65,6 +65,11 @@ function voicedFlags(value: boolean): Int32Array {
   return new Int32Array(frameCount).fill(value ? 1 : 0);
 }
 
+function expectVoicedTypeError(operation: () => unknown, fnName: string): void {
+  expect(operation).toThrowError(TypeError);
+  expect(operation).toThrowError(new RegExp(`^${fnName}: voiced`));
+}
+
 function sine(hz: number, amplitude: number, n: number): Float32Array {
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -421,7 +426,10 @@ describe('extractNotes', () => {
       Array<object>(fixtureFrames).fill({}),
     ];
     for (const voiced of invalid) {
-      expect(() => extractNotes({ ...source, voiced: voiced as never })).toThrow(TypeError);
+      expectVoicedTypeError(
+        () => extractNotes({ ...source, voiced: voiced as never }),
+        'extractNotes',
+      );
     }
   });
 
@@ -433,8 +441,26 @@ describe('extractNotes', () => {
       {},
     ];
     for (const voiced of invalid) {
-      expect(() => extractNotes({ ...source, voiced: voiced as never })).toThrow(TypeError);
+      expectVoicedTypeError(
+        () => extractNotes({ ...source, voiced: voiced as never }),
+        'extractNotes',
+      );
     }
+  });
+
+  it('uses the shared voiced length message for both selected arrays', () => {
+    const source = plainSource();
+    const short = new Int32Array(fixtureFrames - 1);
+    expect(() => extractNotes({ ...source, voiced: short })).toThrow(
+      'extractNotes: voiced must have the same length as f0Hz',
+    );
+    expect(() =>
+      extractNotes({
+        ...source,
+        voiced: undefined,
+        voicedProb: new Float32Array(fixtureFrames - 1),
+      }),
+    ).toThrow('extractNotes: voicedProb must have the same length as f0Hz');
   });
 
   it('returns an empty array when the track segments to nothing', () => {
@@ -573,6 +599,41 @@ describe('renderNotes', () => {
       }),
     );
     expect(() => renderNotes({ samples, sampleRate: 7999, notes })).toThrow(RangeError);
+  });
+
+  it('matches Node validation precedence before scanning audio', () => {
+    const invalidVoiced = '1' as never;
+    expect(() =>
+      renderNotes({
+        samples,
+        sampleRate,
+        notes: [],
+        f0Hz: new Float64Array(1) as never,
+        frameRate: Number.NaN,
+        voiced: invalidVoiced,
+        validate: false,
+      }),
+    ).toThrow('renderNotes: f0Hz must be a Float32Array');
+    expect(() =>
+      renderNotes({
+        samples,
+        sampleRate,
+        notes: [],
+        f0Hz,
+        frameRate: Number.NaN,
+        voiced: invalidVoiced,
+        validate: false,
+      }),
+    ).toThrow('renderNotes: frameRate must be a finite number');
+    expect(() =>
+      renderNotes({
+        samples,
+        sampleRate,
+        notes: [],
+        voiced: invalidVoiced,
+        validate: false,
+      }),
+    ).toThrow('renderNotes: voiced must be');
   });
 
   // note_val.h::noteEditFromVal used to static_cast<int64_t> a raw double for
@@ -868,7 +929,7 @@ describe('renderNotes pitch curve edits', () => {
         frameRate: fixtureFrameRate,
       }),
     );
-    for (const badRate of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const badRate of [0, -100]) {
       expectInvalidParameter(() =>
         renderNotes({
           samples: source,
@@ -878,6 +939,17 @@ describe('renderNotes pitch curve edits', () => {
           frameRate: badRate,
         }),
       );
+    }
+    for (const badRate of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        renderNotes({
+          samples: source,
+          sampleRate: fixtureRate,
+          notes: [note],
+          f0Hz: track,
+          frameRate: badRate,
+        }),
+      ).toThrow('renderNotes: frameRate must be a finite number');
     }
     // Positive control: a note ending exactly at the track's last frame is
     // inside it, so none of the above passes by rejecting every curve edit.
@@ -1062,7 +1134,7 @@ describe('renderNotes voiced masks', () => {
         voiced: new Int32Array(fixtureFrames).fill(1),
         validate: false,
       }),
-    ).toThrow(RangeError);
+    ).toThrow('renderNotes: voiced requires f0Hz');
     expect(() =>
       renderNotes({
         samples: source,
@@ -1073,38 +1145,42 @@ describe('renderNotes voiced masks', () => {
         frameRate: fixtureFrameRate,
         validate: false,
       }),
-    ).toThrow(RangeError);
+    ).toThrow('renderNotes: voiced must have the same length as f0Hz');
   });
 
   it('rejects unsupported voiced containers before the native call', () => {
     for (const voiced of ['111', new Float64Array(fixtureFrames).fill(1)]) {
-      expect(() =>
-        renderNotes({
-          samples: source,
-          sampleRate: fixtureRate,
-          notes: [],
-          f0Hz: track,
-          voiced: voiced as never,
-          frameRate: fixtureFrameRate,
-          validate: false,
-        }),
-      ).toThrow(TypeError);
+      expectVoicedTypeError(
+        () =>
+          renderNotes({
+            samples: source,
+            sampleRate: fixtureRate,
+            notes: [],
+            f0Hz: track,
+            voiced: voiced as never,
+            frameRate: fixtureFrameRate,
+            validate: false,
+          }),
+        'renderNotes',
+      );
     }
   });
 
   it('rejects unsupported voiced containers before checking their length', () => {
     for (const voiced of ['1', new Float64Array(fixtureFrames - 1).fill(1), {}]) {
-      expect(() =>
-        renderNotes({
-          samples: source,
-          sampleRate: fixtureRate,
-          notes: [],
-          f0Hz: track,
-          voiced: voiced as never,
-          frameRate: fixtureFrameRate,
-          validate: false,
-        }),
-      ).toThrow(TypeError);
+      expectVoicedTypeError(
+        () =>
+          renderNotes({
+            samples: source,
+            sampleRate: fixtureRate,
+            notes: [],
+            f0Hz: track,
+            voiced: voiced as never,
+            frameRate: fixtureFrameRate,
+            validate: false,
+          }),
+        'renderNotes',
+      );
     }
   });
 });
@@ -1228,14 +1304,20 @@ describe('decomposeNotePitch', () => {
   it('rejects unsupported voiced containers before the native call', () => {
     const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
     for (const voiced of ['111', new Float64Array(curveFrames).fill(1)]) {
-      expect(() => decomposeNotePitch({ ...base, voiced: voiced as never })).toThrow(TypeError);
+      expectVoicedTypeError(
+        () => decomposeNotePitch({ ...base, voiced: voiced as never }),
+        'decomposeNotePitch',
+      );
     }
   });
 
   it('rejects unsupported voiced containers before checking their length', () => {
     const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
     for (const voiced of ['1', new Float64Array(curveFrames - 1).fill(1), {}]) {
-      expect(() => decomposeNotePitch({ ...base, voiced: voiced as never })).toThrow(TypeError);
+      expectVoicedTypeError(
+        () => decomposeNotePitch({ ...base, voiced: voiced as never }),
+        'decomposeNotePitch',
+      );
     }
   });
 
@@ -1268,8 +1350,16 @@ describe('decomposeNotePitch', () => {
     const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
     expectInvalidParameter(() => decomposeNotePitch({ ...base, f0Hz: new Float32Array(0) }));
     expect(() => decomposeNotePitch({ ...base, voiced: new Int32Array(curveFrames - 1) })).toThrow(
-      RangeError,
+      'decomposeNotePitch: voiced must have the same length as f0Hz',
     );
+    expect(() =>
+      decomposeNotePitch({
+        f0Hz: undefined as never,
+        frameRate: Number.NaN,
+        medianHz: centreHz,
+        voiced: '1' as never,
+      }),
+    ).toThrow('decomposeNotePitch: f0Hz must be a Float32Array');
     // A frame carrying no pitch is spelled zero, negative or non-finite, and
     // all three are read rather than refused. The frame rate and the centre
     // below are still rejected, so this is not a blanket acceptance.
@@ -1278,8 +1368,13 @@ describe('decomposeNotePitch', () => {
       track[7] = noPitch;
       expect(decomposeNotePitch({ ...base, f0Hz: track }).centreHz).toBeGreaterThan(0);
     }
-    for (const badRate of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const badRate of [0, -100]) {
       expectInvalidParameter(() => decomposeNotePitch({ ...base, frameRate: badRate }));
+    }
+    for (const badRate of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => decomposeNotePitch({ ...base, frameRate: badRate })).toThrow(
+        'decomposeNotePitch: frameRate must be a finite number',
+      );
     }
     // 0 is the no-pitch spelling and 0 is the default cutoff, so only a value
     // that cannot be either at all is rejected.
@@ -1505,6 +1600,38 @@ describe('splitNote', () => {
     );
   });
 
+  it('uses the shared voiced length message for split and merge', () => {
+    const source = gappedSource();
+    const notes = extractNotes(source);
+    const short = new Int32Array(fixtureFrames - 1);
+    expect(() => splitNote({ ...source, voiced: short, notes, index: 1, frame: 18 })).toThrow(
+      'splitNote: voiced must have the same length as f0Hz',
+    );
+    expect(() => mergeNotes({ ...source, voiced: short, notes, first: 0, last: 1 })).toThrow(
+      'mergeNotes: voiced must have the same length as f0Hz',
+    );
+    expect(() =>
+      splitNote({
+        ...source,
+        voiced: undefined,
+        voicedProb: new Float32Array(fixtureFrames - 1),
+        notes,
+        index: 1,
+        frame: 18,
+      }),
+    ).toThrow('splitNote: voicedProb must have the same length as f0Hz');
+    expect(() =>
+      mergeNotes({
+        ...source,
+        voiced: undefined,
+        voicedProb: new Float32Array(fixtureFrames - 1),
+        notes,
+        first: 0,
+        last: 1,
+      }),
+    ).toThrow('mergeNotes: voicedProb must have the same length as f0Hz');
+  });
+
   it('rejects unsupported voiced containers through split and merge', () => {
     const source = gappedSource();
     const notes = extractNotes(source);
@@ -1516,12 +1643,14 @@ describe('splitNote', () => {
       Array<object>(fixtureFrames).fill({}),
     ];
     for (const voiced of invalid) {
-      expect(() =>
-        splitNote({ ...source, voiced: voiced as never, notes, index: 1, frame: 18 }),
-      ).toThrow(TypeError);
-      expect(() =>
-        mergeNotes({ ...source, voiced: voiced as never, notes, first: 0, last: 1 }),
-      ).toThrow(TypeError);
+      expectVoicedTypeError(
+        () => splitNote({ ...source, voiced: voiced as never, notes, index: 1, frame: 18 }),
+        'splitNote',
+      );
+      expectVoicedTypeError(
+        () => mergeNotes({ ...source, voiced: voiced as never, notes, first: 0, last: 1 }),
+        'mergeNotes',
+      );
     }
   });
 
@@ -1530,12 +1659,14 @@ describe('splitNote', () => {
     const notes = extractNotes(source);
     const invalid = ['1', new Float64Array(fixtureFrames - 1).fill(1), {}];
     for (const voiced of invalid) {
-      expect(() =>
-        splitNote({ ...source, voiced: voiced as never, notes, index: 1, frame: 18 }),
-      ).toThrow(TypeError);
-      expect(() =>
-        mergeNotes({ ...source, voiced: voiced as never, notes, first: 0, last: 1 }),
-      ).toThrow(TypeError);
+      expectVoicedTypeError(
+        () => splitNote({ ...source, voiced: voiced as never, notes, index: 1, frame: 18 }),
+        'splitNote',
+      );
+      expectVoicedTypeError(
+        () => mergeNotes({ ...source, voiced: voiced as never, notes, first: 0, last: 1 }),
+        'mergeNotes',
+      );
     }
   });
 

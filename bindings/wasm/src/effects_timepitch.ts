@@ -3,7 +3,7 @@
  * correction onto a target pitch.
  */
 
-import { toVoicedFloat32 } from './_effects_common';
+import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common';
 import { resolveFftOptions } from './_fft_options';
 import { getSonareModule } from './module_state';
 import type { PitchCorrectOptions, VoicedFlags } from './public_types';
@@ -306,17 +306,16 @@ export function pitchCorrectToMidiTimevarying(
         }
       : samples;
   assertSamples('pitchCorrectToMidiTimevarying', request.samples, request.validate !== false);
-  const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
-  if (voicedF32 != null && voicedF32.length !== request.f0Hz.length) {
-    throw new RangeError('pitchCorrectToMidiTimevarying: voiced length must match f0Hz length');
-  }
-  if (
-    request.voiced == null &&
-    request.voicedProb &&
-    request.voicedProb.length !== request.f0Hz.length
-  ) {
-    throw new RangeError('pitchCorrectToMidiTimevarying: voicedProb length must match f0Hz length');
-  }
+  const voicedF32 =
+    request.voiced == null
+      ? undefined
+      : toVoicedFloat32('pitchCorrectToMidiTimevarying', request.voiced);
+  assertPitchTrackLengths(
+    'pitchCorrectToMidiTimevarying',
+    request.f0Hz,
+    request.voiced,
+    request.voicedProb,
+  );
   return requireModule().pitchCorrectToMidiTimevarying(
     request.samples,
     request.sampleRate ?? 22050,
@@ -366,17 +365,14 @@ export function pitchCorrectTimevarying(
       ? { samples, f0Hz: f0Hz as Float32Array, sampleRate, hopLength, ...options }
       : samples;
   assertSamples('pitchCorrectTimevarying', request.samples, request.validate !== false);
-  const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(request.voiced);
-  if (voicedF32 != null && voicedF32.length !== request.f0Hz.length) {
-    throw new RangeError('pitchCorrectTimevarying: voiced length must match f0Hz length');
-  }
-  if (
-    request.voiced == null &&
-    request.voicedProb &&
-    request.voicedProb.length !== request.f0Hz.length
-  ) {
-    throw new RangeError('pitchCorrectTimevarying: voicedProb length must match f0Hz length');
-  }
+  const voicedF32 =
+    request.voiced == null ? undefined : toVoicedFloat32('pitchCorrectTimevarying', request.voiced);
+  assertPitchTrackLengths(
+    'pitchCorrectTimevarying',
+    request.f0Hz,
+    request.voiced,
+    request.voicedProb,
+  );
   const nativeOptions = {
     ...request,
     voiced: voicedF32,
