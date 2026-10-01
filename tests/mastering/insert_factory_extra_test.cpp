@@ -1429,9 +1429,9 @@ TEST_CASE(
   using sonare::mastering::api::ChannelPolicy;
 
   // The inherently-stereo set: stereo-image processors, eq.midSide,
-  // multiband.imager, and every reverb/modulation/delay effect operate on the
+  // multiband.imager, the GS EFX unit, and every reverb/modulation/delay effect operate on the
   // front L/R pair and pass surround planes through dry.
-  const std::array<const char*, 26> spo = {"stereo.imager",
+  const std::array<const char*, 27> spo = {"stereo.imager",
                                            "stereo.monoMaker",
                                            "stereo.stereoBalance",
                                            "stereo.haasEnhancer",
@@ -1456,7 +1456,8 @@ TEST_CASE(
                                            "effects.modulation.rotary",
                                            "effects.modulation.pitchShifter",
                                            "effects.filter.vowel",
-                                           "effects.delay.stereo"};
+                                           "effects.delay.stereo",
+                                           "effects.gsEfx"};
   for (const char* id : spo) {
     REQUIRE(channel_policy(id) == ChannelPolicy::StereoPairOnly);
   }

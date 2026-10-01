@@ -96,6 +96,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
+#include "midi/synth/gs_efx.h"
 #ifdef SONARE_HAVE_ACOUSTIC
 #include "acoustic/material.h"
 #include "acoustic/rir_synthesizer.h"
@@ -692,6 +693,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       config.pre_delay_samples = f(params, "preDelayMs", 0.0f) *
                                  static_cast<float>(DattorroReverb::kReferenceSampleRate) / 1000.0f;
     }
+    params.note_effective("preDelayMs",
+                          config.pre_delay_samples * 1000.0f /
+                              static_cast<float>(DattorroReverb::kReferenceSampleRate));
     config.damping_hz = f(params, "dampingHz", config.damping_hz);
     config.gate_threshold_db = f(params, "gateThresholdDb", config.gate_threshold_db);
     config.gate_hold_ms = f(params, "gateHoldMs", config.gate_hold_ms);
@@ -1021,6 +1025,71 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   }
   return nullptr;
 }
+
+std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
+  using sonare::midi::synth::GsEfx;
+  using sonare::midi::synth::GsEfxBuildPolicy;
+  using sonare::midi::synth::GsEfxProcessor;
+  using sonare::midi::synth::GsEfxRealization;
+
+  // Require both TYPE bytes: defaulting a missing half would select a different effect.
+  const auto type_msb = params.find("typeMsb");
+  const auto type_lsb = params.find("typeLsb");
+  if ((type_msb == params.end()) != (type_lsb == params.end())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "effects.gsEfx requires typeMsb and typeLsb together");
+  }
+  const int msb = detail::i(params, "typeMsb", 0);
+  const int lsb = detail::i(params, "typeLsb", 0);
+  if (msb < 0 || msb > 127 || lsb < 0 || lsb > 127) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "effects.gsEfx type bytes must be in [0, 127]");
+  }
+  const int realization_value = detail::i(params, "realization", 0);
+  if (params.records_declarations()) {
+    params.note_choices("realization", {{"modern", 0}, {"classic", 1}});
+  }
+  if (realization_value < 0 || realization_value > 1) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "effects.gsEfx realization must be 0 (modern) or 1 (classic)");
+  }
+
+  GsEfx state;
+  state.type = static_cast<uint16_t>((msb << 8) | lsb);
+  state.type_msb = static_cast<uint8_t>(msb);
+  state.assigned = state.type != 0;
+  if (state.type != 0) {
+    const auto* defaults = sonare::midi::synth::gs_efx_type_defaults(state.type);
+    if (defaults == nullptr) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "effects.gsEfx unsupported type " + std::to_string(state.type));
+    }
+    state.params = defaults->params;
+  }
+
+  for (std::size_t slot = 0; slot < state.params.size(); ++slot) {
+    const std::string key = "byte" + std::to_string(slot);
+    const int value = detail::i(params, key.c_str(), state.params[slot]);
+    if (value < 0 || value > 127) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "effects.gsEfx " + key + " must be in [0, 127]");
+    }
+    state.params[slot] = static_cast<uint8_t>(value);
+    if (state.type != 0 && !sonare::midi::synth::gs_efx_parameter_takes(
+                               state.type, static_cast<uint8_t>(slot), state.params[slot])) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "effects.gsEfx " + key + " is outside the GS state list");
+    }
+  }
+
+  const auto realization = static_cast<GsEfxRealization>(realization_value);
+  const sonare::midi::synth::GsEfxStageFactory stage_factory = [](std::string_view stage_name,
+                                                                  std::string_view stage_params) {
+    return make_insert(std::string(stage_name), std::string(stage_params));
+  };
+  return std::make_unique<GsEfxProcessor>(state, realization, stage_factory,
+                                          GsEfxBuildPolicy::kRequireCompleteGraph);
+}
 #endif  // SONARE_HAVE_FX
 
 }  // namespace
@@ -1038,6 +1107,7 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
   if (auto p = build_maximizer(name, params)) return p;
   if (auto p = build_multiband(name, params)) return p;
 #ifdef SONARE_HAVE_FX
+  if (name == "effects.gsEfx") return build_gs_efx(params);
   if (auto p = build_effects(name, params, json_root)) return p;
 #endif
   return nullptr;
@@ -1187,6 +1257,7 @@ std::vector<std::string> insert_factory_names() {
       "multiband.saturation",
       "multiband.dynamicEq",
 #ifdef SONARE_HAVE_FX
+      "effects.gsEfx",
       // "effects.reverb.plate" is an alias for "effects.reverb.dattorro" (same
       // processor); both names are listed so either resolves via make_insert.
       "effects.reverb.plate",
@@ -1294,6 +1365,11 @@ int required_crossover_cutoffs(const SlotList& slots, const std::string& key) {
 std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
                                        double value) {
   std::vector<Param> params{Param{key, value}};
+  if (name == "effects.gsEfx") {
+    // TYPE is a paired selector, so a single-key probe gets the other byte at zero.
+    if (key == "typeMsb") params.push_back(Param{"typeLsb", 0.0});
+    if (key == "typeLsb") params.push_back(Param{"typeMsb", 0.0});
+  }
   // A presence-gated slot exists once @p key itself is supplied. A crossover
   // band past the default split needs more cutoffs: the default ones as they
   // are, then the rest spread log-evenly above the last of them.
@@ -1617,13 +1693,16 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   const bool measurable = param_kind == ParamKind::Integer || param_kind == ParamKind::Number;
   // A declared band key is read once its band is active, which the probe arranges.
   const bool construction_reads_key = probed.find(key) != probed.end() || kind != kinds.end();
+  // GS TYPE accepts byte pairs, so a scalar probe cannot bound either byte.
+  const bool coupled_gs_type_selector =
+      name == "effects.gsEfx" && (key == "typeMsb" || key == "typeLsb");
   const auto declared = enum_choices.find(key);
   const bool is_enum = declared != enum_choices.end();
 
   bool has_choices = false;
   std::vector<detail::EnumChoice> choices;
   MeasuredBounds bounds;
-  if (construction_reads_key && measurable) {
+  if (construction_reads_key && measurable && !coupled_gs_type_selector) {
     if (is_enum) {
       choices = measure_enum_choices(name, key, declared->second);
       has_choices = true;

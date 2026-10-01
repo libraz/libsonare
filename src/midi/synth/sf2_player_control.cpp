@@ -17,10 +17,6 @@
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
-#if defined(SONARE_MIDI_WITH_FX)
-#include "midi/synth/gs_classic/classic_unit.h"
-#include "midi/synth/gs_classic/model_registry.h"
-#endif
 
 namespace sonare::midi::synth {
 
@@ -870,15 +866,6 @@ constexpr uint8_t kEfxSourceBend = 0x61;
 /// The CONTROL DEPTH byte that modulates nothing.
 constexpr uint8_t kEfxDepthCentre = 0x40;
 
-/// The type number @p rows spell @p type as: its own where a row names it,
-/// otherwise its alias (the spelling gs_efx_insert_chain binds through).
-uint16_t efx_row_type(const GsEfxRowView& rows, uint16_t type) noexcept {
-  for (size_t i = 0; i < rows.n_rows; ++i) {
-    if (rows.rows[i].type == type) return type;
-  }
-  return gs_efx_alias_type(type);
-}
-
 /// Where the source of @p control sits, as the fraction its depth scales: 0..1
 /// for a controller or channel aftertouch, -1..+1 for the bend. Read at full
 /// width, as refresh_channel_mod reads the same controllers.
@@ -909,62 +896,6 @@ uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcep
 }
 
 }  // namespace
-
-#if defined(SONARE_MIDI_WITH_FX)
-/// The one stage a classic unit realises, named so the shape check can tell it
-/// apart from a modern stage list.
-constexpr std::string_view kClassicStageName = "gs.classic";
-#endif
-
-Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>& stages,
-                                GsEfxRealization realization,
-                                const decltype(Sf2PlayerConfig::insert_factory)& factory,
-                                double sample_rate, int max_block) {
-  Sf2EfxUnitRt out;
-  out.realization = realization;
-  const double fade_samples = static_cast<double>(kSf2EfxFadeMs) * 1e-3 * sample_rate;
-  out.fade_step = fade_samples > 1.0 ? static_cast<float>(1.0 / fade_samples) : 1.0f;
-  if (realization == GsEfxRealization::kClassic) {
-#if defined(SONARE_MIDI_WITH_FX)
-    const gs_classic::GsClassicModelRegistry& registry = gs_classic::gs_classic_default_registry();
-    const gs_classic::GsClassicType* model =
-        efx.type != 0 && registry.valid() ? registry.find(efx.type) : nullptr;
-    if (model != nullptr) {
-      Sf2EfxStageRt stage;
-      stage.name = std::string(kClassicStageName);
-      auto unit = std::make_unique<gs_classic::GsClassicUnit>(registry.models(), *model);
-      for (size_t slot = 0; slot < efx.params.size(); ++slot) {
-        unit->set_parameter(static_cast<unsigned int>(slot), static_cast<float>(efx.params[slot]));
-      }
-      // Every shipped model is a graph the engine draws (the classic type tests build each one).
-      unit->prepare(sample_rate, max_block);
-      stage.proc = std::move(unit);
-      out.stages.push_back(std::move(stage));
-    }
-#else
-    // The classic models are built only with the effects; without them the unit stays empty.
-    (void)efx;
-#endif
-  } else {
-    out.stages.reserve(stages.size());
-    for (const GsEfxStage& stage : stages) {
-      Sf2EfxStageRt rt;
-      rt.name = stage.name;
-      rt.branch = stage.branch;
-      rt.ordinal = stage.ordinal;
-      rt.enabled_target = stage.enabled;
-      rt.enabled_now = stage.enabled;
-      rt.fade = stage.enabled ? 1.0f : 0.0f;
-      if (factory) {
-        rt.proc = factory(stage.name, stage.params_json);
-        if (rt.proc != nullptr) rt.proc->prepare(sample_rate, max_block);
-      }
-      out.stages.push_back(std::move(rt));
-    }
-  }
-  if (!out.stages.empty()) out.scratch.assign(3 * 2 * static_cast<size_t>(max_block), 0.0f);
-  return out;
-}
 
 std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_node(size_t unit,
                                                                                    uint16_t type) {
@@ -999,41 +930,24 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
   }
 
   const GsEfxRowView& rows = efx_rows_ != nullptr ? *efx_rows_ : kGeneratedEfxRows;
-  const uint16_t row_type = efx_row_type(rows, type);
-  const auto find_stage = [&](std::string_view name, uint8_t ordinal) -> int {
-    for (size_t s = 0; s < node->unit_rt.stages.size(); ++s) {
-      const Sf2EfxStageRt& stage = node->unit_rt.stages[s];
-      if (stage.name == name && stage.ordinal == ordinal) return static_cast<int>(s);
-    }
-    return -1;
-  };
+  const uint16_t row_type = gs_efx_binding_type(rows, type);
 
   // A null stage is a no-DSP hole; a built one must take every row realtime-safely.
   if (config_.gs_efx_realization == GsEfxRealization::kModern) {
     for (size_t i = 0; i < rows.n_rows; ++i) {
       const GsEfxBindingRow& row = rows.rows[i];
       if (row.type != row_type) continue;
-      if (row.stage >= kGsEfxRowStages.size() || row.key >= kGsEfxRowKeys.size()) return nullptr;
-      const int stage_index = find_stage(kGsEfxRowStages[row.stage], row.ordinal);
-      if (stage_index < 0) continue;
-      const rt::ProcessorBase* proc =
-          node->unit_rt.stages[static_cast<size_t>(stage_index)].proc.get();
-      if (proc == nullptr) continue;
-      const std::string_view key = kGsEfxRowKeys[row.key];
-      const std::vector<rt::ParamDescriptor> descriptors = proc->parameter_descriptors();
-      const rt::ParamDescriptor* found = nullptr;
-      for (const rt::ParamDescriptor& descriptor : descriptors) {
-        if (descriptor.key == key) {
-          found = &descriptor;
-          break;
-        }
+      const Sf2EfxRowTarget target = sf2_resolve_efx_row(node->unit_rt, row);
+      if (target.status == Sf2EfxRowResolution::kNoStage ||
+          target.status == Sf2EfxRowResolution::kNoProcessor) {
+        continue;
       }
-      if (found == nullptr || !proc->parameter_is_realtime_safe(found->id)) return nullptr;
+      if (target.status != Sf2EfxRowResolution::kResolved) return nullptr;
       if (node->param_dest_count >= node->param_dests.size()) return nullptr;
       PreparedEfxParamDest& dest = node->param_dests[node->param_dest_count++];
       dest.row = row;
-      dest.stage_index = static_cast<uint8_t>(stage_index);
-      dest.param_id = found->id;
+      dest.stage_index = static_cast<uint8_t>(target.stage_index);
+      dest.param_id = target.param_id;
     }
     for (size_t i = 0; i < rows.n_enables; ++i) {
       const GsEfxEnable& enable = rows.enables[i];
@@ -1044,7 +958,8 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
       plan.stage_indices.fill(0xFF);
       for (uint8_t s = 0; s < enable.n_stages && s < plan.stage_indices.size(); ++s) {
         if (enable.stages[s] >= kGsEfxRowStages.size()) return nullptr;
-        const int stage_index = find_stage(kGsEfxRowStages[enable.stages[s]], enable.ordinals[s]);
+        const int stage_index = sf2_find_efx_stage(node->unit_rt, kGsEfxRowStages[enable.stages[s]],
+                                                   enable.ordinals[s]);
         if (stage_index >= 0) plan.stage_indices[s] = static_cast<uint8_t>(stage_index);
       }
     }
@@ -1070,20 +985,11 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
         control.n_dest = 1;
         break;
       }
-      const int stage_index = find_stage(kGsEfxRowStages[row.stage], row.ordinal);
-      if (stage_index < 0) continue;
-      const rt::ProcessorBase* proc =
-          node->unit_rt.stages[static_cast<size_t>(stage_index)].proc.get();
-      if (proc == nullptr) continue;
-      for (const rt::ParamDescriptor& descriptor : proc->parameter_descriptors()) {
-        if (descriptor.key != kGsEfxRowKeys[row.key] ||
-            !proc->parameter_is_realtime_safe(descriptor.id)) {
-          continue;
-        }
-        if (control.n_dest >= control.dest.size()) break;
-        control.dest[control.n_dest++] = {static_cast<uint8_t>(stage_index), descriptor.id, &row};
-        break;
-      }
+      const Sf2EfxRowTarget target = sf2_resolve_efx_row(node->unit_rt, row);
+      if (target.status != Sf2EfxRowResolution::kResolved) continue;
+      if (control.n_dest >= control.dest.size()) continue;
+      control.dest[control.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id,
+                                        &row};
     }
     if (first == nullptr || control.n_dest == 0) continue;
     control.slot = first->slot;
@@ -1340,9 +1246,7 @@ void Sf2Player::apply_prepared_candidate(const PreparedSysEx& token,
   // The candidate selects the node; the audio-owned raw state supplies every byte.
   apply_prepared_node_plan(*candidate.node, prepared_efx_[candidate.unit], !switching);
   if (switching) {
-    for (Sf2EfxStageRt& stage : candidate.node->unit_rt.stages) {
-      if (stage.proc != nullptr) stage.proc->reset();
-    }
+    sf2_reset_efx_unit(candidate.node->unit_rt);
   }
   (void)token;
 }
@@ -1549,14 +1453,7 @@ void Sf2Player::build_legacy_efx_plan(Sf2EfxUnitRt& unit, size_t unit_index,
   }
 
   const GsEfxRowView& rows = efx_rows_ != nullptr ? *efx_rows_ : kGeneratedEfxRows;
-  const uint16_t row_type = efx_row_type(rows, efx.type);
-  const auto find_stage = [&](std::string_view name, uint8_t ordinal) -> int {
-    for (size_t s = 0; s < unit.stages.size(); ++s) {
-      const Sf2EfxStageRt& stage = unit.stages[s];
-      if (stage.name == name && stage.ordinal == ordinal) return static_cast<int>(s);
-    }
-    return -1;
-  };
+  const uint16_t row_type = gs_efx_binding_type(rows, efx.type);
 
   // All on, as a prepared node: the enable plans below carry every selector rule.
   unit.legacy_default_enabled.assign(unit.stages.size(), 1);
@@ -1573,22 +1470,10 @@ void Sf2Player::build_legacy_efx_plan(Sf2EfxUnitRt& unit, size_t unit_index,
         if (first == nullptr) first = &row;
         if (row.slot != first->slot) continue;
         if (control.n_dest >= control.dest.size()) break;
-        const std::string_view stage_name = kGsEfxRowStages[row.stage];
-        const std::string_view key = kGsEfxRowKeys[row.key];
-        for (size_t s = 0; s < unit.stages.size(); ++s) {
-          const Sf2EfxStageRt& stage = unit.stages[s];
-          if (stage.proc == nullptr || stage.name != stage_name || stage.ordinal != row.ordinal) {
-            continue;
-          }
-          for (const rt::ParamDescriptor& descriptor : stage.proc->parameter_descriptors()) {
-            if (descriptor.key != key || !stage.proc->parameter_is_realtime_safe(descriptor.id)) {
-              continue;
-            }
-            control.dest[control.n_dest++] = {static_cast<uint8_t>(s), descriptor.id, &row};
-            break;
-          }
-          break;
-        }
+        const Sf2EfxRowTarget target = sf2_resolve_efx_row(unit, row);
+        if (target.status != Sf2EfxRowResolution::kResolved) continue;
+        control.dest[control.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id,
+                                          &row};
       }
       if (first == nullptr || control.n_dest == 0) continue;
       control.slot = first->slot;
@@ -1610,24 +1495,14 @@ void Sf2Player::build_legacy_efx_plan(Sf2EfxUnitRt& unit, size_t unit_index,
 
   for (size_t i = 0; i < rows.n_rows; ++i) {
     const GsEfxBindingRow& row = rows.rows[i];
-    if (row.type != row_type || row.stage >= kGsEfxRowStages.size() ||
-        row.key >= kGsEfxRowKeys.size()) {
-      continue;
-    }
-    const int stage_index = find_stage(kGsEfxRowStages[row.stage], row.ordinal);
-    if (stage_index < 0) continue;
-    const rt::ProcessorBase* proc = unit.stages[static_cast<size_t>(stage_index)].proc.get();
-    if (proc == nullptr) continue;
-    const std::string_view key = kGsEfxRowKeys[row.key];
-    for (const rt::ParamDescriptor& descriptor : proc->parameter_descriptors()) {
-      if (descriptor.key != key || !proc->parameter_is_realtime_safe(descriptor.id)) continue;
-      Sf2EfxLegacyParamDest dest;
-      dest.row = row;
-      dest.stage_index = static_cast<uint8_t>(stage_index);
-      dest.param_id = descriptor.id;
-      unit.legacy_param_dests.push_back(dest);
-      break;
-    }
+    if (row.type != row_type) continue;
+    const Sf2EfxRowTarget target = sf2_resolve_efx_row(unit, row);
+    if (target.status != Sf2EfxRowResolution::kResolved) continue;
+    Sf2EfxLegacyParamDest dest;
+    dest.row = row;
+    dest.stage_index = static_cast<uint8_t>(target.stage_index);
+    dest.param_id = target.param_id;
+    unit.legacy_param_dests.push_back(dest);
   }
 
   for (size_t i = 0; i < rows.n_enables; ++i) {
@@ -1638,7 +1513,8 @@ void Sf2Player::build_legacy_efx_plan(Sf2EfxUnitRt& unit, size_t unit_index,
     bool mapped = false;
     for (uint8_t s = 0; s < enable.n_stages && s < plan.stage_indices.size(); ++s) {
       if (enable.stages[s] >= kGsEfxRowStages.size()) continue;
-      const int stage_index = find_stage(kGsEfxRowStages[enable.stages[s]], enable.ordinals[s]);
+      const int stage_index =
+          sf2_find_efx_stage(unit, kGsEfxRowStages[enable.stages[s]], enable.ordinals[s]);
       if (stage_index < 0) continue;
       plan.stage_indices[s] = static_cast<uint8_t>(stage_index);
       mapped = true;
@@ -1747,7 +1623,7 @@ void Sf2Player::build_efx_controls(Sf2RealizedEfx& out) const {
   if (part >= 16) return;
   const GsEfx& efx = efx_[0];
   const GsEfxRowView& rows = efx_rows_ != nullptr ? *efx_rows_ : kGeneratedEfxRows;
-  const uint16_t type = efx_row_type(rows, efx.type);
+  const uint16_t type = gs_efx_binding_type(rows, efx.type);
   const bool classic = unit.realization == GsEfxRealization::kClassic;
   for (size_t k = 0; k < out.controls.size(); ++k) {
     const uint8_t source = efx.control_source[k];

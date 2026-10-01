@@ -576,6 +576,11 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx);
 /// Row stage and key indices still name entries of the generated name tables.
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx, const GsEfxRowView& rows);
 
+/// The type number @p rows spells @p type as. The binding files spell Rotary
+/// Multi one way (020C/0300) and the defaults table the other, so a type no row
+/// names has one more spelling to try before it binds nothing.
+uint16_t gs_efx_binding_type(const GsEfxRowView& rows, uint16_t type) noexcept;
+
 // --- NRPN offset scalings (documented approximations, see file header) ---
 
 /// TVF cutoff: ~150 cents per step (+-9600 over the full range).

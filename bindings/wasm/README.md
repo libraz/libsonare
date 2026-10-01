@@ -8,7 +8,7 @@
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-**Turn audio into data and back — entirely in the browser.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments, all client-side via WebAssembly — the same C++ engine that runs natively, with zero dependencies and no model weights. 91 named mastering DSP processors implemented against published references; analysis defaults match librosa where the two overlap.
+**Turn audio into data and back — entirely in the browser.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments, all client-side via WebAssembly — the same C++ engine that runs natively, with zero dependencies and no model weights. 92 named mastering DSP processors implemented against published references; analysis defaults match librosa where the two overlap.
 
 **Guides and the full API reference: [libsonare.libraz.net](https://libsonare.libraz.net)**. Try it without installing anything: the [live demos](https://libsonare.libraz.net/demos), or [sonare studio](https://sonare-studio.libraz.net), a browser DAW whose audio runs on this engine.
 
@@ -59,7 +59,7 @@ try {
 
 - **Analysis** — BPM, key, chords, downbeats, sections, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/wasm)
 - **Stem decomposition and transcription** — `decomposeStems` splits a mix into stems, and `transcribe` turns audio into MIDI events. → [Analysis](https://libsonare.libraz.net/docs/js-api-analysis)
-- **Mastering** — 91 named DSP processors, the configurable `masteringChain`, 30 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 92 named DSP processors, the configurable `masteringChain`, 30 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Restoration** — five repair-only presets, `vinyl`, `tapeHiss`, `fieldRecording`, `voiceMemo` and `shellac78`. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo`, the block-based `Mixer` with scene presets, and `suggestMixScene`, which suggests a mixer scene with a written explanation without applying it; `sampleRate` is **required** and must be an integer within `[8000, 384000]`. → [Mixing](https://libsonare.libraz.net/docs/mixing), [Mixing assistant](https://libsonare.libraz.net/docs/mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS, phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)

@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -21,71 +20,7 @@ namespace {
 
 using sonare::constants::kInvSqrt2;
 
-/// Runs one stage in place. A stage fully off is passed over with its state
-/// frozen; a stage fading crossfades its input (kept in @p dry_l / @p dry_r)
-/// into its output, one fade_step per sample.
-void run_efx_stage(const Sf2EfxStageRt& stage, float* left, float* right, int n, float* dry_l,
-                   float* dry_r, float fade_step) noexcept {
-  if (stage.proc == nullptr) return;
-  const float target = stage.enabled_now ? 1.0f : 0.0f;
-  float* chans[2] = {left, right};
-  if (stage.fade == target) {
-    if (target == 0.0f) return;
-    stage.proc->process(chans, 2, n);
-    return;
-  }
-  std::copy(left, left + n, dry_l);
-  std::copy(right, right + n, dry_r);
-  stage.proc->process(chans, 2, n);
-  float fade = stage.fade;
-  for (int i = 0; i < n; ++i) {
-    fade = target > fade ? std::min(target, fade + fade_step) : std::max(target, fade - fade_step);
-    left[i] = dry_l[i] + fade * (left[i] - dry_l[i]);
-    right[i] = dry_r[i] + fade * (right[i] - dry_r[i]);
-  }
-  stage.fade = fade;
-}
-
-/// Runs, in chain order, every stage of @p unit on @p branch.
-void run_efx_branch(const Sf2EfxUnitRt& unit, uint8_t branch, float* left, float* right, int n,
-                    float* dry_l, float* dry_r) noexcept {
-  for (const Sf2EfxStageRt& stage : unit.stages) {
-    if (stage.branch == branch) run_efx_stage(stage, left, right, n, dry_l, dry_r, unit.fade_step);
-  }
-}
-
 }  // namespace
-
-void sf2_run_efx_unit(const Sf2EfxUnitRt& unit, float* left, float* right, int n) noexcept {
-  if (unit.stages.empty()) return;
-  const size_t span = unit.scratch.size() / 6;
-  assert(static_cast<size_t>(n) <= span);
-  float* dry_l = unit.scratch.data();
-  float* dry_r = dry_l + span;
-  float* a_l = dry_r + span;
-  float* a_r = a_l + span;
-  float* b_l = a_r + span;
-  float* b_r = b_l + span;
-  run_efx_branch(unit, kGsEfxBranchFront, left, right, n, dry_l, dry_r);
-  const bool halves =
-      std::any_of(unit.stages.begin(), unit.stages.end(), [](const Sf2EfxStageRt& s) {
-        return s.branch == kGsEfxBranchHalfA || s.branch == kGsEfxBranchHalfB;
-      });
-  if (halves) {
-    // Each half runs on its own copy of the front's output; the back takes the sum.
-    std::copy(left, left + n, a_l);
-    std::copy(right, right + n, a_r);
-    std::copy(left, left + n, b_l);
-    std::copy(right, right + n, b_r);
-    run_efx_branch(unit, kGsEfxBranchHalfA, a_l, a_r, n, dry_l, dry_r);
-    run_efx_branch(unit, kGsEfxBranchHalfB, b_l, b_r, n, dry_l, dry_r);
-    for (int i = 0; i < n; ++i) {
-      left[i] = a_l[i] + b_l[i];
-      right[i] = a_r[i] + b_r[i];
-    }
-  }
-  run_efx_branch(unit, kGsEfxBranchBack, left, right, n, dry_l, dry_r);
-}
 
 bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
                              size_t source_output_count, int output_offset,

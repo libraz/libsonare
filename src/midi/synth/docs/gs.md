@@ -102,7 +102,30 @@ The second line splits `designed` by basis; it counts the estimates, so a later 
 
 **The form is measured rather than taken on the binding file's word**: a translated byte has to emit its control at every value it can carry, a designed byte has to move the chain through the law it names, and an enables byte has to switch its stage. Without that the equation would balance just as well with every row filed under whichever form is cheapest to defend. Floors hold the tally from below, so neither a single translation nor a whole row can be downgraded quietly.
 
+## System reverb delay modes
+
+REVERB CHARACTER `6` selects Delay and `7` selects Panning Delay, using the reverb send and return level. These modes own a separate delay line from the system DELAY unit. REVERB DELAY FEEDBACK controls their repeats; Panning Delay alternates the returns between left and right. The [SC-8850 manual, p. 80](https://cdn.roland.com/assets/media/pdf/SC-8850_OM.pdf) describes these behaviours but gives no millisecond scale for REVERB TIME.
+
+`gs_reverb_delay_time_ms_designed()` maps TIME 0–127 linearly to 1–1000 ms. Panning Delay folds its stereo input to the midpoint `(L + R) / 2` and seeds the left delay leg, so centered mono input also produces alternating echoes. These are modern design choices. The current `soundings` archive has no measured TIME curve for these two system-reverb modes, so neither this curve nor the panning arrangement claims an exact hardware match. The separate system DELAY TIME CENTER table and insertion-effect delay tables do not establish this curve.
+
+When a macro switches between the normal reverb tank, Delay, and Panning Delay, new input enters the selected mode. Previously selected modes continue draining with their last time, feedback, pre-delay, and tank coefficients; the current reverb return level scales their combined output.
+
 ## Two realisations of the insertion effect
+
+The named audio insert `effects.gsEfx` exposes the same modern and classic graphs to audio tracks and buses, without constructing an SF2 player. Its JSON parameters are `typeMsb`, `typeLsb`, `realization` (`0` modern, `1` classic), and `byte0` through `byte19`. The type selects the twenty default bytes before explicit byte overrides are applied. Type and realisation are construction settings; changing them requires replacing the insert. Raw-byte automation uses parameter IDs 0 through 19, subject to the processor's realtime-safety descriptors. A Thru insert (type `00 00`) reports none of the twenty as realtime-safe, since no byte of it can be heard. GS unit sends and MIDI controller source/depth are routing and controller state; use the audio scene's sends around this insert.
+
+```cpp
+auto effect = sonare::mastering::api::make_insert(
+    "effects.gsEfx",
+    R"({"typeMsb":1,"typeLsb":16,"realization":1,"byte0":80})");
+effect->prepare(48000.0, 256);
+```
+
+The insert is available with `BUILD_FX=ON`, including when `BUILD_ARRANGEMENT=OFF`. A missing effect stage is an error when constructing the audio insert; the instrument's injected-factory compatibility policy remains separate.
+
+Modern graphs preserve child processors' algorithmic latency at Q8 precision. A disabled stage uses a dry path with the same latency, and parallel halves align before summing, so realtime selectors do not change the graph's reported latency. Musical delay times are not algorithmic latency and remain part of the effect.
+
+Classic units report a ten-second rendering allowance through `tail_samples()`. Streaming flush and automatic project bounce use this allowance to render after the input ends. It is a per-unit host policy cap, not a measured decay bound: feedback and internally generated noise can continue beyond it. Continuous realtime processing keeps running, and classic's intentionally uncompensated latency remains unchanged. The one-shot named-processor API preserves the input length for every effect and does not append this tail.
 
 The protocol layer — address table, parameter holding, acceptance rules, unit assignment, power-on values, control source holding — is shared. Only the layer that makes the sound differs, and a host picks it per instrument with the realisation field: `gs_efx_realization` in the C ABI instrument configs (`0` modern, `1` classic; any other value is refused), `gsEfxRealization` on Node and WASM, `gs_efx_realization` in Python. The default is modern, and the native CLIs do not expose it.
 

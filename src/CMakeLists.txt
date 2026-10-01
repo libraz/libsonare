@@ -410,6 +410,23 @@ target_link_libraries(sonare_automation PUBLIC sonare_rt)
 target_compile_options(sonare_automation PRIVATE ${SONARE_WARNING_FLAGS})
 set_target_properties(sonare_automation PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# GS protocol state, address decoding, and EFX conversion are useful without
+# the arrangement/player layer.  Keeping this target below rt makes the GS
+# wire surface available to standalone audio inserts and to BUILD_ARRANGEMENT=OFF
+# consumers without pulling in Sf2Player.
+add_library(sonare_gs_protocol STATIC
+  midi/synth/gs_layer.cpp
+  midi/synth/gs_address_table.cpp
+  midi/synth/gs_system_effects.cpp
+  midi/synth/gs_master_eq.cpp
+  midi/synth/gs_efx_convert.cpp
+)
+target_include_directories(sonare_gs_protocol PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_gs_protocol SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
+target_link_libraries(sonare_gs_protocol PUBLIC sonare_rt)
+target_compile_options(sonare_gs_protocol PRIVATE ${SONARE_WARNING_FLAGS})
+set_target_properties(sonare_gs_protocol PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 if(BUILD_MASTERING)
   add_library(sonare_mastering STATIC
     mastering/api/chain.cpp
@@ -693,6 +710,36 @@ if(BUILD_FX)
   endif()
   target_compile_options(sonare_fx PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_fx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+endif()
+
+# Shared GS EFX graph used by Sf2Player and the standalone mastering insert.
+# The modern graph is available with BUILD_FX=OFF when a host supplies its own
+# stage factory; only the classic realization and the stock FX suite are gated.
+add_library(sonare_gs_efx STATIC
+  midi/synth/gs_efx_processor.cpp
+)
+target_include_directories(sonare_gs_efx PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_gs_efx SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
+target_link_libraries(sonare_gs_efx PUBLIC sonare_gs_protocol sonare_rt)
+if(BUILD_FX)
+  target_sources(sonare_gs_efx PRIVATE
+    midi/synth/gs_classic/graph_engine.cpp
+    midi/synth/gs_classic/sections.cpp
+    midi/synth/gs_classic/nodes_dynamics.cpp
+    midi/synth/gs_classic/nodes_pitch.cpp
+    midi/synth/gs_classic/classic_unit.cpp
+    midi/synth/gs_classic/model_registry.cpp
+  )
+  target_link_libraries(sonare_gs_efx PUBLIC sonare_fx)
+  target_compile_definitions(sonare_gs_efx PRIVATE SONARE_GS_CLASSIC=1)
+endif()
+target_compile_options(sonare_gs_efx PRIVATE ${SONARE_WARNING_FLAGS})
+set_target_properties(sonare_gs_efx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(BUILD_MASTERING AND BUILD_FX)
+  # The public effects.gsEfx factory is implemented in mastering, while its
+  # graph and classic realization live in this independent target.
+  target_link_libraries(sonare_mastering PUBLIC sonare_gs_efx)
 endif()
 
 if(BUILD_ACOUSTIC_SIM)
@@ -892,14 +939,9 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_player_control.cpp
     midi/synth/sf2_player_midi.cpp
     midi/synth/sf2_player_render.cpp
-    midi/synth/gs_layer.cpp
-    midi/synth/gs_address_table.cpp
-    midi/synth/gs_system_effects.cpp
-    midi/synth/gs_master_eq.cpp
-    midi/synth/gs_efx_convert.cpp
   )
   target_include_directories(sonare_midi PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
-  target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
+  target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation sonare_gs_protocol sonare_gs_efx)
   # The GM fallback tables are constant-initialised so they land in the data
   # section instead of being assembled by start-up code. Clamping a couple of
   # hundred patches field by field runs past the default constant-evaluation
@@ -924,19 +966,6 @@ if(BUILD_ARRANGEMENT)
     # GS system effects (reverb/chorus/delay send-returns) reuse the FX suite;
     # without BUILD_FX the SF2 player renders dry (sends become no-ops).
     target_sources(sonare_midi PRIVATE midi/synth/gs_effects.cpp)
-    target_sources(sonare_midi PRIVATE
-      midi/synth/gs_classic/model_format.h
-      midi/synth/gs_classic/graph_engine.h
-      midi/synth/gs_classic/graph_engine.cpp
-      midi/synth/gs_classic/sections.h
-      midi/synth/gs_classic/sections.cpp
-      midi/synth/gs_classic/nodes_dynamics.cpp
-      midi/synth/gs_classic/nodes_pitch.cpp
-      midi/synth/gs_classic/classic_unit.h
-      midi/synth/gs_classic/classic_unit.cpp
-      midi/synth/gs_classic/model_registry.h
-      midi/synth/gs_classic/model_registry.cpp
-    )
     target_link_libraries(sonare_midi PUBLIC sonare_fx)
     target_compile_definitions(sonare_midi PUBLIC SONARE_MIDI_WITH_FX=1)
   endif()
@@ -1165,6 +1194,7 @@ if(BUILD_WASM)
   target_compile_options(sonare_core PUBLIC -msimd128)
   target_compile_options(sonare_rt PUBLIC -msimd128)
   target_compile_options(sonare_automation PUBLIC -msimd128)
+  target_compile_options(sonare_gs_protocol PUBLIC -msimd128)
   target_compile_options(sonare_engine PUBLIC -msimd128)
   if(BUILD_MASTERING)
     target_compile_options(sonare_mastering PUBLIC -msimd128)
@@ -1178,6 +1208,7 @@ if(BUILD_WASM)
   if(BUILD_FX)
     target_compile_options(sonare_fx PUBLIC -msimd128)
   endif()
+  target_compile_options(sonare_gs_efx PUBLIC -msimd128)
   if(BUILD_ACOUSTIC_SIM)
     target_compile_options(sonare_acoustic PUBLIC -msimd128)
   endif()
@@ -1195,6 +1226,7 @@ if(BUILD_WASM)
   target_compile_options(sonare_core PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_rt PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_automation PUBLIC -matomics -mbulk-memory)
+  target_compile_options(sonare_gs_protocol PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_engine PUBLIC -matomics -mbulk-memory)
   if(BUILD_MASTERING)
     target_compile_options(sonare_mastering PUBLIC -matomics -mbulk-memory)
@@ -1208,6 +1240,7 @@ if(BUILD_WASM)
   if(BUILD_FX)
     target_compile_options(sonare_fx PUBLIC -matomics -mbulk-memory)
   endif()
+  target_compile_options(sonare_gs_efx PUBLIC -matomics -mbulk-memory)
   if(BUILD_ACOUSTIC_SIM)
     target_compile_options(sonare_acoustic PUBLIC -matomics -mbulk-memory)
   endif()
@@ -1655,8 +1688,10 @@ foreach(_sonare_target IN ITEMS
     sonare_core
     sonare_rt
     sonare_automation
+    sonare_gs_protocol
     sonare_acoustic
     sonare_fx
+    sonare_gs_efx
     sonare_mastering
     sonare_mixing
     sonare_mixing_assistant

@@ -213,6 +213,15 @@ target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
                                                 ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/tools)
 
+# The C engine MIDI contract tests remain part of the no-arrangement matrix and
+# compare their C ABI results with the pure UMP constructors.  BUILD_ARRANGEMENT
+# normally supplies those constructors through sonare_midi; keep the small,
+# dependency-free implementation in the test executable when that target is
+# intentionally absent.
+if(NOT BUILD_ARRANGEMENT)
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/midi/ump.cpp)
+endif()
+
 if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
   target_sources(sonare_tests PRIVATE
     analysis/acoustic_dataset_test.cpp
@@ -296,6 +305,9 @@ if(BUILD_MASTERING)
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_streaming.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
+  if(BUILD_FX)
+    target_sources(sonare_tests PRIVATE mastering/gs_efx_insert_test.cpp)
+  endif()
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
     target_sources(sonare_tests PRIVATE mastering/ebu_r128_compliance_test.cpp)
   endif()
@@ -373,7 +385,10 @@ if(BUILD_GRAPH)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_GRAPH=1)
 endif()
 
+target_sources(sonare_tests PRIVATE midi/gs_efx_audio_processor_test.cpp)
+target_link_libraries(sonare_tests PRIVATE sonare_gs_efx)
 if(BUILD_FX)
+  target_sources(sonare_tests PRIVATE midi/gs_classic_audio_tail_test.cpp)
   target_sources(sonare_tests PRIVATE effects/creative_fx_test.cpp)
   target_sources(sonare_tests PRIVATE effects/stereo_delay_smoothing_test.cpp)
   target_sources(sonare_tests PRIVATE effects/stereo_delay_feedback_sign_test.cpp)

@@ -362,6 +362,31 @@ TEST_CASE("a published default is a value construction accepts", "[mastering][ca
   }
 }
 
+#if SONARE_BUILD_FX
+TEST_CASE("coupled GS TYPE selectors leave their pair-dependent domain open",
+          "[mastering][catalog]") {
+  const json::Array params = param_info("effects.gsEfx");
+  const json::Value* type_msb = find_param(params, "typeMsb");
+  const json::Value* type_lsb = find_param(params, "typeLsb");
+  REQUIRE(type_msb != nullptr);
+  REQUIRE(type_lsb != nullptr);
+
+  // The valid values of either byte depend on its companion. A scalar probe
+  // against the Thru companion cannot publish a bound or a choices list for it.
+  for (const json::Value* selector : {type_msb, type_lsb}) {
+    INFO(field(*selector, "name").as_string());
+    CHECK(field(*selector, "min").is_null());
+    CHECK(field(*selector, "max").is_null());
+    CHECK(field(*selector, "choices").is_null());
+  }
+
+  // These documented non-Thru pairs must remain constructible even though a
+  // single-key probe cannot measure their joint domain.
+  REQUIRE(make_insert("effects.gsEfx", R"({"typeMsb":1,"typeLsb":16})") != nullptr);
+  REQUIRE(make_insert("effects.gsEfx", R"({"typeMsb":2,"typeLsb":12})") != nullptr);
+}
+#endif
+
 TEST_CASE("a published bound brackets the default and rejects the value beyond it",
           "[mastering][catalog]") {
   for (const std::string& name : insert_factory_names()) {

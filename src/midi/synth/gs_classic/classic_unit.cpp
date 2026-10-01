@@ -2,13 +2,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 #include "CDSPResampler.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::midi::synth::gs_classic {
+
+using sonare::constants::kDefaultDawSampleRate;
 
 namespace {
 
@@ -18,6 +22,17 @@ constexpr double kStopBandDb = 96.0;
 /// Host time over which `prepare()` walks the resampler pair for its deepest shortfall.
 constexpr double kShortfallProbeSeconds = 0.5;
 constexpr float kLargestByte = 127.0f;
+/// Host-side rendering allowance for classic recursive effects.
+constexpr double kClassicTailSeconds = 10.0;
+
+int classic_tail_samples(uint16_t type, double sample_rate) noexcept {
+  if (type == 0 || !(sample_rate > 0.0)) return 0;
+  constexpr long double kMax = static_cast<long double>(std::numeric_limits<int>::max());
+  if (!std::isfinite(sample_rate)) return std::numeric_limits<int>::max();
+  const long double samples = static_cast<long double>(sample_rate) * kClassicTailSeconds;
+  if (samples >= kMax) return std::numeric_limits<int>::max();
+  return static_cast<int>(std::ceil(samples));
+}
 
 std::unique_ptr<r8b::CDSPResampler> make_resampler(double from, double to, int max_in) {
   return std::make_unique<r8b::CDSPResampler>(from, to, max_in, kTransitionBandPercent, kStopBandDb,
@@ -39,7 +54,9 @@ const GsClassicKernelTable& gs_classic_extension_kernels() noexcept {
 }
 
 GsClassicUnit::GsClassicUnit(const GsClassicModelSet& models, const GsClassicType& type)
-    : models_(&models), type_(&type) {}
+    : models_(&models),
+      type_(&type),
+      tail_samples_(classic_tail_samples(type.type, kDefaultDawSampleRate)) {}
 
 GsClassicUnit::~GsClassicUnit() = default;
 
@@ -81,6 +98,7 @@ void GsClassicUnit::prepare(double sample_rate, int max_block_size) {
     drawn_[c].assign(static_cast<std::size_t>(drawn_max), 0.0);
     fifo_[c].assign(prefill_ + static_cast<std::size_t>(returned_max) + max_block_, 0.0);
   }
+  tail_samples_ = classic_tail_samples(type_->type, sample_rate);
   prepared_ = true;
   reset();
 }

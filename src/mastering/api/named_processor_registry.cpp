@@ -149,6 +149,9 @@ ChannelPolicy channel_policy(const std::string& id) {
       "effects.modulation.autoWah",
       "effects.modulation.rotary",
       "effects.modulation.pitchShifter",
+      // GS EFX stages expose the same two-leg audio graph as the MIDI path;
+      // on a surround strip they must receive the front stereo pair only.
+      "effects.gsEfx",
       // The vowel filter allocates a stereo pair of banks, like wah.
       "effects.filter.vowel",
       "effects.delay.stereo",

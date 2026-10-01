@@ -47,6 +47,7 @@
 #include "midi/per_note_state.h"
 #include "midi/source_residual.h"
 #include "midi/synth/channel_param_state.h"
+#include "midi/synth/gs_efx_graph.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/gs_master_eq.h"
 #include "midi/synth/gs_system_effects.h"
@@ -63,120 +64,6 @@
 #endif
 
 namespace sonare::midi::synth {
-
-/// One stage of a realised insertion unit, at the same position as the stage
-/// gs_efx_insert_chain (or the classic unit) describes, so a queued update
-/// addresses it by index. The identity fields are read by the control thread
-/// only; `fade` and `enabled_now` belong to the audio thread.
-struct Sf2EfxStageRt {
-  /// Null where the factory could not build the stage; the position is kept
-  /// and nothing runs there.
-  std::unique_ptr<rt::ProcessorBase> proc;
-  std::string name;
-  uint8_t branch = kGsEfxBranchFront;
-  uint8_t ordinal = 0;
-  /// The enable target used by the AUDIO-side plan application. CONTROL only
-  /// initializes this field while constructing a fresh snapshot; it never
-  /// reads or updates the published value.
-  mutable bool enabled_target = true;
-  /// AUDIO thread: 1 runs the stage, 0 passes its input through untouched with
-  /// the processor's state frozen, in between crossfades dry to wet.
-  mutable float fade = 1.0f;
-  /// AUDIO thread: the enable state `fade` is moving toward.
-  mutable bool enabled_now = true;
-};
-
-/// One control destination resolved against an insertion stage. A modern
-/// destination reads the slot byte through @c binding; a classic one (null @c
-/// binding) takes the byte itself in slot @c param_id.
-struct Sf2EfxControlDest {
-  uint8_t stage_index = 0;
-  uint32_t param_id = 0;
-  const GsEfxBindingRow* binding = nullptr;
-};
-
-/// A descriptor resolved against a published legacy unit. Unlike a prepared
-/// node's strict plan, this is partial: a custom processor may expose only a
-/// subset of the generated GS rows, and the rows without a safe descriptor are
-/// simply left on the already realised processor.
-struct Sf2EfxLegacyParamDest {
-  GsEfxBindingRow row{};
-  uint8_t stage_index = 0;
-  uint32_t param_id = 0;
-};
-
-/// One selector/switch rule resolved against a published legacy unit. The
-/// stage indices are 0xFF where the published chain has no corresponding
-/// processor, which keeps partial custom graphs valid.
-struct Sf2EfxLegacyEnablePlan {
-  GsEfxEnable rule{};
-  std::array<uint8_t, 4> stage_indices{{0xFF, 0xFF, 0xFF, 0xFF}};
-};
-
-/// One EFX CONTROL fanout resolved against published unit 0. Unlike
-/// Sf2EfxControlRt, this plan is retained even when the snapshot's original
-/// source byte was zero, so a later scheduled source write can activate the
-/// already validated destinations without rebuilding the graph.
-struct Sf2EfxLegacyControlPlan {
-  uint8_t slot = 0;
-  uint8_t lo = 0;
-  uint8_t hi = 0;
-  uint8_t states = 0;
-  uint8_t n_dest = 0;
-  std::array<Sf2EfxControlDest, 4> dest{};
-};
-
-/// One realised insertion unit: its stages in chain order and the scratch its
-/// parallel halves and fades run in.
-struct Sf2EfxUnitRt {
-  GsEfxRealization realization = GsEfxRealization::kModern;
-  std::vector<Sf2EfxStageRt> stages;
-  /// Dry copy, half A and half B, each stereo x the render chunk. Allocated on
-  /// the control thread; the audio thread writes it through the const snapshot.
-  mutable std::vector<float> scratch;
-  /// Fade movement per sample: a whole fade takes kSf2EfxFadeMs.
-  float fade_step = 1.0f;
-  /// CONTROL-built partial plan for candidate-less prepared deltas. These
-  /// vectors belong to the immutable published snapshot; AUDIO only iterates
-  /// them and calls already-validated realtime-safe setters. Only unit 0
-  /// carries @c legacy_controls.
-  std::vector<Sf2EfxLegacyParamDest> legacy_param_dests;
-  std::vector<Sf2EfxLegacyEnablePlan> legacy_enable_plans;
-  std::vector<uint8_t> legacy_default_enabled;
-  std::array<Sf2EfxLegacyControlPlan, 2> legacy_controls{};
-  std::array<uint8_t, 20> legacy_classic_slots{};
-  uint8_t legacy_classic_slot_count = 0;
-};
-
-/// Length of the linear crossfade a stage's enable switch takes.
-inline constexpr float kSf2EfxFadeMs = 5.0f;
-
-/// EFX CONTROL 1 or 2 of unit 0 (40 03 1B-1E), resolved when the unit is built:
-/// the source of part @c part moves slot @c slot (the type's `+` or `#` slot)
-/// away from its base byte within [@c lo, @c hi], scaled by the depth. Built
-/// only where the source is a controller and the type marks a slot; otherwise
-/// @c n_dest is 0 and the control is inert. The identity fields are read by the
-/// control thread; the three mutable ones belong to the audio thread.
-struct Sf2EfxControlRt {
-  uint8_t part = 0;
-  uint8_t source = 0;    ///< Raw CONTROL SOURCE byte: 01-5F CC1-95, 60 CAf, 61 bend.
-  uint8_t depth = 0x40;  ///< Raw CONTROL DEPTH byte; 40 is no modulation.
-  uint8_t slot = 0;
-  uint8_t lo = 0;  ///< Lowest byte the slot takes.
-  uint8_t hi = 0;  ///< Highest byte the slot takes.
-  /// How many evenly spaced bytes across [lo, hi] the slot prints as states
-  /// (00/7F is two); 0 where every byte between is a value.
-  uint8_t states = 0;
-  uint8_t n_dest = 0;
-  std::array<Sf2EfxControlDest, 4> dest{};
-  /// AUDIO thread: the slot's unmodulated byte, moved by kControlBase.
-  mutable uint8_t base_byte = 0;
-  /// AUDIO thread: the byte the destinations last received.
-  mutable uint8_t applied_byte = 0;
-  /// AUDIO thread: an update rewrote a destination, so the next block writes it
-  /// whether or not the modulated byte moved.
-  mutable bool dirty = false;
-};
 
 /// A realised per-part insert routing, handed to the audio thread as one
 /// immutable-lifetime snapshot. `chains[part]` is the series of inserts run on
@@ -327,21 +214,6 @@ struct Sf2PlayerConfig {
   GsEffectsConfig effects;
 #endif
 };
-
-/// CONTROL thread: realise one insertion unit. kModern builds @p stages
-/// through @p factory, keeping a null processor where a stage cannot be built;
-/// kClassic ignores @p stages and makes the type's classic unit the only stage,
-/// holding @p efx's bytes. Type 00 00 (Thru) realises no stage either way.
-/// Allocates.
-Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>& stages,
-                                GsEfxRealization realization,
-                                const decltype(Sf2PlayerConfig::insert_factory)& factory,
-                                double sample_rate, int max_block);
-
-/// AUDIO thread: run @p unit in place over @p n frames (n <= the max_block it
-/// was built for): the front stages, then each half on its own copy of their
-/// output summed back, then the back stages. Allocation-free.
-void sf2_run_efx_unit(const Sf2EfxUnitRt& unit, float* left, float* right, int n) noexcept;
 
 class Sf2Player final : public MidiInstrument {
  public:

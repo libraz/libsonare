@@ -45,6 +45,11 @@ class GsClassicUnit : public rt::ProcessorBase {
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
+  /// Host rendering allowance for recursive classic effects, in host samples.
+  /// This is a fixed ten-second policy cap for non-Thru units, not a measured
+  /// decay bound. It remains allocation-free and stable across reset().
+  int tail_samples() const noexcept override { return tail_samples_; }
+
   /// The byte in one of the 20 slots.
   uint8_t byte(std::size_t slot) const noexcept { return graph_.byte(slot); }
   /// Host samples the output FIFO was primed with.
@@ -59,6 +64,7 @@ class GsClassicUnit : public rt::ProcessorBase {
   const GsClassicType* type_;
   GsClassicGraph graph_;
   bool prepared_ = false;
+  int tail_samples_ = 0;
   std::size_t max_block_ = 0;
   std::unique_ptr<r8b::CDSPResampler> up_[2];
   std::unique_ptr<r8b::CDSPResampler> down_[2];

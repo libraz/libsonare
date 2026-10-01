@@ -27,6 +27,7 @@ using sonare::rt::ProcessorBase;
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlockSize = 512;
 constexpr int kNumChannels = 2;
+constexpr const char* kGsEfxName = "effects.gsEfx";
 // A meaningful output change is anything above this max-abs sample delta.
 constexpr float kDiffTolerance = 1.0e-5f;
 // Hard cap on probed ids so a buggy set_parameter that always returns true is
@@ -126,6 +127,11 @@ std::unique_ptr<ProcessorBase> MakePrepared(const std::string& name,
 // activation is applied identically to the baseline and perturbed instances, so
 // the only difference between them is the perturbed parameter itself.
 std::string ActivationJson(const std::string& name) {
+  if (name == kGsEfxName) {
+    // Thru is useful for catalog probing, but it has no audible graph. Select
+    // the measured stereo-EQ type so byte automation reaches a live stage.
+    return R"({"typeMsb":1,"typeLsb":0,"realization":0,"byte1":127})";
+  }
   if (name == "eq.parametric" || name == "eq.equalizer" || name == "eq.minimumPhase" ||
       name == "eq.linearPhase") {
     return R"({"band0.frequencyHz":1000,"band0.gainDb":0})";
@@ -158,6 +164,55 @@ unsigned int CountParameters(const std::string& name) {
   return count;
 }
 
+// The generic count above relies on parameter ids being a contiguous prefix.
+// GS EFX deliberately publishes all twenty wire-byte descriptors, while only
+// the bytes mapped by the selected type are realtime-safe. Discover those ids
+// from the typed activation instead of treating the default Thru state as an
+// automation graph.
+std::vector<unsigned int> DiscoverParameterIds(const std::string& name) {
+  if (name != kGsEfxName) {
+    const unsigned int count = CountParameters(name);
+    std::vector<unsigned int> ids;
+    ids.reserve(count);
+    for (unsigned int id = 0; id < count; ++id) ids.push_back(id);
+    return ids;
+  }
+
+  const std::string activation = ActivationJson(name);
+  auto processor = MakePrepared(name, activation);
+  REQUIRE(processor != nullptr);
+  std::vector<unsigned int> ids;
+  for (const auto& descriptor : processor->parameter_descriptors()) {
+    if (!processor->parameter_is_realtime_safe(descriptor.id)) continue;
+    float constructed = 0.0f;
+    REQUIRE(processor->constructed_parameter_value(descriptor.id, &constructed));
+    auto probe = MakePrepared(name, activation);
+    REQUIRE(probe != nullptr);
+    REQUIRE(probe->set_parameter(descriptor.id, constructed));
+    ids.push_back(descriptor.id);
+  }
+  REQUIRE_FALSE(ids.empty());
+  return ids;
+}
+
+// GS EFX bytes are unsigned 7-bit values, and some typed slots have a shorter
+// printed state list. Keep perturbations in the wire domain and retain only
+// values accepted by the selected type's realtime setter.
+std::vector<float> ParameterPerturbations(const std::string& name, unsigned int id) {
+  if (name != kGsEfxName) return {1.0f, 12.0f, -1.0f, -12.0f};
+
+  constexpr std::array<float, 4> kGsValues = {0.0f, 1.0f, 64.0f, 127.0f};
+  const std::string activation = ActivationJson(name);
+  std::vector<float> accepted;
+  for (const float value : kGsValues) {
+    auto probe = MakePrepared(name, activation);
+    REQUIRE(probe != nullptr);
+    if (probe->set_parameter(id, value)) accepted.push_back(value);
+  }
+  REQUIRE_FALSE(accepted.empty());
+  return accepted;
+}
+
 }  // namespace
 
 TEST_CASE("All factory inserts expose set_parameter contract",
@@ -176,7 +231,8 @@ TEST_CASE("All factory inserts expose set_parameter contract",
       }
 
       // 1. Automatable-param discovery + contract.
-      const unsigned int n = CountParameters(name);
+      const std::vector<unsigned int> parameter_ids = DiscoverParameterIds(name);
+      const unsigned int n = static_cast<unsigned int>(parameter_ids.size());
       if (IsZeroParamAllowed(name)) {
         REQUIRE(n == 0u);
       } else {
@@ -189,7 +245,8 @@ TEST_CASE("All factory inserts expose set_parameter contract",
         auto processor = MakePrepared(name);
         REQUIRE(processor != nullptr);
         REQUIRE_FALSE(processor->set_parameter(1000000u, 0.0f));
-        REQUIRE_FALSE(processor->set_parameter(n, 0.0f));
+        const unsigned int invalid_id = name == kGsEfxName ? 20u : n;
+        REQUIRE_FALSE(processor->set_parameter(invalid_id, 0.0f));
       }
 
       // 3. Audible effect: a parameter change must alter the output of at least
@@ -211,9 +268,9 @@ TEST_CASE("All factory inserts expose set_parameter contract",
       // threshold/ceiling parameters: a positive ceiling clamps to 0 dB (the
       // default) and never engages, whereas a -12 dB ceiling limits the
       // ~-10 dBFS noise stimulus and produces an observable change.
-      const std::array<float, 4> perturbations = {1.0f, 12.0f, -1.0f, -12.0f};
-      for (unsigned int id = 0; id < n && !observed_change; ++id) {
-        for (float value : perturbations) {
+      for (const unsigned int id : parameter_ids) {
+        if (observed_change) break;
+        for (const float value : ParameterPerturbations(name, id)) {
           auto perturbed = MakePrepared(name, activation);
           REQUIRE(perturbed != nullptr);
           // A fresh instance per id keeps stateful processors (reverbs, filters,

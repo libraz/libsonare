@@ -645,12 +645,7 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
   }
 }
 
-namespace {
-
-/// The type number @p view spells @p type as. The binding files spell Rotary
-/// Multi one way and the defaults table the other, so a type no row names has
-/// one more spelling to try before it binds nothing.
-uint16_t bound_type(const GsEfxRowView& view, uint16_t type) noexcept {
+uint16_t gs_efx_binding_type(const GsEfxRowView& view, uint16_t type) noexcept {
   for (size_t i = 0; i < view.n_rows; ++i) {
     if (view.rows[i].type == type) return type;
   }
@@ -659,6 +654,8 @@ uint16_t bound_type(const GsEfxRowView& view, uint16_t type) noexcept {
   }
   return gs_efx_alias_type(type);
 }
+
+namespace {
 
 /// Writes one bound byte as the value the row's own law gives it.
 void write_bound(ParamsJson& out, const char* key, const GsEfxBindingRow& row, uint8_t byte) {
@@ -763,7 +760,7 @@ void write_method_keys(std::vector<GsEfxStage>& chain) {
 /// any one effect, which is why nineteen inserts do not each carry a copy of
 /// them: the module puts one stage after the effect and the table says so.
 void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEfxRowView& view) {
-  const uint16_t type = bound_type(view, efx.type);
+  const uint16_t type = gs_efx_binding_type(view, efx.type);
   // Rows arrive in slot order, which is the unit's own: an appended stage lands
   // where the unit puts it -- tone pair, pan, level.
   for (size_t i = 0; i < view.n_rows; ++i) {
@@ -797,7 +794,7 @@ void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEf
 /// Sets each stage's `enabled` from the switch and selector rows. A stage two
 /// rules name is on only where both turn it on (a switch over a selector).
 void apply_enables(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEfxRowView& view) {
-  const uint16_t type = bound_type(view, efx.type);
+  const uint16_t type = gs_efx_binding_type(view, efx.type);
   for (size_t i = 0; i < view.n_enables; ++i) {
     const GsEfxEnable& enable = view.enables[i];
     if (enable.type != type) continue;
