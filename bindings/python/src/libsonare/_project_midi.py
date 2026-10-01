@@ -155,10 +155,13 @@ class _ProjectMidiMixin:
 
         Raises:
             SonareValueError: If ``samples`` is empty or holds a NaN or Inf
-                sample, or if a config argument is outside its domain.
-            SonareError: If the clip id is unknown, or ``NOT_SUPPORTED`` when the
-                library was built without the pitch editor or the arrangement
-                subsystem.
+                sample, if a config argument is outside its domain, or if both
+                ``fmin`` and ``fmax`` are given and ``fmin`` is not below ``fmax``.
+            SonareError: ``INVALID_PARAMETER`` when only one of ``fmin``/``fmax``
+                is given and it does not lie on the right side of the selected
+                source's default for the other bound; also if the clip id is
+                unknown, or ``NOT_SUPPORTED`` when the library was built without
+                the pitch editor or the arrangement subsystem.
 
         Example:
             >>> project.auto_tempo(samples, sample_rate=sr)

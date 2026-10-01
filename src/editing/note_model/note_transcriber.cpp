@@ -17,6 +17,19 @@ namespace sonare::editing::note_model {
 
 using constants::kSemitonesPerOctave;
 
+TranscribeF0Range resolve_transcribe_f0_range(const TranscribeConfig& config) noexcept {
+  TranscribeF0Range defaults;
+  if (config.source == TranscribeSource::kPolyphonic) {
+    const polyphony::SalienceConfig source;
+    defaults = {source.f0_min_hz, source.f0_max_hz};
+  } else {
+    const PitchConfig source;
+    defaults = {source.fmin, source.fmax};
+  }
+  return {config.fmin == 0.0f ? defaults.fmin : config.fmin,
+          config.fmax == 0.0f ? defaults.fmax : config.fmax};
+}
+
 namespace {
 
 constexpr int kMaxMidiNote = 127;
@@ -49,19 +62,11 @@ TranscribeConfig validate_and_resolve(const Audio& audio, const TranscribeConfig
               config.source == TranscribeSource::kPolyphonic,
           "transcribe_notes: source is not a known TranscribeSource");
 
-  // A zero endpoint is the internal spelling of an omitted endpoint. Resolve
-  // it from the selected tracker configuration before checking the ordering;
-  // the two chains intentionally have different calibrated ranges.
+  // Resolve omitted endpoints before checking the ordering; the two chains have different ranges.
   TranscribeConfig resolved = config;
-  if (config.source == TranscribeSource::kMonophonic) {
-    const PitchConfig defaults;
-    if (resolved.fmin == 0.0f) resolved.fmin = defaults.fmin;
-    if (resolved.fmax == 0.0f) resolved.fmax = defaults.fmax;
-  } else {
-    const polyphony::SalienceConfig defaults;
-    if (resolved.fmin == 0.0f) resolved.fmin = defaults.f0_min_hz;
-    if (resolved.fmax == 0.0f) resolved.fmax = defaults.f0_max_hz;
-  }
+  const TranscribeF0Range range = resolve_transcribe_f0_range(config);
+  resolved.fmin = range.fmin;
+  resolved.fmax = range.fmax;
   require(std::isfinite(resolved.fmin) && resolved.fmin > 0.0f,
           "transcribe_notes: fmin must be finite and positive");
   require(std::isfinite(resolved.fmax) && resolved.fmax > resolved.fmin,

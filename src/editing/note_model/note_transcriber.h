@@ -72,6 +72,18 @@ struct TranscribeConfig {
   int fixed_velocity = 0;
 };
 
+/// @brief Effective F0 tracker bounds for one transcription source.
+struct TranscribeF0Range {
+  float fmin;
+  float fmax;
+};
+
+/// @brief Resolves zero endpoints against the selected source's defaults.
+/// @details Nonzero endpoints are copied as-is. Validation belongs to
+///          @ref transcribe_notes and callers that need an ordering check.
+[[nodiscard]] TranscribeF0Range resolve_transcribe_f0_range(
+    const TranscribeConfig& config) noexcept;
+
 /// @brief One transcribed note.
 struct TranscribedNote {
   /// Span in source samples, [onset_sample, offset_sample).
@@ -106,11 +118,10 @@ uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 ///          Finding no notes is not an error. Silence, and material whose
 ///          register the chain cannot resolve, transcribe to an empty vector.
 /// @throws SonareException(InvalidParameter) on empty @p audio, on a non-finite
-///         or out-of-range config field, on a @c fixed_velocity outside
-///         {0} U [1, 127], on a
-///         @c velocity_floor_db that is not finite and negative, or on a
-///         resolved @c fmin >= @c fmax. A zero range endpoint selects the
-///         source-specific default before that ordering check.
+///         or out-of-range config field, on a @c fixed_velocity outside {0} U
+///         [1, 127], on a @c velocity_floor_db that is not finite and negative,
+///         or on a resolved @c fmin >= @c fmax. A zero range endpoint selects
+///         the source-specific default before that ordering check.
 std::vector<TranscribedNote> transcribe_notes(const Audio& audio,
                                               const TranscribeConfig& config = {});
 

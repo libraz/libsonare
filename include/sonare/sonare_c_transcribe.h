@@ -41,8 +41,8 @@ extern "C" {
 /// @brief Versioned transcription configuration.
 /// @details Every numeric field takes its documented default at 0, so a
 ///          zero-filled struct with @c struct_version set is the defaults.
-///          Prefer @ref sonare_transcribe_config_default, which fills them in
-///          explicitly.
+///          @ref sonare_transcribe_config_default initializes the configuration
+///          and keeps @c fmin and @c fmax at 0 to select the source's range.
 ///
 ///          **A struct field has no way to spell "absent", which is why 0 means
 ///          "default" here and does NOT mean that on the bindings.** Python,
@@ -65,10 +65,10 @@ typedef struct {
   /// Tuning reference the MIDI note numbers are measured against; 0 => 440.
   float reference_hz;
   /// F0 tracker range in Hz. A zero endpoint uses the selected source's
-  /// default: PitchConfig's range (65..2093 Hz) for the monophonic path, or
-  /// SalienceConfig's range (55..1760 Hz) for the polyphonic path. Both paths
-  /// use the resolved bounds. The polyphonic path applies them to its salience
-  /// estimator's F0 axis; its cent-spectrum bounds remain independent.
+  /// default: 65..2093 Hz for the monophonic path, or 55..1760 Hz for the
+  /// polyphonic path. Both use the resolved bounds. The polyphonic path applies
+  /// them to its salience estimator's F0 axis; its cent-spectrum bounds remain
+  /// independent.
   float fmin;
   float fmax;
   /// Shortest span kept as a note, in milliseconds; 0 => 30.

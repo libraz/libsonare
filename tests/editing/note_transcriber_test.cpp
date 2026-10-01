@@ -363,6 +363,35 @@ TEST_CASE("polyphonic fmin and fmax constrain the selected tracker range", "[not
   }
 }
 
+TEST_CASE("the F0 range resolver uses the selected source and explicit endpoints",
+          "[note_transcriber]") {
+  const sonare::PitchConfig mono_defaults;
+  const sonare::editing::polyphony::SalienceConfig poly_defaults;
+
+  TranscribeConfig monophonic;
+  const TranscribeF0Range mono_range = resolve_transcribe_f0_range(monophonic);
+  CHECK(mono_range.fmin == mono_defaults.fmin);
+  CHECK(mono_range.fmax == mono_defaults.fmax);
+
+  TranscribeConfig polyphonic;
+  polyphonic.source = TranscribeSource::kPolyphonic;
+  const TranscribeF0Range poly_range = resolve_transcribe_f0_range(polyphonic);
+  CHECK(poly_range.fmin == poly_defaults.f0_min_hz);
+  CHECK(poly_range.fmax == poly_defaults.f0_max_hz);
+
+  monophonic.fmin = 80.0f;
+  monophonic.fmax = 0.0f;
+  const TranscribeF0Range mono_partial = resolve_transcribe_f0_range(monophonic);
+  CHECK(mono_partial.fmin == 80.0f);
+  CHECK(mono_partial.fmax == mono_defaults.fmax);
+
+  polyphonic.fmin = 0.0f;
+  polyphonic.fmax = 1500.0f;
+  const TranscribeF0Range poly_partial = resolve_transcribe_f0_range(polyphonic);
+  CHECK(poly_partial.fmin == poly_defaults.f0_min_hz);
+  CHECK(poly_partial.fmax == 1500.0f);
+}
+
 TEST_CASE("omitted tracker bounds resolve from the selected source", "[note_transcriber]") {
   const sonare::PitchConfig mono_defaults;
   const sonare::editing::polyphony::SalienceConfig poly_defaults;

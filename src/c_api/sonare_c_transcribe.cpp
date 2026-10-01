@@ -5,8 +5,6 @@
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "analysis/bpm_analyzer.h"
 #include "editing/note_model/note_transcriber.h"
-#include "editing/polyphony/f0_salience.h"
-#include "feature/pitch.h"
 #endif
 
 // ============================================================================
@@ -46,22 +44,7 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   out->source =
       in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic : ntm::TranscribeSource::kMonophonic;
 
-  struct TrackerDefaults {
-    float fmin;
-    float fmax;
-  };
-  const TrackerDefaults defaults = [&] {
-    if (out->source == ntm::TranscribeSource::kPolyphonic) {
-      const sonare::editing::polyphony::SalienceConfig source;
-      return TrackerDefaults{source.f0_min_hz, source.f0_max_hz};
-    }
-    const sonare::PitchConfig source;
-    return TrackerDefaults{source.fmin, source.fmax};
-  }();
-
-  // Each of these is "0 keeps the default, anything else must be valid on its
-  // own terms". The core validates again; refusing here is what names the
-  // offending field before the audio is touched.
+  // Zero keeps the default; other values must be valid, and this layer names the offending field.
   if (in->reference_hz != 0.0f) {
     if (!finite_positive(in->reference_hz)) return refuse("reference_hz must be a positive number");
     out->reference_hz = in->reference_hz;
@@ -74,9 +57,8 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
     if (!finite_positive(in->fmax)) return refuse("fmax must be a positive number");
     out->fmax = in->fmax;
   }
-  const float resolved_fmin = in->fmin == 0.0f ? defaults.fmin : in->fmin;
-  const float resolved_fmax = in->fmax == 0.0f ? defaults.fmax : in->fmax;
-  if (resolved_fmax <= resolved_fmin) return refuse("fmax must be above fmin");
+  const ntm::TranscribeF0Range range = ntm::resolve_transcribe_f0_range(*out);
+  if (range.fmax <= range.fmin) return refuse("fmax must be above fmin");
   if (in->min_note_ms != 0.0f) {
     if (!finite_positive(in->min_note_ms)) return refuse("min_note_ms must be a positive number");
     out->min_note_ms = in->min_note_ms;
@@ -205,10 +187,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  // The family's buffer policy, non-finite scan included. Transcription needs it
-  // as much as any of them: a buffer of NaN tracks no pitch, so without the scan
-  // it would answer SONARE_OK with zero notes -- an answer a caller cannot tell
-  // apart from silence.
+  // Reject non-finite samples so NaN audio cannot return zero notes indistinguishably from silence.
   const SonareError audio_error = validate_audio_params(samples, length, sample_rate);
   if (audio_error != SONARE_OK) return audio_error;
   ntm::TranscribeConfig core_config;
