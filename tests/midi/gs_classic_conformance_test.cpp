@@ -580,11 +580,11 @@ void require_rate_independent(Pick pick) {
     }
     CHECK(comparison.residual_noise <= kHostNoiseCeilingDb);
     std::size_t at = 0;
-    const double across = host_difference(at44, at48, &at);
+    host_difference(at44, at48, &at);
     WARN("type " << std::hex << type.type << std::dec << ": " << seconds << " s, " << offsets
-                 << " offsets over " << span * 1000.0 << " ms, across rates " << across
-                 << " dB even / " << comparison.across_odd << " dB odd, residual noise "
-                 << comparison.residual_noise << " dB");
+                 << " offsets over " << span * 1000.0 << " ms, across rates "
+                 << comparison.across_even << " dB even / " << comparison.across_odd
+                 << " dB odd, residual noise " << comparison.residual_noise << " dB");
     INFO("worst at channel " << at / kHostBands << " band " << at % kHostBands << ": " << at44[at]
                              << " / " << at48[at] << " dB");
     CHECK(comparison.across_even <= kHostRateToleranceDb);

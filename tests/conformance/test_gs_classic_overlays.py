@@ -30,6 +30,9 @@ COVERAGE = _load_module("gs_coverage_for_overlay_test", ROOT / "tools/gs/coverag
 
 
 # Provenance for this reduced fixture:
+#   01 31: ../soundings/inferences/models/
+#          0131-whole-rms-branching.json
+#          (inferences/roland-sc8850-01/stages/01-31.json p0)
 #   01 41: ../soundings/inferences/models/
 #          0141-whole-raised-sine-tremolo-on-the-wet.json
 #          (inferences/roland-sc8850-01/stages/01-41.json p0)

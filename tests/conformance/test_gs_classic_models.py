@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
-import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
-from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -57,14 +55,22 @@ class ClassicModelVocabularyTest(unittest.TestCase):
 
 
 class ArchiveRevisionTest(unittest.TestCase):
-    @staticmethod
-    def git_fixture() -> tuple[Path, Path]:
+    def git_fixture(self) -> Path:
         root = Path(tempfile.mkdtemp())
-        source = root / "src" / "soundings" / "render" / "graph.py"
-        source.parent.mkdir(parents=True)
-        source.write_text("VERSION = 1\n", encoding="utf-8")
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        files = {
+            "src/soundings/__init__.py": "VERSION = 1\n",
+            "src/soundings/render/graph.py": "VERSION = 1\n",
+            "src/soundings/render/native.so": "binary\n",
+            "tools/helper.py": "VERSION = 1\n",
+            ".venv/lib/soundings/installed.py": "VERSION = 1\n",
+        }
+        for name, text in files.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
         subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
-        subprocess.run(["git", "-C", str(root), "add", str(source)], check=True)
+        subprocess.run(["git", "-C", str(root), "add", "-f", "."], check=True)
         subprocess.run(
             [
                 "git",
@@ -84,58 +90,48 @@ class ArchiveRevisionTest(unittest.TestCase):
             ],
             check=True,
         )
-        return root, source
+        return root
 
-    def test_loaded_soundings_source_is_included_in_dirty_input_check(self) -> None:
-        root, source = self.git_fixture()
-        archive = classic.Archive.__new__(classic.Archive)
-        archive.root = root
-        archive.read = set()
-        module = types.ModuleType("soundings.render.graph")
-        module.__file__ = str(source)
-        outside = types.ModuleType("soundings.render.third_party")
-        outside.__file__ = str(Path(tempfile.mkdtemp()) / "third_party.py")
+    def dirty(self, root: Path, read: set[Path]) -> bool:
+        return classic.archive_revision(root, sorted(read))["archive_inputs_dirty"]
 
-        with mock.patch.dict(
-            sys.modules,
+    def test_tracked_package_sources_are_the_dirty_input_set(self) -> None:
+        root = self.git_fixture()
+        package = root / "src" / "soundings"
+        read = classic.package_sources(root, package)
+
+        self.assertEqual(
+            read,
             {
-                "soundings.render.graph": module,
-                "soundings.render.third_party": outside,
+                (package / "__init__.py").resolve(),
+                (package / "render" / "graph.py").resolve(),
             },
-        ):
-            archive.record_imported_sources()
+        )
+        self.assertFalse(self.dirty(root, read))
+        (package / "render" / "graph.py").write_text("VERSION = 2\n", encoding="utf-8")
+        self.assertTrue(self.dirty(root, read))
 
-        self.assertIn(source.resolve(), archive.read)
-        self.assertNotIn(Path(outside.__file__).resolve(), archive.read)
-        clean = classic.archive_revision(root, sorted(archive.read))
-        self.assertFalse(clean["archive_inputs_dirty"])
-        source.write_text("VERSION = 2\n", encoding="utf-8")
-        dirty = classic.archive_revision(root, sorted(archive.read))
-        self.assertTrue(dirty["archive_inputs_dirty"])
+    def test_files_outside_the_package_are_not_counted(self) -> None:
+        root = self.git_fixture()
+        read = classic.package_sources(root, root / "src" / "soundings")
+        (root / "tools" / "helper.py").write_text("VERSION = 2\n", encoding="utf-8")
 
-    def test_only_python_sources_inside_archive_root_are_recorded(self) -> None:
-        root, source = self.git_fixture()
-        archive = classic.Archive.__new__(classic.Archive)
-        archive.root = root
-        archive.read = set()
-        package = types.ModuleType("soundings")
-        package.__file__ = str(source)
-        escaped = types.ModuleType("soundings.render.escaped")
-        escaped.__file__ = str(root.parent / "outside.py")
-        extension = types.ModuleType("soundings.render.extension")
-        extension.__file__ = str(root / "src" / "soundings" / "render" / "native.so")
+        self.assertNotIn((root / "tools" / "helper.py").resolve(), read)
+        self.assertFalse(self.dirty(root, read))
 
-        with mock.patch.dict(
-            sys.modules,
-            {
-                "soundings": package,
-                "soundings.render.escaped": escaped,
-                "soundings.render.extension": extension,
-            },
-        ):
-            archive.record_imported_sources()
+    def test_a_package_under_venv_or_outside_the_root_is_not_archive_input(self) -> None:
+        root = self.git_fixture()
+        installed = root / ".venv" / "lib" / "soundings"
+        elsewhere = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, elsewhere, ignore_errors=True)
+        (installed / "installed.py").write_text("VERSION = 2\n", encoding="utf-8")
 
-        self.assertEqual(archive.read, {source.resolve()})
+        self.assertEqual(classic.package_sources(root, installed), set())
+        self.assertEqual(classic.package_sources(root, elsewhere), set())
+        read = classic.package_sources(root, root / "src" / "soundings") | classic.package_sources(
+            root, installed
+        )
+        self.assertFalse(self.dirty(root, read))
 
 
 if __name__ == "__main__":

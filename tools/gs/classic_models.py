@@ -285,6 +285,34 @@ def archive_revision(root: Path, inputs: list[Path]) -> dict:
     }
 
 
+def package_sources(root: Path, package_dir: Path) -> set[Path]:
+    """Every tracked ``*.py`` of the renderer package, when it lives inside the archive.
+
+    The revision must identify the renderer implementation as well as the JSON it
+    reads. A package installed under ``.venv`` or from a sibling checkout is not
+    archive input, so it yields nothing.
+    """
+    root = root.resolve()
+    package_dir = package_dir.resolve()
+    try:
+        relative = package_dir.relative_to(root)
+    except ValueError:
+        return set()
+    if ".venv" in relative.parts:
+        return set()
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--", relative.as_posix()],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+        paths = [root / name for name in listed if name.endswith(".py")]
+    except (OSError, subprocess.CalledProcessError):
+        paths = sorted(package_dir.rglob("*.py"))
+    return {path.resolve() for path in paths if path.is_file()}
+
+
 # ---------------------------------------------------------------- helpers
 
 
@@ -1119,36 +1147,14 @@ class Archive:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         self.read: set[Path] = set()
+        import soundings
         from soundings import reproduce
         from soundings.render import graph
 
         self.reproduce = reproduce
         self.graph = graph
         self.coverage = load_sibling("gs_coverage", "coverage.py")
-        self.record_imported_sources()
-
-    def record_imported_sources(self) -> None:
-        """Record loaded soundings source modules that live inside this archive.
-
-        The archive revision must identify the renderer implementation as well as the
-        JSON it reads.  A module installed from a sibling checkout or a third-party
-        package is deliberately outside the archive input set.
-        """
-        root = self.root.resolve()
-        for name, module in tuple(sys.modules.items()):
-            if name != "soundings" and not name.startswith("soundings."):
-                continue
-            source = getattr(module, "__file__", None)
-            if not isinstance(source, (str, os.PathLike)):
-                continue
-            path = Path(source).resolve()
-            if path.suffix != ".py":
-                continue
-            try:
-                path.relative_to(root)
-            except ValueError:
-                continue
-            self.read.add(path)
+        self.read |= package_sources(self.root, Path(soundings.__file__).parent)
 
     def json(self, rel) -> dict:
         path = self.root / rel
@@ -1267,8 +1273,6 @@ def read_models(archive: Archive) -> tuple[list[dict], dict[str, int]]:
                     if checked is not value:
                         replace_value(node, field, checked)
         loaded = archive.graph.load_graph(model, models_dir=models_dir, root=archive.root)
-        # load_graph may import renderer modules lazily.
-        archive.record_imported_sources()
         digest = hashlib.sha256(model_path.read_bytes())
         for name in laws:
             digest.update((models_dir / name).read_bytes())
@@ -2111,7 +2115,6 @@ def main() -> int:
     ctx.laws_by_name = {name: law for t in types for name, law in t["laws"].items()}
     _, printed = archive.coverage.load_printed(root)
     archive.read |= set((root / "data" / "units").glob("*/efx-params/*.json"))
-    archive.record_imported_sources()
     total = sum(len(v) for v in printed.values())
     if total != archive.coverage.EXPECTED_PRINTED:
         stop(
@@ -2150,8 +2153,6 @@ def main() -> int:
             f"read by no node (write overlays, or run --raw / --scope): {listed}"
         )
 
-    # Picks up renderer modules the conversion above imported lazily.
-    archive.record_imported_sources()
     revision = archive_revision(root, sorted(archive.read))
     if revision["archive_inputs_dirty"]:
         print(

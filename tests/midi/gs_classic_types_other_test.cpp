@@ -234,6 +234,11 @@ bool heard_in(uint16_t type, int slot, const Printed& ends,
   return band_db >= kHeardDb || l2 >= kHeardRelativeL2;
 }
 
+const gc::GsClassicModelRegistry& raw_registry() {
+  static const gc::GsClassicModelRegistry raw(gc::gs_classic_models_raw_other());
+  return raw;
+}
+
 }  // namespace
 
 TEST_CASE("GS classic types 02 00-11 08: each type's first printed byte is heard",
@@ -254,7 +259,7 @@ TEST_CASE("GS classic 11 05: OD Pan is heard at its interior", "[gs-classic-type
   REQUIRE(registry.valid());
   const gc::GsClassicType* type = registry.find(kType);
   REQUIRE(type != nullptr);
-  const gc::GsClassicModelRegistry raw(gc::gs_classic_models_raw_other());
+  const gc::GsClassicModelRegistry& raw = raw_registry();
   REQUIRE(raw.valid());
   const gc::GsClassicType* raw_type = raw.find(kType);
   REQUIRE(raw_type != nullptr);
@@ -274,29 +279,6 @@ TEST_CASE("GS classic 11 05: OD Pan is heard at its interior", "[gs-classic-type
 }
 
 namespace {
-
-const gc::GsClassicModelRegistry& raw_registry() {
-  static const gc::GsClassicModelRegistry raw(gc::gs_classic_models_raw_other());
-  return raw;
-}
-
-TEST_CASE("GS classic 11 07: Separate anchor preserves the p0 power-on drawing",
-          "[gs-classic-types-other]") {
-  constexpr uint16_t kType = 0x1107;
-  constexpr double kSameDrawing = 1e-9;
-  const gc::GsClassicModelRegistry& raw = raw_registry();
-  const gc::GsClassicModelRegistry& overlaid = gc::gs_classic_default_registry();
-  REQUIRE(raw.valid());
-  REQUIRE(overlaid.valid());
-  const gc::GsClassicType* raw_type = raw.find(kType);
-  const gc::GsClassicType* default_type = overlaid.find(kType);
-  REQUIRE(raw_type != nullptr);
-  REQUIRE(default_type != nullptr);
-  const double l2 = relative_l2(draw(raw.models(), *raw_type, power_on(kType)),
-                                draw(overlaid.models(), *default_type, power_on(kType)));
-  INFO("11 07 raw/default power-on relative L2: " << l2);
-  CHECK(l2 <= kSameDrawing);
-}
 
 /// The byte tables every value of a type reads `slot` through.
 std::vector<const gc::GsClassicLut*> byte_luts(const gc::GsClassicModelSet& m,
@@ -413,6 +395,24 @@ std::map<int, std::vector<const gc::GsClassicNode*>> cab_chains(const gc::GsClas
 }
 
 }  // namespace
+
+TEST_CASE("GS classic 11 07: Separate anchor preserves the p0 power-on drawing",
+          "[gs-classic-types-other]") {
+  constexpr uint16_t kType = 0x1107;
+  constexpr double kSameDrawing = 1e-9;
+  const gc::GsClassicModelRegistry& raw = raw_registry();
+  const gc::GsClassicModelRegistry& overlaid = gc::gs_classic_default_registry();
+  REQUIRE(raw.valid());
+  REQUIRE(overlaid.valid());
+  const gc::GsClassicType* raw_type = raw.find(kType);
+  const gc::GsClassicType* default_type = overlaid.find(kType);
+  REQUIRE(raw_type != nullptr);
+  REQUIRE(default_type != nullptr);
+  const double l2 = relative_l2(draw(raw.models(), *raw_type, power_on(kType)),
+                                draw(overlaid.models(), *default_type, power_on(kType)));
+  INFO("11 07 raw/default power-on relative L2: " << l2);
+  CHECK(l2 <= kSameDrawing);
+}
 
 TEST_CASE("GS classic types other: the amp overlays' cabinet sections are cab_voicing's",
           "[gs-classic-types-other]") {
