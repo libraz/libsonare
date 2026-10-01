@@ -28,7 +28,12 @@ Rotary::Rotary(RotaryConfig config) : config_(config) {
   config_.drum_rate_hz = std::max(0.0f, config_.drum_rate_hz);
   config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxDepthMs);
   config_.tremolo = std::clamp(config_.tremolo, 0.0f, 1.0f);
+  if (!std::isfinite(config_.stereo_spread)) config_.stereo_spread = 1.0f;
   config_.stereo_spread = std::clamp(config_.stereo_spread, 0.0f, 1.0f);
+  if (!std::isfinite(config_.accel_tau_s)) config_.accel_tau_s = 0.0f;
+  if (!std::isfinite(config_.decel_tau_s)) config_.decel_tau_s = 0.0f;
+  if (!std::isfinite(config_.undershoot_hz)) config_.undershoot_hz = 0.0f;
+  if (!std::isfinite(config_.drum_undershoot_hz)) config_.drum_undershoot_hz = 0.0f;
   config_.accel_tau_s = std::max(0.0f, config_.accel_tau_s);
   config_.decel_tau_s = std::max(0.0f, config_.decel_tau_s);
   config_.undershoot_hz = std::max(0.0f, config_.undershoot_hz);
@@ -52,6 +57,7 @@ float Rotary::drum_target_hz() const noexcept {
 
 void Rotary::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  prepared_ = true;
   // One-pole lowpass crossover coefficient.
   const double x =
       std::exp(-2.0 * ::sonare::constants::kPiD * static_cast<double>(kCrossoverHz) / sample_rate_);
@@ -330,16 +336,47 @@ bool Rotary::set_parameter_impl(unsigned int param_id, float value) {
       }
       return true;
     }
+    case 14: {
+      const float old_spread = config_.stereo_spread;
+      config_.stereo_spread = std::clamp(value, 0.0f, 1.0f);
+      if (prepared_) {
+        // Shift the right LFO by the spread delta rather than resetting it.
+        const double phase_delta = 0.5 * static_cast<double>(config_.stereo_spread - old_spread);
+        horn_lfo_[1].reset(horn_lfo_[1].phase() + phase_delta);
+        drum_lfo_[1].reset(drum_lfo_[1].phase() + phase_delta);
+      }
+      place_mics();
+      return true;
+    }
+    case 15:
+      config_.accel_tau_s = std::max(0.0f, value);
+      accel_coeff_ = glide_coeff(config_.accel_tau_s, sample_rate_);
+      return true;
+    case 16:
+      config_.decel_tau_s = std::max(0.0f, value);
+      decel_coeff_ = glide_coeff(config_.decel_tau_s, sample_rate_);
+      return true;
+    case 17:
+      config_.undershoot_hz = std::max(0.0f, value);
+      return true;
+    case 18:
+      config_.drum_undershoot_hz = std::max(0.0f, value);
+      return true;
     default:
       return false;
   }
 }
 
+bool Rotary::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id <= 18u;
+}
+
 std::vector<rt::ParamDescriptor> Rotary::parameter_descriptors() const {
-  return {{"rateHz", 0},         {"depthMs", 1},    {"tremolo", 2},      {"dryWet", 3},
-          {"drumRateHz", 4},     {"hornSlowHz", 5}, {"hornFastHz", 6},   {"drumSlowHz", 7},
-          {"drumFastHz", 8},     {"speed", 9},      {"hornLevelDb", 10}, {"drumLevelDb", 11},
-          {"interpolation", 12}, {"model", 13}};
+  return {{"rateHz", 0},         {"depthMs", 1},       {"tremolo", 2},          {"dryWet", 3},
+          {"drumRateHz", 4},     {"hornSlowHz", 5},    {"hornFastHz", 6},       {"drumSlowHz", 7},
+          {"drumFastHz", 8},     {"speed", 9},         {"hornLevelDb", 10},     {"drumLevelDb", 11},
+          {"interpolation", 12}, {"model", 13},        {"stereoSpread", 14},    {"accelTauS", 15},
+          {"decelTauS", 16},     {"undershootHz", 17}, {"drumUndershootHz", 18}};
 }
 
 }  // namespace sonare::effects::modulation

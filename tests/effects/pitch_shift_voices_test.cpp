@@ -254,16 +254,29 @@ TEST_CASE("cents offset each voice from its semitone interval", "[pitch-voices]"
   }
 }
 
-TEST_CASE("realtime ids reach the voices and the pre-delays stay construction-only",
-          "[pitch-voices]") {
+TEST_CASE("realtime ids reach the voices and pre-delays", "[pitch-voices]") {
   PitchShifter shifter;
   shifter.prepare(kRate, 512);
   for (unsigned int id = 2; id <= 8; ++id) REQUIRE(shifter.set_parameter(id, 0.25f));
   REQUIRE(shifter.set_parameter(9, 1.0f));
   for (const float bad : {-1.0f, 0.5f, 2.0f}) REQUIRE_FALSE(shifter.set_parameter(9, bad));
-  REQUIRE_FALSE(shifter.set_parameter(12, 0.0f));
+  REQUIRE(shifter.set_parameter(12, 25.0f));
+  REQUIRE(shifter.set_parameter(13, 10.0f));
+  REQUIRE(shifter.set_parameter(14, 25.0f));
+  REQUIRE(shifter.parameter_is_realtime_safe(12));
+  REQUIRE(shifter.parameter_is_realtime_safe(13));
+  REQUIRE(shifter.parameter_is_realtime_safe(14));
+  bool has_window = false;
+  bool has_pre_delay = false;
+  bool has_pre_delay2 = false;
   for (const auto& descriptor : shifter.parameter_descriptors()) {
-    CHECK(descriptor.key != std::string("preDelayMs"));
-    CHECK(descriptor.key != std::string("preDelay2Ms"));
+    has_window = has_window || (descriptor.key == std::string("windowMs") && descriptor.id == 12);
+    has_pre_delay =
+        has_pre_delay || (descriptor.key == std::string("preDelayMs") && descriptor.id == 13);
+    has_pre_delay2 =
+        has_pre_delay2 || (descriptor.key == std::string("preDelay2Ms") && descriptor.id == 14);
   }
+  REQUIRE(has_window);
+  REQUIRE(has_pre_delay);
+  REQUIRE(has_pre_delay2);
 }

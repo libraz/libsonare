@@ -266,6 +266,17 @@ bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
       update_coefficients();
       return true;
     }
+    case 19: {
+      // A ladder entry is a named set; refuse an unnamed value rather than pick a neighbour.
+      const float rounded = std::round(value);
+      if (rounded != value || rounded < 0.0f ||
+          rounded > static_cast<float>(kTypeLadderHoldHz.size())) {
+        return false;
+      }
+      config_.type_ladder = static_cast<int>(rounded);
+      update_hold_increment();
+      return true;
+    }
     default:
       return false;
   }
@@ -274,32 +285,23 @@ bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
 bool BitCrusher::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every one is an in-place scalar update on preallocated state. hold_hz is a
   // frequency rather than a structure: it moves where the aperture null sits
-  // without changing what the processor is made of. quantizer_mode and
-  // type_ladder select what the hold is driven by and are not published at all;
-  // unknown ids are rejected by set_parameter before this query is reached.
-  return param_id <= 18;
+  // without changing what the processor is made of. quantizer_mode remains a
+  // construction choice; unknown ids are rejected by set_parameter before this
+  // query is reached.
+  return param_id <= 19;
 }
 
 std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
-  return {{"bitDepth", 0},
-          {"mix", 1},
-          {"holdHz", 2},
-          {"radioNoiseLevel", 3},
-          {"wpNoiseLevel", 4},
-          {"discNoiseLevel", 5},
-          {"humLevel", 6},
-          {"noiseDetune", 7},
-          {"noiseLpfHz", 8},
-          {"wpNoiseLpfHz", 9},
-          {"discNoiseLpfHz", 10},
-          {"humLpfHz", 11},
-          {"preFilterHz", 12},
-          {"postFilterHz", 13},
-          {"humHz", 14},
-          {"wpNoisePink", 15},
-          {"discType", 16},
-          {"filterType", 17},
-          {"mono", 18}};
+  return {{"bitDepth", 0},        {"mix", 1},
+          {"holdHz", 2},          {"radioNoiseLevel", 3},
+          {"wpNoiseLevel", 4},    {"discNoiseLevel", 5},
+          {"humLevel", 6},        {"noiseDetune", 7},
+          {"noiseLpfHz", 8},      {"wpNoiseLpfHz", 9},
+          {"discNoiseLpfHz", 10}, {"humLpfHz", 11},
+          {"preFilterHz", 12},    {"postFilterHz", 13},
+          {"humHz", 14},          {"wpNoisePink", 15},
+          {"discType", 16},       {"filterType", 17},
+          {"mono", 18},           {"typeLadder", 19}};
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {

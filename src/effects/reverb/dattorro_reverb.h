@@ -44,8 +44,8 @@ struct DattorroReverbConfig {
   DattorroGateType gate_type = DattorroGateType::kNormal;
   /// Tank length set, in [0, kDattorroMaxCharacter]: 0 is the canonical tank, 1-6 are
   /// Room 1, Room 2, Stage 1, Stage 2, Hall 1, Hall 2. The sets are ratios applied to the
-  /// four tank delay lines and the output taps that read them. Lengths size the buffers, so
-  /// this is read at prepare() only and has no automation id.
+  /// four tank delay lines and the output taps that read them. The maximum line sizes are
+  /// prepared up front, so this can be changed by its realtime parameter.
   int character = 0;
 };
 
@@ -72,8 +72,7 @@ class DattorroReverb : public rt::ProcessorBase {
   //       requested depth exceeds the prepared guard)
   //   5 = damping_hz (0 restores `damping`), 6 = gate_threshold_db,
   //   7 = gate_hold_ms, 8 = gate_type (a whole number naming a type, refused otherwise)
-  // Note: pre_delay_samples and character are not automatable; they size buffers
-  // and require prepare().
+  //   9 = pre_delay_ms, 10 = character (a whole number naming a tank set)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
@@ -111,9 +110,10 @@ class DattorroReverb : public rt::ProcessorBase {
   };
 
   /// @brief Plain delay with multi-tap reads, write/advance decoupled.
-  /// @details Capacity is length+1 so that read_at(length) (the main delay
-  ///          output) addresses the sample written `length` steps ago.
-  ///          read_at(0) returns the value written this step.
+  /// @details Capacity is the prepared maximum length plus one; `length` is the
+  ///          active character's delay and stays within that physical ring.
+  ///          read_at(length) addresses the sample written `length` steps ago,
+  ///          while read_at(0) returns the value written this step.
   struct TapDelay {
     std::vector<float> buf;
     size_t cap = 2;
@@ -127,6 +127,11 @@ class DattorroReverb : public rt::ProcessorBase {
     float read_at(size_t offset) const;
   };
 
+  /// Applies the current pre-delay in the already allocated ring.
+  void update_pre_delay_length() noexcept;
+  /// Applies the current character's line lengths and output taps.
+  void update_character_geometry() noexcept;
+
   /// Returns the tank to rest once a non-finite value has reached it, once per
   /// block (see util/non_finite_state.h).
   void discard_non_finite() noexcept;
@@ -135,7 +140,7 @@ class DattorroReverb : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
 
   // Stage 1 input diffusion.
-  std::vector<float> pre_delay_buf_;
+  std::vector<float> pre_delay_buf_;  ///< Fixed-capacity history for all live pre-delay values.
   size_t pre_delay_len_ = 0;
   size_t pre_delay_index_ = 0;
   Allpass in_ap_[4];

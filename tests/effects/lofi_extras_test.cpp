@@ -300,17 +300,24 @@ TEST_CASE("a block longer than the prepared size renders as one block", "[lofi-e
   CHECK(render(config, input, kRate, 64) == render(config, input));
 }
 
-TEST_CASE("the new keys are realtime automation targets and the rest are refused",
+TEST_CASE("the automation keys include the type ladder and refuse unknown values",
           "[lofi-extras]") {
   BitCrusher crusher;
   crusher.prepare(kRate, 64);
-  for (unsigned id = 0; id <= 18; ++id) {
+  for (unsigned id = 0; id <= 19; ++id) {
     INFO("id " << id);
     CHECK(crusher.parameter_is_realtime_safe(id));
   }
-  CHECK_FALSE(crusher.parameter_is_realtime_safe(19));
-  CHECK_FALSE(crusher.set_parameter(19, 1.0f));
-  CHECK(crusher.parameter_descriptors().size() == 19);
+  CHECK_FALSE(crusher.parameter_is_realtime_safe(20));
+  CHECK_FALSE(crusher.set_parameter(20, 1.0f));
+  const auto descriptors = crusher.parameter_descriptors();
+  CHECK(descriptors.size() == 20);
+  CHECK(std::any_of(descriptors.begin(), descriptors.end(), [](const auto& descriptor) {
+    return descriptor.id == 19 && descriptor.key == "typeLadder";
+  }));
+  CHECK(crusher.set_parameter(19, 4.0f));
+  CHECK(crusher.config().type_ladder == 4);
+  CHECK_FALSE(crusher.set_parameter(19, 20.0f));
   CHECK(crusher.set_parameter(3, 0.4f));
   CHECK(crusher.config().radio_noise_level == 0.4f);
   CHECK(crusher.set_parameter(6, 3.0f));

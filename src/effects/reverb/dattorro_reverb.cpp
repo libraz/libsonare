@@ -17,6 +17,10 @@ namespace {
 
 // Reference rate from Dattorro's tables; all delay lengths scale by sr/29761.
 constexpr double kRefRate = DattorroReverb::kReferenceSampleRate;
+// The GS delay-time ladder tops out at 100 ms. Keep a wider bounded control
+// range for direct callers while ensuring the realtime setter never grows the
+// prepared ring.
+constexpr float kMaxPreDelayMs = 1000.0f;
 
 size_t scale_len(double ref_samples, double sr) {
   const double scaled = ref_samples * sr / kRefRate;
@@ -179,17 +183,67 @@ float DattorroReverb::damping_coefficient(double corner_hz, double sample_rate) 
   return static_cast<float>(1.0 - b);
 }
 
-DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {}
+DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {
+  if (!std::isfinite(config_.pre_delay_samples)) config_.pre_delay_samples = 0.0f;
+  config_.character = clamp_character(config_.character);
+}
+
+void DattorroReverb::update_pre_delay_length() noexcept {
+  if (pre_delay_buf_.empty() || !(config_.pre_delay_samples > 0.0f)) {
+    pre_delay_len_ = 0;
+    return;
+  }
+  const size_t requested = scale_len(static_cast<double>(config_.pre_delay_samples), sample_rate_);
+  pre_delay_len_ = std::min(requested, pre_delay_buf_.size());
+  pre_delay_index_ %= pre_delay_buf_.size();
+}
+
+void DattorroReverb::update_character_geometry() noexcept {
+  if (delay_l1_.buf.empty() || delay_l2_.buf.empty() || delay_r1_.buf.empty() ||
+      delay_r2_.buf.empty()) {
+    return;
+  }
+
+  const double* ratio = kCharacterRatios[clamp_character(config_.character)];
+  const auto set_length = [this](TapDelay& delay, double ref_samples, double ratio_value) {
+    const size_t requested = scale_len(ref_samples * ratio_value, sample_rate_);
+    delay.length = std::min(requested, delay.cap - 1);
+  };
+  set_length(delay_l1_, 4453.0, ratio[0]);
+  set_length(delay_l2_, 3720.0, ratio[1]);
+  set_length(delay_r1_, 4217.0, ratio[2]);
+  set_length(delay_r2_, 3163.0, ratio[3]);
+
+  // Output taps; a tap that reads a delay line scales with that line.
+  tap_l_l1a_ = scale_len(266.0 * ratio[0], sample_rate_);
+  tap_l_l1b_ = scale_len(2974.0 * ratio[0], sample_rate_);
+  tap_l_apl_ = scale_len(1913.0 * ratio[1], sample_rate_);
+  tap_l_l2_ = scale_len(1996.0 * ratio[1], sample_rate_);
+  tap_l_r1_ = scale_len(1990.0 * ratio[2], sample_rate_);
+  tap_l_apr_ = scale_len(187.0, sample_rate_);
+  tap_l_r2_ = scale_len(1066.0 * ratio[3], sample_rate_);
+
+  tap_r_r1a_ = scale_len(353.0 * ratio[2], sample_rate_);
+  tap_r_r1b_ = scale_len(3627.0 * ratio[2], sample_rate_);
+  tap_r_apr_ = scale_len(1228.0, sample_rate_);
+  tap_r_r2_ = scale_len(2673.0 * ratio[3], sample_rate_);
+  tap_r_l1_ = scale_len(2111.0 * ratio[0], sample_rate_);
+  tap_r_apl_ = scale_len(335.0, sample_rate_);
+  tap_r_l2_ = scale_len(121.0 * ratio[1], sample_rate_);
+}
 
 void DattorroReverb::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   const double sr = sample_rate_;
 
   // Stage 1: pre-delay + four series input-diffusion allpasses.
-  const size_t pre = scale_len(static_cast<double>(config_.pre_delay_samples), sr);
-  pre_delay_len_ = config_.pre_delay_samples > 0.0f ? pre : 0;
-  pre_delay_buf_.assign(std::max<size_t>(1, pre_delay_len_), 0.0f);
+  const double requested_pre = std::max(0.0, static_cast<double>(config_.pre_delay_samples));
+  const double max_pre_samples = kMaxPreDelayMs * kRefRate / 1000.0;
+  const size_t max_pre = scale_len(std::max(max_pre_samples, requested_pre), sr);
+  pre_delay_buf_.assign(max_pre, 0.0f);
+  pre_delay_len_ = 0;
   pre_delay_index_ = 0;
+  update_pre_delay_length();
 
   in_ap_[0].prepare(scale_len(142.0, sr), kGainIn);
   in_ap_[1].prepare(scale_len(107.0, sr), kGainIn);
@@ -202,34 +256,14 @@ void DattorroReverb::prepare(double sample_rate, int) {
   mod_ap_l_.prepare(scale_len(672.0, sr), max_depth, kGainMod);
   mod_ap_r_.prepare(scale_len(908.0, sr), max_depth, kGainMod);
 
-  const double* ratio = kCharacterRatios[clamp_character(config_.character)];
-  const double r_l1 = ratio[0];
-  const double r_l2 = ratio[1];
-  const double r_r1 = ratio[2];
-  const double r_r2 = ratio[3];
-  delay_l1_.prepare(scale_len(4453.0 * r_l1, sr));
-  delay_l2_.prepare(scale_len(3720.0 * r_l2, sr));
-  delay_r1_.prepare(scale_len(4217.0 * r_r1, sr));
-  delay_r2_.prepare(scale_len(3163.0 * r_r2, sr));
+  const double* max_ratio = kCharacterRatios[kDattorroMaxCharacter];
+  delay_l1_.prepare(scale_len(4453.0 * max_ratio[0], sr));
+  delay_l2_.prepare(scale_len(3720.0 * max_ratio[1], sr));
+  delay_r1_.prepare(scale_len(4217.0 * max_ratio[2], sr));
+  delay_r2_.prepare(scale_len(3163.0 * max_ratio[3], sr));
   decay_ap_l_.prepare(scale_len(1800.0, sr), kGainDiff);
   decay_ap_r_.prepare(scale_len(2656.0, sr), kGainDiff);
-
-  // Output taps; a tap that reads a delay line scales with that line.
-  tap_l_l1a_ = scale_len(266.0 * r_l1, sr);
-  tap_l_l1b_ = scale_len(2974.0 * r_l1, sr);
-  tap_l_apl_ = scale_len(1913.0 * r_l2, sr);
-  tap_l_l2_ = scale_len(1996.0 * r_l2, sr);
-  tap_l_r1_ = scale_len(1990.0 * r_r1, sr);
-  tap_l_apr_ = scale_len(187.0, sr);
-  tap_l_r2_ = scale_len(1066.0 * r_r2, sr);
-
-  tap_r_r1a_ = scale_len(353.0 * r_r1, sr);
-  tap_r_r1b_ = scale_len(3627.0 * r_r1, sr);
-  tap_r_apr_ = scale_len(1228.0, sr);
-  tap_r_r2_ = scale_len(2673.0 * r_r2, sr);
-  tap_r_l1_ = scale_len(2111.0 * r_l1, sr);
-  tap_r_apl_ = scale_len(335.0, sr);
-  tap_r_l2_ = scale_len(121.0 * r_l2, sr);
+  update_character_geometry();
 
   lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sr);
 
@@ -275,11 +309,13 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
 
     // Stage 1: mono sum, optional pre-delay, four diffusion allpasses.
     float x = 0.5f * (in_l + in_r);
-    if (pre_delay_len_ > 0) {
-      const float delayed = pre_delay_buf_[pre_delay_index_];
+    if (!pre_delay_buf_.empty()) {
+      const size_t read_index =
+          (pre_delay_index_ + pre_delay_buf_.size() - pre_delay_len_) % pre_delay_buf_.size();
+      const float delayed = pre_delay_buf_[read_index];
       pre_delay_buf_[pre_delay_index_] = x;
-      pre_delay_index_ = (pre_delay_index_ + 1) % pre_delay_len_;
-      x = delayed;
+      pre_delay_index_ = (pre_delay_index_ + 1) % pre_delay_buf_.size();
+      if (pre_delay_len_ > 0) x = delayed;
     }
     x = in_ap_[0].process(x);
     x = in_ap_[1].process(x);
@@ -477,6 +513,20 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       }
       config_.gate_type = static_cast<DattorroGateType>(static_cast<int>(value));
       return true;
+    case 9:
+      config_.pre_delay_samples =
+          std::clamp(value, 0.0f, kMaxPreDelayMs) * static_cast<float>(kRefRate) / 1000.0f;
+      update_pre_delay_length();
+      return true;
+    case 10:
+      // A tank set is discrete, but every set's maximum line was prepared up front.
+      if (value < 0.0f || value != std::floor(value) ||
+          value > static_cast<float>(kDattorroMaxCharacter)) {
+        return false;
+      }
+      config_.character = static_cast<int>(value);
+      update_character_geometry();
+      return true;
     default:
       return false;
   }
@@ -488,9 +538,9 @@ bool DattorroReverb::parameter_is_realtime_safe(unsigned int param_id) const noe
 }
 
 std::vector<rt::ParamDescriptor> DattorroReverb::parameter_descriptors() const {
-  return {{"decay", 0},           {"damping", 1},         {"dryWet", 2},
-          {"modRateHz", 3},       {"modDepthSamples", 4}, {"dampingHz", 5},
-          {"gateThresholdDb", 6}, {"gateHoldMs", 7},      {"gateType", 8}};
+  return {{"decay", 0},           {"damping", 1},    {"dryWet", 2},          {"modRateHz", 3},
+          {"modDepthSamples", 4}, {"dampingHz", 5},  {"gateThresholdDb", 6}, {"gateHoldMs", 7},
+          {"gateType", 8},        {"preDelayMs", 9}, {"character", 10}};
 }
 
 void DattorroReverb::reset() {

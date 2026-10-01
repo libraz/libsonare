@@ -117,17 +117,19 @@ class BitCrusher : public rt::ProcessorBase {
   //   7 = noise_detune (clamped to [0, 1])
   //   8-11 = noise_lpf_hz / wp / disc / hum (refused when negative or non-finite)
   //   12 = pre_filter_hz, 13 = post_filter_hz
-  //   14 = hum_hz, 15 = wp_noise_pink, 16 = disc_type, 17 = filter_type, 18 = mono
+  //   14 = hum_hz, 15 = wp_noise_pink, 16 = disc_type, 17 = filter_type, 18 = mono,
+  //   19 = type_ladder
   // downsample_factor changes the hold cadence in samples, dither_type is an
-  // enum, quantizer_mode selects whether the quantizer is in the path at all,
-  // and type_ladder replaces the hold cadence wholesale, so none of the four is
-  // exposed here.
+  // enum and quantizer_mode selects whether the quantizer is in the path at all,
+  // so none of the three is exposed. type_ladder is exposed: every ladder rate is
+  // known before prepare().
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   // Automatable parameters: 0=bitDepth, 1=mix, 2=holdHz, 3=radioNoiseLevel,
   // 4=wpNoiseLevel, 5=discNoiseLevel, 6=humLevel, 7=noiseDetune, 8=noiseLpfHz,
   // 9=wpNoiseLpfHz, 10=discNoiseLpfHz, 11=humLpfHz, 12=preFilterHz,
-  // 13=postFilterHz, 14=humHz, 15=wpNoisePink, 16=discType, 17=filterType, 18=mono
+  // 13=postFilterHz, 14=humHz, 15=wpNoisePink, 16=discType, 17=filterType, 18=mono,
+  // 19=typeLadder
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

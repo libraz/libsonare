@@ -15,12 +15,12 @@ namespace {
 constexpr double kWindowsPerGrain = 2.0;
 
 // Window bounds. The floor keeps the window positive (prepare()'s own 64-sample
-// floor takes over below it); the ceiling keeps the grain allocation bounded,
-// well clear of the longest window a caller selects.
+// floor takes over below it); the ceiling sizes the delay line prepare()
+// allocates, so a live window change never reallocates.
 constexpr float kMinWindowMs = 0.5f;
 constexpr float kMaxWindowMs = 1000.0f;
 
-// The pre-delays lengthen the delay line, so they are bounded like the window.
+// The delay line is sized at prepare() for this ceiling, so a live pre-delay never reallocates.
 constexpr float kMaxPreDelayMs = 1000.0f;
 constexpr float kMaxFeedback = 0.95f;
 constexpr float kMaxCents = 100.0f;
@@ -86,19 +86,34 @@ PitchShifter::PitchShifter(PitchShifterConfig config) : config_(config) {
   config_.window_ms = std::clamp(config_.window_ms, kMinWindowMs, kMaxWindowMs);
 }
 
-void PitchShifter::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+void PitchShifter::update_grain() noexcept {
   const double grain_ms = kWindowsPerGrain * static_cast<double>(config_.window_ms);
   grain_ = std::max(64, static_cast<int>(sample_rate_ * grain_ms * 0.001));
-  const float pre_ms = std::max(config_.pre_delay_ms, config_.pre_delay2_ms);
+  if (grain_ > 0) {
+    phase_ = std::fmod(phase_, static_cast<float>(grain_));
+    phase2_ = std::fmod(phase2_, static_cast<float>(grain_));
+    if (phase_ < 0.0f) phase_ += static_cast<float>(grain_);
+    if (phase2_ < 0.0f) phase2_ += static_cast<float>(grain_);
+  }
+}
+
+void PitchShifter::update_pre_delay_samples() noexcept {
   const float sr = static_cast<float>(sample_rate_);
-  anti_alias_corner_hz_ = 0.0f;
   pre_delay_samples_ = {config_.pre_delay_ms * 0.001f * sr, config_.pre_delay2_ms * 0.001f * sr};
-  const int pre_max = static_cast<int>(std::ceil(pre_ms * 0.001f * sr));
-  const size_t len = static_cast<size_t>(grain_ + pre_max + 4);
+}
+
+void PitchShifter::prepare(double sample_rate, int) {
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  anti_alias_corner_hz_ = 0.0f;
+  const int max_grain =
+      std::max(64, static_cast<int>(sample_rate_ * kWindowsPerGrain * kMaxWindowMs * 0.001));
+  const int max_pre = static_cast<int>(std::ceil(kMaxPreDelayMs * 0.001 * sample_rate_));
+  const size_t len = static_cast<size_t>(max_grain + max_pre + 4);
   for (auto& buffer : buffers_) {
     buffer.assign(len, 0.0f);
   }
+  update_grain();
+  update_pre_delay_samples();
   reset();
 }
 
@@ -119,10 +134,11 @@ float PitchShifter::read_tap(int channel, float delay) const noexcept {
   // Same fractional-read hazard as ModDelayLine::process: a non-finite delay
   // cannot produce an in-range index, so the tap contributes nothing.
   if (!delay_param_acceptable(delay)) return 0.0f;
+  const auto& buffer = buffers_[static_cast<size_t>(channel)];
+  if (buffer.empty()) return 0.0f;
   if (config_.interpolation == DelayInterpolation::kLagrange3) {
     return read_tap_lagrange3(channel, delay);
   }
-  const auto& buffer = buffers_[static_cast<size_t>(channel)];
   const float size = static_cast<float>(buffer.size());
   float read_pos = static_cast<float>(write_pos_[static_cast<size_t>(channel)]) - delay;
   while (read_pos < 0.0f) read_pos += size;
@@ -135,6 +151,7 @@ float PitchShifter::read_tap(int channel, float delay) const noexcept {
 float PitchShifter::read_tap_lagrange3(int channel, float delay) const noexcept {
   const auto& buffer = buffers_[static_cast<size_t>(channel)];
   const int size = static_cast<int>(buffer.size());
+  if (size < 4) return 0.0f;
   // Nodes sit at delays D-1, D, D+1, D+2; the buffer holds grain + pre-delay + 4
   // samples, so D + 2 stays inside it.
   const float clamped = std::clamp(delay, 1.0f, static_cast<float>(size - 3));
@@ -318,15 +335,32 @@ bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
       if (!is_switch_value(value)) return false;
       config_.anti_alias = value != 0.0f;
       return true;
+    case 12:
+      config_.window_ms = std::clamp(value, kMinWindowMs, kMaxWindowMs);
+      update_grain();
+      return true;
+    case 13:
+      config_.pre_delay_ms = std::clamp(value, 0.0f, kMaxPreDelayMs);
+      update_pre_delay_samples();
+      return true;
+    case 14:
+      config_.pre_delay2_ms = std::clamp(value, 0.0f, kMaxPreDelayMs);
+      update_pre_delay_samples();
+      return true;
     default:
       return false;
   }
 }
 
+bool PitchShifter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id <= 14u;
+}
+
 std::vector<rt::ParamDescriptor> PitchShifter::parameter_descriptors() const {
-  return {{"semitones", 0},  {"dryWet", 1}, {"cents", 2},          {"pan", 3},
-          {"semitones2", 4}, {"cents2", 5}, {"level2", 6},         {"pan2", 7},
-          {"feedback", 8},   {"mixLaw", 9}, {"interpolation", 10}, {"antiAlias", 11}};
+  return {{"semitones", 0},  {"dryWet", 1},      {"cents", 2},          {"pan", 3},
+          {"semitones2", 4}, {"cents2", 5},      {"level2", 6},         {"pan2", 7},
+          {"feedback", 8},   {"mixLaw", 9},      {"interpolation", 10}, {"antiAlias", 11},
+          {"windowMs", 12},  {"preDelayMs", 13}, {"preDelay2Ms", 14}};
 }
 
 }  // namespace sonare::effects::modulation

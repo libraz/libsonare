@@ -696,7 +696,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.gate_threshold_db = f(params, "gateThresholdDb", config.gate_threshold_db);
     config.gate_hold_ms = f(params, "gateHoldMs", config.gate_hold_ms);
     detail::read_field(params, "gateType", config.gate_type);
-    // Construction-only: the tank's delay lengths follow it.
+    // Also realtime id 10; every tank set's lines are prepared up front.
     detail::read_field(params, "character", config.character);
     return make<DattorroReverb>(config);
   }

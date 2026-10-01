@@ -275,7 +275,7 @@ TEST_CASE("the gate types shape the wet image over the hold", "[reverb-character
   REQUIRE(energy(sweep2.left, late_a, late_b) > 2.0 * energy(sweep2.right, late_a, late_b));
 }
 
-TEST_CASE("the reverb's new automation ids are in place and refuse what they cannot take",
+TEST_CASE("the reverb's automation ids are in place and refuse what they cannot take",
           "[reverb-character]") {
   DattorroReverb reverb(wet_config());
   reverb.prepare(kRate, kBlock);
@@ -287,6 +287,19 @@ TEST_CASE("the reverb's new automation ids are in place and refuse what they can
   REQUIRE_FALSE(reverb.set_parameter(8, 1.5f));
   REQUIRE_FALSE(reverb.set_parameter(8, -1.0f));
   for (unsigned int id = 5; id <= 8; ++id) REQUIRE(reverb.parameter_is_realtime_safe(id));
-  // The tank length has no id: it sizes the delay lines.
-  for (const auto& d : reverb.parameter_descriptors()) REQUIRE(d.key != std::string("character"));
+
+  REQUIRE(reverb.set_parameter(9, 12.0f));
+  REQUIRE(reverb.set_parameter(10, 3.0f));
+  REQUIRE(reverb.parameter_is_realtime_safe(9));
+  REQUIRE(reverb.parameter_is_realtime_safe(10));
+  bool has_pre_delay = false;
+  bool has_character = false;
+  for (const auto& d : reverb.parameter_descriptors()) {
+    has_pre_delay = has_pre_delay || (d.key == std::string("preDelayMs") && d.id == 9);
+    has_character = has_character || (d.key == std::string("character") && d.id == 10);
+  }
+  REQUIRE(has_pre_delay);
+  REQUIRE(has_character);
+  REQUIRE_FALSE(reverb.set_parameter(10, 1.5f));
+  REQUIRE_FALSE(reverb.set_parameter(10, 7.0f));
 }

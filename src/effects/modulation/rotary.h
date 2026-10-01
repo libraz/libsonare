@@ -76,9 +76,8 @@ struct RotaryConfig {
   /// convention (`ChorusConfig::center_delay_ms` is 14 ms on the same terms).
   float depth_ms = 1.2f;
   float tremolo = 0.5f;  ///< amplitude-modulation depth [0, 1].
-  /// L/R anti-phase amount [0, 1]. Construction/reset-only: changing it
-  /// requires reconstructing or resetting the effect, so it is intentionally
-  /// absent from the realtime automation parameter list.
+  /// L/R anti-phase amount [0, 1]: the right rotor's LFO phase offset and the mic
+  /// angles; a live change shifts that phase by the delta, keeping rotor state.
   float stereo_spread = 1.0f;
   float dry_wet = 1.0f;
   /// How long a rotor takes to close the gap to a new target rate, one time
@@ -132,7 +131,10 @@ class Rotary : public rt::ProcessorBase {
   //   10 = horn_level_db, 11 = drum_level_db
   //   12 = interpolation (0 linear, 1 Lagrange3)
   //   13 = model (0 classic, 1 geometric)
+  //   14 = stereo_spread, 15 = accel_tau_s, 16 = decel_tau_s
+  //   17 = undershoot_hz, 18 = drum_undershoot_hz
   bool set_parameter_impl(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   /// The rate each rotor is turning at now, which is what drives its LFO. It
@@ -161,6 +163,7 @@ class Rotary : public rt::ProcessorBase {
 
   RotaryConfig config_{};
   double sample_rate_ = 48000.0;
+  bool prepared_ = false;
   float lp_coeff_ = 0.0f;
   float accel_coeff_ = 1.0f;  ///< per-sample gap fraction closed while speeding up.
   float decel_coeff_ = 1.0f;  ///< ... and while slowing down.

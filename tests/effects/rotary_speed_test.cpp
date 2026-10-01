@@ -203,5 +203,7 @@ TEST_CASE("the level keys scale each rotor's contribution", "[rotary-speed]") {
   Rotary rotary;
   CHECK(rotary.set_parameter(10, -3.0f));
   CHECK(rotary.set_parameter(11, -3.0f));
-  CHECK_FALSE(rotary.set_parameter(14, 0.0f));
+  rotary.prepare(sonare::test::kRate, 256);
+  CHECK(rotary.set_parameter(14, 0.0f));
+  CHECK(rotary.parameter_is_realtime_safe(14));
 }

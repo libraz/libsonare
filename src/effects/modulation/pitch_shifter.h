@@ -32,8 +32,9 @@ struct PitchShifterConfig {
   float level2 = 0.0f;      ///< voice 2 linear gain in [0, 1]; 0 switches the voice off.
   float pan2 = 0.0f;        ///< voice 2 balance, as `pan`.
   /// Delay of each voice's read-out ahead of the shifter, in milliseconds. The
-  /// delay line is sized from these at prepare(), so they are construction-only:
-  /// no automation id, and the reported latency does not include them.
+  /// delay line is bounded and prepared for the supported maximum, so both
+  /// delays can be changed without reallocating; reported latency does not
+  /// include them.
   float pre_delay_ms = 0.0f;
   float pre_delay2_ms = 0.0f;
   /// Fraction of the shifted sum written back into the delay line, in [-0.95, 0.95].
@@ -69,13 +70,16 @@ class PitchShifter : public rt::ProcessorBase {
   //   4 = semitones2, 5 = cents2, 6 = level2, 7 = pan2, 8 = feedback,
   //   9 = mix_law (a whole number naming a law, refused otherwise)
   //   10 = interpolation (0 linear, 1 Lagrange3), 11 = anti_alias (0 or 1)
-  // The pre-delays have no id: they size the delay line.
+  //   12 = window_ms, 13 = pre_delay_ms, 14 = pre_delay2_ms
   bool set_parameter_impl(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   float read_tap(int channel, float delay) const noexcept;
   float read_tap_lagrange3(int channel, float delay) const noexcept;
+  void update_grain() noexcept;
+  void update_pre_delay_samples() noexcept;
 
   /// Derives the anti-alias corner, in hertz, from the larger sounding ratio and
   /// rebuilds the low-pass sections when it moved. A ratio of 1 or less leaves
