@@ -97,10 +97,15 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 ///          frames carries an @p f0_hz value (the measured pitch at that frame)
 ///          and the corrector retunes every voiced frame toward @p target_midi,
 ///          so vibrato/drift in the source is tracked rather than flattened.
+///          A valid voiced frame is passed through unchanged when its source
+///          period exceeds the input buffer length, or its corrected pitch lies
+///          outside [sample_rate / length, sample_rate / 2]. These frames do not
+///          fail the request. Invalid source F0 and non-finite parameters are
+///          rejected by the core; all bindings inherit this validation.
 /// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
-///                    A NaN is accepted only when the corresponding @p voiced
-///                    flag is zero (matching pYIN's default unvoiced output).
-///                    Finite values must be in [0, sample_rate/2].
+///                    Voiced frames require finite F0 in (0, sample_rate/2].
+///                    Unvoiced frames accept NaN or finite F0 in
+///                    [0, sample_rate/2], matching pYIN's unvoiced output.
 /// @param voiced_prob Per-frame voicing probability [0,1] (@p n_frames entries),
 ///                    or NULL. It is used ONLY to derive voicing when @p voiced
 ///                    is NULL (>= 0.5 is voiced); when @p voiced is supplied it
@@ -112,7 +117,9 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 /// @param voiced      Per-frame voiced flags (non-zero = voiced; @p n_frames
 ///                    entries), or NULL to fall back to @p voiced_prob (see
 ///                    above); with both NULL, every frame is treated as voiced.
-/// @param hop_length  F0 hop in samples (> 0; frame i covers sample i*hop_length).
+/// @param hop_length  F0 hop in samples (> 0). Frame i is centered at sample
+///                    i*hop_length; nearest-frame voicing switches at half-hop
+///                    boundaries.
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
 SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_t length,
@@ -156,9 +163,15 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
 ///          between a fixed-MIDI target and scale quantisation and exposes the
 ///          retune-strength / vibrato-preservation knobs. Pass NULL for @p config
 ///          to use the library defaults.
+///          A valid voiced frame is passed through unchanged when its source
+///          period exceeds the input buffer length, or its corrected pitch lies
+///          outside [sample_rate / length, sample_rate / 2]. These frames do not
+///          fail the request. Invalid source F0 and non-finite parameters are
+///          rejected by the core; all bindings inherit this validation.
 /// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
-///                    Unvoiced frames may contain NaN when @p voiced is zero;
-///                    finite values must be in [0, sample_rate/2].
+///                    Voiced frames require finite F0 in (0, sample_rate/2].
+///                    Unvoiced frames accept NaN or finite F0 in
+///                    [0, sample_rate/2].
 /// @param voiced_prob Per-frame voicing probability [0,1], or NULL. Used only
 ///                    to derive voicing when @p voiced is NULL (>= 0.5 is
 ///                    voiced); never a weight on the correction amount (see
@@ -166,7 +179,8 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
 /// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL to
 ///                    fall back to @p voiced_prob; with both NULL, every
 ///                    frame is treated as voiced.
-/// @param hop_length  F0 hop in samples (> 0).
+/// @param hop_length  F0 hop in samples (> 0), with the centered-frame voicing
+///                    rule of @ref sonare_pitch_correct_to_midi_timevarying.
 /// @note The returned array is heap-allocated and MUST be released with
 ///       @ref sonare_free_floats.
 SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length, int sample_rate,
@@ -356,7 +370,11 @@ void sonare_free_note_objects(SonareNoteObjectsResult* result);
 ///          Overlap is checked on the source spans only. Where
 ///          @c time_offset_samples lands a note is not, and a note lengthened
 ///          past its own span writes into its neighbours' samples, so two moved
-///          or stretched notes may be written over each other.
+///          or stretched notes may be written over each other. Edited source
+///          spans are cleared before rendering destinations. Notes are rendered
+///          in array order; later notes overwrite earlier destination samples,
+///          with the configured cross-fade at their edges. Muted notes clear
+///          their source span and do not erase rendered destinations.
 ///          Per note the order is: pitch curve, time stretch, pitch shift,
 ///          formant warp, amplitude envelope, then gain.
 /// @param notes May be NULL when @p note_count is 0.
@@ -376,6 +394,9 @@ void sonare_free_note_objects(SonareNoteObjectsResult* result);
 ///        Given one, every note is sliced and so every note's bounds are
 ///        checked, whatever its edit does with the result: an out-of-range
 ///        @c frame_end is rejected rather than read past the end of the track.
+/// @param voiced Optional per-frame flags, @p n_frames entries. Zero suppresses
+///        the F0 measurement; nonzero still requires a positive finite F0.
+///        NULL infers voicing from F0 alone. Requires @p f0_hz when given.
 /// @param n_frames Number of F0 frames, or 0 when @p f0_hz is NULL.
 /// @param frame_rate F0 frames per second; must be finite and > 0 when @p f0_hz
 ///        is given.
@@ -386,7 +407,7 @@ void sonare_free_note_objects(SonareNoteObjectsResult* result);
 SonareError sonare_render_notes(const float* samples, size_t length, int sample_rate,
                                 const SonareNoteObject* notes, size_t note_count,
                                 const float* envelopes, size_t envelope_count, const float* f0_hz,
-                                size_t n_frames, float frame_rate,
+                                const int32_t* voiced, size_t n_frames, float frame_rate,
                                 const SonareNoteRenderConfig* config, float** out,
                                 size_t* out_length);
 
@@ -409,20 +430,23 @@ typedef struct {
 ///          the three parts reconstruct the curve. The drift filter is zero
 ///          phase, so neither curve is shifted in time against the audio.
 ///
-///          Frames whose F0 is unusable carry no measurement, so the curve is
+///          Unvoiced frames and frames whose F0 is unusable carry no measurement,
+///          so the curve is
 ///          held at the nearest usable neighbour across them. Both curves
 ///          therefore have an entry everywhere; a host marking the held ones
-///          reads them off @p f0_hz, which is exact.
+///          identifies them from @p f0_hz and @p voiced when given.
 ///
 ///          The note's own F0 curve is not returned by
 ///          @ref sonare_extract_notes, so pass the caller's own @c f0_hz sliced
 ///          by the note's @c [frame_start, frame_end) together with its
 ///          @c median_hz.
-/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. A frame carrying no pitch is
-/// spelled as zero, a
-///        negative value or a non-finite one -- sonare_pitch_pyin emits NaN
+/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. A frame
+///        carrying no pitch is zero, negative or non-finite. sonare_pitch_pyin emits NaN
 ///        there unless asked to fill it -- and all three read the same: that
 ///        frame contributes no measurement.
+/// @param voiced Optional per-frame flags for the same note slice. Zero suppresses
+///        the F0 measurement; nonzero still requires a positive finite F0.
+///        NULL infers voicing from F0 alone.
 /// @param frame_rate F0 frames per second; must be finite and > 0.
 /// @param median_hz The note's @c median_hz; must be finite and non-negative.
 ///        A note with no pitch is spelled 0, so a negative or non-finite value
@@ -433,8 +457,8 @@ typedef struct {
 /// @param out Receives a heap-owned result, cleared before validation. A note
 ///        with no usable pitch is reported as a zero centre and NULL curves
 ///        rather than as an error.
-SonareError sonare_decompose_note_pitch(const float* f0_hz, size_t n_frames, float frame_rate,
-                                        float median_hz, float vibrato_cutoff_hz,
+SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voiced, size_t n_frames,
+                                        float frame_rate, float median_hz, float vibrato_cutoff_hz,
                                         SonarePitchDecompositionResult* out);
 void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result);
 

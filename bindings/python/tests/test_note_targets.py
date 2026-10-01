@@ -168,6 +168,25 @@ def test_the_callers_notes_are_not_rewritten() -> None:
     assert edited[0].edit.pitch_shift_semitones == pytest.approx(-1.0, abs=1e-4)
 
 
+@pytest.mark.parametrize("curve", ["amplitude", "envelope"])
+def test_assigned_note_curves_are_independent_of_the_source(curve: str) -> None:
+    note = NoteObject(
+        onset_sample=0,
+        offset_sample=HALF_SECOND,
+        median_hz=A4_HZ,
+        amplitude=np.array([0.2, 0.4], dtype=np.float32),
+        edit=NoteEdit(amplitude_envelope=np.array([1.0, 0.5], dtype=np.float32)),
+    )
+    edited, assigned = libsonare.assign_note_targets([note], SR, [NoteTarget(0.0, 0.5, 60.0)])
+    assert assigned == 1
+    edited[0].amplitude[0] = 0.9
+    edited[0].edit.amplitude_envelope[0] = 0.1
+    if curve == "amplitude":
+        assert note.amplitude[0] == pytest.approx(0.2, abs=1e-6)
+    else:
+        assert note.edit.amplitude_envelope[0] == pytest.approx(1.0, abs=1e-6)
+
+
 def test_everything_the_assignment_does_not_write_survives_it() -> None:
     envelope = np.array([1.0, 0.5, 0.25], dtype=np.float32)
     note = NoteObject(

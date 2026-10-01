@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
@@ -142,6 +143,64 @@ TEST_CASE("Time-varying pitch correction ignores voiced_prob", "[feature][pitch]
   REQUIRE_FALSE(omitted.empty());
   for (size_t i = 0; i < omitted.size(); ++i) {
     REQUIRE(omitted[i] == with_prob[i]);
+  }
+}
+
+TEST_CASE("Explicit voiced flags ignore invalid voiced_prob on both correction APIs",
+          "[feature][pitch][pyin]") {
+  const std::vector<float> samples = harmonic_tone(60.0f, 0.5f);
+  const size_t n_frames = samples.size() / static_cast<size_t>(kHopLength) + 1;
+  const std::vector<float> f0(n_frames, 220.0f);
+  const std::vector<int32_t> voiced(n_frames, 1);
+
+  const auto fixed = [&](const float* prob, const int32_t* flags) {
+    float* out = nullptr;
+    size_t out_length = 0;
+    const SonareError error = sonare_pitch_correct_to_midi_timevarying(
+        samples.data(), samples.size(), kSampleRate, f0.data(), prob, flags, n_frames, kHopLength,
+        69.0f, &out, &out_length);
+    std::vector<float> result;
+    if (error == SONARE_OK) {
+      result.assign(out, out + out_length);
+      sonare_free_floats(out);
+    }
+    return std::pair<SonareError, std::vector<float>>{error, std::move(result)};
+  };
+
+  const auto general = [&](const float* prob, const int32_t* flags) {
+    float* out = nullptr;
+    size_t out_length = 0;
+    const SonareError error = sonare_pitch_correct_timevarying(
+        samples.data(), samples.size(), kSampleRate, f0.data(), prob, flags, n_frames, kHopLength,
+        nullptr, &out, &out_length);
+    std::vector<float> result;
+    if (error == SONARE_OK) {
+      result.assign(out, out + out_length);
+      sonare_free_floats(out);
+    }
+    return std::pair<SonareError, std::vector<float>>{error, std::move(result)};
+  };
+
+  const auto fixed_without_prob = fixed(nullptr, voiced.data());
+  const auto general_without_prob = general(nullptr, voiced.data());
+  REQUIRE(fixed_without_prob.first == SONARE_OK);
+  REQUIRE(general_without_prob.first == SONARE_OK);
+
+  for (const float invalid : {std::numeric_limits<float>::quiet_NaN(), -0.1f, 1.1f}) {
+    const std::vector<float> invalid_prob(n_frames, invalid);
+    const auto fixed_with_invalid_prob = fixed(invalid_prob.data(), voiced.data());
+    const auto general_with_invalid_prob = general(invalid_prob.data(), voiced.data());
+    REQUIRE(fixed_with_invalid_prob.first == SONARE_OK);
+    REQUIRE(general_with_invalid_prob.first == SONARE_OK);
+    REQUIRE(fixed_with_invalid_prob.second == fixed_without_prob.second);
+    REQUIRE(general_with_invalid_prob.second == general_without_prob.second);
+  }
+
+  // The probability-only path still owns the [0,1] and finite-value contract.
+  for (const float invalid : {std::numeric_limits<float>::quiet_NaN(), -0.1f, 1.1f}) {
+    const std::vector<float> invalid_prob(n_frames, invalid);
+    REQUIRE(fixed(invalid_prob.data(), nullptr).first == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(general(invalid_prob.data(), nullptr).first == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/convert.h"
@@ -25,13 +26,82 @@ bool valid_voiced_frame(const F0Track& track, int frame) {
          track.f0_hz[index] > 0.0f && std::isfinite(track.f0_hz[index]);
 }
 
-// Largest |delta| (semitones) still handled by TD-PSOLA; larger jumps fall back to spectral shift.
+// Each PSOLA pass stays within this interval. Larger caller requests are split
+// into several passes by PitchCorrector::resynthesize.
 constexpr float kPsolaMaxSemitones = 6.0f;
 // Cross-fade duration at voiced/unvoiced boundaries.
 constexpr float kCrossfadeMs = 10.0f;
 
 // Hann window value at normalized position t in [0, 1].
 float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
+
+void validate_f0_track(const Audio& audio, const F0Track& track) {
+  SONARE_CHECK(!track.f0_hz.empty() && track.hop_length > 0 &&
+                   track.f0_hz.size() == track.voiced.size() &&
+                   (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
+               ErrorCode::InvalidParameter);
+  // hop_length is in samples at the track's rate; a rate mismatch would
+  // silently apply the correction curve at the wrong time positions.
+  SONARE_CHECK(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
+  const double samples_per_frame = track.samples_per_frame();
+  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
+               ErrorCode::InvalidParameter);
+
+  const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
+  for (size_t i = 0; i < track.f0_hz.size(); ++i) {
+    const float f0 = track.f0_hz[i];
+    if (track.voiced[i]) {
+      SONARE_CHECK(std::isfinite(f0) && f0 > 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter);
+    } else {
+      // pYIN uses NaN for unvoiced F0. A finite non-negative value is also
+      // accepted for host-supplied tracks because voiced[] is authoritative.
+      SONARE_CHECK((std::isnan(f0) || (std::isfinite(f0) && f0 >= 0.0f && f0 <= nyquist)),
+                   ErrorCode::InvalidParameter);
+    }
+  }
+  for (const float probability : track.voiced_prob) {
+    SONARE_CHECK(std::isfinite(probability) && probability >= 0.0f && probability <= 1.0f,
+                 ErrorCode::InvalidParameter);
+  }
+}
+
+int rounded_sample(double position, int n_samples) noexcept {
+  if (!(position > 0.0)) return 0;
+  const double rounded = std::round(position);
+  if (rounded >= static_cast<double>(n_samples - 1)) return n_samples - 1;
+  return static_cast<int>(rounded);
+}
+
+// Log-frequency bounds are computed independently from the float F0/delta
+// inputs. Allow only a few representational float ULPs at an inclusive
+// endpoint; an audible out-of-range target remains ineligible and is
+// dry-passed.
+constexpr int kRepresentabilityUlps = 2;
+
+double representability_tolerance(double bound) noexcept {
+  const float bound_hz = static_cast<float>(std::exp2(bound));
+  if (!std::isfinite(bound_hz) || bound_hz <= 0.0f) return 0.0;
+  const double encoded_log = std::log2(static_cast<double>(bound_hz));
+  const float lower_hz = std::nextafter(bound_hz, -std::numeric_limits<float>::infinity());
+  const float upper_hz = std::nextafter(bound_hz, std::numeric_limits<float>::infinity());
+  const double lower_step = std::abs(encoded_log - std::log2(static_cast<double>(lower_hz)));
+  const double upper_step = std::abs(std::log2(static_cast<double>(upper_hz)) - encoded_log);
+  const double encoding_error = std::abs(bound - encoded_log);
+  return static_cast<double>(kRepresentabilityUlps) *
+         std::max({lower_step, upper_step, encoding_error});
+}
+
+bool clamp_log2_to_bounds(double& value, double lower, double upper) noexcept {
+  if (!std::isfinite(value)) return false;
+  if (value < lower) {
+    if (lower - value > representability_tolerance(lower)) return false;
+    value = lower;
+  } else if (value > upper) {
+    if (value - upper > representability_tolerance(upper)) return false;
+    value = upper;
+  }
+  return true;
+}
 
 }  // namespace
 
@@ -147,32 +217,7 @@ float PitchCorrector::apply_limits(float semitones) const noexcept {
 
 Audio PitchCorrector::correct_timevarying(const Audio& audio, const F0Track& track, TargetMode mode,
                                           float fixed_target_midi) const {
-  SONARE_CHECK(!track.f0_hz.empty() && track.hop_length > 0 &&
-                   track.f0_hz.size() == track.voiced.size() &&
-                   (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
-               ErrorCode::InvalidParameter);
-  // hop_length is in samples at the track's rate; a rate mismatch would silently apply
-  // the correction curve at the wrong time positions and derive a wrong retune tau.
-  SONARE_CHECK(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
-  // Reject a non-finite or negative F0 (or non-finite voicing probability) so it
-  // cannot turn into garbage output. Validated in the core so every surface
-  // inherits the contract, not just the C ABI.
-  const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
-  for (size_t i = 0; i < track.f0_hz.size(); ++i) {
-    const float f0 = track.f0_hz[i];
-    const bool is_voiced = track.voiced[i];
-    // pYIN uses NaN for unvoiced F0 by default. It is safe to preserve that
-    // representation because all consumers gate F0 reads on `voiced`; infinities
-    // and non-representable voiced pitches remain invalid.
-    const bool valid_unvoiced_nan = !is_voiced && std::isnan(f0);
-    SONARE_CHECK(valid_unvoiced_nan || (std::isfinite(f0) && f0 >= 0.0f && f0 <= nyquist),
-                 ErrorCode::InvalidParameter);
-  }
-  for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
-    SONARE_CHECK(std::isfinite(track.voiced_prob[i]) && track.voiced_prob[i] >= 0.0f &&
-                     track.voiced_prob[i] <= 1.0f,
-                 ErrorCode::InvalidParameter);
-  }
+  validate_f0_track(audio, track);
   if (audio.empty()) {
     return audio;
   }
@@ -243,19 +288,17 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
   return smooth;
 }
 
-// TD-PSOLA driven by a per-frame delta curve, with a spectral fallback for
-// large shifts and pass-through (with cross-fade) for unvoiced regions.
-Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
-                                   const std::vector<float>& deltas_semitones) const {
-  SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
-  // The curve is read by clamped frame index, so a short one reads out of
-  // bounds rather than reporting a mismatched track.
-  SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
-               ErrorCode::InvalidParameter);
+namespace {
 
+// One bounded TD-PSOLA pass. Public resynthesize validates the complete curve
+// and splits requests larger than kPsolaMaxSemitones before calling this helper.
+Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
+                              const std::vector<float>& deltas_semitones) {
+  SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
   const int n_samples = static_cast<int>(audio.size());
   const int sr = audio.sample_rate();
-  const float sr_f = static_cast<float>(sr);
+  const double sr_f = static_cast<double>(sr);
   // Same cadence rule as every other frame<->sample conversion on this track.
   // double: this is the unit frame_at converts to/from, and frame_at feeds the
   // grain clock below, which must not lose precision past 2^24 samples.
@@ -270,29 +313,46 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   // than float -- see the comment above those two variables below.
   auto frame_at = [hop](double sample_pos) -> double { return sample_pos / hop; };
 
-  // Linear interpolation of a per-frame curve at a sample position. The
-  // position is double (see frame_at); the curve values stay float, since
-  // they are read fresh per grain rather than accumulated.
+  auto nearest_frame = [&](double sample_pos) -> int {
+    int frame = rounded_sample(frame_at(sample_pos), n_samples);
+    return std::clamp(frame, 0, n_frames - 1);
+  };
+
+  // Interpolate only across eligible voiced frames. If the nearest active
+  // frame has an ineligible/unvoiced neighbour, hold that active value until
+  // the nearest-frame boundary instead of tapering it through dry audio.
+  // Stable a+(b-a)*t arithmetic plus the clamp keeps a bounded pass within its
+  // inclusive six-semitone contract despite floating-point FMA rounding.
   auto interp_frame = [&](const std::vector<float>& curve, double sample_pos) -> float {
     const double ff = frame_at(sample_pos);
     int f0 = static_cast<int>(std::floor(ff));
-    const float frac = static_cast<float>(ff - static_cast<double>(f0));
     f0 = std::clamp(f0, 0, n_frames - 1);
     const int f1 = std::clamp(f0 + 1, 0, n_frames - 1);
-    return curve[static_cast<size_t>(f0)] * (1.0f - frac) + curve[static_cast<size_t>(f1)] * frac;
+    const float frac = static_cast<float>(ff - static_cast<double>(f0));
+    const bool first_active = valid_voiced_frame(track, f0);
+    const bool second_active = valid_voiced_frame(track, f1);
+    float value = 0.0f;
+    if (first_active && second_active) {
+      const float first = curve[static_cast<size_t>(f0)];
+      const float second = curve[static_cast<size_t>(f1)];
+      value = first + (second - first) * frac;
+    } else if (first_active) {
+      value = curve[static_cast<size_t>(f0)];
+    } else if (second_active) {
+      value = curve[static_cast<size_t>(f1)];
+    }
+    return std::clamp(value, -kPsolaMaxSemitones, kPsolaMaxSemitones);
   };
 
   // Build a per-sample voiced flag and per-sample f0 (for epoch spacing).
   auto sample_voiced = [&](int sample_pos) -> bool {
-    int f = static_cast<int>(std::lround(frame_at(static_cast<double>(sample_pos))));
-    f = std::clamp(f, 0, n_frames - 1);
-    return valid_voiced_frame(track, f);
+    return valid_voiced_frame(track, nearest_frame(static_cast<double>(sample_pos)));
   };
   auto sample_f0 = [&](double sample_pos) -> float {
-    int f = static_cast<int>(std::lround(frame_at(sample_pos)));
-    f = std::clamp(f, 0, n_frames - 1);
+    const int f = nearest_frame(sample_pos);
+    if (!valid_voiced_frame(track, f)) return 0.0f;
     const float hz = track.f0_hz[static_cast<size_t>(f)];
-    return (hz > 0.0f && std::isfinite(hz)) ? hz : 0.0f;
+    return hz;
   };
 
   std::vector<float> out(static_cast<size_t>(n_samples), 0.0f);
@@ -324,10 +384,10 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   while (output_epoch < static_cast<double>(n_samples)) {
     // Keep the analysis pointer time-aligned with the synthesis position: it
     // marks the input sample whose pitch period we are about to reproduce.
-    const int center = static_cast<int>(std::lround(analysis_epoch));
+    const int center = rounded_sample(analysis_epoch, n_samples);
     if (!sample_voiced(center)) {
-      // Unvoiced/silence is handled by the fallback pass below; advance both
-      // timelines together (no pitch change) so they re-sync across the gap.
+      // Dry frames retain the input in the output blend; advance both timelines
+      // together (no pitch change) so they re-sync across the gap.
       output_epoch += hop;
       analysis_epoch += hop;
       continue;
@@ -338,27 +398,28 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       analysis_epoch += hop;
       continue;
     }
-    const float period_in = std::max(1.0f, sr_f / f0);
+    const double period_in = std::max(1.0, sr_f / static_cast<double>(f0));
     const float delta = interp_frame(deltas_semitones, analysis_epoch);
 
-    // Large shifts: leave to the spectral fallback pass (skip here). Advance
-    // both timelines in lock-step so the region stays time-aligned.
-    if (std::abs(delta) > kPsolaMaxSemitones) {
-      output_epoch += period_in;
-      analysis_epoch += period_in;
-      continue;
-    }
+    // Public resynthesize splits every request before reaching this helper.
+    // Keep this guard as a local invariant in case a future caller bypasses
+    // that boundary.
+    SONARE_CHECK(std::isfinite(delta) && std::abs(delta) <= kPsolaMaxSemitones,
+                 ErrorCode::InvalidParameter);
     have_psola = true;
 
-    const float ratio = std::pow(2.0f, delta / kSemitonesPerOctave);
-    const float period_out = std::max(1.0f, period_in / ratio);  // higher pitch -> shorter period
+    const double ratio = std::exp2(static_cast<double>(delta) / kSemitonesPerOctave);
+    const double period_out = std::max(1.0, period_in / ratio);  // higher pitch -> shorter period
 
     // Two-period Hann grain copied from the analysis center to the output
     // epoch. Source and destination share the same half-width so the grain is
     // pitch-shifted (spacing changes) but not time-stretched.
-    const int half = std::max(1, static_cast<int>(std::lround(period_in)));
+    const int max_half = std::max(1, (n_samples - 1) / 2);
+    const long long rounded_period = std::llround(period_in);
+    const int half =
+        static_cast<int>(std::clamp(rounded_period, 1LL, static_cast<long long>(max_half)));
     const int grain_len = 2 * half + 1;
-    const int out_center = static_cast<int>(std::lround(output_epoch));
+    const int out_center = rounded_sample(output_epoch, n_samples);
     for (int k = 0; k < grain_len; ++k) {
       const int src = center - half + k;
       if (src < 0 || src >= n_samples) {
@@ -366,6 +427,13 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       }
       const int dst = out_center - half + k;
       if (dst < 0 || dst >= n_samples) {
+        continue;
+      }
+      // A grain centred at the edge of an active run can extend into an
+      // unvoiced or ineligible run. Never let that source grain repitch dry
+      // output; the boundary cross-fade below then fades the active result to
+      // the untouched input on its own side of the nearest-frame boundary.
+      if (!sample_voiced(dst)) {
         continue;
       }
       const float w = hann(static_cast<float>(k) / static_cast<float>(grain_len - 1));
@@ -385,7 +453,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       if (next_f0 <= 0.0f) {
         break;  // next epoch is unvoiced: let the outer hop logic re-sync.
       }
-      const float next_period_in = std::max(1.0f, sr_f / next_f0);
+      const double next_period_in = std::max(1.0, sr_f / static_cast<double>(next_f0));
       // Map the synthesis epoch to the NEAREST analysis pitch mark, not the
       // floor. Stepping only while the next mark stays at least half a period
       // below the synthesis clock keeps |analysis_epoch - output_epoch| within
@@ -409,58 +477,13 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     }
   }
 
-  // Fallback / pass-through pass: any sample not covered by PSOLA (unvoiced
-  // regions, large-shift regions) is filled from a spectral shift or the
-  // dry signal, then cross-faded against the PSOLA output near boundaries.
-  Audio fallback_audio;
-  bool have_fallback = false;
-  {
-    // Median delta over large-shift voiced frames drives a single spectral shift.
-    std::vector<float> big;
-    for (int f = 0; f < n_frames; ++f) {
-      if (valid_voiced_frame(track, f) &&
-          std::abs(deltas_semitones[static_cast<size_t>(f)]) > kPsolaMaxSemitones) {
-        big.push_back(deltas_semitones[static_cast<size_t>(f)]);
-      }
-    }
-    if (!big.empty()) {
-      const float med = sonare::median(big.data(), big.size());
-      PitchShiftConfig shift_config;
-      shift_config.backend = config_.backend;
-      fallback_audio = pitch_shift(audio, apply_limits(med), shift_config);
-      have_fallback = true;
-    }
-  }
-
   const int xfade = std::max(1, static_cast<int>(std::lround(kCrossfadeMs * 0.001f * sr_f)));
   std::vector<float> result(static_cast<size_t>(n_samples), 0.0f);
-  // Weight of the fallback (dry/spectral-shift) contribution at each sample,
-  // i.e. (1 - w) below. Used to scope the overshoot guard to only the samples
-  // the spectral fallback actually feeds, so a localized fallback overshoot
-  // never attenuates the rest of the (in-range) corrected output.
-  std::vector<float> fallback_weight(static_cast<size_t>(n_samples), 0.0f);
   for (int i = 0; i < n_samples; ++i) {
     const size_t idx = static_cast<size_t>(i);
     const bool psola_here = have_psola && norm[idx] > kSpectrumEpsilon;
-    // The spectral fallback shifts the WHOLE buffer by one median delta, so it
-    // is only a correct stand-in near the large-shift voiced frame(s) that
-    // triggered it -- everywhere else (unvoiced/silence, or a voiced frame
-    // whose own delta was small enough for PSOLA) the documented passthrough
-    // is the dry input, not that global shift.
-    int nearest_frame = static_cast<int>(std::lround(frame_at(static_cast<double>(i))));
-    nearest_frame = std::clamp(nearest_frame, 0, n_frames - 1);
-    const bool near_large_shift =
-        valid_voiced_frame(track, nearest_frame) &&
-        std::abs(deltas_semitones[static_cast<size_t>(nearest_frame)]) > kPsolaMaxSemitones;
-    float dry;
-    if (have_fallback && near_large_shift && i < static_cast<int>(fallback_audio.size())) {
-      dry = fallback_audio[idx];
-    } else {
-      dry = input[idx];
-    }
     if (!psola_here) {
-      result[idx] = dry;
-      fallback_weight[idx] = 1.0f;
+      result[idx] = input[idx];
       continue;
     }
     // Cross-fade weight ramps from dry to PSOLA across boundary samples.
@@ -479,42 +502,107 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
     if (edge < xfade) {
       w = static_cast<float>(edge) / static_cast<float>(xfade);
     }
-    result[idx] = w * out[idx] + (1.0f - w) * dry;
-    fallback_weight[idx] = 1.0f - w;
+    result[idx] = w * out[idx] + (1.0f - w) * input[idx];
   }
 
-  // The PSOLA path is OLA-normalized and stays in range, but the spectral
-  // fallback can overshoot. Peak-normalize (instead of hard-clipping) so a
-  // large-shift fallback region does not introduce clipping distortion.
-  //
-  // Scope the guard to the fallback-fed samples only: a contiguous run of
-  // samples that the spectral fallback contributes to (directly or through its
-  // cross-fade tails) is normalized as a unit, and the same per-run gain is
-  // applied to the cross-fade neighbours so no gain step appears at the
-  // boundary. PSOLA-only samples (fallback_weight == 0) keep unity gain, so a
-  // localized overshoot can no longer pull down the whole corrected output.
-  if (have_fallback) {
-    int i = 0;
-    while (i < n_samples) {
-      if (fallback_weight[static_cast<size_t>(i)] <= 0.0f) {
-        ++i;
+  return Audio::from_vector(std::move(result), sr);
+}
+
+}  // namespace
+
+Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
+                                   const std::vector<float>& deltas_semitones) const {
+  SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
+  validate_f0_track(audio, track);
+
+  const int n_samples = static_cast<int>(audio.size());
+  const double sample_rate = static_cast<double>(audio.sample_rate());
+  const double min_target_log2 = std::log2(sample_rate / static_cast<double>(n_samples));
+  const double max_target_log2 = std::log2(0.5 * sample_rate);
+  const int n_frames = track.n_frames();
+
+  // Unvoiced and unrepresentable deltas are intentionally normalized to zero
+  // before interpolation. A caller may leave arbitrary values in those slots,
+  // but they must never bleed into the first eligible grain on either side.
+  std::vector<float> effective_deltas(static_cast<size_t>(n_frames), 0.0f);
+  std::vector<double> source_log2(static_cast<size_t>(n_frames), 0.0);
+  std::vector<bool> eligible(static_cast<size_t>(n_frames), false);
+  double max_abs_delta = 0.0;
+  for (int frame = 0; frame < n_frames; ++frame) {
+    const size_t index = static_cast<size_t>(frame);
+    const float requested = deltas_semitones[index];
+    SONARE_CHECK(std::isfinite(requested), ErrorCode::InvalidParameter);
+    if (!track.voiced[index]) continue;
+
+    double source = std::log2(static_cast<double>(track.f0_hz[index]));
+    // A valid source F0 whose period is longer than the buffer has no complete
+    // analysis grain. It remains a dry frame; malformed source F0 values were
+    // already rejected by validate_f0_track above.
+    if (!clamp_log2_to_bounds(source, min_target_log2, max_target_log2)) continue;
+
+    double target = source + static_cast<double>(requested) / kSemitonesPerOctave;
+    // A finite request can still target an unrepresentable pitch. Keep the
+    // frame dry rather than rejecting or deriving an unbounded pass count.
+    if (!clamp_log2_to_bounds(target, min_target_log2, max_target_log2)) continue;
+
+    const double effective = (target - source) * kSemitonesPerOctave;
+    if (!std::isfinite(effective)) continue;
+    source_log2[index] = source;
+    effective_deltas[index] = static_cast<float>(effective);
+    eligible[index] = true;
+    max_abs_delta = std::max(max_abs_delta, std::abs(effective));
+  }
+
+  // Validation above is deliberately complete before this identity return:
+  // malformed tracks and non-finite parameters must not become a silent
+  // success just because no eligible frame needs a correction.
+  if (!(max_abs_delta > 0.0)) return audio;
+
+  const double pass_count = std::ceil(max_abs_delta / static_cast<double>(kPsolaMaxSemitones));
+  SONARE_CHECK(std::isfinite(pass_count) &&
+                   pass_count <= static_cast<double>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
+  const int passes = std::max(1, static_cast<int>(pass_count));
+  const double pass_scale = 1.0 / static_cast<double>(passes);
+
+  Audio working = audio;
+  F0Track working_track = track;
+  std::vector<float> pass_deltas(static_cast<size_t>(n_frames), 0.0f);
+  for (int frame = 0; frame < n_frames; ++frame) {
+    working_track.voiced[static_cast<size_t>(frame)] = eligible[static_cast<size_t>(frame)];
+  }
+  for (int pass = 0; pass < passes; ++pass) {
+    const double progress = static_cast<double>(pass) * pass_scale;
+    for (int frame = 0; frame < n_frames; ++frame) {
+      const size_t index = static_cast<size_t>(frame);
+      if (!eligible[index]) {
+        working_track.voiced[index] = false;
+        pass_deltas[index] = 0.0f;
         continue;
       }
-      const int run_start = i;
-      float peak = 0.0f;
-      while (i < n_samples && fallback_weight[static_cast<size_t>(i)] > 0.0f) {
-        peak = std::max(peak, std::abs(result[static_cast<size_t>(i)]));
-        ++i;
-      }
-      if (peak > 1.0f) {
-        const float gain = 1.0f / peak;
-        for (int j = run_start; j < i; ++j) {
-          result[static_cast<size_t>(j)] *= gain;
-        }
-      }
+
+      double current_log2 = source_log2[index] + progress *
+                                                     static_cast<double>(effective_deltas[index]) /
+                                                     kSemitonesPerOctave;
+      // Keep intermediate values inside the same inclusive range. This also
+      // absorbs a last-bit drift at an exact Nyquist/lower-bound endpoint.
+      SONARE_CHECK(clamp_log2_to_bounds(current_log2, min_target_log2, max_target_log2),
+                   ErrorCode::InvalidParameter);
+      const double current_hz = std::exp2(current_log2);
+      SONARE_CHECK(std::isfinite(current_hz) && current_hz > 0.0, ErrorCode::InvalidParameter);
+      working_track.voiced[index] = true;
+      working_track.f0_hz[index] = static_cast<float>(current_hz);
+      const float pass_delta =
+          static_cast<float>(static_cast<double>(effective_deltas[index]) * pass_scale);
+      pass_deltas[index] = std::clamp(pass_delta, -kPsolaMaxSemitones, kPsolaMaxSemitones);
     }
+    working = resynthesize_psola_pass(working, working_track, pass_deltas);
   }
-  return Audio::from_vector(std::move(result), sr);
+  return working;
 }
 
 }  // namespace sonare::editing::pitch_editor

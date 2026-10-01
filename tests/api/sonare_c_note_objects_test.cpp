@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
@@ -87,7 +88,7 @@ SonareError render_at(const std::vector<float>& samples, const SonareNoteObject*
                       size_t note_count, const SonareNoteRenderConfig* config, float** out,
                       size_t* out_length) {
   return sonare_render_notes(samples.data(), samples.size(), kSampleRate, notes, note_count,
-                             nullptr, 0, nullptr, 0, kFrameRate, config, out, out_length);
+                             nullptr, 0, nullptr, nullptr, 0, kFrameRate, config, out, out_length);
 }
 
 /// The same with the envelope pool and the F0 track the edit fields index into.
@@ -96,8 +97,19 @@ SonareError render_with(const std::vector<float>& samples, const SonareNoteObjec
                         const float* f0_hz, size_t n_frames, const SonareNoteRenderConfig* config,
                         float** out, size_t* out_length) {
   return sonare_render_notes(samples.data(), samples.size(), kSampleRate, notes, note_count,
-                             envelopes, envelope_count, f0_hz, n_frames, kFrameRate, config, out,
-                             out_length);
+                             envelopes, envelope_count, f0_hz, nullptr, n_frames, kFrameRate,
+                             config, out, out_length);
+}
+
+/// The same render with explicit per-frame voiced flags.
+SonareError render_with_voiced(const std::vector<float>& samples, const SonareNoteObject* notes,
+                               size_t note_count, const float* envelopes, size_t envelope_count,
+                               const float* f0_hz, const int32_t* voiced, size_t n_frames,
+                               const SonareNoteRenderConfig* config, float** out,
+                               size_t* out_length) {
+  return sonare_render_notes(samples.data(), samples.size(), kSampleRate, notes, note_count,
+                             envelopes, envelope_count, f0_hz, voiced, n_frames, kFrameRate, config,
+                             out, out_length);
 }
 
 /// A renderable note carrying nothing but its span, its centre and a zeroed
@@ -669,6 +681,94 @@ TEST_CASE("sonare_render_notes applies a gain edit inside the note only", "[c_ap
   }
 }
 
+TEST_CASE("sonare_render_notes preserves a moved note over a vacated source span",
+          "[c_api][note_objects][note_review]") {
+  std::vector<float> samples(6400, 0.0f);
+  std::fill(samples.begin() + 800, samples.begin() + 2400, 0.25f);
+  std::fill(samples.begin() + 3200, samples.begin() + 4800, -0.5f);
+  SonareNoteObject moved = hand_note(800, 2400);
+  moved.edit.time_offset_samples = 2400;
+  SonareNoteObject muted = hand_note(3200, 4800);
+  muted.edit.muted = 1;
+
+  std::vector<float> previous;
+  for (const bool reversed : {false, true}) {
+    INFO("reversed " << reversed);
+    const std::vector<SonareNoteObject> notes = reversed
+                                                    ? std::vector<SonareNoteObject>{muted, moved}
+                                                    : std::vector<SonareNoteObject>{moved, muted};
+    float* out = nullptr;
+    size_t count = 0;
+    REQUIRE(render_at(samples, notes.data(), notes.size(), nullptr, &out, &count) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(count == samples.size());
+    std::vector<float> rendered(out, out + count);
+    sonare_free_floats(out);
+    CHECK_THAT(rendered[4000], WithinAbs(0.25f, 1e-6f));
+    CHECK_THAT(rendered[1600], WithinAbs(0.0f, 1e-6f));
+    if (!previous.empty()) {
+      CHECK(max_difference(previous.data(), rendered.data(), count) < 1e-6f);
+    }
+    previous = std::move(rendered);
+  }
+}
+
+TEST_CASE("sonare_render_notes applies a voiced mask to a sliced note track",
+          "[c_api][note_objects][note_review]") {
+  constexpr size_t kFrames = 40;
+  const std::vector<float> samples = fm_tone(220.0, 30.0, 5.5, 0.4, 6400);
+  const std::vector<float> f0 = fm_track(220.0, 30.0, 5.5, kFrames);
+  std::vector<int32_t> voiced(kFrames, 1);
+  std::vector<float> zeroed = f0;
+  // The note starts at frame 10. These masked frames are deliberately inside
+  // that slice, so using the mask from index 0 would read the wrong frames.
+  for (size_t i = 15; i < 22; ++i) {
+    voiced[i] = 0;
+    zeroed[i] = 0.0f;
+  }
+
+  SonareNoteObject note = hand_note(10 * kSamplesPerFrame, 30 * kSamplesPerFrame, 220.0f);
+  note.edit.vibrato_depth_change = -1.0f;
+  float* masked = nullptr;
+  size_t masked_length = 0;
+  REQUIRE(render_with_voiced(samples, &note, 1, nullptr, 0, f0.data(), voiced.data(), kFrames,
+                             nullptr, &masked, &masked_length) == SONARE_OK);
+  REQUIRE(masked_length == samples.size());
+
+  float* zero_baseline = nullptr;
+  size_t baseline_length = 0;
+  REQUIRE(render_with(samples, &note, 1, nullptr, 0, zeroed.data(), kFrames, nullptr,
+                      &zero_baseline, &baseline_length) == SONARE_OK);
+  REQUIRE(baseline_length == masked_length);
+  REQUIRE_THAT(max_difference(masked, zero_baseline, masked_length), WithinAbs(0.0f, 1.0e-6f));
+
+  // Non-vacuity: without the mask, the positive candidates remain active and
+  // therefore differ from the zeroed baseline.
+  float* unmasked = nullptr;
+  size_t unmasked_length = 0;
+  REQUIRE(render_with(samples, &note, 1, nullptr, 0, f0.data(), kFrames, nullptr, &unmasked,
+                      &unmasked_length) == SONARE_OK);
+  REQUIRE(unmasked_length == masked_length);
+  REQUIRE(max_difference(unmasked, zero_baseline, masked_length) > 1.0e-3f);
+
+  sonare_free_floats(masked);
+  sonare_free_floats(zero_baseline);
+  sonare_free_floats(unmasked);
+}
+
+TEST_CASE("sonare_render_notes rejects a voiced mask without an F0 track",
+          "[c_api][note_objects][note_review]") {
+  const std::vector<float> samples = sine(440.0f, 0.25f, 1600);
+  const std::vector<int32_t> voiced(10, 1);
+  SonareNoteObject note = hand_note(0, 1600);
+  float* out = nullptr;
+  size_t out_length = 0;
+
+  REQUIRE(sonare_render_notes(samples.data(), samples.size(), kSampleRate, &note, 1, nullptr, 0,
+                              nullptr, voiced.data(), 0, kFrameRate, nullptr, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("sonare_render_notes silences a muted note", "[c_api][note_objects]") {
   const std::vector<float> samples = sine(440.0f, 0.5f, 8000);
   constexpr size_t kOnset = 1920;
@@ -933,6 +1033,51 @@ TEST_CASE("sonare_render_notes rejects a curve edit with no F0 track and applies
   }
 }
 
+TEST_CASE("sonare_render_notes treats unusable F0 frames as unvoiced during curve edits",
+          "[c_api][note_objects][note_review]") {
+  constexpr size_t frames = 40;
+  const std::vector<float> samples = fm_tone(220.0, 30.0, 5.5, 0.4, 6400);
+  std::vector<float> f0 = fm_track(220.0, 30.0, 5.5, frames);
+  const std::vector<int32_t> all_voiced(frames, 1);
+  f0[5] = 0.0f;
+  SonareNoteObject note = hand_note(0, 6400, 220.0f);
+  note.edit.vibrato_depth_change = -1.0f;
+  float* expected = nullptr;
+  size_t expected_length = 0;
+  REQUIRE(render_with(samples, &note, 1, nullptr, 0, f0.data(), f0.size(), nullptr, &expected,
+                      &expected_length) == SONARE_OK);
+  for (const float missing : {0.0f, -1.0f, kInf, -kInf, kNaN}) {
+    INFO("missing F0 representation " << missing);
+    f0[5] = missing;
+    float* actual = nullptr;
+    size_t actual_length = 0;
+    const SonareError error = render_with(samples, &note, 1, nullptr, 0, f0.data(), f0.size(),
+                                          nullptr, &actual, &actual_length);
+    CHECK(error == SONARE_OK);
+    if (error == SONARE_OK) {
+      CHECK(actual_length == expected_length);
+      CHECK_THAT(max_difference(actual, expected, std::min(actual_length, expected_length)),
+                 WithinAbs(0.0f, 1.0e-6f));
+    }
+    sonare_free_floats(actual);
+
+    float* masked_actual = nullptr;
+    size_t masked_actual_length = 0;
+    const SonareError masked_error =
+        render_with_voiced(samples, &note, 1, nullptr, 0, f0.data(), all_voiced.data(), frames,
+                           nullptr, &masked_actual, &masked_actual_length);
+    CHECK(masked_error == SONARE_OK);
+    if (masked_error == SONARE_OK) {
+      CHECK(masked_actual_length == expected_length);
+      CHECK_THAT(
+          max_difference(masked_actual, expected, std::min(masked_actual_length, expected_length)),
+          WithinAbs(0.0f, 1.0e-6f));
+    }
+    sonare_free_floats(masked_actual);
+  }
+  sonare_free_floats(expected);
+}
+
 TEST_CASE("sonare_render_notes rejects an F0 track that does not cover the notes it is given",
           "[c_api][note_objects]") {
   constexpr size_t kFrames = 40;
@@ -978,7 +1123,7 @@ TEST_CASE("sonare_render_notes rejects an F0 track that does not cover the notes
 
   for (const float bad_rate : {0.0f, -100.0f, kNaN, kInf}) {
     REQUIRE(sonare_render_notes(samples.data(), samples.size(), kSampleRate, &note, 1, nullptr, 0,
-                                f0.data(), f0.size(), bad_rate, nullptr, &out,
+                                f0.data(), nullptr, f0.size(), bad_rate, nullptr, &out,
                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -1183,8 +1328,9 @@ TEST_CASE("sonare_render_notes rejects malformed spans, edits and config",
   REQUIRE(render_at(samples, &note, 1, nullptr, &out, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(render_at(samples, nullptr, 1, nullptr, &out, &out_length) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_render_notes(nullptr, 0, kSampleRate, &note, 1, nullptr, 0, nullptr, 0, kFrameRate,
-                              nullptr, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_render_notes(nullptr, 0, kSampleRate, &note, 1, nullptr, 0, nullptr, nullptr, 0,
+                              kFrameRate, nullptr, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Empty, reversed and negative spans have nothing to render into.
   const SonareNoteObject empty_span = edited(1920, 1920);
@@ -1277,6 +1423,47 @@ TEST_CASE("sonare_free_note_objects clears the result it releases", "[c_api][not
   REQUIRE(out.amplitude_count == 0);
 }
 
+TEST_CASE("low-F0 C pitch correction keeps a short block unchanged", "[c_api][pitch_revision]") {
+  constexpr int sample_rate = 48000;
+  constexpr int n_samples = 512;
+  constexpr float input_f0 = 80.0f;
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    samples[static_cast<size_t>(i)] =
+        0.25f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * input_f0 * i /
+                                            static_cast<double>(sample_rate)));
+  }
+  const float target_midi = sonare_hz_to_midi(input_f0);
+  const std::vector<float> f0(1, input_f0);
+  const std::vector<float> voiced_prob(1, 1.0f);
+  const std::vector<int32_t> voiced(1, 1);
+
+  auto check_identity = [&](float* output, size_t output_length) {
+    REQUIRE(output != nullptr);
+    REQUIRE(output_length == samples.size());
+    REQUIRE(max_difference(samples.data(), output, output_length) < 1.0e-6f);
+    sonare_free_floats(output);
+  };
+
+  float* output = nullptr;
+  size_t output_length = 0;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), sample_rate,
+                                                   f0.data(), voiced_prob.data(), voiced.data(),
+                                                   f0.size(), n_samples, target_midi, &output,
+                                                   &output_length) == SONARE_OK);
+  check_identity(output, output_length);
+
+  SonarePitchCorrectionConfig config{};
+  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  config.target_midi = target_midi;
+  output = nullptr;
+  output_length = 0;
+  REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), sample_rate, f0.data(),
+                                           voiced_prob.data(), voiced.data(), f0.size(), n_samples,
+                                           &config, &output, &output_length) == SONARE_OK);
+  check_identity(output, output_length);
+}
+
 #else
 
 TEST_CASE("the note-object C API reports NOT_SUPPORTED without the pitch editor",
@@ -1293,7 +1480,7 @@ TEST_CASE("the note-object C API reports NOT_SUPPORTED without the pitch editor"
   float* rendered = nullptr;
   size_t rendered_length = 0;
   REQUIRE(sonare_render_notes(samples.data(), samples.size(), 16000, nullptr, 0, nullptr, 0,
-                              nullptr, 0, 100.0f, nullptr, &rendered,
+                              nullptr, nullptr, 0, 100.0f, nullptr, &rendered,
                               &rendered_length) == SONARE_ERROR_NOT_SUPPORTED);
 }
 

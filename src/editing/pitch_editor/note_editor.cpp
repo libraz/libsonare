@@ -13,7 +13,10 @@ namespace sonare::editing::pitch_editor {
 
 using sonare::constants::kPi;
 
-NoteEditor::NoteEditor(NoteEditorConfig config) : config_(config) {}
+NoteEditor::NoteEditor(NoteEditorConfig config) : config_(config) {
+  SONARE_CHECK(std::isfinite(config_.fade_ms) && config_.fade_ms >= 0.0f,
+               ErrorCode::InvalidParameter);
+}
 
 Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
                             int target_onset_sample) const {
@@ -28,6 +31,13 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
                    "NoteEditor::move_note: targetOnsetSample must fall inside the buffer, got " +
                        std::to_string(target_onset_sample) + " for " +
                        std::to_string(audio.size()) + " samples");
+
+  // Validate the region and target before taking the identity fast path.  A
+  // no-op edit still has to reject malformed input consistently with edits
+  // that do modify the samples.
+  if (target_onset_sample == clipped.onset_sample) {
+    return audio;
+  }
 
   const int fade = fade_samples(audio.sample_rate(), length);
   std::vector<float> output(audio.begin(), audio.end());
@@ -56,6 +66,13 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;
   SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
+
+  // Ratio one is an exact identity.  Avoid sending an unchanged region
+  // through either spectral backend, which can introduce phase and edge
+  // differences even when its requested duration is unchanged.
+  if (stretch_ratio == 1.0f) {
+    return audio;
+  }
 
   std::vector<float> segment(audio.begin() + clipped.onset_sample,
                              audio.begin() + clipped.offset_sample);
@@ -103,9 +120,12 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
 }
 
 int NoteEditor::fade_samples(int sample_rate, int region_length) const noexcept {
-  const int requested =
-      static_cast<int>(std::round(config_.fade_ms * 0.001f * static_cast<float>(sample_rate)));
-  return std::clamp(requested, 0, std::max(0, region_length / 2));
+  const double requested =
+      std::round(static_cast<double>(config_.fade_ms) * 0.001 * static_cast<double>(sample_rate));
+  const int limit = std::max(0, region_length / 2);
+  if (!(requested > 0.0)) return 0;
+  if (requested >= static_cast<double>(limit)) return limit;
+  return static_cast<int>(requested);
 }
 
 void NoteEditor::apply_edge_fades(std::vector<float>& samples, int fade_samples) {

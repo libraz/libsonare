@@ -360,6 +360,65 @@ def test_voiced_prob_selects_voicing_when_no_flags_are_given() -> None:
     ]
 
 
+def test_explicit_voiced_ignores_invalid_voiced_prob_for_note_apis() -> None:
+    audio, f0_hz, voiced, notes = _gapped_notes()
+    invalid_probabilities = (
+        np.full(len(f0_hz) - 1, np.nan, dtype=np.float32),
+        np.full(len(f0_hz), np.nan, dtype=np.float32),
+        np.full(len(f0_hz), 1.5, dtype=np.float32),
+    )
+
+    def assert_same_notes(
+        actual: list[libsonare.NoteObject], expected: list[libsonare.NoteObject]
+    ) -> None:
+        assert actual == expected
+        for actual_note, expected_note in zip(actual, expected, strict=True):
+            np.testing.assert_array_equal(actual_note.amplitude, expected_note.amplitude)
+
+    expected_extract = libsonare.extract_notes(audio, SR, f0_hz, FRAME_RATE, voiced=voiced)
+    expected_split = libsonare.split_note(audio, SR, f0_hz, FRAME_RATE, notes, 1, 13, voiced=voiced)
+    expected_merge = libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 0, 1, voiced=voiced)
+    for invalid in invalid_probabilities:
+        assert_same_notes(
+            libsonare.extract_notes(
+                audio, SR, f0_hz, FRAME_RATE, voiced=voiced, voiced_prob=invalid
+            ),
+            expected_extract,
+        )
+        assert_same_notes(
+            libsonare.split_note(
+                audio,
+                SR,
+                f0_hz,
+                FRAME_RATE,
+                notes,
+                1,
+                13,
+                voiced=voiced,
+                voiced_prob=invalid,
+            ),
+            expected_split,
+        )
+        assert_same_notes(
+            libsonare.merge_notes(
+                audio,
+                SR,
+                f0_hz,
+                FRAME_RATE,
+                notes,
+                0,
+                1,
+                voiced=voiced,
+                voiced_prob=invalid,
+            ),
+            expected_merge,
+        )
+
+    for invalid in invalid_probabilities:
+        with pytest.raises(SonareError):
+            libsonare.extract_notes(audio, SR, f0_hz, FRAME_RATE, voiced_prob=invalid)
+
+
 def test_extract_notes_rejects_invalid_arguments() -> None:
     audio, f0_hz, voiced = _melody()
     with pytest.raises(SonareValueError, match="voiced"):
@@ -617,6 +676,130 @@ def test_decompose_note_pitch_reports_a_note_with_no_usable_pitch_as_empty() -> 
     usable = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, centre_hz)
     assert usable.centre_hz == pytest.approx(centre_hz)
     assert usable.drift_cents.size == n_frames
+
+
+def test_decompose_note_pitch_uses_voiced_mask_and_preserves_f0_validity() -> None:
+    n_frames = 64
+    f0_hz = np.full(n_frames, 220.0, dtype=np.float32)
+    f0_hz[n_frames // 2 :] = 440.0
+    voiced = np.ones(n_frames, dtype=np.int32)
+    voiced[n_frames // 2 :] = 0
+    normalized = f0_hz.copy()
+    normalized[voiced == 0] = 0.0
+
+    masked = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, 220.0, voiced=voiced)
+    zero_baseline = libsonare.decompose_note_pitch(normalized, FRAME_RATE, 220.0)
+    np.testing.assert_allclose(masked.drift_cents, zero_baseline.drift_cents, rtol=0.0, atol=1e-6)
+    np.testing.assert_allclose(
+        masked.vibrato_cents, zero_baseline.vibrato_cents, rtol=0.0, atol=1e-6
+    )
+
+    # The positive candidate is real input when no mask is supplied, so this is
+    # the negative control for a mask implementation that accidentally ignores
+    # the pointer.
+    unmasked = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, 220.0)
+    unmasked_total = unmasked.drift_cents.astype(np.float64) + unmasked.vibrato_cents
+    masked_total = masked.drift_cents.astype(np.float64) + masked.vibrato_cents
+    assert float(np.max(np.abs(unmasked_total - masked_total))) > 100.0
+
+    # A non-zero flag cannot resurrect an unusable F0 value.
+    invalid = f0_hz.copy()
+    invalid[7] = np.nan
+    invalid_masked = libsonare.decompose_note_pitch(
+        invalid, FRAME_RATE, 220.0, voiced=np.ones(n_frames)
+    )
+    invalid_inferred = libsonare.decompose_note_pitch(invalid, FRAME_RATE, 220.0)
+    assert invalid_masked.centre_hz == pytest.approx(invalid_inferred.centre_hz, abs=1e-6)
+    np.testing.assert_allclose(
+        invalid_masked.drift_cents, invalid_inferred.drift_cents, rtol=0.0, atol=1e-6
+    )
+    np.testing.assert_allclose(
+        invalid_masked.vibrato_cents, invalid_inferred.vibrato_cents, rtol=0.0, atol=1e-6
+    )
+
+    # A slice is a complete note-local track, so its flags are checked against
+    # that slice's length rather than against an unrelated source track.
+    start, stop = 8, 56
+    sliced = libsonare.decompose_note_pitch(
+        f0_hz[start:stop], FRAME_RATE, 220.0, voiced=voiced[start:stop]
+    )
+    sliced_baseline = libsonare.decompose_note_pitch(normalized[start:stop], FRAME_RATE, 220.0)
+    np.testing.assert_allclose(sliced.drift_cents, sliced_baseline.drift_cents, rtol=0.0, atol=1e-6)
+    np.testing.assert_allclose(
+        sliced.vibrato_cents, sliced_baseline.vibrato_cents, rtol=0.0, atol=1e-6
+    )
+
+    all_unvoiced = libsonare.decompose_note_pitch(
+        f0_hz, FRAME_RATE, 220.0, voiced=np.zeros(n_frames, dtype=bool)
+    )
+    assert all_unvoiced.centre_hz == pytest.approx(0.0, abs=1e-6)
+    assert all_unvoiced.drift_cents.size == 0
+    assert all_unvoiced.vibrato_cents.size == 0
+
+
+def test_render_notes_uses_voiced_mask_for_positive_f0_candidates() -> None:
+    audio, f0_hz, _, notes = _vibrato_notes()
+    candidate = f0_hz.copy()
+    candidate[10:24] = 440.0
+    voiced = np.ones(len(candidate), dtype=np.int32)
+    voiced[10:24] = 0
+    normalized = candidate.copy()
+    normalized[voiced == 0] = 0.0
+    for note in notes:
+        note.edit.drift_change = 1.0
+
+    masked = libsonare.render_notes(
+        audio, SR, notes, f0_hz=candidate, voiced=voiced, frame_rate=FRAME_RATE
+    )
+    zero_baseline = libsonare.render_notes(
+        audio, SR, notes, f0_hz=normalized, frame_rate=FRAME_RATE
+    )
+    np.testing.assert_allclose(masked, zero_baseline, rtol=0.0, atol=1e-6)
+
+    unmasked = libsonare.render_notes(audio, SR, notes, f0_hz=candidate, frame_rate=FRAME_RATE)
+    assert float(np.max(np.abs(unmasked - masked))) > 1e-6
+
+
+@pytest.mark.parametrize("nan_in_f0", [False, True], ids=["finite-f0", "nan-in-f0"])
+def test_note_curve_voiced_masks_validate_presence_length_and_numeric_values(
+    nan_in_f0: bool,
+) -> None:
+    audio, f0_hz, _, notes = _vibrato_notes()
+    with pytest.raises(SonareValueError, match="f0_hz"):
+        libsonare.render_notes(audio, SR, notes, voiced=np.ones(len(f0_hz), dtype=bool))
+
+    # ``render_notes`` intentionally sends its F0 through the shape-only path
+    # (the C ABI accepts NaN as an unmeasured frame). The mask length check must
+    # remain active even when that value validation is disabled.
+    f0_for_length = f0_hz.copy()
+    if nan_in_f0:
+        f0_for_length[0] = np.nan
+    with pytest.raises(SonareValueError, match="voiced"):
+        libsonare.render_notes(
+            audio,
+            SR,
+            notes,
+            f0_hz=f0_for_length,
+            voiced=np.ones(len(f0_for_length) - 1, dtype=np.int32),
+            frame_rate=FRAME_RATE,
+        )
+    with pytest.raises(SonareValueError, match="voiced"):
+        libsonare.decompose_note_pitch(
+            f0_hz, FRAME_RATE, 220.0, voiced=np.ones(len(f0_hz) - 1, dtype=np.int32)
+        )
+    with pytest.raises(SonareValueError, match="voiced"):
+        libsonare.decompose_note_pitch(
+            f0_hz, FRAME_RATE, 220.0, voiced=np.full(len(f0_hz), 0.5, dtype=np.float32)
+        )
+
+    by_bool = libsonare.decompose_note_pitch(
+        f0_hz, FRAME_RATE, 220.0, voiced=np.ones(len(f0_hz), dtype=bool)
+    )
+    by_numeric = libsonare.decompose_note_pitch(
+        f0_hz, FRAME_RATE, 220.0, voiced=np.ones(len(f0_hz), dtype=np.float32)
+    )
+    np.testing.assert_allclose(by_bool.drift_cents, by_numeric.drift_cents, rtol=0.0, atol=1e-6)
+    np.testing.assert_allclose(by_bool.vibrato_cents, by_numeric.vibrato_cents, rtol=0.0, atol=1e-6)
 
 
 def test_decompose_note_pitch_rejects_invalid_arguments() -> None:

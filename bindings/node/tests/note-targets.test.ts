@@ -64,6 +64,33 @@ function matchedAndStranded(): NoteObject[] {
 
 const shift = (note: NoteObject): number => Number(note.edit.pitchShiftSemitones.toFixed(4));
 
+it('keeps assigned note curves independent of the source notes', () => {
+  const note = noteAt(0, HALF_SECOND, A4_HZ);
+  note.amplitude = new Float32Array([0.2, 0.4]);
+  note.edit.amplitudeEnvelope = new Float32Array([1, 0.5]);
+  const result = assignNoteTargets({
+    notes: [note],
+    sampleRate: SR,
+    targets: [target(0, 0.5, 60)],
+  });
+  result.notes[0].amplitude[0] = 0.9;
+  result.notes[0].edit.amplitudeEnvelope[0] = 0.1;
+  expect.soft(note.amplitude[0]).toBeCloseTo(0.2, 6);
+  expect.soft(note.edit.amplitudeEnvelope[0]).toBeCloseTo(1, 6);
+});
+
+it('assigns sparse JavaScript notes without curves or an edit object', () => {
+  const note = { onsetSample: 0, offsetSample: HALF_SECOND, medianHz: A4_HZ };
+  const result = assignNoteTargets({
+    notes: [note as NoteObject],
+    sampleRate: SR,
+    targets: [target(0, 0.5, 60)],
+  });
+  expect(result.assignedCount).toBe(1);
+  expect(result.notes[0].edit.pitchShiftSemitones).toBeCloseTo(-9, 4);
+  expect(note).not.toHaveProperty('edit');
+});
+
 /**
  * Two quarter notes at 120 BPM: C4 over 0–0.5 s and G4 over 0.5–1.0 s.
  *
@@ -439,9 +466,9 @@ describe('the whole chain, on a segmented take', () => {
     expect(tuned.assignedCount).toBe(1);
     expect(shift(tuned.notes[0])).toBeCloseTo(-9, 2);
 
-    // The measured fields and the amplitude curve never reached the C ABI, so
-    // they are the caller's own objects rather than copies of them.
-    expect(tuned.notes[0].amplitude).toBe(notes[0].amplitude);
+    // Assignment preserves the measurements and copies mutable curves.
+    expect(tuned.notes[0].amplitude).not.toBe(notes[0].amplitude);
+    expect(tuned.notes[0].amplitude).toEqual(notes[0].amplitude);
     expect(tuned.notes[0].medianCents).toBe(notes[0].medianCents);
     expect(tuned.notes[0].f0Stability).toBe(notes[0].f0Stability);
     expect(tuned.notes[0].frameEnd).toBe(notes[0].frameEnd);

@@ -2329,12 +2329,14 @@ export interface SonareModule {
     options: {
       fadeMs?: number;
       f0Hz?: Float32Array;
+      voiced?: Float32Array;
       frameRate?: number;
       vibratoCutoffHz?: number;
     },
   ) => Float32Array;
   decomposeNotePitch: (
     f0Hz: Float32Array,
+    voiced: Float32Array | undefined,
     frameRate: number,
     medianHz: number,
     vibratoCutoffHz: number,

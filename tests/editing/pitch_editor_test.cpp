@@ -50,6 +50,67 @@ float median_voiced_f0(const F0Track& track) {
   return values[values.size() / 2];
 }
 
+// A deliberately independent estimator for the synthetic-tone regressions
+// below.  The supplied F0 track describes the requested edit, so measuring the
+// rendered samples independently is what catches a wrong resynthesis pitch.
+float positive_zero_crossing_hz(const sonare::Audio& audio, int begin, int end) {
+  const int first = std::max(1, begin + 1);
+  const int last = std::min(end, static_cast<int>(audio.size()));
+  if (last <= first) return 0.0f;
+
+  double first_crossing = 0.0;
+  double last_crossing = 0.0;
+  int crossings = 0;
+  for (int i = first; i < last; ++i) {
+    const float previous = audio[static_cast<size_t>(i - 1)];
+    const float current = audio[static_cast<size_t>(i)];
+    if (!(previous <= 0.0f && current > 0.0f)) continue;
+
+    const double denominator = static_cast<double>(current) - previous;
+    const double fraction = denominator > 0.0 ? -static_cast<double>(previous) / denominator : 0.0;
+    const double crossing = static_cast<double>(i - 1) + fraction;
+    if (crossings == 0) first_crossing = crossing;
+    last_crossing = crossing;
+    ++crossings;
+  }
+  if (crossings < 2 || last_crossing <= first_crossing) return 0.0f;
+  return static_cast<float>(audio.sample_rate() * static_cast<double>(crossings - 1) /
+                            (last_crossing - first_crossing));
+}
+
+// Use an independent pYIN pass for rendered-pitch measurements.  Its search
+// band is fixed rather than derived from the requested edit, so the test does
+// not select a lag from the expected pitch.  The long frame gives pYIN enough
+// periods for both octave endpoints while retaining the whole interior window.
+float median_pyin_f0(const sonare::Audio& audio) {
+  sonare::PitchConfig config;
+  config.frame_length = 4096;
+  config.hop_length = 256;
+  config.fmin = 30.0f;
+  config.fmax = 1000.0f;
+  PyinF0Provider provider(config);
+  return median_voiced_f0(provider.detect(audio));
+}
+
+F0Track voiced_runs_track(float f0_hz, int sample_rate, int hop_length, int frames, int first_start,
+                          int first_end, int second_start, int second_end) {
+  F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = hop_length;
+  track.f0_hz.assign(static_cast<size_t>(frames), 0.0f);
+  track.voiced.assign(static_cast<size_t>(frames), false);
+  track.voiced_prob.assign(static_cast<size_t>(frames), 1.0f);
+  for (int frame = first_start; frame < first_end; ++frame) {
+    track.f0_hz[static_cast<size_t>(frame)] = f0_hz;
+    track.voiced[static_cast<size_t>(frame)] = true;
+  }
+  for (int frame = second_start; frame < second_end; ++frame) {
+    track.f0_hz[static_cast<size_t>(frame)] = f0_hz;
+    track.voiced[static_cast<size_t>(frame)] = true;
+  }
+  return track;
+}
+
 }  // namespace
 
 TEST_CASE("NoteSegmenter splits voiced notes by sustained pitch jump", "[pitch_editor]") {
@@ -781,6 +842,525 @@ TEST_CASE("PitchCorrector preserves duration for a constant pitch shift", "[pitc
   // The corrected marker must stay aligned with the input marker (within ~6 ms),
   // NOT shifted by the pitch ratio.
   REQUIRE(std::abs(output_peak - input_peak) < 300);
+}
+
+TEST_CASE("PitchCorrector resynthesizes separated large shifts and preserves an unvoiced gap",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 240;
+  constexpr int n_samples = sample_rate;
+  constexpr int frames = n_samples / hop_length;
+  constexpr float input_f0 = 200.0f;
+  constexpr int first_start = 8;
+  constexpr int first_end = 64;
+  constexpr int gap_start = 64;
+  constexpr int gap_end = 112;
+  constexpr int second_start = 112;
+  constexpr int second_end = 192;
+
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = voiced_runs_track(input_f0, sample_rate, hop_length, frames, first_start,
+                                          first_end, second_start, second_end);
+  std::vector<float> deltas(static_cast<size_t>(frames), 0.0f);
+  std::fill(deltas.begin() + first_start, deltas.begin() + first_end, 7.0f);
+  std::fill(deltas.begin() + second_start, deltas.begin() + second_end, -7.0f);
+
+  const PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.resynthesize(audio, track, deltas);
+  REQUIRE(corrected.size() == audio.size());
+
+  const int first_lo = (first_start + 4) * hop_length;
+  const int first_hi = (first_end - 4) * hop_length;
+  const int second_lo = (second_start + 4) * hop_length;
+  const int second_hi = (second_end - 4) * hop_length;
+  const float expected_up = input_f0 * std::pow(2.0f, 7.0f / 12.0f);
+  const float expected_down = input_f0 * std::pow(2.0f, -7.0f / 12.0f);
+  CHECK_THAT(positive_zero_crossing_hz(corrected, first_lo, first_hi),
+             WithinAbs(expected_up, 8.0f));
+  CHECK_THAT(positive_zero_crossing_hz(corrected, second_lo, second_hi),
+             WithinAbs(expected_down, 8.0f));
+
+  // Boundary cross-fades may touch a few samples at each edge.  The middle of
+  // the unvoiced run must remain the original input sample-for-sample.
+  const int dry_lo = (gap_start + 4) * hop_length;
+  const int dry_hi = (gap_end - 4) * hop_length;
+  for (int i = dry_lo; i < dry_hi; ++i) {
+    CHECK_THAT(corrected[static_cast<size_t>(i)],
+               WithinAbs(audio[static_cast<size_t>(i)], 1.0e-6f));
+  }
+}
+
+TEST_CASE("PitchCorrector keeps adjacent large shifts separate for opposite intervals",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 240;
+  constexpr int n_samples = sample_rate;
+  constexpr int frames = n_samples / hop_length;
+  constexpr float input_f0 = 200.0f;
+  constexpr int first_start = 8;
+  constexpr int boundary = 100;
+  constexpr int second_end = 192;
+
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = voiced_runs_track(input_f0, sample_rate, hop_length, frames, first_start,
+                                          boundary, boundary, second_end);
+  std::vector<float> deltas(static_cast<size_t>(frames), 0.0f);
+  std::fill(deltas.begin() + first_start, deltas.begin() + boundary, 7.0f);
+  std::fill(deltas.begin() + boundary, deltas.begin() + second_end, -7.0f);
+
+  const PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.resynthesize(audio, track, deltas);
+  const float expected_up = input_f0 * std::pow(2.0f, 7.0f / 12.0f);
+  const float expected_down = input_f0 * std::pow(2.0f, -7.0f / 12.0f);
+  CHECK_THAT(positive_zero_crossing_hz(corrected, 16 * hop_length, 88 * hop_length),
+             WithinAbs(expected_up, 8.0f));
+  CHECK_THAT(positive_zero_crossing_hz(corrected, 112 * hop_length, 184 * hop_length),
+             WithinAbs(expected_down, 8.0f));
+}
+
+TEST_CASE("PitchCorrector keeps adjacent large shifts separate for unequal intervals",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 240;
+  constexpr int n_samples = sample_rate;
+  constexpr int frames = n_samples / hop_length;
+  constexpr float input_f0 = 200.0f;
+  constexpr int first_start = 8;
+  constexpr int boundary = 100;
+  constexpr int second_end = 192;
+
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = voiced_runs_track(input_f0, sample_rate, hop_length, frames, first_start,
+                                          boundary, boundary, second_end);
+  std::vector<float> deltas(static_cast<size_t>(frames), 0.0f);
+  std::fill(deltas.begin() + first_start, deltas.begin() + boundary, 7.0f);
+  std::fill(deltas.begin() + boundary, deltas.begin() + second_end, 9.0f);
+
+  const PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.resynthesize(audio, track, deltas);
+  const float expected_first = input_f0 * std::pow(2.0f, 7.0f / 12.0f);
+  const float expected_second = input_f0 * std::pow(2.0f, 9.0f / 12.0f);
+  CHECK_THAT(positive_zero_crossing_hz(corrected, 16 * hop_length, 88 * hop_length),
+             WithinAbs(expected_first, 8.0f));
+  CHECK_THAT(positive_zero_crossing_hz(corrected, 112 * hop_length, 184 * hop_length),
+             WithinAbs(expected_second, 8.0f));
+}
+
+TEST_CASE("PitchCorrector resynthesize rejects malformed tracks and non-finite deltas",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 256;
+  constexpr int frames = 16;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(200.0f, sample_rate, 4096), sample_rate);
+  const F0Track valid = constant_track(200.0f, sample_rate, hop_length, frames);
+  const std::vector<float> deltas(static_cast<size_t>(frames), 0.0f);
+  const PitchCorrector corrector;
+
+  auto require_invalid_parameter = [](auto&& operation) {
+    bool threw = false;
+    try {
+      operation();
+    } catch (const sonare::SonareException& error) {
+      threw = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    }
+    CHECK(threw);
+  };
+
+  F0Track malformed_shape = valid;
+  malformed_shape.voiced.pop_back();
+  require_invalid_parameter([&] { corrector.resynthesize(audio, malformed_shape, deltas); });
+
+  F0Track malformed_rate = valid;
+  malformed_rate.sample_rate = sample_rate + 1;
+  require_invalid_parameter([&] { corrector.resynthesize(audio, malformed_rate, deltas); });
+
+  F0Track malformed_cadence = valid;
+  malformed_cadence.frame_rate_hz = static_cast<float>(sample_rate) * 2.0f;
+  require_invalid_parameter([&] { corrector.resynthesize(audio, malformed_cadence, deltas); });
+  require_invalid_parameter([&] { corrector.correct_to_midi(audio, malformed_cadence, 69.0f); });
+
+  F0Track nonfinite_f0 = valid;
+  nonfinite_f0.f0_hz[0] = std::numeric_limits<float>::quiet_NaN();
+  require_invalid_parameter([&] { corrector.resynthesize(audio, nonfinite_f0, deltas); });
+
+  for (const float bad_delta :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    std::vector<float> bad_deltas = deltas;
+    bad_deltas[0] = bad_delta;
+    require_invalid_parameter([&] { corrector.resynthesize(audio, valid, bad_deltas); });
+  }
+}
+
+TEST_CASE("PitchCorrector validates voiced periods and target pitch representability",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 256;
+  constexpr int frames = 16;
+  const sonare::Audio short_audio =
+      sonare::Audio::from_vector(sine(200.0f, sample_rate, 4096), sample_rate);
+  const PitchCorrector corrector;
+  const std::vector<float> zero_deltas(static_cast<size_t>(frames), 0.0f);
+
+  auto check_invalid_parameter = [](auto&& operation) {
+    bool threw = false;
+    try {
+      operation();
+    } catch (const sonare::SonareException& error) {
+      threw = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    }
+    CHECK(threw);
+  };
+
+  // A voiced period longer than the source buffer cannot provide a complete
+  // PSOLA grain.  That frame is dry-passed rather than rejected: the contract
+  // is per-frame representability, rather than an arbitrary musical cutoff.
+  const F0Track tiny_f0 = constant_track(1.0f, sample_rate, hop_length, frames);
+  const sonare::Audio tiny_identity = corrector.resynthesize(
+      short_audio, tiny_f0, std::vector<float>(static_cast<size_t>(frames), 6.0f));
+  for (size_t i = 0; i < tiny_identity.size(); ++i) {
+    CHECK_THAT(tiny_identity[i], WithinAbs(short_audio[i], 1.0e-7f));
+  }
+
+  const F0Track nominal = constant_track(200.0f, sample_rate, hop_length, frames);
+  const sonare::Audio identity = corrector.resynthesize(short_audio, nominal, zero_deltas);
+  CHECK(identity.size() == short_audio.size());
+  for (size_t i = 0; i < identity.size(); ++i) {
+    CHECK_THAT(identity[i], WithinAbs(short_audio[i], 1.0e-7f));
+  }
+
+  std::vector<float> too_low(static_cast<size_t>(frames), -100.0f);
+  std::vector<float> too_high(static_cast<size_t>(frames), 100.0f);
+  const sonare::Audio low_identity = corrector.resynthesize(short_audio, nominal, too_low);
+  const sonare::Audio high_identity = corrector.resynthesize(short_audio, nominal, too_high);
+  for (size_t i = 0; i < short_audio.size(); ++i) {
+    CHECK_THAT(low_identity[i], WithinAbs(short_audio[i], 1.0e-7f));
+    CHECK_THAT(high_identity[i], WithinAbs(short_audio[i], 1.0e-7f));
+  }
+
+  // A source F0 above Nyquist remains malformed input even when the frame
+  // would otherwise be dry-passable.
+  F0Track above_nyquist = nominal;
+  above_nyquist.f0_hz[0] = static_cast<float>(sample_rate);
+  check_invalid_parameter([&] { corrector.resynthesize(short_audio, above_nyquist, zero_deltas); });
+
+  // Shifts beyond six semitones use bounded passes when every target pitch is
+  // representable in this buffer.
+  const sonare::Audio long_audio =
+      sonare::Audio::from_vector(sine(200.0f, sample_rate, sample_rate), sample_rate);
+  const F0Track long_track =
+      constant_track(200.0f, sample_rate, hop_length, sample_rate / hop_length);
+  const sonare::Audio pure_400_audio =
+      sonare::Audio::from_vector(sine(400.0f, sample_rate, sample_rate), sample_rate);
+  CHECK_THAT(median_pyin_f0(pure_400_audio), WithinAbs(400.0f, 5.0f));
+
+  for (const float delta : {-24.0f, 24.0f}) {
+    CAPTURE(delta);
+    const std::vector<float> curve(static_cast<size_t>(long_track.n_frames()), delta);
+    const sonare::Audio shifted = corrector.resynthesize(long_audio, long_track, curve);
+    CHECK(shifted.size() == long_audio.size());
+    for (size_t i = 0; i < shifted.size(); ++i) CHECK(std::isfinite(shifted[i]));
+    const float expected = 200.0f * std::pow(2.0f, delta / 12.0f);
+    CHECK_THAT(median_pyin_f0(shifted), WithinAbs(expected, 8.0f));
+  }
+}
+
+TEST_CASE("PitchCorrector follows a large time-varying pitch ramp", "[pitch_editor]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 240;
+  constexpr int n_samples = sample_rate;
+  constexpr int frames = n_samples / hop_length;
+  constexpr float input_f0 = 200.0f;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = constant_track(input_f0, sample_rate, hop_length, frames);
+  std::vector<float> deltas(static_cast<size_t>(frames), 0.0f);
+  for (int frame = 0; frame < frames; ++frame) {
+    deltas[static_cast<size_t>(frame)] =
+        7.0f + 11.0f * static_cast<float>(frame) / static_cast<float>(frames - 1);
+  }
+
+  const PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.resynthesize(audio, track, deltas);
+  const auto expected_at = [&](int frame) {
+    const float delta = deltas[static_cast<size_t>(frame)];
+    return input_f0 * std::pow(2.0f, delta / 12.0f);
+  };
+  CHECK_THAT(positive_zero_crossing_hz(corrected, 20 * hop_length, 50 * hop_length),
+             WithinAbs(expected_at(35), 15.0f));
+  CHECK_THAT(positive_zero_crossing_hz(corrected, 150 * hop_length, 180 * hop_length),
+             WithinAbs(expected_at(165), 15.0f));
+}
+
+TEST_CASE("PitchCorrector accepts a target at the exact lower representability bound",
+          "[pitch_editor][pitch_revision]") {
+  constexpr int sample_rate = 8000;
+  constexpr int n_samples = 512;
+  constexpr int hop_length = n_samples;
+  constexpr float source_f0 = 31.25f;
+  constexpr float target_f0 = 15.625f;  // sample_rate / n_samples
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(source_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = constant_track(source_f0, sample_rate, hop_length, 1);
+  const PitchCorrector corrector;
+  const float target_delta = 12.0f * std::log2(target_f0 / source_f0);  // exactly -12 semitones
+  const sonare::Audio corrected =
+      corrector.resynthesize(audio, track, std::vector<float>{target_delta});
+
+  REQUIRE(corrected.size() == audio.size());
+  double maximum_difference = 0.0;
+  for (size_t i = 0; i < corrected.size(); ++i) {
+    CHECK(std::isfinite(corrected[i]));
+    maximum_difference = std::max(maximum_difference, std::abs(static_cast<double>(corrected[i]) -
+                                                               static_cast<double>(audio[i])));
+  }
+  CHECK(maximum_difference > 1.0e-4);
+  CHECK_THAT(target_f0, WithinAbs(sample_rate / static_cast<float>(n_samples), 1.0e-6f));
+}
+
+TEST_CASE("PitchCorrector keeps bounded passes stable at fractional frame cadence",
+          "[pitch_editor][pitch_revision]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 240;
+  constexpr int n_samples = sample_rate;
+  constexpr float input_f0 = 220.0f;
+  constexpr float fractional_frame_rate = 200.5f;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+  F0Track track = constant_track(input_f0, sample_rate, hop_length, n_samples / hop_length + 2);
+  track.frame_rate_hz = fractional_frame_rate;
+
+  const PitchCorrector corrector;
+  for (const float delta : {-12.0f, -6.0f, 6.0f, 12.0f}) {
+    CAPTURE(delta);
+    const std::vector<float> curve(static_cast<size_t>(track.n_frames()), delta);
+    const sonare::Audio shifted = corrector.resynthesize(audio, track, curve);
+    REQUIRE(shifted.size() == audio.size());
+    for (size_t i = 0; i < shifted.size(); ++i) CHECK(std::isfinite(shifted[i]));
+
+    const float expected = input_f0 * std::pow(2.0f, delta / 12.0f);
+    // A PSOLA output can contain strong harmonics that add extra zero
+    // crossings even while its fundamental is correct. Measure the rendered
+    // pitch through the independent fixed-band pYIN estimator instead.
+    CHECK_THAT(median_pyin_f0(shifted), WithinAbs(expected, 8.0f));
+  }
+}
+
+TEST_CASE("PitchCorrector accepts a float-spelled lower endpoint",
+          "[pitch_editor][pitch_revision]") {
+  constexpr int sample_rate = 44100;
+  constexpr int n_samples = 1000;
+  constexpr int hop_length = n_samples;
+  constexpr float source_f0 = 100.0f;
+  const float target_f0 = static_cast<float>(sample_rate) / static_cast<float>(n_samples);
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(source_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = constant_track(source_f0, sample_rate, hop_length, 1);
+  const float target_delta = 12.0f * std::log2(target_f0 / source_f0);
+  const sonare::Audio corrected =
+      PitchCorrector().resynthesize(audio, track, std::vector<float>{target_delta});
+
+  REQUIRE(corrected.size() == audio.size());
+  double maximum_difference = 0.0;
+  for (size_t i = 0; i < corrected.size(); ++i) {
+    CHECK(std::isfinite(corrected[i]));
+    maximum_difference = std::max(maximum_difference, std::abs(static_cast<double>(corrected[i]) -
+                                                               static_cast<double>(audio[i])));
+  }
+  CHECK(maximum_difference > 1.0e-4);
+}
+
+TEST_CASE("PitchCorrector dry-passes ineligible mixed frames without a large-shift loop",
+          "[pitch_editor][pitch_revision]") {
+  constexpr int sample_rate = 8000;
+  constexpr int hop_length = 512;
+  constexpr int n_samples = sample_rate * 2;
+  constexpr float input_f0 = 500.0f;
+  constexpr int frames = n_samples / hop_length;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+  const F0Track track = constant_track(input_f0, sample_rate, hop_length, frames);
+  std::vector<float> deltas(static_cast<size_t>(frames), std::numeric_limits<float>::max());
+  const int boundary_frame = frames / 2;
+  // 500 Hz + 36 semitones is exactly Nyquist at 8 kHz and must remain an
+  // eligible boundary case.  The tail requests an enormous finite shift and
+  // must be treated as dry because its target is outside the representable
+  // range, without turning the pass count into an unbounded loop.
+  std::fill(deltas.begin(), deltas.begin() + boundary_frame, 36.0f);
+
+  const PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.resynthesize(audio, track, deltas);
+  REQUIRE(corrected.size() == audio.size());
+  for (size_t i = 0; i < corrected.size(); ++i) CHECK(std::isfinite(corrected[i]));
+
+  const int active_lo = 4 * hop_length;
+  const int active_hi = (boundary_frame - 4) * hop_length;
+  double active_difference = 0.0;
+  for (int i = active_lo; i < active_hi; ++i) {
+    active_difference += std::abs(static_cast<double>(corrected[static_cast<size_t>(i)]) -
+                                  static_cast<double>(audio[static_cast<size_t>(i)]));
+  }
+  CHECK(active_difference > 1.0);
+
+  // The dry tail is measured well beyond the transition cross-fade and a
+  // source grain, so neighbouring eligible grains must not leak into it.
+  const int dry_lo = (boundary_frame + 4) * hop_length;
+  const int dry_hi = n_samples - 4 * hop_length;
+  for (int i = dry_lo; i < dry_hi; ++i) {
+    CHECK_THAT(corrected[static_cast<size_t>(i)],
+               WithinAbs(audio[static_cast<size_t>(i)], 1.0e-6f));
+  }
+}
+
+TEST_CASE("PitchCorrector stops a correction at a voiced-to-unvoiced tail boundary",
+          "[pitch_editor][pitch_revision]") {
+  constexpr int sample_rate = 48000;
+  constexpr int hop_length = 2048;
+  constexpr int frames = 24;
+  constexpr int tail_frame = 8;
+  constexpr float input_f0 = 2000.0f;
+  constexpr int n_samples = frames * hop_length;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(input_f0, sample_rate, n_samples), sample_rate);
+
+  auto make_track = [&](int last_voiced_frame) {
+    F0Track track;
+    track.sample_rate = sample_rate;
+    track.hop_length = hop_length;
+    track.f0_hz.assign(frames, 0.0f);
+    track.voiced.assign(frames, false);
+    track.voiced_prob.assign(frames, 1.0f);
+    for (int frame = 2; frame <= last_voiced_frame; ++frame) {
+      track.f0_hz[static_cast<size_t>(frame)] = input_f0;
+      track.voiced[static_cast<size_t>(frame)] = true;
+    }
+    return track;
+  };
+
+  const std::vector<float> deltas(static_cast<size_t>(frames), 6.0f);
+  const PitchCorrector corrector;
+  const sonare::Audio cut_at_tail = corrector.resynthesize(audio, make_track(tail_frame), deltas);
+  const sonare::Audio with_one_more_frame =
+      corrector.resynthesize(audio, make_track(tail_frame + 1), deltas);
+  REQUIRE(cut_at_tail.size() == audio.size());
+  REQUIRE(with_one_more_frame.size() == audio.size());
+
+  // sample_voiced() selects the nearest frame, so frame N remains active only
+  // through its centered half-frame. Compare the latter part of that active
+  // interval, ending one cross-fade and one source period before the boundary.
+  // The only difference between the tracks is whether frame N+1 is voiced, so
+  // a correction must not taper toward zero through the tail of frame N.
+  constexpr int crossfade_samples = 480;
+  constexpr int source_period = sample_rate / static_cast<int>(input_f0);
+  const int compare_lo = tail_frame * hop_length + hop_length / 8;
+  const int compare_hi =
+      tail_frame * hop_length + hop_length / 2 - crossfade_samples - source_period;
+  REQUIRE(compare_hi > compare_lo);
+  double difference = 0.0;
+  for (int i = compare_lo; i < compare_hi; ++i) {
+    difference = std::max(
+        difference, std::abs(static_cast<double>(cut_at_tail[static_cast<size_t>(i)]) -
+                             static_cast<double>(with_one_more_frame[static_cast<size_t>(i)])));
+  }
+  double reference_difference = 0.0;
+  for (int i = compare_lo; i < compare_hi; ++i) {
+    reference_difference =
+        std::max(reference_difference,
+                 std::abs(static_cast<double>(with_one_more_frame[static_cast<size_t>(i)]) -
+                          static_cast<double>(audio[static_cast<size_t>(i)])));
+  }
+  CHECK(reference_difference > 1.0e-4);
+  CHECK(difference < 1.0e-4);
+}
+
+TEST_CASE("NoteEditor rejects invalid fade configuration", "[pitch_editor]") {
+  for (const float fade_ms :
+       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    CAPTURE(fade_ms);
+    NoteEditorConfig config;
+    config.fade_ms = fade_ms;
+    bool threw = false;
+    try {
+      (void)NoteEditor(config);
+    } catch (const sonare::SonareException& error) {
+      threw = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    }
+    CHECK(threw);
+  }
+}
+
+TEST_CASE("NoteEditor saturates a huge finite fade before converting to samples",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 1000;
+  std::vector<float> samples(1000, 0.0f);
+  std::fill(samples.begin() + 200, samples.begin() + 800, 1.0f);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  NoteRegion region;
+  region.onset_sample = 200;
+  region.offset_sample = 800;
+
+  NoteEditorConfig config;
+  config.fade_ms = std::numeric_limits<float>::max();
+  NoteEditor editor(config);
+  bool threw = false;
+  sonare::Audio moved;
+  try {
+    moved = editor.move_note(audio, region, 0);
+  } catch (const sonare::SonareException& error) {
+    threw = true;
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+  }
+  CHECK_FALSE(threw);
+  CHECK(moved.size() == audio.size());
+  for (size_t i = 0; i < moved.size(); ++i) CHECK(std::isfinite(moved[i]));
+  // A finite but huge fade saturates at half the 600-sample region (300
+  // samples) before the integer conversion. A platform-dependent overflow to
+  // zero would paste a hard-edged constant note at the destination instead.
+  CHECK(moved[1] < 0.001f);
+  CHECK_THAT(moved[150], WithinAbs(0.5f, 0.01f));
+}
+
+TEST_CASE("NoteEditor identity move and stretch preserve samples for both backends",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  constexpr int n_samples = sample_rate;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(440.0f, sample_rate, n_samples), sample_rate);
+  NoteRegion region;
+  region.onset_sample = 2000;
+  region.offset_sample = 12000;
+
+  for (const sonare::StretchBackend backend :
+       {sonare::StretchBackend::NativeSpectral, sonare::StretchBackend::PhaseVocoder}) {
+    const int backend_id = static_cast<int>(backend);
+    CAPTURE(backend_id);
+    NoteEditorConfig config;
+    config.stretch_backend = backend;
+    REQUIRE(config.fade_ms > 0.0f);
+    NoteEditor editor(config);
+
+    const sonare::Audio moved = editor.move_note(audio, region, region.onset_sample);
+    const sonare::Audio stretched = editor.stretch_note(audio, region, 1.0f);
+    REQUIRE(moved.size() == audio.size());
+    REQUIRE(stretched.size() == audio.size());
+
+    float move_error = 0.0f;
+    float stretch_error = 0.0f;
+    for (size_t i = 0; i < audio.size(); ++i) {
+      move_error = std::max(move_error, std::abs(moved[i] - audio[i]));
+      stretch_error = std::max(stretch_error, std::abs(stretched[i] - audio[i]));
+    }
+    CHECK_THAT(move_error, WithinAbs(0.0f, 1.0e-5f));
+    CHECK_THAT(stretch_error, WithinAbs(0.0f, 1.0e-5f));
+  }
 }
 
 TEST_CASE("NoteEditor moves note region with edge fades", "[pitch_editor]") {

@@ -218,19 +218,19 @@ def _note_voicing_arrays(
     voiced: Sequence[int] | list[int] | np.ndarray | None,
     voiced_prob: Sequence[float] | list[float] | np.ndarray | None,
 ) -> tuple[object, object]:
-    """Marshal the two per-frame voicing arrays; at least one is required."""
+    """Marshal voicing arrays, with explicit flags taking precedence."""
     if voiced is None and voiced_prob is None:
         raise SonareValueError(f"{fn_name}: pass voiced or voiced_prob")
-    prob_array = None
-    if voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
-        if prob_len != n_frames:
-            raise SonareValueError(f"{fn_name}: voiced_prob must have f0_hz's length")
     voiced_array = None
+    prob_array = None
     if voiced is not None:
         voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
         if voiced_len != n_frames:
             raise SonareValueError(f"{fn_name}: voiced must have f0_hz's length")
+    else:
+        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+        if prob_len != n_frames:
+            raise SonareValueError(f"{fn_name}: voiced_prob must have f0_hz's length")
     return prob_array, voiced_array
 
 

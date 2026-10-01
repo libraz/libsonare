@@ -993,6 +993,90 @@ TEST_CASE("render_notes keeps the input's length for a vibrato-only edit", "[not
 
 // --- render_notes: validation ----------------------------------------------
 
+TEST_CASE("curve rendering keeps unusable F0 frames unvoiced", "[note_pitch_curve][note_review]") {
+  const sonare::Audio audio = table_source();
+  NoteObject note = table_notes()[0];
+  note.edit.vibrato_depth_change = -1.0f;
+  note.f0_hz.values[5] = 0.0f;
+  const sonare::Audio expected = render_notes(audio, {note});
+  for (const float missing : {-1.0f, kInf, -kInf, kNaN}) {
+    INFO("missing F0 representation " << missing);
+    note.f0_hz.values[5] = missing;
+    sonare::Audio actual;
+    const ErrorCode error = code_of([&] { actual = render_notes(audio, {note}); });
+    CHECK(error == ErrorCode::Ok);
+    if (error != ErrorCode::Ok) continue;
+    REQUIRE(actual.size() == expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+      CHECK_THAT(actual[i], WithinAbs(expected[i], 1.0e-6f));
+    }
+  }
+}
+
+TEST_CASE("note extraction rejects a track at another audio sample rate",
+          "[note_pitch_curve][note_review]") {
+  const sonare::Audio audio = sonare::Audio::from_vector(std::vector<float>(3200, 0.25f), 16000);
+  F0Track track;
+  track.sample_rate = 16000;
+  track.hop_length = 160;
+  track.f0_hz.assign(20, 440.0f);
+  track.voiced.assign(20, true);
+  REQUIRE_NOTHROW(extract_notes(audio, track));
+  REQUIRE_NOTHROW(make_note(audio, track, 0, 20));
+
+  for (const float cadence : {0.0f, 100.0f}) {
+    INFO("explicit cadence " << cadence);
+    track.frame_rate_hz = cadence;
+    track.sample_rate = 48000;
+    CHECK(code_of([&] { extract_notes(audio, track); }) == ErrorCode::InvalidParameter);
+    CHECK(code_of([&] { make_note(audio, track, 0, 20); }) == ErrorCode::InvalidParameter);
+  }
+  track.sample_rate = 0;
+  const auto notes = extract_notes(audio, track);
+  REQUIRE(notes.size() == 1);
+  CHECK(notes[0].offset_sample == 3200);
+}
+
+TEST_CASE("note extraction rejects a cadence faster than the audio sample rate",
+          "[note_pitch_curve][note_review]") {
+  const sonare::Audio audio = sonare::Audio::from_vector(std::vector<float>(3200, 0.25f), 16000);
+  F0Track track;
+  track.sample_rate = 16000;
+  track.hop_length = 160;
+  track.frame_rate_hz = 32000.0f;
+  track.f0_hz.assign(20, 440.0f);
+  track.voiced.assign(20, true);
+  CHECK(code_of([&] { extract_notes(audio, track); }) == ErrorCode::InvalidParameter);
+  CHECK(code_of([&] { make_note(audio, track, 0, 20); }) == ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("a note spanning an unvoiced candidate keeps that frame unpitched",
+          "[note_pitch_curve][note_review]") {
+  const sonare::Audio audio = sonare::Audio::from_vector(std::vector<float>(6400, 0.25f), 16000);
+  F0Track track;
+  track.sample_rate = 16000;
+  track.hop_length = 160;
+  track.f0_hz.assign(40, 440.0f);
+  track.voiced.assign(40, true);
+  for (size_t i = 15; i < 25; ++i) {
+    track.f0_hz[i] = 880.0f;
+    track.voiced[i] = false;
+  }
+  const auto notes = extract_notes(audio, track);
+  REQUIRE(notes.size() == 2);
+  const NoteObject spanning = make_note(audio, track, 0, 40);
+  CHECK_THAT(spanning.median_hz, WithinAbs(440.0f, 0.01f));
+  for (size_t i = 15; i < 25; ++i) {
+    CHECK_THAT(spanning.f0_hz.values[i], WithinAbs(0.0f, 1e-6f));
+  }
+  const PitchDecomposition split = decompose_pitch(spanning);
+  REQUIRE(split.drift.size() == 40);
+  for (size_t i = 0; i < 40; ++i) {
+    CHECK_THAT(split.drift[i], WithinAbs(0.0f, 1e-6f));
+    CHECK_THAT(split.vibrato[i], WithinAbs(0.0f, 1e-6f));
+  }
+}
+
 TEST_CASE("render_notes rejects a curve edit on a note with no pitch and renders its other edits",
           "[note_pitch_curve]") {
   // The pair is the point: the requirement belongs to the edit, not to the note.

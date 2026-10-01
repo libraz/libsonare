@@ -3,14 +3,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/// @brief ABI version of the flat analysis / feature POD structs declared in
+/// @brief ABI version of the general C function contracts and flat analysis /
+///        feature POD structs declared in
 ///        this header (SonareKey, SonareAnalysisResult, the feature result
 ///        structs, SonareChordDetectionOptions, ...). Bump on ANY layout change
-///        to one of those structs. Mirrors the project / engine / voice /
+///        to one of those structs or a shipped general C function signature.
+///        Mirrors the project / engine / voice /
 ///        acoustic per-subsystem versioning pattern. Exposed at runtime through
 ///        the aggregate sonare_abi_version() so a prebuilt binding can detect a
-///        struct-layout mismatch before exchanging a single byte.
-#define SONARE_FEATURE_ABI_VERSION 5u
+///        layout or function-contract mismatch before calling into the library.
+#define SONARE_FEATURE_ABI_VERSION 6u
 
 /// @brief Single aggregate C-ABI version. Encodes the per-subsystem versions so a
 ///        prebuilt binding linked against a different libsonare can detect a

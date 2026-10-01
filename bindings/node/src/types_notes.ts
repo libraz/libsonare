@@ -37,10 +37,17 @@ export interface PitchCorrectOptions {
   retuneSpeedMs?: number;
   /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */
   vibratoThresholdCents?: number;
-  /** Per-frame voiced flags (truthy = voiced); omit to treat all frames as voiced. */
-  voiced?: VoicedFlags;
-  /** Per-frame voicing probability in `[0, 1]`; omit to derive from `voiced`. */
-  voicedProb?: Float32Array;
+  /**
+   * Per-frame voiced flags (truthy = voiced). Explicit flags take precedence
+   * over `voicedProb`; omit or pass `null` to use that probability array, and
+   * with both omitted every frame is treated as voiced.
+   */
+  voiced?: VoicedFlags | null;
+  /**
+   * Per-frame voicing probability in `[0, 1]`. It is read only when `voiced`
+   * is omitted or `null`, and is ignored when explicit flags are supplied.
+   */
+  voicedProb?: Float32Array | null;
 }
 
 /** Options for {@link noteStretch}. All fields are optional. */

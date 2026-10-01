@@ -77,7 +77,7 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   const std::string prefix = std::string(entry_point) + ": ";
   const std::string budget = std::string(entry_point) + " input";
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
-  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   if (!has_voiced && !has_prob) {
     throw SonareException(ErrorCode::InvalidParameter, prefix + "voiced or voicedProb is required");
   }
@@ -128,6 +128,40 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
     track.voiced[i] = has_voiced ? voiced_vec[i] != 0.0f : prob_vec[i] >= voiced_threshold;
   }
   return track;
+}
+
+// A direct note render/decompose call does not pass through noteTrackFromVal,
+// so apply the same usable-pitch rule here before constructing a NoteObject.
+// A supplied mask only suppresses a positive finite candidate; a true flag
+// cannot make a zero, negative or non-finite F0 usable.
+std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced, const char* entry_point,
+                                       std::size_t* cumulative_count) {
+  const std::string prefix = std::string(entry_point) + ": ";
+  const std::string budget = std::string(entry_point) + " input";
+  const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
+
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", budget.c_str(), cumulative_count);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  if (f0.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, prefix + "f0Hz must not be empty");
+  }
+
+  std::vector<float> voiced_vec;
+  if (has_voiced) {
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", budget.c_str(), cumulative_count);
+    voiced_vec = float32ArrayToVector(voiced);
+    if (voiced_vec.size() != f0.size()) {
+      throw SonareException(ErrorCode::InvalidParameter, prefix + "voiced must match f0Hz length");
+    }
+  }
+
+  for (std::size_t i = 0; i < f0.size(); ++i) {
+    const bool usable = std::isfinite(f0[i]) && f0[i] > 0.0f;
+    if (!usable || (has_voiced && voiced_vec[i] == 0.0f)) {
+      f0[i] = 0.0f;
+    }
+  }
+  return f0;
 }
 
 // Reads one note's span and pending edit, plus the frame bounds and the centre a
@@ -279,6 +313,11 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   // The track is optional; only a vibrato or drift edit reads it.
   const val f0_hz = objectProperty(options, "f0Hz");
   const bool has_track = !f0_hz.isUndefined();
+  const val voiced = objectProperty(options, "voiced");
+  const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
+  if (has_voiced && !has_track) {
+    throw SonareException(ErrorCode::InvalidParameter, "renderNotes: voiced requires f0Hz");
+  }
   const float frame_rate = floatProperty(options, "frameRate", 0.0f);
   std::vector<float> f0;
   if (has_track) {
@@ -287,13 +326,7 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
           ErrorCode::InvalidParameter,
           "renderNotes: frameRate must be a finite positive number when f0Hz is given");
     }
-    accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "renderNotes input", &cumulative_count);
-    f0 = float32ArrayToVector(f0_hz);
-    if (f0.empty()) {
-      throw SonareException(ErrorCode::InvalidParameter, "renderNotes: f0Hz must not be empty");
-    }
-    // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
-    // negative or non-finite, and every consumer reads all three the same.
+    f0 = normalizedF0FromVal(f0_hz, voiced, "renderNotes", &cumulative_count);
   }
 
   const std::size_t count = wasmArrayLikeLength(notes, "renderNotes notes");
@@ -309,8 +342,8 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   return vectorToFloat32Array(result.data(), result.size());
 }
 
-val js_decompose_note_pitch(val f0_hz, const val& frame_rate_val, const val& median_hz_val,
-                            const val& vibrato_cutoff_hz_val) {
+val js_decompose_note_pitch(val f0_hz, const val& voiced, const val& frame_rate_val,
+                            const val& median_hz_val, const val& vibrato_cutoff_hz_val) {
   const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
   const float median_hz = checkedFloatFromVal(median_hz_val, "medianHz");
   const float vibrato_cutoff_hz = checkedFloatFromVal(vibrato_cutoff_hz_val, "vibratoCutoffHz");
@@ -329,14 +362,8 @@ val js_decompose_note_pitch(val f0_hz, const val& frame_rate_val, const val& med
                           "decomposeNotePitch: frameRate must be a positive number");
   }
   std::size_t cumulative_count = 0;
-  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "decomposeNotePitch input", &cumulative_count);
-  std::vector<float> f0 = float32ArrayToVector(f0_hz);
-  if (f0.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: f0Hz must not be empty");
-  }
-  // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
-  // negative or non-finite, and every consumer reads all three the same.
+  std::vector<float> f0 =
+      normalizedF0FromVal(f0_hz, voiced, "decomposeNotePitch", &cumulative_count);
 
   editing::note_model::NoteObject note;
   note.median_hz = median_hz;
@@ -498,20 +525,15 @@ editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
   return note;
 }
 
-// The two fields the rule writes, replaced on a copy of the caller's own note.
-// Everything else -- the span, the metrics, the amplitude curve, the other edits
-// -- reaches the result exactly as it arrived, which is what the C ABI gets for
-// free by editing in place.
+// Replace the two fields the rule writes while preserving the caller's other
+// note fields.
 val assignedNoteToVal(const val& row, const editing::note_model::NoteEdit& edit) {
   const val object_ctor = val::global("Object");
   val out = object_ctor.call<val>("assign", val::object(), row);
   val out_edit = object_ctor.call<val>("assign", val::object(), objectProperty(row, "edit"));
   out_edit.set("pitchShiftSemitones", edit.pitch_shift_semitones);
   out_edit.set("muted", edit.muted);
-  // The two arrays a note carries are copied, not shared: a spread carries the
-  // reference across, so a host editing the result would reach back into the
-  // notes it handed in. The addon and ctypes surfaces marshal field by field and
-  // hand back fresh arrays, and this is the one surface that has to ask for it.
+  // Copy note arrays so edits to the returned object do not mutate the input.
   const val envelope = objectProperty(out_edit, "amplitudeEnvelope");
   if (!envelope.isUndefined()) out_edit.set("amplitudeEnvelope", envelope.call<val>("slice"));
   out.set("edit", out_edit);

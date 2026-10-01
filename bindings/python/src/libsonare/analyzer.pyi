@@ -732,6 +732,7 @@ def render_notes(
     notes: Sequence[NoteObject],
     *,
     f0_hz: FloatSamples | None = None,
+    voiced: IntSamples | None = None,
     frame_rate: float | None = None,
     fade_ms: float | None = None,
     vibrato_cutoff_hz: float | None = None,
@@ -834,6 +835,7 @@ def decompose_note_pitch(
     frame_rate: float,
     median_hz: float,
     *,
+    voiced: IntSamples | None = None,
     vibrato_cutoff_hz: float | None = None,
 ) -> PitchDecomposition: ...
 def split_note(

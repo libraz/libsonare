@@ -145,6 +145,67 @@ def test_pitch_correct_timevarying_derives_voicing_from_voiced_prob() -> None:
         )
 
 
+def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_values() -> None:
+    """Explicit voiced flags take precedence over a companion probability track."""
+    sr = 22050
+    samples = _tone(sr)
+    hop = 512
+    n_frames = len(samples) // hop + 1
+    f0 = [220.0] * n_frames
+    voiced = [1] * n_frames
+
+    fixed_without_prob = libsonare.pitch_correct_to_midi_timevarying(
+        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced
+    )
+    general_without_prob = libsonare.pitch_correct_timevarying(
+        samples, f0, sample_rate=sr, hop_length=hop, voiced=voiced
+    )
+
+    # A supplied probability track is ignored completely once voiced is present,
+    # including its length and element-domain checks.
+    for invalid_prob in ([math.nan] * (n_frames + 1), [-0.1] * n_frames, [1.1] * n_frames):
+        fixed_with_invalid_prob = libsonare.pitch_correct_to_midi_timevarying(
+            samples,
+            f0,
+            60.0,
+            sample_rate=sr,
+            hop_length=hop,
+            voiced=voiced,
+            voiced_prob=invalid_prob,
+        )
+        general_with_invalid_prob = libsonare.pitch_correct_timevarying(
+            samples,
+            f0,
+            sample_rate=sr,
+            hop_length=hop,
+            voiced=voiced,
+            voiced_prob=invalid_prob,
+        )
+        assert list(fixed_with_invalid_prob) == list(fixed_without_prob)
+        assert list(general_with_invalid_prob) == list(general_without_prob)
+
+    # Without explicit flags, the probability track still owns the [0,1] and
+    # finite-value contract on both APIs.
+    for invalid in (math.nan, -0.1, 1.1):
+        with pytest.raises((ValueError, RuntimeError)):
+            libsonare.pitch_correct_to_midi_timevarying(
+                samples,
+                f0,
+                60.0,
+                sample_rate=sr,
+                hop_length=hop,
+                voiced_prob=[invalid] * n_frames,
+            )
+        with pytest.raises((ValueError, RuntimeError)):
+            libsonare.pitch_correct_timevarying(
+                samples,
+                f0,
+                sample_rate=sr,
+                hop_length=hop,
+                voiced_prob=[invalid] * n_frames,
+            )
+
+
 def test_pitch_correct_timevarying_voiced_accepts_any_int_sequence() -> None:
     """The voiced flags marshal in bulk, so every int-like sequence agrees.
 

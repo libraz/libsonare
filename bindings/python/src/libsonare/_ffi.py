@@ -23,7 +23,7 @@ from ._ffi_types import *  # noqa: F403
 
 _type_exports = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]
 
-EXPECTED_ABI_VERSION = 0x04020205
+EXPECTED_ABI_VERSION = 0x04020206
 
 # --- Library discovery ---
 

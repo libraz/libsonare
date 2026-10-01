@@ -10,6 +10,10 @@ import {
   renderNotes,
   splitNote,
 } from '../src/index.js';
+import { addon } from '../src/native.js';
+
+/* biome-ignore lint/suspicious/noExplicitAny: the raw addon is intentionally untyped here. */
+const rawAddon = addon as any;
 
 const SR = 22050;
 const HOP = 512;
@@ -214,6 +218,128 @@ describe('extractNotes', () => {
     expect(() => extractNotes({ ...request, sampleRate: 0 })).toThrow(RangeError);
     expect(() => extractNotes({ ...request, voiced: new Int32Array(3) })).toThrow(RangeError);
     expect(() => extractNotes({ ...request, voicedProb: new Float32Array(3) })).toThrow(RangeError);
+  });
+
+  it('treats null voicing options as omitted', () => {
+    const probability = new Float32Array(tone.f0Hz.length).fill(0.9);
+    const expected = extractNotes({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      voicedProb: probability,
+    });
+    const actual = extractNotes({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      voiced: null,
+      voicedProb: probability,
+    });
+    expect(actual).toEqual(expected);
+
+    const withMask = extractNotes({ ...tone, sampleRate: SR, frameRate: FRAME_RATE });
+    const withNullProbability = extractNotes({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      voiced: tone.voiced,
+      voicedProb: null,
+    });
+    expect(withNullProbability).toEqual(withMask);
+
+    const notes = extractNotes({ ...tone, sampleRate: SR, frameRate: FRAME_RATE });
+    const splitExpected = splitNote({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      notes,
+      index: 0,
+      frame: SPLIT_FRAME / 2,
+    });
+    const splitWithNullFlags = splitNote({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      voiced: null,
+      voicedProb: probability,
+      notes,
+      index: 0,
+      frame: SPLIT_FRAME / 2,
+    });
+    expect(splitWithNullFlags).toEqual(splitExpected);
+
+    const mergeExpected = mergeNotes({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      notes,
+      first: 0,
+      last: 1,
+    });
+    const mergeWithNullFlags = mergeNotes({
+      ...tone,
+      sampleRate: SR,
+      frameRate: FRAME_RATE,
+      voiced: null,
+      voicedProb: probability,
+      notes,
+      first: 0,
+      last: 1,
+    });
+    expect(mergeWithNullFlags).toEqual(mergeExpected);
+
+    expect(() =>
+      extractNotes({
+        ...tone,
+        sampleRate: SR,
+        frameRate: FRAME_RATE,
+        voiced: null,
+        voicedProb: null,
+      }),
+    ).toThrow(TypeError);
+  });
+
+  it('rejects voiced containers that merely have the right length', () => {
+    const malformed = [
+      '0'.repeat(N_FRAMES),
+      new Float64Array(N_FRAMES),
+      new Array(N_FRAMES).fill('0'),
+      new Array(N_FRAMES).fill({}),
+    ];
+    for (const voiced of malformed) {
+      expect(() =>
+        extractNotes({
+          ...tone,
+          sampleRate: SR,
+          frameRate: FRAME_RATE,
+          voiced: voiced as never,
+        }),
+      ).toThrow(TypeError);
+
+      const notes = extractTone();
+      expect(() =>
+        splitNote({
+          ...tone,
+          sampleRate: SR,
+          frameRate: FRAME_RATE,
+          voiced: voiced as never,
+          notes,
+          index: 0,
+          frame: SPLIT_FRAME / 2,
+        }),
+      ).toThrow(TypeError);
+      expect(() =>
+        mergeNotes({
+          ...tone,
+          sampleRate: SR,
+          frameRate: FRAME_RATE,
+          voiced: voiced as never,
+          notes,
+          first: 0,
+          last: 1,
+        }),
+      ).toThrow(TypeError);
+    }
   });
 });
 
@@ -545,6 +671,138 @@ describe('renderNotes pitch curve edits', () => {
       expect(() => renderWith({ vibratoDepthChange: -1 }, bad)).toThrow();
     }
   });
+
+  it('uses an explicit voiced mask when rendering a curve edit', () => {
+    const candidate = Float32Array.from(f0Hz);
+    const zeroed = Float32Array.from(f0Hz);
+    const frame = 13;
+    candidate[frame] = 880;
+    zeroed[frame] = 0;
+    const voiced = new Int32Array(SET_FRAMES).fill(1);
+    voiced[frame] = 0;
+
+    const withMask = renderNotes({
+      samples,
+      sampleRate: SR,
+      notes: [{ ...note, edit: { vibratoDepthChange: -1 } }],
+      f0Hz: candidate,
+      voiced,
+      frameRate: FRAME_RATE,
+    });
+    const zeroedBaseline = renderNotes({
+      samples,
+      sampleRate: SR,
+      notes: [{ ...note, edit: { vibratoDepthChange: -1 } }],
+      f0Hz: zeroed,
+      frameRate: FRAME_RATE,
+    });
+    const unmasked = renderNotes({
+      samples,
+      sampleRate: SR,
+      notes: [{ ...note, edit: { vibratoDepthChange: -1 } }],
+      f0Hz: candidate,
+      frameRate: FRAME_RATE,
+    });
+
+    expect(maxDifference(withMask, zeroedBaseline)).toBeLessThan(1e-6);
+    expect(maxDifference(unmasked, zeroedBaseline)).toBeGreaterThan(1e-6);
+
+    const rawWithMask = rawAddon.renderNotes(
+      samples,
+      SR,
+      [{ ...note, edit: { vibratoDepthChange: -1 } }],
+      {
+        f0Hz: candidate,
+        voiced,
+        frameRate: FRAME_RATE,
+      },
+    );
+    const rawZeroed = rawAddon.renderNotes(
+      samples,
+      SR,
+      [{ ...note, edit: { vibratoDepthChange: -1 } }],
+      {
+        f0Hz: zeroed,
+        frameRate: FRAME_RATE,
+      },
+    );
+    expect(maxDifference(rawWithMask, rawZeroed)).toBeLessThan(1e-6);
+  });
+
+  it('accepts supported voiced flag arrays and rejects incomplete masks', () => {
+    const makeFlags = (): Array<Int32Array | Uint8Array | Float32Array | number[] | boolean[]> => {
+      const intFlags = new Int32Array(SET_FRAMES).fill(1);
+      intFlags[13] = 0;
+      const byteFlags = new Uint8Array(SET_FRAMES).fill(1);
+      byteFlags[13] = 0;
+      const floatFlags = new Float32Array(SET_FRAMES).fill(1);
+      floatFlags[13] = 0;
+      const numberFlags = new Array<number>(SET_FRAMES).fill(1);
+      numberFlags[13] = 0;
+      const booleanFlags = new Array<boolean>(SET_FRAMES).fill(true);
+      booleanFlags[13] = false;
+      return [intFlags, byteFlags, floatFlags, numberFlags, booleanFlags];
+    };
+    const edit = { vibratoDepthChange: -1 };
+    const request = {
+      samples,
+      sampleRate: SR,
+      notes: [{ ...note, edit }],
+      f0Hz,
+      frameRate: FRAME_RATE,
+    };
+
+    const omitted = renderNotes(request);
+    const explicitNull = renderNotes({ ...request, voiced: null });
+    expect(maxDifference(explicitNull, omitted)).toBeLessThan(1e-6);
+
+    const zeroedBaseline = renderNotes({
+      ...request,
+      f0Hz: Float32Array.from(f0Hz, (value, index) => (index === 13 ? 0 : value)),
+    });
+    expect(maxDifference(omitted, zeroedBaseline)).toBeGreaterThan(1e-6);
+    for (const voiced of makeFlags()) {
+      const rendered = renderNotes({ ...request, voiced });
+      expect(rendered).toHaveLength(samples.length);
+      expect(maxDifference(rendered, zeroedBaseline)).toBeLessThan(1e-6);
+    }
+    expect(() => renderNotes({ ...request, voiced: new Int32Array(SET_FRAMES - 1) })).toThrow(
+      RangeError,
+    );
+    const validFlags = new Uint8Array(SET_FRAMES).fill(1);
+    validFlags[13] = 0;
+    expect(() =>
+      renderNotes({ samples, sampleRate: SR, notes: [{ ...note, edit }], voiced: validFlags }),
+    ).toThrow(RangeError);
+    for (const malformed of [
+      '0'.repeat(SET_FRAMES),
+      new Float64Array(SET_FRAMES),
+      new Array(SET_FRAMES).fill('0'),
+      new Array(SET_FRAMES).fill({}),
+    ]) {
+      expect(() => renderNotes({ ...request, voiced: malformed as never })).toThrow(TypeError);
+    }
+
+    expect(() =>
+      rawAddon.renderNotes(samples, SR, [{ ...note, edit }], {
+        f0Hz,
+        frameRate: FRAME_RATE,
+        voiced: new Float32Array(SET_FRAMES),
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      rawAddon.renderNotes(samples, SR, [{ ...note, edit }], {
+        voiced: new Int32Array(SET_FRAMES),
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      rawAddon.renderNotes(samples, SR, [{ ...note, edit }], {
+        f0Hz,
+        frameRate: FRAME_RATE,
+        voiced: new Int32Array(SET_FRAMES - 1),
+      }),
+    ).toThrow(RangeError);
+  });
 });
 
 describe('decomposeNotePitch', () => {
@@ -660,6 +918,115 @@ describe('decomposeNotePitch', () => {
       ).toBeGreaterThan(0);
     }
   });
+
+  it('uses an explicit voiced mask, including a sliced mask, for decomposition', () => {
+    const frame = 17;
+    const candidate = Float32Array.from(f0Hz);
+    const zeroed = Float32Array.from(f0Hz);
+    candidate[frame] = 880;
+    zeroed[frame] = 0;
+    const voiced = new Int32Array(CURVE_FRAMES).fill(1);
+    voiced[frame] = 0;
+    const byteVoiced = new Uint8Array(CURVE_FRAMES).fill(1);
+    byteVoiced[frame] = 0;
+    const floatVoiced = new Float32Array(CURVE_FRAMES).fill(1);
+    floatVoiced[frame] = 0;
+    const numberVoiced = new Array<number>(CURVE_FRAMES).fill(1);
+    numberVoiced[frame] = 0;
+    const booleanVoiced = new Array<boolean>(CURVE_FRAMES).fill(true);
+    booleanVoiced[frame] = false;
+
+    const withMask = decomposeNotePitch({
+      f0Hz: candidate,
+      voiced,
+      frameRate: CURVE_RATE,
+      medianHz: CENTRE,
+    });
+    const zeroedBaseline = decomposeNotePitch({
+      f0Hz: zeroed,
+      frameRate: CURVE_RATE,
+      medianHz: CENTRE,
+    });
+    const unmasked = decomposeNotePitch({
+      f0Hz: candidate,
+      frameRate: CURVE_RATE,
+      medianHz: CENTRE,
+    });
+    expect(withMask.centreHz).toBeCloseTo(zeroedBaseline.centreHz, 6);
+    expect(maxDifference(withMask.driftCents, zeroedBaseline.driftCents)).toBeLessThan(1e-6);
+    expect(maxDifference(withMask.vibratoCents, zeroedBaseline.vibratoCents)).toBeLessThan(1e-6);
+    expect(unmasked).not.toEqual(zeroedBaseline);
+    for (const flags of [byteVoiced, floatVoiced, numberVoiced, booleanVoiced]) {
+      const result = decomposeNotePitch({
+        f0Hz: candidate,
+        voiced: flags,
+        frameRate: CURVE_RATE,
+        medianHz: CENTRE,
+      });
+      expect(result.centreHz).toBeCloseTo(zeroedBaseline.centreHz, 6);
+      expect(maxDifference(result.driftCents, zeroedBaseline.driftCents)).toBeLessThan(1e-6);
+      expect(maxDifference(result.vibratoCents, zeroedBaseline.vibratoCents)).toBeLessThan(1e-6);
+    }
+
+    const rawWithMask = rawAddon.decomposeNotePitch(candidate, CURVE_RATE, CENTRE, 3, voiced);
+    const rawZeroed = rawAddon.decomposeNotePitch(zeroed, CURVE_RATE, CENTRE, 3);
+    expect(maxDifference(rawWithMask.driftCents, rawZeroed.driftCents)).toBeLessThan(1e-6);
+    expect(maxDifference(rawWithMask.vibratoCents, rawZeroed.vibratoCents)).toBeLessThan(1e-6);
+
+    const paddedF0 = new Float32Array(CURVE_FRAMES + 4);
+    paddedF0.set(candidate, 2);
+    const paddedVoiced = new Int32Array(CURVE_FRAMES + 4).fill(1);
+    paddedVoiced.set(voiced, 2);
+    const sliced = decomposeNotePitch({
+      f0Hz: paddedF0.subarray(2, 2 + CURVE_FRAMES),
+      voiced: paddedVoiced.subarray(2, 2 + CURVE_FRAMES),
+      frameRate: CURVE_RATE,
+      medianHz: CENTRE,
+    });
+    expect(sliced.centreHz).toBeCloseTo(withMask.centreHz, 6);
+    expect(maxDifference(sliced.driftCents, withMask.driftCents)).toBeLessThan(1e-6);
+    expect(maxDifference(sliced.vibratoCents, withMask.vibratoCents)).toBeLessThan(1e-6);
+  });
+
+  it('rejects a decomposition mask whose length does not match the F0 track', () => {
+    expect(() =>
+      decomposeNotePitch({
+        f0Hz,
+        voiced: new Int32Array(CURVE_FRAMES - 1),
+        frameRate: CURVE_RATE,
+        medianHz: CENTRE,
+      }),
+    ).toThrow(RangeError);
+    const omitted = decomposeNotePitch({ f0Hz, frameRate: CURVE_RATE, medianHz: CENTRE });
+    const explicitNull = decomposeNotePitch({
+      f0Hz,
+      voiced: null,
+      frameRate: CURVE_RATE,
+      medianHz: CENTRE,
+    });
+    expect(explicitNull).toEqual(omitted);
+    for (const malformed of [
+      '0'.repeat(CURVE_FRAMES),
+      new Float64Array(CURVE_FRAMES),
+      new Array(CURVE_FRAMES).fill('0'),
+      new Array(CURVE_FRAMES).fill({}),
+    ]) {
+      expect(() =>
+        decomposeNotePitch({
+          f0Hz,
+          voiced: malformed as never,
+          frameRate: CURVE_RATE,
+          medianHz: CENTRE,
+        }),
+      ).toThrow(TypeError);
+    }
+    expect(() =>
+      rawAddon.decomposeNotePitch(f0Hz, FRAME_RATE, CENTRE, 3, new Uint8Array(CURVE_FRAMES)),
+    ).toThrow(TypeError);
+    expect(() =>
+      rawAddon.decomposeNotePitch(f0Hz, FRAME_RATE, CENTRE, 3, new Int32Array(CURVE_FRAMES - 1)),
+    ).toThrow(RangeError);
+  });
 });
 
 describe('splitNote and mergeNotes', () => {
@@ -718,6 +1085,56 @@ describe('splitNote and mergeNotes', () => {
       expect(actual[i]).toBeCloseTo(expected[i], 6);
     }
   }
+
+  function expectSameNotes(actual: NoteObject[], expected: NoteObject[]): void {
+    expect(actual.map(measurements)).toEqual(expected.map(measurements));
+    for (let i = 0; i < expected.length; i += 1) {
+      expectSameValues(actual[i].amplitude, expected[i].amplitude);
+      expect(actual[i].edit).toEqual(expected[i].edit);
+    }
+  }
+
+  it('ignores invalid voicedProb whenever explicit voiced flags are supplied', () => {
+    const source = gappedSource();
+    const expectedExtract = extractNotes(source);
+    const expectedSplit = splitNote({ ...source, notes: expectedExtract, index: 1, frame: 18 });
+    const expectedMerge = mergeNotes({ ...source, notes: expectedExtract, first: 0, last: 1 });
+    const invalidProbabilities = [
+      new Float32Array(SET_FRAMES - 1),
+      new Float32Array(SET_FRAMES).fill(Number.NaN),
+      new Float32Array(SET_FRAMES).fill(1.5),
+    ];
+
+    for (const voicedProb of invalidProbabilities) {
+      expectSameNotes(extractNotes({ ...source, voicedProb }), expectedExtract);
+      expectSameNotes(
+        splitNote({ ...source, voicedProb, notes: expectedExtract, index: 1, frame: 18 }),
+        expectedSplit,
+      );
+      expectSameNotes(
+        mergeNotes({ ...source, voicedProb, notes: expectedExtract, first: 0, last: 1 }),
+        expectedMerge,
+      );
+    }
+
+    expect(() =>
+      extractNotes({
+        ...source,
+        voiced: undefined,
+        voicedProb: invalidProbabilities[0],
+      }),
+    ).toThrow(RangeError);
+    for (const voicedProb of invalidProbabilities.slice(1)) {
+      let caught: unknown;
+      try {
+        extractNotes({ ...source, voiced: undefined, voicedProb });
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    }
+  });
 
   it('segments the gapped source into the three notes the cases below start from', () => {
     const notes = extractNotes(gappedSource());

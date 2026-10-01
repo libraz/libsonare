@@ -220,6 +220,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_int32),
             ctypes.c_size_t,
             ctypes.c_float,
             ctypes.POINTER(SonareNoteRenderConfig),
@@ -384,6 +385,7 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_decompose_note_pitch.restype = ctypes.c_int32
         lib.sonare_decompose_note_pitch.argtypes = [
             ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_int32),
             ctypes.c_size_t,
             ctypes.c_float,
             ctypes.c_float,

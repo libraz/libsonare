@@ -436,6 +436,147 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(Array.from(optLow)).toEqual(Array.from(optUnvoiced));
     });
 
+    it('treats a null voiced field as omitted while using voicedProb', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const voicedProb = new Float32Array(nFrames).fill(0.9);
+
+      const positionalOmitted = pitchCorrectToMidiTimevarying(
+        signal,
+        f0,
+        60,
+        SR,
+        hop,
+        undefined,
+        voicedProb,
+      );
+      const positionalNull = pitchCorrectToMidiTimevarying(
+        signal,
+        f0,
+        60,
+        SR,
+        hop,
+        null,
+        voicedProb,
+      );
+      expect(Array.from(positionalNull)).toEqual(Array.from(positionalOmitted));
+
+      const optionsOmitted = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 60,
+        voicedProb,
+      });
+      const optionsNull = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 60,
+        voiced: null,
+        voicedProb,
+      });
+      expect(Array.from(optionsNull)).toEqual(Array.from(optionsOmitted));
+    });
+
+    it('explicit voiced flags ignore invalid voicedProb shape and values', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const voiced = new Int32Array(nFrames).fill(1);
+      const withoutProb = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced);
+      const generalWithoutProb = pitchCorrectTimevarying(signal, f0, SR, hop, { voiced });
+
+      // Once voiced is supplied, voicedProb is ignored completely, including
+      // its shape and value-domain checks.
+      const invalidProbabilities = [
+        new Float32Array(nFrames + 1).fill(Number.NaN),
+        new Float32Array(nFrames).fill(-0.1),
+        new Float32Array(nFrames).fill(1.1),
+      ];
+      for (const invalidProb of invalidProbabilities) {
+        const withInvalidProb = pitchCorrectToMidiTimevarying(
+          signal,
+          f0,
+          60,
+          SR,
+          hop,
+          voiced,
+          invalidProb,
+        );
+        const generalWithInvalidProb = pitchCorrectTimevarying(signal, f0, SR, hop, {
+          voiced,
+          voicedProb: invalidProb,
+        });
+        expect(Array.from(withInvalidProb)).toEqual(Array.from(withoutProb));
+        expect(Array.from(generalWithInvalidProb)).toEqual(Array.from(generalWithoutProb));
+      }
+
+      // With no explicit flags, invalid probabilities remain rejected by the
+      // probability-only path.
+      for (const invalid of [Number.NaN, -0.1, 1.1]) {
+        expect(() =>
+          pitchCorrectToMidiTimevarying(
+            signal,
+            f0,
+            60,
+            SR,
+            hop,
+            undefined,
+            new Float32Array(nFrames).fill(invalid),
+          ),
+        ).toThrow();
+        expect(() =>
+          pitchCorrectTimevarying(signal, f0, SR, hop, {
+            voicedProb: new Float32Array(nFrames).fill(invalid),
+          }),
+        ).toThrow();
+      }
+    });
+
+    it('rejects unsupported voiced containers before native pitch correction', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const invalid = [
+        '1'.repeat(nFrames),
+        new Float64Array(nFrames).fill(1),
+        { length: nFrames, 0: 1 },
+        Array<string>(nFrames).fill('0'),
+        Array<object>(nFrames).fill({}),
+      ];
+
+      for (const voiced of invalid) {
+        expect(() =>
+          pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
+            validate: false,
+          }),
+        ).toThrow(TypeError);
+        expect(() =>
+          pitchCorrectTimevarying(signal, f0, SR, hop, {
+            voiced: voiced as never,
+            validate: false,
+          }),
+        ).toThrow(TypeError);
+      }
+    });
+
+    it('rejects unsupported voiced containers before checking their length', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const invalid = ['1', new Float64Array(nFrames - 1).fill(1), {}];
+
+      for (const voiced of invalid) {
+        expect(() =>
+          pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
+            validate: false,
+          }),
+        ).toThrow(TypeError);
+        expect(() =>
+          pitchCorrectTimevarying(signal, f0, SR, hop, {
+            voiced: voiced as never,
+            validate: false,
+          }),
+        ).toThrow(TypeError);
+      }
+    });
+
     it('noteStretch lengthens the buffer by the stretch ratio', () => {
       const out = noteStretch(signal, SR, {
         onsetSample: 0,

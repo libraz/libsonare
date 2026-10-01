@@ -141,7 +141,9 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   const float target_midi = checkedFloatFromVal(target_midi_val, "targetMidi");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
-  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  // Explicit voiced flags own the decision; do not inspect or copy the
+  // companion probability array when they are present.
+  const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", "pitchCorrectToMidiTimevarying input",
                                    &cumulative_count);
@@ -199,7 +201,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     voiced = options["voiced"];
     voiced_prob = options["voicedProb"];
     has_voiced = !voiced.isUndefined() && !voiced.isNull();
-    has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+    has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   }
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(samples, "samples", "pitchCorrectTimevarying input",

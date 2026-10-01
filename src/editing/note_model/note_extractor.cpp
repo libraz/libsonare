@@ -80,12 +80,12 @@ pitch_editor::F0Track resolve_track(const Audio& audio, const pitch_editor::F0Tr
   // an explicit cadence, so fill both from the cadence: leaving them unset
   // segments to nothing instead of failing.
   if (resolved.sample_rate <= 0) resolved.sample_rate = audio.sample_rate();
+  SONARE_CHECK(resolved.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
+  const double per_frame = resolved.samples_per_frame();
+  SONARE_CHECK(std::isfinite(per_frame) && per_frame >= 1.0 &&
+                   per_frame <= static_cast<double>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
   if (resolved.hop_length <= 0) {
-    const double per_frame =
-        static_cast<double>(resolved.sample_rate) / static_cast<double>(resolved.frame_rate());
-    SONARE_CHECK(
-        per_frame >= 1.0 && per_frame <= static_cast<double>(std::numeric_limits<int>::max()),
-        ErrorCode::InvalidParameter);
     resolved.hop_length = static_cast<int>(per_frame);
   }
   if (resolved.voiced.empty()) {
@@ -138,6 +138,13 @@ NoteObject build_note(const Audio& audio, const pitch_editor::F0Track& resolved,
   }
 
   note.f0_hz.values.assign(resolved.f0_hz.begin() + start, resolved.f0_hz.begin() + end);
+  // Note curves carry no separate voicing flags. Preserve the track's decision
+  // as zero Hz so a merged gap cannot become voiced during curve editing.
+  for (int frame = start; frame < end; ++frame) {
+    if (!resolved.voiced[static_cast<size_t>(frame)] || !usable_pitch(resolved, frame)) {
+      note.f0_hz.values[static_cast<size_t>(frame - start)] = 0.0f;
+    }
+  }
   note.f0_hz.frame_rate_hz = frame_rate;
   note.f0_hz.frame_offset = start;
 

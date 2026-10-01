@@ -149,6 +149,19 @@ SonareError validate_f0_frames(const float* f0_hz, size_t n_frames, float frame_
   return SONARE_OK;
 }
 
+/// Normalizes the C F0/mask pair into the core's positive-finite pitch
+/// spelling. A NULL mask infers voicing from positive finite F0;
+/// an explicit zero flag suppresses an otherwise usable F0 frame.
+std::vector<float> normalize_f0_frames(const float* f0_hz, const int32_t* voiced, size_t n_frames) {
+  std::vector<float> normalized(n_frames, 0.0f);
+  for (size_t i = 0; i < n_frames; ++i) {
+    if (f0_hz[i] > 0.0f && std::isfinite(f0_hz[i]) && (voiced == nullptr || voiced[i] != 0)) {
+      normalized[i] = f0_hz[i];
+    }
+  }
+  return normalized;
+}
+
 /// Validates the whole F0 track the extraction-shaped entry points take.
 SonareError validate_track_args(const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
                                 size_t n_frames, float frame_rate) {
@@ -424,7 +437,10 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
     if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    if (voiced_prob && (!std::isfinite(voiced_prob[i]))) return SONARE_ERROR_INVALID_PARAMETER;
+    if (!voiced && voiced_prob &&
+        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -438,7 +454,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
     for (size_t i = 0; i < n_frames; ++i) {
       const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
       track.voiced[i] = is_voiced;
-      track.voiced_prob[i] = voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
+      track.voiced_prob[i] = !voiced && voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
     }
     Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
     return copy_audio_result(result, out, out_length);
@@ -522,7 +538,10 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
     if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    if (voiced_prob && !std::isfinite(voiced_prob[i])) return SONARE_ERROR_INVALID_PARAMETER;
+    if (!voiced && voiced_prob &&
+        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -536,7 +555,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
     for (size_t i = 0; i < n_frames; ++i) {
       const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
       track.voiced[i] = is_voiced;
-      track.voiced_prob[i] = voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
+      track.voiced_prob[i] = !voiced && voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
     }
     Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)
                               : corrector.correct_to_midi_timevarying(audio, track, target_midi);
@@ -613,7 +632,7 @@ void sonare_free_note_objects(SonareNoteObjectsResult* result) {
 SonareError sonare_render_notes(const float* samples, size_t length, int sample_rate,
                                 const SonareNoteObject* notes, size_t note_count,
                                 const float* envelopes, size_t envelope_count, const float* f0_hz,
-                                size_t n_frames, float frame_rate,
+                                const int32_t* voiced, size_t n_frames, float frame_rate,
                                 const SonareNoteRenderConfig* config, float** out,
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
@@ -622,6 +641,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
   if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   // The track is optional; only a curve edit reads it.
+  if (voiced != nullptr && f0_hz == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (f0_hz != nullptr) {
     const SonareError track_error = validate_f0_frames(f0_hz, n_frames, frame_rate);
     if (track_error != SONARE_OK) return track_error;
@@ -661,7 +681,9 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
             static_cast<size_t>(row.frame_end) > n_frames) {
           return SONARE_ERROR_INVALID_PARAMETER;
         }
-        core_notes[i].f0_hz.values.assign(f0_hz + row.frame_start, f0_hz + row.frame_end);
+        const size_t note_frames = static_cast<size_t>(row.frame_end - row.frame_start);
+        core_notes[i].f0_hz.values = normalize_f0_frames(
+            f0_hz + row.frame_start, voiced ? voiced + row.frame_start : nullptr, note_frames);
         core_notes[i].f0_hz.frame_rate_hz = frame_rate;
         core_notes[i].f0_hz.frame_offset = row.frame_start;
       } else if (row.edit.vibrato_depth_change != 0.0f || row.edit.drift_change != 0.0f) {
@@ -677,12 +699,13 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
   });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, notes, note_count, envelopes,
-                              envelope_count, f0_hz, n_frames, frame_rate, config, out, out_length);
+                              envelope_count, f0_hz, voiced, n_frames, frame_rate, config, out,
+                              out_length);
 #endif
 }
 
-SonareError sonare_decompose_note_pitch(const float* f0_hz, size_t n_frames, float frame_rate,
-                                        float median_hz, float vibrato_cutoff_hz,
+SonareError sonare_decompose_note_pitch(const float* f0_hz, const int32_t* voiced, size_t n_frames,
+                                        float frame_rate, float median_hz, float vibrato_cutoff_hz,
                                         SonarePitchDecompositionResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
@@ -696,13 +719,14 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, size_t n_frames, flo
       vibrato_cutoff_hz < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (voiced != nullptr && f0_hz == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const SonareError track_error = validate_f0_frames(f0_hz, n_frames, frame_rate);
   if (track_error != SONARE_OK) return track_error;
 
   SONARE_C_TRY
   editing::note_model::NoteObject note;
   note.median_hz = median_hz;
-  note.f0_hz.values.assign(f0_hz, f0_hz + n_frames);
+  note.f0_hz.values = normalize_f0_frames(f0_hz, voiced, n_frames);
   note.f0_hz.frame_rate_hz = frame_rate;
 
   editing::note_model::PitchDecompositionConfig decomposition_config;
@@ -722,7 +746,8 @@ SonareError sonare_decompose_note_pitch(const float* f0_hz, size_t n_frames, flo
   SONARE_C_CATCH
 #else
   if (out) *out = {};
-  SONARE_C_STUB_NOT_SUPPORTED(f0_hz, n_frames, frame_rate, median_hz, vibrato_cutoff_hz, out);
+  SONARE_C_STUB_NOT_SUPPORTED(f0_hz, voiced, n_frames, frame_rate, median_hz, vibrato_cutoff_hz,
+                              out);
 #endif
 }
 

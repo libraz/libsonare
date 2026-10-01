@@ -71,15 +71,13 @@ float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
 /// segment ramps up, so the seam keeps its level instead of dipping through
 /// silence.
 /// @details Blends against @p output rather than the pristine source
-///          deliberately: erase_span always runs immediately before this call
-///          for the same note (even when the edit is a mute), and a
-///          neighbouring note earlier in the render can have already tapered
-///          or overwritten part of this range too. output starts as a copy of
-///          the source and only diverges where a prior erase_span/overlay call
-///          touched it, so blending against output[j] is identical to
-///          blending against the source everywhere untouched, and correctly
-///          picks up the vacated taper (rather than reintroducing the
-///          pristine original) everywhere it is not.
+///          deliberately: all edited source spans are vacated before any
+///          destination is written, and a neighbouring note earlier in the
+///          render can have already overwritten part of this range too.
+///          output starts as a copy of the source and only diverges where an
+///          erase_span/overlay call touched it. Blending against output[j]
+///          preserves the source in untouched spans and uses the current
+///          taper or destination in edited spans.
 void overlay(std::vector<float>& output, const std::vector<float>& segment, int64_t dest,
              int64_t fade) {
   const int64_t n = static_cast<int64_t>(output.size());
@@ -154,15 +152,15 @@ void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int 
   track.voiced.resize(n);
   for (size_t i = 0; i < n; ++i) {
     track.voiced[i] = track.f0_hz[i] > 0.0f && std::isfinite(track.f0_hz[i]);
+    // Decomposition accepts any unusable value as a missing measurement;
+    // the pitch corrector consumes a normalized, validated F0 track.
+    if (!track.voiced[i]) track.f0_hz[i] = 0.0f;
   }
   track.sample_rate = sample_rate;
   track.frame_rate_hz = note.f0_hz.frame_rate_hz;
 
-  pitch_editor::PitchCorrectionConfig correction;
-  correction.backend = config.stretch_backend;
-  const Audio repitched =
-      pitch_editor::PitchCorrector(correction)
-          .resynthesize(Audio::from_vector(segment, sample_rate), track, deltas);
+  const Audio repitched = pitch_editor::PitchCorrector().resynthesize(
+      Audio::from_vector(segment, sample_rate), track, deltas);
   segment.assign(repitched.begin(), repitched.end());
 }
 
@@ -225,6 +223,9 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
   const int64_t n_samples = static_cast<int64_t>(audio.size());
   std::vector<float> output(audio.begin(), audio.end());
 
+  // Vacate every edited source span before rendering any destination. A moved
+  // note may land on another edited note's source span, so erasing one note
+  // while rendering the next would otherwise remove an earlier destination.
   for (const NoteObject& note : notes) {
     if (note.edit.is_identity()) continue;
 
@@ -234,7 +235,16 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
 
     erase_span(output, audio, onset, offset,
                fade_samples(config.fade_ms, sample_rate, offset - onset));
-    if (note.edit.muted) continue;
+  }
+
+  // Render in vector order after clearing all edited source spans. Later notes
+  // overwrite earlier destinations, with an edge blend against existing audio.
+  for (const NoteObject& note : notes) {
+    if (note.edit.is_identity() || note.edit.muted) continue;
+
+    const int64_t onset = std::min(note.onset_sample, n_samples);
+    const int64_t offset = std::clamp(note.offset_sample, onset, n_samples);
+    if (offset <= onset) continue;
 
     std::vector<float> segment(audio.begin() + onset, audio.begin() + offset);
     if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {

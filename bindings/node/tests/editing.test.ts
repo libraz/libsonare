@@ -39,6 +39,14 @@ function peak(samples: Float32Array): number {
   return out;
 }
 
+function maxDifference(a: Float32Array, b: Float32Array): number {
+  let worst = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    worst = Math.max(worst, Math.abs(a[i] - b[i]));
+  }
+  return worst;
+}
+
 describe('editing effects', () => {
   const tone = generateSine(440, SR, 0.5);
 
@@ -89,6 +97,43 @@ describe('editing effects', () => {
     expect(pyinResult.every((x) => Number.isFinite(x))).toBe(true);
   });
 
+  it('applies every supported voiced flag format to the numeric correction result', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const frame = 13;
+    const candidate = new Float32Array(nFrames).fill(440);
+    const zeroed = new Float32Array(nFrames).fill(440);
+    candidate[frame] = 880;
+    zeroed[frame] = 0;
+    const intFlags = new Int32Array(nFrames).fill(1);
+    intFlags[frame] = 0;
+    const byteFlags = new Uint8Array(nFrames).fill(1);
+    byteFlags[frame] = 0;
+    const floatFlags = new Float32Array(nFrames).fill(1);
+    floatFlags[frame] = 0;
+    const numberFlags = new Array<number>(nFrames).fill(1);
+    numberFlags[frame] = 0;
+    const booleanFlags = new Array<boolean>(nFrames).fill(true);
+    booleanFlags[frame] = false;
+    const flags = [intFlags, byteFlags, floatFlags, numberFlags, booleanFlags];
+    const baselineFlags = new Int32Array(nFrames).fill(1);
+    baselineFlags[frame] = 0;
+
+    const zeroedBaseline = pitchCorrectToMidiTimevarying(tone, zeroed, 71, SR, hop, baselineFlags);
+    const unmasked = pitchCorrectToMidiTimevarying(tone, candidate, 71, SR, hop);
+    expect(maxDifference(unmasked, zeroedBaseline)).toBeGreaterThan(1e-6);
+    for (const voiced of flags) {
+      const masked = pitchCorrectToMidiTimevarying(tone, candidate, 71, SR, hop, voiced);
+      expect(maxDifference(masked, zeroedBaseline)).toBeLessThan(1e-6);
+
+      const generalMasked = pitchCorrectTimevarying(tone, candidate, SR, hop, { voiced });
+      const generalBaseline = pitchCorrectTimevarying(tone, zeroed, SR, hop, {
+        voiced: baselineFlags,
+      });
+      expect(maxDifference(generalMasked, generalBaseline)).toBeLessThan(1e-6);
+    }
+  });
+
   it('pitchCorrectToMidiTimevarying derives voicing from voicedProb when voiced is omitted', () => {
     // voicedProb below 0.5 must behave exactly like an explicit all-unvoiced
     // array, and at/above 0.5 exactly like an explicit all-voiced one -- never
@@ -111,6 +156,117 @@ describe('editing effects', () => {
 
     // The two derived answers must actually differ, or this proves nothing.
     expect(viaLowProb.some((x, i) => Math.abs(x - viaHighProb[i]) > 1e-6)).toBe(true);
+  });
+
+  it('treats null voicing options as omitted', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    const voiced = new Int32Array(nFrames).fill(1);
+    const voicedProb = new Float32Array(nFrames).fill(0.9);
+
+    const withProbability = pitchCorrectToMidiTimevarying(
+      tone,
+      f0,
+      71,
+      SR,
+      hop,
+      undefined,
+      voicedProb,
+    );
+    const withNullFlags = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, null, voicedProb);
+    expect(Array.from(withNullFlags)).toEqual(Array.from(withProbability));
+
+    const explicitVoiced = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced);
+    const withNullProbability = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, null);
+    expect(Array.from(withNullProbability)).toEqual(Array.from(explicitVoiced));
+
+    const generalWithProbability = pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb });
+    const generalWithNullFlags = pitchCorrectTimevarying(tone, f0, SR, hop, {
+      voiced: null,
+      voicedProb,
+    });
+    expect(Array.from(generalWithNullFlags)).toEqual(Array.from(generalWithProbability));
+
+    const generalExplicitVoiced = pitchCorrectTimevarying(tone, f0, SR, hop, { voiced });
+    const generalWithNullProbability = pitchCorrectTimevarying(tone, f0, SR, hop, {
+      voiced,
+      voicedProb: null,
+    });
+    expect(Array.from(generalWithNullProbability)).toEqual(Array.from(generalExplicitVoiced));
+  });
+
+  it('rejects voiced containers that merely have the right length', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    for (const malformed of [
+      '0'.repeat(nFrames),
+      new Float64Array(nFrames),
+      new Array(nFrames).fill('0'),
+      new Array(nFrames).fill({}),
+    ]) {
+      expect(() =>
+        pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, malformed as never),
+      ).toThrow(TypeError);
+      expect(() =>
+        pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: malformed as never }),
+      ).toThrow(TypeError);
+    }
+  });
+
+  it('explicit voiced flags ignore invalid voicedProb shape and values', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    const voiced = new Int32Array(nFrames).fill(1);
+    const withoutProb = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced);
+    const generalWithoutProb = pitchCorrectTimevarying(tone, f0, SR, hop, { voiced });
+
+    // Once voiced is supplied, voicedProb is ignored completely, including its
+    // shape and value-domain checks.
+    const invalidProbabilities = [
+      new Float32Array(nFrames + 1).fill(Number.NaN),
+      new Float32Array(nFrames).fill(-0.1),
+      new Float32Array(nFrames).fill(1.1),
+    ];
+    for (const invalidProb of invalidProbabilities) {
+      const withInvalidProb = pitchCorrectToMidiTimevarying(
+        tone,
+        f0,
+        71,
+        SR,
+        hop,
+        voiced,
+        invalidProb,
+      );
+      const generalWithInvalidProb = pitchCorrectTimevarying(tone, f0, SR, hop, {
+        voiced,
+        voicedProb: invalidProb,
+      });
+      expect(Array.from(withInvalidProb)).toEqual(Array.from(withoutProb));
+      expect(Array.from(generalWithInvalidProb)).toEqual(Array.from(generalWithoutProb));
+    }
+
+    // With no explicit flags, invalid probabilities remain rejected.
+    for (const invalid of [Number.NaN, -0.1, 1.1]) {
+      expect(() =>
+        pitchCorrectToMidiTimevarying(
+          tone,
+          f0,
+          71,
+          SR,
+          hop,
+          undefined,
+          new Float32Array(nFrames).fill(invalid),
+        ),
+      ).toThrow();
+      expect(() =>
+        pitchCorrectTimevarying(tone, f0, SR, hop, {
+          voicedProb: new Float32Array(nFrames).fill(invalid),
+        }),
+      ).toThrow();
+    }
   });
 
   it('rejects mismatched pitch-track companion arrays before native reads', () => {

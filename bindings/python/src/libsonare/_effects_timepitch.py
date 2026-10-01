@@ -209,11 +209,6 @@ def pitch_correct_to_midi_timevarying(
         raise RuntimeError("libsonare was built without pitch-editor support")
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
-    prob_array = None
-    if voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
-        if prob_len != n_frames:
-            raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
     if voiced is not None:
         # Bulk-marshalled through NumPy like every other buffer on this path;
@@ -222,6 +217,11 @@ def pitch_correct_to_midi_timevarying(
         voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
         if voiced_len != n_frames:
             raise SonareValueError("voiced must have the same length as f0_hz")
+    prob_array = None
+    if voiced is None and voiced_prob is not None:
+        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+        if prob_len != n_frames:
+            raise SonareValueError("voiced_prob must have the same length as f0_hz")
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_pitch_correct_to_midi_timevarying(
@@ -325,11 +325,6 @@ def pitch_correct_timevarying(
 
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
-    prob_array = None
-    if voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
-        if prob_len != n_frames:
-            raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
     if voiced is not None:
         # Bulk-marshalled through NumPy like every other buffer on this path;
@@ -338,6 +333,11 @@ def pitch_correct_timevarying(
         voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
         if voiced_len != n_frames:
             raise SonareValueError("voiced must have the same length as f0_hz")
+    prob_array = None
+    if voiced is None and voiced_prob is not None:
+        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+        if prob_len != n_frames:
+            raise SonareValueError("voiced_prob must have the same length as f0_hz")
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_pitch_correct_timevarying(

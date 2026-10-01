@@ -47,6 +47,26 @@ struct NoteTrackOptions {
   const float* prob_ptr = nullptr;
 };
 
+/// Reads the optional render/decomposition voicing mask. The public facade
+/// normalizes every supported flag spelling to Int32Array; the raw addon still
+/// checks the type and length so a direct N-API caller cannot silently lose it.
+bool ReadOptionalVoicedFlags(Napi::Env env, const Napi::Value& value, size_t n_frames,
+                             Napi::Int32Array* storage, const int32_t** data) {
+  *data = nullptr;
+  if (value.IsUndefined() || value.IsNull()) return true;
+  if (!IsInt32Array(value)) {
+    Napi::TypeError::New(env, "voiced must be an Int32Array").ThrowAsJavaScriptException();
+    return false;
+  }
+  *storage = value.As<Napi::Int32Array>();
+  if (storage->ElementLength() != n_frames) {
+    Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
+    return false;
+  }
+  *data = storage->Data();
+  return true;
+}
+
 /// Reads the shared options bag, which may be absent. A voicing array that does
 /// not match the track leaves a RangeError pending, so the caller must bail out
 /// on a false return before its C-ABI call.
@@ -77,7 +97,7 @@ bool ReadNoteTrackOptions(Napi::Env env, const Napi::Value& value, size_t n_fram
     out->voiced_ptr = out->voiced.data();
   }
   const Napi::Value prob_value = opts.Get("voicedProb");
-  if (IsFloat32Array(prob_value)) {
+  if (!out->voiced_ptr && IsFloat32Array(prob_value)) {
     auto arr = prob_value.As<Napi::Float32Array>();
     if (arr.ElementLength() != n_frames) {
       Napi::RangeError::New(env, "voicedProb must match f0Hz length").ThrowAsJavaScriptException();
@@ -403,7 +423,9 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   // The track a curve edit acts on rides in the same bag; the C ABI's frame
   // count is derived from its length rather than taken separately.
   Napi::Float32Array f0;
+  Napi::Int32Array voiced;
   const float* f0_data = nullptr;
+  const int32_t* voiced_data = nullptr;
   size_t n_frames = 0;
   float frame_rate = 0.0f;
   if (info[3].IsObject()) {
@@ -412,10 +434,22 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
     config.vibrato_cutoff_hz = FloatProperty(opts, "vibratoCutoffHz", 0.0f);
     frame_rate = FloatProperty(opts, "frameRate", 0.0f);
     const Napi::Value f0_value = opts.Get("f0Hz");
+    if (!f0_value.IsUndefined() && !f0_value.IsNull() && !IsFloat32Array(f0_value)) {
+      Napi::TypeError::New(env, "f0Hz must be a Float32Array").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
     if (IsFloat32Array(f0_value)) {
       f0 = f0_value.As<Napi::Float32Array>();
       f0_data = f0.Data();
       n_frames = f0.ElementLength();
+    }
+    const Napi::Value voiced_value = opts.Get("voiced");
+    if (!voiced_value.IsUndefined() && !voiced_value.IsNull() && f0_data == nullptr) {
+      Napi::TypeError::New(env, "voiced requires f0Hz").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    if (!ReadOptionalVoicedFlags(env, voiced_value, n_frames, &voiced, &voiced_data)) {
+      return env.Undefined();
     }
   }
 
@@ -428,7 +462,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
   const SonareError err =
       sonare_render_notes(data, length, sr, notes.empty() ? nullptr : notes.data(), notes.size(),
                           envelopes.empty() ? nullptr : envelopes.data(), envelopes.size(), f0_data,
-                          n_frames, frame_rate, &config, &out, &out_length);
+                          voiced_data, n_frames, frame_rate, &config, &out, &out_length);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);
     return env.Undefined();
@@ -442,7 +476,7 @@ Napi::Value SonareWrap::RenderNotes(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  // (f0Hz, frameRate, medianHz, vibratoCutoffHz)
+  // (f0Hz, frameRate, medianHz, vibratoCutoffHz, voiced?)
   if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
       !info[3].IsNumber()) {
     Napi::TypeError::New(env, "Expected (f0Hz Float32Array, frameRate, medianHz, vibratoCutoffHz)")
@@ -455,10 +489,16 @@ Napi::Value SonareWrap::DecomposeNotePitch(const Napi::CallbackInfo& info) {
   const float frame_rate = node_narrow_finite_float(env, info[1], "frameRate");
   const float median_hz = node_narrow_finite_float(env, info[2], "medianHz");
   const float vibrato_cutoff_hz = node_narrow_finite_float(env, info[3], "vibratoCutoffHz");
+  Napi::Int32Array voiced;
+  const int32_t* voiced_data = nullptr;
+  const Napi::Value voiced_value = info.Length() > 4 ? info[4] : env.Undefined();
+  if (!ReadOptionalVoicedFlags(env, voiced_value, f0.ElementLength(), &voiced, &voiced_data)) {
+    return env.Undefined();
+  }
 
   OwnedPitchDecomposition decomposition;
   const SonareError err =
-      sonare_decompose_note_pitch(f0.Data(), f0.ElementLength(), frame_rate, median_hz,
+      sonare_decompose_note_pitch(f0.Data(), voiced_data, f0.ElementLength(), frame_rate, median_hz,
                                   vibrato_cutoff_hz, &decomposition.value);
   if (err != SONARE_OK) {
     ThrowIfError(env, err);

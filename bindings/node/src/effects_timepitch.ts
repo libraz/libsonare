@@ -32,8 +32,8 @@ export interface PitchCorrectToMidiTimevaryingRequest extends EffectSamplesReque
   f0Hz: Float32Array;
   targetMidi: number;
   hopLength?: number;
-  voiced?: VoicedFlags;
-  voicedProb?: Float32Array;
+  voiced?: VoicedFlags | null;
+  voicedProb?: Float32Array | null;
 }
 
 export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, PitchCorrectOptions {
@@ -158,11 +158,27 @@ export function pitchCorrectToMidi(
  * Unlike {@link pitchCorrectToMidi} (a single constant transpose), this follows
  * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
  * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
- * flattened. `voiced` (truthy = voiced) and `voicedProb` ([0,1]) are optional;
- * omitting them treats every frame as voiced. An `f0Hz` NaN is accepted only
- * when the corresponding `voiced` entry is falsy, matching pYIN output. The
+ * flattened. When `voiced` is supplied (truthy = voiced), it takes precedence
+ * over `voicedProb`; omitting it or passing `null` uses the probability array.
+ * When both are omitted, every frame is treated as voiced. A false `voiced`
+ * entry suppresses a positive F0 candidate, while a true entry cannot revive a
+ * non-positive or non-finite F0. An `f0Hz` NaN is accepted only when the
+ * corresponding `voiced` entry is falsy, matching pYIN output. The
  * `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be passed
  * through directly.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
+ * @param targetMidi - Desired MIDI note number
+ * @param sampleRate - Sample rate in Hz
+ * @param hopLength - F0 frame-center spacing in samples; frame `i` is centered
+ *   at sample `i * hopLength`, and nearest-frame voicing switches halfway
+ *   between adjacent centers
+ * @param voiced - Optional per-frame voiced flags; takes precedence over
+ *   `voicedProb`
+ * @param voicedProb - Optional per-frame voicing probability in `[0, 1]`, used
+ *   when `voiced` is omitted or `null`
+ * @returns Pitch-corrected audio
  */
 export function pitchCorrectToMidiTimevarying(
   request: PitchCorrectToMidiTimevaryingRequest,
@@ -173,8 +189,8 @@ export function pitchCorrectToMidiTimevarying(
   targetMidi: number,
   sampleRate?: number,
   hopLength?: number,
-  voiced?: VoicedFlags,
-  voicedProb?: Float32Array,
+  voiced?: VoicedFlags | null,
+  voicedProb?: Float32Array | null,
 ): Float32Array;
 export function pitchCorrectToMidiTimevarying(
   samples: Float32Array | PitchCorrectToMidiTimevaryingRequest,
@@ -182,8 +198,8 @@ export function pitchCorrectToMidiTimevarying(
   targetMidi?: number,
   sampleRate = 22050,
   hopLength = 512,
-  voiced?: VoicedFlags,
-  voicedProb?: Float32Array,
+  voiced?: VoicedFlags | null,
+  voicedProb?: Float32Array | null,
 ): Float32Array {
   const request =
     samples instanceof Float32Array
@@ -197,6 +213,7 @@ export function pitchCorrectToMidiTimevarying(
           voicedProb,
         }
       : samples;
+  const nativeVoiced = request.voiced != null ? toVoicedInt32(request.voiced) : undefined;
   assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
   // Positivity only: the corrector requires a positive hop to place the contour
   // and carries no further domain.
@@ -212,8 +229,8 @@ export function pitchCorrectToMidiTimevarying(
     request.f0Hz,
     request.targetMidi,
     resolvedHopLength,
-    request.voiced ? toVoicedInt32(request.voiced) : undefined,
-    request.voicedProb,
+    nativeVoiced,
+    request.voicedProb ?? undefined,
   );
 }
 
@@ -226,7 +243,21 @@ export function pitchCorrectToMidiTimevarying(
  * between a fixed-MIDI target (`'midi'`, default) and scale quantisation
  * (`'scale'`), and the retune knobs (`retuneAmount`, `maxCorrectionSemitones`,
  * `retuneSpeedMs`, `vibratoThresholdCents`) shape natural-vs-robotic correction.
- * An `f0Hz` NaN is accepted only for a frame marked unvoiced.
+ * When `voiced` is supplied (truthy = voiced), it takes precedence over
+ * `voicedProb`; omitting it or passing `null` uses the probability array. When
+ * both are omitted, every frame is treated as voiced. A false `voiced` entry
+ * suppresses a positive F0 candidate, but a true entry cannot revive a
+ * non-positive or non-finite F0. An `f0Hz` NaN is accepted only for a frame
+ * marked unvoiced.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
+ * @param sampleRate - Sample rate in Hz
+ * @param hopLength - F0 frame-center spacing in samples; frame `i` is centered
+ *   at sample `i * hopLength`, and nearest-frame voicing switches halfway
+ *   between adjacent centers
+ * @param options - Target mode, retune knobs, and optional voiced/voicedProb arrays
+ * @returns Pitch-corrected audio
  */
 export function pitchCorrectTimevarying(request: PitchCorrectTimevaryingRequest): Float32Array;
 export function pitchCorrectTimevarying(
@@ -254,6 +285,8 @@ export function pitchCorrectTimevarying(
     hopLength: requestHopLength,
     ...requestOptions
   } = request;
+  const nativeVoiced =
+    requestOptions.voiced != null ? toVoicedInt32(requestOptions.voiced) : undefined;
   assertPitchTrackLengths(requestF0Hz, requestOptions.voiced, requestOptions.voicedProb);
   // Positivity only, as pitchCorrectToMidiTimevarying: the same corrector.
   const resolvedHopLength = resolvePositiveIntegerOption(
@@ -269,7 +302,8 @@ export function pitchCorrectTimevarying(
     resolvedHopLength,
     {
       ...requestOptions,
-      voiced: requestOptions.voiced ? toVoicedInt32(requestOptions.voiced) : undefined,
+      voiced: nativeVoiced,
+      voicedProb: requestOptions.voicedProb ?? undefined,
     },
   );
 }

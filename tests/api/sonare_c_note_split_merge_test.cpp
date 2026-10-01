@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -20,6 +21,8 @@
 #include "util/constants.h"
 
 #ifdef SONARE_WITH_PITCH_EDITOR
+
+using Catch::Matchers::WithinAbs;
 
 namespace {
 
@@ -234,8 +237,8 @@ TEST_CASE("sonare_decompose_note_pitch splits a curve into two parts that add ba
   out.vibrato_cents = poisoned_floats();
   out.count = 7;
 
-  REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, 3.0f, &out) ==
-          SONARE_OK);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre, 3.0f,
+                                      &out) == SONARE_OK);
   REQUIRE(out.count == kCurveFrames);
   REQUIRE(out.centre_hz == kCentre);
   REQUIRE(out.drift_cents != nullptr);
@@ -268,8 +271,8 @@ TEST_CASE("the sonare_decompose_note_pitch cutoff takes its default at 0",
 
   auto decomposed_at = [&](float cutoff_hz) {
     SonarePitchDecompositionResult out{};
-    REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, cutoff_hz,
-                                        &out) == SONARE_OK);
+    REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre,
+                                        cutoff_hz, &out) == SONARE_OK);
     REQUIRE(out.count == kCurveFrames);
     std::vector<float> both(out.drift_cents, out.drift_cents + out.count);
     both.insert(both.end(), out.vibrato_cents, out.vibrato_cents + out.count);
@@ -284,6 +287,85 @@ TEST_CASE("the sonare_decompose_note_pitch cutoff takes its default at 0",
   // Non-vacuity: the cutoff does decide the split, so the equality above is the
   // default being applied rather than an argument nobody reads.
   REQUIRE(decomposed_at(8.0f) != explicit_default);
+}
+
+TEST_CASE("sonare_decompose_note_pitch applies a voiced mask across a merged gap",
+          "[c_api][note_split_merge][note_review]") {
+  constexpr size_t kMergedFrames = 25;
+  constexpr float kCentre = 220.0f;
+  const std::vector<CurveComponent> components = {{0.5, 60.0}, {5.5, 40.0}};
+  const std::vector<float> f0 = injected_f0(kCentre, kMergedFrames, components);
+  std::vector<int32_t> voiced(kMergedFrames, 1);
+  std::vector<float> zeroed = f0;
+  // A merged note spans the two-frame gap between source notes. Keep those F0
+  // candidates positive and let the mask, rather than zero-valued F0, mark the
+  // gap as unvoiced.
+  for (size_t i = 10; i < 12; ++i) {
+    voiced[i] = 0;
+    zeroed[i] = 0.0f;
+  }
+
+  SonarePitchDecompositionResult masked{};
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), voiced.data(), kMergedFrames, kFrameRate, kCentre,
+                                      3.0f, &masked) == SONARE_OK);
+  SonarePitchDecompositionResult zero_baseline{};
+  REQUIRE(sonare_decompose_note_pitch(zeroed.data(), nullptr, kMergedFrames, kFrameRate, kCentre,
+                                      3.0f, &zero_baseline) == SONARE_OK);
+  REQUIRE(masked.count == zero_baseline.count);
+  REQUIRE_THAT(masked.centre_hz, WithinAbs(zero_baseline.centre_hz, 1.0e-6f));
+  for (size_t i = 0; i < masked.count; ++i) {
+    REQUIRE_THAT(masked.drift_cents[i], WithinAbs(zero_baseline.drift_cents[i], 1.0e-6f));
+    REQUIRE_THAT(masked.vibrato_cents[i], WithinAbs(zero_baseline.vibrato_cents[i], 1.0e-6f));
+  }
+  sonare_free_pitch_decomposition(&masked);
+  sonare_free_pitch_decomposition(&zero_baseline);
+
+  const std::vector<int32_t> all_false(kMergedFrames, 0);
+  SonarePitchDecompositionResult empty{};
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), all_false.data(), kMergedFrames, kFrameRate,
+                                      kCentre, 3.0f, &empty) == SONARE_OK);
+  REQUIRE(empty.centre_hz == 0.0f);
+  REQUIRE(empty.drift_cents == nullptr);
+  REQUIRE(empty.vibrato_cents == nullptr);
+  REQUIRE(empty.count == 0);
+
+  // A NULL mask keeps the positive-finite-F0 interpretation. An
+  // explicit all-true mask is therefore equivalent to omitting the mask.
+  const std::vector<int32_t> all_true(kMergedFrames, 1);
+  SonarePitchDecompositionResult inferred{};
+  SonarePitchDecompositionResult explicit_true{};
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, kMergedFrames, kFrameRate, kCentre, 3.0f,
+                                      &inferred) == SONARE_OK);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), all_true.data(), kMergedFrames, kFrameRate,
+                                      kCentre, 3.0f, &explicit_true) == SONARE_OK);
+  REQUIRE(inferred.count == explicit_true.count);
+  for (size_t i = 0; i < inferred.count; ++i) {
+    REQUIRE_THAT(inferred.drift_cents[i], WithinAbs(explicit_true.drift_cents[i], 1.0e-6f));
+    REQUIRE_THAT(inferred.vibrato_cents[i], WithinAbs(explicit_true.vibrato_cents[i], 1.0e-6f));
+  }
+  sonare_free_pitch_decomposition(&inferred);
+  sonare_free_pitch_decomposition(&explicit_true);
+}
+
+TEST_CASE("sonare_decompose_note_pitch does not resurrect invalid F0 with a true mask",
+          "[c_api][note_split_merge][note_review]") {
+  const std::vector<float> invalid = {0.0f, kNaN, -1.0f, kInf, -kInf};
+  const std::vector<int32_t> all_true(invalid.size(), 1);
+  SonarePitchDecompositionResult out{};
+  REQUIRE(sonare_decompose_note_pitch(invalid.data(), all_true.data(), invalid.size(), kFrameRate,
+                                      220.0f, 3.0f, &out) == SONARE_OK);
+  REQUIRE(out.centre_hz == 0.0f);
+  REQUIRE(out.drift_cents == nullptr);
+  REQUIRE(out.vibrato_cents == nullptr);
+  REQUIRE(out.count == 0);
+
+  // The mask itself still requires an F0 array to describe what it masks.
+  REQUIRE(sonare_decompose_note_pitch(nullptr, all_true.data(), all_true.size(), kFrameRate, 220.0f,
+                                      3.0f, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out.centre_hz == 0.0f);
+  REQUIRE(out.drift_cents == nullptr);
+  REQUIRE(out.vibrato_cents == nullptr);
+  REQUIRE(out.count == 0);
 }
 
 TEST_CASE("sonare_decompose_note_pitch reports a note with no usable pitch as an empty result",
@@ -301,8 +383,8 @@ TEST_CASE("sonare_decompose_note_pitch reports a note with no usable pitch as an
     out.drift_cents = poisoned_floats();
     out.vibrato_cents = poisoned_floats();
     out.count = 7;
-    REQUIRE(sonare_decompose_note_pitch(curve.data(), curve.size(), kFrameRate, median_hz, 3.0f,
-                                        &out) == SONARE_OK);
+    REQUIRE(sonare_decompose_note_pitch(curve.data(), nullptr, curve.size(), kFrameRate, median_hz,
+                                        3.0f, &out) == SONARE_OK);
     REQUIRE(out.centre_hz == 0.0f);
     REQUIRE(out.drift_cents == nullptr);
     REQUIRE(out.vibrato_cents == nullptr);
@@ -317,8 +399,8 @@ TEST_CASE("sonare_decompose_note_pitch reports a note with no usable pitch as an
   // The same curve with a centre is not an empty measurement, so neither of the
   // two above passes by emptying every call.
   SonarePitchDecompositionResult usable{};
-  REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, 3.0f, &usable) ==
-          SONARE_OK);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre, 3.0f,
+                                      &usable) == SONARE_OK);
   REQUIRE(usable.count == kCurveFrames);
   REQUIRE(usable.centre_hz == kCentre);
   sonare_free_pitch_decomposition(&usable);
@@ -344,14 +426,15 @@ TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears it
     REQUIRE(out.count == 0);
   };
 
-  REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, 3.0f, nullptr) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre, 3.0f,
+                                      nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   rejects([&](SonarePitchDecompositionResult* out) {
-    return sonare_decompose_note_pitch(nullptr, kCurveFrames, kFrameRate, kCentre, 3.0f, out);
+    return sonare_decompose_note_pitch(nullptr, nullptr, kCurveFrames, kFrameRate, kCentre, 3.0f,
+                                       out);
   });
   rejects([&](SonarePitchDecompositionResult* out) {
-    return sonare_decompose_note_pitch(f0.data(), 0, kFrameRate, kCentre, 3.0f, out);
+    return sonare_decompose_note_pitch(f0.data(), nullptr, 0, kFrameRate, kCentre, 3.0f, out);
   });
 
   // A frame carrying no pitch is spelled zero, negative or non-finite, and all
@@ -362,14 +445,15 @@ TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears it
     std::vector<float> track = f0;
     track[7] = no_pitch;
     SonarePitchDecompositionResult out{};
-    REQUIRE(sonare_decompose_note_pitch(track.data(), track.size(), kFrameRate, kCentre, 3.0f,
-                                        &out) == SONARE_OK);
+    REQUIRE(sonare_decompose_note_pitch(track.data(), nullptr, track.size(), kFrameRate, kCentre,
+                                        3.0f, &out) == SONARE_OK);
     sonare_free_pitch_decomposition(&out);
   }
 
   for (const float bad_rate : {0.0f, -100.0f, kNaN, kInf}) {
     rejects([&](SonarePitchDecompositionResult* out) {
-      return sonare_decompose_note_pitch(f0.data(), f0.size(), bad_rate, kCentre, 3.0f, out);
+      return sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), bad_rate, kCentre, 3.0f,
+                                         out);
     });
   }
 
@@ -377,22 +461,23 @@ TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears it
   // is rejected.
   for (const float bad_median : {-1.0f, kNaN, kInf, -kInf}) {
     rejects([&](SonarePitchDecompositionResult* out) {
-      return sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, bad_median, 3.0f, out);
+      return sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, bad_median,
+                                         3.0f, out);
     });
   }
 
   // 0 is the default spelling, so only a value that cannot be a cutoff is.
   for (const float bad_cutoff : {-1.0f, -3.0f, kNaN, kInf, -kInf}) {
     rejects([&](SonarePitchDecompositionResult* out) {
-      return sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, bad_cutoff,
-                                         out);
+      return sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre,
+                                         bad_cutoff, out);
     });
   }
 
   // Positive control: the same call with nothing poisoned succeeds.
   SonarePitchDecompositionResult ok{};
-  REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, 3.0f, &ok) ==
-          SONARE_OK);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre, 3.0f,
+                                      &ok) == SONARE_OK);
   REQUIRE(ok.count == kCurveFrames);
   sonare_free_pitch_decomposition(&ok);
 }
@@ -415,8 +500,8 @@ TEST_CASE("sonare_free_pitch_decomposition clears the result it releases",
   const std::vector<float> f0 = injected_f0(kCentre, kCurveFrames, components);
 
   SonarePitchDecompositionResult out{};
-  REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), kFrameRate, kCentre, 3.0f, &out) ==
-          SONARE_OK);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), kFrameRate, kCentre, 3.0f,
+                                      &out) == SONARE_OK);
   REQUIRE(out.drift_cents != nullptr);
   REQUIRE(out.vibrato_cents != nullptr);
 
@@ -958,8 +1043,8 @@ TEST_CASE("the note reshaping C API reports NOT_SUPPORTED without the pitch edit
   notes[0].median_hz = 440.0f;
 
   SonarePitchDecompositionResult decomposition{};
-  REQUIRE(sonare_decompose_note_pitch(f0.data(), f0.size(), 100.0f, 440.0f, 3.0f, &decomposition) ==
-          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_decompose_note_pitch(f0.data(), nullptr, f0.size(), 100.0f, 440.0f, 3.0f,
+                                      &decomposition) == SONARE_ERROR_NOT_SUPPORTED);
   sonare_free_pitch_decomposition(&decomposition);
 
   SonareNoteObjectsResult out{};

@@ -51,10 +51,10 @@ export interface NoteTrackRequest extends EffectSamplesRequest, NoteExtractorOpt
   f0Hz: Float32Array;
   /** F0 frames per second. */
   frameRate: number;
-  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`. */
-  voiced?: VoicedFlags;
-  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted. */
-  voicedProb?: Float32Array;
+  /** Per-frame voiced flags (truthy = voiced). Takes precedence over `voicedProb`; `null` is omitted. */
+  voiced?: VoicedFlags | null;
+  /** Per-frame voicing probability in `[0, 1]`; read only when `voiced` is omitted, and `null` is omitted. */
+  voicedProb?: Float32Array | null;
 }
 
 export type ExtractNotesRequest = NoteTrackRequest;
@@ -80,9 +80,11 @@ export interface MergeNotesRequest extends NoteTrackRequest {
 export interface DecomposeNotePitchRequest {
   /**
    * The note's slice of the F0 track (`f0Hz.subarray(frameStart, frameEnd)`);
-   * finite and non-negative, zero meaning unvoiced.
+   * Positive finite values carry pitch; other values carry no measurement.
    */
   f0Hz: Float32Array;
+  /** Per-frame voiced flags (truthy = voiced); false suppresses F0, while true cannot revive invalid F0. */
+  voiced?: VoicedFlags | null;
   /** F0 frames per second. */
   frameRate: number;
   /** The note's `medianHz`; non-negative, 0 spelling a note with no pitch. */
@@ -111,10 +113,15 @@ export interface RenderNotesRequest extends EffectSamplesRequest {
    * The F0 track the notes were extracted from. Required by a
    * `vibratoDepthChange` / `driftChange` edit, which acts on the note's own
    * pitch curve; every other edit ignores it.
+   * Positive finite F0 values are used when `voiced` is omitted. When `voiced`
+   * is supplied, a false flag suppresses the corresponding F0 measurement; a
+   * true flag cannot make a non-positive or non-finite F0 usable.
    */
   f0Hz?: Float32Array;
   /** F0 frames per second; required when `f0Hz` is given. */
   frameRate?: number;
+  /** Per-frame voiced flags for `f0Hz`; must have the same length as `f0Hz`. */
+  voiced?: VoicedFlags | null;
   /**
    * Boundary between the drift and the vibrato those two edits act on, in Hz.
    * Default 3. Pass whatever {@link decomposeNotePitch} was called with: a host
@@ -183,13 +190,17 @@ function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): v
 }
 
 /** Shared entry check for the three entry points that re-measure a whole track. */
-function assertNoteTrackRequest(fnName: string, request: NoteTrackRequest): void {
+function assertNoteTrackRequest(fnName: string, request: NoteTrackRequest): Int32Array | undefined {
   assertSampleRate(fnName, request.sampleRate);
   assertFiniteScalar(fnName, request.frameRate, 'frameRate');
-  if (request.voiced === undefined && request.voicedProb === undefined) {
+  if (request.voiced == null && request.voicedProb == null) {
     throw new TypeError(`${fnName}: one of voiced or voicedProb is required`);
   }
+  // Normalize first so an unsupported container cannot be mistaken for a
+  // length error merely because it happens to expose a matching `length`.
+  const nativeVoiced = request.voiced != null ? toVoicedInt32(request.voiced) : undefined;
   assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
+  return nativeVoiced;
 }
 
 export function noteStretch(request: NoteStretchRequest): Float32Array;
@@ -257,8 +268,8 @@ export function noteMove(
  *   track that segments into nothing returns an empty array.
  * @throws {TypeError} Neither `voiced` nor `voicedProb` was given.
  * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
- *   of the supported range, or `voiced` / `voicedProb` do not have the same
- *   length as `f0Hz`.
+ *   of the supported range, or the selected voicing array differs from
+ *   `f0Hz` in length (`voiced`, or `voicedProb` when `voiced` is omitted).
  *
  * @example
  * ```ts
@@ -281,11 +292,12 @@ export function noteMove(
  * ```
  */
 export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
-  const { samples, sampleRate, f0Hz, frameRate, voiced, ...options } = request;
-  assertNoteTrackRequest('extractNotes', request);
+  const { samples, sampleRate, f0Hz, frameRate, voicedProb, ...options } = request;
+  const nativeVoiced = assertNoteTrackRequest('extractNotes', request);
   return addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
     ...options,
-    voiced: voiced ? toVoicedInt32(voiced) : undefined,
+    voiced: nativeVoiced,
+    voicedProb: voicedProb ?? undefined,
   });
 }
 
@@ -306,11 +318,13 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * neighbours' samples, so two moved or stretched notes may overwrite each other.
  *
  * @param request - Audio, its sample rate, the notes to render, the optional
- *   edge cross-fade, and the F0 track a curve edit needs.
+ *   edge cross-fade, and the F0 track plus voiced mask a curve edit needs.
  * @returns The rendered audio, the same length as `samples`.
- * @throws {TypeError} `notes` is not an array, or `f0Hz` is not a `Float32Array`.
- * @throws {RangeError} `sampleRate` is out of the supported range, or `f0Hz` was
- *   given without a finite `frameRate`.
+ * @throws {TypeError} `notes` is not an array, `f0Hz` is not a `Float32Array`,
+ *   or `voiced` is not a supported flag array.
+ * @throws {RangeError} `sampleRate` is out of the supported range, `f0Hz` was
+ *   given without a finite `frameRate`, `voiced` was supplied without `f0Hz`,
+ *   or `voiced` differs in length from `f0Hz`.
  * @throws {SonareError} A note is missing `onsetSample` or `offsetSample`, or
  *   carries `vibratoDepthChange` or `driftChange` without an `f0Hz` covering its
  *   frame span, or an `amplitudeEnvelope` value is not a finite non-negative
@@ -333,7 +347,7 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * ```
  */
 export function renderNotes(request: RenderNotesRequest): Float32Array {
-  const { samples, sampleRate, notes, ...options } = request;
+  const { samples, sampleRate, notes, voiced, ...options } = request;
   assertSampleRate('renderNotes', sampleRate);
   if (!Array.isArray(notes)) {
     throw new TypeError('renderNotes: notes must be an array');
@@ -347,8 +361,16 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   if (options.f0Hz !== undefined) {
     assertFiniteScalar('renderNotes', options.frameRate as number, 'frameRate');
   }
+  const nativeVoiced = voiced != null ? toVoicedInt32(voiced) : undefined;
+  if (nativeVoiced !== undefined) {
+    if (options.f0Hz === undefined) {
+      throw new RangeError('renderNotes: voiced requires f0Hz');
+    }
+    assertPitchTrackLengths(options.f0Hz, voiced);
+  }
   assertEditTimeOffsets('renderNotes', notes, 'notes');
-  return addon.renderNotes(samples, sampleRate, notes, options);
+  const nativeOptions = nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
+  return addon.renderNotes(samples, sampleRate, notes, nativeOptions);
 }
 
 /**
@@ -359,20 +381,24 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * reconstruct the curve. The drift filter is zero phase, so neither curve is
  * shifted in time against the audio.
  *
- * Frames whose F0 is unusable carry no measurement, so the curve is held at the
- * nearest usable neighbour across them. Both curves therefore have an entry
- * everywhere; a host marking the held ones reads them off `f0Hz`, which is
- * exact.
+ * Frames whose F0 is unusable, or whose explicit voiced flag is false, carry no
+ * measurement, so the curve is held at the nearest usable neighbour across
+ * them. A true flag cannot make an unusable F0 measurable. Both curves
+ * therefore have an entry everywhere; a host marking the held ones can use
+ * the same positive-finite-F0 and voiced-flag predicate.
  *
  * A note with no usable pitch comes back as a zero centre and two empty curves
  * rather than as an error.
  *
- * @param request - The note's slice of the F0 track, its frame rate, its median
- *   pitch, and the optional cutoff between the two curves.
+ * @param request - The note's slice of the F0 track, its optional voiced mask,
+ *   frame rate, median pitch, and cutoff between the two curves.
  * @returns The centre and the two curves, one entry per frame of `f0Hz`.
- * @throws {RangeError} `frameRate` is not a finite number.
- * @throws {SonareError} `f0Hz` is empty or carries a negative or non-finite
- *   value, or `medianHz` / `vibratoCutoffHz` is negative or non-finite.
+ * @throws {TypeError} `f0Hz` is not a `Float32Array` or `voiced` is not a
+ *   supported flag array.
+ * @throws {RangeError} `frameRate` is not a finite number or `voiced` differs
+ *   in length from `f0Hz`.
+ * @throws {SonareError} `f0Hz` is empty, or `medianHz` / `vibratoCutoffHz`
+ *   is negative or non-finite.
  *
  * @example
  * ```ts
@@ -386,9 +412,17 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * ```
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
-  const { f0Hz, frameRate, medianHz, vibratoCutoffHz = 0 } = request;
+  const { f0Hz, frameRate, medianHz, vibratoCutoffHz = 0, voiced } = request;
+  if (!(f0Hz instanceof Float32Array)) {
+    throw new TypeError('decomposeNotePitch: f0Hz must be a Float32Array');
+  }
   assertFiniteScalar('decomposeNotePitch', frameRate, 'frameRate');
-  return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz);
+  let nativeVoiced: Int32Array | undefined;
+  if (voiced != null) {
+    nativeVoiced = toVoicedInt32(voiced);
+    assertPitchTrackLengths(f0Hz, voiced);
+  }
+  return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz, nativeVoiced);
 }
 
 /**
@@ -413,8 +447,8 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  *   not an array, or one of its entries is missing a finite `frameStart` and
  *   `frameEnd`.
  * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
- *   of the supported range, or `voiced` / `voicedProb` do not have the same
- *   length as `f0Hz`.
+ *   of the supported range, or the selected voicing array differs from
+ *   `f0Hz` in length (`voiced`, or `voicedProb` when `voiced` is omitted).
  * @throws {SonareError} `index` is out of range, or `frame` is not strictly
  *   inside that note's own span.
  *
@@ -434,15 +468,27 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * ```
  */
 export function splitNote(request: SplitNoteRequest): NoteObject[] {
-  const { samples, sampleRate, f0Hz, frameRate, voiced, notes, index, frame, ...options } = request;
-  assertNoteTrackRequest('splitNote', request);
+  const {
+    samples,
+    sampleRate,
+    f0Hz,
+    frameRate,
+    voiced,
+    voicedProb,
+    notes,
+    index,
+    frame,
+    ...options
+  } = request;
+  const nativeVoiced = assertNoteTrackRequest('splitNote', request);
   if (!Array.isArray(notes)) {
     throw new TypeError('splitNote: notes must be an array');
   }
   assertNoteSetEntries('splitNote', notes);
   return addon.splitNote(samples, sampleRate, f0Hz, frameRate, notes, index, frame, {
     ...options,
-    voiced: voiced ? toVoicedInt32(voiced) : undefined,
+    voiced: nativeVoiced,
+    voicedProb: voicedProb ?? undefined,
   });
 }
 
@@ -467,8 +513,8 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  *   not an array, or one of its entries is missing a finite `frameStart` and
  *   `frameEnd`.
  * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
- *   of the supported range, or `voiced` / `voicedProb` do not have the same
- *   length as `f0Hz`.
+ *   of the supported range, or the selected voicing array differs from
+ *   `f0Hz` in length (`voiced`, or `voicedProb` when `voiced` is omitted).
  * @throws {SonareError} `first` is not less than `last`, or `last` is out of
  *   range.
  *
@@ -488,15 +534,27 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  * ```
  */
 export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
-  const { samples, sampleRate, f0Hz, frameRate, voiced, notes, first, last, ...options } = request;
-  assertNoteTrackRequest('mergeNotes', request);
+  const {
+    samples,
+    sampleRate,
+    f0Hz,
+    frameRate,
+    voiced,
+    voicedProb,
+    notes,
+    first,
+    last,
+    ...options
+  } = request;
+  const nativeVoiced = assertNoteTrackRequest('mergeNotes', request);
   if (!Array.isArray(notes)) {
     throw new TypeError('mergeNotes: notes must be an array');
   }
   assertNoteSetEntries('mergeNotes', notes);
   return addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, notes, first, last, {
     ...options,
-    voiced: voiced ? toVoicedInt32(voiced) : undefined,
+    voiced: nativeVoiced,
+    voicedProb: voicedProb ?? undefined,
   });
 }
 
@@ -546,8 +604,8 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  *
  * The returned notes are a new array — the C ABI edits in place, and a caller
  * handing in its own notes does not expect them rewritten. Every field but the
- * two the assignment writes is the caller's own, so the result goes straight to
- * {@link renderNotes}.
+ * two the assignment writes keeps its value. Curves are copied so editing the
+ * result leaves the source notes unchanged.
  *
  * @param request - The notes, their sample rate, the reference melody, and the
  *   optional matching tuning.
@@ -592,7 +650,14 @@ export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNote
     // each note travels through here rather than through the C ABI.
     notes: notes.map((note, index) => ({
       ...note,
-      edit: { ...note.edit, ...assigned.edits[index] },
+      ...(note.amplitude ? { amplitude: note.amplitude.slice() } : {}),
+      edit: {
+        ...note.edit,
+        ...assigned.edits[index],
+        ...(note.edit?.amplitudeEnvelope
+          ? { amplitudeEnvelope: note.edit.amplitudeEnvelope.slice() }
+          : {}),
+      },
     })),
     assignedCount: assigned.assignedCount,
   };

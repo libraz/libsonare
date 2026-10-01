@@ -255,7 +255,10 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   track.voiced_prob.resize(n_frames);
 
   const bool has_voiced = info.Length() > 5 && IsInt32Array(info[5]);
-  const bool has_prob = info.Length() > 6 && IsFloat32Array(info[6]);
+  // An explicit voiced track owns the decision and makes voicedProb irrelevant;
+  // leave the ignored array untouched so malformed values and lengths cannot
+  // leak into the core validator.
+  const bool has_prob = !has_voiced && info.Length() > 6 && IsFloat32Array(info[6]);
   Napi::Int32Array voiced_arr;
   Napi::Float32Array prob_arr;
   if (has_voiced) voiced_arr = info[5].As<Napi::Int32Array>();
@@ -353,7 +356,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
       voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
       voiced_ptr = voiced.data();
     }
-    if (opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
+    if (!voiced_ptr && opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
       auto arr = opts.Get("voicedProb").As<Napi::Float32Array>();
       if (arr.ElementLength() != n_frames) {
         Napi::RangeError::New(env, "voicedProb must match f0Hz length")

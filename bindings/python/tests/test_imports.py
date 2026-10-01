@@ -47,11 +47,14 @@ def test_error_codes_are_public_and_named() -> None:
     assert libsonare.SonareError(12345, "unknown").code_name == "Unknown"
 
 
-def test_library_abi_is_checked_before_configuring_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("reported_abi", [0, 0x04020205])
+def test_library_abi_is_checked_before_configuring_symbols(
+    monkeypatch: pytest.MonkeyPatch, reported_abi: int
+) -> None:
     """An old dylib produces the ABI error before any newer symbol is looked up."""
     import libsonare._ffi as ffi
 
-    fake_library = types.SimpleNamespace(sonare_abi_version=lambda: 0)
+    fake_library = types.SimpleNamespace(sonare_abi_version=lambda: reported_abi)
     monkeypatch.setattr(ffi.ctypes, "CDLL", lambda _path: fake_library)
 
     def unexpected_configuration(_lib: object) -> None:

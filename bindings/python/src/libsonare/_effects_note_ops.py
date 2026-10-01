@@ -51,6 +51,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_int32,
+    _to_c_int_array,
     _to_c_size_t,
     _unsupported_effect_symbol,
     _validate_samples,
@@ -64,6 +65,32 @@ _UNMATCHED_POLICIES = {
     "mute": SONARE_NOTE_TARGET_UNMATCHED_MUTE,
     "nearest": SONARE_NOTE_TARGET_UNMATCHED_NEAREST,
 }
+
+
+def _optional_note_voiced(
+    fn_name: str,
+    voiced: Sequence[int] | list[int] | np.ndarray | None,
+    *,
+    f0_supplied: bool,
+    n_frames: int,
+) -> object:
+    """Marshal an optional note F0 mask and keep it aligned with the track.
+
+    The C ABI uses a null pointer to mean that voicing is inferred from a
+    positive finite F0. Once a caller supplies a mask, its length must still be
+    checked even on paths that deliberately skip the F0 value scan: otherwise a
+    shorter array would let the native code read beyond the caller's buffer.
+    ``_to_c_int_array`` provides the same bool/integer numeric validation as
+    ``extract_notes`` and ``split_note``.
+    """
+    if voiced is None:
+        return None
+    if not f0_supplied:
+        raise SonareValueError(f"{fn_name}: voiced requires f0_hz")
+    voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
+    if voiced_len != n_frames:
+        raise SonareValueError(f"{fn_name}: voiced must have f0_hz's length")
+    return voiced_array
 
 
 @_guard_buffer("samples")
@@ -142,11 +169,10 @@ def extract_notes(
     Args:
         samples: Source audio (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
-        f0_hz: Per-frame F0 in Hz, one entry per analysis frame. Every value
-            must be finite and non-negative; zero denotes an unvoiced frame.
-            :func:`pitch_pyin` emits NaN for an unvoiced frame unless it is
-            called with ``fill_na=True``, which returns the zero this expects,
-            so a track taken from it needs that argument.
+        f0_hz: Per-frame F0 in Hz, one entry per analysis frame. A positive
+            finite value carries pitch; zero, a negative value, or a non-finite
+            value carries no pitch. :func:`pitch_pyin` emits NaN for an
+            unvoiced frame by default, which this function accepts as no pitch.
         frame_rate: F0 frames per second; must be finite and positive.
         voiced: Per-frame voiced flags (non-zero = voiced). Preferred over
             ``voiced_prob``; pass :func:`pitch_pyin`'s ``voiced_flag`` here.
@@ -169,9 +195,10 @@ def extract_notes(
 
     Raises:
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            either has a different length than ``f0_hz``, or if a buffer is
-            empty. A non-finite ``f0_hz`` frame is read as carrying no pitch,
-            not refused.
+            the selected voicing array has a different length than ``f0_hz``
+            (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), or if a buffer is
+            empty. Positive finite ``f0_hz`` values carry pitch; zero, negative
+            and non-finite values carry no pitch.
 
     Example:
         pYIN's default leaves an unvoiced frame as ``NaN`` and this function
@@ -226,6 +253,7 @@ def render_notes(
     notes: Sequence[NoteObject],
     *,
     f0_hz: Sequence[float] | list[float] | np.ndarray | None = None,
+    voiced: Sequence[int] | list[int] | np.ndarray | None = None,
     frame_rate: float | None = None,
     fade_ms: float | None = None,
     vibrato_cutoff_hz: float | None = None,
@@ -251,8 +279,15 @@ def render_notes(
             ``NoteEdit.vibrato_depth_change`` and ``NoteEdit.drift_change``,
             which act on the note's own pitch curve -- that curve is this array
             sliced by ``[frame_start, frame_end)``, which the caller already
-            holds, so it is not carried on the notes. Every other edit ignores
-            it.
+            holds, so it is not carried on the notes. A positive finite value
+            carries pitch; zero, a negative value, or a non-finite value carries
+            no pitch. If ``voiced`` is supplied, a zero flag suppresses that
+            frame even when its F0 is positive; a non-zero flag still requires
+            a positive finite F0. Every other edit ignores the track.
+        voiced: Optional per-frame voiced flags with the same length as
+            ``f0_hz``. ``None`` makes the C ABI infer voicing from F0 alone;
+            when supplied, non-zero is voiced and zero suppresses the F0
+            measurement.
         frame_rate: F0 frames per second; required when ``f0_hz`` is given and
             ignored otherwise.
         fade_ms: Equal-power cross-fade at each edited note's edges; ``None``
@@ -269,9 +304,11 @@ def render_notes(
 
     Raises:
         SonareValueError: If ``samples`` is empty or non-finite, if ``f0_hz`` is
-            empty, or if ``f0_hz`` was given without ``frame_rate``. A
-            non-finite ``f0_hz`` frame is read as carrying no pitch, not
-            refused.
+            empty, if ``f0_hz`` was given without ``frame_rate``, if ``voiced``
+            is given without ``f0_hz``, or if the two tracks have different
+            lengths. Positive finite ``f0_hz`` values carry pitch; zero,
+            negative and non-finite values carry no pitch. A supplied non-zero
+            flag cannot make an unusable F0 frame usable.
         SonareError: If the C call rejects the request (e.g. a note span that
             overlaps another's, or a curve edit with no ``f0_hz``).
 
@@ -289,6 +326,7 @@ def render_notes(
     c_notes, note_count, envelopes, envelope_count = _notes_to_c("render_notes", notes)
 
     f0_array = None
+    voiced_array = None
     n_frames = 0
     # Unread when there is no track, which is how the C ABI spells "no frames".
     c_frame_rate = 0.0
@@ -304,7 +342,12 @@ def render_notes(
         f0_array, n_frames = _to_c_float_array(
             _validate_samples("render_notes", f0_hz, validate=False, arg_name="f0_hz")
         )
+        voiced_array = _optional_note_voiced(
+            "render_notes", voiced, f0_supplied=True, n_frames=n_frames
+        )
         c_frame_rate = float(frame_rate)
+    elif voiced is not None:
+        _optional_note_voiced("render_notes", voiced, f0_supplied=False, n_frames=0)
 
     config = SonareNoteRenderConfig(
         _NOTE_STRUCT_VERSION,
@@ -322,6 +365,7 @@ def render_notes(
                 envelopes,
                 _to_c_size_t(envelope_count, "envelope_count"),
                 f0_array,
+                voiced_array,
                 _to_c_size_t(n_frames, "n_frames"),
                 _to_c_float(c_frame_rate, "frame_rate"),
                 ctypes.byref(config),
@@ -338,6 +382,7 @@ def decompose_note_pitch(
     frame_rate: float,
     median_hz: float,
     *,
+    voiced: Sequence[int] | list[int] | np.ndarray | None = None,
     vibrato_cutoff_hz: float | None = None,
 ) -> PitchDecomposition:
     """Split one note's pitch curve into a centre, a drift and a vibrato.
@@ -352,9 +397,15 @@ def decompose_note_pitch(
     here together with the note's ``median_hz``.
 
     Args:
-        f0_hz: The note's slice of the F0 track, one entry per frame. Every
-            value must be finite and non-negative; zero denotes an unvoiced
-            frame.
+        f0_hz: The note's slice of the F0 track, one entry per frame. A positive
+            finite value carries pitch; zero, a negative value, or a non-finite
+            value carries no pitch. If ``voiced`` is supplied, a zero flag
+            suppresses that frame even when its F0 is positive; a non-zero flag
+            still requires a positive finite F0.
+        voiced: Optional per-frame voiced flags with the same length as
+            ``f0_hz``. ``None`` makes the C ABI infer voicing from F0 alone;
+            when supplied, non-zero is voiced and zero suppresses the F0
+            measurement.
         frame_rate: F0 frames per second; must be finite and positive.
         median_hz: The note's ``median_hz``; must be finite and non-negative. A
             note with no pitch is spelled 0, so a negative value is a caller bug
@@ -367,8 +418,11 @@ def decompose_note_pitch(
         a zero ``centre_hz`` and two empty curves rather than as an error.
 
     Raises:
-        SonareValueError: If ``f0_hz`` is empty. A non-finite frame is read
-            as carrying no pitch, not refused.
+        SonareValueError: If ``f0_hz`` is empty or if ``voiced`` has a different
+            length. A non-finite frame is read as carrying no pitch, not
+            refused. Positive finite values carry pitch; zero and negative
+            values carry no pitch as well. A supplied non-zero flag cannot make
+            an unusable F0 frame usable.
         SonareError: If the C call rejects the request.
 
     Example:
@@ -383,9 +437,13 @@ def decompose_note_pitch(
         raise _unsupported_effect_symbol("sonare_decompose_note_pitch")
 
     f0_array, n_frames = _to_c_float_array(f0_hz)
+    voiced_array = _optional_note_voiced(
+        "decompose_note_pitch", voiced, f0_supplied=True, n_frames=n_frames
+    )
     out = SonarePitchDecompositionResult()
     rc = lib.sonare_decompose_note_pitch(
         f0_array,
+        voiced_array,
         _to_c_size_t(n_frames, "n_frames"),
         _to_c_float(frame_rate, "frame_rate"),
         _to_c_float(median_hz, "median_hz"),
@@ -464,7 +522,8 @@ def split_note(
 
     Raises:
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            either has a different length than ``f0_hz``, if ``index`` is not a
+            the selected voicing array has a different length than ``f0_hz``
+            (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), if ``index`` is not a
             non-negative integer a ``size_t`` holds, or if a buffer is empty or
             non-finite.
         SonareError: If the C call rejects the request (e.g. a frame on or
@@ -552,7 +611,8 @@ def merge_notes(
 
     Raises:
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
-            either has a different length than ``f0_hz``, if ``first`` or
+            the selected voicing array has a different length than ``f0_hz``
+            (``voiced``, or ``voiced_prob`` when ``voiced`` is omitted), if ``first`` or
             ``last`` is not a non-negative integer a ``size_t`` holds, or if a
             buffer is empty. A non-finite ``f0_hz`` frame is read as carrying no
             pitch, not refused.
@@ -650,15 +710,18 @@ def _note_with_assigned_edit(note: NoteObject, row: SonareNoteObject) -> NoteObj
 
     The C call rewrites ``pitch_shift_semitones`` and ``muted`` in place and
     reads nothing else back, so those two are taken from the row and everything
-    else -- the span, the metrics, the other edits, both curves -- is the note
-    that went in.
+    else -- the span, the metrics, the other edits, both curves -- is copied from
+    the note that went in. The two curves are independent arrays in the returned
+    note, so changing it cannot mutate the caller's note.
     """
     return dataclasses.replace(
         note,
+        amplitude=np.asarray(note.amplitude).copy(),
         edit=dataclasses.replace(
             note.edit,
             pitch_shift_semitones=float(row.edit.pitch_shift_semitones),
             muted=bool(row.edit.muted),
+            amplitude_envelope=np.asarray(note.edit.amplitude_envelope).copy(),
         ),
     )
 
@@ -904,11 +967,14 @@ def transcribe(
             reads pYIN cut into notes, which follows one line at a time.
         reference_hz: Tuning reference the MIDI note numbers are measured
             against; ``None`` keeps the default (A4 = 440 Hz).
-        fmin: Lowest pitch the monophonic tracker looks for, in Hz; ``None``
-            keeps the default (65). The polyphonic chain sets its own range and
-            reads neither this nor ``fmax``.
-        fmax: Highest pitch the monophonic tracker looks for; ``None`` keeps the
-            default (2093).
+        fmin: Low end of the F0 tracker's range, in Hz. ``None`` uses 65 for
+            the monophonic path or 55 for the polyphonic path. Both paths use
+            this bound; the polyphonic path applies it to the salience
+            estimator's F0 axis, whose cent-spectrum bounds remain independent.
+        fmax: High end of the F0 tracker's range. ``None`` uses 2093 for the
+            monophonic path or 1760 for the polyphonic path. Both paths use
+            this bound, with the same polyphonic salience-axis behavior as
+            ``fmin``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
             (30 ms).
         segmentation_threshold_cents: Pitch movement that ends one note and
@@ -929,8 +995,10 @@ def transcribe(
         SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample,
             or if a config argument is outside its domain -- each named against
             this function.
-        SonareError: ``NOT_SUPPORTED`` when the library was built without the
-            pitch editor.
+        SonareError: ``INVALID_PARAMETER`` when only one of ``fmin``/``fmax``
+            is given and it does not lie on the right side of the selected
+            path's default for the other bound; ``NOT_SUPPORTED`` when the
+            library was built without the pitch editor.
 
     Example:
         >>> result = libsonare.transcribe(samples, sr, tempo_bpm=120.0)

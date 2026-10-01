@@ -58,21 +58,24 @@ class PitchCorrector {
   /// @brief Repitches @p audio frame by frame by @p deltas_semitones.
   /// @details TD-PSOLA over the track's voiced frames and duration-preserving:
   ///          the output has the input's length and stays time-locked to it.
-  ///          A voiced frame asking for more than PSOLA handles (beyond
-  ///          @c kPsolaMaxSemitones) is covered by one spectral shift computed
-  ///          once over the whole buffer, bounded by @c max_correction_semitones
-  ///          and rendered with @c backend -- the only two config fields this
-  ///          reads -- but that shift is substituted for the dry input only
-  ///          near the large-shift voiced frame(s) that required it. Every
-  ///          other unvoiced or silent sample passes through as the dry input
-  ///          unchanged, regardless of what some other, unrelated frame
-  ///          elsewhere in the buffer needed.
+  ///          Large shifts are decomposed into several bounded PSOLA passes,
+  ///          so neighbouring voiced frames keep their own requested deltas.
+  ///          Unvoiced or silent samples pass through as the dry input,
+  ///          unchanged, with only the boundary cross-fade touching their
+  ///          immediate neighbourhood.
+  ///          The supplied deltas are caller-stated intervals and are applied
+  ///          in full; @c max_correction_semitones and @c backend do not bound
+  ///          or replace this direct curve.
   ///
   ///          A caller driving this directly owns its own smoothing: a step
   ///          between neighbouring deltas is reproduced as a step.
-  /// @throws SonareException(InvalidParameter) on empty audio, an empty track,
-  ///         or a @p deltas_semitones whose length is not the track's frame
-  ///         count.
+  /// @throws SonareException(InvalidParameter) on empty audio, malformed track
+  ///         shape, rate or cadence, invalid voiced F0 or probabilities,
+  ///         non-finite or mismatched deltas, source F0 above Nyquist, or
+  ///         pitches outside the representable range due to malformed source
+  ///         data. Valid finite pitches whose source period or corrected target
+  ///         is outside [sample_rate / audio_samples, Nyquist] are dry-passed
+  ///         for that frame; inclusive endpoints use a small ULP tolerance.
   Audio resynthesize(const Audio& audio, const F0Track& track,
                      const std::vector<float>& deltas_semitones) const;
 

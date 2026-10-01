@@ -744,6 +744,109 @@ TEST_CASE("render_notes moves an edited note to its new position", "[note_model]
   REQUIRE(peak(rendered, kOnset + 320, moved_onset - 320) < 0.05f);
 }
 
+TEST_CASE("render_notes keeps a moved note when its destination note is muted", "[note_model]") {
+  constexpr int64_t kFirstOnset = 320;
+  constexpr int64_t kFirstOffset = 324;
+  constexpr int64_t kSecondOnset = 640;
+  constexpr int64_t kSecondOffset = 644;
+  const std::vector<float> first_signal = {0.11f, 0.22f, 0.33f, 0.44f};
+  const std::vector<float> second_signal = {-0.71f, -0.62f, -0.53f, -0.44f};
+  std::vector<float> samples(1000, 0.0f);
+  std::copy(first_signal.begin(), first_signal.end(),
+            samples.begin() + static_cast<ptrdiff_t>(kFirstOnset));
+  std::copy(second_signal.begin(), second_signal.end(),
+            samples.begin() + static_cast<ptrdiff_t>(kSecondOnset));
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, kSampleRate);
+
+  NoteObject moved = synthetic_note(kFirstOnset, kFirstOffset, 440.0f);
+  moved.edit.time_offset_samples = kSecondOnset - kFirstOnset;
+  NoteObject muted = synthetic_note(kSecondOnset, kSecondOffset, 440.0f);
+  muted.edit.muted = true;
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+
+  const sonare::Audio rendered = render_notes(audio, {moved, muted}, config);
+  const sonare::Audio reversed = render_notes(audio, {muted, moved}, config);
+
+  REQUIRE_THAT(peak(rendered, kFirstOnset, kFirstOffset), WithinAbs(0.0f, 1.0e-6f));
+  REQUIRE(peak(rendered, kSecondOnset, kSecondOffset) > 0.0f);
+  for (size_t i = 0; i < first_signal.size(); ++i) {
+    REQUIRE_THAT(rendered[static_cast<size_t>(kSecondOnset) + i],
+                 WithinAbs(first_signal[i], 1.0e-6f));
+  }
+  for (size_t i = 0; i < rendered.size(); ++i) {
+    REQUIRE_THAT(rendered[i], WithinAbs(reversed[i], 1.0e-6f));
+  }
+}
+
+TEST_CASE("render_notes keeps both signals when two notes swap destinations", "[note_model]") {
+  constexpr int64_t kFirstOnset = 320;
+  constexpr int64_t kFirstOffset = 324;
+  constexpr int64_t kSecondOnset = 640;
+  constexpr int64_t kSecondOffset = 644;
+  const std::vector<float> first_signal = {0.11f, 0.22f, 0.33f, 0.44f};
+  const std::vector<float> second_signal = {-0.71f, -0.62f, -0.53f, -0.44f};
+  std::vector<float> samples(1000, 0.0f);
+  std::copy(first_signal.begin(), first_signal.end(),
+            samples.begin() + static_cast<ptrdiff_t>(kFirstOnset));
+  std::copy(second_signal.begin(), second_signal.end(),
+            samples.begin() + static_cast<ptrdiff_t>(kSecondOnset));
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, kSampleRate);
+
+  NoteObject first = synthetic_note(kFirstOnset, kFirstOffset, 440.0f);
+  first.edit.time_offset_samples = kSecondOnset - kFirstOnset;
+  NoteObject second = synthetic_note(kSecondOnset, kSecondOffset, 440.0f);
+  second.edit.time_offset_samples = kFirstOnset - kSecondOnset;
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+
+  const sonare::Audio rendered = render_notes(audio, {first, second}, config);
+  const sonare::Audio reversed = render_notes(audio, {second, first}, config);
+
+  for (size_t i = 0; i < first_signal.size(); ++i) {
+    REQUIRE_THAT(rendered[static_cast<size_t>(kFirstOnset) + i],
+                 WithinAbs(second_signal[i], 1.0e-6f));
+    REQUIRE_THAT(rendered[static_cast<size_t>(kSecondOnset) + i],
+                 WithinAbs(first_signal[i], 1.0e-6f));
+  }
+  for (size_t i = 0; i < rendered.size(); ++i) {
+    REQUIRE_THAT(rendered[i], WithinAbs(reversed[i], 1.0e-6f));
+  }
+}
+
+TEST_CASE("render_notes lets the later note win a destination collision", "[note_model]") {
+  constexpr int64_t kFirstOnset = 320;
+  constexpr int64_t kFirstOffset = 324;
+  constexpr int64_t kSecondOnset = 640;
+  constexpr int64_t kSecondOffset = 644;
+  constexpr int64_t kDestination = 800;
+  const std::vector<float> first_signal = {0.11f, 0.22f, 0.33f, 0.44f};
+  const std::vector<float> second_signal = {-0.71f, -0.62f, -0.53f, -0.44f};
+  std::vector<float> samples(1000, 0.0f);
+  std::copy(first_signal.begin(), first_signal.end(),
+            samples.begin() + static_cast<ptrdiff_t>(kFirstOnset));
+  std::copy(second_signal.begin(), second_signal.end(),
+            samples.begin() + static_cast<ptrdiff_t>(kSecondOnset));
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, kSampleRate);
+
+  NoteObject first = synthetic_note(kFirstOnset, kFirstOffset, 440.0f);
+  first.edit.time_offset_samples = kDestination - kFirstOnset;
+  NoteObject second = synthetic_note(kSecondOnset, kSecondOffset, 440.0f);
+  second.edit.time_offset_samples = kDestination - kSecondOnset;
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+
+  const sonare::Audio first_then_second = render_notes(audio, {first, second}, config);
+  const sonare::Audio second_then_first = render_notes(audio, {second, first}, config);
+
+  for (size_t i = 0; i < first_signal.size(); ++i) {
+    REQUIRE_THAT(first_then_second[static_cast<size_t>(kDestination) + i],
+                 WithinAbs(second_signal[i], 1.0e-6f));
+    REQUIRE_THAT(second_then_first[static_cast<size_t>(kDestination) + i],
+                 WithinAbs(first_signal[i], 1.0e-6f));
+  }
+}
+
 // pitch-editor-003: a note moved by LESS than its own length lands its new
 // segment's head-fade zone inside the span erase_span just vacated. overlay
 // used to cross-fade that head against the PRISTINE source there, reintroducing
