@@ -49,7 +49,7 @@ struct GsEffectsConfig {
   float chorus_rate_hz = 0.8f;
   float chorus_depth_ms = 6.0f;
   float delay_time_ms = 340.0f;
-  float delay_feedback = 0.25f;  ///< [-0.9, 0.9]; the bus clamps negatives to 0 for now.
+  float delay_feedback = 0.25f;  ///< [-0.9, 0.9]; the sign alternates feedback echoes.
 
   float reverb_level = 1.0f;        ///< Return gain; the reset value is unity, full scale ~+6 dB.
   float reverb_predelay_ms = 0.0f;  ///< Input pre-delay.
@@ -125,6 +125,14 @@ class GsEffectBus {
   std::vector<float> reverb_bus_[2];
   std::vector<float> chorus_bus_[2];
   std::vector<float> delay_bus_[2];
+  /// set_config() slews delay feedback/time, so a new target can be shorter
+  /// while the old tail is still audible. Keep the largest targets since the
+  /// last prepare/reset as a conservative bound for that state.
+  double max_delay_feedback_abs_ = 0.0;
+  double max_delay_time_ms_ = 1.0;
+
+  void observe_delay_config(const GsEffectsConfig& config) noexcept;
+  void reset_delay_history() noexcept;
 };
 
 }  // namespace sonare::midi::synth

@@ -45,10 +45,18 @@ effects::delay::StereoDelayConfig delay_config(const GsEffectsConfig& cfg) {
   effects::delay::StereoDelayConfig dc;
   dc.delay_time_l_ms = std::max(1.0f, cfg.delay_time_ms);
   dc.delay_time_r_ms = std::max(1.0f, cfg.delay_time_ms);
-  dc.feedback = std::clamp(cfg.delay_feedback, 0.0f, 0.9f);
+  dc.feedback = std::clamp(cfg.delay_feedback, -0.9f, 0.9f);
   dc.ping_pong = 0.0f;
   dc.dry_wet = 1.0f;
   return dc;
+}
+
+double delay_feedback_magnitude(float feedback) noexcept {
+  return std::fabs(std::clamp(static_cast<double>(feedback), -0.9, 0.9));
+}
+
+double delay_time_milliseconds(float delay_time_ms) noexcept {
+  return std::max(1.0, static_cast<double>(delay_time_ms));
 }
 
 /// RT60 seconds -> tank feedback, the inverse of the ring-out bound below:
@@ -95,7 +103,9 @@ GsEffectBus::GsEffectBus(const GsEffectsConfig& config)
     : config_(config),
       reverb_(reverb_config(config)),
       chorus_(chorus_config(config)),
-      delay_(delay_config(config)) {}
+      delay_(delay_config(config)) {
+  reset_delay_history();
+}
 
 void GsEffectBus::prepare(double sample_rate) {
   for (int ch = 0; ch < 2; ++ch) {
@@ -106,6 +116,7 @@ void GsEffectBus::prepare(double sample_rate) {
   reverb_.prepare(sample_rate, kBlockFrames);
   chorus_.prepare(sample_rate, kBlockFrames);
   delay_.prepare(sample_rate, kBlockFrames);
+  reset_delay_history();
 }
 
 void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
@@ -116,6 +127,7 @@ void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
   config_.enable_reverb = enable_reverb;
   config_.enable_chorus = enable_chorus;
   config_.enable_delay = enable_delay;
+  observe_delay_config(config_);
   // Automatable parameter ids, from each unit's header. Everything reached here
   // is a coefficient: nothing resizes a buffer or clears a delay line.
   const effects::reverb::DattorroReverbConfig rc = reverb_config(config_);
@@ -132,7 +144,19 @@ void GsEffectBus::reset() {
   reverb_.reset();
   chorus_.reset();
   delay_.reset();
+  reset_delay_history();
   begin_chunk();
+}
+
+void GsEffectBus::observe_delay_config(const GsEffectsConfig& config) noexcept {
+  max_delay_feedback_abs_ =
+      std::max(max_delay_feedback_abs_, delay_feedback_magnitude(config.delay_feedback));
+  max_delay_time_ms_ = std::max(max_delay_time_ms_, delay_time_milliseconds(config.delay_time_ms));
+}
+
+void GsEffectBus::reset_delay_history() noexcept {
+  max_delay_feedback_abs_ = delay_feedback_magnitude(config_.delay_feedback);
+  max_delay_time_ms_ = delay_time_milliseconds(config_.delay_time_ms);
 }
 
 void GsEffectBus::begin_chunk() noexcept {
@@ -190,10 +214,12 @@ int64_t GsEffectBus::tail_samples(double sample_rate) const noexcept {
     tail_s = std::max(tail_s, kTankPassSeconds * passes);
   }
   if (config_.enable_delay) {
-    const double fb = std::clamp(static_cast<double>(config_.delay_feedback), 0.0, 0.9);
-    const double time_s = std::max(1.0f, config_.delay_time_ms) * 0.001;
-    const double repeats = fb > 0.0 ? std::log(1.0e-4) / std::log(fb) : 1.0;
-    tail_s = std::max(tail_s, time_s * std::max(1.0, repeats));
+    const double fb = max_delay_feedback_abs_;
+    const double time_s = max_delay_time_ms_ * 0.001;
+    const double repeats = fb > 0.0 ? std::log(1.0e-4) / std::log(fb) : 0.0;
+    // Each lap adds one frame (the feedback cell); bound the last echo above -80 dB.
+    const double loop_s = time_s + 1.0 / sample_rate;
+    tail_s = std::max(tail_s, time_s + repeats * loop_s);
   }
   if (config_.enable_chorus) {
     tail_s = std::max(tail_s, 0.1);  // modulated delay line ring-out

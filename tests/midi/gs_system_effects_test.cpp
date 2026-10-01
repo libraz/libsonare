@@ -10,12 +10,14 @@
 
 #include "midi/synth/gs_system_effects.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #if defined(SONARE_MIDI_WITH_FX)
@@ -637,6 +639,173 @@ TEST_CASE("GS system effects bridge onto the effect bus config", "[midi][synth][
       INFO("reverb macro " << m);
       CHECK(decays[static_cast<size_t>(m)] < decays[static_cast<size_t>(m) + 1]);
     }
+  }
+}
+
+TEST_CASE("GS delay feedback keeps its sign in the bus and its tail bound", "[midi][synth][gs]") {
+  using sonare::midi::synth::GsEffectBus;
+  using sonare::midi::synth::GsEffectsConfig;
+
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kDelaySamples = 480;                  // 10 ms at 48 kHz.
+  constexpr int kSecondEcho = 2 * kDelaySamples + 1;  // feedback state adds one sample per lap.
+  constexpr int kRenderSamples = kDelaySamples * 3;
+  constexpr int kSettleSamples = 4800;  // 100 ms of silence: ten smoothing time constants.
+
+  auto render_impulse = [&](float feedback, bool via_set_config) {
+    GsEffectsConfig initial;
+    initial.enable_reverb = false;
+    initial.enable_chorus = false;
+    initial.enable_delay = true;
+    initial.delay_time_ms = 10.0f;
+    initial.delay_feedback = via_set_config ? 0.0f : feedback;
+
+    GsEffectBus bus(initial);
+    bus.prepare(kSampleRate);
+
+    if (via_set_config) {
+      GsEffectsConfig target = initial;
+      target.delay_feedback = feedback;
+      bus.set_config(target);
+    }
+
+    std::array<float, GsEffectBus::kBlockFrames> silence_l{};
+    std::array<float, GsEffectBus::kBlockFrames> silence_r{};
+    for (int offset = 0; offset < (via_set_config ? kSettleSamples : 0);
+         offset += GsEffectBus::kBlockFrames) {
+      const int n = std::min(GsEffectBus::kBlockFrames, kSettleSamples - offset);
+      bus.begin_chunk();
+      bus.render_returns(silence_l.data(), silence_r.data(), n);
+    }
+
+    std::vector<float> output(static_cast<size_t>(kRenderSamples), 0.0f);
+    std::vector<float> output_r(static_cast<size_t>(kRenderSamples), 0.0f);
+    for (int offset = 0; offset < kRenderSamples; offset += GsEffectBus::kBlockFrames) {
+      const int n = std::min(GsEffectBus::kBlockFrames, kRenderSamples - offset);
+      bus.begin_chunk();
+      if (offset == 0) bus.delay_in(0)[0] = 1.0f;
+      bus.render_returns(output.data() + offset, output_r.data() + offset, n);
+    }
+
+    return std::pair<std::vector<float>, int64_t>{std::move(output), bus.tail_samples(kSampleRate)};
+  };
+
+  for (const bool via_set_config : {false, true}) {
+    INFO("mode: " << (via_set_config ? "set_config" : "constructor"));
+    const auto positive = render_impulse(0.5f, via_set_config);
+    const auto negative = render_impulse(-0.5f, via_set_config);
+    const auto& positive_output = positive.first;
+    const auto& negative_output = negative.first;
+
+    // The first echo does not yet traverse the feedback loop, so both signs
+    // must arrive with the same polarity and magnitude.
+    CHECK(positive_output[static_cast<size_t>(kDelaySamples)] > 0.0f);
+    CHECK(negative_output[static_cast<size_t>(kDelaySamples)] > 0.0f);
+    CHECK(std::abs(positive_output[static_cast<size_t>(kDelaySamples)]) ==
+          Approx(std::abs(negative_output[static_cast<size_t>(kDelaySamples)])).margin(1.0e-6));
+
+    // The second echo has passed through feedback once, so a negative GS
+    // coefficient must invert it while preserving its magnitude.
+    CHECK(positive_output[static_cast<size_t>(kSecondEcho)] > 0.0f);
+    CHECK(negative_output[static_cast<size_t>(kSecondEcho)] < 0.0f);
+    CHECK(std::abs(positive_output[static_cast<size_t>(kSecondEcho)]) ==
+          Approx(std::abs(negative_output[static_cast<size_t>(kSecondEcho)])).margin(1.0e-4));
+
+    // Tail duration depends on loop-gain magnitude, not its polarity, and it
+    // must include more than the one-echo delay when feedback is nonzero.
+    CHECK(positive.second == negative.second);
+    CHECK(positive.second > kDelaySamples);
+  }
+
+  auto max_after_tail = [](float feedback) {
+    constexpr double kLowSampleRate = 1000.0;
+    GsEffectsConfig config;
+    config.enable_reverb = false;
+    config.enable_chorus = false;
+    config.enable_delay = true;
+    config.delay_time_ms = 10.0f;
+    config.delay_feedback = feedback;
+
+    GsEffectBus bus(config);
+    bus.prepare(kLowSampleRate);
+    const int64_t tail = bus.tail_samples(kLowSampleRate);
+    const int samples = static_cast<int>(tail) + 32;
+    std::vector<float> output(static_cast<size_t>(samples), 0.0f);
+    std::vector<float> output_r(static_cast<size_t>(samples), 0.0f);
+    for (int offset = 0; offset < samples; offset += GsEffectBus::kBlockFrames) {
+      const int n = std::min(GsEffectBus::kBlockFrames, samples - offset);
+      bus.begin_chunk();
+      if (offset == 0) bus.delay_in(0)[0] = 1.0f;
+      bus.render_returns(output.data() + offset, output_r.data() + offset, n);
+    }
+
+    float peak = 0.0f;
+    for (int i = static_cast<int>(tail); i < samples; ++i) {
+      peak = std::max(peak, std::abs(output[static_cast<size_t>(i)]));
+    }
+    return std::pair<int64_t, float>{tail, peak};
+  };
+
+  for (const float feedback : {0.5f, -0.5f}) {
+    INFO("tail feedback: " << feedback);
+    const auto [tail, peak] = max_after_tail(feedback);
+    CHECK(tail > 10);
+    CHECK(peak <= 1.0e-4f);
+  }
+}
+
+TEST_CASE("GS delay tail remains conservative while feedback is lowered", "[midi][synth][gs]") {
+  using sonare::midi::synth::GsEffectBus;
+  using sonare::midi::synth::GsEffectsConfig;
+
+  constexpr double kSampleRate = 1000.0;
+  constexpr int kDelaySamples = 10;
+  constexpr int kImpulseFrames = 64;
+
+  auto tail_peak_after_lowering = [](float feedback) {
+    GsEffectsConfig config;
+    config.enable_reverb = false;
+    config.enable_chorus = false;
+    config.enable_delay = true;
+    config.delay_time_ms = 10.0f;
+    config.delay_feedback = feedback;
+
+    GsEffectBus bus(config);
+    bus.prepare(kSampleRate);
+
+    std::array<float, GsEffectBus::kBlockFrames> impulse_l{};
+    std::array<float, GsEffectBus::kBlockFrames> impulse_r{};
+    bus.begin_chunk();
+    bus.delay_in(0)[0] = 1.0f;
+    bus.render_returns(impulse_l.data(), impulse_r.data(), kImpulseFrames);
+
+    // Shorten both targets while the old 10 ms delay and high feedback are
+    // still in the line; set_config() must leave the bound conservative.
+    config.delay_time_ms = 1.0f;
+    config.delay_feedback = 0.0f;
+    bus.set_config(config);
+    const int64_t tail = bus.tail_samples(kSampleRate);
+    const int samples = static_cast<int>(tail) + 64;
+    std::vector<float> output(static_cast<size_t>(samples), 0.0f);
+    std::vector<float> output_r(static_cast<size_t>(samples), 0.0f);
+    for (int offset = 0; offset < samples; offset += GsEffectBus::kBlockFrames) {
+      const int n = std::min(GsEffectBus::kBlockFrames, samples - offset);
+      bus.begin_chunk();
+      bus.render_returns(output.data() + offset, output_r.data() + offset, n);
+    }
+
+    float peak = 0.0f;
+    for (int i = static_cast<int>(tail); i < samples; ++i) {
+      peak = std::max(peak, std::abs(output[static_cast<size_t>(i)]));
+    }
+    return std::pair<int64_t, float>{tail, peak};
+  };
+
+  for (const float feedback : {0.9f, -0.9f}) {
+    INFO("lowered feedback: " << feedback);
+    const auto [tail, peak] = tail_peak_after_lowering(feedback);
+    CHECK(tail > kDelaySamples);
+    CHECK(peak <= 1.0e-4f);
   }
 }
 
