@@ -131,6 +131,47 @@ TEST_CASE("RtPublisher coalesces a full publish ring to the newest snapshot", "[
   REQUIRE(publisher.current()->value == sonare::rt::RtPublisher<CountedSnapshot>::kCapacity + 10);
 }
 
+TEST_CASE("RtPublisher never lets a pending snapshot override a newer ring publish",
+          "[rt][publisher]") {
+  sonare::rt::RtPublisher<int> publisher;
+  REQUIRE(publisher.publish(std::make_shared<const int>(0)));
+  publisher.acquire();
+
+  // Fill the hand-off ring and coalesce later values into the pending slot.
+  for (int value = 1; value <= 70; ++value) {
+    REQUIRE(publisher.publish(std::make_shared<const int>(value)));
+  }
+  publisher.acquire();
+  REQUIRE(publisher.current() != nullptr);
+
+  // A newer publication must remain newer than the coalesced value even when
+  // the consumer has only retired part of the ring so far.
+  REQUIRE(publisher.publish(std::make_shared<const int>(71)));
+  publisher.acquire();
+  REQUIRE(publisher.current() != nullptr);
+  REQUIRE(*publisher.current() == 71);
+}
+
+TEST_CASE("RtPublisher quiescent acquire drains a full ring before pending", "[rt][publisher]") {
+  sonare::rt::RtPublisher<int> publisher;
+  constexpr int kFinalValue = static_cast<int>(sonare::rt::RtPublisher<int>::kCapacity) + 1;
+  REQUIRE(publisher.publish(std::make_shared<const int>(0)));
+  publisher.acquire();
+
+  for (int value = 1; value <= static_cast<int>(publisher.kCapacity); ++value) {
+    REQUIRE(publisher.publish(std::make_shared<const int>(value)));
+  }
+  // The next publication is coalesced in the pending slot while the ring is
+  // exactly full, matching the rebind path's staged replacement.
+  REQUIRE(publisher.publish(std::make_shared<const int>(kFinalValue)));
+
+  publisher.acquire_control_quiescent();
+  REQUIRE(publisher.current() != nullptr);
+  REQUIRE(*publisher.current() == kFinalValue);
+  REQUIRE(publisher.control_current() != nullptr);
+  REQUIRE(*publisher.control_current() == kFinalValue);
+}
+
 TEST_CASE("RtPublisher concurrent publish/acquire is torn-read and leak free", "[rt][publisher]") {
   constexpr int kIterations = 100000;
   CountedSnapshot::live.store(0);

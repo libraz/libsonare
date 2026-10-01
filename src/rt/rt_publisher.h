@@ -60,6 +60,11 @@ class RtPublisher {
   bool publish(std::shared_ptr<const T> snapshot) {
     reclaim_retired();
     if (!snapshot) return false;
+    // After an overflow pending_slot_ is the newest; coalesce there so the ring never outruns it.
+    if (pending_state_.load(std::memory_order_acquire) != kPendingEmpty) {
+      publish_pending(std::move(snapshot));
+      return true;
+    }
     // Retain a control-thread copy before handing ownership to the ring. The
     // ring keeps no copy of its own, so the retire ring's audio-thread producer
     // never performs a shared_ptr refcount operation (and thus never frees) on
@@ -107,6 +112,31 @@ class RtPublisher {
 #ifndef NDEBUG
     in_acquire_.store(false, std::memory_order_release);
 #endif
+  }
+
+  /// Adopt every snapshot accepted by the CONTROL thread while the AUDIO
+  /// consumer is quiescent. Unlike one ordinary acquire(), this drains the
+  /// retire ring between iterations, so a full publish burst followed by a
+  /// pending replacement cannot leave the pending replacement stranded behind
+  /// a full retire ring. The first iteration is unconditional: a control
+  /// snapshot may already equal the audio snapshot while older hand-off
+  /// entries still need to be consumed (for example, when the same owner was
+  /// published more than once).
+  ///
+  /// This method is CONTROL-only and must not run concurrently with the audio
+  /// thread or another publisher. It is intended for serialized control
+  /// operations, such as replacing an instrument between audio blocks. The
+  /// normal acquire() path remains the bounded, wait-free audio operation.
+  void acquire_control_quiescent() noexcept {
+    bool first_iteration = true;
+    do {
+      // Reclaim first so the consumer always has retire-ring space to progress.
+      reclaim_retired();
+      acquire();
+      // Release a snapshot this acquire retired before testing for another iteration.
+      reclaim_retired();
+      first_iteration = false;
+    } while (first_iteration || has_unadopted_snapshot());
   }
 
   /// Adopt the latest pending snapshot on the AUDIO thread, like acquire()
@@ -250,6 +280,10 @@ class RtPublisher {
       return head - tail < kCapacity;
     }
 
+    bool empty() const noexcept {
+      return head_.load(std::memory_order_acquire) == tail_.load(std::memory_order_acquire);
+    }
+
    private:
     std::array<std::shared_ptr<const T>, kCapacity> slots_{};
     alignas(64) std::atomic<size_t> head_{0};
@@ -327,6 +361,11 @@ class RtPublisher {
     if (deferred_retire_) {
       retire_ring_.push(std::move(deferred_retire_));
     }
+  }
+
+  bool has_unadopted_snapshot() const noexcept {
+    return audio_current_.get() != control_current_.get() || !publish_ring_.empty() ||
+           pending_state_.load(std::memory_order_acquire) != kPendingEmpty;
   }
 
   // Hand-off: control -> audio.
