@@ -195,7 +195,7 @@ export type MixBandOccupancy = Record<MixBandName, number>;
 
 /** One track handed to {@link suggestMixScene}. */
 export interface MixAssistantTrack {
-  /** Strip id the suggestion addresses. Must be unique across the request. */
+  /** Strip id the suggestion addresses. Must be non-empty and unique across the request. */
   id: string;
   /**
    * Display name, used as a source-classification hint.

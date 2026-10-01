@@ -65,6 +65,8 @@ void append(std::vector<SceneDelta>& into, std::vector<SceneDelta> from) {
 void require_unique_ids(const std::vector<TrackInput>& tracks) {
   std::set<std::string> seen;
   for (const TrackInput& track : tracks) {
+    SONARE_CHECK_MSG(!track.id.empty(), ErrorCode::InvalidParameter,
+                     "mixing assistant track id must not be empty");
     SONARE_CHECK_MSG(seen.insert(track.id).second, ErrorCode::InvalidParameter,
                      "duplicate mixing assistant track id '" + track.id + "'");
   }

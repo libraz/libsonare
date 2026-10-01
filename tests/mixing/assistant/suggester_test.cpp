@@ -3,6 +3,8 @@
 
 #include "mixing/assistant/suggester.h"
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -129,6 +131,35 @@ TEST_CASE("two tracks sharing an id are rejected rather than absorbed", "[mixing
 
   tracks[1].id = "other";
   REQUIRE_NOTHROW(sonare::mixing::assistant::suggest_scene(tracks));
+}
+
+TEST_CASE("the mixing assistant rejects an empty track id on core and C surfaces",
+          "[mixing][assistant][c_api][regression]") {
+  const float sample = 0.0f;
+  TrackInput track;
+  track.left = &sample;
+  track.frame_count = 1;
+  track.sample_rate = 48000;
+  try {
+    (void)sonare::mixing::assistant::suggest_scene(std::vector<TrackInput>{track});
+    FAIL("empty track id accepted");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()).find("track id") != std::string::npos);
+  }
+
+  const float* channels[] = {&sample};
+  const char* ids[] = {""};
+  const size_t lengths[] = {1};
+  char* json = nullptr;
+  const auto error = sonare_mixing_assistant_suggest_scene_json(
+      channels, nullptr, ids, nullptr, lengths, 1, 48000, nullptr, 0, &json);
+  if (json != nullptr) sonare_free_string(json);
+  CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(json == nullptr);
+
+  track.id = "valid";
+  CHECK_NOTHROW(sonare::mixing::assistant::suggest_scene(std::vector<TrackInput>{track}));
 }
 
 TEST_CASE("a non-finite sample excludes the track under its own reason", "[mixing][assistant]") {

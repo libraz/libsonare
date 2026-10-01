@@ -108,7 +108,7 @@ std::vector<std::string> source_class_names();
 ///          mixing C ABI already uses for multi-track input. A mono track
 ///          leaves @ref right null.
 struct TrackInput {
-  /// @brief Strip id the suggestion is written against. Must be unique.
+  /// @brief Strip id the suggestion is written against. Must be nonempty and unique.
   std::string id;
   /// @brief Optional human-facing track name.
   /// @details A hint. It moves a class the measurement chose, and redirects

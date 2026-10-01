@@ -205,15 +205,12 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
 ///          a result with an empty scene and an empty explanation; each affected
 ///          track carries its own @ref TrackProfile::exclusion_reason.
 ///
-///          Two tracks sharing a @ref TrackInput::id is the one input that is
-///          rejected rather than absorbed, with
-///          @ref ErrorCode::InvalidParameter. Absorbing it means shipping a
-///          scene the mixer refuses to load, and the refusal names the scene
-///          rather than the pair of tracks that collided.
-/// @param tracks Tracks to mix, planar, mono or stereo. Ids must be unique.
+///          Empty or duplicate track ids are rejected with
+///          @ref ErrorCode::InvalidParameter before analysis.
+/// @param tracks Tracks to mix, planar, mono or stereo. Ids must be nonempty and unique.
 /// @param config Assistant configuration.
 /// @throws SonareException with @ref ErrorCode::InvalidParameter when two
-///         tracks share an id.
+///         tracks share an id or a track id is empty.
 MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
                                  const MixAssistantConfig& config = {});
 

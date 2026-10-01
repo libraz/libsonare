@@ -440,12 +440,8 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // @param input_right  Per-track right channel pointers, or NULL for an all-mono
 //                     set. Individual entries may be NULL for a mono track.
 // @param track_ids    Per-track strip identifiers; @c input_count entries, each
-//                     non-NULL and unique. Both are enforced, not assumed: a
-//                     NULL or a repeated id returns
-//                     @c SONARE_ERROR_INVALID_PARAMETER. A repeated id would
-//                     otherwise produce a scene the mixer refuses to load, and
-//                     the refusal names the scene rather than the two tracks
-//                     that collided.
+//                     non-NULL, nonempty and unique. A NULL, empty or repeated
+//                     id returns @c SONARE_ERROR_INVALID_PARAMETER.
 // @param track_names  Optional per-track display names used only as a
 //                     classification hint, or NULL. Individual entries may be NULL.
 // @param track_lengths Per-track frame counts; @c input_count entries.
