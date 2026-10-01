@@ -1012,6 +1012,351 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('retains explicit source channel layouts across mixer syncs', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const latestSync = (): { lanes: Array<Record<string, unknown>> } => {
+        const syncs = posted.filter(
+          (message) => (message as { type?: unknown }).type === 'syncMixer',
+        ) as Array<{ lanes: Array<Record<string, unknown>> }>;
+        return syncs.at(-1) as { lanes: Array<Record<string, unknown>> };
+      };
+      try {
+        engine.setTrackBuses([{ busId: 100 }]);
+        engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 2 }]);
+        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 2 });
+
+        engine.setSends(1, [{ busId: 100, levelDb: -6, enabled: true }]);
+        expect(latestSync().lanes[0]).toMatchObject({
+          trackId: 1,
+          sourceChannelLayout: 2,
+          sends: [{ busId: 100, levelDb: -6, enabled: true }],
+        });
+
+        // An omitted layout on an existing lane keeps the previous explicit
+        // value, while a newly appended lane remains on the native default.
+        engine.setTrackLanes([{ trackId: 1 }, 2]);
+        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 2 });
+        expect(latestSync().lanes[1]).toEqual({ trackId: 2 });
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('does not cache a rejected output-bus route', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const latestSync = (): { lanes: Array<Record<string, unknown>> } =>
+        posted.filter((message) => (message as { type?: unknown }).type === 'syncMixer').at(-1) as {
+          lanes: Array<Record<string, unknown>>;
+        };
+      try {
+        engine.setTrackBuses([{ busId: 100 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 2 }]);
+        const beforeRejectedRoute = posted.length;
+        expect(() => engine.setTrackOutputBus(1, 999)).toThrow();
+        expect(posted).toHaveLength(beforeRejectedRoute);
+
+        // A valid no-op topology sync must still use the prior route.
+        expect(() => engine.setSends(1, [])).not.toThrow();
+        expect(latestSync().lanes).toEqual([
+          { trackId: 1, outputBusId: 100, sourceChannelLayout: 2 },
+        ]);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('does not cache rejected sends', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const latestSync = (): { lanes: Array<Record<string, unknown>> } =>
+        posted.filter((message) => (message as { type?: unknown }).type === 'syncMixer').at(-1) as {
+          lanes: Array<Record<string, unknown>>;
+        };
+      try {
+        engine.setTrackBuses([{ busId: 100 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100 }]);
+        const beforeRejectedSend = posted.length;
+        expect(() => engine.setSends(1, [{ busId: 999, levelDb: -6 }])).toThrow();
+        expect(posted).toHaveLength(beforeRejectedSend);
+
+        expect(() => engine.setTrackLanes([1])).not.toThrow();
+        expect(latestSync().lanes).toEqual([{ trackId: 1, outputBusId: 100 }]);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('does not cache a rejected explicit lane update', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const latestSync = (): { lanes: Array<Record<string, unknown>> } =>
+        posted.filter((message) => (message as { type?: unknown }).type === 'syncMixer').at(-1) as {
+          lanes: Array<Record<string, unknown>>;
+        };
+      try {
+        engine.setTrackBuses([{ busId: 100 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 2 }]);
+        const beforeRejectedLanes = posted.length;
+        expect(() =>
+          engine.setTrackLanes([
+            {
+              trackId: 1,
+              outputBusId: 999,
+              sourceChannelLayout: 3,
+              sends: [{ busId: 999, levelDb: -6 }],
+            },
+          ]),
+        ).toThrow();
+        expect(posted).toHaveLength(beforeRejectedLanes);
+
+        expect(() => engine.setSends(1, [])).not.toThrow();
+        expect(latestSync().lanes).toEqual([
+          { trackId: 1, outputBusId: 100, sourceChannelLayout: 2 },
+        ]);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('does not retain an implicitly added lane rejected at the native limit', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const latestSync = (): { lanes: Array<Record<string, unknown>> } =>
+        posted.filter((message) => (message as { type?: unknown }).type === 'syncMixer').at(-1) as {
+          lanes: Array<Record<string, unknown>>;
+        };
+      try {
+        const lanes = Array.from({ length: 32 }, (_, index) => index + 1);
+        engine.setTrackLanes(lanes);
+        const beforeRejectedLane = posted.length;
+        expect(() => engine.setSends(33, [])).toThrow();
+        expect(posted).toHaveLength(beforeRejectedLane);
+
+        expect(() => engine.setSends(1, [])).not.toThrow();
+        expect(latestSync().lanes).toHaveLength(32);
+        expect(latestSync().lanes.some((lane) => lane.trackId === 33)).toBe(false);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('does not settle offline insert automation for a rejected route', async () => {
+      const blockSize = 128;
+      const frames = blockSize * 4;
+      const scene = JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'track-7',
+            inserts: [{ slot: 'pre', processor: 'utility.gain', params: { levelDb: -12 } }],
+          },
+        ],
+        buses: [],
+        connections: [],
+      });
+      const clips = [
+        {
+          id: 1,
+          trackId: 7,
+          channels: [new Float32Array(frames).fill(0.25), new Float32Array(frames).fill(0.25)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ];
+      const createEngine = async (): Promise<{
+        engine: SonareEngine;
+        offline: OfflineEngineOption;
+        automationId: number;
+      }> => {
+        const offline = new (await import('../dist/index.js')).RealtimeEngine(
+          48000,
+          blockSize,
+        ) as unknown as OfflineEngineOption;
+        const engine = await SonareEngine.create(fakeContext(), {
+          mode: 'postMessage',
+          offlineEngine: offline,
+          offlineChannelCount: 2,
+          nodeFactory: () =>
+            readyWorkletNode({
+              postMessage: () => undefined,
+              onmessage: undefined,
+            }),
+        });
+        engine.setTrackLanes([7]);
+        engine.setTrackStripJson(7, scene);
+        const automationId = engine.resolveTrackInsertAutomationId(7, 0, 'levelDb');
+        expect(automationId).toBeGreaterThan(0);
+        offline.setClips(clips);
+        offline.play();
+        return { engine, offline, automationId };
+      };
+
+      const rejected = await createEngine();
+      const baseline = await createEngine();
+      try {
+        const zeroes = () => [new Float32Array(blockSize), new Float32Array(blockSize)];
+        const rejectedFirst = rejected.offline.process(zeroes());
+        const baselineFirst = baseline.offline.process(zeroes());
+        rejected.offline.setParameterSmoothed(rejected.automationId, -12);
+        rejected.offline.flushControlCommands();
+        baseline.offline.setParameterSmoothed(baseline.automationId, -12);
+        baseline.offline.flushControlCommands();
+        const rejectedPriming = rejected.offline.process(zeroes());
+        const baselinePriming = baseline.offline.process(zeroes());
+        rejected.offline.setParameterSmoothed(rejected.automationId, 12);
+        rejected.offline.flushControlCommands();
+        baseline.offline.setParameterSmoothed(baseline.automationId, 12);
+        baseline.offline.flushControlCommands();
+        const expected = baseline.offline.process(zeroes());
+        const expectedNext = baseline.offline.process(zeroes());
+        expect(() => rejected.engine.setTrackOutputBus(7, 999)).toThrow();
+        const actual = rejected.offline.process(zeroes());
+        let maxDiff = 0;
+        for (let channel = 0; channel < actual.length; channel += 1) {
+          for (let sample = 0; sample < blockSize; sample += 1) {
+            maxDiff = Math.max(
+              maxDiff,
+              Math.abs(actual[channel][sample] - expected[channel][sample]),
+            );
+          }
+        }
+        expect(rejectedFirst[0][0]).toBeGreaterThan(0);
+        expect(baselineFirst[0][0]).toBeGreaterThan(0);
+        expect(rejectedPriming[0][0]).toBeGreaterThan(0);
+        expect(baselinePriming[0][0]).toBeGreaterThan(0);
+        // Insert automation advances once per render block, so compare two
+        // successive blocks rather than samples within one block.
+        expect(Math.abs(expectedNext[0][0] - expected[0][0])).toBeGreaterThan(0.05);
+        expect(maxDiff).toBeLessThanOrEqual(1e-6);
+      } finally {
+        rejected.engine.destroy();
+        baseline.engine.destroy();
+      }
+    });
+
+    it('settles a raw insert target before an accepted route sync', async () => {
+      const blockSize = 128;
+      const frames = blockSize * 4;
+      const scene = JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'track-7',
+            inserts: [{ slot: 'pre', processor: 'utility.gain', params: { levelDb: -12 } }],
+          },
+        ],
+        buses: [],
+        connections: [],
+      });
+      const clips = [
+        {
+          id: 1,
+          trackId: 7,
+          channels: [new Float32Array(frames).fill(0.25), new Float32Array(frames).fill(0.25)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ];
+      const createEngine = async (): Promise<{
+        engine: SonareEngine;
+        offline: OfflineEngineOption;
+        automationId: number;
+      }> => {
+        const offline = new (await import('../dist/index.js')).RealtimeEngine(
+          48000,
+          blockSize,
+        ) as unknown as OfflineEngineOption;
+        const engine = await SonareEngine.create(fakeContext(), {
+          mode: 'postMessage',
+          offlineEngine: offline,
+          offlineChannelCount: 2,
+          nodeFactory: () =>
+            readyWorkletNode({
+              postMessage: () => undefined,
+              onmessage: undefined,
+            }),
+        });
+        engine.setTrackLanes([7]);
+        engine.setTrackStripJson(7, scene);
+        const automationId = engine.resolveTrackInsertAutomationId(7, 0, 'levelDb');
+        expect(automationId).toBeGreaterThan(0);
+        offline.setClips(clips);
+        offline.play();
+        return { engine, offline, automationId };
+      };
+
+      const accepted = await createEngine();
+      const settledBaseline = await createEngine();
+      try {
+        const zeroes = () => [new Float32Array(blockSize), new Float32Array(blockSize)];
+        for (const { offline, automationId } of [accepted, settledBaseline]) {
+          offline.process(zeroes());
+          offline.setParameterSmoothed(automationId, -12);
+          offline.flushControlCommands();
+          offline.process(zeroes());
+          offline.setParameterSmoothed(automationId, 12);
+          offline.flushControlCommands();
+        }
+        // The accepted topology change must preserve the raw native target by
+        // settling it before the lane setter clears its automation slot.
+        settledBaseline.offline.settleInsertParameters();
+        const expected = settledBaseline.offline.process(zeroes());
+        expect(() => accepted.engine.setTrackLanes([7])).not.toThrow();
+        const actual = accepted.offline.process(zeroes());
+        let maxDiff = 0;
+        for (let channel = 0; channel < actual.length; channel += 1) {
+          for (let sample = 0; sample < blockSize; sample += 1) {
+            maxDiff = Math.max(
+              maxDiff,
+              Math.abs(actual[channel][sample] - expected[channel][sample]),
+            );
+          }
+        }
+        expect(expected[0][0]).toBeGreaterThan(0.9);
+        expect(maxDiff).toBeLessThanOrEqual(1e-6);
+      } finally {
+        accepted.engine.destroy();
+        settledBaseline.engine.destroy();
+      }
+    });
+
     it('bypasses a bus insert live, like a track or master one', async () => {
       // Insert control has to be the same set for every strip class the facade
       // exposes. A bus could have its insert parameters automated but not

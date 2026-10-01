@@ -7,7 +7,7 @@ import type {
   SidechainSourceKind,
 } from '../index';
 import { normalizeTrackLanes } from './engine-offline';
-import { buildMixerLanes } from './engine-sync';
+import { buildMixerLanes, resolveTargetId } from './engine-sync';
 import type { SonareEngineSyncMessage, SonareEngineSyncMixerInsertParamOverride } from './messages';
 import { ENGINE_MIXER_PARAM_FADER_DB, engineMixerBusTarget } from './protocol';
 
@@ -32,6 +32,7 @@ export interface EngineMixerContext {
   readonly trackLaneIds: number[];
   readonly trackSends: Map<number, EngineTrackSend[]>;
   readonly trackOutputBus: Map<number, number>;
+  readonly trackSourceChannelLayout: Map<number, number>;
   readonly laneSidechains: Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
@@ -65,6 +66,13 @@ export type StripJsonTarget =
   | { kind: 'track'; trackId: number }
   | { kind: 'bus'; busId: number }
   | { kind: 'master' };
+
+interface MixerRoutingDraft {
+  trackLaneIds: number[];
+  trackSends: Map<number, EngineTrackSend[]>;
+  trackOutputBus: Map<number, number>;
+  trackSourceChannelLayout: Map<number, number>;
+}
 
 /** An empty construction scene used only within an explicit strip replacement. */
 export function emptyStripJson(target: StripJsonTarget): string {
@@ -264,27 +272,83 @@ export function cacheStripJson(
 
 /** Builds the engine's track-lane descriptors from the current routing stores. */
 export function mixerLanes(ctx: EngineMixerContext): EngineTrackLane[] {
-  return buildMixerLanes(ctx.trackLaneIds, ctx.trackSends, ctx.trackOutputBus);
+  return buildMixerLanes(
+    ctx.trackLaneIds,
+    ctx.trackSends,
+    ctx.trackOutputBus,
+    ctx.trackSourceChannelLayout,
+  );
 }
 
-/**
- * Mirrors the current mixer routing into the offline engine and posts the full
- * mixer-sync message (lanes, buses, strip JSON, sidechains) to the worklet.
- */
-export function syncMixer(
+function cloneMixerRouting(ctx: EngineMixerContext): MixerRoutingDraft {
+  return {
+    trackLaneIds: [...ctx.trackLaneIds],
+    trackSends: new Map(
+      Array.from(ctx.trackSends, ([trackId, sends]) => [
+        trackId,
+        sends.map((send) => ({ ...send })),
+      ]),
+    ),
+    trackOutputBus: new Map(ctx.trackOutputBus),
+    trackSourceChannelLayout: new Map(ctx.trackSourceChannelLayout),
+  };
+}
+
+function commitMixerRouting(ctx: EngineMixerContext, draft: MixerRoutingDraft): void {
+  ctx.trackLaneIds.splice(0, ctx.trackLaneIds.length, ...draft.trackLaneIds);
+  ctx.trackSends.clear();
+  for (const [trackId, sends] of draft.trackSends) {
+    ctx.trackSends.set(
+      trackId,
+      sends.map((send) => ({ ...send })),
+    );
+  }
+  ctx.trackOutputBus.clear();
+  for (const [trackId, busId] of draft.trackOutputBus) {
+    ctx.trackOutputBus.set(trackId, busId);
+  }
+  ctx.trackSourceChannelLayout.clear();
+  for (const [trackId, layout] of draft.trackSourceChannelLayout) {
+    ctx.trackSourceChannelLayout.set(trackId, layout);
+  }
+}
+
+function buildDraftMixerLanes(draft: MixerRoutingDraft): EngineTrackLane[] {
+  return buildMixerLanes(
+    draft.trackLaneIds,
+    draft.trackSends,
+    draft.trackOutputBus,
+    draft.trackSourceChannelLayout,
+  );
+}
+
+function applyMixerRouting(
   ctx: EngineMixerContext,
-  busesAlreadyApplied = false,
-  forceInsertResets: StripJsonTarget[] = [],
-): void {
-  const lanes = mixerLanes(ctx);
+  draft: MixerRoutingDraft,
+  busesAlreadyApplied: boolean,
+): { lanes: EngineTrackLane[]; buses: EngineBus[] } {
+  const lanes = buildDraftMixerLanes(draft);
   const buses = ctx.buses.map((bus) => ({ ...bus }));
   if (!busesAlreadyApplied) {
     ctx.offlineEngine.setTrackBuses(buses);
   }
   if (lanes.length > 0) {
-    ctx.offlineEngine.settleInsertParameters();
+    // The native setter validates the candidate before clearing insert
+    // automation. Apply it first so rejected routing leaves active ramps
+    // untouched; settle successful insert targets before postMixerSync replays
+    // cached by-name values.
     ctx.offlineEngine.setTrackLanes(lanes);
+    ctx.offlineEngine.settleInsertParameters();
   }
+  return { lanes, buses };
+}
+
+function postMixerSync(
+  ctx: EngineMixerContext,
+  lanes: EngineTrackLane[],
+  buses: EngineBus[],
+  forceInsertResets: StripJsonTarget[],
+): void {
   if (forceInsertResets.length > 0) {
     // The temporary empty strip drops native sidechain bindings. Restore the
     // offline mirror in the same order the worklet restores them below.
@@ -337,6 +401,29 @@ export function syncMixer(
     ...(insertParamOverrides.length > 0 ? { insertParamOverrides } : {}),
     ...(forceInsertResets.length > 0 ? { forceInsertResets } : {}),
   });
+}
+
+function syncMixerDraft(
+  ctx: EngineMixerContext,
+  draft: MixerRoutingDraft,
+  busesAlreadyApplied = false,
+  forceInsertResets: StripJsonTarget[] = [],
+): void {
+  const { lanes, buses } = applyMixerRouting(ctx, draft, busesAlreadyApplied);
+  commitMixerRouting(ctx, draft);
+  postMixerSync(ctx, lanes, buses, forceInsertResets);
+}
+
+/**
+ * Mirrors the current mixer routing into the offline engine and posts the full
+ * mixer-sync message (lanes, buses, strip JSON, sidechains) to the worklet.
+ */
+export function syncMixer(
+  ctx: EngineMixerContext,
+  busesAlreadyApplied = false,
+  forceInsertResets: StripJsonTarget[] = [],
+): void {
+  syncMixerDraft(ctx, cloneMixerRouting(ctx), busesAlreadyApplied, forceInsertResets);
 }
 
 /**
@@ -397,6 +484,7 @@ export function replayInsertParamOverrides(
  * with the already-declared lane ids in their current order and may only
  * append new track ids after them. Entries carrying `sends` replace that
  * track's send list; entries without `sends` leave existing sends untouched.
+ * The same omission rule preserves an existing source channel layout.
  *
  * @param lanes Track ids or lane descriptors in the desired lane order.
  */
@@ -404,24 +492,51 @@ export function setTrackLanes(
   ctx: EngineMixerContext,
   lanes: ReadonlyArray<number | EngineTrackLane>,
 ): void {
-  const { entries, ids } = normalizeTrackLanes(ctx.trackLaneIds, lanes);
+  const draft = cloneMixerRouting(ctx);
+  const { entries, ids } = normalizeTrackLanes(draft.trackLaneIds, lanes);
   for (const entry of entries) {
     if (entry.sends) {
-      ctx.trackSends.set(
+      draft.trackSends.set(
         entry.trackId,
         entry.sends.map((send) => ({ ...send })),
       );
     }
     if (entry.outputBusId !== undefined) {
       if (entry.outputBusId === 0) {
-        ctx.trackOutputBus.delete(entry.trackId);
+        draft.trackOutputBus.delete(entry.trackId);
       } else {
-        ctx.trackOutputBus.set(entry.trackId, entry.outputBusId);
+        draft.trackOutputBus.set(entry.trackId, entry.outputBusId);
       }
     }
+    if (entry.sourceChannelLayout !== undefined) {
+      draft.trackSourceChannelLayout.set(entry.trackId, entry.sourceChannelLayout);
+    }
   }
-  ctx.trackLaneIds.splice(0, ctx.trackLaneIds.length, ...ids);
-  ctx.syncMixer();
+  draft.trackLaneIds = ids;
+  syncMixerDraft(ctx, draft, true);
+}
+
+function ensureTrackLaneInDraft(draft: MixerRoutingDraft, target: string | number): number {
+  const trackId = resolveTargetId(target);
+  if (!Number.isInteger(trackId) || trackId <= 0) {
+    throw new RangeError(`Invalid track id for mixer lane: ${String(target)}`);
+  }
+  const existing = draft.trackLaneIds.indexOf(trackId);
+  if (existing >= 0) {
+    return existing;
+  }
+  draft.trackLaneIds.push(trackId);
+  return draft.trackLaneIds.length - 1;
+}
+
+/** Ensures a lane exists, committing it only after native routing accepts it. */
+export function ensureTrackLane(ctx: EngineMixerContext, target: string | number): number {
+  const draft = cloneMixerRouting(ctx);
+  const laneIndex = ensureTrackLaneInDraft(draft, target);
+  if (draft.trackLaneIds.length !== ctx.trackLaneIds.length) {
+    syncMixerDraft(ctx, draft, true);
+  }
+  return laneIndex;
 }
 
 /**
@@ -433,14 +548,15 @@ export function setTrackOutputBus(
   target: string | number,
   busId: number,
 ): void {
-  const laneIndex = ctx.ensureTrackLane(target);
-  const trackId = ctx.trackLaneIds[laneIndex];
+  const draft = cloneMixerRouting(ctx);
+  const laneIndex = ensureTrackLaneInDraft(draft, target);
+  const trackId = draft.trackLaneIds[laneIndex];
   if (busId === 0) {
-    ctx.trackOutputBus.delete(trackId);
+    draft.trackOutputBus.delete(trackId);
   } else {
-    ctx.trackOutputBus.set(trackId, busId);
+    draft.trackOutputBus.set(trackId, busId);
   }
-  ctx.syncMixer();
+  syncMixerDraft(ctx, draft, true);
 }
 
 /**
@@ -552,13 +668,14 @@ export function setSends(
   target: string | number,
   sends: EngineTrackSend[],
 ): void {
-  const laneIndex = ctx.ensureTrackLane(target);
-  const trackId = ctx.trackLaneIds[laneIndex];
-  ctx.trackSends.set(
+  const draft = cloneMixerRouting(ctx);
+  const laneIndex = ensureTrackLaneInDraft(draft, target);
+  const trackId = draft.trackLaneIds[laneIndex];
+  draft.trackSends.set(
     trackId,
     sends.map((send) => ({ ...send })),
   );
-  ctx.syncMixer();
+  syncMixerDraft(ctx, draft, true);
 }
 
 export function setTrackBuses(ctx: EngineMixerContext, buses: EngineBus[]): void {

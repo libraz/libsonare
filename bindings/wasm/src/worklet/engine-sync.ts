@@ -11,25 +11,30 @@ import type { SonareEngineSyncTempoMessage } from './messages';
  * Builds the ordered mixer-lane descriptors for a sync message.
  *
  * Each declared track id is paired with its current send list and output bus
- * (both omitted when absent), defensively copying the send entries.
+ * (both omitted when absent) and source channel layout, defensively copying the
+ * send entries.
  *
  * @param trackLaneIds Lane order (track ids) declared on the engine.
  * @param trackSends Per-track send lists.
  * @param trackOutputBus Per-track output bus routing.
+ * @param trackSourceChannelLayout Per-track source channel layouts.
  * @returns Lane descriptors in lane order.
  */
 export function buildMixerLanes(
   trackLaneIds: readonly number[],
   trackSends: ReadonlyMap<number, EngineTrackSend[]>,
   trackOutputBus: ReadonlyMap<number, number>,
+  trackSourceChannelLayout: ReadonlyMap<number, number>,
 ): EngineTrackLane[] {
   return trackLaneIds.map((trackId) => {
     const sends = trackSends.get(trackId);
     const outputBusId = trackOutputBus.get(trackId);
+    const sourceChannelLayout = trackSourceChannelLayout.get(trackId);
     return {
       trackId,
       ...(sends && sends.length > 0 ? { sends: sends.map((send) => ({ ...send })) } : {}),
       ...(outputBusId !== undefined ? { outputBusId } : {}),
+      ...(sourceChannelLayout !== undefined ? { sourceChannelLayout } : {}),
     };
   });
 }

@@ -102,6 +102,7 @@ export class SonareEngine {
   private readonly trackLaneIds: number[] = [];
   private readonly trackSends = new Map<number, EngineTrackSend[]>();
   private readonly trackOutputBus = new Map<number, number>();
+  private readonly trackSourceChannelLayout = new Map<number, number>();
   private readonly laneSidechains = new Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
@@ -1494,6 +1495,7 @@ export class SonareEngine {
       trackLaneIds: this.trackLaneIds,
       trackSends: this.trackSends,
       trackOutputBus: this.trackOutputBus,
+      trackSourceChannelLayout: this.trackSourceChannelLayout,
       laneSidechains: this.laneSidechains,
       busSidechains: this.busSidechains,
       masterSidechains: this.masterSidechains,
@@ -1683,17 +1685,7 @@ export class SonareEngine {
   }
 
   private ensureTrackLane(target: string | number): number {
-    const trackId = this.resolveTargetId(target);
-    if (!Number.isInteger(trackId) || trackId <= 0) {
-      throw new RangeError(`Invalid track id for mixer lane: ${String(target)}`);
-    }
-    const existing = this.trackLaneIds.indexOf(trackId);
-    if (existing >= 0) {
-      return existing;
-    }
-    this.trackLaneIds.push(trackId);
-    this.syncMixer();
-    return this.trackLaneIds.length - 1;
+    return mixer.ensureTrackLane(this.mixerContext, target);
   }
 
   private ensureBus(busId: number): number {
