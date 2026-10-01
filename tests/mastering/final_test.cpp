@@ -90,6 +90,78 @@ TEST_CASE("Every dither mode lands on the same target-bit grid", "[mastering][fi
   }
 }
 
+TEST_CASE("Noise-shaped dither does not leak clipped input into silence", "[mastering][final]") {
+  constexpr std::size_t kFrames = 4096;
+  constexpr float kLsb = 1.0f / 32768.0f;
+  const float overload = GENERATE(2.0f, 1.01f);
+
+  std::vector<float> input(kFrames, 0.0f);
+  input.front() = overload;
+  const auto result = dither(make_audio(input), {DitherType::NoiseShaped, 16, 1234});
+
+  // The first sample must exercise the clamp before quantization. The rest of
+  // the input is silence, so any large suffix is feedback from the clipped
+  // sample rather than a legitimate signal.
+  REQUIRE_THAT(result[0], WithinAbs(32767.0f / 32768.0f, 1.0e-7f));
+  float suffix_peak = 0.0f;
+  size_t off_grid = 0;
+  size_t non_finite = 0;
+  for (size_t i = 0; i < result.size(); ++i) {
+    if (!std::isfinite(result[i])) ++non_finite;
+    const float code = result[i] / kLsb;
+    if (code != std::round(code)) ++off_grid;
+    if (i > 0) suffix_peak = std::max(suffix_peak, std::abs(result[i]));
+  }
+  CAPTURE(overload, suffix_peak, suffix_peak / kLsb, non_finite, off_grid);
+  REQUIRE(non_finite == 0);
+  REQUIRE(off_grid == 0);
+  REQUIRE(suffix_peak <= 16.0f * kLsb);
+}
+
+TEST_CASE("Noise-shaped dither stays deterministic and shaped without clipping",
+          "[mastering][final]") {
+  constexpr size_t kFrames = 4096;
+  std::vector<float> input(kFrames);
+  for (size_t i = 0; i < input.size(); ++i) {
+    const float t = static_cast<float>(i) / 48000.0f;
+    input[i] = 0.4f * std::sin(sonare::constants::kTwoPi * 220.0f * t);
+  }
+  const auto audio = make_audio(input);
+  const auto shaped = dither(audio, {DitherType::NoiseShaped, 16, 1234});
+  const auto repeated = dither(audio, {DitherType::NoiseShaped, 16, 1234});
+  const auto tpdf = dither(audio, {DitherType::Tpdf, 16, 1234});
+
+  bool repeated_exactly = true;
+  bool differs_from_tpdf = false;
+  for (size_t i = 0; i < shaped.size(); ++i) {
+    repeated_exactly = repeated_exactly && shaped[i] == repeated[i];
+    differs_from_tpdf = differs_from_tpdf || shaped[i] != tpdf[i];
+  }
+  REQUIRE(repeated_exactly);
+  REQUIRE(differs_from_tpdf);
+  REQUIRE(std::all_of(shaped.data(), shaped.data() + shaped.size(),
+                      [](float sample) { return std::isfinite(sample); }));
+}
+
+TEST_CASE("Interleaved dither validates channel shape and preserves mono behavior",
+          "[mastering][final]") {
+  const auto input = make_audio({0.1f, -0.2f, 0.3f, -0.4f});
+  REQUIRE_THROWS(dither_interleaved(input, 0));
+  REQUIRE_THROWS(dither_interleaved(input, 3));
+
+  size_t mono_non_finite = 99;
+  size_t interleaved_non_finite = 99;
+  const auto mono = dither(input, {DitherType::None, 16, 1234}, &mono_non_finite);
+  const auto interleaved =
+      dither_interleaved(input, 1, {DitherType::None, 16, 1234}, &interleaved_non_finite);
+  REQUIRE(mono_non_finite == 0);
+  REQUIRE(interleaved_non_finite == 0);
+  REQUIRE(mono.size() == interleaved.size());
+  for (size_t i = 0; i < mono.size(); ++i) {
+    REQUIRE(interleaved[i] == mono[i]);
+  }
+}
+
 // target_bits accepts up to 32, but the grid is realized in float samples, so
 // it stops getting finer once the step drops below binary32's own spacing. The
 // headers state that ceiling; this pins the number they state, and pins that it

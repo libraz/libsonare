@@ -458,8 +458,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     // Match the C API: seed == 0 means "keep the library default seed".
     const auto requested_seed = static_cast<uint32_t>(intProperty(options_val, "ditherSeed", 0));
     if (requested_seed != 0) config.seed = requested_seed;
-    Audio dithered = mastering::final::dither(
-        Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate), config);
+    Audio dithered = mastering::final::dither_interleaved(
+        Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
+        static_cast<size_t>(num_channels), config);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
   }
 

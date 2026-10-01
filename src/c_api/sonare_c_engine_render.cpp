@@ -233,9 +233,9 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     config.type = dither_type_from_int(options->dither);
     config.target_bits = options->dither_bits > 0 ? options->dither_bits : 16;
     config.seed = options->dither_seed == 0 ? config.seed : options->dither_seed;
-    Audio dithered = mastering::final::dither(
+    Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), options->target_sample_rate),
-        config);
+        static_cast<size_t>(options->num_channels), config);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
 #else
     return SONARE_ERROR_NOT_SUPPORTED;

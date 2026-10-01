@@ -7,6 +7,8 @@
 
 namespace sonare::mastering::final {
 
+inline constexpr uint32_t kDitherChannelSeedSalt = 0x9E3779B9u;
+
 /// @brief Dither noise shape added before quantization.
 /// @details @c None passes the input through unquantized (only non-finite
 ///          samples are sanitized). Every other mode adds its noise and then
@@ -34,6 +36,25 @@ struct DitherConfig {
   int target_bits = 16;
   uint32_t seed = 0x51A7E5u;
 };
+
+/// @brief Derives the independent per-channel seed used by interleaved dither
+///        and the named per-channel processor path.
+constexpr uint32_t dither_channel_seed(uint32_t base_seed, std::size_t channel_index) noexcept {
+  return base_seed ^ (static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt);
+}
+
+/// @brief Dithers an interleaved buffer while keeping state independent per
+///        channel.
+/// @param audio Interleaved samples, with every frame containing
+///        @p channel_count samples.
+/// @param channel_count Number of interleaved channels; must divide the sample
+///        count exactly.
+/// @details Each channel gets its own RNG and noise-shaper history. Channel 0
+///          uses @c config.seed unchanged, so a one-channel call is identical
+///          to @ref dither.
+Audio dither_interleaved(const Audio& audio, std::size_t channel_count,
+                         const DitherConfig& config = {},
+                         std::size_t* non_finite_samples = nullptr);
 
 /// @brief Dithers and quantizes @p audio to @c config.target_bits.
 /// @details A separate @ref bit_depth pass over the result is a no-op: the

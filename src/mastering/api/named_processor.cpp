@@ -374,14 +374,6 @@ std::size_t checked_nonnegative_size(int value, const char* what) {
   return static_cast<std::size_t>(value);
 }
 
-// Per-channel decorrelation offset XORed into the dither RNG seed. Without this,
-// both stereo channels seed std::mt19937 identically and produce bit-identical
-// (fully correlated) dither + noise-shaper feedback, which collapses the dither
-// noise to a mono phantom centre. The left channel uses channel_index 0 (no
-// change, so its output stays bit-identical to the mono path); the right channel
-// uses channel_index 1, shifting only its noise.
-constexpr uint32_t kDitherChannelSeedSalt = 0x9E3779B9u;
-
 // Sample rate handed to the branch-set probe. Nothing is rendered at it (the
 // probe passes an empty buffer), it only has to be a legal rate.
 constexpr int kProbeSampleRate = 48000;
@@ -718,7 +710,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int channel_index) {
       // Decorrelate the dither noise across stereo channels (no-op for the left
       // channel, channel_index 0).
-      config.seed = base_seed ^ (static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt);
+      config.seed = final::dither_channel_seed(base_seed, static_cast<size_t>(channel_index));
       std::size_t non_finite = 0;
       Audio out = final::dither(audio, config, &non_finite);
       accumulate_substitutions(outcome.non_finite_substitution_count,
@@ -740,7 +732,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
       // steps here with a per-channel seed instead of routing through
       // output_chain() directly.
       dither_config.seed =
-          base_seed ^ (static_cast<uint32_t>(channel_index) * kDitherChannelSeedSalt);
+          final::dither_channel_seed(base_seed, static_cast<size_t>(channel_index));
       // Both steps are counted, as output_chain() itself sums them: the dither
       // step substitutes first, so the bit-depth step sees a finite input and
       // contributes only where dither is bypassed.

@@ -1,7 +1,76 @@
 /// @file sonare_c_engine_bounce_test.cpp
 /// @brief Engine C ABI offline render, bounce and freeze validation.
 
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <cstddef>
+#include <vector>
+
 #include "sonare_c_engine_test_helpers.h"
+
+namespace {
+
+std::vector<float> run_silent_dither_bounce(int num_channels, int dither_type) {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 256;
+  options.block_size = 128;
+  options.num_channels = num_channels;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+  options.dither = dither_type;
+  options.dither_bits = 16;
+  options.dither_seed = 1234;
+
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.interleaved != nullptr);
+  REQUIRE(result.frames == options.total_frames);
+  REQUIRE(result.num_channels == num_channels);
+  REQUIRE(result.sample_count == static_cast<size_t>(result.frames * result.num_channels));
+
+  std::vector<float> interleaved(result.interleaved, result.interleaved + result.sample_count);
+  sonare_free_bounce_result(&result);
+  sonare_engine_destroy(engine);
+  return interleaved;
+}
+
+}  // namespace
+
+TEST_CASE("offline bounce dither keeps channel zero invariant across widths",
+          "[c_api][engine][dither]") {
+  const int dither_type = GENERATE(2, 3);  // TPDF and noise-shaped.
+  const int num_channels = GENERATE(2, 6, 8);
+
+  const auto mono = run_silent_dither_bounce(1, dither_type);
+  const auto interleaved = run_silent_dither_bounce(num_channels, dither_type);
+  REQUIRE(mono.size() == 256);
+  REQUIRE(interleaved.size() % static_cast<size_t>(num_channels) == 0);
+  REQUIRE(interleaved.size() / static_cast<size_t>(num_channels) == mono.size());
+
+  size_t channel_zero_mismatches = 0;
+  size_t nonzero_samples = 0;
+  size_t channel_divergences = 0;
+  for (size_t frame = 0; frame < mono.size(); ++frame) {
+    const float channel_zero = interleaved[frame * static_cast<size_t>(num_channels)];
+    if (channel_zero != mono[frame]) ++channel_zero_mismatches;
+    for (int channel = 0; channel < num_channels; ++channel) {
+      const float sample =
+          interleaved[frame * static_cast<size_t>(num_channels) + static_cast<size_t>(channel)];
+      if (sample != 0.0f) ++nonzero_samples;
+      if (channel > 0 && sample != channel_zero) ++channel_divergences;
+    }
+  }
+  CAPTURE(dither_type, num_channels, channel_zero_mismatches, nonzero_samples, channel_divergences);
+  REQUIRE(channel_zero_mismatches == 0);
+  REQUIRE(nonzero_samples > 0);
+  REQUIRE(channel_divergences > 0);
+}
 
 TEST_CASE("sonare_engine_bounce_offline validates the channel count against a layout",
           "[c_api][engine][surround]") {

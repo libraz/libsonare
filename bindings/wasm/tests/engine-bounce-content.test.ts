@@ -112,4 +112,33 @@ describe('RealtimeEngine offline bounce content', () => {
     expect(Array.from(repeat.samples)).toEqual(Array.from(first.samples));
     expect(maxAbsDiff(other.samples, first.samples)).toBeGreaterThan(0);
   });
+
+  it.each([2, 3] as const)('keeps dither type %i independent across output channels', (dither) => {
+    const renderSilence = (numChannels: number): Float32Array => {
+      const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+      try {
+        return engine.bounceOffline({
+          totalFrames: FRAMES,
+          blockSize: BLOCK_SIZE,
+          numChannels,
+          sourceSampleRate: SAMPLE_RATE,
+          targetSampleRate: SAMPLE_RATE,
+          dither,
+          ditherBits: 16,
+          ditherSeed: 1234,
+        }).interleaved;
+      } finally {
+        engine.destroy();
+      }
+    };
+    const mono = renderSilence(1);
+    expect(mono.some((sample) => sample !== 0)).toBe(true);
+    for (const width of [2, 6, 8]) {
+      const interleaved = renderSilence(width);
+      const left = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width]);
+      const right = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width + 1]);
+      expect(left).toEqual(Array.from(mono));
+      expect(right).not.toEqual(left);
+    }
+  });
 });
