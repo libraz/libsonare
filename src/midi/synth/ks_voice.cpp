@@ -256,9 +256,13 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     // peak high = bright), a neck pickup at a longer delay (rounder).
     const float offset = std::max(4.0f, (1.0f - pickup) * loop_period);
     pickup_delay_q8_ = static_cast<int>(offset * 256.0f);
+    pickup_fraction_ = pickup;
+    pickup_reference_delay_ = string_.effective_delay(1.0f);
     pickup_depth_ = 0.85f;  // near-full comb notch depth
     pickup_mag_ = 0.18f;    // gentle even-harmonic nonlinearity
   } else {
+    pickup_fraction_ = 0.0f;
+    pickup_reference_delay_ = 1.0f;
     pickup_delay_q8_ = 0;
     pickup_depth_ = 0.0f;
     pickup_mag_ = 0.0f;
@@ -440,8 +444,19 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
   // sample (0 unless a pickup is engaged).
   float pickup_tap = 0.0f;
   if (pickup_depth_ != 0.0f) {
+    int pickup_delay_q8 = pickup_delay_q8_;
+    if (ratio != 1.0f) {
+      // Bent or tensioned: scale the tap by the main read's effective delay so
+      // the notch follows the sounding pitch.
+      const float reference = std::max(1.0f, pickup_reference_delay_);
+      const float scale = string_.effective_delay(ratio) / reference;
+      const float nominal = (1.0f - pickup_fraction_) * string_.period;
+      const float max_delay = static_cast<float>(std::max(4, string_.size - 4));
+      const float delay = std::clamp(nominal * scale, 4.0f, max_delay);
+      pickup_delay_q8 = static_cast<int>(delay * 256.0f);
+    }
     pickup_tap = rt::lagrange3_read(string_.buffer, static_cast<size_t>(string_.size),
-                                    string_.write, pickup_delay_q8_);
+                                    string_.write, pickup_delay_q8);
   }
 
   const float out = string_.advance(loop_in, ratio);

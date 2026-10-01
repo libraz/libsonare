@@ -272,11 +272,15 @@ class KsVoiceCore {
   float pluck_style_ = 0.0f;
   int pluck_contact_ = 0;
 
-  // Magnetic pickup (electric). pickup_depth_ == 0 -> no pickup, output
-  // bit-identical. pickup_delay_q8_ is the position tap into the loop line (a
-  // second output-side comb); pickup_mag_ is the field-gradient nonlinearity
-  // amount (even harmonics).
+  // Magnetic pickup (electric). pickup_depth_ == 0 -> no pickup. pickup_fraction_
+  // is the physical tap position; pickup_reference_delay_ is the effective loop
+  // delay at ratio 1, taken at note-on, and divides the effective delay to scale
+  // the tap. The tap scales whenever the ratio differs from 1 (bend and tension
+  // rise alike). The tap is a second output-side comb; pickup_mag_ is the
+  // field-gradient nonlinearity amount (even harmonics).
   float pickup_depth_ = 0.0f;
+  float pickup_fraction_ = 0.0f;
+  float pickup_reference_delay_ = 1.0f;
   int pickup_delay_q8_ = 0;
   float pickup_mag_ = 0.0f;
 

@@ -25,6 +25,10 @@ namespace {
 
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::gm_fallback_patch;
+using sonare::midi::synth::ks_buffer_capacity;
+using sonare::midi::synth::ks_slab_capacity;
+using sonare::midi::synth::KsPatchParams;
+using sonare::midi::synth::KsVoiceCore;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -151,6 +155,18 @@ NativeSynthPatch ks_base_patch() {
   p.amp_env.attack_ms = 1.0f;
   p.amp_env.sustain = 1.0f;
   return p;
+}
+
+std::vector<float> render_ks_core(const KsPatchParams& params, uint8_t note, float pitch_ratio,
+                                  int num_samples) {
+  KsVoiceCore core;
+  const int per_line = ks_buffer_capacity(kRate);
+  std::vector<float> slab(static_cast<size_t>(ks_slab_capacity(kRate)), 0.0f);
+  core.attach(slab.data(), per_line);
+  core.start(params, kRate, note, sonare::midi::Velocity16::from7(110), 0x4B53504Bull);
+  std::vector<float> out(static_cast<size_t>(num_samples));
+  for (float& sample : out) sample = core.render(pitch_ratio);
+  return out;
 }
 
 }  // namespace
@@ -577,6 +593,39 @@ TEST_CASE("pickup position places a comb node on the matching harmonic", "[midi]
   const double pickup_h4 =
       harmonic_power(pickup_power, f0, 4) / harmonic_power(pickup_power, f0, 2);
   REQUIRE(pickup_h4 < 0.25 * plain_h4);
+}
+
+TEST_CASE("magnetic pickup comb follows a bent string", "[midi][synth][ks]") {
+  // The pickup is at a quarter-string position, so its fourth harmonic is a
+  // node. The node must move with the propagating string period when pitch
+  // bend changes the loop ratio; a fixed note-on tap leaves the notch behind.
+  KsPatchParams plain;
+  plain.brightness = 0.85f;
+  plain.decay_s = 4.0f;
+  plain.pick_position = 0.12f;  // leave the harmonics present in the pluck
+  KsPatchParams pickup = plain;
+  pickup.pickup_pos = 0.25f;
+
+  constexpr uint8_t kNote = 45;  // A2 = 110 Hz
+  constexpr double kF0 = 110.0;
+  const float ratios[] = {1.35f, 0.72f};  // positive and downward bends
+  for (const float ratio : ratios) {
+    const std::vector<float> dry = render_ks_core(plain, kNote, ratio, 24000);
+    const std::vector<float> sensed = render_ks_core(pickup, kNote, ratio, 24000);
+    const std::vector<double> dry_power = power_spectrum(dry, 2048);
+    const std::vector<double> sensed_power = power_spectrum(sensed, 2048);
+    const double bent_f0 = kF0 * ratio;
+    const double dry_h4 = harmonic_power(dry_power, bent_f0, 4);
+    const double sensed_h4 = harmonic_power(sensed_power, bent_f0, 4);
+    const double dry_h2 = harmonic_power(dry_power, bent_f0, 2);
+    const double sensed_h2 = harmonic_power(sensed_power, bent_f0, 2);
+    REQUIRE(dry_h4 > 1.0e-8);
+    REQUIRE(dry_h2 > 1.0e-8);
+    REQUIRE(sensed_h2 > 1.0e-8);
+    INFO("ratio " << ratio << " dry h4/h2 " << dry_h4 / dry_h2 << " pickup h4/h2 "
+                  << sensed_h4 / sensed_h2);
+    CHECK(sensed_h4 / sensed_h2 < 0.30 * (dry_h4 / dry_h2));
+  }
 }
 
 TEST_CASE("steel dispersion stretches the partials and stays off by default", "[midi][synth][ks]") {

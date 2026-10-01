@@ -350,13 +350,20 @@ struct StringLoop {
     gain = 0.0f;
   }
 
-  /// Writes @p input into the line and reads the delayed sample back. @p ratio is
-  /// the per-sample pitch factor (bend / vibrato / tension), 1 = on pitch; it
-  /// scales the frequency, so it divides the delay. The returned value is the
-  /// string's output BEFORE the loss filter — shape it if the instrument shapes
-  /// it, then hand it to commit().
+  /// Returns the clamped delay used by the travelling-wave read for @p ratio.
+  /// The ratio is the per-sample pitch factor (bend / vibrato / tension), 1 =
+  /// on pitch; it scales the frequency, so it divides the delay. Callers that
+  /// need a second physical tap should use this same value so both taps obey
+  /// loop compensation and the delay-line bounds.
+  float effective_delay(float ratio) const noexcept {
+    return std::clamp(period / ratio - loop_comp, 1.0f, static_cast<float>(size - 4));
+  }
+
+  /// Writes @p input into the line and reads the delayed sample back. The
+  /// returned value is the string's output BEFORE the loss filter — shape it if
+  /// the instrument shapes it, then hand it to commit().
   float advance(float input, float ratio) noexcept {
-    const float delay = std::clamp(period / ratio - loop_comp, 1.0f, static_cast<float>(size - 4));
+    const float delay = effective_delay(ratio);
     const int delay_q8 = static_cast<int>(delay * 256.0f);
     return rt::lagrange3_fractional_delay(buffer, static_cast<size_t>(size), write, delay_q8,
                                           input);
