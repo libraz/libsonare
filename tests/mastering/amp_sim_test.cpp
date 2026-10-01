@@ -23,6 +23,7 @@
 #include "mastering/saturation/triode.h"
 #include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
+#include "util/db.h"
 
 namespace {
 
@@ -48,9 +49,9 @@ std::vector<float> sine(double freq_hz, float amplitude, int num_samples) {
 
 std::vector<float> process_mono(sonare::rt::ProcessorBase& processor, std::vector<float> input) {
   const size_t original_size = input.size();
+  processor.prepare(kRate, 512);
   const int latency = processor.latency_samples();
   input.resize(original_size + static_cast<size_t>(std::max(0, latency)), 0.0f);
-  processor.prepare(kRate, 512);
   for (size_t off = 0; off < input.size(); off += 512) {
     const int count = static_cast<int>(std::min<size_t>(512, input.size() - off));
     float* block[1] = {input.data() + off};
@@ -2221,6 +2222,46 @@ TEST_CASE("the amp's input trim saturates where its output trim only scales",
   unity.input_db = 0.0f;
   AmpSim identity(unity);
   REQUIRE(process_mono(identity, quiet) == direct);
+}
+
+TEST_CASE("amp input trim has the same preamp effect through construction and automation",
+          "[mastering][saturation][amp][insert_factory]") {
+  using sonare::mastering::saturation::AmpTopology;
+  for (const AmpTopology topology : {AmpTopology::kVoiced, AmpTopology::kCircuit}) {
+    CAPTURE(static_cast<int>(topology));
+    AmpSimConfig config;
+    config.topology = topology;
+    config.cab = false;
+    config.drive = 0.55f;
+    const auto quiet = sine(220.0, 0.05f, kNumSamples);
+    auto amplified = quiet;
+    for (float& sample : amplified) sample *= sonare::db_to_linear(12.0f);
+    AmpSim reference(config);
+    const auto expected = process_mono(reference, amplified);
+
+    config.input_db = 12.0f;
+    AmpSim constructed(config);
+    CHECK(process_mono(constructed, quiet) == expected);
+
+    config.input_db = 0.0f;
+    AmpSim automated(config);
+    REQUIRE(automated.set_parameter(16, 12.0f));
+    CHECK(process_mono(automated, quiet) == expected);
+
+    auto insert = make_insert("saturation.ampSim",
+                              std::string(R"({"inputDb":12,"drive":0.55,"cab":false,"topology":)") +
+                                  std::to_string(static_cast<int>(topology)) + "}");
+    REQUIRE(insert != nullptr);
+    CHECK(process_mono(*insert, quiet) == expected);
+
+    const auto offline = apply_named_processor("saturation.ampSim", quiet.data(), quiet.size(),
+                                               static_cast<int>(kRate),
+                                               {{"inputDb", 12.0},
+                                                {"drive", 0.55},
+                                                {"cab", 0.0},
+                                                {"topology", static_cast<double>(topology)}});
+    CHECK(offline.samples == expected);
+  }
 }
 
 TEST_CASE("a numeric preset index picks the same rig the name does",
