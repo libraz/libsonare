@@ -39,7 +39,9 @@ namespace s = sonare::midi::synth;
 constexpr double kRate = 48000.0;
 constexpr int kBlock = 256;
 constexpr uint16_t kStereoDelay = 0x0150;
+#if defined(SONARE_MIDI_WITH_FX)
 constexpr uint16_t kOverdrive = 0x0110;
+#endif
 
 /// A framed GS DT1 write of @p value at 40 03 @p offset (offset 0x03 is EFX
 /// PARAMETER 1), with the checksum.
@@ -68,6 +70,7 @@ std::array<uint8_t, 12> type_write(uint16_t type) {
 
 /// A type write at the uniform extension address (40 30-3F 00). The spec
 /// block uses 40 03, while 40 31 addresses unit 1.
+#if defined(SONARE_MIDI_WITH_FX)
 std::array<uint8_t, 12> type_write_at(uint8_t address, uint16_t type) {
   const auto msb = static_cast<uint8_t>(type >> 8);
   const auto lsb = static_cast<uint8_t>(type & 0x7F);
@@ -85,6 +88,7 @@ std::array<uint8_t, 11> part_efx_assign(uint8_t value) {
   m[9] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
   return m;
 }
+#endif
 
 /// Part 1 (channel 0) routed into the spec unit.
 constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};

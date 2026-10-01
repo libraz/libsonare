@@ -7,11 +7,19 @@
 #include "engine/insert_automation_id.h"
 #include "engine/realtime_engine_internal.h"
 #include "midi/midi_clip_envelope.h"
+#include "midi/ump.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::engine {
+
+bool RealtimeEngine::is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept {
+  if (words == nullptr || count == 0 || count > 4) return false;
+  if (count != midi::ump_word_count_for_word0(words[0])) return false;
+  const auto type = static_cast<midi::UmpMessageType>((words[0] >> 28) & 0x0Fu);
+  return type != midi::UmpMessageType::kData64 && type != midi::UmpMessageType::kData128;
+}
 
 void RealtimeEngine::process(float* const* io, int num_channels, int num_frames) noexcept {
   process_impl(io, nullptr, num_channels, num_frames, true);

@@ -60,6 +60,7 @@ using sonare::midi::synth::GsParam;
 using sonare::midi::synth::kGsAddressTable;
 using sonare::midi::synth::kGsEfxUnitCount;
 
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 /// GS part-parameter block 1, which gs_part_block_to_channel maps to channel 0 —
 /// the melodic part the stimulus sustains. Block 0 would be channel 9, the
 /// rhythm part, where the key-shift and mono/poly rows are exempt by the manual.
@@ -73,6 +74,7 @@ constexpr uint8_t kRhythmBlock = 0;
 /// A rhythm program whose kit a later map introduced, so an older map has
 /// something to fail to reach. Program 1 is Standard 2, since the SC-88.
 constexpr uint8_t kLaterMapKitProgram = 1;
+#endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 const char* level_name(GsLevel level) {
   switch (level) {
@@ -95,6 +97,7 @@ std::string addr_text(uint32_t addr) {
   return buf;
 }
 
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 std::string bytes_text(const std::vector<uint8_t>& data) {
   std::string out;
   for (const uint8_t b : data) {
@@ -105,6 +108,7 @@ std::string bytes_text(const std::vector<uint8_t>& data) {
   }
   return out;
 }
+#endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 /// A framed Roland DT1 write of @p data at @p addr, with the checksum.
 std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
@@ -120,6 +124,7 @@ std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
   return msg;
 }
 
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 /// The state a row needs before its value can move anything.
 enum class Setup : uint8_t {
   kNone,
@@ -477,6 +482,7 @@ uint8_t efx_setup_unit(const GsAddressEntry& row) {
   if ((row.addr & 0xFFF000u) != 0x403000u) return 0;
   return static_cast<uint8_t>((probe_address(row) >> 8) & 0x0Fu);
 }
+#endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 }  // namespace
 

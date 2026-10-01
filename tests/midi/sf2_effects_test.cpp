@@ -45,7 +45,9 @@ constexpr double kTwoPi = 6.28318530717958647692;
 /// residual instead of snapping to zero, so an empty measurement window reads
 /// as a level below audibility rather than a bit-exact zero. The wet returns
 /// these cases look for are orders of magnitude above it.
+#if defined(SONARE_MIDI_WITH_FX)
 constexpr float kSilenceFloor = 1.0e-6f;
+#endif
 
 using sonare::test::event;
 

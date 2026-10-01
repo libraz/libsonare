@@ -33,6 +33,7 @@ void fill_c_parameter(const automation::ParameterInfo& info, SonareParameterInfo
 // A reserved-namespace description carries no id of its own (the id is the
 // query, not a stored field), so it is echoed back from @p id rather than
 // read off @p description.
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
 void fill_c_parameter_description(uint32_t id, const automation::ParameterDescription& description,
                                   SonareParameterInfo* out) {
   out->id = id;
@@ -44,6 +45,7 @@ void fill_c_parameter_description(uint32_t id, const automation::ParameterDescri
   out->rt_safe = description.rt_safe ? 1 : 0;
   out->default_curve = curve_to_int(description.default_curve);
 }
+#endif
 
 std::vector<automation::ParameterInfo> parameter_metadata_snapshot(
     const automation::ParameterRegistry& registry) {

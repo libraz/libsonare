@@ -403,6 +403,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
   void set_clips(std::vector<ClipSchedule> clips);
   size_t clip_count() const noexcept { return clip_player_.clip_count(); }
+  /// @brief Whether @p words / @p count form a UMP the live path accepts.
+  /// @details @p count must equal the word count the message type of
+  ///   `words[0]` fixes, and the type must not be Data (MT 0x3 SysEx7, MT 0x5
+  ///   128-bit data): those arrive as payloads (@ref push_midi_sysex), never as
+  ///   raw packets. Utility (0x0), Flex Data (0xD) and UMP Stream (0xF) are
+  ///   accepted here and discarded at the destination, see
+  ///   @ref midi_ump_discarded_count.
+  ///
+  /// This validator is available in builds without the arrangement subsystem
+  /// because the C API validates raw UMP arguments before returning its
+  /// feature-gated result.
+  static bool is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept;
 #if defined(SONARE_WITH_ARRANGEMENT)
   // Control-thread direct-setter: publishes a compiled MIDI clip set through the
   // sequencer's RtPublisher (NOT an rt::Command, no ABI bump). The audio thread
@@ -436,14 +448,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   MidiSysExPushStatus last_midi_sysex_push_status() const noexcept {
     return last_midi_sysex_push_status_.load(std::memory_order_relaxed);
   }
-  /// @brief Whether @p words / @p count form a UMP the live path accepts.
-  /// @details @p count must equal the word count the message type of
-  ///   `words[0]` fixes, and the type must not be Data (MT 0x3 SysEx7, MT 0x5
-  ///   128-bit data): those arrive as payloads (@ref push_midi_sysex), never as
-  ///   raw packets. Utility (0x0), Flex Data (0xD) and UMP Stream (0xF) are
-  ///   accepted here and discarded at the destination, see
-  ///   @ref midi_ump_discarded_count.
-  static bool is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept;
   /// @brief Control-thread: enqueue one live UMP of 1 to 4 words for
   ///   @p destination_id.
   /// @details A single-word message rides kMidiUmpImmediate inline. A longer

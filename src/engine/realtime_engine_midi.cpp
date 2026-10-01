@@ -214,13 +214,6 @@ constexpr uint64_t discard_counter_key(uint32_t destination_id) noexcept {
 
 }  // namespace
 
-bool RealtimeEngine::is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept {
-  if (words == nullptr || count == 0 || count > 4) return false;
-  if (count != midi::ump_word_count_for_word0(words[0])) return false;
-  const auto type = static_cast<midi::UmpMessageType>((words[0] >> 28) & 0x0Fu);
-  return type != midi::UmpMessageType::kData64 && type != midi::UmpMessageType::kData128;
-}
-
 MidiUmpPushResult RealtimeEngine::push_midi_ump(uint32_t destination_id, const uint32_t* words,
                                                 size_t count, int64_t render_frame) noexcept {
   // CONTROL thread.

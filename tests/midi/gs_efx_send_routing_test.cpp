@@ -66,8 +66,10 @@ constexpr double kOutRate = 48000.0;
 constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
 // The same EFX assignment for part 2 (MIDI channel 1). The control fanout
 // must follow this routed part even when part 1 carries a different CC value.
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 constexpr uint8_t kPartOnChannel1[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                        0x42, 0x22, 0x01, 0x5B, 0xF7};
+#endif
 constexpr uint8_t kOdType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
 constexpr uint8_t kOdDrive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x03, 0x7F, 0x3B, 0xF7};
@@ -264,6 +266,7 @@ std::array<uint8_t, 11> efx_param_write(uint8_t offset, uint8_t value) {
 
 /// A contiguous EFX block write, used to exercise the parameter+send
 /// transaction at 40 03 16..19.
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 std::array<uint8_t, 14> efx_bulk_write(uint8_t offset, const std::array<uint8_t, 4>& values) {
   std::array<uint8_t, 14> m = {0xF0,   0x41,      0x10,      0x42,      0x12,      0x40, 0x03,
                                offset, values[0], values[1], values[2], values[3], 0x00, 0xF7};
@@ -271,6 +274,7 @@ std::array<uint8_t, 14> efx_bulk_write(uint8_t offset, const std::array<uint8_t,
   m[12] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
   return m;
 }
+#endif
 
 /// A framed EFX type selection.
 std::array<uint8_t, 12> efx_type_write(uint8_t msb, uint8_t lsb) {
