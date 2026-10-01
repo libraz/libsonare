@@ -80,8 +80,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npm
+        # Skipped when the version is already on npm, so a tag moved to finish
+        # another registry re-fires the workflow without failing here.
         working-directory: bindings/wasm
-        run: npm publish --access public --provenance
+        run: |
+          spec="$(node -p "const p = require('./package.json'); p.name + '@' + p.version")"
+          if npm view "$spec" version >/dev/null 2>&1; then
+            echo "$spec is already on npm; skipping publish"
+          else
+            npm publish --access public --provenance
+          fi
 
   release-cli:
     needs: publish-npm
