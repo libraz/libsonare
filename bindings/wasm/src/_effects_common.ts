@@ -7,6 +7,7 @@ import type { VoicedFlags } from './public_types';
 // The embind layer reads the companion voicing array as Float32Array. Keep the
 // public union a runtime contract before conversion: strings, Float64Arrays and
 // arbitrary array-like objects must not become flags through truthiness.
+// Same 1/0 reduction as the Node facade's toVoicedInt32.
 export function toVoicedFloat32(fnName: string, voiced: VoicedFlags): Float32Array {
   if (
     !(

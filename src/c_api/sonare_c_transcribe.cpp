@@ -187,7 +187,10 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  // Reject non-finite samples so NaN audio cannot return zero notes indistinguishably from silence.
+  // The family's buffer policy, non-finite scan included. Transcription needs it
+  // as much as any of them: a buffer of NaN tracks no pitch, so without the scan
+  // it would answer SONARE_OK with zero notes -- an answer a caller cannot tell
+  // apart from silence.
   const SonareError audio_error = validate_audio_params(samples, length, sample_rate);
   if (audio_error != SONARE_OK) return audio_error;
   ntm::TranscribeConfig core_config;

@@ -355,7 +355,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
     if (first_active && second_active) {
       const float first = curve[static_cast<size_t>(f0)];
       const float second = curve[static_cast<size_t>(f1)];
-      // a+(b-a)*t keeps equal ±6 endpoints exact; FMA can make a*(1-t)+b*t overshoot by one ULP.
+      // a+(b-a)*t keeps equal +/-6 endpoints exact; FMA can make a*(1-t)+b*t overshoot by one ULP.
       value = first + (second - first) * frac;
     } else if (first_active) {
       value = curve[static_cast<size_t>(f0)];
