@@ -28,10 +28,14 @@ struct NoteExtractorConfig {
 ///          only when that is empty, and its length is not checked otherwise.
 ///          A track stating only @c frame_rate_hz is served by the cadence rule
 ///          like any other -- it segments rather than coming back empty.
+///          A missing sample rate uses the audio's rate; a stated rate must
+///          match it. Samples per frame must be finite and in [1, INT_MAX].
+///          Returned F0 curves encode unvoiced or unusable measurements as zero.
 /// @throws SonareException(InvalidParameter) on empty audio, an empty track, a
-///         track whose frame cadence is not positive, a voiced or voiced
-///         probability array whose length does not match the track's frames, or
-///         a non-finite config value.
+///         track whose frame cadence is not positive, a selected voicing array
+///         whose length does not match the track's frames,
+///         a rate mismatch, samples per frame outside [1, INT_MAX], or a
+///         non-finite config value.
 std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0Track& track,
                                       const NoteExtractorConfig& config = {});
 

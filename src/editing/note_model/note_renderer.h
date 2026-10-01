@@ -70,12 +70,12 @@ void validate_render_config(const NoteRenderConfig& config);
 
 /// @brief Renders @p notes over @p audio.
 /// @details The output has the input's length and sample rate; an edit that
-///          pushes a note past either end is truncated there. A muted note
-///          silences its span and its other edit fields do not apply. Overlap
-///          is checked on the source spans only -- where time_offset_samples
-///          lands a note is not, so two moved notes may be written over each
-///          other. A note lengthened past its own span writes into its
-///          neighbours' samples for the same reason.
+///          pushes a note past either end is truncated there. All edited source
+///          spans are cleared before destinations are written in vector order.
+///          Later destinations overwrite earlier ones, with an edge blend
+///          against the current output. A muted note only clears its source;
+///          its other edit fields do not apply. Overlap is checked on every
+///          source span, including identity notes, but destinations may overlap.
 ///
 ///          Per note the order is: pitch curve, time stretch, pitch shift,
 ///          formant warp, amplitude envelope, then gain. The pitch curve goes

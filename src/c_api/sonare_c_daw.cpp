@@ -947,8 +947,7 @@ SonareError sonare_extract_percussive_events(const float* samples, size_t length
     if (config->onset_wait != 0) extractor_config.onset.wait = config->onset_wait;
     if (config->onset_delta != 0.0f) extractor_config.onset.delta = config->onset_delta;
     if (config->max_event_ms != 0.0f) extractor_config.max_event_ms = config->max_event_ms;
-    // Unlike the rest, 0 is this field's own meaning as well as its default, so
-    // it is assigned unconditionally rather than read as "leave the default".
+    // Copy unconditionally because zero is both a valid ratio and the default value.
     extractor_config.min_percussive_ratio = config->min_percussive_ratio;
   }
 

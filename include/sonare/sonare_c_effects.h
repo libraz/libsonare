@@ -430,9 +430,8 @@ typedef struct {
 ///          the three parts reconstruct the curve. The drift filter is zero
 ///          phase, so neither curve is shifted in time against the audio.
 ///
-///          Unvoiced frames and frames whose F0 is unusable carry no measurement,
-///          so the curve is
-///          held at the nearest usable neighbour across them. Both curves
+///          Unvoiced frames and frames whose F0 is unusable carry no measurement.
+///          The curve is held at the nearest usable neighbour across them. Both curves
 ///          therefore have an entry everywhere; a host marking the held ones
 ///          identifies them from @p f0_hz and @p voiced when given.
 ///
@@ -440,10 +439,10 @@ typedef struct {
 ///          @ref sonare_extract_notes, so pass the caller's own @c f0_hz sliced
 ///          by the note's @c [frame_start, frame_end) together with its
 ///          @c median_hz.
-/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. A frame
-///        carrying no pitch is zero, negative or non-finite. sonare_pitch_pyin emits NaN
-///        there unless asked to fill it -- and all three read the same: that
-///        frame contributes no measurement.
+/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. Positive
+///        finite values carry pitch; zero, negative and non-finite values carry
+///        no measurement. @ref sonare_pitch_pyin emits NaN in unvoiced frames
+///        unless asked to fill them.
 /// @param voiced Optional per-frame flags for the same note slice. Zero suppresses
 ///        the F0 measurement; nonzero still requires a positive finite F0.
 ///        NULL infers voicing from F0 alone.

@@ -184,9 +184,7 @@ void validate_note_for_render(const NoteObject& note) {
                    std::isfinite(edit.formant_shift_semitones) &&
                    std::isfinite(edit.vibrato_depth_change) && std::isfinite(edit.drift_change),
                ErrorCode::InvalidParameter);
-  // A pitch-curve edit with no curve to read is a wiring bug, not a no-op.
-  // The frames are scanned too: a median can outlive every frame that
-  // produced it, and decompose_pitch reports such a note as unmeasured.
+  // Curve edits require usable frames; a median can outlive every frame that produced it.
   if (edit.vibrato_depth_change != 0.0f || edit.drift_change != 0.0f) {
     SONARE_CHECK(note.median_hz > 0.0f && note.f0_hz.frame_rate_hz > 0.0f &&
                      has_usable_pitch(note.f0_hz.values),
