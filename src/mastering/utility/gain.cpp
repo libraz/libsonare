@@ -49,7 +49,7 @@ void Gain::set_config(const GainConfig& config) {
 bool Gain::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      if (!numeric::finite(value)) return false;
+      if (!numeric::finite(value) || !numeric::finite(db_to_linear(value))) return false;
       config_.level_db = value;
       return true;
     default:
@@ -60,10 +60,9 @@ bool Gain::set_parameter_impl(unsigned int param_id, float value) {
 std::vector<rt::ParamDescriptor> Gain::parameter_descriptors() const { return {{"levelDb", 0}}; }
 
 void Gain::validate_config(const GainConfig& config) {
-  // No window: a gain of -200 dB is silence and one of +200 dB is loud, and both
-  // are answers. A non-finite one is not -- it reaches every later stage.
-  if (!numeric::finite(config.level_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "levelDb must be finite");
+  // Allow any level whose linear multiplier is finite, including underflow to zero.
+  if (!numeric::finite(config.level_db) || !numeric::finite(db_to_linear(config.level_db))) {
+    throw SonareException(ErrorCode::InvalidParameter, "levelDb must produce a finite linear gain");
   }
 }
 

@@ -32,7 +32,9 @@
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/multiband/multiband_saturation.h"
 #include "mastering/saturation/amp_sim.h"
+#include "mastering/utility/gain.h"
 #include "rt/processor_base.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/resource_limits.h"
@@ -60,6 +62,8 @@ using sonare::mastering::api::make_insert_with_ir;
 using sonare::mastering::api::MasteringChainConfig;
 using sonare::mastering::api::Preset;
 using sonare::mastering::api::preset_config;
+using sonare::mastering::utility::Gain;
+using sonare::mastering::utility::GainConfig;
 using sonare::resource::ProjectImportResourceLimits;
 
 float ConstructedValue(const std::string& name, const std::string& params, const std::string& key) {
@@ -80,6 +84,65 @@ bool ListContains(const std::vector<std::string>& names, const std::string& targ
     if (name == target) return true;
   }
   return false;
+}
+
+TEST_CASE("utility gain rejects dB values whose linear gain is infinite",
+          "[mastering][insert_factory][gain]") {
+  const float overflowing_db = 1000.0f;
+  try {
+    Gain gain(GainConfig{overflowing_db});
+    FAIL("Gain accepted a dB value whose linear conversion overflows");
+  } catch (const sonare::SonareException& error) {
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+  }
+
+  Gain gain(GainConfig{-6.0f});
+  try {
+    gain.set_config(GainConfig{overflowing_db});
+    FAIL("Gain accepted a config whose linear conversion overflows");
+  } catch (const sonare::SonareException& error) {
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+  }
+  REQUIRE_THAT(gain.config().level_db, WithinAbs(-6.0f, 1.0e-6f));
+
+  try {
+    make_insert("utility.gain", R"({"levelDb":1000})");
+    FAIL("insert factory accepted a dB value whose linear conversion overflows");
+  } catch (const sonare::SonareException& error) {
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+  }
+}
+
+TEST_CASE("utility gain rejects overflowing automation without changing its state",
+          "[mastering][insert_factory][gain][automation]") {
+  Gain gain(GainConfig{-1000.0f});
+  gain.prepare(48000.0, 4);
+  const float before = gain.config().level_db;
+  std::array<float, 4> samples{1.0f, -1.0f, 0.25f, -0.25f};
+  float* channels[] = {samples.data()};
+
+  REQUIRE_FALSE(gain.set_parameter(0, 1000.0f));
+  REQUIRE_THAT(gain.config().level_db, WithinAbs(before, 1.0e-6f));
+  gain.process(channels, 1, static_cast<int>(samples.size()));
+  for (const float sample : samples) REQUIRE(sample == 0.0f);
+}
+
+TEST_CASE("utility gain keeps finite extremes meaningful", "[mastering][insert_factory][gain]") {
+  auto render_one = [](float level_db) {
+    Gain gain(GainConfig{level_db});
+    gain.prepare(48000.0, 4);
+    std::array<float, 4> samples{1.0f, -1.0f, 0.25f, -0.25f};
+    float* channels[] = {samples.data()};
+    gain.process(channels, 1, static_cast<int>(samples.size()));
+    return samples;
+  };
+
+  const auto normal = render_one(6.0f);
+  REQUIRE_THAT(normal[0], WithinAbs(sonare::db_to_linear(6.0f), 1.0e-6f));
+  REQUIRE(std::isfinite(render_one(200.0f)[0]));
+
+  const auto silence = render_one(-1000.0f);
+  for (const float sample : silence) REQUIRE(sample == 0.0f);
 }
 
 TEST_CASE("insert construction captures effective realtime parameter values",
