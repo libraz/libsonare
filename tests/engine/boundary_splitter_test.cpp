@@ -109,3 +109,23 @@ TEST_CASE("BoundarySplitter records overflow while preserving block end", "[engi
   REQUIRE(boundaries[boundaries.size() - 1].offset == 4096);
   REQUIRE(has_source(boundaries[boundaries.size() - 1], sonare::engine::BoundarySource::kBlockEnd));
 }
+
+TEST_CASE("BoundarySplitter uses prepared block capacity and merges duplicates before overflow",
+          "[engine][boundary]") {
+  sonare::engine::BoundarySplitter splitter;
+  splitter.prepare(97);
+  splitter.begin({0, 0, 96});
+
+  for (int offset = 1; offset < 96; ++offset) {
+    REQUIRE(splitter.add_command(offset));
+    REQUIRE(splitter.add_marker(offset));
+  }
+
+  const auto& boundaries = splitter.finish();
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 97);
+  REQUIRE(has_source(boundaries[95], sonare::engine::BoundarySource::kCommand));
+  REQUIRE(has_source(boundaries[95], sonare::engine::BoundarySource::kMarker));
+  REQUIRE(boundaries[96].offset == 96);
+  REQUIRE(has_source(boundaries[96], sonare::engine::BoundarySource::kBlockEnd));
+}

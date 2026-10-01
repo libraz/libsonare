@@ -1,11 +1,12 @@
 #pragma once
 
 /// @file boundary_splitter.h
-/// @brief Fixed-capacity boundary merge for realtime render sub-blocks.
+/// @brief Prepared-capacity boundary merge for realtime render sub-blocks.
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace sonare::engine {
 
@@ -51,6 +52,9 @@ class BoundaryList {
  public:
   static constexpr size_t kCapacity = 32;
 
+  /// CONTROL-thread preparation. The storage is retained for subsequent
+  /// audio-thread blocks; an unprepared list keeps the 32-point inline capacity.
+  void prepare(size_t capacity);
   void clear() noexcept;
   bool add_offset(int offset, BoundarySource source, const BoundaryBuildContext& context) noexcept;
   bool add_point(BoundaryPoint point) noexcept;
@@ -58,7 +62,7 @@ class BoundaryList {
   bool finalize(const BoundaryBuildContext& context) noexcept;
 
   size_t size() const noexcept { return size_; }
-  const BoundaryPoint& operator[](size_t index) const noexcept { return points_[index]; }
+  const BoundaryPoint& operator[](size_t index) const noexcept { return points()[index]; }
   bool overflowed() const noexcept { return overflowed_; }
   uint32_t dropped_count() const noexcept { return dropped_count_; }
 
@@ -67,15 +71,35 @@ class BoundaryList {
   bool append(BoundaryPoint point) noexcept;
   bool ensure_block_start(const BoundaryBuildContext& context) noexcept;
   bool ensure_block_end(const BoundaryBuildContext& context) noexcept;
+  size_t find_offset(int offset) const noexcept;
+  void rebuild_offset_indices() noexcept;
+  BoundaryPoint* points() noexcept {
+    return capacity_limit_ > kCapacity ? prepared_points_.data() : inline_points_.data();
+  }
+  const BoundaryPoint* points() const noexcept {
+    return capacity_limit_ > kCapacity ? prepared_points_.data() : inline_points_.data();
+  }
 
-  std::array<BoundaryPoint, kCapacity> points_{};
+  // An unprepared list stays entirely inline. prepare() switches
+  // to this separately owned, CONTROL-reserved storage only for a larger
+  // engine block; no first append on AUDIO can allocate either way.
+  std::array<BoundaryPoint, kCapacity> inline_points_{};
+  std::vector<BoundaryPoint> prepared_points_{};
+  // For a prepared block, store offset -> (point index + 1); zero means absent.
+  // The inline/default and out-of-range paths use the bounded linear scan.
+  std::vector<size_t> prepared_offset_indices_{};
   size_t size_ = 0;
+  size_t capacity_limit_ = kCapacity;
   bool overflowed_ = false;
   uint32_t dropped_count_ = 0;
 };
 
 class BoundarySplitter {
  public:
+  /// CONTROL-thread preparation for the largest block this splitter will see.
+  /// Calling this before rendering keeps all later boundary collection
+  /// allocation-free while retaining a 32-point standalone default.
+  void prepare(size_t capacity);
   void begin(BoundaryBuildContext context) noexcept;
   bool add_loop(int offset) noexcept;
   bool add_command(int offset) noexcept;

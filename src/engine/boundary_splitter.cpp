@@ -11,10 +11,31 @@ int clamp_offset(int offset, int num_frames) noexcept {
 
 }  // namespace
 
+void BoundaryList::prepare(size_t capacity) {
+  const size_t next_capacity = std::max(kCapacity, capacity);
+  std::vector<BoundaryPoint> next_points;
+  std::vector<size_t> next_offset_indices;
+  if (next_capacity > kCapacity) {
+    // prepare() runs on CONTROL. Keeping the vector sized means the AUDIO
+    // append path only assigns into already-owned storage.
+    next_points.resize(next_capacity);
+    next_offset_indices.resize(next_capacity);
+  }
+
+  // Build both replacement buffers before changing the active capacity. A
+  // failed allocation therefore leaves the previous storage selection and
+  // bounds usable by the current renderer.
+  prepared_points_.swap(next_points);
+  prepared_offset_indices_.swap(next_offset_indices);
+  capacity_limit_ = next_capacity;
+  clear();
+}
+
 void BoundaryList::clear() noexcept {
   size_ = 0;
   overflowed_ = false;
   dropped_count_ = 0;
+  std::fill(prepared_offset_indices_.begin(), prepared_offset_indices_.end(), 0);
 }
 
 bool BoundaryList::add_offset(int offset, BoundarySource source,
@@ -27,33 +48,34 @@ bool BoundaryList::add_offset(int offset, BoundarySource source,
 bool BoundaryList::add_point(BoundaryPoint point) noexcept { return append(point); }
 
 void BoundaryList::sort_unique() noexcept {
-  std::sort(points_.begin(), points_.begin() + static_cast<std::ptrdiff_t>(size_),
-            [](const BoundaryPoint& a, const BoundaryPoint& b) {
-              if (a.offset != b.offset) return a.offset < b.offset;
-              return a.timeline_sample < b.timeline_sample;
-            });
+  BoundaryPoint* storage = points();
+  std::sort(storage, storage + size_, [](const BoundaryPoint& a, const BoundaryPoint& b) {
+    if (a.offset != b.offset) return a.offset < b.offset;
+    return a.timeline_sample < b.timeline_sample;
+  });
 
   size_t out = 0;
   for (size_t i = 0; i < size_; ++i) {
-    if (out > 0 && points_[out - 1].offset == points_[i].offset) {
-      points_[out - 1].sources |= points_[i].sources;
+    if (out > 0 && storage[out - 1].offset == storage[i].offset) {
+      storage[out - 1].sources |= storage[i].sources;
       // Prefer the later point's timeline at duplicate loop boundaries: it is
       // the start position of the next sub-block after a wrap.
-      points_[out - 1].timeline_sample = points_[i].timeline_sample;
-      points_[out - 1].render_frame = points_[i].render_frame;
+      storage[out - 1].timeline_sample = storage[i].timeline_sample;
+      storage[out - 1].render_frame = storage[i].render_frame;
     } else {
-      points_[out++] = points_[i];
+      storage[out++] = storage[i];
     }
   }
   size_ = out;
+  rebuild_offset_indices();
 }
 
 bool BoundaryList::finalize(const BoundaryBuildContext& context) noexcept {
   add_offset(0, BoundarySource::kBlockStart, context);
   add_offset(context.num_frames, BoundarySource::kBlockEnd, context);
   for (size_t i = 0; i < size_; ++i) {
-    points_[i].render_frame = context.block_render_frame + points_[i].offset;
-    points_[i].timeline_sample = timeline_at_offset(points_[i].offset, context);
+    points()[i].render_frame = context.block_render_frame + points()[i].offset;
+    points()[i].timeline_sample = timeline_at_offset(points()[i].offset, context);
   }
   sort_unique();
   const bool start_ok = ensure_block_start(context);
@@ -76,32 +98,86 @@ int64_t BoundaryList::timeline_at_offset(int offset, const BoundaryBuildContext&
 }
 
 bool BoundaryList::append(BoundaryPoint point) noexcept {
-  if (size_ >= points_.size()) {
+  BoundaryPoint* storage = points();
+  // Merge while appending. A duplicate arriving after the prepared capacity
+  // is full still carries its source bits into the existing point instead of
+  // becoming a false overflow.
+  const size_t existing = find_offset(point.offset);
+  if (existing < size_) {
+    BoundaryPoint& current = storage[existing];
+    current.sources |= point.sources;
+    current.render_frame = point.render_frame;
+    current.timeline_sample = point.timeline_sample;
+    return true;
+  }
+  if (size_ >= capacity_limit_) {
     overflowed_ = true;
     ++dropped_count_;
     return false;
   }
-  points_[size_++] = point;
+  const size_t index = size_;
+  storage[index] = point;
+  ++size_;
+  if (capacity_limit_ > kCapacity && point.offset >= 0) {
+    const size_t offset = static_cast<size_t>(point.offset);
+    if (offset < prepared_offset_indices_.size()) {
+      prepared_offset_indices_[offset] = index + 1;
+    }
+  }
   return true;
+}
+
+size_t BoundaryList::find_offset(int offset) const noexcept {
+  if (capacity_limit_ > kCapacity && offset >= 0) {
+    const size_t index = static_cast<size_t>(offset);
+    if (index < prepared_offset_indices_.size()) {
+      const size_t encoded = prepared_offset_indices_[index];
+      // A prepared in-range offset has an authoritative map entry: zero means
+      // this offset is absent, so return the append position immediately
+      // instead of falling back to a scan over every existing point.
+      return encoded == 0 ? size_ : encoded - 1;
+    }
+  }
+
+  const BoundaryPoint* storage = points();
+  for (size_t i = 0; i < size_; ++i) {
+    if (storage[i].offset != offset) continue;
+    return i;
+  }
+  return size_;
+}
+
+void BoundaryList::rebuild_offset_indices() noexcept {
+  if (capacity_limit_ <= kCapacity) return;
+  std::fill(prepared_offset_indices_.begin(), prepared_offset_indices_.end(), 0);
+  const BoundaryPoint* storage = points();
+  for (size_t i = 0; i < size_; ++i) {
+    if (storage[i].offset < 0) continue;
+    const size_t offset = static_cast<size_t>(storage[i].offset);
+    if (offset < prepared_offset_indices_.size()) {
+      prepared_offset_indices_[offset] = i + 1;
+    }
+  }
 }
 
 bool BoundaryList::ensure_block_start(const BoundaryBuildContext& context) noexcept {
   for (size_t i = 0; i < size_; ++i) {
-    if (points_[i].offset == 0) {
-      points_[i].sources |= boundary_source_mask(BoundarySource::kBlockStart);
+    if (points()[i].offset == 0) {
+      points()[i].sources |= boundary_source_mask(BoundarySource::kBlockStart);
       return true;
     }
   }
 
   const BoundaryPoint start{0, context.block_render_frame, timeline_at_offset(0, context),
                             boundary_source_mask(BoundarySource::kBlockStart)};
-  if (size_ < points_.size()) {
-    points_[size_++] = start;
+  if (size_ < capacity_limit_) {
+    points()[size_] = start;
+    ++size_;
     sort_unique();
     return true;
   }
 
-  points_[0] = start;
+  points()[0] = start;
   sort_unique();
   overflowed_ = true;
   ++dropped_count_;
@@ -111,8 +187,8 @@ bool BoundaryList::ensure_block_start(const BoundaryBuildContext& context) noexc
 bool BoundaryList::ensure_block_end(const BoundaryBuildContext& context) noexcept {
   const int end_offset = std::max(context.num_frames, 0);
   for (size_t i = 0; i < size_; ++i) {
-    if (points_[i].offset == end_offset) {
-      points_[i].sources |= boundary_source_mask(BoundarySource::kBlockEnd);
+    if (points()[i].offset == end_offset) {
+      points()[i].sources |= boundary_source_mask(BoundarySource::kBlockEnd);
       return true;
     }
   }
@@ -120,18 +196,21 @@ bool BoundaryList::ensure_block_end(const BoundaryBuildContext& context) noexcep
   const BoundaryPoint end{end_offset, context.block_render_frame + end_offset,
                           timeline_at_offset(end_offset, context),
                           boundary_source_mask(BoundarySource::kBlockEnd)};
-  if (size_ < points_.size()) {
-    points_[size_++] = end;
+  if (size_ < capacity_limit_) {
+    points()[size_] = end;
+    ++size_;
     sort_unique();
     return true;
   }
 
-  points_[points_.size() - 1] = end;
+  points()[capacity_limit_ - 1] = end;
   sort_unique();
   overflowed_ = true;
   ++dropped_count_;
   return false;
 }
+
+void BoundarySplitter::prepare(size_t capacity) { boundaries_.prepare(capacity); }
 
 void BoundarySplitter::begin(BoundaryBuildContext context) noexcept {
   context.num_frames = std::max(context.num_frames, 0);
