@@ -21,7 +21,8 @@ struct PitchShifterConfig {
   float semitones = 0.0f;  ///< shift amount; +12 = one octave up.
   float dry_wet = 1.0f;
   /// Distance the read-out drifts between splices, in milliseconds, and the
-  /// distance the two taps sit apart in the delay line. The output repeats once
+  /// distance the two taps sit apart in the delay line. A live change clamps to
+  /// the larger of the configured value and the GS EFX ceiling. The output repeats once
   /// per window of drift, so its beat period is `window_ms / |ratio - 1|`.
   float window_ms = kDefaultWindowMs;
   float cents = 0.0f;  ///< voice 1 fine offset added to `semitones`, in [-100, 100].
@@ -32,9 +33,9 @@ struct PitchShifterConfig {
   float level2 = 0.0f;      ///< voice 2 linear gain in [0, 1]; 0 switches the voice off.
   float pan2 = 0.0f;        ///< voice 2 balance, as `pan`.
   /// Delay of each voice's read-out ahead of the shifter, in milliseconds. The
-  /// delay line is bounded and prepared for the supported maximum, so both
-  /// delays can be changed without reallocating; reported latency does not
-  /// include them.
+  /// delay line is prepared for the larger of the configured value and the GS
+  /// EFX ceiling, so a live change clamps to that instead of reallocating;
+  /// reported latency does not include them.
   float pre_delay_ms = 0.0f;
   float pre_delay2_ms = 0.0f;
   /// Fraction of the shifted sum written back into the delay line, in [-0.95, 0.95].
@@ -87,6 +88,8 @@ class PitchShifter : public rt::ProcessorBase {
   void update_anti_alias(float max_ratio) noexcept;
 
   PitchShifterConfig config_{};
+  float max_window_ms_ = 0.0f;     ///< largest window the prepared delay line holds.
+  float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared delay line holds.
   double sample_rate_ = 48000.0;
   int grain_ = 2048;     ///< grain length in samples: two of config_.window_ms.
   float phase_ = 0.0f;   ///< voice 1 tap-1 delay position in [0, grain_).

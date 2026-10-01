@@ -1,6 +1,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -17,10 +18,10 @@ namespace {
 
 // Reference rate from Dattorro's tables; all delay lengths scale by sr/29761.
 constexpr double kRefRate = DattorroReverb::kReferenceSampleRate;
-// The GS delay-time ladder tops out at 100 ms. Keep a wider bounded control
-// range for direct callers while ensuring the realtime setter never grows the
-// prepared ring.
-constexpr float kMaxPreDelayMs = 1000.0f;
+// Live pre-delay ceiling: the GS system reverb PREDELAY conversion reaches 127 ms
+// (gs_reverb_predelay_ms) and the EFX pre-delay ladder 100 ms. prepare() sizes the
+// ring for max(ceiling, configured value), so the realtime setter never grows it.
+constexpr float kLiveMaxPreDelayMs = 127.0f;
 
 size_t scale_len(double ref_samples, double sr) {
   const double scaled = ref_samples * sr / kRefRate;
@@ -38,6 +39,18 @@ constexpr double kCharacterRatios[kDattorroMaxCharacter + 1][4] = {
     {1.0, 1.0, 1.0, 1.0},     {0.30, 0.28, 0.32, 0.27}, {0.45, 0.42, 0.47, 0.40},
     {0.70, 0.66, 0.72, 0.62}, {0.85, 0.80, 0.90, 0.78}, {1.15, 1.10, 1.20, 1.05},
     {1.40, 1.30, 1.50, 1.25}};
+
+// Per-column maximum over the table: the size every tank line is prepared for.
+constexpr std::array<double, 4> max_character_ratios() {
+  std::array<double, 4> max_ratio{};
+  for (const auto& row : kCharacterRatios) {
+    for (size_t column = 0; column < 4; ++column) {
+      max_ratio[column] = std::max(max_ratio[column], row[column]);
+    }
+  }
+  return max_ratio;
+}
+constexpr std::array<double, 4> kMaxCharacterRatios = max_character_ratios();
 
 int clamp_character(int character) { return std::clamp(character, 0, kDattorroMaxCharacter); }
 
@@ -186,6 +199,8 @@ float DattorroReverb::damping_coefficient(double corner_hz, double sample_rate) 
 DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {
   if (!std::isfinite(config_.pre_delay_samples)) config_.pre_delay_samples = 0.0f;
   config_.character = clamp_character(config_.character);
+  max_pre_delay_ms_ = std::max(kLiveMaxPreDelayMs,
+                               static_cast<float>(config_.pre_delay_samples * 1000.0 / kRefRate));
 }
 
 void DattorroReverb::update_pre_delay_length() noexcept {
@@ -238,7 +253,7 @@ void DattorroReverb::prepare(double sample_rate, int) {
 
   // Stage 1: pre-delay + four series input-diffusion allpasses.
   const double requested_pre = std::max(0.0, static_cast<double>(config_.pre_delay_samples));
-  const double max_pre_samples = kMaxPreDelayMs * kRefRate / 1000.0;
+  const double max_pre_samples = static_cast<double>(max_pre_delay_ms_) * kRefRate / 1000.0;
   const size_t max_pre = scale_len(std::max(max_pre_samples, requested_pre), sr);
   pre_delay_buf_.assign(max_pre, 0.0f);
   pre_delay_len_ = 0;
@@ -256,7 +271,7 @@ void DattorroReverb::prepare(double sample_rate, int) {
   mod_ap_l_.prepare(scale_len(672.0, sr), max_depth, kGainMod);
   mod_ap_r_.prepare(scale_len(908.0, sr), max_depth, kGainMod);
 
-  const double* max_ratio = kCharacterRatios[kDattorroMaxCharacter];
+  const std::array<double, 4>& max_ratio = kMaxCharacterRatios;
   delay_l1_.prepare(scale_len(4453.0 * max_ratio[0], sr));
   delay_l2_.prepare(scale_len(3720.0 * max_ratio[1], sr));
   delay_r1_.prepare(scale_len(4217.0 * max_ratio[2], sr));
@@ -515,7 +530,7 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 9:
       config_.pre_delay_samples =
-          std::clamp(value, 0.0f, kMaxPreDelayMs) * static_cast<float>(kRefRate) / 1000.0f;
+          std::clamp(value, 0.0f, max_pre_delay_ms_) * static_cast<float>(kRefRate) / 1000.0f;
       update_pre_delay_length();
       return true;
     case 10:

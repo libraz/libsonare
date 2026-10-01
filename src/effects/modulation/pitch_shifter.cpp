@@ -15,13 +15,16 @@ namespace {
 constexpr double kWindowsPerGrain = 2.0;
 
 // Window bounds. The floor keeps the window positive (prepare()'s own 64-sample
-// floor takes over below it); the ceiling sizes the delay line prepare()
-// allocates, so a live window change never reallocates.
+// floor takes over below it); the ceiling bounds a configured window.
 constexpr float kMinWindowMs = 0.5f;
 constexpr float kMaxWindowMs = 1000.0f;
-
-// The delay line is sized at prepare() for this ceiling, so a live pre-delay never reallocates.
 constexpr float kMaxPreDelayMs = 1000.0f;
+
+// Live ceilings: the largest values the GS EFX bindings can request (the splice
+// window table in gs_efx_tables.h tops at 128 ms, the pre-delay ladder at 100 ms).
+// prepare() sizes the delay line for max(live ceiling, configured value).
+constexpr float kLiveMaxWindowMs = 128.0f;
+constexpr float kLiveMaxPreDelayMs = 100.0f;
 constexpr float kMaxFeedback = 0.95f;
 constexpr float kMaxCents = 100.0f;
 constexpr float kCentsPerSemitone = 100.0f;
@@ -84,6 +87,8 @@ PitchShifter::PitchShifter(PitchShifterConfig config) : config_(config) {
     config_.window_ms = kDefaultWindowMs;
   }
   config_.window_ms = std::clamp(config_.window_ms, kMinWindowMs, kMaxWindowMs);
+  max_window_ms_ = std::max(kLiveMaxWindowMs, config_.window_ms);
+  max_pre_delay_ms_ = std::max({kLiveMaxPreDelayMs, config_.pre_delay_ms, config_.pre_delay2_ms});
 }
 
 void PitchShifter::update_grain() noexcept {
@@ -106,8 +111,8 @@ void PitchShifter::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   anti_alias_corner_hz_ = 0.0f;
   const int max_grain =
-      std::max(64, static_cast<int>(sample_rate_ * kWindowsPerGrain * kMaxWindowMs * 0.001));
-  const int max_pre = static_cast<int>(std::ceil(kMaxPreDelayMs * 0.001 * sample_rate_));
+      std::max(64, static_cast<int>(sample_rate_ * kWindowsPerGrain * max_window_ms_ * 0.001));
+  const int max_pre = static_cast<int>(std::ceil(max_pre_delay_ms_ * 0.001 * sample_rate_));
   const size_t len = static_cast<size_t>(max_grain + max_pre + 4);
   for (auto& buffer : buffers_) {
     buffer.assign(len, 0.0f);
@@ -336,15 +341,15 @@ bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
       config_.anti_alias = value != 0.0f;
       return true;
     case 12:
-      config_.window_ms = std::clamp(value, kMinWindowMs, kMaxWindowMs);
+      config_.window_ms = std::clamp(value, kMinWindowMs, max_window_ms_);
       update_grain();
       return true;
     case 13:
-      config_.pre_delay_ms = std::clamp(value, 0.0f, kMaxPreDelayMs);
+      config_.pre_delay_ms = std::clamp(value, 0.0f, max_pre_delay_ms_);
       update_pre_delay_samples();
       return true;
     case 14:
-      config_.pre_delay2_ms = std::clamp(value, 0.0f, kMaxPreDelayMs);
+      config_.pre_delay2_ms = std::clamp(value, 0.0f, max_pre_delay_ms_);
       update_pre_delay_samples();
       return true;
     default:

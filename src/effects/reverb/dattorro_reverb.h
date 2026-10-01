@@ -33,7 +33,9 @@ struct DattorroReverbConfig {
   float dry_wet = 0.35f;           ///< Wet mix amount, [0, 1].
   float mod_rate_hz = 0.5f;        ///< Tank allpass modulation rate.
   float mod_depth_samples = 6.0f;  ///< Modulation depth (at reference rate 29761 Hz).
-  float pre_delay_samples = 0.0f;  ///< Input pre-delay (at reference rate 29761 Hz).
+  /// Input pre-delay (at reference rate 29761 Hz). The ring holds the larger of this and
+  /// the GS ceiling; a live change clamps to that size.
+  float pre_delay_samples = 0.0f;
   /// Corner of the tank's one-pole damping low-pass, in Hz, built at the working
   /// rate. Above 0 it replaces `damping`; 0 keeps `damping`.
   float damping_hz = 0.0f;
@@ -138,6 +140,7 @@ class DattorroReverb : public rt::ProcessorBase {
 
   DattorroReverbConfig config_{};
   double sample_rate_ = 48000.0;
+  float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared ring holds.
 
   // Stage 1 input diffusion.
   std::vector<float> pre_delay_buf_;  ///< Fixed-capacity history for all live pre-delay values.

@@ -370,18 +370,32 @@ TEST_CASE("reverb character changes preserve nonzero tank history", "[fx][gs][au
 }
 
 TEST_CASE("reverb preserves a direct pre-delay above the realtime ladder", "[fx][gs][automation]") {
-  DattorroReverbConfig base_config;
-  base_config.dry_wet = 1.0f;
-  DattorroReverb base(base_config);
-  base.prepare(kRate, 256);
+  constexpr double kPreDelayMs = 1200.0;
+  constexpr float kOnsetThreshold = 1.0e-6f;
+  constexpr int kRoundingSamples = 8;
+  constexpr double kOnsetWindowMs = 10.0;
 
-  DattorroReverbConfig long_config = base_config;
-  long_config.pre_delay_samples =
-      1200.0f * static_cast<float>(DattorroReverb::kReferenceSampleRate) / 1000.0f;
-  DattorroReverb extended(long_config);
-  extended.prepare(kRate, 256);
+  DattorroReverbConfig config;
+  config.dry_wet = 1.0f;
+  config.pre_delay_samples =
+      static_cast<float>(kPreDelayMs * DattorroReverb::kReferenceSampleRate / 1000.0);
+  DattorroReverb reverb(config);
 
-  REQUIRE(extended.tail_samples() > base.tail_samples() + 55000);
+  const int length = static_cast<int>(kRate * (kPreDelayMs + 50.0) / 1000.0);
+  const std::vector<float> impulse = sonare::test::generate_impulse(length);
+  const std::vector<float> rendered = render_stereo(reverb, impulse, impulse);
+
+  std::size_t onset = rendered.size();
+  for (std::size_t i = 0; i < static_cast<std::size_t>(length); ++i) {
+    if (std::abs(rendered[i]) > kOnsetThreshold) {
+      onset = i;
+      break;
+    }
+  }
+  const double expected = kRate * kPreDelayMs / 1000.0;
+  REQUIRE(onset < static_cast<std::size_t>(length));
+  CHECK(static_cast<double>(onset) >= expected - kRoundingSamples);
+  CHECK(static_cast<double>(onset) <= expected + kRate * kOnsetWindowMs / 1000.0);
 }
 
 }  // namespace
