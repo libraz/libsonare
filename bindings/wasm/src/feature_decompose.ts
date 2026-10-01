@@ -233,7 +233,7 @@ export function decomposeWithInit(
 /** Options for {@link decomposeStems}. */
 export interface DecomposeStemsRequest {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
   /** Number of NMF components (default 4). */
   nComponents?: number;
   /** STFT size (default 2048). */
@@ -278,7 +278,7 @@ export interface DecomposeStemsResult {
  * to the input.
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
-  return requireModule().decomposeStems(request.samples, request.sampleRate, {
+  return requireModule().decomposeStems(request.samples, request.sampleRate ?? 22050, {
     nComponents: request.nComponents,
     nFft: request.nFft,
     hopLength: request.hopLength,
