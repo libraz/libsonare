@@ -593,9 +593,10 @@ SonareError sonare_extract_notes(const float* samples, size_t length, int sample
                                  const SonareNoteExtractorConfig* config,
                                  SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and cleared before the gate, so the stub below leaves it defined too.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   clear_note_objects_result(*out);
+#if defined(SONARE_WITH_PITCH_EDITOR)
 
   const SonareError track_error =
       validate_track_args(f0_hz, voiced_prob, voiced, n_frames, frame_rate);
@@ -635,10 +636,11 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
                                 const SonareNoteRenderConfig* config, float** out,
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   // The track is optional; only a curve edit reads it.
@@ -770,9 +772,10 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
                               const float* envelopes, size_t envelope_count, size_t index,
                               int32_t frame, SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and cleared before the gate, so the stub below leaves it defined too.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   clear_note_objects_result(*out);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (index >= note_count) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_note_set_edit(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
@@ -798,9 +801,10 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                const float* envelopes, size_t envelope_count, size_t first,
                                size_t last, SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and cleared before the gate, so the stub below leaves it defined too.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   clear_note_objects_result(*out);
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (!(first < last) || last >= note_count) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_note_set_edit(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
