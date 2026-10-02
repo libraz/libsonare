@@ -1217,6 +1217,50 @@ TEST_CASE("apply_to_engine installs full tempo and time-signature maps", "[arran
   REQUIRE(after.denominator == 4);
 }
 
+TEST_CASE("applying an empty compiled timeline restores transport defaults", "[arrangement]") {
+  arr::Project project_a;
+  project_a.set_sample_rate(kProjectSr);
+  project_a.set_tempo_segments({{0.0, 60.0, 0.0}});
+  project_a.set_time_signatures({{0.0, {7, 8}}});
+  arr::MidiContentStore midi_a;
+  arr::AudioContentStore audio_a;
+
+  const arr::CompileResult compiled_a = arr::compile(project_a, midi_a, audio_a);
+  REQUIRE_FALSE(compiled_a.has_errors());
+  REQUIRE(compiled_a.timeline.has_value());
+  REQUIRE(compiled_a.timeline->tempo_segments.size() == 1);
+  REQUIRE(compiled_a.timeline->tempo_segments.front().bpm == 60.0);
+  REQUIRE(compiled_a.timeline->time_signatures.size() == 1);
+  REQUIRE(compiled_a.timeline->time_signatures.front().time_sig.numerator == 7);
+  REQUIRE(compiled_a.timeline->time_signatures.front().time_sig.denominator == 8);
+
+  arr::Project project_b;
+  project_b.set_sample_rate(kProjectSr);
+  arr::MidiContentStore midi_b;
+  arr::AudioContentStore audio_b;
+  const arr::CompileResult compiled_b = arr::compile(project_b, midi_b, audio_b);
+  REQUIRE_FALSE(compiled_b.has_errors());
+  REQUIRE(compiled_b.timeline.has_value());
+  REQUIRE(compiled_b.timeline->tempo_segments.empty());
+  REQUIRE(compiled_b.timeline->time_signatures.empty());
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kProjectSr, kBlock);
+  arr::apply_to_engine(*compiled_a.timeline, engine);
+  REQUIRE(engine.bpm_at_sample(0) == 60.0);
+  const auto previous_sig = engine.time_signature_at_ppq(0.0);
+  REQUIRE(previous_sig.numerator == 7);
+  REQUIRE(previous_sig.denominator == 8);
+
+  // The empty project compiles against the same defaults used by the runtime
+  // TempoMap, then replaces A on the already-prepared engine.
+  arr::apply_to_engine(*compiled_b.timeline, engine);
+  REQUIRE(engine.bpm_at_sample(0) == 120.0);
+  const auto default_sig = engine.time_signature_at_ppq(0.0);
+  REQUIRE(default_sig.numerator == 4);
+  REQUIRE(default_sig.denominator == 4);
+}
+
 TEST_CASE("source SR != project SR resamples deterministically", "[arrangement]") {
   // 44100 Hz source into a 48000 Hz project: the compiler bakes a resampled,
   // fixed-length buffer with repeatable contents.

@@ -1217,9 +1217,13 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
   //    metronome, automation and clip rescheduling share the compiled map.
   if (!timeline.tempo_segments.empty()) {
     engine.set_tempo_segments(timeline.tempo_segments);
+  } else {
+    engine.set_tempo(kDefaultBpm);
   }
   if (!timeline.time_signatures.empty()) {
     engine.set_time_signature_segments(timeline.time_signatures);
+  } else {
+    engine.set_time_signature(4, 4);
   }
 
   // 2) Markers. The CompiledTimeline owns the name strings; the transport::Marker

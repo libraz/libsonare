@@ -232,7 +232,8 @@ struct CompiledTimeline {
 
   /// Tempo / time-signature segments (full segment vectors copied from the
   /// Project). apply_to_engine() installs the full vectors into RealtimeEngine's
-  /// TempoMap before publishing clips and automation.
+  /// TempoMap before publishing clips and automation. An empty vector installs
+  /// the defaults (kDefaultBpm, 4/4).
   std::vector<transport::TempoSegment> tempo_segments;
   std::vector<transport::TimeSignatureSegment> time_signatures;
 
