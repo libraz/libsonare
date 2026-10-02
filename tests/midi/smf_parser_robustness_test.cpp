@@ -18,6 +18,23 @@
 #include "transport/tempo_map.h"
 #include "util/resource_limits.h"
 
+TEST_CASE("SMF requires every track declared by its header", "[midi][smf]") {
+  const std::vector<uint8_t> header{'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 1, 224};
+  const auto missing = sonare::midi::import_smf(header.data(), header.size());
+  CHECK(missing.status == sonare::midi::SmfStatus::kTruncated);
+  auto partial = header;
+  partial[9] = 1;
+  partial[11] = 2;
+  const std::vector<uint8_t> track{'M', 'T',  'r', 'k', 0, 0,    0,    8,
+                                   0,   0x90, 60,  100, 0, 0xFF, 0x2F, 0};
+  partial.insert(partial.end(), track.begin(), track.end());
+  const auto prefix = sonare::midi::import_smf(partial.data(), partial.size());
+  CHECK(prefix.status == sonare::midi::SmfStatus::kTruncated);
+  REQUIRE(prefix.clips.size() == 1);
+  REQUIRE(prefix.clips[0].events().size() == 1);
+  CHECK(prefix.clips[0].events()[0].ump.note_number() == 60);
+}
+
 namespace {
 
 using sonare::midi::export_clip_file;

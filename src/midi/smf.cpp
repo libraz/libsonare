@@ -706,7 +706,7 @@ SmfImportResult parse_smf(const uint8_t* data, size_t size,
   uint16_t tracks_read = 0;
   while (tracks_read < num_tracks) {
     if (reader.remaining() == 0) {
-      // Fewer track chunks than the header claimed: stop gracefully.
+      // Preserve the parsed prefix, but report the missing declared tracks below.
       break;
     }
     const uint8_t* chunk_tag = reader.take(4);
@@ -779,7 +779,10 @@ SmfImportResult parse_smf(const uint8_t* data, size_t size,
     }
   }
 
-  if (any_track_truncated) {
+  if (tracks_read != num_tracks) {
+    result.status = SmfStatus::kTruncated;
+    result.diagnostic = "fewer SMF tracks than declared in the header";
+  } else if (any_track_truncated) {
     result.status = SmfStatus::kTruncated;
     result.diagnostic = "one or more SMF tracks were truncated";
   } else {
