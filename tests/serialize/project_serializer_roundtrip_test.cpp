@@ -1870,6 +1870,34 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
   REQUIRE(unordered.project->tempo_segments()[0].start_ppq == 0.0);
   REQUIRE(unordered.project->tempo_segments()[1].start_ppq == 960.0);
 
+  const auto unordered_signatures =
+      project_from_json(R"({"version":1,"time_signatures":[)"
+                        R"({"start_ppq":8.0,"numerator":3,"denominator":4},)"
+                        R"({"start_ppq":0.0,"numerator":4,"denominator":4},)"
+                        R"({"start_ppq":8.0,"numerator":7,"denominator":8}]})");
+  REQUIRE(unordered_signatures.ok());
+  REQUIRE(unordered_signatures.project->time_signatures().size() == 2);
+  REQUIRE(unordered_signatures.project->time_signatures()[0].start_ppq == 0.0);
+  REQUIRE(unordered_signatures.project->time_signatures()[0].time_sig.numerator == 4);
+  REQUIRE(unordered_signatures.project->time_signatures()[0].time_sig.denominator == 4);
+  REQUIRE(unordered_signatures.project->time_signatures()[1].start_ppq == 8.0);
+  REQUIRE(unordered_signatures.project->time_signatures()[1].time_sig.numerator == 7);
+  REQUIRE(unordered_signatures.project->time_signatures()[1].time_sig.denominator == 8);
+
+  const std::string normalized_signatures =
+      project_to_json(*unordered_signatures.project, unordered_signatures.midi);
+  const auto reloaded_signatures = project_from_json(normalized_signatures);
+  REQUIRE(reloaded_signatures.ok());
+  REQUIRE(reloaded_signatures.project->time_signatures().size() == 2);
+  CHECK(reloaded_signatures.project->time_signatures()[0].start_ppq == 0.0);
+  CHECK(reloaded_signatures.project->time_signatures()[0].time_sig.numerator == 4);
+  CHECK(reloaded_signatures.project->time_signatures()[0].time_sig.denominator == 4);
+  CHECK(reloaded_signatures.project->time_signatures()[1].start_ppq == 8.0);
+  CHECK(reloaded_signatures.project->time_signatures()[1].time_sig.numerator == 7);
+  CHECK(reloaded_signatures.project->time_signatures()[1].time_sig.denominator == 8);
+  CHECK(project_to_json(*reloaded_signatures.project, reloaded_signatures.midi) ==
+        normalized_signatures);
+
   // Zero is a legal position; only negatives are rejected.
   const auto ok =
       project_from_json(R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0}],)"

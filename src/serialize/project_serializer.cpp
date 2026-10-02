@@ -393,6 +393,26 @@ DeserializeResult project_from_json(const std::string& json_text) {
         ++index;
       }
     }
+    // Stable sort by start_ppq, then drop earlier duplicates sharing a
+    // start_ppq (the last segment for a tick wins), matching tempo loading and
+    // the edit model's strictly increasing timeline invariant.
+    std::stable_sort(
+        sigs.begin(), sigs.end(),
+        [](const transport::TimeSignatureSegment& a, const transport::TimeSignatureSegment& b) {
+          return a.start_ppq < b.start_ppq;
+        });
+    if (sigs.size() > 1) {
+      std::vector<transport::TimeSignatureSegment> deduped;
+      deduped.reserve(sigs.size());
+      for (auto& s : sigs) {
+        if (!deduped.empty() && deduped.back().start_ppq == s.start_ppq) {
+          deduped.back() = s;  // Same tick: keep the later (last-writer) segment.
+        } else {
+          deduped.push_back(s);
+        }
+      }
+      sigs = std::move(deduped);
+    }
     project.set_time_signatures(std::move(sigs));
 
     // Sources (insert verbatim, preserving ids, then bump the id counters so a
