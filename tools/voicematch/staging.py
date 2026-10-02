@@ -224,6 +224,7 @@ def _term_effect(evaluator, baseline_terms, candidate_terms) -> float | None:
                 "_notes",
                 "_pairs",
                 "_past_db",
+                "_cell_mean",
             )
         )
     }
@@ -651,6 +652,9 @@ STAGE_TOKENS = {
         "attack",
         "chiff",
         "strike",
+        "stick",
+        "mallet",
+        "contact",
         "pick",
         "pluck",
         "hammer",
@@ -699,8 +703,20 @@ STAGE_WEIGHTS = {
 # profile — which a hit's first tens of milliseconds dominate — plus the attack
 # gesture, and the decay stage on the per-band slopes.
 PERCUSSION_STAGE_WEIGHTS = {
-    "excitation": {"band": 1.0, "env": 0.5},
-    "decay": {"bdecay": 1.0, "env": 1.0, "band": 0.5},
+    "excitation": {
+        "band": 1.0,
+        "env": 0.5,
+        "evolve": 1.0,
+        "diffuse": 0.5,
+        "strike": 0.5,
+    },
+    "decay": {
+        "bdecay": 1.0,
+        "env": 1.0,
+        "band": 0.5,
+        "evolve": 0.5,
+        "diffuse": 1.0,
+    },
 }
 
 

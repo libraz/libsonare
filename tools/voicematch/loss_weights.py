@@ -71,6 +71,12 @@ TERM_UNITS = {
     # of the full spectrum.
     "density": 7.0,
     "prompt": 7.0,
+    # Three windows by eight bands, reduced to one mean dB per referenced
+    # finite cell.  The count remains in the report so an absent short window
+    # cannot be mistaken for a zero residual.
+    "evolve": 1.0,
+    # Three short-window flatness values, one dB per referenced finite cell.
+    "diffuse": 1.0,
     # A decibel of tilt and five per cent of centroid: both are quantities a
     # listener names before anything else about a kit piece, and both are well
     # inside what two takes of the same drum differ by.
@@ -144,9 +150,13 @@ def cli_weights(args) -> dict[str, float]:
         # run; an explicit `--w-dyn` gets refused by the caller instead.
         weights.pop("dyn", None)
         weights.pop("hfdyn", None)
+    if not getattr(args, "has_level_contrasts", True):
+        weights.pop("level", None)
     group = set(measured_terms(percussive))
     for term in LOSS_TERMS:
         given = getattr(args, f"w_{term}", None)
+        if term == "level" and given and not getattr(args, "has_level_contrasts", True):
+            raise ValueError("level weighting requires a note/velocity contrast after gain removal")
         if given is not None:
             weights[term] = given
     # A term the probe's metric set does not produce is dropped rather than
@@ -177,6 +187,7 @@ def refused_weights(args) -> list[str]:
 #: probe that cannot fit it is an ordinary thing to run — and silence is how a
 #: weight the instrument's class asked for goes missing with nothing to say so.
 DROP_REASONS = {
+    "level": ("has_level_contrasts", "the probe has no note/velocity level contrast"),
     "kit": ("has_kit_groups", "the probe covers no whole family of the capture's"),
     "dyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "hfdyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
@@ -254,6 +265,8 @@ TERM_COUNT_KEYS = {
     "bdecay": "bdecay_bins",
     "density": "density_bins",
     "prompt": "prompt_bins",
+    "evolve": "evolution_cells",
+    "diffuse": "window_flatness_cells",
     "tilt": "tilt_hits",
     "bright": "bright_hits",
     "tonal": "tonal_hits",
@@ -288,7 +301,7 @@ SURVIVOR_MEAN_TERMS = frozenset(("mod", "modes", "stiff", "dyn", "hfdyn", "lf", 
 # Terms whose raw value already charges each missing reference cell at the cap
 # inside a fixed reference denominator, so the unmeasurable penalty would charge
 # the same absence twice. Their coverage stays reported.
-ABSENCE_CAPPED_TERMS = frozenset(("level",))
+ABSENCE_CAPPED_TERMS = frozenset(("level", "evolve", "diffuse"))
 
 # What a term costs once it can no longer be measured, in multiples of its own
 # start value. Above 1.0 on purpose: equal to the start would make going blind

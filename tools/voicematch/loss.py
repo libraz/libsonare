@@ -129,7 +129,12 @@ from metrics import (
     stretch_cents,
 )
 from metrics_hit import ring_doublings
-from metrics_texture import DENSITY_CLIP, PROMPT_CLIP
+from metrics_texture import (
+    DENSITY_CLIP,
+    EVOLUTION_CLIP_DB,
+    PROMPT_CLIP,
+    WINDOW_FLATNESS_CLIP_DB,
+)
 from patterns import analysis_window_end
 from toneclass import default_weights
 
@@ -644,7 +649,7 @@ def loss_terms(
     # cap standing in for one. See `CellCount`: the raw value of a term whose
     # cells all hit the cap is its worst, not its best, so none of the empty-set
     # guards above can see it and a reader cannot tell it from a real distance.
-    cells = {t: CellCount() for t in ("init", "slope", "tail", "hf", "lf", "mod", "modes")}
+    cells = {t: CellCount() for t in ("env", "init", "slope", "tail", "hf", "lf", "mod", "modes")}
     for m, o in zip(model_rows, oracle_rows_):
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
         available += max(0, len(pairs) - 1)
@@ -695,7 +700,7 @@ def loss_terms(
             else:
                 tnr_absent += 1
         totals["env"] += _absent_or(
-            m["sustain_slope_db_s"], o["sustain_slope_db_s"], SUSTAIN_SLOPE_CAP_DB_S
+            m["sustain_slope_db_s"], o["sustain_slope_db_s"], SUSTAIN_SLOPE_CAP_DB_S, cells["env"]
         )
         totals["env"] += abs(m["release_ms"] - o["release_ms"]) / 100.0
         totals["env"] += _attack_delta_ms(m, o) / 10.0
@@ -752,11 +757,15 @@ def loss_terms(
     out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
-    out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_)
+    dyn_counts: dict[str, float] = {}
+    out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_, counts=dyn_counts)
+    hfdyn_counts: dict[str, float] = {}
     out["hfdyn"], hfdyn_groups = _dyn_terms(
-        model_rows, oracle_rows_, read=_attack_hf_share, cap_db=HF_DELTA_CAP_DB
+        model_rows, oracle_rows_, read=_attack_hf_share, cap_db=HF_DELTA_CAP_DB, counts=hfdyn_counts
     )
-    out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_)
+    stiff_counts: dict[str, float] = {}
+    out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_, counts=stiff_counts)
+    out.update(stiff_counts)
     if any(not math.isfinite(v) for v in out.values()):
         return None
     out["dyn_groups"] = float(dyn_groups)
@@ -775,9 +784,25 @@ def loss_terms(
     for term, tally in cells.items():
         out.update(tally.out(term))
     out.update(level_counts)
+    out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
+    out.update({f"hfdyn_{key}": value for key, value in hfdyn_counts.items()})
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out
+
+
+def _focal_cell_mean(values: list[float]) -> tuple[float, float]:
+    """Return the mean and the worst-quarter mean of the cells.
+
+    The worst quarter (at least one cell) keeps one focal defect from vanishing
+    in the plain mean.
+    """
+    if not values:
+        return 0.0, 0.0
+    ordered = sorted(values, reverse=True)
+    mean = math.fsum(ordered) / len(ordered)
+    upper = ordered[: max(1, math.ceil(len(ordered) * 0.25))]
+    return mean, math.fsum(upper) / len(upper)
 
 
 def percussion_terms(
@@ -818,8 +843,16 @@ def percussion_terms(
     strike_hits = 0
     # See `CellCount` and the pitched reducer: how much of each capped aggregate
     # is a comparison rather than a cap standing in for one.
-    cells = {t: CellCount() for t in ("band", "bdecay", "modes", "density", "prompt")}
+    cells = {
+        t: CellCount()
+        for t in ("band", "bdecay", "modes", "density", "prompt", "evolve", "diffuse")
+    }
     density_bins = prompt_bins = 0
+    evolution_cells = window_flatness_cells = 0
+    evolution_reference_unavailable = 0
+    window_flatness_reference_unavailable = 0
+    evolution_deltas: list[float] = []
+    window_flatness_deltas: list[float] = []
     for m, o in zip(model_rows, oracle_rows_):
         tilt_m, tilt_o = band_tilt_db(m.get("bands_db")), band_tilt_db(o.get("bands_db"))
         if tilt_m is not None and tilt_o is not None:
@@ -886,6 +919,111 @@ def percussion_terms(
                     cells[term].clipped += 1
                 else:
                     cells[term].compared += 1
+        # The reference's eligibility mask defines the temporal cells; a missing candidate cell is charged the cap.
+        for value_key, valid_key, measured_key, term, cap, counter_name in (
+            (
+                "evolution_db",
+                "evolution_valid",
+                "evolution_measured",
+                "evolve",
+                EVOLUTION_CLIP_DB,
+                "evolution_cells",
+            ),
+            (
+                "window_flatness_db",
+                "window_flatness_valid",
+                "window_flatness_measured",
+                "diffuse",
+                WINDOW_FLATNESS_CLIP_DB,
+                "window_flatness_cells",
+            ),
+        ):
+            model_values, model_valid = m.get(value_key), m.get(valid_key)
+            model_measured = m.get(measured_key)
+            oracle_values, oracle_valid = o.get(value_key), o.get(valid_key)
+
+            def _cells(values, valid):
+                def _sequence(value):
+                    if isinstance(value, np.ndarray):
+                        return [value.item()] if value.ndim == 0 else value
+                    return value if isinstance(value, (list, tuple)) else None
+
+                values = _sequence(values)
+                valid = _sequence(valid)
+                if values is None or valid is None:
+                    return {}
+
+                def _valid_flag(value):
+                    # A malformed multi-cell ndarray makes that coordinate unknown.
+                    try:
+                        return bool(value)
+                    except (TypeError, ValueError):
+                        return False
+
+                output = {}
+                for row_index, value in enumerate(values):
+                    if isinstance(value, (list, tuple)) or (
+                        isinstance(value, np.ndarray) and value.ndim > 0
+                    ):
+                        valid_row = (
+                            valid[row_index]
+                            if row_index < len(valid)
+                            and (
+                                isinstance(valid[row_index], (list, tuple))
+                                or (
+                                    isinstance(valid[row_index], np.ndarray)
+                                    and valid[row_index].ndim > 0
+                                )
+                            )
+                            else []
+                        )
+                        for cell_index, cell in enumerate(value):
+                            output[(row_index, cell_index)] = (
+                                cell,
+                                cell_index < len(valid_row) and _valid_flag(valid_row[cell_index]),
+                            )
+                    else:
+                        output[(row_index, 0)] = (
+                            value,
+                            row_index < len(valid) and _valid_flag(valid[row_index]),
+                        )
+                return output
+
+            oracle_cells = _cells(oracle_values, oracle_valid)
+            model_cells = _cells(model_values, model_valid)
+            model_measured_cells = _cells(model_values, model_measured)
+            for coordinate, (oracle_value, oracle_ok) in oracle_cells.items():
+                if not bool(oracle_ok) or _finite_or_none(oracle_value) is None:
+                    # A reference-invalid coordinate was never evidence, so it is counted apart from `skipped`.
+                    if term == "evolve":
+                        evolution_reference_unavailable += 1
+                    else:
+                        window_flatness_reference_unavailable += 1
+                    continue
+                if counter_name == "evolution_cells":
+                    evolution_cells += 1
+                else:
+                    window_flatness_cells += 1
+                model_value, model_valid_ok = model_cells.get(coordinate, (None, False))
+                measured_value, model_measured_ok = model_measured_cells.get(
+                    coordinate, (None, False)
+                )
+                if coordinate not in model_cells:
+                    model_value = measured_value
+                model_ok = bool(model_valid_ok) or bool(model_measured_ok)
+                if not model_ok or _finite_or_none(model_value) is None:
+                    value = cap
+                    cells[term].absent += 1
+                else:
+                    value = min(abs(float(model_value) - float(oracle_value)), cap)
+                    if value >= cap:
+                        cells[term].clipped += 1
+                    else:
+                        cells[term].compared += 1
+                if term == "evolve":
+                    evolution_deltas.append(value)
+                else:
+                    window_flatness_deltas.append(value)
         for a, b in zip(m["bands_db"], o["bands_db"]):
             if b <= BAND_REFERENCE_FLOOR_DB:
                 # The reference has floored this band. See
@@ -924,12 +1062,17 @@ def percussion_terms(
         totals["env"] += abs(m["crest_db"] - o["crest_db"]) / 3.0
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
+    evolution_mean, evolution_upper = _focal_cell_mean(evolution_deltas)
+    flatness_mean, flatness_upper = _focal_cell_mean(window_flatness_deltas)
+    out["evolve"] = max(evolution_mean, evolution_upper) if evolution_deltas else 0.0
+    out["diffuse"] = max(flatness_mean, flatness_upper) if window_flatness_deltas else 0.0
     out["mss"] = mss
     level_counts: dict[str, float] = {}
     out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
-    out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_)
+    dyn_counts: dict[str, float] = {}
+    out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_, counts=dyn_counts)
     # The pitch of everything in a kit that has one — see `_modes_terms`. Empty
     # for a cymbal or a shaker, whose rows carry no modes, so the term costs
     # those nothing and prices a mistuned tom.
@@ -937,11 +1080,13 @@ def percussion_terms(
     # The low end as one region rather than as six of twenty-five bands — see
     # `_perc_lf_terms`. Scored on the same profiles `band` reads, so it is a
     # re-weighting of evidence already in hand and not a second measurement.
-    out["lf"], lf_notes = _perc_lf_terms(model_rows, oracle_rows_)
+    lf_counts: dict[str, float] = {}
+    out["lf"], lf_notes = _perc_lf_terms(model_rows, oracle_rows_, counts=lf_counts)
     # The relations between the kit's own members — see `_kit_terms`. Empty
     # without a capture that declares its families, which is what a probe of one
     # drum note gets and is the right answer there.
-    out["kit"], kit_notes = _kit_terms(model_rows, oracle_rows_, groups)
+    kit_counts: dict[str, float] = {}
+    out["kit"], kit_notes = _kit_terms(model_rows, oracle_rows_, groups, counts=kit_counts)
     if any(not math.isfinite(v) for v in out.values()):
         return None
     out["dyn_groups"] = float(dyn_groups)
@@ -960,6 +1105,12 @@ def percussion_terms(
     out["bdecay_bins"] = float(bdecay_bins)
     out["density_bins"] = float(density_bins)
     out["prompt_bins"] = float(prompt_bins)
+    out["evolution_cells"] = float(evolution_cells)
+    out["window_flatness_cells"] = float(window_flatness_cells)
+    out["evolution_reference_unavailable"] = float(evolution_reference_unavailable)
+    out["window_flatness_reference_unavailable"] = float(window_flatness_reference_unavailable)
+    out["evolution_cell_mean"] = float(evolution_mean)
+    out["window_flatness_cell_mean"] = float(flatness_mean)
     # Both skip when either side has no profile or no centroid to read, which a
     # candidate can cause by rendering silence, so both are counted and guarded.
     out["tilt_hits"] = float(tilt_hits)
@@ -971,6 +1122,9 @@ def percussion_terms(
     for term, tally in cells.items():
         out.update(tally.out(term))
     out.update(level_counts)
+    out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
+    out.update(lf_counts)
+    out.update(kit_counts)
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out

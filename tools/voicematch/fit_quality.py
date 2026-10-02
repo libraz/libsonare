@@ -175,6 +175,11 @@ def _coverage(
         if count_tracked
         else True
     )
+    if name == "level":
+        contrasts = _as_float(
+            terms.get("level_contrasts", terms.get("level_expected", baseline_count))
+        )
+        known = known and contrasts is not None and contrasts >= 2.0
     ratio = (
         max(0.0, min(1.0, cells / expected))
         if fixed_lf_cells and cells is not None and expected is not None and expected > 0.0
@@ -328,6 +333,12 @@ def aggregate_term_residuals(
             "unmeasured": unmeasured,
             "coverage_complete": coverage["coverage_complete"],
         }
+        unavailable_key = {
+            "evolve": "evolution_reference_unavailable",
+            "diffuse": "window_flatness_reference_unavailable",
+        }.get(name)
+        if unavailable_key is not None:
+            rows[name]["reference_unavailable"] = _as_float(terms.get(unavailable_key))
     return rows
 
 

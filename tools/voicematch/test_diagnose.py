@@ -9,7 +9,9 @@ is measured. So each verdict has a case, and so does the confusion between them.
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,14 +19,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from diagnose import (
     CONNECTED_UNITS,
+    JOINT_ONLY,
+    MEASUREMENT_LIMITED,
     TERM_MEANS,
     TERM_UNIT_NAMES,
     Diagnosis,
     diagnose,
     print_report,
     probe_axes,
+    run_diagnosis,
 )
-from loss import LOSS_TERMS, TERM_UNITS, measured_terms
+from loss import LOSS_TERMS, TERM_UNITS, LossWeights, measured_terms
+from loss_weights import TERM_COUNT_KEYS
 
 PITCHED_WEIGHTS = {"harm": 1.0, "cents": 1.0, "slope": 1.0, "env": 1.0}
 
@@ -106,6 +112,22 @@ def test_unreachable_over_a_heuristic_range_asks_for_a_wider_one_first():
         PITCHED_WEIGHTS,
     )
     assert "widen" in row(diag, "harm").note
+
+
+def test_unreachable_wording_scopes_the_range_to_the_strongest_knob():
+    base = terms(harm=8.0)
+    diag = diagnose(
+        base,
+        probes(
+            ("full.x", "lo", terms(harm=8.0), "clamp"),
+            ("full.x", "hi", terms(harm=8.0), "clamp"),
+            ("narrow.y", "lo", terms(harm=8.0), "auto"),
+            ("narrow.y", "hi", terms(harm=8.0), "auto"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    note = row(diag, "harm").note
+    assert "`full.x`'s whole interval" in note
 
 
 def test_a_converged_term_is_spent_not_unreachable():
@@ -428,7 +450,7 @@ def test_the_report_prints_for_either_metric_set(capsys, percussive):
     assert "hypothesis to test" in out
 
 
-def test_the_report_says_so_when_nothing_is_structural(capsys):
+def test_the_report_does_not_claim_uncomputed_terms_are_reachable(capsys):
     diag = diagnose(
         terms(harm=8.0),
         probes(
@@ -439,7 +461,8 @@ def test_the_report_says_so_when_nothing_is_structural(capsys):
     )
     print_report(diag)
     out = capsys.readouterr().out
-    assert "Every measurement is reachable" in out
+    assert "Every measurement is reachable" not in out
+    assert "No universal reachability claim" in out
 
 
 def test_the_verdict_can_be_written_to_a_file(tmp_path, capsys):
@@ -469,3 +492,380 @@ def test_every_loss_term_has_a_unit_and_a_meaning_the_report_can_print():
     missing_means = [t for t in LOSS_TERMS if t not in TERM_MEANS]
     assert not missing_units, f"no unit for {missing_units}"
     assert not missing_means, f"no explanation for {missing_means}"
+
+
+# --------------------------------------------------------------------------
+# measurement evidence and bounded interaction probing
+
+
+def test_a_capped_term_is_measurement_limited_and_never_structural():
+    base = terms(harm=0.0, harm_capped=1.0)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=0.0, harm_capped=1.0), "clamp"),
+            ("a.x", "hi", terms(harm=0.0, harm_capped=1.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == MEASUREMENT_LIMITED
+    assert not diag.structural()
+
+
+def test_missing_cells_cannot_be_a_zero_gain_match():
+    base = terms(harm=0.0, harm_cells=0.0)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=0.0, harm_cells=0.0), "clamp"),
+            ("a.x", "hi", terms(harm=0.0, harm_cells=0.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == MEASUREMENT_LIMITED
+    assert verdict_of(diag, "harm") != "matched"
+
+
+def test_a_capped_endpoint_cannot_create_a_false_mover():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=1.0, harm_capped=1.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == MEASUREMENT_LIMITED
+    assert row(diag, "harm").movers == 0
+    assert not diag.structural()
+
+
+def test_a_matched_baseline_survives_an_invalid_exploratory_endpoint():
+    diag = diagnose(
+        terms(harm=0.2),
+        probes(
+            ("a.x", "lo", None, "clamp"),
+            ("a.x", "hi", terms(harm=0.2), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == "matched"
+
+
+def test_a_base_with_missing_measurement_does_not_call_a_knob_inert():
+    base = terms(harm=0.0, harm_cells=0.0)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=0.0), "clamp"),
+            ("a.x", "hi", terms(harm=0.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == MEASUREMENT_LIMITED
+    assert diag.inert_knobs == []
+
+
+def test_a_worst_note_keeps_a_small_mean_from_being_matched():
+    def counted(value: float) -> dict[str, float]:
+        out = terms(harm=value, harm_worst=2.0 * TERM_UNITS["harm"])
+        for key in TERM_COUNT_KEYS.values():
+            out[key] = 1.0
+        out["level_expected"] = 1.0
+        out["harm_worst_row"] = 2.0
+        out["harm_worst_note"] = 72.0
+        out["harm_worst_velocity"] = 110.0
+        return out
+
+    base = counted(0.2)
+    objective = LossWeights({"harm": 1.0})
+    objective.anchor(base)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", counted(0.2), "clamp"),
+            ("a.x", "hi", counted(0.2), "clamp"),
+        ),
+        objective.weights,
+        objective=objective,
+    )
+    harm = row(diag, "harm")
+    assert harm.worst_units == pytest.approx(2.0)
+    assert harm.worst_condition["note"] == pytest.approx(72.0)
+    assert harm.verdict != "matched"
+
+
+def test_an_inactive_weight_is_not_a_structural_claim():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        {"harm": 0.0},
+    )
+    assert verdict_of(diag, "harm") == "unscored"
+    assert not diag.structural()
+
+
+def test_report_does_not_call_an_unknown_measurement_reachable(capsys):
+    diag = diagnose(
+        terms(harm=0.0, harm_cells=0.0),
+        probes(
+            ("a.x", "lo", terms(harm=0.0, harm_cells=0.0), "clamp"),
+            ("a.x", "hi", terms(harm=0.0, harm_cells=0.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    print_report(diag)
+    output = capsys.readouterr().out
+    assert "Every measurement is reachable" not in output
+    assert "No universal reachability claim" in output
+
+
+def test_joint_context_is_reported_as_interaction_only():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+        context_probes=[
+            ("context:all-low", "joint", terms(harm=5.0), "context", "joint"),
+            ("context:all-high", "joint", terms(harm=8.0), "context", "joint"),
+        ],
+    )
+    assert verdict_of(diag, "harm") == JOINT_ONLY
+    assert not diag.structural()
+
+
+def test_failed_endpoint_does_not_support_a_confident_structural_claim():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", None, "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == "unreachable"  # legacy bare-term API
+    assert not diag.structural()
+
+
+def test_a_valid_interior_response_survives_one_silent_endpoint():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", None, "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+            ("a.x", "mid-lo", terms(harm=8.0), "clamp"),
+            ("a.x", "mid-hi", terms(harm=1.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
+    assert verdict_of(diag, "harm") == "reachable"
+    assert not diag.structural()
+
+
+def test_a_joint_response_survives_one_silent_endpoint():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", None, "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+        context_probes=[("context:all-low", "joint", terms(harm=5.0), "context", "joint")],
+    )
+    assert verdict_of(diag, "harm") == JOINT_ONLY
+    assert not diag.structural()
+
+
+def test_a_capped_joint_context_cannot_fake_an_interaction():
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+        context_probes=[
+            (
+                "context:all-low",
+                "joint",
+                terms(harm=1.0, harm_capped=1.0),
+                "context",
+                "joint",
+            )
+        ],
+    )
+    assert verdict_of(diag, "harm") != JOINT_ONLY
+    assert not diag.structural()
+
+
+@dataclass
+class _ProbeKnob:
+    label: str
+    lo: float
+    hi: float
+    log: bool
+    start_value: float
+
+
+class _ProbeEvaluator:
+    def __init__(self, objective):
+        self.cache = {}
+        self.loss = objective
+        self.quiet = True
+        self.points = []
+        self.batch_quiet = []
+        self.oracle = [{"note": 60, "velocity": 80}]
+        self.harm_base = 8.0
+        self.respond_interior = True
+
+    def key(self, values):
+        return tuple(round(float(value), 9) for value in values)
+
+    def _terms(self, values):
+        # Only the interior sample at 0.75 responds. Endpoints alone therefore
+        # require the bounded midpoint pass to discover that the mechanism is live.
+        value = self.harm_base
+        if self.respond_interior and abs(float(values[0]) - 0.75) < 1e-8:
+            value = 2.0
+        out = terms(harm=value)
+        for key in TERM_COUNT_KEYS.values():
+            out[key] = 1.0
+        out["level_expected"] = 1.0
+        return out
+
+    def __call__(self, values):
+        values = list(values)
+        self.points.append(tuple(values))
+        self.cache[self.key(values)] = self._terms(values)
+        return 0.0
+
+    def evaluate_batch(self, batch):
+        self.batch_quiet.append(self.quiet)
+        for values in batch:
+            self(values)
+        return [0.0 for _ in batch]
+
+
+def test_adaptive_probe_is_bounded_deduplicated_and_restores_quiet():
+    base = {name: 0.0 for name in LOSS_TERMS}
+    for key in TERM_COUNT_KEYS.values():
+        base[key] = 1.0
+    base["level_expected"] = 1.0
+    objective = LossWeights({"harm": 1.0})
+    objective.anchor(base)
+    evaluator = _ProbeEvaluator(objective)
+    args = SimpleNamespace(
+        spec="auto",
+        percussive=False,
+        pattern="sustain",
+        has_analysis_notes=True,
+        has_kit_groups=True,
+        has_tail_window=True,
+        has_velocity_spread=True,
+    )
+    diag = run_diagnosis(
+        evaluator,
+        [_ProbeKnob("voice.x", 0.0, 1.0, False, 0.5)],
+        args,
+        catalogue=SimpleNamespace(bound_for=lambda _label: (-1.0, 2.0)),
+    )
+    assert evaluator.quiet is True
+    assert evaluator.batch_quiet == [True, True]
+    assert len(set(evaluator.points)) == len(evaluator.points) == 5
+    assert diag.sampling["total_candidates"] == 5
+    assert diag.sampling["contexts"] == []
+    assert row(diag, "harm").movers == 1
+    assert row(diag, "harm").best.source == "auto"
+    assert "end of a searched range" not in row(diag, "harm").note
+    assert diag.sampling["adaptive"] is True
+
+
+def test_a_matched_base_with_a_failed_endpoint_skips_adaptive_probing():
+    base = {name: 0.0 for name in LOSS_TERMS}
+    for key in TERM_COUNT_KEYS.values():
+        base[key] = 1.0
+    base["level_expected"] = 1.0
+    objective = LossWeights({"harm": 1.0})
+    objective.anchor(base)
+    evaluator = _ProbeEvaluator(objective)
+    evaluator.respond_interior = False
+    evaluator.harm_base = 0.2
+    original = evaluator._terms
+
+    def fail_low(values):
+        if float(values[0]) == 0.0:
+            return None
+        return original(values)
+
+    evaluator._terms = fail_low
+    args = SimpleNamespace(
+        spec="auto",
+        percussive=False,
+        pattern="sustain",
+        has_analysis_notes=True,
+        has_kit_groups=True,
+        has_tail_window=True,
+        has_velocity_spread=True,
+    )
+    diag = run_diagnosis(evaluator, [_ProbeKnob("voice.x", 0.0, 1.0, False, 0.5)], args)
+    assert verdict_of(diag, "harm") == "matched"
+    assert diag.sampling["adaptive"] is False
+    assert diag.sampling["total_candidates"] == 3
+    assert len(evaluator.batch_quiet) == 1
+
+
+def test_inactive_terms_do_not_trigger_the_adaptive_pass():
+    base = {name: 0.0 for name in LOSS_TERMS}
+    for key in TERM_COUNT_KEYS.values():
+        base[key] = 1.0
+    base["level_expected"] = 1.0
+    objective = LossWeights({"harm": 1.0})
+    objective.anchor(base)
+    evaluator = _ProbeEvaluator(objective)
+    evaluator.harm_base = 0.5
+    evaluator.respond_interior = False
+    args = SimpleNamespace(
+        spec="auto",
+        percussive=False,
+        pattern="sustain",
+        has_analysis_notes=True,
+        has_kit_groups=True,
+        has_tail_window=True,
+        has_velocity_spread=True,
+    )
+    diag = run_diagnosis(evaluator, [_ProbeKnob("voice.x", 0.0, 1.0, False, 0.5)], args)
+    assert diag.sampling["adaptive"] is False
+    assert diag.sampling["total_candidates"] == 3
+    assert len(evaluator.batch_quiet) == 1
+
+
+def test_a_full_catalogue_bound_is_the_only_clamp_claim():
+    base = {name: 0.0 for name in LOSS_TERMS}
+    for key in TERM_COUNT_KEYS.values():
+        base[key] = 1.0
+    base["level_expected"] = 1.0
+    objective = LossWeights({"harm": 1.0})
+    objective.anchor(base)
+    args = SimpleNamespace(
+        spec="auto",
+        percussive=False,
+        pattern="sustain",
+        has_analysis_notes=True,
+        has_kit_groups=True,
+        has_tail_window=True,
+        has_velocity_spread=True,
+    )
+    evaluator = _ProbeEvaluator(objective)
+    full = run_diagnosis(
+        evaluator,
+        [_ProbeKnob("voice.x", 0.0, 1.0, False, 0.5)],
+        args,
+        catalogue=SimpleNamespace(bound_for=lambda _label: (0.0, 1.0)),
+    )
+    assert row(full, "harm").best.source == "clamp"

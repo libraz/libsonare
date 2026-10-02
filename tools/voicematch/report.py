@@ -294,13 +294,18 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         else:
             margin = v["start"] - v["best"]
             if margin > 0.005:
-                verdict = "generalises"
+                verdict = "improves the held-out objective"
             elif margin < -0.005:
                 verdict = "does NOT generalise — worse than the defaults off the probe"
             else:
                 verdict = "unchanged off the probe"
             print(f"\n== held-out {v['axis']} {v['held_out']} ==")
             print(f"  start {v['start']:.4f}  ->  best {v['best']:.4f}   {verdict}")
+            held_quality = v.get("best_quality")
+            if held_quality is not None and not held_quality.get("full_known_coverage", False):
+                print(
+                    "  held-out coverage is incomplete; this does not validate all active metrics"
+                )
             if margin < -0.005:
                 print(
                     "  the fitted values are worse than the defaults on notes the fit never "

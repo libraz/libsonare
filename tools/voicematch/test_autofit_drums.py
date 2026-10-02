@@ -116,6 +116,8 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
         "ring",
         "density",
         "prompt",
+        "evolve",
+        "diffuse",
         "lf",
         "env",
         "modes",

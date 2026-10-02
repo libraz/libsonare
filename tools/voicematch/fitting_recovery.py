@@ -82,6 +82,8 @@ REPORT_TERMS = (
     "modes",
     "density",
     "prompt",
+    "evolve",
+    "diffuse",
     "lf",
 )
 # Exercise the same default selected by autofit for a percussion probe.  This

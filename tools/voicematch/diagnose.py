@@ -15,9 +15,9 @@ throws the terms away. From those terms two independent things are read for
 every measurement the metric set produces:
 
 - **Connectivity** — the largest change any single knob makes to the term, in
-  either direction. Near zero means nothing this program exposes is wired to
-  that measurement. That is the structural claim, and it is the sharpest one
-  available: no amount of fitting reaches a term nothing moves.
+  either direction. Near zero means no independently varied knob exposed by
+  this probe moved that measurement. That is scoped evidence for a structural
+  gap; coupled context points are checked before the report makes the claim.
 - **Improvement** — the largest *reduction* any single knob makes. A term that
   moves but does not improve is a term the fit has already spent, or one whose
   improvement costs another term. That is a trade-off, not a missing mechanism,
@@ -45,20 +45,15 @@ import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
+from fit_quality import aggregate_term_residuals
 from loss import LOSS_TERMS, TERM_UNITS, measured_terms, unmeasurable_terms
 
-# Below this many of its own perceptual units, a term is as matched as the probe
-# can tell. `TERM_UNITS` is "one unit of this term that anyone would notice" —
-# 1 dB of harmonic error, 1 cent, 0.1 dB/s of slope — and the objective divides
-# by the same table, so a term diagnosed as matched is a term the fit charges
-# one unit for.
+# The numerical target uses the same declared scoring units as the quality
+# report. These units are a fixed ruler, not a calibrated listening threshold.
 MATCHED_UNITS = 1.0
 
-# A knob counts as connected to a term when moving it over its range shifts the
-# term by at least this fraction of one perceptual unit. A tenth of the smallest
-# difference anyone would notice: generous, because the cost of calling a live
-# knob dead is a mechanism removed from a model that had it, and the cost of
-# calling a dead knob live is one more thing to check.
+# Count a knob as connected when its sampled response exceeds this fraction
+# of a declared unit. Smaller effects remain unresolved at this probe resolution.
 CONNECTED_UNITS = 0.1
 
 # What one knob has to buy, as a share of the gap above one unit, for the gap
@@ -69,6 +64,8 @@ REACHABLE_SHARE = 0.5
 PARTIAL_SHARE = 0.1
 
 VERDICT_ORDER = (
+    "measurement-limited",
+    "interaction",
     "unreachable",
     "unscored",
     "spent",
@@ -77,6 +74,11 @@ VERDICT_ORDER = (
     "matched",
     "not computed",
 )
+
+MEASUREMENT_LIMITED = "measurement-limited"
+# Public JSON/report spelling. The note explains that this is a joint-only
+# response, while the concise verdict stays stable for downstream consumers.
+JOINT_ONLY = "interaction"
 
 TERM_UNIT_NAMES = {
     "harm": "dB",
@@ -107,6 +109,8 @@ TERM_UNIT_NAMES = {
     "kit": "doublings",
     "density": "resonances per octave band",
     "prompt": "dB of band-share change, strike to aftersound",
+    "evolve": "dB of band power evolution on a common hit-power ruler",
+    "diffuse": "dB of short-window spectral flatness",
 }
 
 TERM_MEANS = {
@@ -147,6 +151,8 @@ TERM_MEANS = {
     "spread apart, how the three hi-hats stand against each other. The "
     "one percussion reading that lives between instruments rather than "
     "inside one",
+    "evolve": "how band power moves from the stick contact through body and late hit",
+    "diffuse": "whether each short hit window is a sparse set of lines or a diffuse field",
 }
 
 
@@ -193,6 +199,14 @@ class TermVerdict:
     best: KnobReach | None = None
     strongest: KnobReach | None = None
     note: str = ""
+    worst_units: float | None = None
+    worst_condition: dict[str, float | None] | None = None
+    measurement_reasons: tuple[str, ...] = ()
+    endpoint_valid: int = 0
+    endpoint_expected: int = 0
+    endpoint_complete: bool = True
+    joint_movers: int = 0
+    measurement_limited: bool = False
 
     def to_dict(self) -> dict:
         out = {k: v for k, v in self.__dict__.items() if k not in ("best", "strongest")}
@@ -215,6 +229,7 @@ class Diagnosis:
     #: Which axes the probe varied. A knob whose effect only shows along an axis
     #: the probe holds fixed reads as inert and is not.
     axes: str = ""
+    sampling: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -222,16 +237,35 @@ class Diagnosis:
             "inert_knobs": list(self.inert_knobs),
             "unscorable": list(self.unscorable),
             "axes": self.axes,
+            "sampling": dict(self.sampling),
         }
 
     def structural(self) -> list[TermVerdict]:
         """The terms whose residual no knob reaches. The reason this exists."""
-        return [t for t in self.terms if t.verdict == "unreachable"]
+        return [
+            t
+            for t in self.terms
+            if t.verdict == "unreachable"
+            and not t.measurement_limited
+            and t.endpoint_complete
+            and t.endpoint_expected > 0
+        ]
+
+
+def _unpack_probe(probe) -> tuple[str, str, dict | None, str, str]:
+    """Read the legacy four-field shape and the optional context kind."""
+    label, end, terms, range_source, *rest = probe
+    kind = rest[0] if rest else ("joint" if str(label).startswith("context:") else "knob")
+    return str(label), str(end), terms, str(range_source), kind
 
 
 def _reach(
-    term: str, base: float, probes: list[tuple[str, str, dict | None, str]]
-) -> tuple[KnobReach | None, KnobReach | None, set[str], int]:
+    term: str,
+    base: float,
+    probes: list[tuple[str, str, dict | None, str]],
+    *,
+    strict: bool = False,
+) -> tuple[KnobReach | None, KnobReach | None, set[str], int, int, int, set[str]]:
     """Per-knob effect on one term: the best improver, the strongest mover, the count.
 
     Two winners rather than one, because they answer different questions and
@@ -242,11 +276,26 @@ def _reach(
     """
     by_knob: dict[str, dict[str, float]] = {}
     source: dict[str, str] = {}
-    for label, end, terms, range_source in probes:
+    endpoint_labels: set[str] = set()
+    valid_by_label: dict[str, int] = {}
+    endpoint_kinds = {"lo", "hi"}
+    valid_endpoints = 0
+    for raw_probe in probes:
+        label, end, terms, range_source, kind = _unpack_probe(raw_probe)
+        if kind == "joint":
+            continue
+        if end in endpoint_kinds:
+            endpoint_labels.add(label)
         source[label] = range_source
         if terms is None or not scorable(terms):
             continue
-        by_knob.setdefault(label, {})[end] = terms.get(term, base)
+        value = _term_value(term, terms, base, strict=strict)
+        if value is None:
+            continue
+        if end in endpoint_kinds:
+            valid_endpoints += 1
+            valid_by_label[label] = valid_by_label.get(label, 0) + 1
+        by_knob.setdefault(label, {})[end] = value
 
     best: KnobReach | None = None
     strongest: KnobReach | None = None
@@ -270,7 +319,146 @@ def _reach(
             best = reach
         if strongest is None or swing > strongest.swing:
             strongest = reach
-    return best, strongest, movers, len(by_knob)
+    complete_labels = {label for label, count in valid_by_label.items() if count >= 2}
+    return (
+        best,
+        strongest,
+        movers,
+        len(by_knob),
+        valid_endpoints,
+        2 * len(endpoint_labels),
+        complete_labels,
+    )
+
+
+def _joint_reach(
+    term: str,
+    base: float,
+    probes: Iterable,
+    *,
+    strict: bool = False,
+) -> tuple[float, int]:
+    """Return movement from context points without counting a live knob."""
+    swing = 0.0
+    valid = 0
+    for raw_probe in probes:
+        _label, _end, terms, _source, kind = _unpack_probe(raw_probe)
+        if kind != "joint" or terms is None or not scorable(terms):
+            continue
+        value = _term_value(term, terms, base, strict=strict)
+        if value is None:
+            continue
+        valid += 1
+        swing = max(swing, abs(value - base))
+    return swing, valid
+
+
+def _positive(value) -> bool:
+    try:
+        return math.isfinite(float(value)) and float(value) > 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _worst_raw(terms: dict | None, term: str) -> float | None:
+    if not isinstance(terms, dict) or f"{term}_worst" not in terms:
+        return None
+    try:
+        value = float(terms[f"{term}_worst"])
+    except (TypeError, ValueError):
+        return None
+    return abs(value) if math.isfinite(value) else None
+
+
+def _term_value(term: str, terms: dict | None, fallback: float, *, strict: bool) -> float | None:
+    if terms is None or (strict and term not in terms):
+        return None
+    try:
+        value = float(terms.get(term, fallback))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    worst = _worst_raw(terms, term)
+    return max(abs(value), worst or 0.0)
+
+
+def _bare_measurement_reasons(terms: dict | None, term: str) -> set[str]:
+    """Find explicit coverage markers without changing legacy bare terms."""
+    if not isinstance(terms, dict):
+        return set()
+    reasons: set[str] = set()
+    for suffix, reason in (
+        ("capped", "one or more cells reached the comparison cap"),
+        ("absent", "the reference has cells the candidate did not measure"),
+        ("skipped", "one or more reference cells were skipped"),
+    ):
+        if _positive(terms.get(f"{term}_{suffix}")):
+            reasons.add(reason)
+    for suffix in ("cells", "notes", "groups", "hits", "bins"):
+        key = f"{term}_{suffix}"
+        if key in terms and terms.get(key) is not None and not _positive(terms.get(key)):
+            reasons.add("no valid comparison cells were recorded")
+    if "comparable" in terms and not _positive(terms.get("comparable")):
+        reasons.add("the render produced no comparable note")
+    return reasons
+
+
+def _objective_measurement(
+    objective,
+    terms: dict | None,
+    term: str,
+) -> tuple[set[str], float | None, dict[str, float | None] | None]:
+    """Read coverage and worst-note evidence through the quality API."""
+    if objective is None:
+        return set(), None, None
+    try:
+        rows = aggregate_term_residuals(terms or {}, objective, active=(term,), baseline_terms=None)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        # A weight-like compatibility object has no coverage evidence.
+        return set(), None, None
+    row = rows.get(term)
+    if not row:
+        return {"the objective did not produce a coverage record"}, None, None
+    reasons: set[str] = set()
+    if row.get("unmeasured"):
+        reasons.add("no valid comparison cells were recorded")
+    if row.get("coverage_complete") is False:
+        reasons.add("the objective has incomplete reference coverage")
+    for key, reason in (
+        ("capped", "one or more cells reached the comparison cap"),
+        ("absent", "the reference has cells the candidate did not measure"),
+        ("skipped", "one or more reference cells were skipped"),
+    ):
+        if _positive(row.get(key)):
+            reasons.add(reason)
+    coverage = row.get("coverage")
+    if coverage is not None:
+        try:
+            if float(coverage) < 1.0:
+                reasons.add("the candidate covers only part of the reference cells")
+        except (TypeError, ValueError):
+            reasons.add("the objective coverage is not finite")
+    worst_units = row.get("worst_residual_units")
+    try:
+        worst_units = float(worst_units) if worst_units is not None else None
+    except (TypeError, ValueError):
+        worst_units = None
+    condition = row.get("worst_condition")
+    if isinstance(condition, dict):
+        clean_condition = {}
+        for key, value in condition.items():
+            try:
+                converted = float(value) if value is not None else None
+            except (TypeError, ValueError):
+                converted = None
+            clean_condition[key] = (
+                converted if converted is not None and math.isfinite(converted) else None
+            )
+        condition = clean_condition
+    else:
+        condition = None
+    return reasons, worst_units, condition
 
 
 def _classify(
@@ -280,22 +468,47 @@ def _classify(
     best: KnobReach | None,
     strongest: KnobReach | None,
     movers: int,
+    *,
+    effective_units: float | None = None,
+    measurement_limited: bool = False,
+    measurement_note: str = "",
+    joint_swing: float = 0.0,
 ) -> tuple[str, str]:
     """The verdict for one term, and the sentence a reader is meant to act on."""
     unit_size = TERM_UNITS[term]
-    units = residual / unit_size
+    units = residual / unit_size if effective_units is None else effective_units
     unit = TERM_UNIT_NAMES.get(term, "")
-    if units <= MATCHED_UNITS:
-        return "matched", (
-            f"{residual:.3g} {unit} — at or under the smallest difference this term resolves."
+    if measurement_limited:
+        detail = f" {measurement_note}" if measurement_note else ""
+        return MEASUREMENT_LIMITED, (
+            f"{residual:.3g} {unit} off, but the measurement is incomplete.{detail} "
+            "Collect a complete uncapped endpoint before attributing this residual "
+            "to the physical model."
         )
-    gap = residual - unit_size
+    if units <= MATCHED_UNITS:
+        return "matched", (f"{residual:.3g} {unit} — at or under the declared numerical target.")
+    gap = max(0.0, (units - MATCHED_UNITS) * unit_size)
+    if weight <= 0.0:
+        return "unscored", (
+            f"{residual:.3g} {unit} off, and this term carries no weight, so no fit has "
+            f"ever tried to close it. {movers} knobs move it. Weight it before calling it "
+            f"structural."
+        )
+    if movers == 0 and joint_swing >= CONNECTED_UNITS * unit_size:
+        return JOINT_ONLY, (
+            f"{residual:.3g} {unit} off. No single knob moves it, but the sampled "
+            f"joint contexts move it by {joint_swing:.3g} {unit}. Probe a coupled "
+            "change before treating this as a missing mechanism."
+        )
     if movers == 0:
         source = strongest.source if strongest else "auto"
-        where = {
-            "clamp": "over the whole interval the engine accepts",
-            "spec": "over the range the spec gave them",
-        }.get(source, "over the range each was searched")
+        if strongest:
+            where = {
+                "clamp": f"over `{strongest.knob}`'s whole interval the engine accepts",
+                "spec": f"over `{strongest.knob}`'s range from the spec",
+            }.get(source, f"over `{strongest.knob}`'s searched range")
+        else:
+            where = "over the searched range"
         detail = (
             f" The largest effect any of them had was {strongest.swing:.3g} {unit}."
             if strongest
@@ -303,23 +516,17 @@ def _classify(
         )
         weak = {
             "clamp": "",
-            "spec": " Those ranges were chosen by hand; check they are wide enough before "
+            "spec": " That range was chosen by hand; check it is wide enough before "
             "concluding the mechanism is absent.",
         }.get(
             source,
-            " Those ranges are heuristic windows around each default and narrow on "
-            "purpose, so widen them before concluding the mechanism is absent.",
+            " This is a heuristic window around one default and narrow on purpose, so "
+            "widen it before concluding the mechanism is absent.",
         )
         return "unreachable", (
             f"{residual:.3g} {unit} off, and no knob moves it {where}.{detail} "
-            f"Nothing in this program's voicing or its engine's calibration is wired to "
-            f"this measurement — a fit cannot reach it, whatever budget it is given.{weak}"
-        )
-    if weight <= 0.0:
-        return "unscored", (
-            f"{residual:.3g} {unit} off, and this term carries no weight, so no fit has "
-            f"ever tried to close it. {movers} knobs move it. Weight it before calling it "
-            f"structural."
+            f"No independently varied knob in this probe is wired to this measurement. "
+            f"Treat that as a scoped hypothesis about the model, not a guarantee.{weak}"
         )
     if best is None or best.gain <= 0.0:
         return "spent", (
@@ -328,15 +535,16 @@ def _classify(
             f"that helps costs another term. That is a trade-off to price, not a missing "
             f"mechanism."
         )
-    share = best.gain / gap if gap > 0.0 else 1.0
-    at_end = f" at its {best.at}" if best.at else ""
+    share = (best.gain / unit_size) / (units - MATCHED_UNITS) if gap > 0.0 else 1.0
+    endpoint = best.at in {"lo", "hi"}
+    at_end = f" at its {best.at}" if endpoint else (f" at sampled {best.at}" if best.at else "")
     pinned = ""
-    if best.at and best.source == "clamp":
+    if endpoint and best.source == "clamp":
         pinned = (
             " That is the end of the interval the engine accepts, so this knob has "
             "nothing more to give."
         )
-    elif best.at:
+    elif endpoint:
         pinned = " That is the end of a searched range; widen it and re-probe."
     if share >= REACHABLE_SHARE:
         verdict = "reachable"
@@ -361,6 +569,9 @@ def diagnose(
     percussive: bool = False,
     axes: str = "",
     unmeasurable: Iterable[tuple[str, str]] = (),
+    objective=None,
+    context_probes: Iterable = (),
+    sampling: dict[str, object] | None = None,
 ) -> Diagnosis:
     """Reduce a base render and its 2n probe renders to a verdict per term.
 
@@ -371,14 +582,26 @@ def diagnose(
     `unmeasurable` is `(term, why)` for anything this probe's shape produced no
     cell for. Those arrive as a 0.0 residual, which is also the best value a
     term has, so without it a term that compared nothing reads as matched.
+    ``objective`` is optional for compatibility with old hand-built term
+    dictionaries. Production runs pass ``LossWeights`` here, which lets the
+    diagnosis use the same coverage, cap and worst-note evidence as the quality
+    report. ``context_probes`` contains bounded all-low/all-high samples and
+    can turn a one-at-a-time null into the explicit ``interaction`` verdict.
     """
     absent = dict(unmeasurable)
-    out = Diagnosis(axes=axes)
+    out = Diagnosis(axes=axes, sampling=dict(sampling or {}))
+    strict = objective is not None
+    context_probes = list(context_probes)
     out.unscorable = sorted(
-        f"{label}:{end}" for label, end, terms, _ in probes if not scorable(terms)
+        f"{label}:{end}"
+        for raw_probe in probes
+        for label, end, terms, _source, _kind in (_unpack_probe(raw_probe),)
+        if not scorable(terms)
     )
     group = set(measured_terms(percussive))
     moved_something: set[str] = set()
+    valid_knobs: set[str] = set()
+    uncertain_knobs: set[str] = set()
     for term in LOSS_TERMS:
         if term not in group:
             continue
@@ -386,6 +609,14 @@ def diagnose(
         residual = float(base_terms.get(term, 0.0))
         if not math.isfinite(residual):
             continue
+        base_reasons = _bare_measurement_reasons(base_terms, term)
+        objective_reasons, worst_units, worst_condition = _objective_measurement(
+            objective, base_terms, term
+        )
+        reasons = base_reasons | objective_reasons
+        baseline_value = max(residual, (worst_units or 0.0) * TERM_UNITS[term])
+        if worst_units is None:
+            baseline_value = max(baseline_value, _worst_raw(base_terms, term) or 0.0)
         if term in absent:
             out.terms.append(
                 TermVerdict(
@@ -398,6 +629,10 @@ def diagnose(
                     probed=0,
                     note=f"not computed — {absent[term]}, so no cell was compared "
                     f"and the 0.0 below is an absence rather than a match.",
+                    worst_units=worst_units,
+                    worst_condition=worst_condition,
+                    measurement_reasons=tuple(sorted(reasons | {absent[term]})),
+                    measurement_limited=bool(strict or reasons or term in absent),
                 )
             )
             continue
@@ -417,27 +652,148 @@ def diagnose(
                     probed=0,
                     note="not computed — the multi-scale term needs --w-mss above zero "
                     "before the renders it compares are kept.",
+                    worst_units=worst_units,
+                    worst_condition=worst_condition,
+                    measurement_reasons=tuple(
+                        sorted(reasons | {"multi-scale audio was not retained"})
+                    ),
+                    measurement_limited=bool(strict or reasons),
                 )
             )
             continue
-        best, strongest, movers, probed = _reach(term, residual, probes)
+        endpoint_reasons = set(reasons)
+        term_probes = []
+        for raw_probe in probes:
+            label, end, endpoint_terms, source, kind = _unpack_probe(raw_probe)
+            invalid_reasons = _bare_measurement_reasons(endpoint_terms, term)
+            objective_reasons, _ignored_worst, _ignored_condition = _objective_measurement(
+                objective, endpoint_terms, term
+            )
+            invalid_reasons |= objective_reasons
+            endpoint_reasons |= invalid_reasons
+            term_probes.append(
+                (label, end, None if invalid_reasons else endpoint_terms, source, kind)
+            )
+        term_context_probes = []
+        for raw_probe in context_probes:
+            label, end, context_terms, source, kind = _unpack_probe(raw_probe)
+            invalid_reasons = _bare_measurement_reasons(context_terms, term)
+            objective_reasons, _ignored_worst, _ignored_condition = _objective_measurement(
+                objective, context_terms, term
+            )
+            invalid_reasons |= objective_reasons
+            endpoint_reasons |= invalid_reasons
+            term_context_probes.append(
+                (label, end, None if invalid_reasons else context_terms, source, kind)
+            )
+        (
+            best,
+            strongest,
+            movers,
+            probed,
+            valid_endpoints,
+            expected_endpoints,
+            complete_labels,
+        ) = _reach(term, baseline_value, term_probes, strict=strict)
         moved_something |= movers
-        verdict, note = _classify(term, weight, residual, best, strongest, len(movers))
+        valid_knobs |= complete_labels
+        endpoint_complete = expected_endpoints == 0 or valid_endpoints >= expected_endpoints
+        if weight > 0.0:
+            term_labels = {
+                _unpack_probe(raw_probe)[0]
+                for raw_probe in term_probes
+                if _unpack_probe(raw_probe)[4] != "joint"
+            }
+            invalid_labels = {
+                _unpack_probe(raw_probe)[0]
+                for raw_probe in term_probes
+                if _unpack_probe(raw_probe)[2] is None
+            }
+            uncertain_knobs |= invalid_labels
+            if base_reasons:
+                uncertain_knobs |= term_labels
+            if not endpoint_complete:
+                uncertain_knobs |= term_labels - complete_labels
+        if strict and not endpoint_complete:
+            endpoint_reasons.add(
+                f"only {valid_endpoints}/{expected_endpoints} knob endpoints produced a valid term"
+            )
+        joint_swing, joint_valid = _joint_reach(
+            term, baseline_value, term_context_probes, strict=strict
+        )
+        if strict and joint_valid == 0 and context_probes:
+            endpoint_reasons.add("joint context samples were not scorable")
+        effective_units = baseline_value / TERM_UNITS[term]
+        valid_response = bool(movers) or joint_swing >= CONNECTED_UNITS * TERM_UNITS[term]
+        # An invalid exploratory point cannot erase a valid baseline or response.
+        measurement_limited = bool(reasons) and (strict or base_reasons)
+        probe_reasons = endpoint_reasons - reasons
+        if (
+            not measurement_limited
+            and effective_units > MATCHED_UNITS
+            and probe_reasons
+            and not valid_response
+        ):
+            measurement_limited = True
+        verdict, note = _classify(
+            term,
+            weight,
+            residual,
+            best,
+            strongest,
+            len(movers),
+            effective_units=effective_units,
+            measurement_limited=measurement_limited,
+            measurement_note="; ".join(sorted(endpoint_reasons)),
+            joint_swing=joint_swing,
+        )
         out.terms.append(
             TermVerdict(
                 term=term,
                 weight=weight,
                 residual=residual,
-                units=residual / TERM_UNITS[term],
+                units=effective_units,
                 verdict=verdict,
                 movers=len(movers),
                 probed=probed,
                 best=best,
                 strongest=strongest,
                 note=note,
+                worst_units=worst_units,
+                worst_condition=worst_condition,
+                measurement_reasons=tuple(sorted(endpoint_reasons)),
+                endpoint_valid=valid_endpoints,
+                endpoint_expected=expected_endpoints,
+                endpoint_complete=endpoint_complete,
+                joint_movers=1 if joint_swing >= CONNECTED_UNITS * TERM_UNITS[term] else 0,
+                measurement_limited=measurement_limited,
             )
         )
-    out.inert_knobs = sorted({p[0] for p in probes} - moved_something)
+    all_knobs = {
+        label
+        for raw_probe in probes
+        for label, _end, _terms, _source, kind in (_unpack_probe(raw_probe),)
+        if kind != "joint"
+    }
+    if any(term.verdict == JOINT_ONLY for term in out.terms):
+        uncertain_knobs |= all_knobs
+    out.inert_knobs = sorted((all_knobs & valid_knobs) - moved_something - uncertain_knobs)
+    if not out.sampling:
+        endpoint_count = sum(1 for raw_probe in probes if _unpack_probe(raw_probe)[4] != "joint")
+        context_labels = sorted(
+            {
+                _unpack_probe(raw_probe)[0]
+                for raw_probe in context_probes
+                if _unpack_probe(raw_probe)[4] == "joint"
+            }
+        )
+        out.sampling = {
+            "initial_candidates": endpoint_count + 1 if endpoint_count else 0,
+            "adaptive_candidates": 0,
+            "total_candidates": endpoint_count + 1 if endpoint_count else 0,
+            "contexts": context_labels,
+            "adaptive": bool(context_labels),
+        }
     return out
 
 
@@ -456,9 +812,8 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
             f"{movers:>7}  {t.verdict}"
         )
     print(
-        "\n  'units' is the residual in multiples of the smallest difference the term "
-        "resolves,\n  and 'movers' is how many knobs shift it at all over the range they "
-        "were searched."
+        "\n  'units' uses the declared TERM_UNITS ruler, not a calibrated listening "
+        "threshold.\n  'movers' counts knobs with a measurable response in the sampled range."
     )
 
     for t in rows:
@@ -468,6 +823,12 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
         print(f"    {t.note}")
 
     structural = diag.structural()
+    measurement_limited = [t for t in rows if t.verdict == MEASUREMENT_LIMITED]
+    interactions = [t for t in rows if t.verdict == JOINT_ONLY]
+    unscored = [t for t in rows if t.verdict == "unscored"]
+    no_probe_evidence = [
+        t for t in rows if t.weight > 0.0 and (t.endpoint_expected == 0 or not t.endpoint_complete)
+    ]
     if structural:
         print(
             f"\n== {len(structural)} measurement"
@@ -477,21 +838,43 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
             print(f"  {t.term}: {TERM_MEANS.get(t.term, t.term)}")
         print(
             "\n  This is a hypothesis to test, not a finding. A one-at-a-time probe "
-            "cannot see\n  a knob that does nothing alone and something in combination, "
-            "so confirm it by\n  adding the mechanism and watching the term move — and "
-            "if it does not, the\n  mechanism was not the missing one either."
+            "and the bounded joint samples do not cover every combination. Check "
+            "untested interactions,\n  ranges and probe axes before changing the physical model."
         )
-    else:
-        unscored = [t.term for t in rows if t.verdict == "unscored"]
+    elif (
+        measurement_limited
+        or interactions
+        or no_probe_evidence
+        or unscored
+        or any(t.verdict == "not computed" for t in rows)
+    ):
         print(
-            "\n  Every measurement is reachable by something. Whatever is left is a "
-            "matter of\n  values, weights or budget rather than of physics."
+            "\n  No universal reachability claim is made: some terms still need "
+            "measurement evidence"
+            " or a coupled probe before the residual can be attributed to physics."
         )
+        if measurement_limited:
+            print("  Measurement-limited: " + ", ".join(t.term for t in measurement_limited) + ".")
+        if interactions:
+            print("  Interaction evidence: " + ", ".join(t.term for t in interactions) + ".")
         if unscored:
-            print(
-                f"  Start with {', '.join(unscored)}: those carry no weight, so the "
-                f"residual in them\n  is headroom no fit has ever been pointed at."
-            )
+            print("  Unscored terms: " + ", ".join(t.term for t in unscored) + ".")
+    else:
+        print(
+            "\n  No structural deficiency was established by these sampled conditions. "
+            "The remaining\n  residuals still need fitting and validation."
+        )
+
+    if diag.sampling:
+        print(
+            "\n== probe effort ==\n"
+            f"  {diag.sampling.get('total_candidates', '?')} unique candidates "
+            f"({diag.sampling.get('initial_candidates', '?')} initial, "
+            f"{diag.sampling.get('adaptive_candidates', 0)} adaptive)"
+        )
+        contexts = diag.sampling.get("contexts", ())
+        if contexts:
+            print("  contexts: " + ", ".join(str(value) for value in contexts))
 
     if diag.unscorable:
         n = len(diag.unscorable)
@@ -524,14 +907,9 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
                 f"single-velocity probe, and reads exactly\n  like a dead one."
             )
         print(
-            "\n  And every knob here was judged at the two ENDS of what the engine accepts, "
-            "never\n  between them. Where those bounds are guard rails rather than a search "
-            "range — a\n  time in milliseconds allowed out to 20 seconds, a frequency "
-            "allowed to Nyquist —\n  both ends can be worse than the value that ships while "
-            "an interior one is much\n  better, and the knob reads weak or dead either way. "
-            "One drum note's envelope\n  attack took its dimension from 11.6x the "
-            "references' spread to 1.6x at a value\n  the probe never tried. Sweep a "
-            "wide-clamped knob by hand before believing this\n  list."
+            "\n  These are bounded samples, including interior and joint conditions when "
+            "the diagnostic\n  needed them. An untested interior value, interaction or probe "
+            "axis can still\n  reveal an effect; inspect those before removing a knob."
         )
 
     if out_path:
@@ -569,25 +947,91 @@ def probe_axes(oracle_rows: list[dict], pattern: str = "") -> str:
 def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "") -> Diagnosis:
     """Render the base point and both ends of every knob, then diagnose the terms.
 
-    Costs `2n+1` renders and parallelises completely, which is the same price as
-    `--screen`. Nothing is written to the source: the state being diagnosed is
-    whatever the tree currently holds, so the way to diagnose a fitted voice is
-    to let the fit write back and run this afterwards.
+    The first pass costs `2n+1` candidates, the same price as `--screen`.
+    Only an incomplete or unreachable first pass earns a bounded second pass:
+    the two start-to-end midpoints for each knob and two all-at-once contexts.
+    That is at most `4n+3` unique candidates, so a diagnosis cannot turn into
+    an unbounded pair search. Nothing is written to the source: the state being
+    diagnosed is whatever the tree currently holds, so the way to diagnose a
+    fitted voice is to let the fit write back and run this afterwards.
     """
     base_values = [k.start_value for k in knobs]
+    max_candidates = 4 * len(knobs) + 3
+    sampling: dict[str, object] = {
+        "initial_candidates": 0,
+        "adaptive_candidates": 0,
+        "total_candidates": 0,
+        "max_candidates": max_candidates,
+        "contexts": [],
+        "adaptive": False,
+        "cache_hits": 0,
+    }
     print(
-        f"probing {len(knobs)} knobs at both ends ({2 * len(knobs) + 1} renders)...",
+        f"probing {len(knobs)} knobs at both ends ({2 * len(knobs) + 1} renders, "
+        f"up to {max_candidates} with the adaptive pass)...",
         file=sys.stderr,
     )
-    evaluator(base_values)
-    base_terms = evaluator.cache.get(evaluator.key(base_values))
+
+    def key(values: list[float]):
+        key_fn = getattr(evaluator, "key", None)
+        if callable(key_fn):
+            return key_fn(values)
+        return tuple(float(value) for value in values)
+
+    def cached(values: list[float]):
+        cache = getattr(evaluator, "cache", {})
+        point_key = key(values)
+        if point_key in cache:
+            return cache[point_key]
+        return None
+
+    sampled_keys = {key(base_values)}
+    base_result = evaluator(base_values)
+    base_terms = cached(base_values)
+    if base_terms is None and isinstance(base_result, dict):
+        # Small callers may return raw terms; production returns scalar loss.
+        base_terms = base_result
+    sampling["initial_candidates"] = 1
+    sampling["total_candidates"] = 1
     if not scorable(base_terms):
         print(
             "the base render produced nothing measurable against the oracle; there is "
             "nothing to diagnose",
             file=sys.stderr,
         )
-        return Diagnosis()
+        return Diagnosis(sampling=sampling)
+
+    def evaluate_unique(points: list[list[float]]) -> int:
+        """Evaluate uncached points once and restore the caller's quiet flag."""
+
+        pending: list[list[float]] = []
+        pending_keys = set()
+        cache = getattr(evaluator, "cache", {})
+        for values in points:
+            point_key = key(values)
+            if point_key in cache or point_key in sampled_keys or point_key in pending_keys:
+                sampling["cache_hits"] = int(sampling["cache_hits"]) + 1
+                sampled_keys.add(point_key)
+                continue
+            pending.append(values)
+            pending_keys.add(point_key)
+        if not pending:
+            return 0
+        old_quiet = getattr(evaluator, "quiet", None)
+        try:
+            if old_quiet is not None:
+                evaluator.quiet = True
+            evaluate_batch = getattr(evaluator, "evaluate_batch", None)
+            if callable(evaluate_batch):
+                evaluate_batch(pending)
+            else:
+                for values in pending:
+                    evaluator(values)
+        finally:
+            if old_quiet is not None:
+                evaluator.quiet = old_quiet
+        sampled_keys.update(pending_keys)
+        return len(pending)
 
     trials: list[tuple[str, str, list[float]]] = []
     for i, knob in enumerate(knobs):
@@ -595,32 +1039,95 @@ def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "")
             candidate = list(base_values)
             candidate[i] = value
             trials.append((knob.label, end, candidate))
-    evaluator.quiet = True
-    evaluator.evaluate_batch([t[2] for t in trials])
-    evaluator.quiet = False
+    initial_points = [trial[2] for trial in trials]
+    initial_added = evaluate_unique(initial_points)
+    sampling["initial_candidates"] = 1 + initial_added
+    sampling["total_candidates"] = 1 + initial_added
 
-    # Where each knob's range came from decides what a null result over it is
-    # worth, so it is carried rather than assumed. The clamp bound wins wherever
-    # the library reported one, since that is the interval the engine will
-    # actually accept whatever the spec asked for.
     hand_written = getattr(args, "spec", "auto") not in ("auto", "")
 
+    knob_by_label = {knob.label: knob for knob in knobs}
+
     def range_source(label: str) -> str:
-        if catalogue and catalogue.bound_for(label):
-            return "clamp"
+        knob = knob_by_label.get(label)
+        bound = catalogue.bound_for(label) if catalogue else None
+        if bound is not None and knob is not None:
+            blo, bhi = bound
+            tolerance = 1e-9 * max(1.0, abs(blo), abs(bhi))
+            if knob.lo <= blo + tolerance and knob.hi >= bhi - tolerance:
+                return "clamp"
         return "spec" if hand_written else "auto"
 
-    probes = [
-        (label, end, evaluator.cache.get(evaluator.key(values)), range_source(label))
-        for label, end, values in trials
+    def trial_probes(rows):
+        return [(label, end, cached(values), range_source(label)) for label, end, values in rows]
+
+    initial_probes = trial_probes(trials)
+    objective = getattr(evaluator, "loss", None)
+    resolved_weights = getattr(objective, "weights", objective or {})
+    base_kwargs = {
+        "percussive": bool(getattr(args, "percussive", False)),
+        "axes": probe_axes(getattr(evaluator, "oracle", []), getattr(args, "pattern", "")),
+        "unmeasurable": unmeasurable_terms(args),
+        "objective": objective,
+    }
+    initial_diag = diagnose(
+        base_terms,
+        initial_probes,
+        resolved_weights,
+        sampling=dict(sampling),
+        **base_kwargs,
+    )
+    needs_adaptive = any(
+        term.weight > 0.0
+        and (
+            term.verdict in ("unreachable", MEASUREMENT_LIMITED)
+            or term.measurement_limited
+            or (not term.endpoint_complete and term.units > MATCHED_UNITS)
+        )
+        for term in initial_diag.terms
+    )
+    adaptive_trials: list[tuple[str, str, list[float]]] = []
+    context_trials: list[tuple[str, str, list[float]]] = []
+    if needs_adaptive and knobs:
+        for i, knob in enumerate(knobs):
+            for end, endpoint in (("mid-lo", knob.lo), ("mid-hi", knob.hi)):
+                if knob.log and knob.start_value > 0.0 and endpoint > 0.0:
+                    midpoint = math.sqrt(knob.start_value * endpoint)
+                else:
+                    midpoint = 0.5 * (knob.start_value + endpoint)
+                candidate = list(base_values)
+                candidate[i] = midpoint
+                adaptive_trials.append((knob.label, end, candidate))
+        context_trials = [
+            ("context:all-low", "joint", [knob.lo for knob in knobs]),
+            ("context:all-high", "joint", [knob.hi for knob in knobs]),
+        ]
+        adaptive_points = [trial[2] for trial in adaptive_trials + context_trials]
+        sampled_before_adaptive = set(sampled_keys)
+        adaptive_added = evaluate_unique(adaptive_points)
+        sampling["adaptive_candidates"] = adaptive_added
+        sampling["total_candidates"] = int(sampling["total_candidates"]) + adaptive_added
+        sampling["adaptive"] = bool(adaptive_added)
+        new_keys = sampled_keys - sampled_before_adaptive
+        context_keys = set()
+        sampling["contexts"] = []
+        for trial in context_trials:
+            point_key = key(trial[2])
+            if point_key in new_keys and point_key not in context_keys:
+                sampling["contexts"].append(trial[0])
+                context_keys.add(point_key)
+
+    probes = initial_probes + trial_probes(adaptive_trials)
+    context_probes = [
+        (label, end, cached(values), "context", "joint") for label, end, values in context_trials
     ]
     diag = diagnose(
         base_terms,
         probes,
-        evaluator.loss.weights,
-        percussive=bool(getattr(args, "percussive", False)),
-        axes=probe_axes(evaluator.oracle, getattr(args, "pattern", "")),
-        unmeasurable=unmeasurable_terms(args),
+        resolved_weights,
+        context_probes=context_probes,
+        sampling=sampling,
+        **base_kwargs,
     )
     print_report(diag, out_path=out_path)
     return diag

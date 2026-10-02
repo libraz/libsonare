@@ -260,6 +260,7 @@ def resolve_probe(args) -> None:
     for n in pattern.analysis_notes:
         velocities.setdefault(n.note, set()).add(n.velocity)
     args.has_velocity_spread = any(len(v) >= 2 for v in velocities.values())
+    args.has_level_contrasts = len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2
     # Whether any note is held long enough for the aftersound band to have
     # frames in it. Same treatment for the fourth time, and this one is the
     # quietest of the four: `tail` reads a band that opens at 2.0 s, the default
@@ -286,6 +287,11 @@ def resolve_probe(args) -> None:
             f"channel 1 and would sound a pitch rather than the kit"
         )
     check_holdout_oracle(args)
+    if getattr(args, "w_level", None) and not args.has_level_contrasts:
+        raise ValueError(
+            "--w-level needs at least two note/velocity conditions for a level contrast; "
+            "removing common gain makes a single condition score zero at any level."
+        )
     # The dynamics term is fitted per pitch across velocity, so a probe that
     # sounds every note once has nothing for it to fit. Refused rather than
     # scored, because its unmeasurable value is 0.0 and 0.0 is also its best

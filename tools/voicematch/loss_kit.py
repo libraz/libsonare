@@ -173,7 +173,11 @@ def _kit_scored(
 
 
 def _kit_terms(
-    model_rows: list[dict], oracle_rows_: list[dict], groups: dict[str, list[int]] | None
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    groups: dict[str, list[int]] | None,
+    *,
+    counts: dict[str, float] | None = None,
 ) -> tuple[float, int]:
     """How far the model's kit-internal relations sit from the reference's.
 
@@ -188,9 +192,14 @@ def _kit_terms(
     """
     total = 0.0
     scored = 0
+    capped = 0
     for _family, _name, _v, model_c, oracle_c in _kit_scored(model_rows, oracle_rows_, groups):
-        total += sum(min(abs(a - b), KIT_DOUBLING_CAP) for a, b in zip(model_c, oracle_c))
+        deltas = [abs(a - b) for a, b in zip(model_c, oracle_c)]
+        total += sum(min(delta, KIT_DOUBLING_CAP) for delta in deltas)
+        capped += sum(delta >= KIT_DOUBLING_CAP for delta in deltas)
         scored += len(oracle_c)
+    if counts is not None:
+        counts["kit_capped"] = float(capped)
     return (total / scored, scored) if scored else (0.0, 0)
 
 

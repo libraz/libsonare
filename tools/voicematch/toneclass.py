@@ -357,6 +357,13 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
     # not forced toward noise.
     "density": 1.0,
     "prompt": 1.0,
+    # Absolute onset/body/late band power on one common hit ruler. This catches
+    # a missing stick or shell component even when the integrated profile is
+    # close, and remains gain-invariant by construction.
+    "evolve": 1.0,
+    # Short-window 1--8 kHz flatness: a sparse cup edge and a diffuse snare
+    # can share the coarse profile while differing in temporal texture.
+    "diffuse": 1.0,
     # Weighted as heavily as the whole band profile it is drawn from, because
     # it is one region against that profile's twenty-five bands and the kick is
     # the loudest thing in the kit. See `loss._perc_lf_terms`.

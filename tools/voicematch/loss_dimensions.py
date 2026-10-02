@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from statistics import median as median_offset
 
 import numpy as np
 from metrics import (
@@ -54,6 +55,8 @@ LOSS_TERMS = (
     "kit",
     "density",
     "prompt",
+    "evolve",
+    "diffuse",
 )
 
 # Per-note caps, in each term's own units. A reference row can be measuring
@@ -143,6 +146,11 @@ PITCHED_TERMS = (
 #: `density` counts the resonances in the aftersound and `prompt` measures how
 #: each band's share changes from the strike to the late window.  Both are
 #: reference-gated so a model cannot make a missing recording cell disappear.
+#: `evolve` keeps the absolute band power on one common hit-power ruler across
+#: onset, body and late windows. `diffuse` compares the three short-window
+#: flatness readings, which catches a sparse cup response with a familiar
+#: coarse spectrum. Each keeps the larger of the cell mean and the worst-quarter
+#: mean over finite reference cells, with explicit cap/absence counts.
 PERCUSSION_TERMS = (
     "band",
     "bdecay",
@@ -156,6 +164,8 @@ PERCUSSION_TERMS = (
     "kit",
     "density",
     "prompt",
+    "evolve",
+    "diffuse",
 ) + _SHARED_TERMS
 
 
@@ -207,25 +217,31 @@ def _level_terms(
     """
     offsets: list[float] = []
     level_pairs: list[tuple[float | None, float]] = []
+    level_conditions: set[tuple] = set()
     crests: list[float] = []
+    crest_capped = 0
     # An oracle note the model lacks stays in the denominator as a capped residual (`_absent_or`).
-    for m, o in zip(model_rows, oracle_rows_):
+    for index, (m, o) in enumerate(zip(model_rows, oracle_rows_)):
         mo, oo = _finite_or_none(m.get("held_rms_dbfs")), _finite_or_none(o.get("held_rms_dbfs"))
         if oo is not None:
             level_pairs.append((mo, oo))
+            condition = (
+                (o["note"], o["velocity"]) if "note" in o and "velocity" in o else ("row", index)
+            )
+            level_conditions.add(condition)
             if mo is not None:
                 offsets.append(mo - oo)
         mc, oc = _finite_or_none(m.get("held_crest_db")), _finite_or_none(o.get("held_crest_db"))
         if oc is not None:
-            crests.append(
-                LEVEL_DELTA_CAP_DB if mc is None else min(abs(mc - oc), LEVEL_DELTA_CAP_DB)
-            )
+            delta = LEVEL_DELTA_CAP_DB if mc is None else abs(mc - oc)
+            crest_capped += int(delta >= LEVEL_DELTA_CAP_DB)
+            crests.append(min(delta, LEVEL_DELTA_CAP_DB))
     expected = len(level_pairs)
     measured = sum(model is not None for model, _ in level_pairs)
     if not offsets:
         median = 0.0
     else:
-        median = sorted(offsets)[len(offsets) // 2]
+        median = median_offset(offsets)
     # Oracle cells stay in the denominator, so going unmeasurable cannot make a render quieter.
     level_residuals = [
         LEVEL_DELTA_CAP_DB
@@ -235,8 +251,16 @@ def _level_terms(
     ]
     balance = sum(level_residuals) / expected if expected else 0.0
     if counts is not None:
+        counts["level_capped"] = float(
+            sum(
+                model is None or abs((model - oracle) - median) >= LEVEL_DELTA_CAP_DB
+                for model, oracle in level_pairs
+            )
+        )
+        counts["crest_capped"] = float(crest_capped)
         counts["level_notes"] = float(measured)
         counts["level_expected"] = float(expected)
+        counts["level_contrasts"] = float(len(level_conditions))
     if not level_pairs:
         balance = 0.0
     crest = sum(crests) / len(crests) if crests else 0.0
@@ -302,6 +326,8 @@ def _dyn_terms(
     oracle_rows_: list[dict],
     read=_brightness,
     cap_db: float = DYN_DELTA_CAP_DB,
+    *,
+    counts: dict[str, float] | None = None,
 ) -> tuple[float, int]:
     """How differently brightness tracks velocity, and how many notes said so.
 
@@ -328,6 +354,7 @@ def _dyn_terms(
             groups.setdefault(r["note"], []).append(i)
     total = 0.0
     used = 0
+    capped = 0
     for idx in groups.values():
         pairs = []
         for i in idx:
@@ -342,8 +369,12 @@ def _dyn_terms(
         v = np.asarray(vel, dtype=np.float64)
         sm = float(np.polyfit(v, [p[1] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
         so = float(np.polyfit(v, [p[2] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
-        total += min(abs(sm - so), cap_db)
+        delta = abs(sm - so)
+        total += min(delta, cap_db)
+        capped += int(delta >= cap_db)
         used += 1
+    if counts is not None:
+        counts["capped"] = float(capped)
     return (total / used if used else 0.0), used
 
 
@@ -546,7 +577,9 @@ def _mod_terms(
 STIFF_DELTA_CENTS_CAP = 50.0
 
 
-def _stiff_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, int]:
+def _stiff_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], *, counts: dict[str, float] | None = None
+) -> tuple[float, int]:
     """How differently the two strings stretch their partials, and on how many notes.
 
     This exists because making the ladder correct removed the only thing that
@@ -565,6 +598,7 @@ def _stiff_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
     """
     total = 0.0
     used = 0
+    capped = 0
     for m, o in zip(model_rows, oracle_rows_):
         mb, ob = m.get("inharmonicity_b"), o.get("inharmonicity_b")
         if mb is None or ob is None:
@@ -575,8 +609,11 @@ def _stiff_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
         ):
             continue
         delta = abs(stretch_cents(mb) - stretch_cents(ob))
+        capped += int(delta >= STIFF_DELTA_CENTS_CAP)
         total += min(delta, STIFF_DELTA_CENTS_CAP)
         used += 1
+    if counts is not None:
+        counts["stiff_capped"] = float(capped)
     return (total / used if used else 0.0), used
 
 
@@ -801,7 +838,12 @@ def _lf_balance_db(bands_db, valid) -> float | None:
     return sum(low) / len(low) - sum(rest) / len(rest)
 
 
-def _perc_lf_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, int]:
+def _perc_lf_terms(
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    *,
+    counts: dict[str, float] | None = None,
+) -> tuple[float, int]:
     """How far the model's low end sits from the reference's, as one region.
 
     Bands the reference floored are left out for the reason they are left out of
@@ -810,6 +852,7 @@ def _perc_lf_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[fl
     """
     total = 0.0
     scored = 0
+    capped = 0
     for m, o in zip(model_rows, oracle_rows_):
         mb, ob = m.get("bands_db") or [], o.get("bands_db") or []
         if len(mb) != len(THIRD_OCTAVE_CENTERS) or len(ob) != len(THIRD_OCTAVE_CENTERS):
@@ -818,6 +861,10 @@ def _perc_lf_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[fl
         m_lf, o_lf = _lf_balance_db(mb, valid), _lf_balance_db(ob, valid)
         if m_lf is None or o_lf is None:
             continue
-        total += min(abs(m_lf - o_lf), LF_DELTA_CAP_DB)
+        delta = abs(m_lf - o_lf)
+        total += min(delta, LF_DELTA_CAP_DB)
+        capped += int(delta >= LF_DELTA_CAP_DB)
         scored += 1
+    if counts is not None:
+        counts["lf_capped"] = float(capped)
     return (total / scored, scored) if scored else (0.0, 0)

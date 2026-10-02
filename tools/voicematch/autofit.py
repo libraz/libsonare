@@ -296,6 +296,7 @@ from corpus import (
 )
 from diagnose import run_diagnosis
 from eval_cache import digest, file_digest, open_cache, source_digest
+from fit_quality import quality_report
 from knobs import (
     at_bound,
     auto_spec,
@@ -1386,7 +1387,9 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
         )
         if weights.scales is None and terms is not None:
             weights.calibrate(terms)
-        return weights.combine(terms)
+        result = weights.combine(terms)
+        score.last_quality = quality_report(terms, weights, loss=result)
+        return result
 
     return score, axis, held
 
@@ -1555,8 +1558,16 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
         return None
     score, axis, held = resolved
     at_start = score(start_values)  # calibrates, so it scores exactly 1.0
+    start_quality = score.last_quality
     at_best = score(best_values)
-    return {"axis": axis, "held_out": held, "start": at_start, "best": at_best}
+    return {
+        "axis": axis,
+        "held_out": held,
+        "start": at_start,
+        "best": at_best,
+        "start_quality": start_quality,
+        "best_quality": score.last_quality,
+    }
 
 
 # --------------------------------------------------------------------------- #

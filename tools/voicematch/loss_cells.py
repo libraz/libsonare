@@ -132,6 +132,7 @@ def resolved_weights(report: dict, rows: list[dict], pattern) -> dict[str, float
         has_analysis_notes=bool(pattern.analysis_notes),
         has_kit_groups=False,
         has_velocity_spread=any(len(v) >= 2 for v in velocities.values()),
+        has_level_contrasts=len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2,
         has_tail_window=any(min(n.dur, SKELETON_MAX_S) >= tail_min for n in pattern.analysis_notes),
         **{f"w_{term}": None for term in LOSS_TERMS},
     )

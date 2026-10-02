@@ -28,7 +28,7 @@ from metrics_signal import (
     channel_width,
     sound_onset_s,
 )
-from metrics_texture import analyze_texture
+from metrics_texture import analyze_evolution, analyze_texture
 from smf import Note
 
 # Longest stretch of one hit that is analyzed.
@@ -432,6 +432,20 @@ class HitMetrics:
     #: Change in each octave band's share from the strike to the aftersound.
     prompt_late_db: list[float] = field(default_factory=list)
     prompt_late_valid: list[bool] = field(default_factory=list)
+    #: Three onset-aligned windows by eight spectral bands, all relative to one
+    #: common 0--240 ms hit power. `evolution_valid` is the reference's
+    #: -60 dB eligibility mask; `evolution_measured` records a finite,
+    #: geometry-valid candidate value even below that reference floor.
+    #: Nested arrays preserve the time/band axes in JSON and let the loss count
+    #: each reference cell explicitly.
+    evolution_db: list[list[float]] = field(default_factory=list)
+    evolution_valid: list[list[bool]] = field(default_factory=list)
+    evolution_measured: list[list[bool]] = field(default_factory=list)
+    #: Spectral flatness in the same three onset windows, over 1--8 kHz. The
+    #: measured mask has the same finite-vs-reference-floor distinction.
+    window_flatness_db: list[float] = field(default_factory=list)
+    window_flatness_valid: list[bool] = field(default_factory=list)
+    window_flatness_measured: list[bool] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -567,6 +581,7 @@ def analyze_hit(
     strike = tilt_strike_db(seg, sr, max_band_hz)
     drop = pitch_drop(seg, sr, tone["tone_f0_hz"])
     texture = analyze_texture(seg, sr, max_band_hz=max_band_hz)
+    evolution = analyze_evolution(seg, sr, max_band_hz=max_band_hz)
 
     return HitMetrics(
         stereo_width=channel_width(stereo, on, min(end, len(mono))),
@@ -577,6 +592,7 @@ def analyze_hit(
         **tone,
         **drop,
         **texture,
+        **evolution,
         band_decay_db_s=[
             None if v is None or i >= keep_octaves else round(v, 2)
             for i, v in enumerate(_band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO))
@@ -619,6 +635,34 @@ def compare_hit(model: HitMetrics, oracle: HitMetrics) -> dict:
                 out.append(round(float(values_m[i]) - float(values_o[i]), 3))
         return out
 
+    def evolution_delta(values_m, valid_m, measured_m, values_o, valid_o):
+        """Difference cells on the reference domain with a finite candidate."""
+        rows = []
+        n_rows = max(len(values_m), len(values_o))
+        for row_index in range(n_rows):
+            model_row = values_m[row_index] if row_index < len(values_m) else []
+            oracle_row = values_o[row_index] if row_index < len(values_o) else []
+            model_ok_row = valid_m[row_index] if row_index < len(valid_m) else []
+            model_measured_row = measured_m[row_index] if row_index < len(measured_m) else []
+            oracle_ok_row = valid_o[row_index] if row_index < len(valid_o) else []
+            cells = []
+            for i in range(max(len(model_row), len(oracle_row))):
+                model_usable = (i < len(model_ok_row) and model_ok_row[i]) or (
+                    i < len(model_measured_row) and model_measured_row[i]
+                )
+                if (
+                    i >= len(model_row)
+                    or i >= len(oracle_row)
+                    or i >= len(oracle_ok_row)
+                    or not oracle_ok_row[i]
+                    or not model_usable
+                ):
+                    cells.append(None)
+                else:
+                    cells.append(round(float(model_row[i]) - float(oracle_row[i]), 3))
+            rows.append(cells)
+        return rows
+
     return {
         "note": model.note,
         "velocity": model.velocity,
@@ -644,6 +688,26 @@ def compare_hit(model: HitMetrics, oracle: HitMetrics) -> dict:
             oracle.prompt_late_db,
             oracle.prompt_late_valid,
         ),
+        "evolution_delta_db": evolution_delta(
+            model.evolution_db,
+            model.evolution_valid,
+            model.evolution_measured,
+            oracle.evolution_db,
+            oracle.evolution_valid,
+        ),
+        "window_flatness_delta_db": [
+            round(float(model.window_flatness_db[i]) - float(oracle.window_flatness_db[i]), 3)
+            if i < len(model.window_flatness_db)
+            and i < len(oracle.window_flatness_db)
+            and i < len(oracle.window_flatness_valid)
+            and oracle.window_flatness_valid[i]
+            and (
+                (i < len(model.window_flatness_valid) and model.window_flatness_valid[i])
+                or (i < len(model.window_flatness_measured) and model.window_flatness_measured[i])
+            )
+            else None
+            for i in range(max(len(model.window_flatness_db), len(oracle.window_flatness_db)))
+        ],
     }
 
 
