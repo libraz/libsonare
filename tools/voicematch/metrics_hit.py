@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 import numpy as np
 from metrics_bands import (
@@ -28,6 +28,7 @@ from metrics_signal import (
     channel_width,
     sound_onset_s,
 )
+from metrics_texture import analyze_texture
 from smf import Note
 
 # Longest stretch of one hit that is analyzed.
@@ -423,6 +424,14 @@ class HitMetrics:
     tone_lowest_hz: float | None
     pitch_drop_ratio: float | None
     pitch_drop_ms: float | None
+    #: Resonance count per octave in the aftersound.  The validity mask is
+    #: separate because a short recording or missing noise floor is not zero
+    #: density.
+    modal_density: list[float] = field(default_factory=list)
+    modal_density_valid: list[bool] = field(default_factory=list)
+    #: Change in each octave band's share from the strike to the aftersound.
+    prompt_late_db: list[float] = field(default_factory=list)
+    prompt_late_valid: list[bool] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -557,6 +566,7 @@ def analyze_hit(
     rise = tilt_rise_db(seg, sr, max_band_hz)
     strike = tilt_strike_db(seg, sr, max_band_hz)
     drop = pitch_drop(seg, sr, tone["tone_f0_hz"])
+    texture = analyze_texture(seg, sr, max_band_hz=max_band_hz)
 
     return HitMetrics(
         stereo_width=channel_width(stereo, on, min(end, len(mono))),
@@ -566,6 +576,7 @@ def analyze_hit(
         peak_band_hz=peak_band,
         **tone,
         **drop,
+        **texture,
         band_decay_db_s=[
             None if v is None or i >= keep_octaves else round(v, 2)
             for i, v in enumerate(_band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO))
@@ -590,6 +601,24 @@ def compare_hit(model: HitMetrics, oracle: HitMetrics) -> dict:
         round(m - o, 2) if m is not None and o is not None else None
         for m, o in zip(model.band_decay_db_s, oracle.band_decay_db_s)
     ]
+
+    def texture_delta(values_m, valid_m, values_o, valid_o):
+        """Difference only where both texture cells were actually measured."""
+        out = []
+        for i in range(max(len(values_m), len(values_o))):
+            if (
+                i >= len(values_m)
+                or i >= len(values_o)
+                or i >= len(valid_m)
+                or i >= len(valid_o)
+                or not valid_m[i]
+                or not valid_o[i]
+            ):
+                out.append(None)
+            else:
+                out.append(round(float(values_m[i]) - float(values_o[i]), 3))
+        return out
+
     return {
         "note": model.note,
         "velocity": model.velocity,
@@ -603,6 +632,18 @@ def compare_hit(model: HitMetrics, oracle: HitMetrics) -> dict:
         "level_delta_db": round(model.level_db - oracle.level_db, 2),
         "flatness_delta_db": _delta(model.flatness_db, oracle.flatness_db, 2),
         "stereo_delta": _delta(model.stereo_width, oracle.stereo_width, 3),
+        "modal_density_delta": texture_delta(
+            model.modal_density,
+            model.modal_density_valid,
+            oracle.modal_density,
+            oracle.modal_density_valid,
+        ),
+        "prompt_late_delta_db": texture_delta(
+            model.prompt_late_db,
+            model.prompt_late_valid,
+            oracle.prompt_late_db,
+            oracle.prompt_late_valid,
+        ),
     }
 
 

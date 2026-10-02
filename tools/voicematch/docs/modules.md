@@ -8,6 +8,7 @@
 - `render_model.py` / `render_oracle.py` — the model renderer, and the oracle (fluidsynth, an external WAV with score alignment, or a plugin)
 - `au_oracle.py` — an AudioUnit instrument as the oracle, hosted by aubounce, with the guards a disk-streaming sampler needs and an on-disk render cache
 - `metrics.py` — per-note analysis and deltas
+- `metrics_texture.py` — a percussion hit's modal density and strike-to-late band colour, each with a validity mask, on the struck-piece estimators the shape fitter uses
 - `room.py` — ambience: measure a reference's space, put the model in it, translate it back into libsonare's sends
 - `rig.py` — whether a reference was recorded through an amplifier or a rotary: a cabinet's skirt, a rotor's anti-phase modulation, and the vacuous nulls of both. Shows a rig present and never absent, so it decides `baked` and leaves `none` to an A/B
 - `smf.py` — minimal type-0 SMF writer (single source of truth for both sides)
@@ -37,12 +38,15 @@
 - `corpus.py` — the captured single-note grid as a probe timeline and as the oracle for one: the bridge between the capture `profile.py` reports against and the search `autofit.py` runs
 - `knobs.py` — what a fit may move and over what range: the spec forms, the clamp-derived search ranges, `--spec auto`, and the one rule for what counts as sitting on a bound
 - `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, the level terms, and the fixed-unit normalisation
+- `loss_aggregate.py` — `robust_score_terms`: the grid's term values raised to the mean of their worst-scoring fraction of notes (`--loss-tail-fraction`), with each term's mean, upper tail and worst note/velocity recorded, from the same measured rows
+- `fit_quality.py` — the absolute report beside the relative loss: each term's residual on the fixed `TERM_UNITS` ruler, its measurement coverage against the anchored start, whether it met its target, and the dropout and regression checks the write-back refuses on
 - `optimizers.py` — coordinate descent with a golden-section line search, and CMA-ES with IPOP restarts
 - `eval_cache.py` — raw loss terms kept across runs, keyed on the library's bytes, the harness source, the probe and the oracle, so a re-run pays for the setup and not the renders
 - `staging.py` — cutting the problem down: knob screening and the excitation/decay/all staged fit
 - `diagnose.py` — the same probe read per term instead of per loss: what the residual is made of, and which of it no knob reaches
 - `loss_sensitivity.py` — `make voicematch-loss-sensitivity`: the loss read against a change of known size instead of against a model. Perturbs a captured reference in the audio domain and scores the result on the same capture's own timbre spread, so the answer arrives as a multiple of the distance two of its references already sit apart. Renders nothing and builds nothing. See [loss.md](loss.md#whether-a-term-is-weighted-is-not-whether-it-is-measured)
 - `loss_cells.py` — `make voicematch-loss-cells`: what happened to every cell the loss aggregates, over the rendered probes in `out/`. A summed term's raw value cannot say whether its cells were comparisons, caps standing in for a model that produced nothing, or skips where the reference offered nothing — and the last two read as the term's worst and its best respectively, so neither shows up in a results table. Renders nothing and builds nothing. See [loss.md](loss.md#a-term-that-stops-being-measurable-is-charged-not-credited)
+- `fitting_recovery.py` / `family_recovery.py` — recovery benchmarks against a known synthetic oracle: a two-parameter modal drum, and one deterministic piece per physical-source family, each fitted with the production metrics and loss and checked on withheld conditions and negative controls. They need no build, plugin or capture
 - `dataset.py` — the corpus of (knob vector → measurement) pairs an amortized inverse would train on
 - `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table
 - `report.py` — the end-of-run report and the diff it applies
@@ -69,7 +73,7 @@ The division of labour, until that decision is made:
 python -m pytest tools/voicematch/
 ```
 
-One file per module — or, where a module is covered from several angles, one file per angle — and none of them renders anything.
+One file per module — or, where a module is covered from several angles, one file per angle — and none of them renders through the library; the recovery tests synthesise their own audio.
 
 - `test_toneclass.py` covers everything that is not a stiff string — the measured partial series, the movement set, audibility weighting, the drum pitch and its overshoot, the band-validity rule, the capture's measured bandwidth and the low-end balance — all on synthesised signals, since the captured corpora cannot be committed and a test that needed one would be a test that never runs.
 - `test_autofit_*.py` cover the fitter one angle at a time: `search` the range rules, the stage classification, a spec's weights and termination; `loss` the normalisation and the ceiling a residual is scored under; `drums` the kit terms and their write-back; `corpus` the captured probe, the room it carries and the per-note window; `tree` the write-back path translation, the build directory and startup; `metrics` what is read off a rendered note; `run` the guards that prove a probe reached the code and the tree state it compiled. `autofit_test_fixtures.py` holds only the builders more than one of them reaches.
@@ -81,4 +85,8 @@ One file per module — or, where a module is covered from several angles, one f
 - `test_signoff.py` covers the two ways a claim expires and the refusals that keep an accepted term honest — an acceptance with no reason, and one naming a term the diagnosis never reported. It also holds the shipped `signoff.json` to real voices and to generations the registry has.
 - `test_check_specs.py` covers both spec shapes and, above all, that the guard names a knob nothing has — a checker that passes everything is the failure mode here.
 - `test_rig.py` covers the direction of each rig signature, and above all that a question which cannot be put reports as unanswerable rather than as a "no" — a vacuous negative is what would put `none` into a capture that never earned it.
+- `test_loss_aggregate.py` covers the upper-tail objective: a bad register or kit piece stays visible, the level tail uses the grid's gain offset, and one note unscorable alone does not make the grid unscorable. `test_reference_cells.py` covers terms priced on the reference's cells, and that a missing level is charged once.
+- `test_fit_quality.py` covers the absolute report: an unmeasured term is unknown rather than a match, and coverage is read against the anchored start.
+- `test_fitting_recovery.py` and `test_family_recovery.py` run the recovery benchmarks, including that a control with an unmeasured term cannot pass.
+- `test_fit_profiles.py` covers the excitation axes `fit_profile` adds to the topology weights; `test_metrics_texture.py` the texture measurements and their validity masks; `test_shape_validation.py` the shape fitter's fit/selection/final partitions; `test_catalogue.py` the `SONARE_TUNABLE` declaration scan.
 - `test_shape.py`, `test_capture.py`, `test_dataset.py`, `test_room.py`, `test_smf.py`, `test_wavio.py` cover their own modules.

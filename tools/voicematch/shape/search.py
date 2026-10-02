@@ -51,6 +51,53 @@ KEEP_DB = 0.02
 PRUNE_LADDER = (KEEP_DB, 0.01, 0.005, 0.0, None)
 
 
+@dataclass(frozen=True)
+class AxisPartitions:
+    """Disjoint fit, selection and final sets on one measurement axis.
+
+    The final set is intentionally not manufactured when the capture has fewer
+    than three distinct values.  An empty set is useful to callers because it
+    makes the absence explicit; ``available`` and ``reason`` keep it from being
+    mistaken for a clean final validation.
+    """
+
+    fit: tuple
+    selection: tuple
+    final: tuple
+    axis: str = "axis"
+    available: bool = True
+    reason: str = ""
+
+    @property
+    def independent(self) -> bool:
+        """Whether all three disjoint partitions contain data."""
+        return self.available and bool(self.fit) and bool(self.selection) and bool(self.final)
+
+    def __iter__(self):
+        """Keep tuple-unpacking convenient for small, non-reporting callers."""
+        return iter((self.fit, self.selection, self.final))
+
+
+def split_axis(values, *, axis: str = "axis") -> AxisPartitions:
+    """Split distinct axis values into disjoint, interleaved partitions.
+
+    Interleaving keeps each populated group spread over the axis.  A value is
+    assigned once only; in particular, a two-layer capture never reuses a layer
+    as a pretend final validation set.  Fewer than three values are reported as
+    unavailable for an independent three-way split while the available groups
+    remain useful to a caller that can proceed without a final set.
+    """
+    values = tuple(sorted(set(values)))
+    groups = tuple(tuple(values[i::3]) for i in range(3))
+    available = len(values) >= 3
+    reason = (
+        ""
+        if available
+        else f"{axis} final validation unavailable: need at least 3 distinct samples (got {len(values)})"
+    )
+    return AxisPartitions(*groups, axis=axis, available=available, reason=reason)
+
+
 @dataclass
 class Descent:
     """Parallel coordinate descent against a `ShapeLoss`."""
@@ -239,6 +286,92 @@ def split_notes(notes, stride: int = 2):
     """
     ns = sorted(notes)
     return tuple(ns[::stride]), tuple(n for i, n in enumerate(ns) if i % stride)
+
+
+def split_notes_three_way(notes) -> AxisPartitions:
+    """Return the fit, selection and final note partitions."""
+    return split_axis(notes, axis="note")
+
+
+def split_velocities_three_way(velocities) -> AxisPartitions:
+    """Return the fit, selection and final velocity partitions."""
+    return split_axis(velocities, axis="velocity")
+
+
+def _terms_summary(score):
+    """Convert a score object into stable JSON/report data."""
+    if score is None:
+        return None
+    return {
+        "total": float(score.total),
+        "parts": {k: float(v) for k, v in score.parts.items()},
+        "unscored": list(score.unscored),
+        "coverage": {
+            k: {"observed": int(v[0]), "expected": int(v[1])} for k, v in score.coverage.items()
+        },
+        "gain_db": float(score.gain_db),
+    }
+
+
+def validate_final(
+    loss,
+    base: dict,
+    selected: dict,
+    final_notes,
+    *,
+    keep_db: float = KEEP_DB,
+    unavailable_reason: str = "",
+):
+    """Compare shipped and selected values exactly once on the final set.
+
+    ``selected`` is the pruned candidate.  The returned mapping is either that
+    candidate or an empty move set when the candidate regresses beyond the
+    allowed tolerance.  The final set is deliberately a parameter to this
+    function rather than a field on ``prune``; search and pruning therefore
+    cannot accidentally score it.
+    """
+    final_notes = tuple(final_notes)
+    if loss is None or not final_notes:
+        reason = unavailable_reason
+        if not reason and loss is not None:
+            reason = getattr(loss, "final_unavailable_reason", "")
+        if not reason:
+            reason = "final validation unavailable: no independent samples"
+        return dict(selected), {
+            "available": False,
+            "reason": reason,
+            "keep_db": float(keep_db),
+            "shipped": None,
+            "selected": None,
+            "delta_db": None,
+            "accepted": None,
+            "fallback": False,
+        }
+
+    shipped = loss.score("", notes=final_notes)
+    candidate_text = write_overrides({**base, **selected}, base)
+    candidate = loss.score(candidate_text, notes=final_notes)
+    delta = float(candidate.total - shipped.total)
+    accepted = delta <= keep_db
+    if accepted:
+        written = dict(selected)
+        reason = "selected candidate is within KEEP_DB of shipped on final test"
+    else:
+        written = {}
+        reason = (
+            f"selected candidate regressed {delta:.3f} dB on final test, exceeding "
+            f"KEEP_DB={keep_db:.3f}; shipped baseline restored"
+        )
+    return written, {
+        "available": True,
+        "reason": reason,
+        "keep_db": float(keep_db),
+        "shipped": _terms_summary(shipped),
+        "selected": _terms_summary(candidate),
+        "delta_db": delta,
+        "accepted": accepted,
+        "fallback": not accepted,
+    }
 
 
 def summarise(contributions, base, moves, limit: int = 0):

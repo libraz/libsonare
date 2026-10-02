@@ -21,6 +21,7 @@ import argparse
 import itertools
 import math
 import sys
+from collections.abc import Mapping
 from dataclasses import replace
 
 from knobs import Knob
@@ -163,6 +164,147 @@ def report_effect_distribution(effects: list[tuple[str, float]], threshold: floa
         )
 
 
+def _cached_terms(evaluator, values: list[float]):
+    """Read raw terms for a point from the evaluator's cache, or None.
+
+    Scalar-only evaluators carry no ``key``/``cache`` and fall back to the
+    scalar effect.
+    """
+    key_fn = getattr(evaluator, "key", None)
+    cache = getattr(evaluator, "cache", None)
+    if not callable(key_fn) or not isinstance(cache, Mapping):
+        return None
+    try:
+        key = key_fn(values)
+    except (TypeError, ValueError):
+        return None
+    terms = cache.get(key)
+    return terms if isinstance(terms, Mapping) else None
+
+
+def _term_effect(evaluator, baseline_terms, candidate_terms) -> float | None:
+    """Measure a candidate's movement without allowing terms to cancel."""
+    if not isinstance(baseline_terms, Mapping) or not isinstance(candidate_terms, Mapping):
+        return None
+    loss = getattr(evaluator, "loss", None)
+    contributions = getattr(loss, "term_contributions", None)
+    if callable(contributions):
+        fixed_units = bool(getattr(loss, "scales", None))
+        try:
+            base = contributions(baseline_terms, fixed_units=fixed_units)
+            candidate = contributions(candidate_terms, fixed_units=fixed_units)
+        except (TypeError, ValueError):
+            base = candidate = None
+        if isinstance(base, Mapping) and isinstance(candidate, Mapping):
+            names = set(base) | set(candidate)
+            total = 0.0
+            for name in names:
+                try:
+                    left = float(base.get(name, 0.0))
+                    right = float(candidate.get(name, 0.0))
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(left) and math.isfinite(right):
+                    total += abs(right - left)
+            return total if math.isfinite(total) else 0.0
+
+    # Without LossWeights, sum scalar term deltas and ignore census metadata.
+    names = {
+        name
+        for name in set(baseline_terms) | set(candidate_terms)
+        if not any(
+            name.endswith(suffix)
+            for suffix in (
+                "_cells",
+                "_capped",
+                "_absent",
+                "_bins",
+                "_groups",
+                "_hits",
+                "_notes",
+                "_pairs",
+                "_past_db",
+            )
+        )
+    }
+    total = 0.0
+    for name in names:
+        try:
+            left = float(baseline_terms.get(name, 0.0))
+            right = float(candidate_terms.get(name, 0.0))
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(left) and math.isfinite(right):
+            total += abs(right - left)
+    return total if math.isfinite(total) else 0.0
+
+
+def _point_effect(
+    evaluator,
+    baseline_score: float,
+    candidate_score: float,
+    baseline_terms,
+    candidate_terms,
+) -> float:
+    term_effect = _term_effect(evaluator, baseline_terms, candidate_terms)
+    if term_effect is not None:
+        # Divide by the objective's reference so the threshold matches the scalar evaluator.
+        reference = getattr(getattr(evaluator, "loss", None), "reference", 1.0)
+        try:
+            reference = float(reference)
+        except (TypeError, ValueError):
+            reference = 1.0
+        if not math.isfinite(reference) or reference <= 0.0:
+            reference = 1.0
+        return term_effect / reference
+    try:
+        candidate_score = float(candidate_score)
+        baseline_score = float(baseline_score)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(candidate_score) or not math.isfinite(baseline_score):
+        return 0.0
+    return abs(candidate_score - baseline_score)
+
+
+def _finite_score(value) -> bool:
+    """Whether an evaluator returned a usable scalar score."""
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _best_finite_endpoint(endpoint_effects: tuple[float | None, ...]) -> int | None:
+    """Return the strongest measured endpoint, ignoring invalid probes."""
+    candidates = [
+        (index, effect)
+        for index, effect in enumerate(endpoint_effects)
+        if effect is not None and math.isfinite(effect)
+    ]
+    return max(candidates, key=lambda item: item[1])[0] if candidates else None
+
+
+def _available_budget(evaluator, args, fallback: int = 0) -> int:
+    """Estimate remaining distinct evaluations without trusting a fake.
+
+    ``Evaluator.trajectory`` is the authoritative count when it exists.  Tiny
+    test doubles and third-party evaluators do not all expose it, so callers
+    pass a conservative lower bound for work already reserved in this call.
+    Taking the larger value keeps a cache hit from accidentally making later
+    conditional probes spend beyond ``max_evals``.
+    """
+    trajectory = getattr(evaluator, "trajectory", None)
+    spent = len(trajectory) if trajectory is not None else fallback
+    return max(0, int(args.max_evals) - max(spent, fallback))
+
+
+def _trajectory_count(evaluator) -> int:
+    """Return the evaluations already recorded by an evaluator, if any."""
+    trajectory = getattr(evaluator, "trajectory", None)
+    return len(trajectory) if trajectory is not None else 0
+
+
 def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
     """Keep only the knobs that measurably move the loss; report the rest.
 
@@ -185,6 +327,17 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
     everything.
     """
     cost = 2 * len(knobs) + 1
+    spent_before = _trajectory_count(evaluator)
+    remaining = max(0, int(args.max_evals) - spent_before)
+    if remaining < cost:
+        # A partial screen would make an unprobed knob look dead, so retain the full set.
+        print(
+            f"screening: {cost} renders required but only {remaining} of "
+            f"{args.max_evals} evaluations remain; retaining all {len(knobs)} "
+            "knobs without probes",
+            file=sys.stderr,
+        )
+        return list(range(len(knobs)))
     if cost > args.max_evals // 3:
         print(
             f"screening: {cost} of {args.max_evals} evaluations go on the probe itself. "
@@ -195,28 +348,57 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
     print(f"screening {len(knobs)} knobs ({cost} renders)...", file=sys.stderr)
     start = [k.start_value for k in knobs]
     baseline = evaluator(start)
+    baseline_terms = _cached_terms(evaluator, start)
+    if not _finite_score(baseline):
+        print(
+            "screening: baseline loss is nonfinite; retaining all "
+            f"{len(knobs)} knobs without probes",
+            file=sys.stderr,
+        )
+        return list(range(len(knobs)))
     probes: list[list[float]] = []
     for i, knob in enumerate(knobs):
         for end in (knob.lo, knob.hi):
             trial = list(start)
             trial[i] = end
             probes.append(trial)
+    previous_quiet = getattr(evaluator, "quiet", False)
     evaluator.quiet = True
-    losses = evaluator.evaluate_batch(probes)
-    evaluator.quiet = False
+    try:
+        losses = evaluator.evaluate_batch(probes)
+    finally:
+        evaluator.quiet = previous_quiet
 
     keep: list[int] = []
     dropped: list[tuple[str, float]] = []
     effects: list[tuple[str, float]] = []
+    endpoint_effects: list[tuple[float | None, float | None]] = []
+    invalid_probe_indices: set[int] = set()
     for i, knob in enumerate(knobs):
         pair = losses[2 * i : 2 * i + 2]
-        effect = (
-            max(abs(v - baseline) for v in pair if math.isfinite(v))
-            if any(math.isfinite(v) for v in pair)
-            else 0.0
-        )
+        pair_effects: list[float | None] = []
+        for offset in range(2):
+            if offset >= len(pair) or not _finite_score(pair[offset]):
+                pair_effects.append(None)
+                invalid_probe_indices.add(i)
+                continue
+            value = pair[offset]
+            candidate = list(start)
+            candidate[i] = (knob.lo, knob.hi)[offset]
+            pair_effects.append(
+                _point_effect(
+                    evaluator,
+                    baseline,
+                    value,
+                    baseline_terms,
+                    _cached_terms(evaluator, candidate),
+                )
+            )
+        finite_effects = [effect for effect in pair_effects if effect is not None]
+        effect = max(finite_effects, default=0.0)
+        endpoint_effects.append(tuple(pair_effects))
         effects.append((knob.label, effect))
-        if effect >= args.screen_threshold:
+        if i in invalid_probe_indices or effect >= args.screen_threshold:
             keep.append(i)
         else:
             dropped.append((knob.label, effect))
@@ -226,11 +408,211 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
         f"{args.screen_threshold} over their range",
         file=sys.stderr,
     )
+    if invalid_probe_indices:
+        labels = ", ".join(knobs[i].label for i in sorted(invalid_probe_indices))
+        print(
+            f"screening: retained knobs with nonfinite or missing endpoint results: {labels}",
+            file=sys.stderr,
+        )
+    if baseline_terms is not None:
+        print(
+            "screening: per-term deltas used to avoid opposing-term cancellation", file=sys.stderr
+        )
     report_effect_distribution(effects, args.screen_threshold)
     if dropped:
         print("  dropped (largest effect first):", file=sys.stderr)
         for label, effect in sorted(dropped, key=lambda kv: -kv[1]):
             print(f"    {label}  effect={effect:.5f}", file=sys.stderr)
+    dropped_indices = [i for i in range(len(knobs)) if i not in keep]
+
+    def report_conditional(message: str) -> None:
+        print(f"  conditional screening: {message}", file=sys.stderr)
+
+    # Probe dropped knobs under one activation context, all-high/all-low when all are inert.
+    if dropped_indices:
+        activation = None
+        activation_score = None
+        activation_terms = None
+        if keep:
+            active_candidates = [
+                i for i in keep if _best_finite_endpoint(endpoint_effects[i]) is not None
+            ]
+            if not active_candidates:
+                report_conditional(
+                    "no finite activation endpoint; retaining all initially dropped knobs"
+                )
+                report_conditional("nonfinite endpoint results are not evidence of inactivity")
+                keep.extend(dropped_indices)
+            else:
+                active = max(
+                    active_candidates,
+                    key=lambda i: max(
+                        effect
+                        for effect in endpoint_effects[i]
+                        if effect is not None and math.isfinite(effect)
+                    ),
+                )
+                active_knob = knobs[active]
+                # Use the endpoint whose measured effect was largest, not the farthest one.
+                endpoint = _best_finite_endpoint(endpoint_effects[active])
+                assert endpoint is not None
+                active_end = (active_knob.lo, active_knob.hi)[endpoint]
+                activation = list(start)
+                activation[active] = active_end
+                activation_score = losses[2 * active + endpoint]
+                activation_terms = _cached_terms(evaluator, activation)
+
+                conditional_points = []
+                for i in dropped_indices:
+                    for end in (knobs[i].lo, knobs[i].hi):
+                        trial = list(activation)
+                        trial[i] = end
+                        if trial != activation and trial not in conditional_points:
+                            conditional_points.append(trial)
+                required = len(conditional_points)
+                if _available_budget(evaluator, args, spent_before + cost) < required:
+                    report_conditional(
+                        f"insufficient budget for {required} probes; retaining all "
+                        f"{len(dropped_indices)} initially dropped knobs"
+                    )
+                    keep.extend(dropped_indices)
+                elif required:
+                    report_conditional(f"{required} probes under {knobs[active].label}")
+                    previous_quiet = getattr(evaluator, "quiet", False)
+                    evaluator.quiet = True
+                    try:
+                        conditional_losses = evaluator.evaluate_batch(conditional_points)
+                    finally:
+                        evaluator.quiet = previous_quiet
+                    conditional_keep = set()
+                    for point, value in zip(conditional_points, conditional_losses):
+                        i = next(
+                            index
+                            for index in dropped_indices
+                            if point[index] != activation[index]
+                            and all(
+                                point[j] == activation[j] for j in range(len(knobs)) if j != index
+                            )
+                        )
+                        if not _finite_score(value):
+                            invalid_probe_indices.add(i)
+                            conditional_keep.add(i)
+                            report_conditional(
+                                f"{knobs[i].label} returned a nonfinite result; retaining it"
+                            )
+                            continue
+                        effect = _point_effect(
+                            evaluator,
+                            activation_score,
+                            value,
+                            activation_terms,
+                            _cached_terms(evaluator, point),
+                        )
+                        effects[i] = (knobs[i].label, max(effects[i][1], effect))
+                        if effect >= args.screen_threshold:
+                            conditional_keep.add(i)
+                    keep.extend(sorted(conditional_keep))
+        else:
+            context_points = [
+                [knob.hi for knob in knobs],
+                [knob.lo for knob in knobs],
+            ]
+            if _available_budget(evaluator, args, spent_before + cost) < len(context_points):
+                report_conditional(
+                    "insufficient budget for activation contexts; retaining all "
+                    f"{len(dropped_indices)} initially dropped knobs"
+                )
+                keep.extend(dropped_indices)
+            else:
+                report_conditional("testing all-high/all-low activation contexts")
+                previous_quiet = getattr(evaluator, "quiet", False)
+                evaluator.quiet = True
+                try:
+                    context_losses = evaluator.evaluate_batch(context_points)
+                finally:
+                    evaluator.quiet = previous_quiet
+                if len(context_losses) < len(context_points) or any(
+                    not _finite_score(value) for value in context_losses
+                ):
+                    report_conditional(
+                        "nonfinite activation context; retaining all initially dropped knobs"
+                    )
+                    keep.extend(dropped_indices)
+                else:
+                    context_effects = [
+                        _point_effect(
+                            evaluator,
+                            baseline,
+                            value,
+                            baseline_terms,
+                            _cached_terms(evaluator, point),
+                        )
+                        for point, value in zip(context_points, context_losses)
+                    ]
+                    best_context = max(range(2), key=context_effects.__getitem__)
+                if (
+                    len(context_losses) >= len(context_points)
+                    and all(_finite_score(value) for value in context_losses)
+                    and context_effects[best_context] >= args.screen_threshold
+                ):
+                    activation = context_points[best_context]
+                    activation_score = context_losses[best_context]
+                    activation_terms = _cached_terms(evaluator, activation)
+                    conditional_points = []
+                    for i in dropped_indices:
+                        trial = list(activation)
+                        trial[i] = knobs[i].lo if best_context == 0 else knobs[i].hi
+                        if trial != activation and trial not in conditional_points:
+                            conditional_points.append(trial)
+                    required = len(conditional_points)
+                    if _available_budget(evaluator, args, spent_before + cost + 2) < required:
+                        report_conditional(
+                            f"activation moved, but budget cannot cover {required} "
+                            "conditional probes; retaining all initially dropped knobs"
+                        )
+                        keep.extend(dropped_indices)
+                    elif required:
+                        previous_quiet = getattr(evaluator, "quiet", False)
+                        evaluator.quiet = True
+                        try:
+                            conditional_losses = evaluator.evaluate_batch(conditional_points)
+                        finally:
+                            evaluator.quiet = previous_quiet
+                        conditional_keep = set()
+                        for i, point, value in (
+                            (
+                                next(
+                                    index
+                                    for index in dropped_indices
+                                    if point[index] != activation[index]
+                                ),
+                                point,
+                                value,
+                            )
+                            for point, value in zip(conditional_points, conditional_losses)
+                        ):
+                            if not _finite_score(value):
+                                invalid_probe_indices.add(i)
+                                conditional_keep.add(i)
+                                report_conditional(
+                                    f"{knobs[i].label} returned a nonfinite result; retaining it"
+                                )
+                                continue
+                            effect = _point_effect(
+                                evaluator,
+                                activation_score,
+                                value,
+                                activation_terms,
+                                _cached_terms(evaluator, point),
+                            )
+                            effects[i] = (knobs[i].label, max(effects[i][1], effect))
+                            if effect >= args.screen_threshold:
+                                conditional_keep.add(i)
+                        keep.extend(sorted(conditional_keep))
+                else:
+                    # No activation moved any measured term at all.
+                    pass
+
     if not keep:
         # Not the same event as "most knobs are inert", and it used to be
         # reported as one: the fallback below quietly restored the whole list,
@@ -249,6 +631,7 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
             f"the ones clamp_synth_patch accepts, and that the probe's pattern "
             f"exercises the axis they act on."
         )
+    keep = sorted(set(keep))
     return keep
 
 

@@ -24,6 +24,53 @@ screening: 39/49 knobs move the loss by at least 0.002 over their range
 
 The objective is [loss.md](loss.md); the oracle is [oracles.md](oracles.md); the probe is [probes.md](probes.md). This page is everything else.
 
+## Improvement, numerical target attainment and acceptance
+
+A normalised loss of 0.70 means the objective improved by 30% from its initial value. It does not measure 70% similarity to the oracle. Terms use the fixed `TERM_UNITS` scales; only the total is divided by the initial total.
+
+Read the final candidate's absolute residuals and measurement coverage alongside the improvement. A term that cannot be measured is unknown. A model that loses measurements the reference supplies is missing evidence, and must not receive a better score by averaging only its surviving measurements. Aggregate term target attainment counts terms within their configured residual unit; it is neither a per-cell agreement rate nor a listening score.
+
+The recorded profile gate protects against regression from an earlier model. Its bounds are derived from that model's errors, so a pass can leave a large absolute error. It does not grant listening acceptance. `fitted` and `heard` remain separate states.
+
+The fit report carries what a numerical verdict needs without a listener: measurement gaps, the largest residuals and the selected values scored on independent conditions. It lists remaining gaps even when the objective improved.
+
+### Protect each register and velocity
+
+The default objective retains both the grid mean and the mean of the worst quarter of note residuals, using the larger value for each per-note term. This prevents many good notes from hiding a few poor ones. `--loss-tail-fraction` controls the fraction; `0` restores the historical mean. Grid relations (`dyn`, `hfdyn`, `kit`) and whole-render `mss` keep their own reducers. These reductions reuse measured rows without rendering or extracting features again.
+
+The report records each term's mean, upper-tail residual and worst note/velocity. A numerical target requires complete known coverage and both the aggregate and the reported worst note within one declared term unit. These units are engineering scales, not a calibrated percentage of perceived similarity.
+
+Defaults also distinguish excitation from the playing interface:
+
+| source | additional checks |
+|---|---|
+| bowed strings, including physical string ensembles | held-level balance across the grid, alongside modulation and decay |
+| plucked strings, including harp and keyboard plucks | held-level balance and late decay |
+| hammered keyboards | held-level balance, late decay and existing attack-brightness dynamics |
+| struck modal sources and drums | held-level balance alongside their modal or percussion measurements |
+
+`fit_profile` records topology, excitation and keyboard interface separately in the JSON. A common gain offset is removed once for the whole grid; it does not erase the velocity or register response. A missing candidate skeleton, shortened attack array or missing held-level measurement is charged against the finite reference cells. An older reference that lacks a measurement remains unknown.
+
+### Retain the selected-value report
+
+Add `--dry-run --out fit.json` while reviewing a fit. The JSON separates `search_winner` from `selected`; use `selected.loss` and `selected.quality` to assess the values that will actually be written. A validation refusal can select the defaults even when the search winner improved on its training probe. `selected.quality` includes absolute aggregate residuals, measurement coverage and target attainment. An unavailable independent validation is reported explicitly.
+
+Normal drum fits include `density` and `prompt` alongside the existing spectral, envelope and tonality terms. `--w-density` and `--w-prompt` override their class defaults. Their targets come from the oracle: a pitched percussion reference is allowed to remain pitched. Re-extract old profiles to obtain the new measurements; missing texture fields are unknown.
+
+The shape fitter separates fit, pruning selection and final validation samples. `shape fit` and `shape prune` accept `--report report.json` separately from the overrides `--out` file. Inspect `partitions`, `final_validation` and `written_selected`. A small capture can leave final validation unavailable; a sample used to prune is not final validation evidence.
+
+### Check the fitting machinery with a known oracle
+
+```sh
+rye run --pyproject bindings/python/pyproject.toml \
+    python tools/voicematch/fitting_recovery.py \
+        --optimizer cmaes --max-evals 72 --out recovery.json
+```
+
+This deterministic benchmark renders a synthetic oracle with known parameters, measures real audio with the normal drum objective, and fits it with the existing optimiser. It reports training and withheld-velocity residuals, coverage, self-comparison and pitch, texture and sparse-resonance controls. It checks measurement and search behavior; it does not prove that a physical voice can reproduce a recorded instrument.
+
+Run `rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/family_recovery.py --family all --optimizer cmaes --max-evals 24 --out family-recovery.json` for bowed, plucked, hammered and percussion cases. It uses the production note/hit measurement path and robust objective, reports distance from known parameters, and checks withheld register/velocity conditions. Read unavailable terms beside the residual; a single percussion piece cannot establish kit relations. These generated signals test the fitting machinery, not the adequacy of the C++ physical models.
+
 ## The reference has to be on the instrument's own side of the boundary
 
 A model whose boundary matches its reference can be fitted against it directly. One fitted against a reference recorded through an amplifier cannot: the string's brightness and the amplifier's treble reach the same measurement, so the search settles somewhere that transfers to neither, and the values are lost the moment the rig goes back to being a stage of its own ([voicing.md](../../../src/midi/synth/docs/voicing.md)).
@@ -172,7 +219,7 @@ Measured on a twenty-evaluation violin fit over fifteen notes: **28.2 s today, 2
 
 49 knobs for a violin, 21–114 across the 128 programs. CMA-ES learns a covariance whose cost grows with the square of the dimension, so a budget that would comfortably fit ten knobs does nothing at fifty. Three levers, all optional:
 
-- **`--screen`** probes each knob at both ends of its range with everything else at its default, and fits only the ones that move the loss by at least `--screen-threshold` (default 0.002 — 0.2 % of the start). The dropped knobs are always listed with their measured effect; a silently narrowed search reads afterwards as a search that covered everything. It costs `2n+1` evaluations, so it pays for itself only when the budget is several times the knob count — the tool says so when it is not.
+- **`--screen`** probes each knob at both ends of its range and keeps those whose effect reaches `--screen-threshold` (default 0.002). When raw terms are cached, it sums the absolute changes in their weighted contributions, so opposing term changes cannot cancel. The initial probes cost `2n+1` evaluations, so screening pays for itself only when the budget is several times the knob count, and the tool says so when more than a third of the budget goes on the probe. Dropped knobs receive bounded conditional probes under an activation context when the budget permits; insufficient budget retains them conservatively. This checks common disabled-feature interactions, not every parameter combination. Review the reported effects and remaining search budget.
 
   **Below that budget it does not merely waste evaluations, it changes the verdict.** Two program-0 runs differing only in this flag, both 114 knobs over a seven-note probe at 600 evaluations and the same seed: without it the fit reached 0.8050 on the probe and **0.8541 on held-out notes, generalising**; with it, 0.8767 on the probe and **1.0535 held out — worse than the defaults on notes it never saw**. Screening spent 229 of the 600 evaluations and dropped 26 of the 114 knobs. One pair of runs is not a law, but read `--validate-notes` before trusting any screened result, and prefer raising `--max-evals` to narrowing the knob set.
 - **`--stages`** fits the excitation knobs against the onset evidence (`--w-init`), then the decay knobs against the decay evidence (`--w-slope` / `--w-env`), then everything under the weights given on the command line. A brighter excitation with a faster decay and a duller one with a slower decay produce nearly the same average spectrum, so asking one search to set both at once sends it wandering along that ridge; `skeleton_note` already separates the evidence, and this is what uses the separation. Classification is by field name, and the final stage takes every knob, so a misclassification costs efficiency and never reach.
@@ -344,7 +391,7 @@ A knob the fit left where it started is not rewritten at all: the two spellings 
 
 **A fit that lost to its own start point writes nothing.** Every stage's loss is a ratio against the compiled-in defaults, so those score exactly 1.0 and a winner above it is a search that never found where it began — which a staged run could reach by walking somewhere its narrow early weights liked. The run keeps the defaults and says so. Nothing else about such a run reads as a failure: the trajectory descends, the diff is ordinary, and the closing line is the same `Best values written to source.` a good fit prints. `--raw-loss` has no reference point and is left alone.
 
-**Write-back is not adoption.** It always writes the fit's winner, and the held-out score is a separate verdict printed above it — a run can perfectly well write values that read `unchanged off the probe` or `does NOT generalise`. Read that line before keeping the diff; undo by re-typing the values, never with git.
+**Write-back is not adoption.** The search winner is checked before selecting the values to write. A held-out regression or an objective that became blind can keep the defaults. The report distinguishes the search candidate from the selected values. An improvement that survives these checks can still be far from the oracle; inspect its absolute residuals before adopting the diff.
 
 `--out result.json` records the whole thing — every knob's start and best, the losses, the held-out score, and a paste-ready `SONARE_TUNING_OVERRIDES` string for auditioning the result without rebuilding.
 

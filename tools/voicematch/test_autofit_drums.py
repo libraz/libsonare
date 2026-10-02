@@ -114,10 +114,13 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
         "rise",
         "strike",
         "ring",
+        "density",
+        "prompt",
         "lf",
         "env",
         "modes",
         "crest",
+        "level",
     }
     assert not {"harm", "cents", "tnr", "init", "slope", "tail", "hf", "stiff", "mod"} & set(
         weights

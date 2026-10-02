@@ -52,6 +52,8 @@ LOSS_TERMS = (
     "strike",
     "ring",
     "kit",
+    "density",
+    "prompt",
 )
 
 # Per-note caps, in each term's own units. A reference row can be measuring
@@ -138,6 +140,9 @@ PITCHED_TERMS = (
 #: score the same on all of them.
 #: `strike` is the lean of the first 15 ms: `rise` differences it away, and `tilt`
 #: read a snare 11 dB dark at the strike as 6 dB too bright (notches between modes).
+#: `density` counts the resonances in the aftersound and `prompt` measures how
+#: each band's share changes from the strike to the late window.  Both are
+#: reference-gated so a model cannot make a missing recording cell disappear.
 PERCUSSION_TERMS = (
     "band",
     "bdecay",
@@ -149,6 +154,8 @@ PERCUSSION_TERMS = (
     "ring",
     "lf",
     "kit",
+    "density",
+    "prompt",
 ) + _SHARED_TERMS
 
 
@@ -158,7 +165,23 @@ def measured_terms(percussive: bool) -> tuple[str, ...]:
     return tuple(t for t in LOSS_TERMS if t in group)
 
 
-def _level_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, float, float]:
+def _finite_or_none(value) -> float | None:
+    """Return a finite metric value, treating NaN and malformed cells as absent."""
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _level_terms(
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    *,
+    counts: dict[str, float] | None = None,
+) -> tuple[float, float, float]:
     """The two level terms, plus the whole-grid offset they are measured against.
 
     Absolute dBFS is not comparable between a model rendered here and a
@@ -178,30 +201,44 @@ def _level_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
 
     Returns zeros when the rows carry no level fields, which is what a probe
     measured from a normalised render should score: nothing, rather than a
-    match.
+    match. When ``counts`` is supplied it receives ``level_notes`` (finite
+    model/reference pairs) and ``level_expected`` (finite oracle cells) without
+    changing this function's three-value return API.
     """
     offsets: list[float] = []
+    level_pairs: list[tuple[float | None, float]] = []
     crests: list[float] = []
-    # A note the oracle holds and the model does not is charged the cap rather
-    # than dropped, for the reason `_absent_or` gives: dropping it lets a voice
-    # that stopped sounding score better than one that sounds slightly wrong.
-    # The level residual is measured around the grid's median offset, so an
-    # absent row cannot join `offsets` without inventing a level for it; it is
-    # counted in `crests`, which is where an envelope that never falls is
-    # already the defect being caught.
+    # An oracle note the model lacks stays in the denominator as a capped residual (`_absent_or`).
     for m, o in zip(model_rows, oracle_rows_):
-        mo, oo = m.get("held_rms_dbfs"), o.get("held_rms_dbfs")
-        if mo is not None and oo is not None:
-            offsets.append(mo - oo)
-        mc, oc = m.get("held_crest_db"), o.get("held_crest_db")
+        mo, oo = _finite_or_none(m.get("held_rms_dbfs")), _finite_or_none(o.get("held_rms_dbfs"))
+        if oo is not None:
+            level_pairs.append((mo, oo))
+            if mo is not None:
+                offsets.append(mo - oo)
+        mc, oc = _finite_or_none(m.get("held_crest_db")), _finite_or_none(o.get("held_crest_db"))
         if oc is not None:
             crests.append(
                 LEVEL_DELTA_CAP_DB if mc is None else min(abs(mc - oc), LEVEL_DELTA_CAP_DB)
             )
+    expected = len(level_pairs)
+    measured = sum(model is not None for model, _ in level_pairs)
     if not offsets:
-        return 0.0, (sum(crests) / len(crests) if crests else 0.0), 0.0
-    median = sorted(offsets)[len(offsets) // 2]
-    balance = sum(min(abs(d - median), LEVEL_DELTA_CAP_DB) for d in offsets) / len(offsets)
+        median = 0.0
+    else:
+        median = sorted(offsets)[len(offsets) // 2]
+    # Oracle cells stay in the denominator, so going unmeasurable cannot make a render quieter.
+    level_residuals = [
+        LEVEL_DELTA_CAP_DB
+        if model is None
+        else min(abs((model - oracle) - median), LEVEL_DELTA_CAP_DB)
+        for model, oracle in level_pairs
+    ]
+    balance = sum(level_residuals) / expected if expected else 0.0
+    if counts is not None:
+        counts["level_notes"] = float(measured)
+        counts["level_expected"] = float(expected)
+    if not level_pairs:
+        balance = 0.0
     crest = sum(crests) / len(crests) if crests else 0.0
     return balance, crest, median
 
@@ -584,8 +621,10 @@ class CellCount:
 
     Reported as `<term>_cells` (what the reference offered), `<term>_capped`,
     `<term>_absent` and `<term>_skipped`, read exactly as `harm_bins` is.
-    Nothing in the objective divides by any of them: the cap is still charged
-    and the skip is still free.
+    The cap is still charged and the skip is still free. `loss_weights` reads
+    `<term>_cells` as the coverage count of `init`, `slope`, `tail`, `hf` and
+    pitched `lf`, so a count below the anchored start's is charged the
+    unmeasurable penalty on the missing fraction.
     """
 
     __slots__ = ("absent", "clipped", "compared", "skipped")
@@ -627,6 +666,8 @@ def _absent_or(model, oracle, cap: float, tally: CellCount | None = None) -> flo
     property of the probe rather than of the voice — and it is not a cell of
     this term at all, so `tally` does not count it either way.
     """
+    oracle = _finite_or_none(oracle)
+    model = _finite_or_none(model)
     if oracle is None:
         if tally is not None:
             tally.skipped += 1

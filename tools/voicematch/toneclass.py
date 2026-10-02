@@ -8,8 +8,11 @@ no harmonic series), under weights tuned for a bowed string.
 
 So the property is named once here and the three read it.
 
-`ToneClass` is about the PARTIAL STRUCTURE and the EXCITATION, because that is
-what the measurements care about:
+`ToneClass` retains the existing coarse metric topology and its historical
+names. `ExcitationFamily` separately identifies how the bank starts the sound;
+`FitProfile.keyboard` identifies the playing interface. In particular, a
+keyboard pluck can retain STRUCK_STRING topology and use plucked fit defaults.
+The coarse classes describe these measurement paths:
 
   sustained       energy is fed continuously; partials are integer multiples
   struck-string   a hammered stiff string: n·f0·sqrt(1+B·n^2), decaying
@@ -26,6 +29,7 @@ partials rather than by predicting them, and the *measurement* is identical.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -56,6 +60,32 @@ class ToneClass(str, Enum):
         resolved fine by the coarse grid.
         """
         return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING, ToneClass.MODAL)
+
+
+class ExcitationFamily(str, Enum):
+    """The physical event that starts a voice.
+
+    ``ToneClass`` deliberately remains the partial-topology classifier used by
+    the existing metrics.  This second axis records the source mechanism, so a
+    keyboard can contain both hammered strings and plucked strings without
+    forcing either into the other's metric profile.
+    """
+
+    BOWED = "bowed"
+    PLUCKED = "plucked"
+    HAMMERED = "hammered"
+    STRUCK_MODAL = "struck-modal"
+    PERCUSSION = "percussion"
+    OTHER = "other"
+
+
+@dataclass(frozen=True)
+class FitProfile:
+    """The independent axes used to choose a fit's measurements."""
+
+    tone_class: ToneClass
+    excitation: ExcitationFamily
+    keyboard: bool
 
 
 #: GM programs whose class is not the one their family implies. Everything else
@@ -105,6 +135,79 @@ _FAMILY_CLASS: dict[int, ToneClass] = {
     112: ToneClass.MODAL,  # 112-119 percussive
     120: ToneClass.NOISE,  # 120-127 sound effects
 }
+
+
+# This table follows the patch implementations in
+# ``src/midi/synth/gm_fallback_map.cpp`` rather than the GM family names. In
+# particular, the first keyboard family contains hammered pianos, plucked
+# harpsichord/clavi and struck FM tines; treating every program 0-7 as a
+# hammer would select the wrong residuals for three of them.
+_PROGRAM_EXCITATION: dict[int, ExcitationFamily] = {
+    # Acoustic/electric grands and the FM tine pair are struck by a hammer or
+    # equivalent reed.  The bank's own program comments call the latter a
+    # tine, so it belongs with the struck keyboard metric profile.
+    **{program: ExcitationFamily.HAMMERED for program in range(6)},
+    # Harpsichord and clavi are keyboard played but their string excitation is
+    # a plectrum/high-ratio pluck.  Their ToneClass stays STRUCK_STRING.
+    6: ExcitationFamily.PLUCKED,
+    7: ExcitationFamily.PLUCKED,
+    # Celesta through tubular bells are struck modes.  The dulcimer is the
+    # explicit hammered-string exception in the source bank.
+    **{program: ExcitationFamily.STRUCK_MODAL for program in range(8, 15)},
+    15: ExcitationFamily.HAMMERED,
+    # Acoustic/electric guitars and basses use the Karplus-Strong plucked path.
+    **{program: ExcitationFamily.PLUCKED for program in range(24, 38)},
+    # The string family has two physical exceptions: tremolo is a subtractive
+    # section patch, while pizzicato and harp remain plucked.
+    40: ExcitationFamily.BOWED,
+    41: ExcitationFamily.BOWED,
+    42: ExcitationFamily.BOWED,
+    43: ExcitationFamily.BOWED,
+    45: ExcitationFamily.PLUCKED,
+    46: ExcitationFamily.PLUCKED,
+    47: ExcitationFamily.STRUCK_MODAL,
+    48: ExcitationFamily.BOWED,
+    49: ExcitationFamily.BOWED,
+    # The bank has a dedicated bowed-string patch for fiddle, while bagpipe
+    # and shanai are wind sources and intentionally remain OTHER.
+    110: ExcitationFamily.BOWED,
+    # The ethnic string instruments use the same plucked waveguide family;
+    # kalimba is a measured modal tine, not a harmonic string.
+    104: ExcitationFamily.PLUCKED,
+    105: ExcitationFamily.PLUCKED,
+    106: ExcitationFamily.PLUCKED,
+    107: ExcitationFamily.PLUCKED,
+    108: ExcitationFamily.STRUCK_MODAL,
+    # Pitched percussive GM slots are modal when played melodically.  A drum
+    # channel note is handled separately below as PERCUSSION.
+    **{program: ExcitationFamily.STRUCK_MODAL for program in range(112, 119)},
+}
+
+# A keyboard interface is orthogonal to the physical event.  Celesta is the
+# useful boundary case: it is keyboard played but modal/struck, whereas a
+# glockenspiel is modal/struck and hand played.  Organ/reed patches 16-23 are
+# also keyboard interfaces even though their excitation remains OTHER. Dulcimer
+# remains a hand struck instrument even though it sits beside the keyboard
+# programs in the GM map.
+_KEYBOARD_PROGRAMS = frozenset((*range(9), *range(16, 22), 23))
+
+
+def fit_profile(
+    program: int, *, drum_note: int | None = None, percussive: bool = False
+) -> FitProfile:
+    """Return the independent topology, excitation and interface profile.
+
+    ``drum_note`` and ``percussive`` describe the channel/measurement path,
+    not the melodic program number.  They therefore override the excitation
+    family while retaining the existing modal topology for a drum hit.
+    """
+    if drum_note is not None or percussive:
+        return FitProfile(ToneClass.MODAL, ExcitationFamily.PERCUSSION, False)
+    return FitProfile(
+        tone_class(program),
+        _PROGRAM_EXCITATION.get(program, ExcitationFamily.OTHER),
+        program in _KEYBOARD_PROGRAMS,
+    )
 
 
 def tone_class(program: int, *, drum_note: int | None = None) -> ToneClass:
@@ -182,6 +285,10 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "env": 1.0,
         "init": 1.5,
         "slope": 1.0,
+        # The long ring is a real pluck axis. `cli_weights` removes it for a
+        # probe whose capture has no tail window, so keeping it here cannot
+        # manufacture a zero-cell match.
+        "tail": 1.0,
         "hf": 0.5,
         "crest": 1.0,
         "stiff": 0.5,
@@ -240,6 +347,16 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
     "strike": 1.0,
     # How long it rings, in the doublings the module grids gate it in.
     "ring": 1.0,
+    # A common output gain must not hide a hit-to-hit level curve. The loss
+    # removes the grid's median offset before scoring this residual.
+    "level": 1.0,
+    # How many resonances fill the aftersound, and how the strike's colour
+    # separates from its late colour.  These two axes distinguish a diffuse
+    # drum field from a sparse ringing cup even when band levels and gross
+    # decay agree.  They are reference-gated, so tonal toms and woodblocks are
+    # not forced toward noise.
+    "density": 1.0,
+    "prompt": 1.0,
     # Weighted as heavily as the whole band profile it is drawn from, because
     # it is one region against that profile's twenty-five bands and the kick is
     # the loudest thing in the kit. See `loss._perc_lf_terms`.
@@ -262,10 +379,33 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
 def default_weights(
     program: int, *, drum_note: int | None = None, percussive: bool = False
 ) -> dict[str, float]:
-    """The term weights a run starts from when the command line names none."""
-    if percussive or drum_note is not None:
+    """The term weights a run starts from when the command line names none.
+
+    The class chooses the available metric topology.  The excitation profile
+    then adds the axes that are specific to the way that topology is started:
+    level for physical struck/plucked/bowed sources, a pluck tail, and the
+    hammer's velocity-dependent attack.  Existing probe-shape filtering still
+    removes a term when its capture cannot measure it.
+    """
+    profile = fit_profile(program, drum_note=drum_note, percussive=percussive)
+    if profile.excitation is ExcitationFamily.PERCUSSION:
         return dict(PERCUSSION_WEIGHTS)
-    return dict(_CLASS_WEIGHTS[tone_class(program)])
+
+    # Harpsichord and clavi keep STRUCK_STRING but take the plucked metric profile.
+    metric_class = profile.tone_class
+    if profile.excitation is ExcitationFamily.PLUCKED and metric_class is ToneClass.STRUCK_STRING:
+        metric_class = ToneClass.PLUCKED_STRING
+    weights = dict(_CLASS_WEIGHTS[metric_class])
+
+    if profile.excitation in {
+        ExcitationFamily.BOWED,
+        ExcitationFamily.PLUCKED,
+        ExcitationFamily.HAMMERED,
+        ExcitationFamily.STRUCK_MODAL,
+    }:
+        # `_level_terms` removes the global offset, leaving a curve a gain cannot improve.
+        weights["level"] = 1.0
+    return weights
 
 
 # --------------------------------------------------------------------------- #

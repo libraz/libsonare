@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 
+from fit_quality import dropout_terms, significant_term_regressions
 from knobs import at_bound
 from profile_gate import FLOOR_GUESSES
 
@@ -45,6 +46,32 @@ def winner_or_defaults(
     # search that simply found nothing — so the reason has to outlive the
     # terminal or the finding does not survive the run.
     evaluator.write_back_refusal = None
+    evaluator.selected_dropout = []
+    evaluator.selected_regressions = []
+    evaluator.search_dropout = []
+    evaluator.search_regressions = []
+
+    # Cache-only lookups (the tree is restored); the winner's loss never pairs with the defaults.
+    start_values = [k.start_value for k in knobs]
+    search_terms = _terms_for(evaluator, best_values)
+    start_terms = _terms_for(evaluator, start_values)
+    if search_terms is not None and start_terms is not None:
+        evaluator.search_regressions = significant_term_regressions(
+            start_terms, search_terms, getattr(evaluator, "loss", None)
+        )
+        dropped = dropout_terms(start_terms, search_terms, getattr(evaluator, "loss", None))
+        evaluator.search_dropout = dropped
+        if dropped:
+            evaluator.selected_dropout = dropped
+            evaluator.write_back_refusal = "measurement_dropout"
+            print(
+                "\nthe winner lost all measurements for active term(s) "
+                f"{', '.join(dropped)} — keeping the defaults, since the selected "
+                "candidate would be judged on less evidence",
+                file=sys.stderr,
+            )
+            _select(evaluator, start_values)
+            return start_values
     if getattr(evaluator, "normalize", False) and evaluator.best_loss > 1.0:
         evaluator.write_back_refusal = "lost_to_start"
         print(
@@ -53,8 +80,14 @@ def winner_or_defaults(
             f"nothing to write",
             file=sys.stderr,
         )
-        return [k.start_value for k in knobs]
-    if validation and validation["best"] - validation["start"] > 0.005:
+        _select(evaluator, start_values)
+        return start_values
+    if (
+        validation
+        and "best" in validation
+        and "start" in validation
+        and validation["best"] - validation["start"] > 0.005
+    ):
         evaluator.write_back_refusal = "fitted_to_the_probe"
         print(
             f"\nthe winner scores {validation['best']:.4f} against the defaults' "
@@ -63,7 +96,8 @@ def winner_or_defaults(
             f"fitted to the probe",
             file=sys.stderr,
         )
-        return [k.start_value for k in knobs]
+        _select(evaluator, start_values)
+        return start_values
     start_absent = getattr(evaluator, "start_tnr_absent", None)
     best_absent = getattr(evaluator, "best_tnr_absent", None)
     start_past = getattr(evaluator, "start_tnr_past_db", None)
@@ -91,8 +125,38 @@ def winner_or_defaults(
             f"reference rather than for matching it",
             file=sys.stderr,
         )
-        return [k.start_value for k in knobs]
+        _select(evaluator, start_values)
+        return start_values
+    _select(evaluator, best_values)
     return best_values
+
+
+def _terms_for(evaluator, values: list[float]) -> dict | None:
+    """Read a candidate's cached raw terms without rendering a new candidate."""
+
+    method = getattr(evaluator, "terms_for", None)
+    return method(values) if callable(method) else None
+
+
+def _select(evaluator, values: list[float]) -> None:
+    """Cache the selected vector, raw terms and loss as one consistent record."""
+
+    evaluator.selected_values = list(values)
+    evaluator.selected_terms = _terms_for(evaluator, values)
+    loss_for = getattr(evaluator, "loss_for", None)
+    evaluator.selected_loss = loss_for(values) if callable(loss_for) else None
+    baseline_terms = getattr(evaluator, "baseline_terms", None)
+    if baseline_terms is not None and evaluator.selected_terms is not None:
+        evaluator.selected_regressions = significant_term_regressions(
+            baseline_terms,
+            evaluator.selected_terms,
+            getattr(evaluator, "loss", None),
+        )
+        evaluator.selected_dropout = dropout_terms(
+            baseline_terms,
+            evaluator.selected_terms,
+            getattr(evaluator, "loss", None),
+        )
 
 
 def report_pinned(knobs, best_values: list[float]) -> list[str]:

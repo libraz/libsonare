@@ -27,6 +27,8 @@ Percussion metric set (per hit, `analyze_hit`):
   level_db               hit RMS (post global normalization)
   flatness_db            how much of the hit stands in peaks rather than a continuum
   stereo_width           1 - |channel correlation| over the hit's own window
+  modal_density          resonances per octave in the aftersound
+  prompt_late_db         per-band colour movement from strike to aftersound
 A drum note has no fundamental, so every metric above that is anchored on one —
 the harmonic ladder, the intonation error, the tonal-to-noise ratio — measures a
 frequency the sound does not contain. What is left of a percussion hit is its
@@ -194,5 +196,13 @@ from metrics_signal import (
     normalize_rms,
     sound_onset_s,
     to_mono,
+)
+from metrics_texture import (
+    DENSITY_CLIP,
+    PROMPT_CLIP,
+    TEXTURE_BAND_CENTERS,
+    TEXTURE_BANDS,
+    TEXTURE_BINS,
+    analyze_texture,
 )
 from smf import Note

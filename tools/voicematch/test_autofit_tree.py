@@ -485,3 +485,13 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
         f"{script} does not import on a clean interpreter "
         f"(exit {proc.returncode}):\n{proc.stderr.strip()[-1200:]}"
     )
+
+
+def test_search_effort_and_the_full_spec_warning_share_one_budget_rule():
+    args = argparse.Namespace(max_evals=5, optimizer="cmaes")
+    evaluator = argparse.Namespace(trajectory=[], needs_rebuild=False)
+    effort = report_module.search_effort(evaluator, args, 4, 6)
+    assert effort["budget_warning"] == report_module.broad_budget_warning(5, 4)
+    assert "(9)" in effort["budget_warning"]
+    assert report_module.broad_budget_warning(9, 4) is None
+    assert report_module.broad_budget_warning(5, 0) is None

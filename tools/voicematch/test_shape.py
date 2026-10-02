@@ -437,6 +437,97 @@ def test_the_parts_are_reported_separately():
     }
 
 
+def _band_field(seconds, lo, hi, seed, sr=SR):
+    """Finite synthetic field confined to one onset/density band."""
+    n = int(seconds * sr)
+    rng = np.random.default_rng(seed)
+    S = np.fft.rfft(rng.standard_normal(n))
+    hz = np.fft.rfftfreq(n, 1.0 / sr)
+    S[(hz < lo) | (hz >= hi)] = 0.0
+    x = np.fft.irfft(S, n)
+    return x / max(float(np.max(np.abs(x))), 1.0e-12)
+
+
+def test_a_reference_finite_onset_bin_stays_scored_when_model_loses_the_band():
+    seconds = 4.0
+    t = np.arange(int(seconds * SR)) / SR
+    envelope = np.clip((t - 0.1) / 0.02, 0.0, 1.0)
+    envelope[t > 0.3] = np.exp(-(t[t > 0.3] - 0.3) / 2.0)
+    reference = envelope * (
+        _band_field(seconds, 100.0, 200.0, 1) + _band_field(seconds, 5000.0, 7000.0, 2)
+    )
+    missing = envelope * _band_field(seconds, 100.0, 200.0, 1)
+    assert np.isfinite(terms.onset_dip_stats(reference, SR)[3])
+    assert np.isnan(terms.onset_dip_stats(missing, SR)[3])
+
+    clean = ShapeLoss(
+        signals=_Fixed({(60, 88): reference}, {(60, 88): reference}),
+        spectro=Spectro(sample_rate=SR, seconds=seconds),
+        velocities=(88,),
+    ).score(notes=(60,))
+    dropped = ShapeLoss(
+        signals=_Fixed({(60, 88): reference}, {(60, 88): missing}),
+        spectro=Spectro(sample_rate=SR, seconds=seconds),
+        velocities=(88,),
+    ).score(notes=(60,))
+    assert dropped.coverage["onset_dip"][1] > dropped.coverage["onset_dip"][0]
+    assert dropped.parts["onset"] > clean.parts["onset"] + 2.0
+
+
+def test_a_reference_valid_density_band_charges_when_model_disappears():
+    seconds = 4.0
+    t = np.arange(int(seconds * SR)) / SR
+    envelope = np.where(t < 0.05, t / 0.05, np.exp(-(t - 0.05) / 0.2))
+    floor = np.random.default_rng(3).standard_normal(len(t)) * 1.0e-4
+    reference = floor + envelope * (
+        _band_field(seconds, 250.0, 500.0, 4) + _band_field(seconds, 4000.0, 8000.0, 5)
+    )
+    missing = floor + envelope * _band_field(seconds, 250.0, 500.0, 4)
+    clean = ShapeLoss(
+        signals=_Fixed({(42, 88): reference}, {(42, 88): reference}),
+        spectro=Spectro(sample_rate=SR, seconds=seconds),
+        velocities=(88,),
+        pitched=False,
+    ).score(notes=(42,))
+    dropped = ShapeLoss(
+        signals=_Fixed({(42, 88): reference}, {(42, 88): missing}),
+        spectro=Spectro(sample_rate=SR, seconds=seconds),
+        velocities=(88,),
+        pitched=False,
+    ).score(notes=(42,))
+    assert dropped.coverage["density"][1] > dropped.coverage["density"][0]
+    assert dropped.coverage["prompt"][1] > dropped.coverage["prompt"][0]
+    assert dropped.parts["density"] > clean.parts["density"] + 2.0
+
+
+def test_spectrum_upper_tail_keeps_one_bad_note_visible_without_changing_uniform_zero():
+    notes, vels, ref, _ = _pair_tables(lambda k, v: v.copy())
+    bad = {
+        k: (v + synth(k[0], seconds=10.0, n_partials=0, extra=((1451.0, 1.0, 0.4),)))
+        if k[0] == 48
+        else v.copy()
+        for k, v in ref.items()
+    }
+    pooled = ShapeLoss(
+        signals=_Fixed(ref, bad),
+        spectro=Spectro(seconds=10.0),
+        velocities=vels,
+        spectrum_tail_fraction=None,
+    ).score(notes=notes)
+    guarded = ShapeLoss(
+        signals=_Fixed(ref, bad),
+        spectro=Spectro(seconds=10.0),
+        velocities=vels,
+    ).score(notes=notes)
+    clean = ShapeLoss(
+        signals=_Fixed(ref, ref),
+        spectro=Spectro(seconds=10.0),
+        velocities=vels,
+    ).score(notes=notes)
+    assert guarded.parts["spectrum"] >= pooled.parts["spectrum"]
+    assert guarded.parts["spectrum"] > clean.parts["spectrum"] + 1.0
+
+
 # --- probes --------------------------------------------------------------
 
 

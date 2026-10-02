@@ -318,6 +318,7 @@ from loss import (
     refused_weights,
     score_terms,
 )
+from loss_aggregate import DEFAULT_TAIL_FRACTION, robust_score_terms
 from metrics import (
     MONO_MODES,
     channel_correlation,
@@ -333,7 +334,7 @@ from render_oracle import (
     obtain_oracle,
     oracle_may_carry_room,
 )
-from report import report_result
+from report import _json_safe, broad_budget_warning, report_result
 from room import apply_room, estimate_room, fit_room_ir
 from smf import write_smf
 from staging import SubEvaluator, run_stages, screen_knobs
@@ -747,6 +748,15 @@ class Evaluator:
         self.trajectory: list[tuple[float, float, str]] = []
         self.best_loss = math.inf
         self.best_values: list[float] | None = None
+        # Raw terms stay with their candidate so a fallback never pairs with the winner's loss.
+        self.best_terms: dict[str, float] | None = None
+        self.selected_values: list[float] | None = None
+        self.selected_terms: dict[str, float] | None = None
+        self.selected_loss: float | None = None
+        self.selected_dropout: list[str] = []
+        self.selected_regressions: list[dict] = []
+        self.search_dropout: list[str] = []
+        self.search_regressions: list[dict] = []
         self.loss = LossWeights(cli_weights(args))
         self.normalize = not args.raw_loss
         self.baseline_terms: dict[str, float] | None = None
@@ -803,12 +813,16 @@ class Evaluator:
         self.stage = name
         self.loss = LossWeights(weights)
         if self.baseline_terms is not None:
-            # Same reference point, re-scored: the per-term scales do not depend
-            # on the weights, but what the start point scores does, and that is
-            # what every stage's loss is a ratio of.
-            self.loss.calibrate(self.baseline_terms)
+            # Anchor counts in every stage, --raw-loss included; calibration is layered on top.
+            self.loss.anchor(self.baseline_terms)
+            if self.normalize:
+                # Same reference point, re-scored: the per-term scales do not
+                # depend on the weights, but what the start point scores does,
+                # and that is what every stage's loss is a ratio of.
+                self.loss.calibrate(self.baseline_terms)
         self.best_loss = math.inf
         self.best_values = None
+        self.best_terms = None
 
     def cache_signature(self) -> str:
         """Everything a stored term value depends on, folded into one name.
@@ -844,6 +858,9 @@ class Evaluator:
                 "n_harm": getattr(self.args, "n_harm", 0),
                 "percussive": self.percussive,
                 "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
+                "loss_tail_fraction": getattr(
+                    self.args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION
+                ),
                 "want_audio": self.want_audio,
                 "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
                 "knobs": [k.label for k in self.knobs],
@@ -972,7 +989,7 @@ class Evaluator:
         mss = 0.0
         if want_audio and model_audio is not None:
             mss = mss_distance(model_audio, self.oracle_audio)
-        terms = score_terms(
+        terms = robust_score_terms(
             model_rows,
             self.oracle,
             n_harm=self.args.n_harm,
@@ -980,6 +997,7 @@ class Evaluator:
             percussive=self.percussive,
             groups=self.groups,
             audibility=not getattr(self.args, "flat_partial_weighting", False),
+            tail_fraction=getattr(self.args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
         )
         if terms is not None:
             worst, pairs = sustain_excess_db_s(model_rows, self.oracle)
@@ -998,6 +1016,27 @@ class Evaluator:
         way into the source.
         """
         return self._record(values, terms, rendered=False)
+
+    def terms_for(self, values: list[float]) -> dict[str, float] | None:
+        """Return cached raw terms for a candidate without starting a render."""
+
+        return self.cache.get(self.key(values))
+
+    def loss_for_terms(self, terms: dict[str, float] | None) -> float:
+        """Compute the same loss used by the search for already measured terms."""
+
+        if terms is None:
+            return math.inf
+        return (
+            self.loss.combine(terms)
+            + self._level_drift_penalty(terms)
+            + self._sustain_drift_penalty(terms)
+        )
+
+    def loss_for(self, values: list[float]) -> float:
+        """Compute a candidate's loss from its cached terms, or infinity."""
+
+        return self.loss_for_terms(self.terms_for(values))
 
     def _level_drift_penalty(self, terms: dict[str, float] | None) -> float:
         """What a candidate pays for moving the voice's whole-grid level.
@@ -1111,9 +1150,12 @@ class Evaluator:
         """
         if terms is not None:
             self._report_level_offset(terms)
-        if self.normalize and self.loss.scales is None and terms is not None:
+        if not self._anchored and terms is not None:
+            # Anchor counts even for --raw-loss; anchor() leaves scales untouched.
             self.baseline_terms = dict(terms)
-            self.loss.calibrate(terms)
+            self.loss.anchor(terms)
+            if self.normalize and self.loss.scales is None:
+                self.loss.calibrate(terms)
         # The fences anchor here too, and OUTSIDE the branch above: they are
         # about where the start point sat, which is a fact about the voice and
         # not about whether the terms are being normalised. Inside it, a
@@ -1172,6 +1214,7 @@ class Evaluator:
         if loss < self.best_loss:
             self.best_loss = loss
             self.best_values = list(values)
+            self.best_terms = None if terms is None else dict(terms)
             # Kept alongside the best values because nothing else can recover
             # it afterwards, and because it is the one number a fit can move
             # freely: the level term scores the spread around the grid's median
@@ -1331,7 +1374,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
             metric_threads=resolve_metric_threads(args),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
-        terms = score_terms(
+        terms = robust_score_terms(
             rows,
             oracle_rows,
             n_harm=args.n_harm,
@@ -1339,12 +1382,89 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
             percussive=percussive,
             groups=dict(getattr(corpus, "groups", None) or {}),
             audibility=not getattr(args, "flat_partial_weighting", False),
+            tail_fraction=getattr(args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
         )
         if weights.scales is None and terms is not None:
             weights.calibrate(terms)
         return weights.combine(terms)
 
     return score, axis, held
+
+
+def _csv_ints(value: str | None) -> set[int]:
+    """Parse a comma-separated axis without treating an empty flag as a set."""
+
+    if not value:
+        return set()
+    return {int(item.strip()) for item in str(value).split(",") if item.strip()}
+
+
+def _loss_tail_fraction(value: str) -> float:
+    fraction = float(value)
+    if not math.isfinite(fraction) or not 0.0 <= fraction <= 1.0:
+        raise argparse.ArgumentTypeError("loss tail fraction must be finite and in [0, 1]")
+    return fraction
+
+
+def check_validation_partition(args, corpus=None) -> dict:
+    """Describe or refuse the independent axis before any render starts.
+
+    An omitted ``--notes``/``--velocities`` is still a real fit set: the
+    pattern or corpus supplies its default grid. Checking only explicit CLI
+    values therefore lets a hold-out overlap the fit silently, especially for
+    corpus fits. The returned status is retained in the report when no
+    independent validation was requested.
+    """
+
+    percussive = bool(getattr(args, "percussive", False))
+    held_csv = (
+        getattr(args, "validate_velocities", "")
+        if percussive
+        else getattr(args, "validate_notes", "")
+    )
+    held = _csv_ints(held_csv)
+    if not held:
+        return {
+            "status": "independent_missing",
+            "independent": False,
+            "axis": "velocities" if percussive else "notes",
+            "held_out": held_csv or None,
+            "reason": "no held-out axis was supplied",
+        }
+
+    if corpus is None:
+        corpus = resolve_corpus(args)
+    pattern, _, _ = _score(
+        args.program,
+        args.pattern,
+        getattr(args, "notes", ""),
+        getattr(args, "velocities", ""),
+        corpus=corpus,
+        gate_ms=getattr(args, "drum_gate_ms", 0),
+    )
+    if percussive:
+        fit_csv = getattr(args, "velocities", "")
+        fit = _csv_ints(fit_csv) or {int(note.velocity) for note in pattern.notes}
+    else:
+        fit_csv = getattr(args, "notes", "")
+        fit = _csv_ints(fit_csv) or {int(note.note) for note in pattern.notes}
+    overlap = sorted(fit.intersection(held))
+    if overlap:
+        axis_flag = "--validate-velocities" if percussive else "--validate-notes"
+        fit_flag = "--velocities" if percussive else "--notes"
+        raise ValueError(
+            f"{axis_flag} overlaps the fit {fit_flag} on {overlap}; independent "
+            f"validation requires disjoint values (the fit set may come from its "
+            "pattern or corpus defaults)."
+        )
+    return {
+        "status": "independent",
+        "independent": True,
+        "axis": "velocities" if percussive else "notes",
+        "fit": sorted(fit),
+        "held_out": sorted(held),
+        "overlap": [],
+    }
 
 
 #: Most points a grid may enumerate. Each one is a model render on the fit probe
@@ -1574,7 +1694,7 @@ def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> 
     path = Path(out_path)
     record = json.loads(path.read_text())
     record["tree"] = {"head": head, "dirty_src": dirty}
-    path.write_text(json.dumps(record, indent=2) + "\n")
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
 def _fold_write_back_verdict(out_path: str, evaluator) -> None:
@@ -1606,7 +1726,7 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
             "best": getattr(evaluator, "best_tnr_past_db", None),
         },
     }
-    path.write_text(json.dumps(record, indent=2) + "\n")
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
 def run(args, argv: list[str] | None = None) -> int:
@@ -1632,6 +1752,8 @@ def run(args, argv: list[str] | None = None) -> int:
         )
 
     resolve_probe(args)
+    # Resolve the fit axis first: an overlapping hold-out is invalid even without the fit flag.
+    validation_partition = check_validation_partition(args)
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
     weights = cli_weights(args)
     print(
@@ -1786,6 +1908,12 @@ def run(args, argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    full_spec_budget_warning = (
+        broad_budget_warning(args.max_evals, len(knobs)) if n_runtime and not n_source else None
+    )
+    if full_spec_budget_warning:
+        print(f"warning: {full_spec_budget_warning}", file=sys.stderr)
+
     configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
 
     print("resolving oracle (once)...", file=sys.stderr)
@@ -1888,10 +2016,24 @@ def run(args, argv: list[str] | None = None) -> int:
             best_values = evaluator.best_values
         # Before the report, because the hold-out decides which values the report
         # is about: it is scored on the winner and can then refuse it.
-        validation = validate(
+        validation_result = validate(
             args, build_dir, knobs, [k.start_value for k in knobs], best_values, ir_path
         )
-        best_values = winner_or_defaults(knobs, best_values, evaluator, validation)
+        if validation_result is None:
+            validation = validation_partition
+            if validation_partition.get("independent"):
+                # Disjoint partition with no hold-out rows scored is not an independent result.
+                validation = {
+                    **validation_partition,
+                    "status": "independent_unavailable",
+                    "independent": False,
+                    "reason": "held-out oracle produced no analyzable rows",
+                }
+            validation_for_winner = None
+        else:
+            validation = {**validation_partition, **validation_result}
+            validation_for_winner = validation
+        best_values = winner_or_defaults(knobs, best_values, evaluator, validation_for_winner)
 
         pinned = report_pinned(knobs, best_values)
         if pinned:
@@ -1911,6 +2053,10 @@ def run(args, argv: list[str] | None = None) -> int:
             "room": room.to_dict() if room is not None else None,
             "pinned": pinned,
             "validation": validation,
+            "validation_partition": validation_partition,
+            "search_dimension": len(fit_knobs),
+            "spec_dimension": len(knobs),
+            "full_spec_budget_warning": full_spec_budget_warning,
         }
     report_result(knobs, pristine, best_values, evaluator, args, extra)
     _fold_tree_provenance(args.out, head_sha, dirty_src)
@@ -2296,6 +2442,22 @@ def main() -> int:
         "`--w-env` prices at a hundredth of a unit per millisecond",
     )
     parser.add_argument(
+        "--w-density",
+        type=float,
+        default=None,
+        dest="w_density",
+        help="drum fits: weight on the spectral hit-density term; unset, "
+        "the drum metric defaults decide",
+    )
+    parser.add_argument(
+        "--w-prompt",
+        type=float,
+        default=None,
+        dest="w_prompt",
+        help="drum fits: weight on the prompt/early ring-down term; unset, "
+        "the drum metric defaults decide",
+    )
+    parser.add_argument(
         "--w-kit",
         type=float,
         default=None,
@@ -2491,6 +2653,14 @@ def main() -> int:
         "27.5 Hz fundamental no longer outvotes the partials that carry "
         "its timbre, and a 10 dB error on something 50 dB down is no "
         "longer charged in full",
+    )
+    parser.add_argument(
+        "--loss-tail-fraction",
+        type=_loss_tail_fraction,
+        default=DEFAULT_TAIL_FRACTION,
+        help="retain the worst fraction of measured per-note residuals alongside "
+        "the grid mean (default: 0.25); 0 uses the historical mean objective. "
+        "Grid dynamics and kit relations retain their own reducers",
     )
     parser.add_argument(
         "--raw-loss",

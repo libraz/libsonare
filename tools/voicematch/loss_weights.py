@@ -65,6 +65,12 @@ TERM_UNITS = {
     "mss": 0.01,
     "band": 1.0 * 25,
     "bdecay": 0.1 * 8,
+    # Seven octave bands, one mode and one dB per band. These two drum terms
+    # are deliberately scaled independently from the 25-band profile: their
+    # measurement is a compact density/promptness summary, not another copy
+    # of the full spectrum.
+    "density": 7.0,
+    "prompt": 7.0,
     # A decibel of tilt and five per cent of centroid: both are quantities a
     # listener names before anything else about a kit piece, and both are well
     # inside what two takes of the same drum differ by.
@@ -216,14 +222,16 @@ def dropped_weights(args) -> list[tuple[str, str]]:
     ]
 
 
-# Which key carries the count of data points each averaged term was measured
-# over. Every one of these terms skips the points it cannot use and divides by
-# the survivors, and every one of them already reported its count — this is the
-# table that makes the counts readable by name instead of by convention.
+# Which key carries the count of data points each count-tracked term was
+# measured over. Some terms average only the surviving observations, while the
+# fixed-denominator aggregates divide their totals by the original row count.
+# Both need the count so a candidate cannot go blind and look better; the
+# denominator distinction is recorded below rather than inferred from names.
 #
 # A term absent from this table is measured over a fixed set (`mss` compares
-# four fixed transform sizes, `level` reads the untouched signal) and has no
-# count to go to zero.
+# four fixed transform sizes) and has no count to go to zero. `level` is listed
+# below because its finite oracle denominator and candidate overlap are both
+# needed to distinguish a gain offset from a missing render.
 #
 # `lf` is two different measurements under one name and only the percussion one
 # is listed here: for a drum it is the low end of the band profile and skips the
@@ -235,17 +243,24 @@ TERM_COUNT_KEYS = {
     "harm": "harm_bins",
     "modes": "modes_notes",
     "mod": "mod_notes",
+    "init": "init_cells",
+    "slope": "slope_cells",
+    "tail": "tail_cells",
+    "hf": "hf_cells",
     "stiff": "stiff_notes",
     "dyn": "dyn_groups",
     "hfdyn": "hfdyn_groups",
     "band": "band_bins",
     "bdecay": "bdecay_bins",
+    "density": "density_bins",
+    "prompt": "prompt_bins",
     "tilt": "tilt_hits",
     "bright": "bright_hits",
     "tonal": "tonal_hits",
     "rise": "rise_hits",
     "strike": "strike_hits",
     "ring": "ring_hits",
+    "level": "level_notes",
     "lf": "lf_notes",
     # The one most likely to go blind of any of them: a relation is dropped
     # whenever the reference stops holding it or a member stops supplying a
@@ -253,6 +268,27 @@ TERM_COUNT_KEYS = {
     # with it and the term would otherwise report the best score it has.
     "kit": "kit_notes",
 }
+
+# A term may have a measured count and a different fixed denominator. Level is
+# the shared example: `level_notes` is the finite model/reference overlap while
+# `level_expected` is every finite oracle cell. `lf` has two metric-set shapes:
+# pitched voices expose fixed attack-band cells and percussion exposes the
+# existing hit-level `lf_notes` count. The objective resolves these aliases from
+# the term mapping rather than making either producer emit a misleading field.
+TERM_EXPECTED_KEYS = {"level": "level_expected"}
+
+# These reducers divide by the observations that survived their per-term
+# validity checks. Their raw value is a survivor mean, so a partial candidate
+# must first be weighted by its measured fraction before the missing portion is
+# charged. The other count-tracked terms are fixed-denominator aggregates:
+# their raw values already include the observed fraction and must not be
+# multiplied by it a second time.
+SURVIVOR_MEAN_TERMS = frozenset(("mod", "modes", "stiff", "dyn", "hfdyn", "lf", "kit"))
+
+# Terms whose raw value already charges each missing reference cell at the cap
+# inside a fixed reference denominator, so the unmeasurable penalty would charge
+# the same absence twice. Their coverage stays reported.
+ABSENCE_CAPPED_TERMS = frozenset(("level",))
 
 # What a term costs once it can no longer be measured, in multiples of its own
 # start value. Above 1.0 on purpose: equal to the start would make going blind
@@ -308,9 +344,127 @@ class LossWeights:
     #: What each term scored at the start point, in perceptual units. Read only
     #: by the unmeasurable penalty, which is defined as a multiple of the start.
     baseline_units: dict[str, float] | None = None
+    #: The raw baseline mapping, retained for report coverage denominators and
+    #: for metric-set aliases such as pitched `lf_cells`.
+    baseline_terms: dict[str, float] | None = None
+
+    def __post_init__(self) -> None:
+        for name, weight in self.weights.items():
+            self._finite(weight, f"weight {name}")
 
     def active(self) -> tuple[str, ...]:
         return tuple(t for t in LOSS_TERMS if self.weights.get(t, 0.0) > 0.0)
+
+    @staticmethod
+    def _finite(value, label: str) -> float:
+        """Read one loss value and refuse NaN/inf before it reaches a score."""
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{label} must be finite, got {value!r}") from None
+        if not math.isfinite(value):
+            raise ValueError(f"{label} must be finite, got {value!r}")
+        return value
+
+    def anchor(self, terms: dict[str, float]) -> None:
+        """Remember the start point's counts and term units without scaling it.
+
+        Raw-loss runs still need a fixed reference for detecting a candidate
+        that made a measurement disappear. Keeping that anchor separate from
+        ``calibrate`` lets callers use the same dropout guard without turning
+        raw values into a start-relative score.
+        """
+        if terms is None:
+            raise ValueError("loss terms are required to anchor a baseline")
+        self.baseline_terms = dict(terms)
+        self.baseline_counts = {}
+        for name in TERM_COUNT_KEYS:
+            count_key = self._count_key(name, terms)
+            expected_key = TERM_EXPECTED_KEYS.get(name)
+            count = self._finite(
+                terms.get(expected_key, terms.get(count_key, 0.0))
+                if expected_key
+                else terms.get(count_key, 0.0),
+                expected_key or count_key,
+            )
+            if count < 0.0:
+                raise ValueError(f"{expected_key or count_key} must be non-negative, got {count!r}")
+            self.baseline_counts[name] = count
+        self.baseline_units = {
+            name: self._finite(terms.get(name, 0.0), name) / TERM_UNITS[name] for name in LOSS_TERMS
+        }
+
+    def coverage(self, name: str, terms: dict[str, float]) -> float:
+        """Return the candidate's measured fraction for a count-tracked term.
+
+        A missing count is treated as zero once the baseline established that
+        the term had observations. Counts at or above the baseline are full
+        coverage, preserving the old objective for an unchanged or expanded
+        probe. This method never mutates the anchor, which lets reports inspect
+        a candidate without changing subsequent scoring.
+        """
+        if terms is None:
+            raise ValueError("loss terms are required to calculate coverage")
+        key = self._count_key(name, terms)
+        expected = (self.baseline_counts or {}).get(name, 0.0)
+        if key is None:
+            return 1.0
+        observed = self._finite(terms.get(key, 0.0), key)
+        if observed < 0.0:
+            raise ValueError(f"{key} must be non-negative, got {observed!r}")
+        if expected <= 0.0:
+            return 1.0
+        return min(1.0, max(0.0, observed / expected))
+
+    def _count_key(self, name: str, terms: dict[str, float] | None = None) -> str | None:
+        """Resolve a term's count field across pitched/percussion aliases."""
+        if name == "lf":
+            baseline = self.baseline_terms or {}
+            if "lf_cells" in baseline or (
+                terms is not None and "lf_cells" in terms and "lf_notes" not in terms
+            ):
+                return "lf_cells"
+        return TERM_COUNT_KEYS.get(name)
+
+    def term_contributions(
+        self, terms: dict[str, float], *, fixed_units: bool = True
+    ) -> dict[str, float]:
+        """Return each active term's weighted contribution.
+
+        ``fixed_units=True`` reports the perceptual-unit space used by a
+        calibrated objective. ``False`` reports raw term units, which is what a
+        ``--raw-loss`` objective uses. Partial measurement loss is blended in
+        fixed units before that conversion, so reports and optimisation share
+        exactly the same dropout accounting.
+        """
+        if terms is None:
+            raise ValueError("loss terms are required to calculate contributions")
+        out: dict[str, float] = {}
+        for name in self.active():
+            weight = self._finite(self.weights[name], f"weight {name}")
+            value = self._finite(terms.get(name, 0.0), name)
+            observed = value / TERM_UNITS[name]
+            fraction = self.coverage(name, terms)
+            expected = (self.baseline_counts or {}).get(name, 0.0)
+            if expected > 0.0 and fraction < 1.0 and name not in ABSENCE_CAPPED_TERMS:
+                baseline = (self.baseline_units or {}).get(name, 0.0)
+                penalty = UNMEASURABLE_PENALTY * max(baseline, UNMEASURABLE_MIN_UNITS)
+                survivor_mean = name in SURVIVOR_MEAN_TERMS and not (
+                    name == "lf"
+                    and ("lf_cells" in terms or "lf_cells" in (self.baseline_terms or {}))
+                )
+                if survivor_mean:
+                    observed = fraction * observed + (1.0 - fraction) * penalty
+                else:
+                    # Fixed-denominator reducers already divided by all rows; never discount twice.
+                    observed += (1.0 - fraction) * penalty
+            if not fixed_units:
+                observed *= TERM_UNITS[name]
+            contribution = weight * observed
+            if not math.isfinite(contribution):
+                raise ValueError(f"contribution for {name} must be finite")
+            out[name] = contribution
+        return out
 
     def unreached(self, terms: dict[str, float]) -> list[tuple[str, float, float]]:
         """Weighted terms whose cells held no comparison, worst share first.
@@ -324,31 +478,26 @@ class LossWeights:
         and its size is the cap rather than the distance.
 
         Neither is a measurement, and the objective charges both as though it
-        were. Reported rather than reweighted, for the reason `_went_unmeasurable`
-        gives: dropping a cell nothing could compare is how an empty set comes to
-        score as a match. Each entry is the term, how much of the loss it
+        were. Reported rather than reweighted, for the same reason the coverage
+        guard exists: dropping a cell nothing could compare is how an empty set
+        comes to score as a match. Each entry is the term, how much of the loss it
         carries, and how many cells it had — zero meaning the reference offered
         nothing, and any other number meaning that many caps and no comparison.
         """
+        contributions = self.term_contributions(terms, fixed_units=True)
         out: list[tuple[str, float, float]] = []
         for name in self.active():
             cells = terms.get(f"{name}_cells")
             if cells is None or cells > terms.get(f"{name}_capped", 0.0):
                 continue
-            share = (
-                self.weights[name]
-                * terms.get(name, 0.0)
-                / TERM_UNITS[name]
-                / (self.reference or 1.0)
-            )
+            share = contributions.get(name, 0.0) / (self.reference or 1.0)
             out.append((name, share, cells))
         return sorted(out, key=lambda e: -e[1])
 
     def calibrate(self, terms: dict[str, float]) -> None:
         """Adopt `terms` as the reference point every term is measured against."""
+        self.anchor(terms)
         self.scales = dict(TERM_UNITS)
-        self.baseline_counts = {t: float(terms.get(key, 0.0)) for t, key in TERM_COUNT_KEYS.items()}
-        self.baseline_units = {t: terms.get(t, 0.0) / TERM_UNITS[t] for t in LOSS_TERMS}
         # Divide by the reference point's own score rather than by the sum of
         # the weights: the terms no longer start at one unit each, so the weight
         # sum is not what the start actually scores, and a loss whose start is
@@ -358,45 +507,8 @@ class LossWeights:
         self.reference = scored if scored > 0.0 else 1.0
 
     def _weighted(self, terms: dict[str, float]) -> float:
-        total = 0.0
-        for name in LOSS_TERMS:
-            w = self.weights.get(name, 0.0)
-            if w <= 0.0:
-                continue
-            value = terms.get(name, 0.0)
-            if self._went_unmeasurable(name, terms):
-                # A term that could be measured at the start point and cannot be
-                # measured here is charged its worst rather than credited its
-                # best. Every averaged term skips the points it cannot use and
-                # divides by the survivors, which is right until there are none:
-                # then the sum is 0.0 over 0 points and 0.0 is that term's best
-                # possible score. A render whose modes vanished, whose vibrato
-                # stopped being detectable or whose partials fell under the
-                # floor therefore reads as the render that fixed the term, and
-                # a search will take that trade every time it is offered.
-                #
-                # Each helper already reports its own count for exactly this
-                # reason; nothing read them. `loss_terms` handles the harmonic
-                # ladder's version of this by refusing the whole comparison,
-                # which is right when the ladder is the objective and too blunt
-                # when one term of ten has gone quiet.
-                #
-                # Charged against the term's own start value, so the trade stays
-                # as unattractive as it was when every term started at one unit.
-                start = (self.baseline_units or {}).get(name, 0.0)
-                total += w * UNMEASURABLE_PENALTY * max(start, UNMEASURABLE_MIN_UNITS)
-                continue
-            total += w * (value / self.scales[name] if self.scales else value)
-        return total
-
-    def _went_unmeasurable(self, name: str, terms: dict[str, float]) -> bool:
-        """Did this term have data at the start point and have none now?"""
-        if not self.baseline_counts:
-            return False
-        key = TERM_COUNT_KEYS.get(name)
-        if key is None:
-            return False
-        return self.baseline_counts.get(name, 0.0) > 0.0 and terms.get(key, 0.0) <= 0.0
+        fixed_units = self.scales is not None
+        return sum(self.term_contributions(terms, fixed_units=fixed_units).values())
 
     def combine(self, terms: dict[str, float] | None) -> float:
         if terms is None:

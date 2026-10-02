@@ -142,7 +142,7 @@ def test_a_term_made_entirely_of_caps_is_reported_as_unreached():
     # And it is still charged: reporting is not excusing, because a cell nothing
     # could compare must not be dropped from the mean.
     assert weights.combine(start) == pytest.approx(1.0)
-    assert weights.combine(_terms(harm=40.0, slope=0.0)) < 1.0
+    assert weights.combine(_terms(harm=40.0, slope=0.0, slope_cells=24.0)) < 1.0
 
 
 def test_a_term_whose_reference_offered_no_cells_is_reported_too():
@@ -159,6 +159,84 @@ def test_a_term_with_comparisons_behind_it_is_not_reported():
     start = _terms(slope=12.0) | {"slope_cells": 24.0, "slope_capped": 23.0}
     weights.calibrate(start)
     assert weights.unreached(start) == []
+
+
+def test_a_partially_measured_term_pays_for_the_missing_cells():
+    """A candidate cannot win by dropping the cells that disagree with it."""
+    weights = LossWeights({"mod": 1.0})
+    baseline = _terms(mod=10.0, mod_notes=100.0)
+    weights.calibrate(baseline)
+
+    candidate = _terms(mod=0.0, mod_notes=10.0)
+    assert weights.coverage("mod", candidate) == pytest.approx(0.1)
+    expected_units = 0.1 * 0.0 + 0.9 * 2.0 * (10.0 / TERM_UNITS["mod"])
+    assert weights.term_contributions(candidate)["mod"] == pytest.approx(expected_units)
+    assert weights.combine(candidate) * weights.reference == pytest.approx(expected_units)
+    assert weights.combine(candidate) > 1.0
+
+
+def test_a_fixed_denominator_aggregate_is_not_discounted_twice_on_dropout():
+    """A summed term already includes the fraction of rows it measured.
+
+    Percussion tilt is reduced as ``total / n``.  With one of ten rows absent,
+    multiplying its 8.55 residual by 0.9 again would falsely make it look
+    better before the missing-row penalty is applied.
+    """
+    weights = LossWeights({"tilt": 1.0})
+    baseline = _terms(tilt=10.0, tilt_hits=10.0)
+    weights.calibrate(baseline)
+
+    candidate = _terms(tilt=8.55, tilt_hits=9.0)
+    expected_units = 8.55 + 0.1 * 2.0 * max(10.0, 1.0)
+    assert weights.coverage("tilt", candidate) == pytest.approx(0.9)
+    assert weights.term_contributions(candidate)["tilt"] == pytest.approx(expected_units)
+    assert weights.combine(candidate) * weights.reference == pytest.approx(expected_units)
+
+
+def test_a_survivor_mean_relation_is_weighted_by_its_remaining_coverage():
+    weights = LossWeights({"kit": 1.0})
+    baseline = _terms(kit=10.0, kit_notes=10.0)
+    weights.calibrate(baseline)
+
+    candidate = _terms(kit=8.55, kit_notes=9.0)
+    expected_units = 0.9 * (8.55 / TERM_UNITS["kit"]) + 0.1 * 2.0 * max(
+        10.0 / TERM_UNITS["kit"], 1.0
+    )
+    assert weights.term_contributions(candidate)["kit"] == pytest.approx(expected_units)
+
+
+def test_a_term_with_equal_or_increased_coverage_keeps_the_observed_value():
+    weights = LossWeights({"mod": 1.0})
+    baseline = _terms(mod=10.0, mod_notes=100.0)
+    weights.calibrate(baseline)
+
+    equal = _terms(mod=0.0, mod_notes=100.0)
+    increased = _terms(mod=0.0, mod_notes=120.0)
+    assert weights.term_contributions(equal)["mod"] == pytest.approx(0.0)
+    assert weights.term_contributions(increased)["mod"] == pytest.approx(0.0)
+
+
+def test_a_raw_loss_can_be_anchored_without_normalising():
+    weights = LossWeights({"mod": 1.0})
+    weights.anchor(_terms(mod=10.0, mod_notes=100.0))
+    candidate = _terms(mod=0.0, mod_notes=10.0)
+    expected_raw = 0.9 * 2.0 * max(10.0, TERM_UNITS["mod"])
+    assert weights.scales is None
+    assert weights.combine(candidate) == pytest.approx(expected_raw)
+    assert weights.term_contributions(candidate, fixed_units=False)["mod"] == pytest.approx(
+        expected_raw
+    )
+
+
+def test_loss_weights_reject_nonfinite_measurements():
+    weights = LossWeights({"mod": 1.0})
+    with pytest.raises(ValueError, match="finite"):
+        weights.anchor(_terms(mod=float("nan"), mod_notes=100.0))
+    weights.anchor(_terms(mod=10.0, mod_notes=100.0))
+    with pytest.raises(ValueError, match="finite"):
+        weights.coverage("mod", _terms(mod=1.0, mod_notes=float("inf")))
+    with pytest.raises(ValueError, match="finite"):
+        weights.combine(_terms(mod=float("nan"), mod_notes=100.0))
 
 
 def test_every_loss_term_has_a_perceptual_unit():
@@ -617,6 +695,9 @@ def _anchoring_evaluator(normalize: bool, start_terms: dict):
 
     class _Loss:
         scales = None
+
+        def anchor(self, terms):
+            pass
 
         def calibrate(self, terms):
             self.scales = {}

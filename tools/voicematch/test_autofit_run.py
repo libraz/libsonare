@@ -138,6 +138,29 @@ def test_a_winner_that_loses_off_the_probe_writes_nothing_either():
     assert winner_or_defaults(knobs, [0.9], won, None) == [0.9]
 
 
+def test_a_validation_fallback_pairs_selected_values_with_selected_loss():
+    """A held-out refusal must not report the search loss for the defaults."""
+
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
+    terms = {("0.25",): {"harm": 1.0}, ("0.9",): {"harm": 0.2}}
+    losses = {("0.25",): 1.0, ("0.9",): 0.5}
+    evaluator = argparse.Namespace(
+        normalize=True,
+        best_loss=0.5,
+        terms_for=lambda values: terms.get(tuple(str(value) for value in values)),
+        loss_for=lambda values: losses.get(tuple(str(value) for value in values)),
+    )
+    selected = winner_or_defaults(
+        knobs,
+        [0.9],
+        evaluator,
+        {"axis": "notes", "held_out": [72], "start": 1.0, "best": 1.2},
+    )
+    assert selected == [0.25]
+    assert evaluator.selected_values == [0.25]
+    assert evaluator.selected_loss == pytest.approx(1.0)
+
+
 def test_a_winner_that_left_the_reference_behind_writes_nothing():
     """`tnr` charges only where the model is noisier, so leaving is free.
 
@@ -350,7 +373,7 @@ def test_an_off_store_writes_nothing_anywhere(tmp_path):
 
 @pytest.mark.parametrize(
     "change",
-    ["library", "harness", "oracle", "probe", "knobs", "corpus"],
+    ["library", "harness", "oracle", "probe", "knobs", "corpus", "loss_tail_fraction"],
 )
 def test_the_signature_moves_with_everything_a_stored_value_depends_on(
     tmp_path,
@@ -374,6 +397,8 @@ def test_the_signature_moves_with_everything_a_stored_value_depends_on(
         ev.oracle = [{"note": 61}]
     elif change == "probe":
         ev.args.notes = "48,60"
+    elif change == "loss_tail_fraction":
+        ev.args.loss_tail_fraction = 0.0
     elif change == "knobs":
         ev.knobs = [replace(ev.knobs[0], label="y.k", tunable="y.k")]
     elif change == "corpus":
@@ -646,6 +671,26 @@ def test_each_refusal_is_distinguishable_and_a_write_names_none():
 
 def test_fold_write_back_verdict_is_a_noop_without_an_out_path():
     autofit._fold_write_back_verdict("", argparse.Namespace())  # must not raise
+
+
+def test_fold_write_back_verdict_keeps_nonfinite_measurements_as_json_null(tmp_path):
+    out = tmp_path / "result.json"
+    out.write_text(json.dumps({"loss": {"best": None}}))
+    evaluator = argparse.Namespace(
+        write_back_refusal=None,
+        start_tnr_notes=float("inf"),
+        best_tnr_notes=float("nan"),
+        start_tnr_absent=None,
+        best_tnr_absent=None,
+        start_tnr_past_db=None,
+        best_tnr_past_db=float("-inf"),
+    )
+    autofit._fold_write_back_verdict(str(out), evaluator)
+    text = out.read_text()
+    assert "Infinity" not in text and "NaN" not in text
+    record = json.loads(text)
+    assert record["write_back"]["tnr_notes"] == {"start": None, "best": None}
+    assert record["write_back"]["tnr_past_db"] == {"start": None, "best": None}
 
 
 def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):

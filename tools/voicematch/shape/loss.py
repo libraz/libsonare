@@ -108,18 +108,15 @@ class Terms:
     #: of them and must not read as one.
     unscored: tuple = ()
 
-    #: Per gated term, how many of the note-and-layer pairs could be read at all.
-    #: A term that survives on some pairs is IN the total, so the ones it could
-    #: not be read for leave no trace in the number -- and on a kit that is not a
-    #: rounding matter: the pieces a gate refuses are the long ones, whose
-    #: recording ends while they are still ringing, and they are the pieces whose
-    #: whole identity is the thing the refused term measures. Named here for the
-    #: same reason `unscored` is, one level down: a term scored on two thirds of
-    #: the set is not the term it prints as.
+    #: Per gated term, how many scalar readings were observed versus expected.
+    #: The reference defines the expected opportunities, so a candidate cannot
+    #: improve a score by making its own bands or windows disappear. A term
+    #: scored on two thirds of its expected readings carries that denominator in
+    #: the report rather than looking like a complete measurement.
     coverage: dict = field(default_factory=dict)
 
     def short(self) -> tuple:
-        """Terms that were read for some pairs and not others, worst first."""
+        """Terms that were read for some opportunities and not others."""
         rows = [
             (got / max(1, asked), k) for k, (got, asked) in self.coverage.items() if got < asked
         ]
@@ -137,6 +134,10 @@ class Terms:
                 + "]"
             )
         return out
+
+
+# Upper-tail fraction of per-note spectrum residuals the loss averages over.
+DEFAULT_SPECTRUM_TAIL_FRACTION = 0.25
 
 
 @dataclass
@@ -167,6 +168,11 @@ class ShapeLoss:
     #: keeps the whole grid analysed with no cap at all, so this is proportional
     #: to a cost the comparison was paying before the cache existed.
     cache_mb: float = 384.0
+    #: Fraction of the worst per-note spectral residuals to retain in the
+    #: aggregate. A pooled RMS can hide one badly wrong note among many good
+    #: ones; the upper-tail mean keeps that failure visible without adding a
+    #: second objective term. ``None`` restores the historical pooled score.
+    spectrum_tail_fraction: float | None = DEFAULT_SPECTRUM_TAIL_FRACTION
 
     def __post_init__(self) -> None:
         self._ref: dict = {}
@@ -177,6 +183,8 @@ class ShapeLoss:
         self.rendered = 0
         if self.weights is None:
             self.weights = dict(DEFAULT_WEIGHTS if self.pitched else STRUCK_WEIGHTS)
+        if self.spectrum_tail_fraction is not None and not 0.0 < self.spectrum_tail_fraction <= 1.0:
+            raise ValueError("spectrum_tail_fraction must be in (0, 1] or None")
         end = self.spectro.seconds
         self.release_pre = (self.note_off_s - 0.5, self.note_off_s - 0.1)
         self.release_post = (min(self.note_off_s + 1.1, end - 0.4), end)
@@ -349,9 +357,9 @@ class ShapeLoss:
         per_note, cells, grids = {}, [], {}
         onset_err, res_err, rel_err, bal_err = [], [], [], []
         den_err, pro_err = [], []
-        # Pairs a gated term could be read for at all. Only the gated ones are
-        # counted; the rest answer for every pair by construction.
-        read = {k: 0 for k in ("release", "residue", "density", "prompt")}
+        # Readings each gated term could answer, as the reference defines them.
+        coverage_expected = {k: 0 for k in ("onset_dip", "release", "residue", "density", "prompt")}
+        coverage_observed = {k: 0 for k in coverage_expected}
         mcurves, rcurves = {}, {}
         mpeaks, rpeaks = {}, {}
         for k in keys:
@@ -369,20 +377,32 @@ class ShapeLoss:
                     terms.ONSET_CLIP,
                 )
             )
-            # Post-attack sag; bands not live on both sides are dropped, not scored as agreement.
+            # Post-attack sag over the reference's bins; a bin the model loses is a charged miss.
             md, rd = mo["onset_dip"], r["onset_dip"]
-            live = ~np.isnan(md) & ~np.isnan(rd)
-            if live.any():
-                onset_err.append(np.clip(md[live] - rd[live], -terms.ONSET_CLIP, terms.ONSET_CLIP))
+            reference_finite = np.isfinite(rd)
+            model_finite = np.isfinite(md)
+            coverage_expected["onset_dip"] += int(reference_finite.sum())
+            coverage_observed["onset_dip"] += int((reference_finite & model_finite).sum())
+            if reference_finite.any():
+                present = reference_finite & model_finite
+                dip_err = np.full(int(reference_finite.sum()), terms.ONSET_CLIP)
+                dip_err[model_finite[reference_finite]] = np.clip(
+                    md[present] - rd[present], -terms.ONSET_CLIP, terms.ONSET_CLIP
+                )
+                onset_err.append(dip_err)
 
             # One-sided, and scored only while the reference still had a note to
             # damp: once it has decayed past seventy decibels under its own peak
             # the ratio is about its floor and not about its felt.
             if self.pitched and r["release"][0] > -70.0:
-                read["release"] += 1
-                rel_err.append(
-                    min(max(mo["release"][1] - r["release"][1], 0.0), terms.RELEASE_CLIP)
-                )
+                coverage_expected["release"] += 1
+                if np.isfinite(mo["release"][1]):
+                    coverage_observed["release"] += 1
+                    rel_err.append(
+                        min(max(mo["release"][1] - r["release"][1], 0.0), terms.RELEASE_CLIP)
+                    )
+                else:
+                    rel_err.append(terms.RELEASE_CLIP)
 
             M = mo["M"]
             # Two-sided and gain-free: a band the model under-fills costs
@@ -396,35 +416,52 @@ class ShapeLoss:
                         np.clip(mb[live] - rb[live], -terms.BALANCE_CLIP, terms.BALANCE_CLIP)
                     )
             if self.pitched:
-                read["residue"] += int(r["valid"].any())
-                res_err.append(
-                    np.clip(mo["residue"] - r["residue"], -terms.RESIDUE_CLIP, terms.RESIDUE_CLIP)[
-                        r["valid"]
-                    ]
-                )
+                reference_valid = np.asarray(r["valid"], dtype=bool) & np.isfinite(r["residue"])
+                model_finite = np.isfinite(mo["residue"])
+                coverage_expected["residue"] += int(reference_valid.sum())
+                coverage_observed["residue"] += int((reference_valid & model_finite).sum())
+                if reference_valid.any():
+                    present = reference_valid & model_finite
+                    residue_err = np.full(int(reference_valid.sum()), terms.RESIDUE_CLIP)
+                    residue_err[model_finite[reference_valid]] = np.clip(
+                        mo["residue"][present] - r["residue"][present],
+                        -terms.RESIDUE_CLIP,
+                        terms.RESIDUE_CLIP,
+                    )
+                    res_err.append(residue_err)
             else:
                 # Both are two-sided. Too sparse is a tuned bar and too diffuse
                 # is a hiss, and a strike that keeps its top and one that loses
                 # it are different pieces -- neither direction is free.
                 md, mok = mo["density"]
                 rd, rok = r["density"]
-                ok = mok & rok
-                read["density"] += int(ok.any())
-                if ok.any():
-                    den_err.append(
-                        np.clip(md[ok] - rd[ok], -struck.DENSITY_CLIP, struck.DENSITY_CLIP)
+                reference_valid = np.asarray(rok, dtype=bool) & np.isfinite(rd)
+                model_valid = np.asarray(mok, dtype=bool) & np.isfinite(md)
+                coverage_expected["density"] += int(reference_valid.sum())
+                coverage_observed["density"] += int((reference_valid & model_valid).sum())
+                if reference_valid.any():
+                    present = reference_valid & model_valid
+                    density_err = np.full(int(reference_valid.sum()), struck.DENSITY_CLIP)
+                    density_err[model_valid[reference_valid]] = np.clip(
+                        md[present] - rd[present], -struck.DENSITY_CLIP, struck.DENSITY_CLIP
                     )
+                    den_err.append(density_err)
                 # The REFERENCE decides which bands are asked about. A model
                 # silent where the instrument is not is the finding, so its own
                 # mask must not be allowed to withdraw the question.
-                mp, _ = mo["prompt"]
+                mp, mpok = mo["prompt"]
                 rp, rpok = r["prompt"]
-                ok = rpok
-                read["prompt"] += int(ok.any())
-                if ok.any():
-                    pro_err.append(
-                        np.clip(mp[ok] - rp[ok], -struck.PROMPT_CLIP, struck.PROMPT_CLIP)
+                reference_valid = np.asarray(rpok, dtype=bool)
+                model_valid = np.asarray(mpok, dtype=bool) & np.isfinite(mp)
+                coverage_expected["prompt"] += int(reference_valid.sum())
+                coverage_observed["prompt"] += int((reference_valid & model_valid).sum())
+                if reference_valid.any():
+                    ok = reference_valid & model_valid
+                    prompt_err = np.full(int(reference_valid.sum()), struck.PROMPT_CLIP)
+                    prompt_err[model_valid[reference_valid]] = np.clip(
+                        mp[ok] - rp[ok], -struck.PROMPT_CLIP, struck.PROMPT_CLIP
                     )
+                    pro_err.append(prompt_err)
             mcurves.setdefault(k[1], []).append(mo["curve"])
             rcurves.setdefault(k[1], []).append(r["curve"])
             mpeaks.setdefault(k[1], []).append(mo["peaks"])
@@ -466,7 +503,16 @@ class ShapeLoss:
 
         da = np.concatenate([a for a, _ in cells])
         wa = np.concatenate([b for _, b in cells])
-        parts = {"spectrum": float(np.sqrt(np.sum(wa * da**2) / np.sum(wa)))}
+        pooled_spectrum = float(np.sqrt(np.sum(wa * da**2) / np.sum(wa)))
+        if self.spectrum_tail_fraction is None or not per_note:
+            spectrum = pooled_spectrum
+        else:
+            ordered = np.sort(np.asarray(tuple(per_note.values()), dtype=float))
+            tail_count = max(1, int(np.ceil(len(ordered) * self.spectrum_tail_fraction)))
+            tail = float(np.mean(ordered[-tail_count:]))
+            # Keep the larger dB RMS so a broad average cannot hide a few badly wrong notes.
+            spectrum = max(pooled_spectrum, tail)
+        parts = {"spectrum": spectrum}
         oe = np.concatenate(onset_err)
         parts["onset"] = float(np.sqrt(np.mean(oe**2)))
         if self.pitched:
@@ -559,6 +605,10 @@ class ShapeLoss:
             per_note=per_note,
             gain_db=g,
             unscored=missing,
-            coverage={k: (n, len(keys)) for k, n in read.items() if k in parts},
+            coverage={
+                k: (coverage_observed[k], coverage_expected[k])
+                for k in coverage_expected
+                if k in parts or coverage_expected[k]
+            },
         )
         return (out, grids) if detail else out

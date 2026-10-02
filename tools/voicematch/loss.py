@@ -66,6 +66,7 @@ from loss_dimensions import (
     _brightness,
     _dyn_terms,
     _fell_silent,
+    _finite_or_none,
     _level_terms,
     _lf_balance_db,
     _mod_terms,
@@ -128,6 +129,7 @@ from metrics import (
     stretch_cents,
 )
 from metrics_hit import ring_doublings
+from metrics_texture import DENSITY_CLIP, PROMPT_CLIP
 from patterns import analysis_window_end
 from toneclass import default_weights
 
@@ -540,6 +542,36 @@ def fixed_resonances(rows: list[dict], *, recurrence_only: bool = False) -> list
     return out
 
 
+def _cell_sequence(value):
+    """Return an array-like metric cell sequence, or ``None`` if it is absent."""
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return value
+    return None
+
+
+def _limited_cells(value, limit: int | None = None):
+    cells = _cell_sequence(value)
+    return None if cells is None else cells[:limit]
+
+
+def _reference_indexed_pairs(model_values, oracle_values):
+    """Yield candidate/reference cells using the reference as the denominator.
+
+    Metric arrays are evidence grids, not positional records. The reference
+    decides which cells exist; an absent or truncated candidate therefore
+    yields ``None`` for each finite oracle cell and is charged by
+    :func:`_absent_or`. A missing reference field yields no cells and remains
+    unknown, which keeps older cached profiles compatible with new metrics.
+    """
+    oracle = _cell_sequence(oracle_values)
+    if oracle is None:
+        return
+    model = _cell_sequence(model_values)
+    for index, oracle_value in enumerate(oracle):
+        candidate = model[index] if model is not None and index < len(model) else None
+        yield candidate, oracle_value
+
+
 def loss_terms(
     model_rows: list[dict],
     oracle_rows_: list[dict],
@@ -667,27 +699,36 @@ def loss_terms(
         )
         totals["env"] += abs(m["release_ms"] - o["release_ms"]) / 100.0
         totals["env"] += _attack_delta_ms(m, o) / 10.0
-        if "skeleton" in m and "skeleton" in o:
-            sm, so = m["skeleton"], o["skeleton"]
-            for a, b in zip(sm["init_db"], so["init_db"]):
+        oracle_skeleton = o.get("skeleton")
+        if isinstance(oracle_skeleton, dict):
+            model_skeleton = m.get("skeleton") if isinstance(m.get("skeleton"), dict) else {}
+            for a, b in _reference_indexed_pairs(
+                model_skeleton.get("init_db"), oracle_skeleton.get("init_db")
+            ):
                 totals["init"] += _absent_or(a, b, 12.0, cells["init"])
             for key in ("early_db_s", "late_db_s"):
-                for a, b in zip(sm[key][:6], so[key][:6]):
+                for a, b in _reference_indexed_pairs(
+                    _limited_cells(model_skeleton.get(key), 6),
+                    _limited_cells(oracle_skeleton.get(key), 6),
+                ):
                     totals["slope"] += _absent_or(a, b, 30.0, cells["slope"]) / 10.0
-            for a, b in zip(sm.get("tail_db_s", [])[:6], so.get("tail_db_s", [])[:6]):
+            for a, b in _reference_indexed_pairs(
+                _limited_cells(model_skeleton.get("tail_db_s"), 6),
+                _limited_cells(oracle_skeleton.get("tail_db_s"), 6),
+            ):
                 totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S, cells["tail"]) / 10.0
-        for a, b in zip(m.get("attack_hf_db", []), o.get("attack_hf_db", [])):
+        for a, b in _reference_indexed_pairs(m.get("attack_hf_db"), o.get("attack_hf_db")):
             totals["hf"] += _absent_or(a, b, HF_DELTA_CAP_DB, cells["hf"])
         # Averaged over the bands the reference offered, not summed over them,
         # because the percussion branch of this same term is a mean of one
         # number per hit: summed, one name would carry two aggregates five
         # times apart and no single unit could scale both. The denominator is
         # the ORACLE's band count, so a candidate cannot shrink it.
-        lf_parts = [
-            _absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"])
-            for a, b in zip(m.get("attack_lf_db", []), o.get("attack_lf_db", []))
-            if b is not None
-        ]
+        lf_parts = []
+        for a, b in _reference_indexed_pairs(m.get("attack_lf_db"), o.get("attack_lf_db")):
+            value = _absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"])
+            if _finite_or_none(b) is not None:
+                lf_parts.append(value)
         if lf_parts:
             totals["lf"] += sum(lf_parts) / len(lf_parts)
     if _fell_silent(model_rows, oracle_rows_):
@@ -707,7 +748,8 @@ def loss_terms(
     out["mss"] = mss
     out["mod"], mod_notes = _mod_terms(model_rows, oracle_rows_, cells["mod"])
     out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_, cells["modes"])
-    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_)
+    level_counts: dict[str, float] = {}
+    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
     out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_)
@@ -732,6 +774,7 @@ def loss_terms(
     out["harm_bins"] = float(compared)
     for term, tally in cells.items():
         out.update(tally.out(term))
+    out.update(level_counts)
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out
@@ -775,7 +818,8 @@ def percussion_terms(
     strike_hits = 0
     # See `CellCount` and the pitched reducer: how much of each capped aggregate
     # is a comparison rather than a cap standing in for one.
-    cells = {t: CellCount() for t in ("band", "bdecay", "modes")}
+    cells = {t: CellCount() for t in ("band", "bdecay", "modes", "density", "prompt")}
+    density_bins = prompt_bins = 0
     for m, o in zip(model_rows, oracle_rows_):
         tilt_m, tilt_o = band_tilt_db(m.get("bands_db")), band_tilt_db(o.get("bands_db"))
         if tilt_m is not None and tilt_o is not None:
@@ -800,6 +844,48 @@ def percussion_terms(
         if ring is not None:
             totals["ring"] += abs(ring)
             ring_hits += 1
+        # A reference cell the model lacks costs the cap; absent reference fields are unmeasured.
+        for value_key, valid_key, term, cap, counter_name in (
+            ("modal_density", "modal_density_valid", "density", DENSITY_CLIP, "density_bins"),
+            ("prompt_late_db", "prompt_late_valid", "prompt", PROMPT_CLIP, "prompt_bins"),
+        ):
+            model_values, model_valid = m.get(value_key), m.get(valid_key)
+            oracle_values, oracle_valid = o.get(value_key), o.get(valid_key)
+            sequence = (list, tuple, np.ndarray)
+            if not isinstance(oracle_values, sequence) or not isinstance(oracle_valid, sequence):
+                # Legacy profiles have no answer to this new question.
+                continue
+            for i, oracle_ok in enumerate(oracle_valid):
+                if not oracle_ok or i >= len(oracle_values):
+                    cells[term].skipped += 1
+                    continue
+                oracle_value = oracle_values[i]
+                if not np.isscalar(oracle_value) or not math.isfinite(float(oracle_value)):
+                    cells[term].skipped += 1
+                    continue
+                if counter_name == "density_bins":
+                    density_bins += 1
+                else:
+                    prompt_bins += 1
+                model_ok = (
+                    isinstance(model_values, sequence)
+                    and isinstance(model_valid, sequence)
+                    and i < len(model_values)
+                    and i < len(model_valid)
+                    and bool(model_valid[i])
+                    and np.isscalar(model_values[i])
+                    and math.isfinite(float(model_values[i]))
+                )
+                if not model_ok:
+                    totals[term] += cap
+                    cells[term].absent += 1
+                    continue
+                delta = abs(float(model_values[i]) - float(oracle_value))
+                totals[term] += min(delta, cap)
+                if delta >= cap:
+                    cells[term].clipped += 1
+                else:
+                    cells[term].compared += 1
         for a, b in zip(m["bands_db"], o["bands_db"]):
             if b <= BAND_REFERENCE_FLOOR_DB:
                 # The reference has floored this band. See
@@ -839,7 +925,8 @@ def percussion_terms(
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
     out["mss"] = mss
-    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_)
+    level_counts: dict[str, float] = {}
+    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
     out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_)
@@ -871,6 +958,8 @@ def percussion_terms(
     # opposite case and is out of that table on purpose; see its own comment.
     out["band_bins"] = float(band_bins)
     out["bdecay_bins"] = float(bdecay_bins)
+    out["density_bins"] = float(density_bins)
+    out["prompt_bins"] = float(prompt_bins)
     # Both skip when either side has no profile or no centroid to read, which a
     # candidate can cause by rendering silence, so both are counted and guarded.
     out["tilt_hits"] = float(tilt_hits)
@@ -881,6 +970,7 @@ def percussion_terms(
     out["ring_hits"] = float(ring_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))
+    out.update(level_counts)
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out

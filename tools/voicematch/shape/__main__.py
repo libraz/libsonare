@@ -29,7 +29,7 @@ from corpus import load_corpus
 
 from . import admittance, attack, probes, purity, struck, takes
 from .bed import Bed
-from .loss import ShapeLoss
+from .loss import DEFAULT_SPECTRUM_TAIL_FRACTION, ShapeLoss
 from .partials import Track
 from .render import (
     Signals,
@@ -38,17 +38,35 @@ from .render import (
     write_overrides,
 )
 from .search import (
+    KEEP_DB,
     Descent,
     ablate,
     prune,
     split_notes,
+    split_notes_three_way,
     split_velocities,
+    split_velocities_three_way,
     summarise,
+    validate_final,
 )
 from .spectro import Spectro
 from .terms import ONSET_BANDS
 
 CAPTURE_DIR = Path(__file__).resolve().parents[1] / "capture"
+
+
+def _spectrum_tail(value):
+    if isinstance(value, str) and value.lower() in {"none", "off"}:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(
+            "spectrum tail must be a fraction in (0, 1] or 'none'"
+        ) from exc
+    if not 0.0 < value <= 1.0:
+        raise argparse.ArgumentTypeError("spectrum tail must be a fraction in (0, 1] or 'none'")
+    return value
 
 
 def build(args):
@@ -123,6 +141,7 @@ def build(args):
         note_off_s=preroll + gate_s,
         velocities=vels,
         pitched=not percussion,
+        spectrum_tail_fraction=getattr(args, "spectrum_tail", DEFAULT_SPECTRUM_TAIL_FRACTION),
     )
     return cap, corpus, sigs, loss, notes
 
@@ -156,33 +175,154 @@ def holdout(loss, notes):
     return notes, notes, hold
 
 
-def _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss):
-    """Price every move, run the threshold ladder, and print both."""
-    kept, report = prune(
-        loss, base, moves, fit_notes, hold_notes, workers=args.workers, hold_loss=hold_loss
-    )
-    print("\n" + summarise(report["contributions"], base, moves))
-    print(f"\nbefore  fit {report['before']['fit']:.3f}  hold {report['before']['hold']:.3f}")
-    for a in report["attempts"]:
-        mark = "*" if a["keep_db"] == report["keep_db"] else " "
-        thresh = "all" if a["keep_db"] is None else f"{a['keep_db']:g}"
-        print(
-            f"prune{mark} keep>{thresh:<5} fit {a['fit']:.3f}  hold {a['hold']:.3f}"
-            f"   ({a['kept']} of {len(moves)} moves)"
+def validation_partitions(loss, notes):
+    """Build disjoint fit, selection and final inputs for a fit run.
+
+    Pitched voices use note partitions. A struck piece keeps every note in all
+    three score calls and partitions its velocity layers instead, because a
+    note number selects a different patch on a kit. Empty partitions are kept
+    as ``None`` losses and reported as unavailable; no layer is duplicated to
+    make a small capture look independently validated.
+    """
+    if loss.pitched:
+        partitions = split_notes_three_way(notes)
+        return (
+            partitions,
+            loss,
+            loss if partitions.selection else None,
+            loss if partitions.final else None,
+            partitions.fit,
+            partitions.selection,
+            partitions.final,
         )
-    out = write_overrides({**base, **kept}, base)
+
+    partitions = split_velocities_three_way(loss.velocities)
+    fit_loss = replace(loss, velocities=partitions.fit) if partitions.fit else None
+    selection_loss = (
+        replace(loss, velocities=partitions.selection) if partitions.selection else None
+    )
+    final_loss = replace(loss, velocities=partitions.final) if partitions.final else None
+    return (
+        partitions,
+        fit_loss,
+        selection_loss,
+        final_loss,
+        tuple(notes),
+        tuple(notes),
+        tuple(notes),
+    )
+
+
+def _write_report(path, report):
+    if path:
+        Path(path).write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+
+
+def _report_prune(
+    args,
+    loss,
+    base,
+    moves,
+    fit_notes,
+    hold_notes,
+    hold_loss,
+    partitions,
+    final_loss,
+    final_notes,
+):
+    """Price moves, select on the middle partition, then test once at the end."""
+    if hold_loss is None or not hold_notes:
+        kept = dict(moves)
+        report = {
+            "skipped": True,
+            "reason": partitions.reason or "selection validation unavailable",
+            "before": None,
+            "after": None,
+            "attempts": [],
+            "dropped": [],
+            "contributions": {},
+        }
+        print(f"\nprune unavailable: {report['reason']}")
+    else:
+        kept, report = prune(
+            loss, base, moves, fit_notes, hold_notes, workers=args.workers, hold_loss=hold_loss
+        )
+        print("\n" + summarise(report["contributions"], base, moves))
+        print(f"\nbefore  fit {report['before']['fit']:.3f}  hold {report['before']['hold']:.3f}")
+        for a in report["attempts"]:
+            mark = "*" if a["keep_db"] == report["keep_db"] else " "
+            thresh = "all" if a["keep_db"] is None else f"{a['keep_db']:g}"
+            print(
+                f"prune{mark} keep>{thresh:<5} fit {a['fit']:.3f}  hold {a['hold']:.3f}"
+                f"   ({a['kept']} of {len(moves)} moves)"
+            )
+
+    # Separate names keep a final regression from reading as a pruning result.
+    written, final = validate_final(
+        final_loss,
+        base,
+        kept,
+        final_notes if partitions.final else (),
+        keep_db=KEEP_DB,
+        unavailable_reason=partitions.reason,
+    )
+    print(f"\nfinal_validation  {final['reason']}")
+    if final["available"]:
+        shipped = final["shipped"]["total"]
+        selected = final["selected"]["total"]
+        print(
+            f"  shipped {shipped:.3f}  selected {selected:.3f}  "
+            f"delta {final['delta_db']:+.3f}  KEEP_DB {KEEP_DB:.3f}"
+        )
+    elif final["reason"]:
+        print(f"  unavailable: {final['reason']}")
+
+    out = write_overrides({**base, **written}, base)
     print("\n" + out)
     if args.out:
         Path(args.out).write_text(out + "\n")
+    final_report = {
+        "schema_version": 1,
+        "axis": partitions.axis,
+        "partitions": {
+            "fit": list(partitions.fit),
+            "selection": list(partitions.selection),
+            "final": list(partitions.final),
+            "available": partitions.available,
+            "independent": partitions.independent,
+            "reason": partitions.reason,
+        },
+        "search_winner": {
+            "moves": dict(moves),
+            "overrides": write_overrides({**base, **moves}, base),
+        },
+        "pruned_selected": {
+            "moves": dict(kept),
+            "overrides": write_overrides({**base, **kept}, base),
+        },
+        "written_selected": {
+            "moves": dict(written),
+            "overrides": out,
+            "fallback_to_shipped": bool(final.get("fallback", False)),
+        },
+        "prune": report,
+        "final_validation": final,
+    }
+    _write_report(getattr(args, "report", ""), final_report)
+    return final_report
 
 
 def cmd_fit(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     deny = set(Path(args.deny).read_text().split()) if args.deny else set()
-    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
+    partitions, fit_loss, hold_loss, final_loss, fit_notes, hold_notes, final_notes = (
+        validation_partitions(loss, notes)
+    )
+    if fit_loss is None:
+        raise SystemExit("fit unavailable: capture has no distinct samples on its fit axis")
     d = Descent(
-        loss=loss,
+        loss=fit_loss,
         base=base,
         fit_notes=fit_notes,
         hold_notes=hold_notes,
@@ -193,7 +333,18 @@ def cmd_fit(args):
     )
     start = read_overrides(Path(args.start).read_text()) if args.start else None
     moves = d.run(start)
-    _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss)
+    _report_prune(
+        args,
+        fit_loss,
+        base,
+        moves,
+        fit_notes,
+        hold_notes,
+        hold_loss,
+        partitions,
+        final_loss,
+        final_notes,
+    )
 
 
 def cmd_prune(args):
@@ -206,17 +357,36 @@ def cmd_prune(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     moves = read_overrides(Path(args.overrides).read_text())
-    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
-    _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss)
+    partitions, fit_loss, hold_loss, final_loss, fit_notes, hold_notes, final_notes = (
+        validation_partitions(loss, notes)
+    )
+    if fit_loss is None:
+        raise SystemExit("fit unavailable: capture has no distinct samples on its fit axis")
+    _report_prune(
+        args,
+        fit_loss,
+        base,
+        moves,
+        fit_notes,
+        hold_notes,
+        hold_loss,
+        partitions,
+        final_loss,
+        final_notes,
+    )
 
 
 def cmd_ablate(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     moves = read_overrides(Path(args.overrides).read_text())
-    fit_notes, hold_notes, hold_loss = holdout(loss, notes)
+    _partitions, fit_loss, hold_loss, _final_loss, fit_notes, hold_notes, _final_notes = (
+        validation_partitions(loss, notes)
+    )
+    if fit_loss is None:
+        raise SystemExit("fit unavailable: capture has no distinct samples on its fit axis")
     scores, (f0, h0) = ablate(
-        loss, base, moves, fit_notes, hold_notes, args.workers, hold_loss=hold_loss
+        fit_loss, base, moves, fit_notes, hold_notes, args.workers, hold_loss=hold_loss
     )
     print(f"fitted set  fit {f0:.3f}  hold {h0:.3f}\n")
     print(summarise(scores, base, moves))
@@ -674,6 +844,12 @@ def main(argv=None):
         q.add_argument("--cache", default="/tmp/voicematch-shape")
         q.add_argument("--no-bed", action="store_true", help="skip the recorded-floor subtraction")
         q.add_argument("--workers", type=int, default=7)
+        q.add_argument(
+            "--spectrum-tail",
+            type=_spectrum_tail,
+            default=DEFAULT_SPECTRUM_TAIL_FRACTION,
+            help="upper-tail fraction of per-note spectrum residuals (or 'none')",
+        )
         return q
 
     common = target(corpus=True)
@@ -691,6 +867,7 @@ def main(argv=None):
     s.add_argument("--deny", default="", help="file of coordinates to leave alone")
     s.add_argument("--start", default="")
     s.add_argument("--out", default="")
+    s.add_argument("--report", default="", help="write fit/prune and final-validation JSON")
     s.add_argument("--passes", type=int, default=4)
     s.set_defaults(fn=cmd_fit)
 
@@ -705,6 +882,7 @@ def main(argv=None):
     s.add_argument("--namespaces", default="")
     s.add_argument("--overrides", required=True)
     s.add_argument("--out", default="")
+    s.add_argument("--report", default="", help="write fit/prune and final-validation JSON")
     s.set_defaults(fn=cmd_prune)
 
     s = sub.add_parser("probe", parents=[common])

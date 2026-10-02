@@ -105,6 +105,8 @@ TERM_UNIT_NAMES = {
     "strike": "dB of tilt over the first 15 ms",
     "ring": "doublings of the time to fall 20 dB",
     "kit": "doublings",
+    "density": "resonances per octave band",
+    "prompt": "dB of band-share change, strike to aftersound",
 }
 
 TERM_MEANS = {
@@ -130,6 +132,8 @@ TERM_MEANS = {
     "never the direction",
     "bright": "where the hit's energy sits, as a percentage of the reference's own centroid",
     "tonal": "whether the hit stands in lines or lies in a continuum — its spectral flatness",
+    "density": "how densely resonances fill each octave of the aftersound",
+    "prompt": "how each octave band's share changes from the strike to the aftersound",
     "ring": "how long the hit rings — the time it takes to fall 20 dB, in doublings",
     "rise": "whether the hit's colour moves after the strike — its tilt 30-60 ms in "
     "against its first 15 ms",

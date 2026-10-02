@@ -112,18 +112,14 @@ then stay there. Notes 49–59 were recorded to 8 s on that criterion and the tw
 rides still ring at the end of it. The open hi-hat was in the same position at
 the kit's 2 s and is the reason the capture now names it at 5 s.
 
-So every score line carries a `[density 35/45]` when a term is short, and a fit
-whose knobs for those pieces cost nothing on that term is reading a silence
-rather than an agreement.
+So every score line carries a `[density got/asked]` when a term is short, and a fit whose knobs for those pieces cost nothing on that term is reading a silence rather than an agreement. The count is in scalar readings — the bands and windows the reference offered — rather than note-and-layer pairs, so a candidate cannot shrink its own denominator by losing a band.
 
 Both new terms are gated on the recording's own floor, and that floor cannot be
 read from a fixed window either: the plane is padded to the longest piece in the
 grid, and padding is exact zeros, which passes as an infinite signal-to-noise
 ratio and is then refused as non-finite. Every band drops out, the term averages
 an empty set, and an empty average scores as a perfect match. `struck.floor_window`
-finds the stretch between the piece's t60 and the last non-zero sample instead,
-and a term nothing could be read for is left out of the total and **named** in
-the score line rather than entered at zero.
+finds the stretch between the piece's t60 and the last non-zero sample instead. A reading the reference has and the model lacks is charged the term's clip, so a candidate cannot win by going unmeasurable; a term the reference offered nothing for is left out of the total and **named** in the score line rather than entered at zero.
 
 ### Where in the strike a band arrives
 
@@ -159,6 +155,8 @@ They are kept apart because they name different repairs, and combined as energie
 
 `balance` is the one term here that is two-sided everywhere, and that is why it exists. Every other measure gives the model a way to be *less* than the reference for free: the cell comparison weights a cell by the louder of the two sides and floors it eighty-five decibels under the note's peak, which puts the whole aftersound at or near the weight floor; `residue` is gated off once the reference has decayed; `invariance` and `release` only charge for excess. Reading each band against the render's **own** total rather than against an absolute level also means two renders compare with no gain removed — a model can be thirteen decibels loud and still be thin, and every measure that starts by aligning levels answers a different question.
 
+`spectrum` reports the larger of the pooled cell RMS and the mean of the worst quarter of per-note residuals, so one badly wrong note cannot hide among many good ones. `--spectrum-tail F` sets that fraction (in `(0, 1]`), and `--spectrum-tail none` restores the pooled score alone.
+
 The last five each exist because the first was measured to be blind to what they ask. The onset occupies six tenths of one percent of the spectrogram's cells, so a fit run on the picture alone trades the strike for the tail every time. The residue escapes through the bed mask, which lets a low ring sit under a treble note for nearly nothing. The release escapes through the weight floor, since a note ringing seventy decibels under its own peak is weighted at three percent. And a resonator that answers every note equally is never a large error on any single one of them, which is what `invariance` is for.
 
 ### The seventh term: recurrence
@@ -189,7 +187,7 @@ The estimator has to earn its use. `Bed.measure` reports the across-note agreeme
 
 ## Hold-out, ablation, pruning
 
-`search.py` splits the capture's notes into a set the descent sees and a set it never does, alternating so that neither is a register. A move that improves the fit while leaving the hold-out alone has learnt the notes it was shown, and a scalar fit on this corpus was caught doing exactly that twice.
+`search.py` splits the capture's notes three ways, interleaved so that none is a register: a fit set the descent sees, a selection set `prune` chooses on, and a final set `validate_final` scores exactly once at the end. A move that improves the fit while leaving the hold-out alone has learnt the notes it was shown, and a scalar fit on this corpus was caught doing exactly that twice. A kit partitions its velocity layers instead, since a note number selects a different patch. The final comparison keeps the pruned set only when it does not regress past `KEEP_DB` against the shipped values; otherwise nothing is written. Fewer than three distinct values leave a partition empty, and the run reports the missing selection or final check as unavailable rather than reusing a note.
 
 Descent accepts a move against the state at the moment it was tried, which is not the state it ends in — so by the end a move may be carrying nothing, or may be compensating for one made after it. `ablate` reverts each move alone in the final state and prices it honestly; `prune` keeps only those that still pay on the held-out notes, which roughly halves the number of constants a change would have to justify.
 
