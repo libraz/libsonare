@@ -39,7 +39,7 @@ class SoftKneeMax : public rt::ProcessorBase {
 
   // Parameters:
   //   0 = input_gain_db (applied per block, no coefficients)
-  //   1 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
+  //   1 = ceiling_db (clamped <= 0; realtime-safe, in-place via inner maximizer)
   //   2 = knee_db (clamped >= 0; applied per block, no coefficients)
   //   3 = release_ms (clamped >= 0; in-place via inner maximizer)
   bool set_parameter_impl(unsigned int param_id, float value) override;

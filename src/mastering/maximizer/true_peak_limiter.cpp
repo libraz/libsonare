@@ -4,9 +4,11 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/sliding_max.h"
 #include "rt/true_peak_fir.h"
@@ -112,10 +114,13 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
     throw SonareException(ErrorCode::InvalidParameter,
                           "max_channels exceeds TruePeakLimiter capacity");
   }
+  const int lookahead_samples = dynamics::checked_lookahead_samples(
+      sample_rate, config_.lookahead_ms,
+      std::numeric_limits<int>::max() / config_.oversample_factor - 1);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
-  lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
+  lookahead_samples_ = lookahead_samples;
   update_time_constants();
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
   limiter_.prepare(sample_rate_, max_block_size_);
@@ -431,15 +436,21 @@ void TruePeakLimiter::reset() {
 
 void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
   validate_config(config);
+  if (prepared_) {
+    (void)dynamics::checked_lookahead_samples(
+        sample_rate_, config.lookahead_ms,
+        std::numeric_limits<int>::max() / config.oversample_factor - 1);
+  }
   // Mirror BrickwallLimiter::set_config: only a structural change (lookahead
-  // length / oversample factor, which size the delay lines and polyphase
-  // filters) requires a full re-prepare. prepare() ends in reset(), wiping all
+  // length / oversample factor / gain-application mode, which select the delay
+  // lines and polyphase topology) requires a full re-prepare. prepare() ends in reset(), wiping all
   // running state (filter histories, gain envelope) — audible mid-stream — so
-  // scalar changes (ceiling, release, gain-application mode) are applied in
+  // scalar changes (ceiling, release) are applied in
   // place instead. The re-prepare branch is control-thread-only and MUST NOT
   // race with process().
   const bool structural = config.lookahead_ms != config_.lookahead_ms ||
-                          config.oversample_factor != config_.oversample_factor;
+                          config.oversample_factor != config_.oversample_factor ||
+                          config.apply_gain_at_input_rate != config_.apply_gain_at_input_rate;
   config_ = config;
   if (!prepared_) return;
   if (structural) {
@@ -451,7 +462,7 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
 }
 
 void TruePeakLimiter::set_release_ms(float release_ms) {
-  if (release_ms < 0.0f) {
+  if (!std::isfinite(release_ms) || release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "true peak limiter release must be non-negative");
   }
@@ -476,14 +487,8 @@ bool TruePeakLimiter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.ceiling_db = std::min(0.0f, value);
-      // The polyphase path reads config_.ceiling_db directly each block (RT-safe).
-      // Forward to the inner brickwall limiter to keep its reported ceiling
-      // consistent; that forward re-prepares the inner limiter, which does not
-      // affect the polyphase gain envelopes used by the active processing path.
-      if (prepared_) {
-        limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
-      }
-      return true;
+      // Update the ceiling in place: set_config() would publish a snapshot and allocate per event.
+      return limiter_.set_parameter(0, config_.ceiling_db);
     case 1:
       // In-place: recomputes time constants and forwards to inner limiter
       // without clearing lookahead or gain-envelope state. Must use the noexcept
@@ -501,11 +506,12 @@ std::vector<rt::ParamDescriptor> TruePeakLimiter::parameter_descriptors() const 
 }
 
 bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
-  return param_id != 0u;
+  return param_id <= 1u;
 }
 
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
-  if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
+  if (!std::isfinite(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
+      !std::isfinite(config.release_ms) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8 &&
        config.oversample_factor != 16)) {

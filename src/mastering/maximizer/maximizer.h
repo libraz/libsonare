@@ -44,7 +44,7 @@ class Maximizer : public rt::ProcessorBase {
 
   // Parameters:
   //   0 = input_gain_db (applied per block, no coefficients)
-  //   1 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
+  //   1 = ceiling_db (clamped <= 0; realtime-safe, in-place)
   //   2 = release_ms (clamped to >= 0; in-place via inner limiter)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=inputGainDb, 1=ceilingDb, 2=releaseMs

@@ -56,11 +56,8 @@ bool Maximizer::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 1:
       config_.ceiling_db = std::min(0.0f, value);
-      // The inner limiter ceiling lives in its config; the only public path is
-      // set_config, which re-prepares (clears lookahead/gain state). Unavoidable.
-      if (prepared_) {
-        limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
-      }
+      // In-place on the inner limiter: no snapshot publish, no allocation.
+      if (prepared_) limiter_.set_parameter(0, config_.ceiling_db);
       return true;
     case 2:
       config_.release_ms = std::max(0.0f, value);
@@ -82,7 +79,7 @@ std::vector<rt::ParamDescriptor> Maximizer::parameter_descriptors() const {
 }
 
 bool Maximizer::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
-  return param_id != 1u;
+  return param_id <= 2u;
 }
 
 void Maximizer::validate_config(const MaximizerConfig& config) {

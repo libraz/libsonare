@@ -170,16 +170,16 @@ TEST_CASE("C-API insert-automation distinguishes non-RT parameters and full lane
   constexpr int kSr = 48000;
   constexpr int kBlock = 256;
 
-  const std::string maximizer_json = make_repeated_insert_scene("maximizer.maximizer", 1);
-  SonareMixer* maximizer = sonare_mixer_from_scene_json(maximizer_json.c_str(), kSr, kBlock);
-  REQUIRE(maximizer != nullptr);
-  SonareStrip* maximizer_strip = sonare_mixer_strip_by_id(maximizer, "inserts");
-  REQUIRE(maximizer_strip != nullptr);
-  // Maximizer ceilingDb (id 1) rebuilds the oversampled limiter and is known,
+  const std::string haas_json = make_repeated_insert_scene("stereo.haasEnhancer", 1);
+  SonareMixer* haas = sonare_mixer_from_scene_json(haas_json.c_str(), kSr, kBlock);
+  REQUIRE(haas != nullptr);
+  SonareStrip* haas_strip = sonare_mixer_strip_by_id(haas, "inserts");
+  REQUIRE(haas_strip != nullptr);
+  // HaasEnhancer delayMs (id 0) reallocates its delay line and is known,
   // but deliberately unavailable to audio-thread automation.
-  REQUIRE(sonare_strip_schedule_insert_automation(maximizer_strip, 0, 1, 0, -1.0f, 0) ==
+  REQUIRE(sonare_strip_schedule_insert_automation(haas_strip, 0, 0, 0, 10.0f, 0) ==
           SONARE_ERROR_NOT_SUPPORTED);
-  sonare_mixer_destroy(maximizer);
+  sonare_mixer_destroy(haas);
 
   const std::string compressors_json = make_repeated_insert_scene("dynamics.compressor", 6);
   SonareMixer* compressors = sonare_mixer_from_scene_json(compressors_json.c_str(), kSr, kBlock);

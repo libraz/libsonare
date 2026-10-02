@@ -135,6 +135,10 @@ class TruePeakLimiter : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  // Control-thread only; must not race with process(). Changing lookahead,
+  // oversample factor, or gain-application mode re-prepares and resets the
+  // signal history and can change latency. Apply those changes between streams.
+  // Ceiling and release changes retain the running signal history.
   void set_config(const TruePeakLimiterConfig& config);
   void set_release_ms(float release_ms);
   /// @brief Realtime-safe release update for per-block automation.
@@ -165,7 +169,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   int latency_samples() const noexcept override;
 
   // Parameters:
-  //   0 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
+  //   0 = ceiling_db (clamped <= 0; realtime-safe, in-place)
   //   1 = release_ms (clamped >= 0; in-place time-constant recompute)
   // lookahead_ms, oversample_factor and apply_gain_at_input_rate are NOT
   // automatable (they resize buffers or switch processing modes).

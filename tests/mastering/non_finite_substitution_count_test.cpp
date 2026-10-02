@@ -44,6 +44,7 @@
 #include "mastering/saturation/hard_clipper.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -848,47 +849,22 @@ TEST_CASE("TruePeakLimiter answers a non-finite sample with silence rather than 
   CHECK(owner.minimum_gain_reduction_db() == 0.0f);
 }
 
-TEST_CASE("A limiter's own gain can go non-finite over a clean input",
+TEST_CASE("A limiter refuses a non-finite release before it reaches the gain coefficient",
           "[mastering][dynamics][maximizer][non-finite]") {
-  // Non-vacuity for the guard each stage keeps after its gain multiply: without
-  // a reachable route to a non-finite gain that guard is dead code. release_ms
-  // is validated for sign only, and a NaN passes an ordered comparison, so it
-  // reaches the release coefficient and the recursive smoother multiplies it
-  // into its own state. Every sample the fixture delivers is finite.
+  // A NaN release passes an ordered sign check, so construction validates
+  // finiteness; the automation path below refuses it as well.
   SECTION("BrickwallLimiter") {
-    sonare::mastering::dynamics::BrickwallLimiter poisoned({-1.0f, 1.0f, kNaN});
-    poisoned.prepare(kSampleRate, kBlockSize);
-    const std::vector<float> out = drive(poisoned, -1, 0.0f);
-    CHECK(non_finite_count(out) == 0u);
-    CHECK(poisoned.non_finite_substitution_count() > 0u);
-
-    // The control that makes the count above the coefficient's doing rather
-    // than the fixture's: the same signal through a finite release.
-    sonare::mastering::dynamics::BrickwallLimiter ordinary({-1.0f, 1.0f, 50.0f});
-    ordinary.prepare(kSampleRate, kBlockSize);
-    const std::vector<float> ordinary_out = drive(ordinary, -1, 0.0f);
-    CHECK(ordinary.non_finite_substitution_count() == 0u);
-    CHECK(finite_peak(ordinary_out) > 0.0f);
+    REQUIRE_THROWS_AS(sonare::mastering::dynamics::BrickwallLimiter({-1.0f, 1.0f, kNaN}),
+                      sonare::SonareException);
   }
 
   SECTION("TruePeakLimiter") {
-    sonare::mastering::maximizer::TruePeakLimiter poisoned({-1.0f, 1.0f, kNaN, 4, false});
-    poisoned.prepare(kSampleRate, kBlockSize);
-    const std::vector<float> out = drive(poisoned, -1, 0.0f);
-    CHECK(non_finite_count(out) == 0u);
-    CHECK(poisoned.non_finite_substitution_count() > 0u);
-
-    sonare::mastering::maximizer::TruePeakLimiter ordinary({-1.0f, 1.0f, 50.0f, 4, false});
-    ordinary.prepare(kSampleRate, kBlockSize);
-    const std::vector<float> ordinary_out = drive(ordinary, -1, 0.0f);
-    CHECK(ordinary.non_finite_substitution_count() == 0u);
-    CHECK(finite_peak(ordinary_out) > 0.0f);
+    REQUIRE_THROWS_AS(sonare::mastering::maximizer::TruePeakLimiter({-1.0f, 1.0f, kNaN, 4, false}),
+                      sonare::SonareException);
   }
 
   SECTION("the automation path cannot reach that coefficient") {
-    // set_parameter refuses a non-finite value before any processor sees it, so
-    // only prepare() can carry one to the coefficient, which is the whole reason
-    // the sections above can reach the guard at all.
+    // set_parameter refuses a non-finite value before any processor sees it.
     sonare::mastering::dynamics::BrickwallLimiter owner({-1.0f, 1.0f, 50.0f});
     owner.prepare(kSampleRate, kBlockSize);
     REQUIRE_FALSE(owner.set_parameter(1, kNaN));

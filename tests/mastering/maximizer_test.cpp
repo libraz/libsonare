@@ -21,6 +21,7 @@
 #include "metering/true_peak.h"
 #include "rt/oversampler.h"
 #include "rt/true_peak_fir.h"
+#include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 
@@ -410,6 +411,128 @@ TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping runn
   REQUIRE(limiter.last_gain_reduction_db() < 0.0f);
 }
 
+TEST_CASE("TruePeakLimiter mode changes start the new topology with fresh history",
+          "[mastering][maximizer][mode]") {
+  const bool input_rate = GENERATE(false, true);
+  TruePeakLimiterConfig config{-6.0f, 1.0f, 25.0f, 4, input_rate};
+  TruePeakLimiter limiter(config);
+  limiter.prepare(48000.0, 256, 1);
+  for (int block = 0; block < 10; ++block) {
+    auto hot = generate_sine_samples(1000.0f, 48000, 256, 0.95f);
+    float* channels[] = {hot.data()};
+    limiter.process(channels, 1, 256);
+  }
+  REQUIRE(limiter.last_gain_reduction_db() < -1.0f);
+  config.apply_gain_at_input_rate = !input_rate;
+  limiter.set_config(config);
+  CHECK(limiter.last_gain_reduction_db() == 0.0f);
+  TruePeakLimiter fresh(config);
+  fresh.prepare(48000.0, 256, 1);
+  CHECK(limiter.latency_samples() == fresh.latency_samples());
+  for (int block = 0; block < 4; ++block) {
+    std::vector<float> actual(256, 0.2f);
+    auto expected = actual;
+    float* actual_channels[] = {actual.data()};
+    float* expected_channels[] = {expected.data()};
+    limiter.process(actual_channels, 1, 256);
+    fresh.process(expected_channels, 1, 256);
+    CHECK(actual == expected);
+  }
+}
+
+TEST_CASE("TruePeakLimiter ceiling automation is realtime-safe and preserves state",
+          "[mastering][maximizer][ceiling]") {
+  const bool apply_at_input_rate = GENERATE(false, true);
+  constexpr int kBlockSize = 128;
+  constexpr float kCeilingDb = -12.0f;
+
+  TruePeakLimiterConfig config{-1.0f, 1.0f, 25.0f, 4, apply_at_input_rate};
+  TruePeakLimiter limiter(config);
+  TruePeakLimiter reference(config);
+  limiter.prepare(48000.0, kBlockSize, 1);
+  reference.prepare(48000.0, kBlockSize, 1);
+
+  // Establish a non-zero detector, smoother, and delay-line state before the
+  // live parameter update. The reference applies the same scalar change through
+  // the control-thread API, which is the numerical state-preservation oracle.
+  for (int block = 0; block < 4; ++block) {
+    auto actual_input = generate_sine_samples(1000.0f, 48000, kBlockSize, 0.95f);
+    auto reference_input = actual_input;
+    float* actual_channels[] = {actual_input.data()};
+    float* reference_channels[] = {reference_input.data()};
+    limiter.process(actual_channels, 1, kBlockSize);
+    reference.process(reference_channels, 1, kBlockSize);
+  }
+  const float reduction_before = limiter.last_gain_reduction_db();
+  REQUIRE(reduction_before < -0.1f);
+
+  {
+    sonare::test::AllocationGuard guard;
+    REQUIRE(limiter.set_parameter(0, kCeilingDb));
+    CHECK(guard.count() == 0);
+  }
+  CHECK(limiter.parameter_is_realtime_safe(0));
+  CHECK(limiter.parameter_is_realtime_safe(1));
+  CHECK_FALSE(limiter.parameter_is_realtime_safe(2));
+  CHECK(limiter.config().ceiling_db == kCeilingDb);
+  CHECK(limiter.last_gain_reduction_db() == reduction_before);
+
+  config.ceiling_db = kCeilingDb;
+  reference.set_config(config);
+  const float ceiling = std::pow(10.0f, kCeilingDb / 20.0f);
+  for (int block = 0; block < 4; ++block) {
+    auto actual_input = generate_sine_samples(1000.0f, 48000, kBlockSize, 0.95f);
+    auto reference_input = actual_input;
+    float* actual_channels[] = {actual_input.data()};
+    float* reference_channels[] = {reference_input.data()};
+    limiter.process(actual_channels, 1, kBlockSize);
+    reference.process(reference_channels, 1, kBlockSize);
+    CAPTURE(peak_abs(actual_input),
+            metering::true_peak(actual_input.data(), actual_input.size(), 4), ceiling);
+    if (block >= 2) {
+      CHECK(peak_abs(actual_input) <= ceiling + 0.01f);
+      CHECK(peak_abs(reference_input) <= ceiling + 0.01f);
+    }
+    float max_difference = 0.0f;
+    for (size_t i = 0; i < actual_input.size(); ++i) {
+      max_difference = std::max(max_difference, std::abs(actual_input[i] - reference_input[i]));
+    }
+    CHECK(max_difference < 1.0e-6f);
+  }
+}
+
+TEST_CASE("Maximizer AdaptiveRelease and SoftKneeMax ceiling automation is realtime-safe",
+          "[mastering][maximizer][ceiling]") {
+  constexpr int kBlockSize = 128;
+  constexpr float kCeilingDb = -12.0f;
+
+  const auto check = [&](rt::ProcessorBase& processor, unsigned int ceiling_id) {
+    processor.prepare(48000.0, kBlockSize);
+    for (int block = 0; block < 4; ++block) {
+      auto input = generate_sine_samples(1000.0f, 48000, kBlockSize, 0.95f);
+      float* channels[] = {input.data()};
+      processor.process(channels, 1, kBlockSize);
+    }
+    CHECK(processor.parameter_is_realtime_safe(ceiling_id));
+    sonare::test::AllocationGuard guard;
+    REQUIRE(processor.set_parameter(ceiling_id, kCeilingDb));
+    CHECK(guard.count() == 0);
+  };
+
+  SECTION("Maximizer") {
+    Maximizer maximizer({0.0f, -1.0f, 1.0f, 50.0f});
+    check(maximizer, 1);
+  }
+  SECTION("AdaptiveRelease") {
+    AdaptiveRelease adaptive({});
+    check(adaptive, 0);
+  }
+  SECTION("SoftKneeMax") {
+    SoftKneeMax soft_knee({});
+    check(soft_knee, 1);
+  }
+}
+
 TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
           "[mastering][maximizer]") {
   TruePeakLimiter full({-6.0f, 1.0f, 25.0f, 4});
@@ -729,19 +852,13 @@ TEST_CASE("AdaptiveRelease preserves lookahead state across release updates",
   REQUIRE(released_sample <= 0.502f);
 }
 
-// mastering-007: ceilingDb forwards to the inner TruePeakLimiter's
-// set_config(), which allocates a new config snapshot -- the same reason
-// TruePeakLimiter, Maximizer and SoftKneeMax all refuse automation on their
-// own ceiling parameter.
-TEST_CASE("AdaptiveRelease refuses realtime automation on ceilingDb", "[mastering][maximizer]") {
+TEST_CASE("AdaptiveRelease accepts realtime automation on every parameter",
+          "[mastering][maximizer]") {
   AdaptiveRelease limiter;
-  REQUIRE_FALSE(limiter.parameter_is_realtime_safe(0));
-  REQUIRE(limiter.parameter_is_realtime_safe(1));
-  REQUIRE(limiter.parameter_is_realtime_safe(2));
-  REQUIRE(limiter.parameter_is_realtime_safe(3));
-  REQUIRE(limiter.parameter_is_realtime_safe(4));
-  REQUIRE(limiter.parameter_is_realtime_safe(5));
-  REQUIRE(limiter.parameter_is_realtime_safe(6));
+  for (unsigned int id = 0; id <= 6u; ++id) {
+    CAPTURE(id);
+    REQUIRE(limiter.parameter_is_realtime_safe(id));
+  }
 }
 
 TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceiling",
@@ -1030,4 +1147,105 @@ TEST_CASE("Maximizer processors validate configuration and state", "[mastering][
   const Audio empty;
   REQUIRE_THROWS(loudness_optimize(empty));
   REQUIRE_THROWS(streaming_preview(empty));
+}
+
+TEST_CASE("Limiter configurations reject nonfinite values before changing live state",
+          "[maximizer][limiter][nonfinite]") {
+  const float invalid =
+      GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+               -std::numeric_limits<float>::infinity());
+  const int field = GENERATE(0, 1, 2);
+  TruePeakLimiterConfig bad;
+  if (field == 0) bad.ceiling_db = invalid;
+  if (field == 1) bad.lookahead_ms = invalid;
+  if (field == 2) bad.release_ms = invalid;
+  CHECK_THROWS(TruePeakLimiter{bad});
+  TruePeakLimiter limiter;
+  if (field != 1) limiter.prepare(48000.0, 32, 1);
+  const int latency = limiter.latency_samples();
+  CHECK_THROWS(limiter.set_config(bad));
+  CHECK(limiter.config().ceiling_db == -1.0f);
+  CHECK(limiter.config().lookahead_ms == 1.0f);
+  CHECK(limiter.config().release_ms == 50.0f);
+  CHECK(limiter.latency_samples() == latency);
+
+  sonare::mastering::dynamics::BrickwallLimiterConfig brick_bad;
+  if (field == 0) brick_bad.ceiling_db = invalid;
+  if (field == 1) brick_bad.lookahead_ms = invalid;
+  if (field == 2) brick_bad.release_ms = invalid;
+  CHECK_THROWS(sonare::mastering::dynamics::BrickwallLimiter{brick_bad});
+  sonare::mastering::dynamics::BrickwallLimiter brick;
+  CHECK_THROWS(brick.set_config(brick_bad));
+  CHECK(brick.config().ceiling_db == -1.0f);
+  CHECK(brick.config().lookahead_ms == 1.0f);
+  CHECK(brick.config().release_ms == 50.0f);
+  sonare::mastering::dynamics::LimiterConfig inner_bad;
+  if (field == 0) inner_bad.threshold_db = invalid;
+  if (field == 1) inner_bad.lookahead_ms = invalid;
+  if (field == 2) inner_bad.release_ms = invalid;
+  CHECK_THROWS(sonare::mastering::dynamics::Limiter{inner_bad});
+  sonare::mastering::dynamics::Limiter inner;
+  const auto inner_original = inner.config();
+  CHECK_THROWS(inner.set_config(inner_bad));
+  CHECK(inner.config().threshold_db == inner_original.threshold_db);
+  CHECK(inner.config().lookahead_ms == inner_original.lookahead_ms);
+  CHECK(inner.config().release_ms == inner_original.release_ms);
+}
+
+TEST_CASE("Limiter release setters reject nonfinite values", "[maximizer][limiter][nonfinite]") {
+  const float invalid =
+      GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+               -std::numeric_limits<float>::infinity());
+  TruePeakLimiter peak;
+  CHECK_THROWS(peak.set_release_ms(invalid));
+  CHECK(peak.config().release_ms == 50.0f);
+  sonare::mastering::dynamics::BrickwallLimiter brick;
+  CHECK_THROWS(brick.set_release_ms(invalid));
+  CHECK(brick.config().release_ms == 50.0f);
+  sonare::mastering::dynamics::Limiter inner;
+  const float original = inner.config().release_ms;
+  CHECK_THROWS(inner.set_release_ms(invalid));
+  CHECK(inner.config().release_ms == original);
+}
+
+TEST_CASE("Limiter preparation rejects unsafe sample rates without changing latency",
+          "[maximizer][limiter][sample_rate]") {
+  const double invalid =
+      GENERATE(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+               -std::numeric_limits<double>::infinity(), 1.0e300);
+  TruePeakLimiter peak;
+  peak.prepare(48000.0, 32, 1);
+  const int peak_latency = peak.latency_samples();
+  CHECK_THROWS(peak.prepare(invalid, 32, 1));
+  CHECK(peak.latency_samples() == peak_latency);
+  sonare::mastering::dynamics::BrickwallLimiter brick;
+  brick.prepare(48000.0, 32);
+  const int brick_latency = brick.latency_samples();
+  CHECK_THROWS(brick.prepare(invalid, 32));
+  CHECK(brick.latency_samples() == brick_latency);
+  sonare::mastering::dynamics::Limiter inner;
+  inner.prepare(48000.0, 32);
+  const int inner_latency = inner.latency_samples();
+  CHECK_THROWS(inner.prepare(invalid, 32));
+  CHECK(inner.latency_samples() == inner_latency);
+}
+
+TEST_CASE("Prepared limiters reject unrepresentable lookahead without changing config",
+          "[maximizer][limiter][lookahead]") {
+  auto check = [](auto& limiter) {
+    limiter.prepare(48000.0, 32);
+    const auto original = limiter.config();
+    const int latency = limiter.latency_samples();
+    auto invalid = original;
+    invalid.lookahead_ms = 1.0e8f;
+    CHECK_THROWS(limiter.set_config(invalid));
+    CHECK(limiter.config().lookahead_ms == original.lookahead_ms);
+    CHECK(limiter.latency_samples() == latency);
+  };
+  TruePeakLimiter peak;
+  check(peak);
+  sonare::mastering::dynamics::BrickwallLimiter brick;
+  check(brick);
+  sonare::mastering::dynamics::Limiter inner;
+  check(inner);
 }

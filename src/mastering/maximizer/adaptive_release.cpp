@@ -161,7 +161,7 @@ std::vector<rt::ParamDescriptor> AdaptiveRelease::parameter_descriptors() const 
 }
 
 bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
-  return param_id != 0u;
+  return param_id <= 6u;
 }
 
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {

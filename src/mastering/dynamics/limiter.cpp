@@ -5,6 +5,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -30,8 +31,9 @@ void Limiter::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
+  const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
-  lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
+  lookahead_samples_ = lookahead_samples;
   update_coefficients(config_);
   prepared_ = true;
   // Preallocate per-channel lookahead and scratch up front so the audio-thread
@@ -159,12 +161,13 @@ void Limiter::set_config(const LimiterConfig& config) {
   // the lookahead buffers from this call (that would require allocation); the
   // buffer size is fixed at prepare() time.
   validate_config(config);
+  if (prepared_) (void)checked_lookahead_samples(sample_rate_, config.lookahead_ms);
   config_ = config;
   config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
 }
 
 void Limiter::set_release_ms(float release_ms) {
-  if (release_ms < 0.0f) {
+  if (!std::isfinite(release_ms) || release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "limiter release must be non-negative");
   }
   config_.release_ms = release_ms;
@@ -230,9 +233,10 @@ std::vector<rt::ParamDescriptor> Limiter::parameter_descriptors() const {
 }
 
 void Limiter::validate_config(const LimiterConfig& config) {
-  if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
+  if (!std::isfinite(config.lookahead_ms) || !std::isfinite(config.release_ms) ||
+      config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "limiter timing values must be non-negative");
+                          "limiter timing values must be finite and non-negative");
   }
   if (!std::isfinite(config.threshold_db)) {
     // A non-finite threshold becomes a non-finite ceiling (db_to_linear) and

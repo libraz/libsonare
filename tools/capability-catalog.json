@@ -62083,7 +62083,7 @@
           "max": null,
           "min": null,
           "name": "ceilingDb",
-          "rtSafe": false,
+          "rtSafe": true,
           "slot": null,
           "type": "number",
           "unit": "dB"
@@ -62218,7 +62218,7 @@
           "max": null,
           "min": null,
           "name": "ceilingDb",
-          "rtSafe": false,
+          "rtSafe": true,
           "slot": null,
           "type": "number",
           "unit": "dB"
@@ -62280,7 +62280,7 @@
           "max": null,
           "min": null,
           "name": "ceilingDb",
-          "rtSafe": false,
+          "rtSafe": true,
           "slot": null,
           "type": "number",
           "unit": "dB"
@@ -62330,7 +62330,7 @@
           "max": null,
           "min": null,
           "name": "ceilingDb",
-          "rtSafe": false,
+          "rtSafe": true,
           "slot": null,
           "type": "number",
           "unit": "dB"

@@ -79,8 +79,7 @@ bool SoftKneeMax::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 1:
       config_.ceiling_db = std::min(0.0f, value);
-      // Routes to Maximizer ceiling (param 1), which re-prepares the inner
-      // limiter and clears its lookahead/gain state. Unavoidable reset.
+      // Routes to Maximizer ceiling (param 1), an in-place update.
       if (prepared_) {
         maximizer_.set_parameter(1, config_.ceiling_db);
       }
@@ -106,7 +105,7 @@ std::vector<rt::ParamDescriptor> SoftKneeMax::parameter_descriptors() const {
 }
 
 bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
-  return param_id != 1u;
+  return param_id <= 3u;
 }
 
 void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {

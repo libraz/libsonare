@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -26,6 +27,7 @@ void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
+  (void)checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   // Inner limiter owns the lookahead buffer sizing. lookahead_ms changes
@@ -115,6 +117,7 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
   // leaves both the control-thread mirror (config_) and the audio-thread
   // snapshot unchanged.
   validate_config(config);
+  if (prepared_) (void)checked_lookahead_samples(sample_rate_, config.lookahead_ms);
   const bool lookahead_changed = prepared_ && config.lookahead_ms != config_.lookahead_ms;
   config_ = config;
   if (lookahead_changed) {
@@ -131,7 +134,7 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
 }
 
 void BrickwallLimiter::set_release_ms(float release_ms) {
-  if (release_ms < 0.0f) {
+  if (!std::isfinite(release_ms) || release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "brickwall limiter release must be non-negative");
   }
@@ -175,9 +178,10 @@ std::vector<rt::ParamDescriptor> BrickwallLimiter::parameter_descriptors() const
 }
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
-  if (!std::isfinite(config.ceiling_db) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
+  if (!std::isfinite(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
+      !std::isfinite(config.release_ms) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "brickwall limiter timing values must be non-negative");
+                          "brickwall limiter values must be finite and timing values non-negative");
   }
 }
 
