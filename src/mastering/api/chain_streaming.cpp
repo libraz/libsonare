@@ -164,8 +164,8 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   if (max_block_size <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be > 0");
   }
-  if (sample_rate <= 0.0) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be > 0");
+  if (!std::isfinite(sample_rate) || sample_rate <= 0.0) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be finite and > 0");
   }
 
   // A stage's own prepare() can throw for a reason only it can see — a
@@ -342,8 +342,7 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
   if (num_samples == 0) {
     return;
   }
-  flush_samples_remaining_ = 0;
-  flush_started_ = false;
+  rt::ProcessorBase::validate_channel_buffers(channels, num_channels);
   // Reject non-finite input before touching any processor so a stray NaN/Inf
   // cannot permanently pollute the filter state (recoverable only via reset()).
   // The C ABI performs this guard too; lifting it into the core keeps the
@@ -359,6 +358,9 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
       }
     }
   }
+  // A rejected block must preserve an in-progress drain as well as DSP state.
+  flush_samples_remaining_ = 0;
+  flush_started_ = false;
   process_prevalidated(channels, num_channels, num_samples);
 }
 

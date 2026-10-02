@@ -2032,4 +2032,79 @@ std::size_t resident_bytes() {
 }  // namespace
 #endif
 
+TEST_CASE("StreamingMasteringChain rejects null planes before processing",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.maximizer.true_peak_limiter.enabled = true;
+  StreamingMasteringChain chain(config);
+  chain.prepare(48000.0, 64, 2);
+  std::vector<float> left(64, 0.25f);
+  const auto original = left;
+  float* channels[] = {left.data(), nullptr};
+  REQUIRE_THROWS_AS(chain.process_block(channels, 2, 64), sonare::SonareException);
+  CHECK(left == original);
+  REQUIRE_THROWS_AS(chain.process_block(nullptr, 2, 1), sonare::SonareException);
+  REQUIRE_NOTHROW(chain.process_block(nullptr, 2, 0));
+}
+
+TEST_CASE("StreamingMasteringChain rejected input preserves an in-progress drain",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.maximizer.true_peak_limiter.enabled = true;
+  StreamingMasteringChain chain(config);
+  StreamingMasteringChain reference(config);
+  constexpr int kBlock = 64;
+  chain.prepare(48000.0, kBlock, 1);
+  reference.prepare(48000.0, kBlock, 1);
+  std::vector<float> actual(kBlock, 0.2f);
+  std::vector<float> expected = actual;
+  float* actual_channels[] = {actual.data()};
+  float* expected_channels[] = {expected.data()};
+  chain.process_block(actual_channels, 1, kBlock);
+  reference.process_block(expected_channels, 1, kBlock);
+  const int first = chain.flush(actual_channels, 1, kBlock);
+  REQUIRE(first == reference.flush(expected_channels, 1, kBlock));
+  REQUIRE(first > 0);
+  REQUIRE(first < chain.latency_samples());
+  CHECK(actual == expected);
+
+  actual[0] = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS_AS(chain.process_block(actual_channels, 1, kBlock), sonare::SonareException);
+  int total = first;
+  for (;;) {
+    const int written = chain.flush(actual_channels, 1, kBlock);
+    const int expected_written = reference.flush(expected_channels, 1, kBlock);
+    REQUIRE(written == expected_written);
+    if (written == 0) break;
+    CHECK(std::equal(actual.begin(), actual.begin() + written, expected.begin()));
+    total += written;
+  }
+  CHECK(total == chain.latency_samples());
+}
+
+TEST_CASE("StreamingMasteringChain rejects non-finite rates without losing preparation",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.maximizer.true_peak_limiter.enabled = true;
+  StreamingMasteringChain chain(config);
+  StreamingMasteringChain reference(config);
+  chain.prepare(48000.0, 64, 1);
+  reference.prepare(48000.0, 64, 1);
+  const int latency = chain.latency_samples();
+  REQUIRE(latency > 0);
+  for (double rate :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity()}) {
+    REQUIRE_THROWS_AS(chain.prepare(rate, 64, 1), sonare::SonareException);
+    CHECK(chain.latency_samples() == latency);
+    std::vector<float> block(64, 0.2f);
+    std::vector<float> expected = block;
+    float* channels[] = {block.data()};
+    float* expected_channels[] = {expected.data()};
+    REQUIRE_NOTHROW(chain.process_block(channels, 1, 64));
+    reference.process_block(expected_channels, 1, 64);
+    CHECK(block == expected);
+  }
+}
+
 }  // namespace sonare::mastering::api
