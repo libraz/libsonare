@@ -106,6 +106,7 @@ class PluckedStringVoiceCore {
   void kill() noexcept;
 
  private:
+  bool killed_ = true;
   float* buffer_ = nullptr;
   int capacity_ = 0;
   size_t write_index_ = 0;

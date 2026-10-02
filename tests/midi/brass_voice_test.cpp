@@ -10,6 +10,7 @@
 #include "midi/synth/brass_voice.h"
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -33,6 +34,9 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::Velocity16;
+using sonare::midi::synth::BrassPatchParams;
+using sonare::midi::synth::BrassVoiceCore;
 using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
@@ -43,6 +47,17 @@ using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
 using sonare::test::render_left;
+
+std::array<float, 3> brass_mute_coefficients(double sample_rate) {
+  BrassPatchParams params;
+  params.mute = 1.0f;
+  std::vector<float> bore(
+      static_cast<size_t>(sonare::midi::synth::brass_buffer_capacity(sample_rate)));
+  BrassVoiceCore core;
+  core.attach(bore.data(), static_cast<int>(bore.size()));
+  core.start(params, sample_rate, 60, Velocity16::from7(110), 0x4d555445ULL);
+  return core.mute_coefficients();
+}
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples, int note_off_at = -1) {
@@ -130,6 +145,38 @@ NativeSynthPatch brass_base_patch() {
 }
 
 }  // namespace
+
+TEST_CASE("brass mute formant keeps its center and damping in hertz",
+          "[midi][synth][brass][rate]") {
+  // Probe the coefficients on an instantiated core after start(), so this
+  // witnesses the actual mute branch rather than duplicating its design here.
+  // The pole radius is voiced at 48 kHz and must describe the same physical
+  // damping at every supported render rate.
+  constexpr double kFormantHz = 1800.0;
+  constexpr double kVoicedRadius = 0.90;
+  const double expected_damping_hz = -48000.0 * std::log(kVoicedRadius);
+
+  for (const double sample_rate : {24000.0, 44100.0, 48000.0, 96000.0}) {
+    const std::array<float, 3> coeff = brass_mute_coefficients(sample_rate);
+    const double radius = std::sqrt(std::max(0.0, -static_cast<double>(coeff[2])));
+    REQUIRE(radius > 0.0);
+    REQUIRE(radius < 1.0);
+    const double centre_hz =
+        std::acos(std::clamp(static_cast<double>(coeff[1]) / (2.0 * radius), -1.0, 1.0)) *
+        sample_rate / sonare::constants::kTwoPiD;
+    const double damping_hz = -sample_rate * std::log(radius);
+
+    INFO("sample rate " << sample_rate);
+    CAPTURE(sample_rate, radius, centre_hz, damping_hz);
+    CHECK(std::fabs(centre_hz - kFormantHz) < 1.0);
+    CHECK(std::fabs(damping_hz - expected_damping_hz) < 2.0);
+    CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - radius)) < 1.0e-6);
+    if (sample_rate == 48000.0) {
+      CHECK(std::fabs(radius - kVoicedRadius) < 1.0e-6);
+      CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - kVoicedRadius)) < 1.0e-6);
+    }
+  }
+}
 
 TEST_CASE("brass rendering is deterministic", "[midi][synth][brass]") {
   const NativeSynthPatch patch = brass_base_patch();
@@ -233,6 +280,34 @@ TEST_CASE("brass rings down after note-off", "[midi][synth][brass]") {
   const float after = rms(tone, 40000, 46000);
   REQUIRE(sounding > 0.01f);
   REQUIRE(after < 0.5f * sounding);
+}
+
+TEST_CASE("brass kill silences subsequent rendering and permits restart", "[midi][synth][brass]") {
+  BrassPatchParams params;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  const double sample_rate = 48000.0;
+  const int capacity = sonare::midi::synth::brass_buffer_capacity(sample_rate);
+  std::vector<float> bore(static_cast<size_t>(capacity));
+  BrassVoiceCore core;
+  core.attach(bore.data(), capacity);
+  core.start(params, sample_rate, 60, Velocity16::from7(110), 0x4b494c4cULL);
+
+  std::vector<float> sounding;
+  sounding.reserve(12000);
+  for (int i = 0; i < 12000; ++i) sounding.push_back(core.render(1.0f));
+  REQUIRE(peak(sounding) > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * capacity; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, sample_rate, 60, Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> restarted;
+  restarted.reserve(12000);
+  for (int i = 0; i < 12000; ++i) restarted.push_back(core.render(1.0f));
+  REQUIRE(peak(restarted) > 0.01f);
 }
 
 TEST_CASE("brass lip tension bends the pitch", "[midi][synth][brass]") {
@@ -915,6 +990,69 @@ BrassPatchParams bell_base_params() {
   return p;
 }
 
+struct CoupledBellRender {
+  BrassVoiceCore::BellCoefficients coefficients;
+  float radiation_scale;
+  float tail_rms;
+};
+
+CoupledBellRender render_coupled_bell(float initial_brightness, float final_brightness, bool move,
+                                      bool snap) {
+  BrassPatchParams params = bell_base_params();
+  params.brightness = initial_brightness;
+  params.bell_cutoff_hz = 1500.0f;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  params.brassiness = 0.0f;
+  constexpr int kWarmup = 12000;
+  constexpr int kTail = 24000;
+  constexpr int kTailWindow = 12000;
+  const double sample_rate = 48000.0;
+  std::vector<float> bore(
+      static_cast<size_t>(sonare::midi::synth::brass_buffer_capacity(sample_rate)));
+  BrassVoiceCore core;
+  core.attach(bore.data(), static_cast<int>(bore.size()));
+  core.start(params, sample_rate, 60, Velocity16::from7(100), 0x57494e44ULL);
+  for (int i = 0; i < kWarmup; ++i) core.render(1.0f);
+  if (move) {
+    ExcitationAxes axes;
+    axes.brightness = final_brightness;
+    core.set_excitation_base(axes, kAxisBrightness);
+    if (snap) core.snap_excitation();
+  }
+  double energy = 0.0;
+  for (int i = 0; i < kTail; ++i) {
+    const float sample = core.render(1.0f);
+    if (i >= kTail - kTailWindow) energy += static_cast<double>(sample) * sample;
+  }
+  return {core.bell_coefficients(), core.radiation_scale(),
+          static_cast<float>(std::sqrt(energy / static_cast<double>(kTailWindow)))};
+}
+
+BrassVoiceCore::BellCoefficients render_independent_bell(float initial_brightness,
+                                                         float final_brightness,
+                                                         float* radiation_scale) {
+  BrassPatchParams params = bell_base_params();
+  params.brightness = initial_brightness;
+  params.bell_radiation_hz = 1500.0f;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  params.brassiness = 0.0f;
+  const double sample_rate = 48000.0;
+  std::vector<float> bore(
+      static_cast<size_t>(sonare::midi::synth::brass_buffer_capacity(sample_rate)));
+  BrassVoiceCore core;
+  core.attach(bore.data(), static_cast<int>(bore.size()));
+  core.start(params, sample_rate, 60, Velocity16::from7(100), 0x57494e44ULL);
+  ExcitationAxes axes;
+  axes.brightness = final_brightness;
+  core.set_excitation_base(axes, kAxisBrightness);
+  core.snap_excitation();
+  for (int i = 0; i < 24000; ++i) core.render(1.0f);
+  *radiation_scale = core.radiation_scale();
+  return core.bell_coefficients();
+}
+
 }  // namespace
 
 TEST_CASE("one bell corner drives both of the bell's filters", "[midi][synth][brass]") {
@@ -978,6 +1116,85 @@ TEST_CASE("the bell corner does not move with the note", "[midi][synth][brass]")
   const double high = corner_hz(bell_coefficients(params, 48000.0, 65).reflect_alpha, 48000.0);
   INFO("note 41 " << low << " Hz, note 65 " << high << " Hz");
   REQUIRE(std::fabs(high / low - 1.0) < 0.01);
+}
+
+TEST_CASE("coupled brass bell recomputes radiation makeup on live brightness",
+          "[midi][synth][brass]") {
+  // The one-flare radiation highpass follows the live reflection pole. Its
+  // fundamental makeup must follow that same pole, whether brightness moves up
+  // or down and whether the control target is ramped or snapped.
+  for (const auto& [initial, final] :
+       {std::pair<float, float>{0.0f, 1.0f}, std::pair<float, float>{1.0f, 0.0f}}) {
+    for (bool snap : {false, true}) {
+      const CoupledBellRender fresh = render_coupled_bell(final, final, false, false);
+      const CoupledBellRender moved = render_coupled_bell(initial, final, true, snap);
+      INFO("initial " << initial << " final " << final << " snap " << snap);
+      CHECK(std::fabs(moved.coefficients.radiate_alpha - fresh.coefficients.radiate_alpha) <
+            3.0e-6f);
+      const float scale_error = std::fabs(moved.radiation_scale - fresh.radiation_scale);
+      // The float control ramp stops a few ulps short of its target. Smooth
+      // radiation uses that actual pole; snap copies the target exactly.
+      CHECK((snap ? scale_error : scale_error / fresh.radiation_scale) < 1.0e-5f);
+      CHECK(fresh.tail_rms > 1.0e-3f);
+      CHECK(moved.tail_rms > 0.8f * fresh.tail_rms);
+    }
+  }
+}
+
+TEST_CASE("independent brass bell radiation keeps its own makeup", "[midi][synth][brass]") {
+  float initial_scale = 0.0f;
+  const auto initial = render_independent_bell(0.0f, 0.0f, &initial_scale);
+  float moved_scale = 0.0f;
+  const auto moved = render_independent_bell(0.0f, 1.0f, &moved_scale);
+  INFO("radiate alpha " << initial.radiate_alpha << " -> " << moved.radiate_alpha);
+  REQUIRE(std::fabs(moved.radiate_alpha - initial.radiate_alpha) < 1.0e-6f);
+  REQUIRE(std::fabs(moved_scale - initial_scale) < 1.0e-6f);
+}
+
+namespace {
+
+/// Radiation makeup after rendering `note` at a held pitch ratio; `coupled`
+/// selects the one-flare bell over the independent radiation corner.
+float radiation_scale_after_bend(bool coupled, uint8_t note, float ratio, float return_ratio) {
+  BrassPatchParams params = bell_base_params();
+  if (coupled) {
+    params.bell_cutoff_hz = 1500.0f;
+  } else {
+    params.bell_radiation_hz = 1500.0f;
+  }
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  params.brassiness = 0.0f;
+  const double sample_rate = 48000.0;
+  std::vector<float> bore(
+      static_cast<size_t>(sonare::midi::synth::brass_buffer_capacity(sample_rate)));
+  BrassVoiceCore core;
+  core.attach(bore.data(), static_cast<int>(bore.size()));
+  core.start(params, sample_rate, note, Velocity16::from7(100), 0x57494e44ULL);
+  for (int i = 0; i < 4800; ++i) core.render(ratio);
+  for (int i = 0; i < 4800; ++i) core.render(return_ratio);
+  return core.radiation_scale();
+}
+
+}  // namespace
+
+TEST_CASE("brass radiation makeup follows live pitch", "[midi][synth][brass]") {
+  // The makeup normalizes the radiation highpass at the sounding fundamental,
+  // so a note bent an octave must carry the makeup of the note it now sounds.
+  for (bool coupled : {true, false}) {
+    INFO("coupled " << coupled);
+    const float fresh_low = radiation_scale_after_bend(coupled, 60, 1.0f, 1.0f);
+    const float fresh_high = radiation_scale_after_bend(coupled, 72, 1.0f, 1.0f);
+    REQUIRE(std::fabs(fresh_high - fresh_low) > 0.05f * fresh_low);
+
+    const float bent_up = radiation_scale_after_bend(coupled, 60, 2.0f, 2.0f);
+    CHECK(std::fabs(bent_up - fresh_high) < 1.0e-4f * fresh_high);
+    const float bent_down = radiation_scale_after_bend(coupled, 72, 0.5f, 0.5f);
+    CHECK(std::fabs(bent_down - fresh_low) < 1.0e-4f * fresh_low);
+    // The cached makeup follows the pitch back to the unbent note.
+    const float returned = radiation_scale_after_bend(coupled, 60, 2.0f, 1.0f);
+    CHECK(returned == fresh_low);
+  }
 }
 
 namespace {

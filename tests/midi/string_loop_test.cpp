@@ -11,6 +11,7 @@
 
 #include "midi/synth/string_loop.h"
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -34,6 +35,139 @@ double response(const StringLoopFilter& f, double omega) {
 double note_hz(int note) { return 440.0 * std::pow(2.0, (note - 69) / 12.0); }
 
 }  // namespace
+
+TEST_CASE("configured string loop kill is immediate and restart is exact",
+          "[midi][synth][string_loop]") {
+  constexpr int kCapacity = 512;
+  constexpr float kPeriod = 64.0f;
+  constexpr int kWarmup = 1024;
+  constexpr int kRestartFrames = 384;
+
+  for (const bool two_pole : {false, true}) {
+    for (const float ratio : {0.5f, 1.0f, 2.0f}) {
+      auto configure = [&](StringLoop& loop, float* slab) {
+        if (!two_pole) {
+          loop.configure(slab, kCapacity, kPeriod, kSr, 0.18f, 2.0f, 0.25f);
+        } else {
+          loop.configure_filter(slab, kCapacity, kPeriod, 0.18f, 0.98f, 0.94f, true, 0.25f, 0.995f);
+        }
+      };
+
+      std::vector<float> slab(static_cast<size_t>(kCapacity), 0.0f);
+      StringLoop loop;
+      configure(loop, slab.data());
+
+      float prekill_peak = 0.0f;
+      float feedback_peak = 0.0f;
+      for (int i = 0; i < kWarmup; ++i) {
+        const float input = (i == 0 ? 1.0f : 0.0f) + loop.feedback();
+        feedback_peak = std::max(feedback_peak, std::fabs(loop.feedback()));
+        const float output = loop.advance(input, ratio);
+        loop.commit(output);
+        prekill_peak = std::max(prekill_peak, std::fabs(output));
+      }
+
+      INFO("two pole=" << two_pole << ", ratio=" << ratio << ", prekill peak=" << prekill_peak
+                       << ", feedback peak=" << feedback_peak);
+      CHECK(prekill_peak > 1.0e-4f);
+      CHECK(feedback_peak > 1.0e-6f);
+
+      // kill() must silence both the fused process() API and the split
+      // advance()/commit() API, even when callers continue sending input.
+      const std::vector<float> slab_before_kill = slab;
+      loop.kill();
+      loop.kill();
+      bool process_silent = true;
+      bool split_silent = true;
+      bool feedback_zero = true;
+      for (int i = 0; i < 2 * kCapacity; ++i) {
+        const float process_output = loop.process(0.37f, ratio);
+        process_silent = process_silent && process_output == 0.0f;
+        feedback_zero = feedback_zero && loop.feedback() == 0.0f;
+
+        loop.commit(0.61f);
+        feedback_zero = feedback_zero && loop.lp_state == 0.0f && loop.lp_state2 == 0.0f;
+
+        const float split_output = loop.advance(0.19f, ratio);
+        loop.commit(split_output);
+        split_silent = split_silent && split_output == 0.0f;
+        feedback_zero = feedback_zero && loop.feedback() == 0.0f;
+      }
+      CHECK(process_silent);
+      CHECK(split_silent);
+      CHECK(feedback_zero);
+      const bool slab_unchanged_after_kill = slab == slab_before_kill;
+      CHECK(slab_unchanged_after_kill);
+
+      // Reconfiguring the killed object must clear its lifecycle state as well
+      // as its slab, so its impulse response is exactly a fresh loop's response.
+      configure(loop, slab.data());
+      std::vector<float> fresh_slab(static_cast<size_t>(kCapacity), 0.0f);
+      StringLoop fresh;
+      configure(fresh, fresh_slab.data());
+      std::vector<float> restarted(static_cast<size_t>(kRestartFrames), 0.0f);
+      std::vector<float> fresh_output(static_cast<size_t>(kRestartFrames), 0.0f);
+      float restart_peak = 0.0f;
+      for (int i = 0; i < kRestartFrames; ++i) {
+        const float restart_input = (i == 0 ? 1.0f : 0.0f) + loop.feedback();
+        const float fresh_input = (i == 0 ? 1.0f : 0.0f) + fresh.feedback();
+        restarted[static_cast<size_t>(i)] = loop.process(restart_input, ratio);
+        fresh_output[static_cast<size_t>(i)] = fresh.process(fresh_input, ratio);
+        restart_peak = std::max(restart_peak, std::fabs(restarted[static_cast<size_t>(i)]));
+      }
+      CHECK(restart_peak > 1.0e-4f);
+      const bool restart_matches_fresh = restarted == fresh_output;
+      CHECK(restart_matches_fresh);
+    }
+  }
+}
+
+TEST_CASE("disabled string loop is inert without clearing its slab and can restart",
+          "[midi][synth][string_loop]") {
+  constexpr int kCapacity = 512;
+  constexpr float kPeriod = 64.0f;
+  constexpr int kWarmup = 1024;
+
+  std::vector<float> slab(static_cast<size_t>(kCapacity), 0.0f);
+  StringLoop loop;
+  loop.configure(slab.data(), kCapacity, kPeriod, kSr, 0.18f, 2.0f, 0.25f);
+
+  float pre_disable_peak = 0.0f;
+  for (int i = 0; i < kWarmup; ++i) {
+    const float input = (i == 0 ? 1.0f : 0.0f) + loop.feedback();
+    pre_disable_peak = std::max(pre_disable_peak, std::fabs(loop.process(input, 1.0f)));
+  }
+  CHECK(pre_disable_peak > 1.0e-4f);
+
+  const std::vector<float> slab_before_disable = slab;
+  loop.disable();
+  bool process_silent = true;
+  bool split_silent = true;
+  bool feedback_zero = true;
+  for (int i = 0; i < kCapacity; ++i) {
+    process_silent = process_silent && loop.process(0.37f, 1.0f) == 0.0f;
+    feedback_zero = feedback_zero && loop.feedback() == 0.0f;
+    const float split_output = loop.advance(0.19f, 1.0f);
+    loop.commit(0.61f);
+    split_silent = split_silent && split_output == 0.0f;
+    feedback_zero = feedback_zero && loop.feedback() == 0.0f;
+  }
+  CHECK(process_silent);
+  CHECK(split_silent);
+  CHECK(feedback_zero);
+  CHECK(loop.lp_state == 0.0f);
+  CHECK(loop.lp_state2 == 0.0f);
+  const bool slab_unchanged_after_disable = slab == slab_before_disable;
+  CHECK(slab_unchanged_after_disable);
+
+  loop.configure(slab.data(), kCapacity, kPeriod, kSr, 0.18f, 2.0f, 0.25f);
+  float restart_peak = 0.0f;
+  for (int i = 0; i < kWarmup; ++i) {
+    const float input = (i == 0 ? 1.0f : 0.0f) + loop.feedback();
+    restart_peak = std::max(restart_peak, std::fabs(loop.process(input, 1.0f)));
+  }
+  CHECK(restart_peak > 1.0e-4f);
+}
 
 TEST_CASE("solved loss filter gives the fundamental exactly the decay it was asked for",
           "[midi][synth][string_loop]") {

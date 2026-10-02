@@ -1,3 +1,5 @@
+#include "midi/synth/piano_resonance.h"
+
 #include <algorithm>
 #include <cmath>
 

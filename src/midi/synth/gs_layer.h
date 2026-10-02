@@ -194,14 +194,19 @@ struct GsDestinationSet {
   uint8_t lfo_rate = 0x40;
 };
 
-/// The GS power-on position of every MIDI controller a part tracks. Only the
-/// three that do not power on at zero are named; everything else starts where
-/// a controller nobody has moved sits.
+/// The GS power-on position of every MIDI controller a part tracks. Only those
+/// that do not power on at zero are named (volume, pan, expression and the
+/// RPN/NRPN selectors at null); everything else starts where a controller
+/// nobody has moved sits.
 constexpr std::array<uint8_t, 128> gs_default_cc_positions() noexcept {
   std::array<uint8_t, 128> p{};
   p[7] = 100;   // CC7 volume
   p[10] = 64;   // CC10 pan, centred
   p[11] = 127;  // CC11 expression
+  p[98] = 127;  // CC98..101 NRPN/RPN selectors, null
+  p[99] = 127;
+  p[100] = 127;
+  p[101] = 127;
   return p;
 }
 

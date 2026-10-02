@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "midi/controller_profile.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gm_fallback_map.h"
@@ -2736,4 +2737,163 @@ TEST_CASE("NativeSynth counts the per-note and relative messages it does not rea
   CHECK(synth.skipped_event_count() == 4);
   synth.reset();
   CHECK(synth.skipped_event_count() == 0);
+}
+
+TEST_CASE("NativeSynth channel-mode All Notes Off preserves sustain", "[midi][synth]") {
+  for (const int controller : {123, 124, 125, 126, 127}) {
+    NativeSynthConfig config;
+    config.patch.amp_env.release_ms = 5.0f;
+    NativeSynth synth(config);
+    synth.prepare(kOutRate, 256);
+
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    REQUIRE(peak(render(synth, 2048).left) > 0.0f);
+
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(
+                          0, 0, static_cast<uint8_t>(controller), 0)));
+    render(synth, 2048);
+    INFO("controller " << controller);
+    REQUIRE(synth.active_voice_count() > 0);
+
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 0)));
+    render(synth, synth.tail_samples() + 1024);
+    REQUIRE(synth.active_voice_count() == 0);
+  }
+}
+
+TEST_CASE("NativeSynth All Sound Off keeps sustain for a new note", "[midi][synth]") {
+  NativeSynthConfig config;
+  config.patch.amp_env.release_ms = 5.0f;
+  NativeSynth synth(config);
+  synth.prepare(kOutRate, 256);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(peak(render(synth, 2048).left) > 0.0f);
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+  REQUIRE(synth.active_voice_count() == 0);
+  REQUIRE(peak(render(synth, 512).left) == 0.0f);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(peak(render(synth, 2048).left) > 0.0f);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  render(synth, synth.tail_samples() + 1024);
+  REQUIRE(synth.active_voice_count() > 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 0)));
+  render(synth, synth.tail_samples() + 1024);
+  REQUIRE(synth.active_voice_count() == 0);
+}
+
+TEST_CASE("NativeSynth All Notes Off preserves a sostenuto capture", "[midi][synth]") {
+  NativeSynthConfig config;
+  config.patch.amp_env.release_ms = 5.0f;
+  NativeSynth synth(config);
+  synth.prepare(kOutRate, 256);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(peak(render(synth, 2048).left) > 0.0f);
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 127)));
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
+  render(synth, synth.tail_samples() + 1024);
+  REQUIRE(synth.active_voice_count() > 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 0)));
+  render(synth, synth.tail_samples() + 1024);
+  REQUIRE(synth.active_voice_count() == 0);
+}
+
+namespace {
+
+using sonare::midi::ControllerAxis;
+using sonare::midi::ControllerInput;
+using sonare::midi::ControllerProfile;
+using sonare::midi::synth::NativeSynthPatch;
+
+/// Tail centroid of note 60 after an optional CC @p cc and an optional CC121.
+double excitation_tail_centroid(const NativeSynthPatch& patch, const ControllerProfile& profile,
+                                uint8_t cc, uint8_t value, bool move, bool reset) {
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  NativeSynth synth(cfg);
+  synth.set_controller_profile(profile);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  render(synth, 12000);
+  if (move) synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, cc, value)));
+  render(synth, 12000);
+  if (reset) synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
+  return sonare::test::spectral_centroid(render(synth, 24000).left, 12000);
+}
+
+ControllerProfile single_binding_profile(ControllerAxis axis) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 74, axis}));
+  return profile;
+}
+
+}  // namespace
+
+TEST_CASE("NativeSynth Reset All Controllers restores a sounding voice's excitation base",
+          "[midi][synth]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  NativeSynthPatch additive{};
+  additive.mode = SynthEngineMode::kAdditive;
+  additive.gain = 0.8f;
+  additive.amp_env.sustain = 1.0f;
+  additive.additive.drawbars_b = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.0f, 8.0f, 8.0f};
+  struct Case {
+    const char* label;
+    NativeSynthPatch patch;
+    ControllerAxis axis;
+    uint8_t value;
+  };
+  const Case cases[] = {
+      {"brass brightness", gm_fallback_patch(0, 56), ControllerAxis::kBrightness, 127},
+      {"bowed position", gm_fallback_patch(0, 40), ControllerAxis::kPosition, 127},
+      {"additive morph", additive, ControllerAxis::kMorph, 127},
+  };
+  for (const Case& c : cases) {
+    INFO(c.label);
+    const ControllerProfile profile = single_binding_profile(c.axis);
+    const double fresh = excitation_tail_centroid(c.patch, profile, 74, c.value, false, false);
+    const double moved = excitation_tail_centroid(c.patch, profile, 74, c.value, true, false);
+    const double reset = excitation_tail_centroid(c.patch, profile, 74, c.value, true, true);
+    INFO("centroids fresh=" << fresh << " moved=" << moved << " reset=" << reset);
+    REQUIRE(std::fabs(moved - fresh) > 0.02 * fresh);
+    CHECK(std::fabs(reset - fresh) < 0.2 * std::fabs(moved - fresh));
+  }
+}
+
+TEST_CASE("NativeSynth channel control on one axis keeps a per-note value on another",
+          "[midi][synth]") {
+  // Poly pressure is a per-note brightness here; CC2 then moves only the channel's breath.
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 74, ControllerAxis::kBrightness}));
+  REQUIRE(profile.bind({ControllerInput::kPolyPressure, 0, ControllerAxis::kBrightness}));
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 2, ControllerAxis::kExcitation}));
+  const NativeSynthPatch patch = sonare::midi::synth::gm_fallback_patch(0, 56);
+  const auto tail_centroid = [&](uint8_t channel_brightness, bool per_note_bright) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.set_controller_profile(profile);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 74, channel_brightness)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    render(synth, 4800);
+    if (per_note_bright) {
+      synth.on_event(0, event(sonare::midi::make_midi1_poly_pressure(0, 0, 60, 127)));
+    }
+    render(synth, 4800);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 2, 100)));
+    return sonare::test::spectral_centroid(render(synth, 24000).left, 12000);
+  };
+  const double dark = tail_centroid(0, false);
+  const double bright = tail_centroid(127, false);
+  const double per_note = tail_centroid(0, true);
+  INFO("centroids dark=" << dark << " bright=" << bright << " per-note=" << per_note);
+  REQUIRE(std::fabs(bright - dark) > 0.02 * dark);
+  CHECK(std::fabs(per_note - bright) < 0.2 * std::fabs(bright - dark));
 }

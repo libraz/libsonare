@@ -5,6 +5,9 @@
 ///        damper note-off and deterministic rendering through the GM
 ///        acoustic-piano fallback.
 
+#include "midi/synth/piano_voice.h"
+
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -14,9 +17,11 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/piano_voice_math.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -25,6 +30,8 @@ using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::PianoPatchParams;
+using sonare::midi::synth::PianoVoiceCore;
 using sonare::midi::synth::SynthEngineMode;
 
 constexpr double kRate = 48000.0;
@@ -89,6 +96,63 @@ double partial_hz(const std::vector<double>& power, double f0, int n) {
 }
 
 float note_hz(int note) { return 440.0f * std::exp2((note - 69.0f) / 12.0f); }
+
+double peak_power_in(const std::vector<double>& power, double freq_lo, double freq_hi) {
+  const int lo = std::max(1, static_cast<int>(std::lround(freq_lo / kRate * kFft)));
+  const int hi = std::min(static_cast<int>(power.size()) - 1,
+                          static_cast<int>(std::lround(freq_hi / kRate * kFft)));
+  double best = 0.0;
+  for (int b = lo; b <= hi; ++b) best = std::max(best, power[static_cast<size_t>(b)]);
+  return best;
+}
+
+float piano_nominal_hz(int note) {
+  using sonare::midi::synth::piano_stretch_cents;
+  return note_hz(note) * std::exp2(piano_stretch_cents(static_cast<uint8_t>(note)) / 1200.0f);
+}
+
+std::vector<float> render_core_ratio(const PianoPatchParams& params, uint8_t note,
+                                     float pitch_ratio, int settle_samples = 12000) {
+  PianoVoiceCore core;
+  std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(kRate)),
+                          0.0f);
+  core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(kRate));
+  core.start(params, kRate, note, sonare::midi::Velocity16::from7(110), 0x5049414E4FULL);
+  for (int i = 0; i < settle_samples; ++i) static_cast<void>(core.render(pitch_ratio));
+  std::vector<float> late(static_cast<size_t>(kFft));
+  for (float& sample : late) sample = core.render(pitch_ratio);
+  return late;
+}
+
+std::vector<float> render_core_live_ratio(const PianoPatchParams& params, uint8_t note,
+                                          float initial_ratio, float settled_ratio) {
+  PianoVoiceCore core;
+  std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(kRate)),
+                          0.0f);
+  core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(kRate));
+  core.start(params, kRate, note, sonare::midi::Velocity16::from7(110), 0x5049414E4FULL);
+  for (int i = 0; i < 12000; ++i) static_cast<void>(core.render(initial_ratio));
+  // Change the host ratio after the hammer has left, then leave a separate
+  // settling interval so the FFT window measures the updated resonators.
+  for (int i = 0; i < 12000; ++i) static_cast<void>(core.render(settled_ratio));
+  std::vector<float> late(static_cast<size_t>(kFft));
+  for (float& sample : late) sample = core.render(settled_ratio);
+  return late;
+}
+
+std::vector<float> render_core(PianoVoiceCore& core, int samples) {
+  std::vector<float> out(static_cast<size_t>(samples));
+  for (float& sample : out) sample = core.render(1.0f);
+  return out;
+}
+
+double decay_rate_db_per_s(const std::vector<float>& tone) {
+  constexpr size_t kWindow = 9600;  // 200 ms at 48 kHz.
+  const float early = rms(tone, 0, kWindow);
+  const float late = rms(tone, 3 * kWindow, 4 * kWindow);
+  return 20.0 * std::log10(static_cast<double>(early) / std::max(1.0e-20f, late)) /
+         (3.0 * static_cast<double>(kWindow) / kRate);
+}
 
 }  // namespace
 
@@ -319,6 +383,171 @@ TEST_CASE("the top octave is not consumed by its own dispersion", "[midi][synth]
   REQUIRE(attack > 0.0f);
   REQUIRE(held > 0.0f);
   REQUIRE(20.0 * std::log10(static_cast<double>(held) / attack) > -40.0);
+}
+
+TEST_CASE("top modal piano partials follow a live pitch ratio", "[midi][synth][piano]") {
+  const PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+  constexpr std::array<float, 3> kRatios = {0.5f, 1.0f, 2.0f};
+
+  for (const uint8_t note : {uint8_t{100}, uint8_t{108}}) {
+    const double nominal = piano_nominal_hz(note);
+    for (const float ratio : kRatios) {
+      const std::vector<float> late = render_core_ratio(params, note, ratio);
+      const std::vector<double> power = power_spectrum(late, 0);
+      const double target = nominal * ratio;
+      const double target_power = peak_power_in(power, target * 0.97, target * 1.03);
+      const double nominal_power = peak_power_in(power, nominal * 0.97, nominal * 1.03);
+      const double peak = peak_hz_in(power, target * 0.97, target * 1.03);
+      INFO("note=" << static_cast<int>(note) << " ratio=" << ratio << " target=" << target
+                   << " peak=" << peak << " target power=" << target_power
+                   << " nominal power=" << nominal_power);
+      CHECK(rms(late, 0, late.size()) > 1.0e-7f);
+      CHECK(target_power > 0.0);
+      CHECK(nominal_power > 0.0);
+      CHECK(peak > 0.0);
+      CHECK(std::fabs(std::log2(peak / target)) < 0.025);
+      if (ratio != 1.0f) CHECK(target_power > 1.05 * nominal_power);
+    }
+  }
+}
+
+TEST_CASE("piano modal drive gain follows the bent physical period", "[midi][synth][piano]") {
+  constexpr float kWeight = 0.37f;
+  constexpr std::array<float, 3> kRatios = {0.5f, 1.0f, 1.5f};
+  constexpr std::array<float, 3> kPeriods = {17.0f, 29.0f, 53.0f};
+
+  for (const float period : kPeriods) {
+    for (const float ratio : kRatios) {
+      const float omega0 = sonare::constants::kTwoPi / period;
+      const float w = omega0 * ratio;
+      const float gain =
+          sonare::midi::synth::piano_detail::piano_modal_drive_gain(kWeight, ratio, w, period);
+      // A physical impulse response has amplitude gain/sin(w); after bending,
+      // its period is P/ratio. The normalized impulse weight must therefore be
+      // invariant at 2*weight, independently of the timbre or pitch choice.
+      const float recovered_weight = gain / std::sin(w) * (period / ratio);
+      INFO("omega0=" << omega0 << " ratio=" << ratio << " period=" << period
+                     << " recovered=" << recovered_weight);
+      CHECK(std::fabs(recovered_weight - 2.0f * kWeight) < 2.0e-5f);
+    }
+  }
+}
+
+TEST_CASE("a live pitch-ratio update retunes the top modal fundamental", "[midi][synth][piano]") {
+  const PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+  constexpr uint8_t kNote = 100;
+  constexpr float kInitialRatio = 1.0f;
+  constexpr float kSettledRatio = 0.5f;
+  const double nominal = piano_nominal_hz(kNote);
+  const double target = nominal * kSettledRatio;
+
+  const std::vector<float> late =
+      render_core_live_ratio(params, kNote, kInitialRatio, kSettledRatio);
+  const std::vector<double> power = power_spectrum(late, 0);
+  const double target_power = peak_power_in(power, target * 0.97, target * 1.03);
+  const double nominal_power = peak_power_in(power, nominal * 0.97, nominal * 1.03);
+  const double peak = peak_hz_in(power, target * 0.97, target * 1.03);
+  INFO("nominal=" << nominal << " target=" << target << " peak=" << peak
+                  << " target power=" << target_power << " nominal power=" << nominal_power);
+  REQUIRE(rms(late, 0, late.size()) > 1.0e-7f);
+  REQUIRE(target_power > 1.0e-8);
+  REQUIRE(target_power > 20.0 * nominal_power);
+  REQUIRE(peak > 0.0);
+  REQUIRE(std::fabs(std::log2(peak / target)) < 0.025);
+}
+
+TEST_CASE("top modal history stays clear across an out-of-band public pitch round trip",
+          "[midi][synth][piano]") {
+  const PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+  constexpr uint8_t kNote = 108;
+  constexpr int kDriveSamples = 12000;
+  constexpr int kRoundTripSamples = 4096;
+  constexpr float kOutRatio = 8.0f;
+
+  PianoVoiceCore a;
+  PianoVoiceCore b;
+  std::vector<float> slab_a(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(kRate)),
+                            0.0f);
+  std::vector<float> slab_b(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(kRate)),
+                            0.0f);
+  a.attach(slab_a.data(), sonare::midi::synth::piano_string_capacity(kRate));
+  b.attach(slab_b.data(), sonare::midi::synth::piano_string_capacity(kRate));
+  a.start(params, kRate, kNote, sonare::midi::Velocity16::from7(110), 0x5049414E4FULL);
+  b.start(params, kRate, kNote, sonare::midi::Velocity16::from7(110), 0x5049414E4FULL);
+
+  std::vector<float> pre(static_cast<size_t>(kDriveSamples));
+  for (int i = 0; i < kDriveSamples; ++i) {
+    pre[static_cast<size_t>(i)] = a.render(1.0f);
+    b.render(1.0f);
+  }
+  REQUIRE(rms(pre, 0, pre.size()) > 1.0e-7f);
+
+  // Both voices leave the modal bank out of band after the excitation has
+  // finished. This transition must clear every active pole history.
+  for (int i = 0; i < kDriveSamples; ++i) {
+    a.render(kOutRatio);
+    b.render(kOutRatio);
+  }
+
+  // A returns to the audible ratio while B stays out of band. With no new
+  // excitation and the top loop disabled, A must not resurrect old modes.
+  std::vector<float> returned_diff(static_cast<size_t>(kRoundTripSamples));
+  for (int i = 0; i < kRoundTripSamples; ++i) {
+    returned_diff[static_cast<size_t>(i)] = a.render(1.0f) - b.render(kOutRatio);
+  }
+  REQUIRE(rms(returned_diff, 0, returned_diff.size()) < 1.0e-7f);
+}
+
+TEST_CASE("the modal crossover does not retain an unbent fundamental", "[midi][synth][piano]") {
+  const PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+  const double nominal = piano_nominal_hz(95);
+  for (const float ratio : {std::exp2(-2.0f / 12.0f), std::exp2(2.0f / 12.0f)}) {
+    const std::vector<float> late = render_core_ratio(params, 95, ratio);
+    const std::vector<double> power = power_spectrum(late, 0);
+    const double target = nominal * ratio;
+    const double bent_power = peak_power_in(power, target * 0.97, target * 1.03);
+    const double unbent_power = peak_power_in(power, nominal * 0.97, nominal * 1.03);
+    INFO("ratio=" << ratio << " bent power=" << bent_power << " unbent power=" << unbent_power);
+    CHECK(rms(late, 0, late.size()) > 1.0e-7f);
+    CHECK(bent_power > 0.0);
+    CHECK(unbent_power < 1.0e-4 * bent_power);
+  }
+}
+
+TEST_CASE("an initial downbend brings the covered top modal sixth partial into the band",
+          "[midi][synth][piano]") {
+  const PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+  constexpr uint8_t kNote = 108;
+  constexpr float kRatio = 0.5f;
+  const double nominal = piano_nominal_hz(kNote);
+  const double b = sonare::midi::synth::piano_inharmonicity_b(kNote);
+  const double modal_f1 = std::sqrt(1.0 + b);
+  const double sixth = 6.0 * nominal * std::sqrt(1.0 + b * 36.0) / modal_f1;
+  const double target = sixth * kRatio;
+
+  // Keep the fixture meaningful: the nominal sixth is outside the admitted
+  // top-modal band, while the initial downbend must bring it back in.
+  CHECK(sixth > 21600.0);
+  CHECK(target < 21600.0);
+
+  const std::vector<float> late = render_core_ratio(params, kNote, kRatio, 6000);
+  const std::vector<double> power = power_spectrum(late, 0);
+  const double target_power = peak_power_in(power, target * 0.985, target * 1.015);
+  const double peak = peak_hz_in(power, target * 0.985, target * 1.015);
+  const double fundamental_power =
+      peak_power_in(power, nominal * kRatio * 0.97, nominal * kRatio * 1.03);
+  INFO("target sixth=" << target << " peak=" << peak << " target power=" << target_power
+                       << " fundamental power=" << fundamental_power);
+  REQUIRE(rms(late, 0, late.size()) > 1.0e-7f);
+  REQUIRE(fundamental_power > 1.0e-4);
+  REQUIRE(target_power > 1.0e-8);
+  // Test that the restored partial rises above its local spectral floor;
+  // its level relative to the fundamental is timbre, not pitch admission.
+  const double local_floor = std::max(peak_power_in(power, target * 0.95, target * 0.96),
+                                      peak_power_in(power, target * 1.04, target * 1.05));
+  REQUIRE(target_power > 20.0 * local_floor);
+  REQUIRE(peak > 0.0);
+  REQUIRE(std::fabs(std::log2(peak / target)) < 0.02);
 }
 
 TEST_CASE("the felt hammer maps velocity to brightness", "[midi][synth][piano]") {
@@ -634,4 +863,145 @@ TEST_CASE("a half pedal damps by its position, not by how many CC64 messages sen
   INFO("tail rms once " << once_tail << " twenty " << twenty_tail);
   REQUIRE(once_tail > 1.0e-5f);  // non-vacuity: the half-pedalled note still rings
   REQUIRE(twenty_tail == once_tail);
+}
+
+TEST_CASE("the piano core follows a half-pedal back toward its natural decay",
+          "[midi][synth][piano]") {
+  const PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+
+  // CC64=90 is a contact strength of 37/63, and CC64=110 is 17/63. The
+  // second contact must replace the first one. Comparing decay slopes avoids
+  // requiring lost energy to come back when the damper retreats.
+  const auto rate_after_contacts = [&](float first, float second) {
+    PianoVoiceCore core;
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(kRate)),
+                            0.0f);
+    core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(kRate));
+    core.start(params, kRate, 60, sonare::midi::Velocity16::from7(110), 0x504544u);
+    render_core(core, 12000);  // let the hammer leave the string
+    core.damp(first);
+    render_core(core, 4800);  // the weaker contact arrives later
+    if (second >= 0.0f) core.damp(second);
+    return decay_rate_db_per_s(render_core(core, 38400));
+  };
+
+  const float half = rate_after_contacts(37.0f / 63.0f, -1.0f);
+  const float shallower = rate_after_contacts(37.0f / 63.0f, 17.0f / 63.0f);
+  const float natural = rate_after_contacts(37.0f / 63.0f, 0.0f);
+  INFO("core decay rates: half=" << half << " shallower=" << shallower << " natural=" << natural);
+  REQUIRE(shallower + 0.3f < half);
+  REQUIRE(natural + 0.3f < shallower);
+}
+
+TEST_CASE("full piano damper contact never lengthens a faster natural decay",
+          "[midi][synth][piano]") {
+  PianoPatchParams params = gm_fallback_patch(0, 0).piano;
+  // Exercise the endpoint ordering the shipped patch normally does not reach:
+  // both natural stages are already faster than this patch's full-damper t60.
+  params.decay_fast_s = 0.5f;
+  params.decay_slow_s = 0.8f;
+  params.release_damp_s = 10.0f;
+
+  const auto rate_after = [&](float contact_strength) {
+    PianoVoiceCore core;
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(kRate)),
+                            0.0f);
+    core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(kRate));
+    core.start(params, kRate, 60, sonare::midi::Velocity16::from7(110), 0x504545u);
+    render_core(core, 1200);
+    if (contact_strength < 0.0f)
+      core.release();
+    else
+      core.damp(contact_strength);
+    return decay_rate_db_per_s(render_core(core, 38400));
+  };
+
+  const float release_rate = rate_after(-1.0f);
+  const float natural_rate = rate_after(0.0f);
+  const float half_contact_rate = rate_after(0.5f);
+  const float full_contact_rate = rate_after(1.0f);
+  INFO("short-natural rates: release=" << release_rate << " natural=" << natural_rate
+                                       << " half contact=" << half_contact_rate
+                                       << " full contact=" << full_contact_rate);
+  REQUIRE(half_contact_rate + 0.3f >= release_rate);
+  REQUIRE(full_contact_rate + 0.3f >= natural_rate);
+}
+
+TEST_CASE("NativeSynth applies reverse half-pedal travel to a released key-up piano note",
+          "[midi][synth][piano]") {
+  auto rate_after_cc64 = [](uint8_t first_depth, uint8_t second_depth) {
+    NativeSynthPatch patch = gm_fallback_patch(0, 0);
+    // Keep this assertion about the string voice. The shared board is covered
+    // separately and can otherwise mask a decay-rate change in the voice.
+    patch.piano.soundboard = 0.0f;
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render_left(synth, 12000);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, first_depth)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    render_left(synth, 4800);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, second_depth)));
+    return decay_rate_db_per_s(render_left(synth, 38400));
+  };
+
+  const float half = rate_after_cc64(90, 90);
+  const float shallower = rate_after_cc64(90, 110);
+  const float natural = rate_after_cc64(90, 127);
+  INFO("NativeSynth decay rates: half=" << half << " shallower=" << shallower
+                                        << " natural=" << natural);
+  REQUIRE(shallower + 0.3f < half);
+  REQUIRE(natural + 0.3f < shallower);
+}
+
+TEST_CASE("NativeSynth does not re-damp a piano voice already in release", "[midi][synth][piano]") {
+  const auto render_after_release = [](uint8_t pedal_depth) {
+    NativeSynthConfig cfg;
+    cfg.patch = gm_fallback_patch(0, 0);
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render_left(synth, 12000);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    // Both cases open the shared sympathetic bank equally. A difference here
+    // therefore proves that a pedal message changed a voice already releasing.
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, pedal_depth)));
+    return render_left(synth, 16384);
+  };
+
+  const std::vector<float> full_lift = render_after_release(127);
+  const std::vector<float> half_lift = render_after_release(110);
+  REQUIRE(rms(full_lift, 0, 8192) > 1.0e-5f);
+  const bool identical = half_lift == full_lift;
+  REQUIRE(identical);
+}
+
+TEST_CASE("NativeSynth applies sustain contact when a sostenuto capture is released",
+          "[midi][synth][piano]") {
+  const auto render_after_capture_release = [](bool restate_sustain) {
+    NativeSynthConfig cfg;
+    cfg.patch = gm_fallback_patch(0, 0);
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render_left(synth, 12000);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 127)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 90)));
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 0)));
+    if (restate_sustain) {
+      // This is the behavior the capture release must match: the same pedal
+      // position is applied after the voice becomes sustain-eligible.
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 90)));
+    }
+    return render_left(synth, 38400);
+  };
+
+  const std::vector<float> capture_release = render_after_capture_release(false);
+  const std::vector<float> repeated_cc = render_after_capture_release(true);
+  REQUIRE(rms(capture_release, 0, 9600) > 1.0e-5f);
+  const bool identical = capture_release == repeated_cc;
+  REQUIRE(identical);
 }

@@ -101,6 +101,7 @@ class VocalVoiceCore {
   /// F0 with pressure, which a note obliged to sound at its note number cannot
   /// do.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  void restore_excitation_base() noexcept;
   /// Mod-matrix offset on the same axis, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not

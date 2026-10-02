@@ -437,6 +437,9 @@ struct NativeSynthVoice : VoiceState {
   /// Pushes live excitation-axis bases to a sounding voice (a CC arriving
   /// mid-note), without the snap: the engine's own ramp owns the approach.
   void push_excitation(const ExcitationAxes& base, uint32_t present) noexcept;
+  /// Restores each engine's start() excitation base (before any controller seeded it) without
+  /// restarting its phase, envelope, or live matrix offset.
+  void restore_excitation_base() noexcept;
   /// Renders one mono sample. Deactivates when the amp envelope ends.
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
@@ -793,7 +796,8 @@ class NativeSynth final : public MidiInstrument {
   void track_mpe_input(const Ump& ump) noexcept;
   /// Pushes the channel's live excitation axes (and CC11 bow speed) to its
   /// sounding voices.
-  void push_excitation_control(uint8_t channel) noexcept;
+  void push_excitation_control(uint8_t channel, uint32_t changed_mask) noexcept;
+  void restore_excitation_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
   void refresh_all_channel_mods() noexcept;

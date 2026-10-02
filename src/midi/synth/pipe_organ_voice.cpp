@@ -216,6 +216,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
@@ -507,11 +508,17 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   bright01_ = 0.5f;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   excitation_live_ = false;
+  excite_.remember_base();
 }
 
 void PipeOrganVoiceCore::set_excitation_base(const ExcitationAxes& base,
                                              uint32_t present) noexcept {
   excite_.set_base(base, present);
+  refresh_excitation_targets();
+}
+
+void PipeOrganVoiceCore::restore_excitation_base() noexcept {
+  excite_.restore_base();
   refresh_excitation_targets();
 }
 
@@ -563,6 +570,7 @@ void PipeOrganVoiceCore::snap_excitation() noexcept {
 }
 
 float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (slab_ == nullptr) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
@@ -677,6 +685,7 @@ void PipeOrganVoiceCore::release() noexcept {
 }
 
 void PipeOrganVoiceCore::kill() noexcept {
+  killed_ = true;
   breath_.releasing = true;
   breath_.level = 0.0f;
   for (int r = 0; r < rank_count_; ++r) {

@@ -82,7 +82,9 @@ TEST_CASE("pipe organ velocity between two 7-bit steps lands between their peaks
 
 TEST_CASE("bowed string velocity between two 7-bit steps lands between their peaks",
           "[midi][midi2]") {
-  const auto& params = melodic_patch(SynthEngineMode::kBowedString).bowed_string;
+  auto params = melodic_patch(SynthEngineMode::kBowedString).bowed_string;
+  // No rosin noise, so a u7-quantized midpoint would render as lo and fail p_lo < p_mid.
+  params.rosin = 0.0f;
   std::vector<float> slab(
       static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(kSr)));
   require_strictly_between([&](Velocity16 v) {

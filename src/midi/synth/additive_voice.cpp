@@ -71,6 +71,7 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
   }
 
   morph_base_ = std::clamp(params.morph, 0.0f, 1.0f);
+  morph_home_ = morph_base_;
   morph_ = morph_base_;
   morph_target_ = morph_base_;
   morph_mod_ = 0.0f;
@@ -113,6 +114,11 @@ void AdditiveVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t
   if ((present & kAxisMorph) != 0u) {
     morph_base_ = std::clamp(base.morph, 0.0f, 1.0f);
   }
+  refresh_morph_target();
+}
+
+void AdditiveVoiceCore::restore_excitation_base() noexcept {
+  morph_base_ = morph_home_;
   refresh_morph_target();
 }
 

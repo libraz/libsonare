@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "midi/control_value.h"
@@ -231,6 +232,24 @@ float rms(const std::vector<float>& buf, size_t from = 0) {
   return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
 }
 
+float rms_window(const std::vector<float>& buf, size_t from, size_t to) {
+  double acc = 0.0;
+  size_t n = 0;
+  for (size_t i = from; i < to && i < buf.size(); ++i) {
+    acc += static_cast<double>(buf[i]) * buf[i];
+    ++n;
+  }
+  return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
+}
+
+double decay_rate_db_per_s(const std::vector<float>& tone) {
+  constexpr size_t kWindow = 9600;  // 200 ms at 48 kHz.
+  const float early = rms_window(tone, 0, kWindow);
+  const float late = rms_window(tone, 3 * kWindow, 4 * kWindow);
+  return 20.0 * std::log10(static_cast<double>(early) / std::max(1.0e-20f, late)) /
+         (3.0 * static_cast<double>(kWindow) / kOutRate);
+}
+
 /// Fundamental frequency estimate from interpolated rising zero crossings.
 double estimate_frequency(const std::vector<float>& buf, size_t from) {
   double first = -1.0;
@@ -431,6 +450,98 @@ TEST_CASE("Sf2Player channel-mode CCs match BuiltinSynth semantics", "[midi][sf2
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
     REQUIRE(peak(render(player, 256).left) > 0.0f);  // channel 1 still sounds
   }
+}
+
+TEST_CASE("Sf2Player fallback applies reverse half-pedal travel to a piano note",
+          "[midi][sf2][synth][piano]") {
+  auto rate_after_cc64 = [](uint8_t first_depth, uint8_t second_depth) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    Sf2Player player(cfg);  // no SoundFont: use the physical-model fallback
+    player.prepare(kOutRate, 256);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render(player, 12000);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, first_depth)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    render(player, 4800);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, second_depth)));
+    return decay_rate_db_per_s(render(player, 38400).left);
+  };
+
+  const float half = rate_after_cc64(90, 90);
+  const float shallower = rate_after_cc64(90, 110);
+  const float natural = rate_after_cc64(90, 127);
+  INFO("Sf2 fallback decay rates: half=" << half << " shallower=" << shallower
+                                         << " natural=" << natural);
+  REQUIRE(shallower + 0.3f < half);
+  REQUIRE(natural + 0.3f < shallower);
+}
+
+TEST_CASE("Sf2Player fallback does not re-damp a piano voice already in release",
+          "[midi][sf2][synth][piano]") {
+  const auto render_after_release = [](uint8_t pedal_depth) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    Sf2Player player(cfg);
+    player.prepare(kOutRate, 256);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render(player, 12000);
+    player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    // Both cases open the same shared sympathetic gate. Any difference proves
+    // the controller changed a fallback voice already in release.
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, pedal_depth)));
+    return render(player, 16384);
+  };
+
+  const StereoRender full_lift = render_after_release(127);
+  const StereoRender half_lift = render_after_release(110);
+  REQUIRE(rms(full_lift.left) > 1.0e-5f);
+  const bool identical = half_lift.left == full_lift.left && half_lift.right == full_lift.right;
+  REQUIRE(identical);
+}
+
+TEST_CASE("Sf2Player fallback applies sustain contact when a sostenuto capture is released",
+          "[midi][sf2][synth][piano]") {
+  const auto render_after_capture_release = [](bool restate_sustain) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    Sf2Player player(cfg);
+    player.prepare(kOutRate, 256);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render(player, 12000);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 127)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 90)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 0)));
+    if (restate_sustain) {
+      // The capture release must match re-stating the same sustain position
+      // after the voice becomes eligible for sustain damping.
+      player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 90)));
+    }
+    return render(player, 38400);
+  };
+
+  const StereoRender capture_release = render_after_capture_release(false);
+  const StereoRender repeated_cc = render_after_capture_release(true);
+  REQUIRE(rms(capture_release.left) > 1.0e-5f);
+  const bool identical =
+      capture_release.left == repeated_cc.left && capture_release.right == repeated_cc.right;
+  REQUIRE(identical);
 }
 
 TEST_CASE("Sf2Player clears a stale sostenuto capture when a voice slot is reused", "[midi][sf2]") {
@@ -1074,4 +1185,111 @@ TEST_CASE("Sf2Player counts what it decodes and does not realise", "[midi][sf2][
   REQUIRE(player.skipped_event_count() == 5);
   player.reset();
   REQUIRE(player.skipped_event_count() == 0);
+}
+
+TEST_CASE("Sf2Player channel-mode All Notes Off preserves sustain for sampled and fallback voices",
+          "[midi][sf2][synth]") {
+  const auto run = [](Sf2Player& player, int controller) {
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    REQUIRE(peak(render(player, 2400).left) > kSilenceFloor);
+
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(
+                           0, 0, static_cast<uint8_t>(controller), 0)));
+    render(player, player.tail_samples() + 1024);
+    const int held = player.active_voice_count();
+
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 0)));
+    render(player, player.tail_samples() + 1024);
+    return std::pair{held, player.active_voice_count()};
+  };
+
+  SECTION("sampled SoundFont") {
+    for (const int controller : {123, 124, 125, 126, 127}) {
+      Sf2Player player = make_player(make_fixture());
+      INFO("controller " << controller);
+      const auto [held, released] = run(player, controller);
+      REQUIRE(held > 0);
+      REQUIRE(released == 0);
+    }
+  }
+
+  SECTION("synth fallback") {
+    for (const int controller : {123, 124, 125, 126, 127}) {
+      Sf2Player player = make_fallback_player();
+      INFO("controller " << controller);
+      const auto [held, released] = run(player, controller);
+      REQUIRE(held > 0);
+      REQUIRE(released == 0);
+    }
+  }
+}
+
+TEST_CASE("Sf2Player All Sound Off keeps sustain for a new sampled and fallback note",
+          "[midi][sf2][synth]") {
+  const auto run = [](Sf2Player& player) {
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    REQUIRE(peak(render(player, 2400).left) > kSilenceFloor);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+    REQUIRE(player.active_voice_count() == 0);
+    REQUIRE(peak(render(player, 512).left) < kSilenceFloor);
+
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    REQUIRE(peak(render(player, 2400).left) > kSilenceFloor);
+    player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    render(player, player.tail_samples() + 1024);
+    const int held = player.active_voice_count();
+
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 0)));
+    render(player, player.tail_samples() + 1024);
+    return std::pair{held, player.active_voice_count()};
+  };
+
+  SECTION("sampled SoundFont") {
+    Sf2Player player = make_player(make_fixture());
+    const auto [held, released] = run(player);
+    REQUIRE(held > 0);
+    REQUIRE(released == 0);
+  }
+
+  SECTION("synth fallback") {
+    // All Sound Off is channel-local, while the optional system FX bus is
+    // shared by all channels. Keep this immediate-silence assertion dry so a
+    // reverb tail from the killed channel cannot be mistaken for a live voice.
+    Sf2Player player = make_player(nullptr);
+    const auto [held, released] = run(player);
+    REQUIRE(held > 0);
+    REQUIRE(released == 0);
+  }
+}
+
+TEST_CASE("Sf2Player All Notes Off preserves a sostenuto capture in both voice pools",
+          "[midi][sf2][synth]") {
+  const auto run = [](Sf2Player& player) {
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    REQUIRE(peak(render(player, 2400).left) > kSilenceFloor);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 127)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
+    render(player, player.tail_samples() + 1024);
+    const int held = player.active_voice_count();
+
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 0)));
+    render(player, player.tail_samples() + 1024);
+    return std::pair{held, player.active_voice_count()};
+  };
+
+  SECTION("sampled SoundFont") {
+    Sf2Player player = make_player(make_fixture());
+    const auto [held, released] = run(player);
+    REQUIRE(held > 0);
+    REQUIRE(released == 0);
+  }
+
+  SECTION("synth fallback") {
+    Sf2Player player = make_fallback_player();
+    const auto [held, released] = run(player);
+    REQUIRE(held > 0);
+    REQUIRE(released == 0);
+  }
 }

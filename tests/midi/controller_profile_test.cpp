@@ -23,7 +23,9 @@
 #include <string>
 #include <vector>
 
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/wind_breath.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
@@ -39,8 +41,14 @@ using sonare::midi::ControllerProfile;
 using sonare::midi::kMaxControllerBindings;
 using sonare::midi::Ump;
 using sonare::midi::synth::default_controller_profile;
+using sonare::midi::synth::ExcitationAxes;
+using sonare::midi::synth::ExcitationBases;
+using sonare::midi::synth::gm_fallback_patch;
+using sonare::midi::synth::kAxisBrightness;
+using sonare::midi::synth::kAxisForce;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
+using sonare::midi::synth::NativeSynthPatch;
 using sonare::test::event;
 using sonare::test::render_left;
 using sonare::test::rms;
@@ -92,7 +100,7 @@ std::vector<Ump> aftertouch_ramp() {
   return out;
 }
 
-NativeSynth make_synth(int program, const ControllerProfile& profile) {
+NativeSynth make_synth(int program, const ControllerProfile& profile, bool start_note = true) {
   NativeSynthConfig cfg;
   cfg.use_gm_programs = true;
   cfg.gain = 1.0f;
@@ -104,8 +112,37 @@ NativeSynth make_synth(int program, const ControllerProfile& profile) {
   synth.prepare(kRate, kBlock);
   synth.on_event(
       0, event(sonare::midi::make_midi1_program_change(0, 0, static_cast<uint8_t>(program))));
-  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity)));
+  if (start_note) {
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity)));
+  }
   return synth;
+}
+
+NativeSynth make_patch_synth(const NativeSynthPatch& patch, const ControllerProfile& profile,
+                             bool start_note = true) {
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  cfg.use_gm_programs = false;
+  cfg.gain = 1.0f;
+  cfg.polyphony = 4;
+  cfg.bus_drive = 0.0f;
+  cfg.dc_block = true;
+  NativeSynth synth(cfg);
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  if (start_note) {
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity)));
+  }
+  return synth;
+}
+
+NativeSynthPatch reset_patch(int program) {
+  NativeSynthPatch patch = gm_fallback_patch(0, static_cast<uint8_t>(program));
+  if (program == 16) {
+    // Give the organ's zero drawbars_b a real morph end so the control is not inert.
+    patch.additive.drawbars_b = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.0f};
+  }
+  return patch;
 }
 
 /// Renders @p program while stepping one input from silence to full. @p step
@@ -131,9 +168,47 @@ Ump aftertouch_step(uint8_t value) {
   return sonare::midi::make_midi1_channel_pressure(0, 0, value);
 }
 
+Ump controller_step(uint8_t controller, uint8_t value) {
+  return sonare::midi::make_midi1_control_change(0, 0, controller, value);
+}
+
+Ump poly_pressure_step(uint8_t value) {
+  return sonare::midi::make_midi1_poly_pressure(0, 0, kNote, value);
+}
+
+void start_note(NativeSynth& synth) {
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity)));
+}
+
+ControllerProfile single_cc16_profile(ControllerAxis axis) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 16, axis}));
+  return profile;
+}
+
 /// Programs covering the engines a breath gesture can reach, so the comparison
 /// is not one engine's accident.
 constexpr int kWindPrograms[] = {21, 40, 56, 65, 73};
+
+struct EngineAxisCase {
+  int program;
+  ControllerAxis axis;
+  const char* label;
+};
+
+/// Every continuously controlled GM fallback, plus the additive registration
+/// morph. These are the engines whose active voices must follow a reset to the
+/// same base they used when the note began.
+constexpr EngineAxisCase kResetAxisCases[] = {
+    {16, ControllerAxis::kMorph, "additive morph"},
+    {19, ControllerAxis::kExcitation, "pipe organ excitation"},
+    {40, ControllerAxis::kPosition, "bowed string position"},
+    {52, ControllerAxis::kBrightness, "vocal brightness"},
+    {56, ControllerAxis::kBrightness, "brass brightness"},
+    {65, ControllerAxis::kExcitation, "reed excitation"},
+    {73, ControllerAxis::kExcitation, "flute excitation"},
+    {21, ControllerAxis::kBrightness, "free reed brightness"},
+};
 
 }  // namespace
 
@@ -438,4 +513,191 @@ TEST_CASE("the three channel axes reach the sound", "[midi][synth][controller-pr
     ++probed;
   }
   REQUIRE(probed == std::size(kProbes));
+}
+
+TEST_CASE("reset all controllers restores every active engine axis to its note baseline",
+          "[midi][synth][controller-profile]") {
+  for (const EngineAxisCase& axis_case : kResetAxisCases) {
+    CAPTURE(axis_case.label, axis_case.program);
+    const ControllerProfile profile = single_cc16_profile(axis_case.axis);
+    const NativeSynthPatch patch = reset_patch(axis_case.program);
+    NativeSynth target = make_patch_synth(patch, profile);
+    NativeSynth latched = make_patch_synth(patch, profile);
+    NativeSynth untouched = make_patch_synth(patch, profile);
+
+    render_left(target, kPrefillFrames);
+    render_left(latched, kPrefillFrames);
+    render_left(untouched, kPrefillFrames);
+
+    const Ump full = controller_step(16, 127);
+    target.on_event(0, event(full));
+    latched.on_event(0, event(full));
+    const std::vector<float> target_moved = render_left(target, kStepFrames);
+    const std::vector<float> latched_moved = render_left(latched, kStepFrames);
+    const std::vector<float> untouched_output = render_left(untouched, kStepFrames);
+
+    // Scalar booleans keep a failure from dumping three buffers; untouched proves CC16 arrived.
+    const bool target_matches_latched = target_moved == latched_moved;
+    const bool moved_from_untouched = target_moved != untouched_output;
+    CHECK(target_matches_latched);
+    CHECK(moved_from_untouched);
+
+    target.on_event(0, event(controller_step(121, 0)));
+    const std::vector<float> target_after_reset = render_left(target, kPrefillFrames);
+    const std::vector<float> latched_after_reset = render_left(latched, kPrefillFrames);
+    // Reset must move the active engine off the latched axis value.
+    const bool reset_released_active_latch = target_after_reset != latched_after_reset;
+    CHECK(reset_released_active_latch);
+  }
+}
+
+TEST_CASE("replacing a controller profile restores the active reed baseline",
+          "[midi][synth][controller-profile]") {
+  const ControllerProfile profile = single_cc16_profile(ControllerAxis::kExcitation);
+  const ControllerProfile empty;
+  NativeSynth target = make_synth(65, profile);
+  NativeSynth latched = make_synth(65, profile);
+  NativeSynth untouched = make_synth(65, profile);
+
+  render_left(target, kPrefillFrames);
+  render_left(latched, kPrefillFrames);
+  render_left(untouched, kPrefillFrames);
+  const Ump full = controller_step(16, 127);
+  target.on_event(0, event(full));
+  latched.on_event(0, event(full));
+  const std::vector<float> target_moved = render_left(target, kStepFrames);
+  const std::vector<float> latched_moved = render_left(latched, kStepFrames);
+  const std::vector<float> untouched_output = render_left(untouched, kStepFrames);
+  const bool target_matches_latched = target_moved == latched_moved;
+  const bool moved_from_untouched = target_moved != untouched_output;
+  CHECK(target_matches_latched);
+  CHECK(moved_from_untouched);
+
+  target.set_controller_profile(empty);
+  const std::vector<float> target_after_replacement = render_left(target, kPrefillFrames);
+  const std::vector<float> latched_after_replacement = render_left(latched, kPrefillFrames);
+  // Replacing the profile must release the active axis latch.
+  const bool replacement_released_active_latch =
+      target_after_replacement != latched_after_replacement;
+  CHECK(replacement_released_active_latch);
+}
+
+TEST_CASE("reset all controllers returns a reed to its precise note-on baseline",
+          "[midi][synth][controller-profile]") {
+  NativeSynthPatch patch = reset_patch(65);
+  patch.reed.breath_pressure = 0.3f;
+  patch.reed.vel_to_breath = 0.0f;
+  ControllerProfile profile;
+  REQUIRE(
+      profile.bind({ControllerInput::kControlChange, 16, ControllerAxis::kExcitation, 0.3f, 1.0f}));
+
+  NativeSynth target = make_patch_synth(patch, profile);
+  NativeSynth reference = make_patch_synth(patch, profile);
+  render_left(target, kPrefillFrames);
+  render_left(reference, kPrefillFrames);
+
+  const Ump full = controller_step(16, 127);
+  target.on_event(0, event(full));
+  reference.on_event(0, event(full));
+  render_left(target, kPrefillFrames);
+  render_left(reference, kPrefillFrames);
+
+  // CC16=0 maps to the patch's .3 baseline, the same target the reset must restore.
+  target.on_event(0, event(controller_step(121, 0)));
+  reference.on_event(0, event(controller_step(16, 0)));
+  const std::vector<float> target_after_reset = render_left(target, kPrefillFrames);
+  const std::vector<float> reference_at_baseline = render_left(reference, kPrefillFrames);
+  const bool reset_matches_note_baseline = target_after_reset == reference_at_baseline;
+  CHECK(reset_matches_note_baseline);
+}
+
+TEST_CASE("an unrelated channel axis does not overwrite a per-note excitation",
+          "[midi][synth][controller-profile]") {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 16, ControllerAxis::kExcitation}));
+  REQUIRE(profile.bind({ControllerInput::kPolyPressure, 0, ControllerAxis::kExcitation}));
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 17, ControllerAxis::kBrightness}));
+
+  NativeSynth target = make_synth(40, profile, false);
+  NativeSynth peer = make_synth(40, profile, false);
+  NativeSynth control = make_synth(40, profile, false);
+  const Ump low_force = controller_step(16, 0);
+  target.on_event(0, event(low_force));
+  peer.on_event(0, event(low_force));
+  control.on_event(0, event(low_force));
+  start_note(target);
+  start_note(peer);
+  start_note(control);
+  render_left(target, kPrefillFrames);
+  render_left(peer, kPrefillFrames);
+  render_left(control, kPrefillFrames);
+
+  const Ump high_per_note_force = poly_pressure_step(127);
+  target.on_event(0, event(high_per_note_force));
+  peer.on_event(0, event(high_per_note_force));
+  const std::vector<float> target_force = render_left(target, kStepFrames);
+  const std::vector<float> peer_force = render_left(peer, kStepFrames);
+  const std::vector<float> control_force = render_left(control, kStepFrames);
+  const bool per_note_target_matches_peer = target_force == peer_force;
+  const bool per_note_force_changed = target_force != control_force;
+  CHECK(per_note_target_matches_peer);
+  CHECK(per_note_force_changed);
+
+  // Bowed string declines brightness; applying it must not re-push channel force.
+  target.on_event(0, event(controller_step(17, 127)));
+  const std::vector<float> target_after_brightness = render_left(target, kPrefillFrames);
+  const std::vector<float> peer_after_brightness = render_left(peer, kPrefillFrames);
+  const bool unrelated_axis_preserved = target_after_brightness == peer_after_brightness;
+  CHECK(unrelated_axis_preserved);
+}
+
+TEST_CASE("multiple per-note bindings retain each resolved excitation axis",
+          "[midi][synth][controller-profile]") {
+  NativeSynthPatch patch = reset_patch(65);
+  patch.mod_matrix = {};
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 16, ControllerAxis::kExcitation}));
+  REQUIRE(profile.bind({ControllerInput::kControlChange, 17, ControllerAxis::kBrightness}));
+  REQUIRE(profile.bind({ControllerInput::kPolyPressure, 0, ControllerAxis::kExcitation}));
+  REQUIRE(profile.bind({ControllerInput::kPolyPressure, 0, ControllerAxis::kBrightness}));
+
+  NativeSynth target = make_patch_synth(patch, profile, false);
+  NativeSynth reference = make_patch_synth(patch, profile, false);
+  NativeSynth untouched = make_patch_synth(patch, profile, false);
+  const Ump low_force = controller_step(16, 0);
+  const Ump low_brightness = controller_step(17, 0);
+  for (NativeSynth* synth : {&target, &reference, &untouched}) {
+    synth->on_event(0, event(low_force));
+    synth->on_event(0, event(low_brightness));
+    start_note(*synth);
+    render_left(*synth, kPrefillFrames);
+  }
+
+  // The two PolyPressure bindings are one gesture that resolves to both axes.
+  // The reference spells the same final state as two channel-wide writes.
+  target.on_event(0, event(poly_pressure_step(127)));
+  reference.on_event(0, event(controller_step(16, 127)));
+  reference.on_event(0, event(controller_step(17, 127)));
+  const std::vector<float> target_output = render_left(target, kStepFrames);
+  const std::vector<float> reference_output = render_left(reference, kStepFrames);
+  const std::vector<float> untouched_output = render_left(untouched, kStepFrames);
+  const bool per_note_axes_match = target_output == reference_output;
+  const bool per_note_axes_reached_audio = target_output != untouched_output;
+  CHECK(per_note_axes_match);
+  CHECK(per_note_axes_reached_audio);
+}
+
+TEST_CASE("restoring excitation bases retains matrix offsets",
+          "[midi][synth][controller-profile]") {
+  ExcitationBases bases{0.2f, 0.4f, 0.1f, -0.1f};
+  ExcitationAxes live{0.9f, 0.0f, 0.8f, 0.0f};
+  bases.set_base(live, kAxisForce | kAxisBrightness);
+  ExcitationAxes offsets{0.3f, 0.0f, -0.2f, 0.0f};
+  bases.set_mod(offsets);
+  bases.restore_base();
+
+  const bool bases_restored = bases.force01_base == 0.2f && bases.bright01_base == 0.4f;
+  const bool offsets_retained = bases.force_mod01 == 0.3f && bases.bright_mod01 == -0.2f;
+  CHECK(bases_restored);
+  CHECK(offsets_retained);
 }

@@ -170,10 +170,16 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
 
   const float vel01 = velocity.f7() / 127.0f;
   output_scale_ = kOutputScale * (kVelFloor + (1.0f - kVelFloor) * vel01);
+  excite_.remember_base();
 }
 
 void VocalVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
   excite_.set_base(base, present);
+  refresh_excitation_targets();
+}
+
+void VocalVoiceCore::restore_excitation_base() noexcept {
+  excite_.restore_base();
   refresh_excitation_targets();
 }
 

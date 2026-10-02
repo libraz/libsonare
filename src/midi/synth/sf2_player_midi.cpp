@@ -715,13 +715,11 @@ void Sf2Player::sustain_cc(uint8_t channel, uint8_t value) noexcept {
     // Half-pedal: a partially raised damper still rests on the piano strings,
     // so held-but-released fallback notes are damped rather than ringing
     // freely. Key-down and sostenuto-captured notes keep their dampers off.
-    if (value < 127) {
-      const float strength = static_cast<float>(127 - value) / 63.0f;
-      for (NativeSynthVoice& v : fallback_pool_) {
-        if (v.active && v.channel == ch && !v.key_down && !v.sostenuto && v.patch != nullptr &&
-            v.patch->mode == SynthEngineMode::kPiano) {
-          v.piano.damp(strength);
-        }
+    const float strength = static_cast<float>(127 - value) / 63.0f;
+    for (NativeSynthVoice& v : fallback_pool_) {
+      if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto &&
+          v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
+        v.piano.damp(strength);
       }
     }
     return;
@@ -762,7 +760,14 @@ void Sf2Player::sostenuto_pedal(uint8_t channel, bool down) noexcept {
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch && v.sostenuto) {
       v.sostenuto = false;
-      if (!v.key_down && !v.releasing && !st.sustain) v.release();
+      if (!v.key_down && !v.releasing) {
+        if (!st.sustain) {
+          v.release();
+        } else if (v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
+          const float strength = static_cast<float>(127 - st.sustain_level) / 63.0f;
+          v.piano.damp(strength);
+        }
+      }
     }
   }
 }
@@ -770,17 +775,24 @@ void Sf2Player::sostenuto_pedal(uint8_t channel, bool down) noexcept {
 void Sf2Player::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  channels_[ch].sustain = false;
+  const ChannelState& st = channels_[ch];
   for (Sf2Voice& v : pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
-      v.release();
+      if (v.sostenuto) continue;
+      if (!st.sustain) v.release();
     }
   }
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
-      v.release();
+      if (v.sostenuto) continue;
+      if (!st.sustain) {
+        v.release();
+      } else if (st.sustain_level < 127 && v.patch != nullptr &&
+                 v.patch->mode == SynthEngineMode::kPiano) {
+        v.piano.damp(static_cast<float>(127 - st.sustain_level) / 63.0f);
+      }
     }
   }
   recharge_percussion(ch);
@@ -789,7 +801,6 @@ void Sf2Player::all_notes_off(uint8_t channel) noexcept {
 void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  channels_[ch].sustain = false;
   for (Sf2Voice& v : pool_) {
     if (v.active && v.channel == ch) {
       v.env.kill();
@@ -915,6 +926,17 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   // performance controller, and is left alone.
   st.portamento = false;
   st.portamento_armed = false;
+  st.cc_position[1] = Control32::from7(0);
+  st.cc_position[2] = Control32::from7(0);
+  st.cc_position[11] = Control32::from7(gs_default_cc_positions()[11]);
+  st.cc_position[64] = Control32::from7(0);
+  st.cc_position[65] = Control32::from7(0);
+  st.cc_position[66] = Control32::from7(0);
+  st.cc_position[67] = Control32::from7(0);
+  st.cc_position[98] = Control32::from7(gs_default_cc_positions()[98]);
+  st.cc_position[99] = Control32::from7(gs_default_cc_positions()[99]);
+  st.cc_position[100] = Control32::from7(gs_default_cc_positions()[100]);
+  st.cc_position[101] = Control32::from7(gs_default_cc_positions()[101]);
   refresh_channel_mod(ch);
 }
 
@@ -976,6 +998,9 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       break;
     case 1:
       st.mod_wheel = value32;
+      refresh_channel_mod(ch);
+      break;
+    case 2:
       refresh_channel_mod(ch);
       break;
     case 5:  // Portamento time

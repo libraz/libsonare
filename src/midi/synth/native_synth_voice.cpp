@@ -372,6 +372,46 @@ void NativeSynthVoice::push_excitation(const ExcitationAxes& base, uint32_t pres
   apply_excitation_base(*this, base, present, false);
 }
 
+void NativeSynthVoice::restore_excitation_base() noexcept {
+  if (patch == nullptr) return;
+  switch (patch->mode) {
+    case SynthEngineMode::kSubtractive:
+    case SynthEngineMode::kFm:
+    case SynthEngineMode::kKarplusStrong:
+    case SynthEngineMode::kModal:
+    case SynthEngineMode::kPercussion:
+    case SynthEngineMode::kPiano:
+    case SynthEngineMode::kPluckedString:
+    case SynthEngineMode::kHarpsichord:
+    case SynthEngineMode::kSample:
+      break;
+    case SynthEngineMode::kAdditive:
+      additive.restore_excitation_base();
+      break;
+    case SynthEngineMode::kPipeOrgan:
+      pipe_organ.restore_excitation_base();
+      break;
+    case SynthEngineMode::kBowedString:
+      bowed_string.restore_excitation_base();
+      break;
+    case SynthEngineMode::kReed:
+      reed.restore_excitation_base();
+      break;
+    case SynthEngineMode::kBrass:
+      brass.restore_excitation_base();
+      break;
+    case SynthEngineMode::kFlute:
+      flute.restore_excitation_base();
+      break;
+    case SynthEngineMode::kVocal:
+      vocal.restore_excitation_base();
+      break;
+    case SynthEngineMode::kFreeReed:
+      free_reed.restore_excitation_base();
+      break;
+  }
+}
+
 float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
                                float wind_gain) noexcept {
   if (!active || patch == nullptr) return 0.0f;

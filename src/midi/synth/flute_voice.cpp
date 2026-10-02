@@ -115,6 +115,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
@@ -166,6 +167,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // enough for the first CC to move a sound the host did not ask to move.
   refresh_excitation_targets();
   snap_excitation();
+  excite_.remember_base();
 
   // In-loop DC blocker pole (on the jet output).
   dc_r_ = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
@@ -236,6 +238,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
 }
 
 float FluteVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (bore_.buffer == nullptr || jet_ == nullptr || capacity_ < 8) return 0.0f;
   float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
@@ -347,6 +350,11 @@ void FluteVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t pr
   refresh_excitation_targets();
 }
 
+void FluteVoiceCore::restore_excitation_base() noexcept {
+  excite_.restore_base();
+  refresh_excitation_targets();
+}
+
 void FluteVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
   excite_.set_mod(offsets);
   refresh_excitation_targets();
@@ -398,6 +406,7 @@ void FluteVoiceCore::snap_excitation() noexcept {
 void FluteVoiceCore::release() noexcept { breath_.release(); }
 
 void FluteVoiceCore::kill() noexcept {
+  killed_ = true;
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
   bore_.out = 0.0f;

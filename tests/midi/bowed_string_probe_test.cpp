@@ -337,9 +337,9 @@ TEST_CASE("bowed string control hashes", "[.][midi][synth][bowed][probe][golden]
   CHECK(v.polarization == 0.15f);
 
   const std::vector<float> core = render_core(v, 48000);
-  CHECK(fnv1a_quantized(core) == 0x82f13b6cd00c9540ull);
+  CHECK(fnv1a_quantized(core) == 0xe57dbd0fb9e42339ull);
   // The same core with both radiation gates off, as the bridge-force probe reads it.
-  CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x8b1705ace0f25090ull);
+  CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x10eea864280d384aull);
 
   // (b) The body resonator on both of its entry points, driven by the same
   // deterministic excitation. The percussion-shell configuration is written out

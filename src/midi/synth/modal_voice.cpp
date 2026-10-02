@@ -39,19 +39,12 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
 
   VoiceRandomSequence scatter(seed);
   num_modes_ = std::clamp(params.num_modes, 0, kMaxModalModes);
-  const float nyquist_limit = 0.45f * static_cast<float>(sample_rate_);
   for (int k = 0; k < num_modes_; ++k) {
     const ModalMode& src = params.modes[static_cast<size_t>(k)];
     Mode& mode = modes_[static_cast<size_t>(k)];
     const float freq = f0 * std::max(0.01f, src.ratio);
     mode.y1 = 0.0f;
     mode.y2 = 0.0f;
-    if (freq >= nyquist_limit) {
-      mode.omega = 0.0f;
-      mode.r = 0.0f;
-      mode.gain = 0.0f;
-      continue;
-    }
     mode.omega = kTwoPi * freq / static_cast<float>(sample_rate_);
     mode.r = radius_for(sample_rate_, t60 * std::max(0.01f, src.decay_scale));
     // Mallet curve: soft strikes excite the fundamental only; the seeded
@@ -59,7 +52,13 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
     const float mallet = std::exp(-(1.0f - hardness) * 1.5f * static_cast<float>(k));
     const float jitter = 1.0f + 0.1f * scatter.bipolar_at(static_cast<uint64_t>(k));
     // sin(omega) normalizes the two-pole impulse response to ~unit amplitude.
-    mode.gain = std::max(0.0f, src.gain) * mallet * jitter * std::sin(mode.omega);
+    // Keep the pre-normalization weight so a live bend can re-derive it at its
+    // current frequency, including when the nominal partial starts out of band.
+    mode.excitation = std::max(0.0f, src.gain) * mallet * jitter;
+    mode.gain = 0.0f;
+    mode.a1 = 0.0f;
+    mode.a2 = 0.0f;
+    mode.audible = false;
   }
   for (int k = num_modes_; k < kMaxModalModes; ++k) modes_[static_cast<size_t>(k)] = Mode{};
 
@@ -69,11 +68,25 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
 }
 
 void ModalVoiceCore::refresh_coefficients(float pitch_ratio) noexcept {
-  cached_ratio_ = pitch_ratio;
+  const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+  cached_ratio_ = ratio;
   for (int k = 0; k < num_modes_; ++k) {
     Mode& mode = modes_[static_cast<size_t>(k)];
-    if (mode.gain == 0.0f && mode.r == 0.0f) continue;
-    const float w = std::min(mode.omega * pitch_ratio, 0.95f * kPi);
+    const float w = mode.omega * ratio;
+    if (mode.excitation == 0.0f || mode.r == 0.0f || w <= 0.0f || w >= 0.9f * kPi) {
+      // Clear the resonator when its current pitch is out of band. This keeps
+      // a later bend from resurrecting a mode that was already struck while it
+      // was inactive; excite_ is consumed by render() exactly once.
+      mode.audible = false;
+      mode.gain = 0.0f;
+      mode.a1 = 0.0f;
+      mode.a2 = 0.0f;
+      mode.y1 = 0.0f;
+      mode.y2 = 0.0f;
+      continue;
+    }
+    mode.audible = true;
+    mode.gain = mode.excitation * std::sin(w);
     mode.a1 = 2.0f * mode.r * std::cos(w);
     mode.a2 = -mode.r * mode.r;
   }
@@ -81,12 +94,14 @@ void ModalVoiceCore::refresh_coefficients(float pitch_ratio) noexcept {
 
 float ModalVoiceCore::render(float pitch_ratio) noexcept {
   if (num_modes_ <= 0) return 0.0f;
-  if (pitch_ratio != cached_ratio_) refresh_coefficients(pitch_ratio);
+  const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+  if (ratio != cached_ratio_) refresh_coefficients(ratio);
   const float x = excite_ ? 1.0f : 0.0f;
   excite_ = false;
   float mix = 0.0f;
   for (int k = 0; k < num_modes_; ++k) {
     Mode& mode = modes_[static_cast<size_t>(k)];
+    if (!mode.audible) continue;
     const float y = mode.a1 * mode.y1 + mode.a2 * mode.y2 + mode.gain * x;
     mode.y2 = mode.y1;
     mode.y1 = y;
@@ -110,7 +125,11 @@ void ModalVoiceCore::kill() noexcept {
   for (Mode& mode : modes_) {
     mode.y1 = 0.0f;
     mode.y2 = 0.0f;
+    mode.excitation = 0.0f;
     mode.gain = 0.0f;
+    mode.a1 = 0.0f;
+    mode.a2 = 0.0f;
+    mode.audible = false;
   }
   excite_ = false;
   num_modes_ = 0;

@@ -637,6 +637,95 @@ TEST_CASE("A GS run starting at USE FOR RHYTHM PART applies its later bytes", "[
   CHECK(lone.handle_sysex(rhythm_only.data(), rhythm_only.size()));
 }
 
+TEST_CASE("Sf2Player refreshes CC2 breath and CC11 expression snapshots", "[midi][sf2][gs]") {
+  Sf2Player player = make_player();
+
+  cc(player, 0, 2, 64);
+  CHECK(player.controller_position(0, 2) == 64);
+  CHECK(player.channel_breath01(0) == Approx(64.0f / 127.0f).epsilon(1.0e-6));
+
+  // CC11 is the positive control: its existing switch case already refreshes
+  // the same live channel snapshot.
+  cc(player, 0, 11, 40);
+  CHECK(player.controller_position(0, 11) == 40);
+  CHECK(player.channel_expression01(0) == Approx(40.0f / 127.0f).epsilon(1.0e-6));
+}
+
+TEST_CASE("Reset All Controllers clears raw modulation positions and preserves mix state",
+          "[midi][sf2][gs]") {
+  Sf2Player player = make_player();
+  cc(player, 0, 1, 127);   // modulation source / assignable source default 1
+  cc(player, 0, 2, 64);    // breath source
+  cc(player, 0, 11, 40);   // expression source
+  cc(player, 0, 64, 127);  // damper
+  cc(player, 0, 65, 127);  // portamento on/off
+  cc(player, 0, 66, 127);  // sostenuto
+  cc(player, 0, 67, 127);  // soft
+  cc(player, 0, 98, 12);   // NRPN LSB
+  cc(player, 0, 99, 13);   // NRPN MSB
+  cc(player, 0, 100, 14);  // RPN LSB
+  cc(player, 0, 101, 15);  // RPN MSB
+  cc(player, 0, 7, 83);    // volume must survive CC121
+  cc(player, 0, 10, 23);   // pan must survive CC121
+  cc(player, 0, 0, 12);    // bank MSB must survive CC121
+  cc(player, 0, 32, 34);   // bank LSB must survive CC121
+  cc(player, 0, 91, 61);   // reverb send must survive CC121
+  cc(player, 0, 93, 62);   // chorus send must survive CC121
+  cc(player, 0, 94, 63);   // delay send must survive CC121
+
+  // Keep these checks non-aborting so the reset assertions run independently of the CC2 case.
+  CHECK(player.controller_position(0, 1) == 127);
+  CHECK(player.controller_position(0, 2) == 64);
+  CHECK(player.controller_position(0, 64) == 127);
+  CHECK(player.controller_position(0, 65) == 127);
+  CHECK(player.controller_position(0, 66) == 127);
+  CHECK(player.controller_position(0, 67) == 127);
+  CHECK(player.controller_position(0, 98) == 12);
+  CHECK(player.controller_position(0, 99) == 13);
+  CHECK(player.controller_position(0, 100) == 14);
+  CHECK(player.controller_position(0, 101) == 15);
+  CHECK(player.channel_expression01(0) == Approx(40.0f / 127.0f).epsilon(1.0e-6));
+
+  cc(player, 0, 121, 0);
+
+  CHECK(player.controller_position(0, 1) == 0);
+  CHECK(player.controller_position(0, 2) == 0);
+  CHECK(player.controller_position(0, 11) == 127);
+  CHECK(player.controller_position(0, 64) == 0);
+  CHECK(player.controller_position(0, 65) == 0);
+  CHECK(player.controller_position(0, 66) == 0);
+  CHECK(player.controller_position(0, 67) == 0);
+  CHECK(player.controller_position(0, 98) == 127);
+  CHECK(player.controller_position(0, 99) == 127);
+  CHECK(player.controller_position(0, 100) == 127);
+  CHECK(player.controller_position(0, 101) == 127);
+  CHECK(player.channel_breath01(0) == Approx(0.0f).margin(1.0e-6));
+  CHECK(player.channel_expression01(0) == Approx(1.0f).margin(1.0e-6));
+
+  // CC121 resets performance sources only. These raw positions are the
+  // untouched mix and routing controls and must remain where their CC writes
+  // left them.
+  CHECK(player.controller_position(0, 7) == 83);
+  CHECK(player.controller_position(0, 10) == 23);
+  CHECK(player.controller_position(0, 0) == 12);
+  CHECK(player.controller_position(0, 32) == 34);
+  CHECK(player.controller_position(0, 91) == 61);
+  CHECK(player.controller_position(0, 93) == 62);
+  CHECK(player.controller_position(0, 94) == 63);
+}
+
+TEST_CASE("RPN/NRPN positions power on where Reset All Controllers leaves them",
+          "[midi][sf2][gs]") {
+  Sf2Player fresh = make_player();
+  Sf2Player reset = make_player();
+  cc(reset, 0, 121, 0);
+  for (uint8_t controller : {98, 99, 100, 101}) {
+    CAPTURE(static_cast<int>(controller));
+    CHECK(fresh.controller_position(0, controller) == reset.controller_position(0, controller));
+    CHECK(fresh.controller_position(0, controller) == 127);
+  }
+}
+
 TEST_CASE("Reset All Controllers returns every RP-015 controller to rest", "[midi][sf2][gs]") {
   // Source 2 is channel aftertouch, destination 2 is AMPLITUDE CONTROL at
   // -100%: with pressure applied the part goes silent, so a latched pressure is
@@ -692,6 +781,37 @@ TEST_CASE("Reset All Controllers returns every RP-015 controller to rest", "[mid
     largest = std::max(largest, std::abs(after_reset[i] - baseline[i]));
   }
   REQUIRE(largest < 0.01f * peak_abs(baseline));
+}
+
+TEST_CASE("Reset All Controllers clears GS assignable raw sources", "[midi][sf2][gs]") {
+  // Point CC1's assignable source at each controller in turn, then route that
+  // source to AMPLITUDE CONTROL at -100 %. A full controller therefore
+  // silences a newly started note until CC121 clears the raw source position.
+  const std::vector<uint8_t> route_amplitude =
+      dt1(0x402042u | (static_cast<uint32_t>(kMelodicBlock) << 8), {0x00});
+
+  const uint8_t controllers[] = {2, 64, 65, 66, 67};
+  for (const uint8_t controller : controllers) {
+    INFO("controller CC" << static_cast<int>(controller));
+    const std::vector<uint8_t> source_controller =
+        dt1(0x40101Fu | (static_cast<uint32_t>(kMelodicBlock) << 8), {controller});
+
+    Sf2Player player = make_player();
+    cc(player, 0, controller, 127);
+    REQUIRE(player.handle_sysex(source_controller.data(), source_controller.size()));
+    REQUIRE(player.handle_sysex(route_amplitude.data(), route_amplitude.size()));
+
+    note_on(player, 0, kNoteC4);
+    CHECK(peak_abs(render(player, 4800)) < 0.01f);
+    note_off(player, 0, kNoteC4);
+    render(player, 4800);
+
+    cc(player, 0, 121, 0);
+    note_on(player, 0, kNoteC4);
+    // The reset must clear the raw position that the assignable source reads,
+    // so the same route no longer mutes the next note.
+    CHECK(peak_abs(render(player, 4800)) > 0.01f);
+  }
 }
 
 TEST_CASE("Reset All Controllers turns portamento off", "[midi][sf2][gs]") {

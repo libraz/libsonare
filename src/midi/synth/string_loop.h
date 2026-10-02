@@ -196,6 +196,15 @@ inline float compensated_loop_gain(float a, float omega_target, float g_target) 
                   g_target / std::max(1.0e-6f, onepole_magnitude(a, omega_target)));
 }
 
+/// Caps the requested loss pole @p a at the darkest one whose compensation
+/// (compensated_loop_gain) the sub-fundamental ring bound can still pay for
+/// at @p omega0 for a fundamental gain @p g0; below it, no pole at all.
+inline float cap_loss_pole(float a, float omega0, float g0) noexcept {
+  const float g_max = sub_fundamental_gain_cap(g0);
+  const float mag_floor = g_max > 0.0f ? g0 / g_max : 1.0f;
+  return std::min(a, mag_floor < 0.999999f ? solve_tilt_pole(omega0, 0.0f, mag_floor) : 0.0f);
+}
+
 /// Solves the loop's loss filter from what the string has to DO rather than
 /// from a tone knob: @p g_fundamental is the per-traversal gain the fundamental
 /// (@p omega0, radians per sample) must keep, and @p g_reference the smaller one
@@ -247,10 +256,7 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
   // roots are reciprocals — the stable one is the root inside the unit circle.
   out.a = solve_tilt_pole(omega0, omega_ref, ratio);
 
-  // The darkest pole the compensation can still pay for; below it, no pole at all.
-  const float g_max = sub_fundamental_gain_cap(g0);
-  const float mag_floor = g_max > 0.0f ? g0 / g_max : 1.0f;
-  out.a = std::min(out.a, mag_floor < 0.999999f ? solve_tilt_pole(omega0, 0.0f, mag_floor) : 0.0f);
+  out.a = cap_loss_pole(out.a, omega0, g0);
 
   // Scale the pole back up so the fundamental keeps exactly the gain it was
   // asked for; without this the pole's own attenuation at w0 is an unaccounted
@@ -320,6 +326,7 @@ struct StringLoop {
   void configure_filter(float* slab, int capacity, float period_samples, float a, float g,
                         float release_g, bool has_pole2 = false, float a2 = 0.0f,
                         float g2 = 1.0f) noexcept {
+    active_ = false;
     buffer = slab;
     period = period_samples;
     write = 0;
@@ -337,11 +344,13 @@ struct StringLoop {
     if (buffer != nullptr) {
       std::fill(buffer, buffer + static_cast<size_t>(std::max(0, size)), 0.0f);
     }
+    active_ = buffer != nullptr && size >= 5;
   }
 
   /// Leaves the loop silent and skipped: a call site gates on gain or on its own
   /// mix level, and a disengaged loop must not carry state from the last note.
   void disable() noexcept {
+    active_ = false;
     size = 0;
     write = 0;
     lp_state = 0.0f;
@@ -363,6 +372,7 @@ struct StringLoop {
   /// returned value is the string's output BEFORE the loss filter — shape it if
   /// the instrument shapes it, then hand it to commit().
   float advance(float input, float ratio) noexcept {
+    if (!active_) return 0.0f;
     const float delay = effective_delay(ratio);
     const int delay_q8 = static_cast<int>(delay * 256.0f);
     return rt::lagrange3_fractional_delay(buffer, static_cast<size_t>(size), write, delay_q8,
@@ -372,6 +382,7 @@ struct StringLoop {
   /// Closes the loop: the (possibly shaped) delayed sample enters the loss
   /// filter, cascaded through the second pole when engaged.
   void commit(float shaped) noexcept {
+    if (!active_) return;
     lp_state += alpha * (shaped - lp_state);
     if (loop2_active) lp_state2 += alpha2 * (lp_state - lp_state2);
   }
@@ -384,7 +395,10 @@ struct StringLoop {
   }
 
   /// The feedback term to add into the next sample's loop input.
-  float feedback() const noexcept { return gain * (loop2_active ? lp_state2 : lp_state); }
+  float feedback() const noexcept {
+    if (!active_) return 0.0f;
+    return gain * (loop2_active ? lp_state2 : lp_state);
+  }
 
   /// Note-off: re-target the decay to the damped t60. Never lengthens a decay
   /// that is already shorter than the damper's.
@@ -392,10 +406,14 @@ struct StringLoop {
 
   /// Immediate silence.
   void kill() noexcept {
+    active_ = false;
     gain = 0.0f;
     lp_state = 0.0f;
     lp_state2 = 0.0f;
   }
+
+ private:
+  bool active_ = false;
 };
 
 }  // namespace sonare::midi::synth

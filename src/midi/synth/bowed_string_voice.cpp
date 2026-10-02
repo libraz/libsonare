@@ -102,6 +102,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
                                  uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
   drive_index_ = 0;
   releasing_ = false;
   bow_level_ = 0.0f;
@@ -116,6 +117,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   // patches it would clamp and rescued no failing note while breaking two working ones.
   beta_ = std::clamp(params.bow_position, 0.02f, 0.5f);
   beta_base_ = beta_;
+  beta_home_ = beta_base_;
   beta_target_ = beta_;
 
   const float vel01 = velocity.f7() / 127.0f;
@@ -132,6 +134,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   const float force = std::clamp(params.bow_force, 0.0f, 1.0f);
   bow_slope_ = kBowSlopeMax_ - kBowSlopeSpan_ * force;
   slope_base_ = bow_slope_;
+  slope_home_ = slope_base_;
   slope_target_ = bow_slope_;
   bow_offset_ = 0.0f;
   // A fresh note starts unmodulated; the matrix re-sets these on its first
@@ -278,6 +281,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
 }
 
 float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (neck_ == nullptr || bridge_ == nullptr || capacity_ < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
@@ -299,7 +303,7 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   }
   float bow_v = max_bow_velocity_ * bow_level_;
   if (rosin_level_ > 0.0f) {
-    bow_v += max_bow_velocity_ * rosin_level_ * noise_.bipolar_at(drive_index_);
+    bow_v += max_bow_velocity_ * bow_level_ * rosin_level_ * noise_.bipolar_at(drive_index_);
   }
 
   // Reflections from the previous delay-line outputs. Bridge: one-pole loss
@@ -438,6 +442,7 @@ float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
 void BowedStringVoiceCore::release() noexcept { releasing_ = true; }
 
 void BowedStringVoiceCore::kill() noexcept {
+  killed_ = true;
   bow_level_ = 0.0f;
   lp_state_ = 0.0f;
   neck_out_ = 0.0f;

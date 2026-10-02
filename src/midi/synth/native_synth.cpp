@@ -642,13 +642,11 @@ void NativeSynth::sustain_cc(uint8_t channel, Control32 value) noexcept {
     // them ringing freely. Key-down and sostenuto-captured notes keep their
     // dampers mechanically off, so they are untouched.
     const float level = value.f7();
-    if (level < 127.0f) {
-      const float strength = (127.0f - level) / 63.0f;
-      for (NativeSynthVoice& v : pool_) {
-        if (v.active && v.channel == ch && !v.key_down && !v.sostenuto && v.patch != nullptr &&
-            v.patch->mode == SynthEngineMode::kPiano) {
-          v.piano.damp(strength);
-        }
+    const float strength = (127.0f - level) / 63.0f;
+    for (NativeSynthVoice& v : pool_) {
+      if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto &&
+          v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
+        v.piano.damp(strength);
       }
     }
     return;
@@ -673,7 +671,14 @@ void NativeSynth::sostenuto_pedal(uint8_t channel, bool down) noexcept {
       if (v.key_down) v.sostenuto = true;
     } else if (v.sostenuto) {
       v.sostenuto = false;
-      if (!v.key_down && !channels_[ch].sustain) v.release();
+      if (!v.key_down && !v.releasing) {
+        if (!channels_[ch].sustain) {
+          v.release();
+        } else if (v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
+          const float strength = (127.0f - channels_[ch].sustain_level.f7()) / 63.0f;
+          v.piano.damp(strength);
+        }
+      }
     }
   }
 }
@@ -681,15 +686,21 @@ void NativeSynth::sostenuto_pedal(uint8_t channel, bool down) noexcept {
 void NativeSynth::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  channels_[ch].sustain = false;
-  channels_[ch].sustain_level = Control32::from7(0);
+  ChannelState& st = channels_[ch];
   // A released key left in the legato stack would be retuned back to later.
-  channels_[ch].held_count = 0;
+  st.held_count = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
-      v.sostenuto = false;
-      v.release();
+      // All Notes Off is a key-up gesture. Sustain and sostenuto still hold a
+      // captured voice, exactly as they do for an ordinary note-off.
+      if (v.sostenuto) continue;
+      if (!st.sustain) {
+        v.release();
+      } else if (st.sustain_level.f7() < 127.0f && v.patch != nullptr &&
+                 v.patch->mode == SynthEngineMode::kPiano) {
+        v.piano.damp((127.0f - st.sustain_level.f7()) / 63.0f);
+      }
     }
   }
   recharge_percussion(ch);
@@ -698,8 +709,6 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
 void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  channels_[ch].sustain = false;
-  channels_[ch].sustain_level = Control32::from7(0);
   channels_[ch].held_count = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch) v.kill();
@@ -783,7 +792,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   } else {
     refresh_channel_mod(ch);
   }
-  push_excitation_control(ch);
+  restore_excitation_control(ch);
 }
 
 void NativeSynth::bend_range_msb(uint8_t channel, uint8_t semitones) noexcept {

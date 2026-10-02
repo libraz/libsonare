@@ -681,3 +681,31 @@ TEST_CASE("the tremulant undulates the wind", "[midi][synth][organ]") {
   REQUIRE(hi > 1.05f);
   REQUIRE(lo < 0.95f);
 }
+
+TEST_CASE("pipe organ kill silences subsequent rendering and permits restart",
+          "[midi][synth][organ]") {
+  using sonare::midi::synth::PipeOrganPatchParams;
+  using sonare::midi::synth::PipeOrganVoiceCore;
+  const double sample_rate = 48000.0;
+  const int capacity = sonare::midi::synth::pipe_organ_buffer_capacity(sample_rate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::pipe_organ_slab_capacity(sample_rate)));
+  PipeOrganPatchParams params;
+  PipeOrganVoiceCore core;
+  core.attach(slab.data(), capacity);
+  core.start(params, sample_rate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4cULL);
+
+  float sounding = 0.0f;
+  for (int i = 0; i < 12000; ++i) sounding = std::max(sounding, std::fabs(core.render(1.0f)));
+  REQUIRE(sounding > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * capacity; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, sample_rate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  float restarted = 0.0f;
+  for (int i = 0; i < 12000; ++i) restarted = std::max(restarted, std::fabs(core.render(1.0f)));
+  REQUIRE(restarted > 0.01f);
+}

@@ -28,7 +28,9 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::Velocity16;
 using sonare::midi::synth::FlutePatchParams;
+using sonare::midi::synth::FluteVoiceCore;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -222,6 +224,35 @@ TEST_CASE("flute rings down after note-off", "[midi][synth][flute]") {
   const float after = rms(tone, 40000, 48000);
   REQUIRE(sounding > 0.01f);
   REQUIRE(after < 0.25f * sounding);
+}
+
+TEST_CASE("flute kill silences subsequent rendering and permits restart", "[midi][synth][flute]") {
+  FlutePatchParams params;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  const double sample_rate = 48000.0;
+  const int capacity = sonare::midi::synth::flute_buffer_capacity(sample_rate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::flute_slab_capacity(sample_rate)));
+  FluteVoiceCore core;
+  core.attach(slab.data(), capacity);
+  core.start(params, sample_rate, 72, Velocity16::from7(110), 0x4b494c4cULL);
+
+  std::vector<float> sounding;
+  sounding.reserve(12000);
+  for (int i = 0; i < 12000; ++i) sounding.push_back(core.render(1.0f));
+  REQUIRE(peak(sounding) > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * capacity; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, sample_rate, 72, Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> restarted;
+  restarted.reserve(12000);
+  for (int i = 0; i < 12000; ++i) restarted.push_back(core.render(1.0f));
+  REQUIRE(peak(restarted) > 0.01f);
 }
 
 TEST_CASE("flute advanced-physics gates are off by default (bit-identical)",

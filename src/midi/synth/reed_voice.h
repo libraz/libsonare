@@ -32,6 +32,7 @@
 /// breath turbulence and onset chiff come from the counter-based
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -246,6 +247,7 @@ class ReedVoiceCore {
   /// tone toward the beating edge without ever crossing into the slammed-shut
   /// silent regime; brightness (CC74) opens the bell reflection filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  void restore_excitation_base() noexcept;
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an
@@ -254,6 +256,12 @@ class ReedVoiceCore {
   /// Jump the smoothed controls to their targets (seed a fresh note at the
   /// host's current CC positions without an audible glide).
   void snap_excitation() noexcept;
+
+  /// The dynamic reed's biquad numerator gain and denominator pair {b0, a1, a2}
+  /// as start() last built them for the running sample rate.
+  std::array<float, 3> dynamic_reed_coefficients() const noexcept {
+    return {reed_b0_, reed_a1_, reed_a2_};
+  }
 
  private:
   // Recomposes the two smoothing targets from their bases and the offsets.
@@ -321,6 +329,7 @@ class ReedVoiceCore {
   // mouth pressure (live-smoothed toward breath_ctrl_target_).
   float breath_target_ = 0.6f;
   BreathContour breath_{};
+  bool killed_ = true;
 
   // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ /
   // loss_gain_ toward these CC targets so a moving controller never zippers.

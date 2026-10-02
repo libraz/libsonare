@@ -253,6 +253,7 @@ class HarpsichordVoiceCore {
   void kill() noexcept;
 
  private:
+  bool killed_ = true;
   /// A choir of strings and the jack that plucks it.
   struct Choir {
     StringLoop loop;

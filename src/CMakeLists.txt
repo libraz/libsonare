@@ -911,6 +911,8 @@ if(BUILD_ARRANGEMENT)
     midi/synth/additive_voice.cpp
     midi/synth/percussion_voice.cpp
     midi/synth/piano_voice.cpp
+    midi/synth/piano_voice_calibration.cpp
+    midi/synth/piano_voice_start.cpp
     midi/synth/piano_resonance.cpp
     midi/synth/pipe_organ_voice.cpp
     midi/synth/bowed_string_voice.cpp
@@ -1590,7 +1592,10 @@ if(BUILD_WASM)
   endif()
   if(TARGET sonare_midi)
     set_source_files_properties(
+      midi/layered_instrument.cpp
+      midi/midi_clip.cpp
       midi/sequencer.cpp
+      midi/synth/sf2_player_control.cpp
       TARGET_DIRECTORY sonare_midi
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()

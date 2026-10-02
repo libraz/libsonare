@@ -114,6 +114,7 @@ class FreeReedVoiceCore {
   /// rather than only loudening it; brightness (CC74) opens the reed-plate body
   /// filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  void restore_excitation_base() noexcept;
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an
@@ -173,8 +174,17 @@ class FreeReedVoiceCore {
   float slot_gap_ = 0.0f;
   float slot_mean_ = 0.0f;
   float radiation_ = 0.0f;
+  // The differentiator's gain is normalised at the current sounding
+  // fundamental, not only at the note's base pitch.  Keep the half-angle and
+  // last ratio so an unchanged bend stays on the exact start() path.
+  float radiation_halfangle_ = 0.0f;
+  float radiation_halfangle_b_ = 0.0f;
+  float radiation_ratio_ = 1.0f;
   float radiation_norm_ = 0.0f;
+  float radiation_norm_b_ = 0.0f;
   float prev_flow_ = 0.0f;
+  float prev_flow_b_ = 0.0f;
+  bool radiation_history_ready_ = false;
 
   // Body lowpass (reed-plate / cavity radiation): a one-pole roll-off.
   float body_alpha_ = 1.0f;

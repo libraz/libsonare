@@ -34,6 +34,7 @@
 /// breath turbulence and onset chiff come from the counter-based
 /// (voice_index, note, age) stream, so identical events render bit-identically.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -256,6 +257,7 @@ class BrassVoiceCore {
   /// toward the buzzing edge without ever crossing into the slammed-shut silent
   /// regime; brightness (CC74) opens the bell reflection filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  void restore_excitation_base() noexcept;
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an
@@ -276,9 +278,19 @@ class BrassVoiceCore {
   };
   BellCoefficients bell_coefficients() const noexcept { return {lp_alpha_, rad_alpha_}; }
 
+  /// The mute formant's biquad numerator gain and denominator pair {b0, a1, a2}
+  /// as start() last built them for the running sample rate.
+  std::array<float, 3> mute_coefficients() const noexcept {
+    return {mute_peak_b0_, mute_peak_a1_, mute_peak_a2_};
+  }
+  /// The fundamental makeup gain for the current radiation pole.
+  float radiation_scale() const noexcept { return rad_scale_; }
+
  private:
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
+  // Recomputes the fundamental makeup for the current radiation pole.
+  void refresh_radiation_scale(float rad_alpha) noexcept;
   // Re-solves bore_.comp from the pole lp_alpha_ now holds.
   void retune_loop_comp() noexcept;
 
@@ -310,6 +322,8 @@ class BrassVoiceCore {
   float rad_alpha_ = 0.0f;
   float rad_state_ = 0.0f;
   float rad_scale_ = 1.0f;
+  // Pitch ratio rad_scale_ was normalized at.
+  float rad_ratio_ = 1.0f;
   // Retained from start() so live brightness updates apply the same conical
   // darkening bias as the note-on seed (a conical bore reflects darker).
   bool conical_ = false;
@@ -361,6 +375,7 @@ class BrassVoiceCore {
   // mouth pressure (live-smoothed toward breath_ctrl_target_).
   float breath_target_ = 0.7f;
   BreathContour breath_{};
+  bool killed_ = true;
 
   // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ toward
   // these CC targets so a moving controller never zippers. Initialised equal to

@@ -98,6 +98,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
                         Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
 
   const float f0 = note_to_hz(note);
   const float base_period = static_cast<float>(sr) / f0;
@@ -132,7 +133,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     // losses and the air's are a property of the frequency.
     const float quote_w = mute > 0.0f ? std::min(mute * w0, 0.9f * kPi) : fixed_quote_w;
     const float quote_t60 = mute > 0.0f ? t60_s / kKsMuteDecayRatio : hf_t60_s;
-    if (hf_t60_s > 0.0f && quote_w > w0 * 1.5f) {
+    if ((hf_t60_s > 0.0f || mute > 0.0f) && quote_w > w0 * 1.5f) {
       const float g0 = g;
       const float g_ref = string_loop_gain_for(period, sr, quote_t60);
       const float mid_w = kTwoPi * kKsMidQuoteHz / static_cast<float>(sr);
@@ -163,7 +164,14 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
         a = stage_a.a;
         g = stage_a.g;
         a2 = b_a;
-        g2 = compensated_loop_gain(b_a, w0, 1.0f);
+        // Stage A holds the fundamental, so B is unity there; the cascade peak stays under the
+        // single-loop ring cap.
+        const float b_at_fundamental = onepole_magnitude(b_a, w0);
+        const float aggregate_peak =
+            stage_a.g * onepole_peak_gain(stage_a.a) * onepole_peak_gain(b_a);
+        const float aggregate_gain_cap =
+            aggregate_peak > 1.0e-8f ? sub_fundamental_gain_cap(g0) / aggregate_peak : 1.0f;
+        g2 = std::min(1.0f / std::max(1.0e-6f, b_at_fundamental), aggregate_gain_cap);
         has_pole2 = true;
         release_g = std::min(0.9999f, release_g * (g0 > 0.0f ? (g * g2) / g0 : 1.0f));
       } else {
@@ -381,6 +389,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
 }
 
 float KsVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (string_.buffer == nullptr || string_.size < 8) return 0.0f;
 
   float exc = 0.0f;
@@ -536,6 +545,7 @@ void KsVoiceCore::release() noexcept {
 }
 
 void KsVoiceCore::kill() noexcept {
+  killed_ = true;
   exc_pos_ = exc_total_;
   string_.kill();
   pol_.kill();

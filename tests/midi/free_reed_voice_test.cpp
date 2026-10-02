@@ -77,6 +77,23 @@ double note_hz(uint8_t note) {
   return 440.0 * std::pow(2.0, (static_cast<double>(note) - 69.0) / 12.0);
 }
 
+double rms_after(sonare::midi::synth::FreeReedVoiceCore& voice, float pitch_ratio, int warmup,
+                 int samples) {
+  for (int i = 0; i < warmup; ++i) voice.render(pitch_ratio);
+  double sum = 0.0;
+  for (int i = 0; i < samples; ++i) {
+    const double sample = voice.render(pitch_ratio);
+    sum += sample * sample;
+  }
+  return std::sqrt(sum / static_cast<double>(samples));
+}
+
+double rms_after_pitch_change(sonare::midi::synth::FreeReedVoiceCore& voice, float start_ratio,
+                              float target_ratio, int warmup, int samples) {
+  for (int i = 0; i < warmup; ++i) voice.render(start_ratio);
+  return rms_after(voice, target_ratio, 0, samples);
+}
+
 }  // namespace
 
 TEST_CASE("the free reed's slot flow is off by default", "[midi][synth][free_reed]") {
@@ -190,4 +207,226 @@ TEST_CASE("the free reed's slot flow stays bounded across the keyboard",
       }
     }
   }
+}
+
+TEST_CASE("the free reed radiation normalization follows live pitch", "[midi][synth][free_reed]") {
+  using sonare::midi::Velocity16;
+  using sonare::midi::synth::FreeReedPatchParams;
+  using sonare::midi::synth::FreeReedVoiceCore;
+
+  FreeReedPatchParams params;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 0.0f;
+  params.breath_noise = 0.0f;
+  const auto compare_bend = [&](float radiation, uint8_t note, float target_ratio,
+                                uint8_t fresh_note) {
+    params.radiation = radiation;
+
+    FreeReedVoiceCore bent;
+    bent.start(params, kRate, note, Velocity16::from7(100), 7);
+    const double bent_rms = rms_after_pitch_change(bent, 1.0f, target_ratio, 24000, 24000);
+
+    FreeReedVoiceCore fresh;
+    fresh.start(params, kRate, fresh_note, Velocity16::from7(100), 7);
+    const double fresh_rms = rms_after(fresh, 1.0f, 24000, 24000);
+    REQUIRE(fresh_rms > 1.0e-4);
+    return bent_rms / fresh_rms;
+  };
+
+  // Note 69 bent up an octave has the same sounding pitch as a fresh note 81.
+  // A fixed fundamental normalizer makes the differentiated slot flow twice as
+  // loud after the bend; the live-pitch normalizer must keep the RMS aligned.
+  const double up_ratio = compare_bend(1.0f, 69, 2.0f, 81);
+  REQUIRE(up_ratio > 0.95);
+  REQUIRE(up_ratio < 1.05);
+
+  // The same law must hold when a high note bends down an octave.
+  const double down_ratio = compare_bend(1.0f, 81, 0.5f, 69);
+  REQUIRE(down_ratio > 0.95);
+  REQUIRE(down_ratio < 1.05);
+
+  // The no-radiation path must stay independent of the differentiator, while a
+  // mixed source still needs the live correction for its radiated component.
+  const double dry_ratio = compare_bend(0.0f, 69, 2.0f, 81);
+  REQUIRE(dry_ratio > 0.99);
+  REQUIRE(dry_ratio < 1.01);
+  const double mixed_ratio = compare_bend(0.5f, 69, 2.0f, 81);
+  REQUIRE(mixed_ratio > 0.95);
+  REQUIRE(mixed_ratio < 1.05);
+
+  // After a bend the cached normalizer must follow the pitch back to ratio 1.
+  params.radiation = 1.0f;
+  FreeReedVoiceCore returning;
+  returning.start(params, kRate, 69, Velocity16::from7(100), 7);
+  for (int i = 0; i < 24000; ++i) returning.render(1.0f);
+  for (int i = 0; i < 24000; ++i) returning.render(2.0f);
+  const double returned_rms = rms_after(returning, 1.0f, 0, 24000);
+
+  FreeReedVoiceCore base;
+  base.start(params, kRate, 69, Velocity16::from7(100), 7);
+  const double base_rms = rms_after(base, 1.0f, 24000, 24000);
+  REQUIRE(returned_rms / base_rms > 0.95);
+  REQUIRE(returned_rms / base_rms < 1.05);
+}
+
+TEST_CASE("the free reed radiation normalization stays bounded above Nyquist",
+          "[midi][synth][free_reed]") {
+  using sonare::midi::Velocity16;
+  using sonare::midi::synth::FreeReedPatchParams;
+  using sonare::midi::synth::FreeReedVoiceCore;
+
+  FreeReedPatchParams params;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 0.0f;
+  params.breath_noise = 0.0f;
+  params.radiation = 1.0f;
+
+  // At a low host rate the base note can put sin(pi*f/sr) on its negative
+  // half-cycle. The ratio-1 start path must use its magnitude as the
+  // normalizer, or it falls through the positive-only floor and explodes.
+  for (uint8_t note : {120, 127}) {
+    FreeReedVoiceCore voice;
+    voice.start(params, 8000.0, note, Velocity16::from7(100), 7);
+    float peak = 0.0f;
+    bool all_finite = true;
+    for (int i = 0; i < 8000; ++i) {
+      const float sample = voice.render(1.0f);
+      all_finite = all_finite && std::isfinite(sample);
+      peak = std::max(peak, std::fabs(sample));
+    }
+    INFO("note " << static_cast<int>(note));
+    CHECK(all_finite);
+    CHECK(peak > 1.0e-3f);
+    CHECK(peak < 4.0f);
+  }
+}
+
+TEST_CASE("the free reed musette radiation stays bounded at the sample-rate edge",
+          "[midi][synth][free_reed]") {
+  using sonare::midi::Velocity16;
+  using sonare::midi::synth::FreeReedPatchParams;
+  using sonare::midi::synth::FreeReedVoiceCore;
+
+  FreeReedPatchParams params;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 0.3f;
+  params.breath_noise = 0.0f;
+
+  // The A tongue reaches exactly the sample rate here. A shared normalizer
+  // evaluated at the un-detuned tongue sees sin(pi) and can amplify the first
+  // difference by its numerical floor. Both the full radiated and mixed paths
+  // must remain finite and bounded after an established note.
+  const float edge_ratio = 48000.0f / 440.0f;
+  for (float radiation : {1.0f, 0.5f}) {
+    params.radiation = radiation;
+    FreeReedVoiceCore voice;
+    voice.start(params, 48000.0, 69, Velocity16::from7(100), 7);
+    for (int i = 0; i < 24000; ++i) voice.render(1.0f);
+
+    float peak_value = 0.0f;
+    bool finite = true;
+    for (int i = 0; i < 4096; ++i) {
+      const float sample = voice.render(edge_ratio);
+      finite = finite && std::isfinite(sample);
+      peak_value = std::max(peak_value, std::fabs(sample));
+    }
+    INFO("radiation " << radiation);
+    CHECK(finite);
+    CHECK(peak_value < 4.0f);
+  }
+}
+
+TEST_CASE("the free reed primes low-frequency mono radiation before the attack",
+          "[midi][synth][free_reed]") {
+  using sonare::midi::Velocity16;
+  using sonare::midi::synth::FreeReedPatchParams;
+  using sonare::midi::synth::FreeReedVoiceCore;
+
+  FreeReedPatchParams params;
+  params.attack_ms = 1.0f;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 0.0f;
+  params.radiation = 1.0f;
+  params.breath_noise = 0.0f;
+
+  FreeReedVoiceCore voice;
+  voice.start(params, 8000.0, 0, Velocity16::from7(100), 7);
+
+  float peak_value = 0.0f;
+  bool finite = true;
+  for (int i = 0; i < 512; ++i) {
+    const float sample = voice.render(0.01f);
+    finite = finite && std::isfinite(sample);
+    peak_value = std::max(peak_value, std::fabs(sample));
+  }
+  CHECK(finite);
+  CHECK(peak_value < 4.0f);
+}
+
+TEST_CASE("the free reed primes a live sub-audio bend before its first sample",
+          "[midi][synth][free_reed]") {
+  using sonare::midi::Velocity16;
+  using sonare::midi::synth::FreeReedPatchParams;
+  using sonare::midi::synth::FreeReedVoiceCore;
+
+  FreeReedPatchParams params;
+  params.attack_ms = 0.0f;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 0.0f;
+  params.radiation = 1.0f;
+  params.breath_noise = 0.0f;
+
+  FreeReedVoiceCore voice;
+  voice.start(params, 48000.0, 69, Velocity16::from7(100), 7);
+
+  float peak_value = 0.0f;
+  bool finite = true;
+  for (int i = 0; i < 128; ++i) {
+    const float sample = voice.render(0.01f);
+    finite = finite && std::isfinite(sample);
+    peak_value = std::max(peak_value, std::fabs(sample));
+  }
+  CHECK(finite);
+  CHECK(peak_value < 4.0f);
+}
+
+TEST_CASE("the free reed musette bend follows fresh controls", "[midi][synth][free_reed]") {
+  using sonare::midi::Velocity16;
+  using sonare::midi::synth::FreeReedPatchParams;
+  using sonare::midi::synth::FreeReedVoiceCore;
+
+  FreeReedPatchParams params;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 0.3f;
+  params.radiation = 0.5f;
+  params.breath_noise = 0.0f;
+
+  constexpr int kComparisonSamples = 480000;
+  const auto compare_bend = [&](uint8_t note, float ratio, uint8_t fresh_note) {
+    FreeReedVoiceCore bent;
+    bent.start(params, 48000.0, note, Velocity16::from7(100), 7);
+    const double bent_rms = rms_after_pitch_change(bent, 1.0f, ratio, 24000, kComparisonSamples);
+
+    FreeReedVoiceCore fresh;
+    fresh.start(params, 48000.0, fresh_note, Velocity16::from7(100), 7);
+    const double fresh_rms = rms_after(fresh, 1.0f, 24000, kComparisonSamples);
+    REQUIRE(fresh_rms > 1.0e-4);
+    return bent_rms / fresh_rms;
+  };
+
+  const double up_ratio = compare_bend(69, 2.0f, 81);
+  INFO("upward bend RMS ratio " << up_ratio);
+  CHECK(up_ratio > 0.95);
+  CHECK(up_ratio < 1.05);
+
+  const double down_ratio = compare_bend(81, 0.5f, 69);
+  INFO("downward bend RMS ratio " << down_ratio);
+  CHECK(down_ratio > 0.95);
+  CHECK(down_ratio < 1.05);
 }

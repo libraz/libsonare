@@ -7,6 +7,7 @@
 
 #include "midi/synth/bowed_string_voice.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -24,6 +25,8 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::synth::BowedStringPatchParams;
+using sonare::midi::synth::BowedStringVoiceCore;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -68,6 +71,18 @@ float peak(const std::vector<float>& buf) {
   return p;
 }
 
+float rms_difference(const std::vector<float>& a, const std::vector<float>& b, size_t from,
+                     size_t to) {
+  double acc = 0.0;
+  size_t n = 0;
+  for (size_t i = from; i < to && i < a.size() && i < b.size(); ++i) {
+    const double difference = static_cast<double>(a[i]) - static_cast<double>(b[i]);
+    acc += difference * difference;
+    ++n;
+  }
+  return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
+}
+
 using sonare::test::fft_fundamental;
 using sonare::test::harmonic_power;
 using sonare::test::power_spectrum;
@@ -98,6 +113,24 @@ NativeSynthPatch bowed_base_patch() {
   p.bowed_string.brightness = 0.5f;
   p.bowed_string.damping = 0.3f;
   return p;
+}
+
+std::vector<float> render_bowed_core(const BowedStringPatchParams& params, size_t frames,
+                                     int release_at = -1, uint64_t seed = 0x524f53494eULL) {
+  constexpr double kSampleRate = 48000.0;
+  const int capacity = sonare::midi::synth::bowed_string_buffer_capacity(kSampleRate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(kSampleRate)), 0.0f);
+  BowedStringVoiceCore core;
+  core.attach(slab.data(), capacity);
+  core.start(params, kSampleRate, 57, sonare::midi::Velocity16::from7(110), seed);
+
+  std::vector<float> output(frames, 0.0f);
+  for (size_t i = 0; i < frames; ++i) {
+    if (release_at >= 0 && i == static_cast<size_t>(release_at)) core.release();
+    output[i] = core.render(1.0f);
+  }
+  return output;
 }
 
 }  // namespace
@@ -567,4 +600,92 @@ TEST_CASE("elasto-plastic, sympathetic and polarization gates compose stably",
   REQUIRE(peak(first) > 0.005f);
   REQUIRE(peak(first) < 4.0f);
   REQUIRE(std::isfinite(first.back()));
+}
+
+TEST_CASE("bowed string kill silences subsequent rendering and permits restart",
+          "[midi][synth][bowed]") {
+  const double sample_rate = 48000.0;
+  const int capacity = sonare::midi::synth::bowed_string_buffer_capacity(sample_rate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(sample_rate)));
+  BowedStringPatchParams params;
+  BowedStringVoiceCore core;
+  core.attach(slab.data(), capacity);
+  core.start(params, sample_rate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4cULL);
+
+  float sounding = 0.0f;
+  for (int i = 0; i < 12000; ++i) sounding = std::max(sounding, std::fabs(core.render(1.0f)));
+  REQUIRE(sounding > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * capacity; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, sample_rate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> restarted_samples(12000, 0.0f);
+  float restarted = 0.0f;
+  for (float& sample : restarted_samples) {
+    sample = core.render(1.0f);
+    restarted = std::max(restarted, std::fabs(sample));
+  }
+  REQUIRE(restarted > 0.01f);
+
+  std::vector<float> fresh_slab(
+      static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(sample_rate)), 0.0f);
+  BowedStringVoiceCore fresh;
+  fresh.attach(fresh_slab.data(), capacity);
+  fresh.start(params, sample_rate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> fresh_samples(12000, 0.0f);
+  for (float& sample : fresh_samples) sample = fresh.render(1.0f);
+  const bool deterministic = restarted_samples == fresh_samples;
+  REQUIRE(deterministic);
+}
+
+TEST_CASE("bowed-string rosin follows bow release", "[midi][synth][bowed]") {
+  // A rosin texture is part of the bow velocity. Once release() lifts the bow,
+  // its contribution must follow bow_level_ down instead of continuing to
+  // inject a stationary noise source into the string loop.
+  constexpr int kReleaseAt = 24000;  // 500 ms of settled bowing.
+  constexpr size_t kFrames = 72000;  // 1 s of post-release ring-down.
+
+  BowedStringPatchParams dry_params;
+  dry_params.bow_speed = 0.85f;
+  dry_params.bow_force = 0.5f;
+  dry_params.brightness = 0.5f;
+  dry_params.damping = 0.8f;
+  dry_params.attack_ms = 10.0f;
+  dry_params.release_ms = 10.0f;
+  dry_params.rosin = 0.0f;
+  BowedStringPatchParams rosin_params = dry_params;
+  rosin_params.rosin = 1.0f;
+
+  const std::vector<float> held = render_bowed_core(rosin_params, kFrames);
+  const std::vector<float> dry_held = render_bowed_core(dry_params, kFrames);
+  const std::vector<float> released = render_bowed_core(rosin_params, kFrames, kReleaseAt);
+  const std::vector<float> dry_released = render_bowed_core(dry_params, kFrames, kReleaseAt);
+
+  const float held_rms = rms(held, static_cast<size_t>(kReleaseAt - 4800), kReleaseAt);
+  const float dry_held_rms = rms(dry_held, static_cast<size_t>(kReleaseAt - 4800), kReleaseAt);
+  const float held_rosin_delta =
+      rms_difference(held, dry_held, static_cast<size_t>(kReleaseAt - 4800), kReleaseAt);
+  const float dry_early_rms = rms(dry_released, kReleaseAt, kReleaseAt + 1000);
+  const float dry_late_rms = rms(dry_released, kReleaseAt + 24000, kReleaseAt + 28800);
+  const float released_late_rms = rms(released, kReleaseAt + 24000, kReleaseAt + 28800);
+  INFO("held rosin rms " << held_rms << ", dry held rms " << dry_held_rms << ", held delta "
+                         << held_rosin_delta << ", dry released early rms " << dry_early_rms
+                         << ", dry released late rms " << dry_late_rms
+                         << ", rosin released late rms " << released_late_rms);
+
+  // Positive controls: the core is speaking while held, and the no-rosin
+  // release has a real string tail to compare against.
+  REQUIRE(held_rms > 0.005f);
+  REQUIRE(dry_held_rms > 0.005f);
+  REQUIRE(held_rosin_delta > 1.0e-4f);
+  REQUIRE(dry_early_rms > 0.0f);
+  // With the bow lifted, the rosin-enabled tail must decay into the same scale
+  // as the dry ring-down. A release-independent noise drive keeps this window
+  // near the held level and fails this assertion.
+  REQUIRE(released_late_rms < 0.35f * held_rms);
+  REQUIRE(released_late_rms < 4.0f * dry_late_rms + 1.0e-4f);
 }

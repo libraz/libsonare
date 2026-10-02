@@ -7,6 +7,8 @@
 
 #include "midi/synth/reed_voice.h"
 
+#include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -20,19 +22,36 @@
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
+#include "util/constants.h"
 
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::Velocity16;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::ReedPatchParams;
+using sonare::midi::synth::ReedVoiceCore;
 using sonare::midi::synth::SynthEngineMode;
 
 using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
 using sonare::test::render_left;
+
+std::array<float, 3> reed_dynamic_reed_coefficients(double sample_rate) {
+  ReedPatchParams params;
+  params.dynamic_reed = true;
+  params.closing_pressure = 0.0f;
+  params.reed_resonance = 0.5f;
+  std::vector<float> bore(
+      static_cast<size_t>(sonare::midi::synth::reed_buffer_capacity(sample_rate)));
+  ReedVoiceCore core;
+  core.attach(bore.data(), static_cast<int>(bore.size()));
+  core.start(params, sample_rate, 60, Velocity16::from7(110), 0x52454544ULL);
+  return core.dynamic_reed_coefficients();
+}
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples, int note_off_at = -1) {
@@ -142,6 +161,37 @@ NativeSynthPatch reed_base_patch() {
 }
 
 }  // namespace
+
+TEST_CASE("table-path dynamic reed keeps its radius and damping in hertz",
+          "[midi][synth][reed][rate]") {
+  // This is the table-path dynamic reed: closing_pressure must stay zero so
+  // the beating-valve branch is not selected. Probe the coefficients on the
+  // started core itself rather than recreating the filter design in the test.
+  constexpr double kReedHz = 2500.0;
+  constexpr double kVoicedRadius = 0.985;
+  const double expected_damping_hz = -48000.0 * std::log(kVoicedRadius);
+
+  for (const double sample_rate : {24000.0, 44100.0, 48000.0, 96000.0}) {
+    const std::array<float, 3> coeff = reed_dynamic_reed_coefficients(sample_rate);
+    const double radius = std::sqrt(std::max(0.0, -static_cast<double>(coeff[2])));
+    REQUIRE(radius > 0.0);
+    REQUIRE(radius < 1.0);
+    const double centre_hz =
+        std::acos(std::clamp(static_cast<double>(coeff[1]) / (2.0 * radius), -1.0, 1.0)) *
+        sample_rate / sonare::constants::kTwoPiD;
+    const double damping_hz = -sample_rate * std::log(radius);
+
+    INFO("sample rate " << sample_rate);
+    CAPTURE(sample_rate, radius, centre_hz, damping_hz);
+    CHECK(std::fabs(centre_hz - kReedHz) < 1.0);
+    CHECK(std::fabs(damping_hz - expected_damping_hz) < 2.0);
+    CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - radius)) < 1.0e-6);
+    if (sample_rate == 48000.0) {
+      CHECK(std::fabs(radius - kVoicedRadius) < 1.0e-6);
+      CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - kVoicedRadius)) < 1.0e-6);
+    }
+  }
+}
 
 TEST_CASE("reed rendering is deterministic", "[midi][synth][reed]") {
   const NativeSynthPatch patch = reed_base_patch();
@@ -279,6 +329,34 @@ TEST_CASE("reed rings down after note-off", "[midi][synth][reed]") {
   const float released = rms(tone, 40000, 46000);
   REQUIRE(held > 0.01f);
   REQUIRE(released < 0.2f * held);
+}
+
+TEST_CASE("reed kill silences subsequent rendering and permits restart", "[midi][synth][reed]") {
+  ReedPatchParams params;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  const double sample_rate = 48000.0;
+  const int capacity = sonare::midi::synth::reed_buffer_capacity(sample_rate);
+  std::vector<float> bore(static_cast<size_t>(capacity));
+  ReedVoiceCore core;
+  core.attach(bore.data(), capacity);
+  core.start(params, sample_rate, 58, Velocity16::from7(110), 0x4b494c4cULL);
+
+  std::vector<float> sounding;
+  sounding.reserve(12000);
+  for (int i = 0; i < 12000; ++i) sounding.push_back(core.render(1.0f));
+  REQUIRE(peak(sounding) > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * capacity; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, sample_rate, 58, Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> restarted;
+  restarted.reserve(12000);
+  for (int i = 0; i < 12000; ++i) restarted.push_back(core.render(1.0f));
+  REQUIRE(peak(restarted) > 0.01f);
 }
 
 TEST_CASE("reed brightness CC74 voices the tone live", "[midi][synth][reed]") {

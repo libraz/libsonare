@@ -77,6 +77,23 @@ float flow_hump(float phase, float centre, float width) noexcept {
   return v * v;
 }
 
+float slot_flow(float phase, float duty, float return_amount, float gap,
+                float return_width) noexcept {
+  return flow_hump(phase, 0.0f, duty) + return_amount * flow_hump(phase, gap, return_width);
+}
+
+float radiation_norm(float halfangle, float ratio, float sample_rate) noexcept {
+  // A first difference has no useful fundamental calibration below 20 Hz or
+  // above Nyquist. Keeping the effective angle in that physical interval also
+  // prevents an aliased pitch from landing on a numerical zero of sin().
+  const float nyquist_halfangle = 0.25f * static_cast<float>(kTwoPi);
+  const float minimum_halfangle =
+      std::min(0.5f * static_cast<float>(kTwoPi) * 20.0f / sample_rate, nyquist_halfangle);
+  const float effective_halfangle =
+      std::clamp(std::abs(halfangle * ratio), minimum_halfangle, nyquist_halfangle);
+  return 1.0f / std::max(2.0f * std::abs(std::sin(effective_halfangle)), 1.0e-6f);
+}
+
 }  // namespace
 
 void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
@@ -145,8 +162,18 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // A first difference is the monopole's +6 dB/octave, and it is 2*sin(pi*f0/sr)
   // at the fundamental — small, and note-dependent. Normalising it away leaves
   // the tilt without the level or the register slope that come with it.
-  const float w = static_cast<float>(kTwoPi * base_freq_hz_ / (2.0 * sr));
-  radiation_norm_ = 1.0f / std::max(2.0f * std::sin(w), 1e-6f);
+  radiation_halfangle_ = static_cast<float>(kTwoPi * base_freq_hz_ / (2.0 * sr));
+  radiation_halfangle_b_ = dual_ ? 0.5f * static_cast<float>(kTwoPi) * inc_b_ : 0.0f;
+  radiation_ratio_ = 1.0f;
+  radiation_norm_ = radiation_norm(radiation_halfangle_, 1.0f, static_cast<float>(sr));
+  radiation_norm_b_ =
+      dual_ ? radiation_norm(radiation_halfangle_b_, 1.0f, static_cast<float>(sr)) : 0.0f;
+
+  // The differentiator history is primed on the first render, after its live
+  // pitch ratio is known. Keep the old zero history for a normal mono start.
+  prev_flow_ = 0.0f;
+  prev_flow_b_ = 0.0f;
+  radiation_history_ready_ = false;
 
   // Contour + textures.
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
@@ -171,10 +198,16 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   bright01_ = brightness;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   excitation_live_ = false;
+  excite_.remember_base();
 }
 
 void FreeReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
   excite_.set_base(base, present);
+  refresh_excitation_targets();
+}
+
+void FreeReedVoiceCore::restore_excitation_base() noexcept {
+  excite_.restore_base();
   refresh_excitation_targets();
 }
 
@@ -227,6 +260,24 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
   const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
   level_ += coeff * (level_target_ - level_);
 
+  if (!radiation_history_ready_) {
+    const float effective_frequency = base_freq_hz_ * ratio;
+    const float nyquist = 0.5f * static_cast<float>(sample_rate_);
+    if (slot_duty_ > 0.0f &&
+        (dual_ || effective_frequency < 20.0f || effective_frequency > nyquist)) {
+      // This is deliberately before phase advance: the first difference must
+      // compare the first rendered phase against the phase that preceded it.
+      prev_flow_ =
+          slot_flow(phase_a_, slot_duty_, slot_return_, slot_gap_, slot_return_width_) - slot_mean_;
+      if (dual_) {
+        prev_flow_b_ =
+            slot_flow(phase_b_, slot_duty_, slot_return_, slot_gap_, slot_return_width_) -
+            slot_mean_;
+      }
+    }
+    radiation_history_ready_ = true;
+  }
+
   // Tongue A, and the musette partner (gated): two phase accumulators, averaged.
   phase_a_ += inc_a_ * ratio;
   phase_a_ -= std::floor(phase_a_);
@@ -237,20 +288,49 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
 
   float tongue;
   if (slot_duty_ > 0.0f) {
+    // The first difference has magnitude 2*sin(pi*f/sr), where f follows the
+    // live pitch ratio. Re-cut its normalizer only when radiation is active
+    // and the ratio moved; ratio 1 retains start()'s original operation.
+    if (radiation_ > 0.0f && ratio != radiation_ratio_) {
+      radiation_norm_ =
+          radiation_norm(radiation_halfangle_, ratio, static_cast<float>(sample_rate_));
+      if (dual_) {
+        radiation_norm_b_ =
+            radiation_norm(radiation_halfangle_b_, ratio, static_cast<float>(sample_rate_));
+      }
+      radiation_ratio_ = ratio;
+    }
     // Slot flow (gated): the tongue swings through the slot and lets air past
     // twice per cycle, so the source is a pair of humps rather than a shaped
     // saw. Radiating it is what lifts the second partial over the first.
-    float flow = flow_hump(phase_a_, 0.0f, slot_duty_) +
-                 slot_return_ * flow_hump(phase_a_, slot_gap_, slot_return_width_);
+    float flow = slot_flow(phase_a_, slot_duty_, slot_return_, slot_gap_, slot_return_width_);
     if (dual_) {
-      const float flow_b = flow_hump(phase_b_, 0.0f, slot_duty_) +
-                           slot_return_ * flow_hump(phase_b_, slot_gap_, slot_return_width_);
-      flow = 0.5f * (flow + flow_b);
+      const float flow_b =
+          slot_flow(phase_b_, slot_duty_, slot_return_, slot_gap_, slot_return_width_);
+      if (radiation_ > 0.0f) {
+        flow -= slot_mean_;
+        const float radiated = (flow - prev_flow_) * radiation_norm_;
+        prev_flow_ = flow;
+        const float tongue_a = flow + radiation_ * (radiated - flow);
+
+        float flow_b_centered = flow_b - slot_mean_;
+        const float radiated_b = (flow_b_centered - prev_flow_b_) * radiation_norm_b_;
+        prev_flow_b_ = flow_b_centered;
+        const float tongue_b = flow_b_centered + radiation_ * (radiated_b - flow_b_centered);
+        tongue = 0.5f * (tongue_a + tongue_b);
+      } else {
+        // Preserve the established dual dry path's average-then-subtract
+        // operation exactly when no radiation is requested.
+        flow = 0.5f * (flow + flow_b);
+        flow -= slot_mean_;
+        tongue = flow;
+      }
+    } else {
+      flow -= slot_mean_;
+      const float radiated = (flow - prev_flow_) * radiation_norm_;
+      prev_flow_ = flow;
+      tongue = flow + radiation_ * (radiated - flow);
     }
-    flow -= slot_mean_;
-    const float radiated = (flow - prev_flow_) * radiation_norm_;
-    prev_flow_ = flow;
-    tongue = flow + radiation_ * (radiated - flow);
   } else {
     // The soft-clipped asymmetric saw: the in-slot and out-of-slot half-cycles
     // get different gains, giving a skewed even-and-odd harmonic buzz.
@@ -289,6 +369,8 @@ void FreeReedVoiceCore::kill() noexcept {
   phase_a_ = 0.0f;
   phase_b_ = 0.0f;
   prev_flow_ = 0.0f;
+  prev_flow_b_ = 0.0f;
+  radiation_history_ready_ = false;
   releasing_ = true;
 }
 

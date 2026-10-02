@@ -6,6 +6,9 @@
 ///        organ key click, the descending drum pitch and one-shot drum
 ///        determinism through the GM fallback kit.
 
+#include "midi/synth/modal_voice.h"
+
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -25,6 +28,8 @@ namespace {
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::gm_fallback_drum_patch;
 using sonare::midi::synth::gm_fallback_patch;
+using sonare::midi::synth::ModalPatchParams;
+using sonare::midi::synth::ModalVoiceCore;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -114,7 +119,96 @@ double high_band_fraction(const std::vector<float>& buf, size_t from, double fre
   return total > 0.0 ? high / total : 0.0;
 }
 
+ModalPatchParams single_modal_mode(float ratio) {
+  ModalPatchParams params;
+  params.num_modes = 1;
+  params.modes[0].ratio = ratio;
+  params.modes[0].gain = 1.0f;
+  params.modes[0].decay_scale = 1.0f;
+  params.decay_s = 4.0f;
+  params.decay_stretch = 0.0f;
+  params.strike_brightness = 1.0f;
+  params.vel_to_brightness = 0.0f;
+  params.release_damp_s = 0.15f;
+  return params;
+}
+
+std::vector<float> render_modal_core(const ModalPatchParams& params, uint8_t note,
+                                     float pitch_ratio, size_t num_samples) {
+  ModalVoiceCore core;
+  core.start(params, kRate, note, sonare::midi::Velocity16::from_f7(127), 0x4d4f44414cULL);
+  std::vector<float> out;
+  out.reserve(num_samples);
+  for (size_t i = 0; i < num_samples; ++i) out.push_back(core.render(pitch_ratio));
+  return out;
+}
+
+float peak_abs(const std::vector<float>& buf) {
+  float peak = 0.0f;
+  for (const float sample : buf) peak = std::max(peak, std::fabs(sample));
+  return peak;
+}
+
 }  // namespace
+
+TEST_CASE("modal excitation stays normalized over ordinary live pitch ratios",
+          "[midi][synth][modal]") {
+  const ModalPatchParams params = single_modal_mode(1.0f);
+  const std::array<float, 3> ratios = {0.5f, 1.0f, 2.0f};
+  std::array<float, 3> peaks{};
+  for (size_t i = 0; i < ratios.size(); ++i) {
+    peaks[i] = peak_abs(render_modal_core(params, 60, ratios[i], 4096));
+    INFO("pitch ratio = " << ratios[i] << ", peak = " << peaks[i]);
+    REQUIRE(peaks[i] > 0.01f);
+  }
+
+  // A two-pole impulse is normalized by sin(w). Changing the live pitch must
+  // therefore preserve the measured strike level over this ordinary range.
+  const float reference = peaks[1];
+  for (const float peak : peaks) {
+    CHECK(peak > 0.75f * reference);
+    CHECK(peak < 1.25f * reference);
+  }
+}
+
+TEST_CASE("a nominally ultrasonic modal partial becomes audible after a downward bend",
+          "[midi][synth][modal]") {
+  // At note 100 the 8.933 partial starts above the 0.45-sample-rate admission
+  // limit, while a downward bend of 0.5 brings it safely into the audible band.
+  const std::vector<float> tone = render_modal_core(single_modal_mode(8.933f), 100, 0.5f, 4096);
+  INFO("down-bent high partial peak = " << peak_abs(tone));
+  REQUIRE(peak_abs(tone) > 0.01f);
+}
+
+TEST_CASE("a struck modal partial is silenced outside the audible band", "[midi][synth][modal]") {
+  // The mode is valid at its nominal ratio (8.0 * note 100), then a live bend
+  // moves it above 0.45 * sample_rate. It must be suppressed rather than
+  // pinned to an unrelated frequency near Nyquist.
+  ModalVoiceCore core;
+  core.start(single_modal_mode(8.0f), kRate, 100, sonare::midi::Velocity16::from_f7(127),
+             0x4d4f44414cULL);
+  float nominal_peak = 0.0f;
+  for (int i = 0; i < 512; ++i) {
+    nominal_peak = std::max(nominal_peak, std::fabs(core.render(1.0f)));
+  }
+  INFO("nominal in-band peak = " << nominal_peak);
+  REQUIRE(nominal_peak > 0.01f);
+
+  float out_of_band_peak = 0.0f;
+  for (int i = 0; i < 512; ++i) {
+    out_of_band_peak = std::max(out_of_band_peak, std::fabs(core.render(1.5f)));
+  }
+  INFO("out-of-band peak = " << out_of_band_peak);
+  REQUIRE(out_of_band_peak < 1.0e-5f);
+
+  // Returning to the old ratio must not retrigger the already struck mode.
+  float returned_peak = 0.0f;
+  for (int i = 0; i < 512; ++i) {
+    returned_peak = std::max(returned_peak, std::fabs(core.render(1.0f)));
+  }
+  INFO("returned-ratio peak = " << returned_peak);
+  REQUIRE(returned_peak < 1.0e-5f);
+}
 
 TEST_CASE("glockenspiel and marimba bars ring at their physical mode ratios",
           "[midi][synth][modal]") {

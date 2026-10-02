@@ -207,6 +207,7 @@ class PipeOrganVoiceCore {
   /// rank's radiation correction from there — because a registration has one
   /// radiation per rank and no single value an absolute control could take.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  void restore_excitation_base() noexcept;
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not
@@ -219,6 +220,7 @@ class PipeOrganVoiceCore {
   void snap_excitation() noexcept;
 
  private:
+  bool killed_ = true;
   /// Recomposes the two smoothing targets from their bases and the offsets, and
   /// arms the ramp if either moved.
   void refresh_excitation_targets() noexcept;

@@ -375,3 +375,39 @@ TEST_CASE("harpsichord top notes render finite and bounded", "[midi][synth][harp
     REQUIRE(peak(out) < 4.0f);
   }
 }
+
+TEST_CASE("harpsichord kill silences subsequent rendering and permits restart",
+          "[midi][synth][harpsichord]") {
+  Slab slab;
+  HarpsichordPatchParams params;
+  HarpsichordVoiceCore core;
+  core.attach(slab.data.data(), slab.per_line);
+  core.start(params, kSr, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4cULL);
+
+  float sounding = 0.0f;
+  for (int i = 0; i < 12000; ++i) sounding = std::max(sounding, std::abs(core.render(1.0f)));
+  REQUIRE(sounding > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * slab.per_line; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, kSr, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> restarted_samples(12000, 0.0f);
+  float restarted = 0.0f;
+  for (float& sample : restarted_samples) {
+    sample = core.render(1.0f);
+    restarted = std::max(restarted, std::abs(sample));
+  }
+  REQUIRE(restarted > 0.01f);
+
+  Slab fresh_slab;
+  HarpsichordVoiceCore fresh;
+  fresh.attach(fresh_slab.data.data(), fresh_slab.per_line);
+  fresh.start(params, kSr, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> fresh_samples(12000, 0.0f);
+  for (float& sample : fresh_samples) sample = fresh.render(1.0f);
+  const bool deterministic = restarted_samples == fresh_samples;
+  REQUIRE(deterministic);
+}

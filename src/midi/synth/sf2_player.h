@@ -395,6 +395,20 @@ class Sf2Player final : public MidiInstrument {
   void on_prepared_sysex_accepted(const uint8_t* data, size_t size,
                                   const PreparedMidiSysEx* prepared) noexcept override;
 
+  /// CONTROL thread: the live controller snapshot the render path consumes, per
+  /// channel. Breath (CC2) and expression (CC11) as normalized [0,1] floats.
+  float channel_breath01(uint8_t channel) const noexcept {
+    return channel_mods_[channel & 0x0Fu].breath01;
+  }
+  float channel_expression01(uint8_t channel) const noexcept {
+    return channel_mods_[channel & 0x0Fu].expression01;
+  }
+  /// Where controller @p controller presently sits on @p channel, as a MIDI 1.0
+  /// 7-bit value, whatever that controller means on this part.
+  uint8_t controller_position(uint8_t channel, uint8_t controller) const noexcept {
+    return channels_[channel & 0x0Fu].cc_position[controller & 0x7Fu].u7();
+  }
+
  private:
   /// gs_default_cc_positions() widened to the controller record's width.
   static std::array<Control32, 128> default_cc_positions() noexcept {
@@ -424,10 +438,12 @@ class Sf2Player final : public MidiInstrument {
     /// fields below because those are what a controller MEANS and this is only
     /// where it is: an assignable source names a controller by number and has
     /// to read its position whatever else that number does, including a number
-    /// nothing else on this part interprets. Written in exactly one place, at
-    /// the top of control_change, so the two cannot drift; the three that power
-    /// on off zero are seeded here and the fields below take their defaults
-    /// from this rather than restating them.
+    /// nothing else on this part interprets. Incoming messages are recorded at
+    /// the top of control_change, and reset_controllers mirrors resettable
+    /// performance/source defaults here before refreshing the live snapshot.
+    /// The controllers that power on off zero are seeded from
+    /// gs_default_cc_positions(), and the fields below take their defaults from
+    /// it rather than restating them.
     std::array<Control32, 128> cc_position = default_cc_positions();
     // Default-modulator controller state.
     // Held at MIDI 2.0 width; a MIDI 1.0 value widens exactly and reads back as float(v).

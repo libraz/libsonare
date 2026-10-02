@@ -76,10 +76,35 @@ struct BreathContour {
 /// (excitation_axes.h), and it derives slope and beta from the axes rather than
 /// storing them, so it keeps its own pair.
 struct ExcitationBases {
-  float force01_base = 0.0f;
-  float bright01_base = 0.0f;
-  float force_mod01 = 0.0f;
-  float bright_mod01 = 0.0f;
+  constexpr ExcitationBases(float force = 0.0f, float bright = 0.0f, float force_mod = 0.0f,
+                            float bright_mod = 0.0f) noexcept
+      : force01_base(force),
+        bright01_base(bright),
+        force_mod01(force_mod),
+        bright_mod01(bright_mod),
+        force01_home(force),
+        bright01_home(bright) {}
+
+  float force01_base;
+  float bright01_base;
+  float force_mod01;
+  float bright_mod01;
+  float force01_home;
+  float bright01_home;
+
+  /// Remembers the patch's start() base (before any controller seeded it) while leaving the live
+  /// modulation offset alone.
+  void remember_base() noexcept {
+    force01_home = force01_base;
+    bright01_home = bright01_base;
+  }
+
+  /// Restores only the patch's start() bases. Matrix offsets remain live and are
+  /// recomposed by the owning core's refresh method.
+  void restore_base() noexcept {
+    force01_base = force01_home;
+    bright01_base = bright01_home;
+  }
 
   /// Stores whichever axes @p present names, clamped to [0,1]; an axis the
   /// caller has not supplied a controller value for yet is left alone rather

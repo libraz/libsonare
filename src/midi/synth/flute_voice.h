@@ -183,6 +183,7 @@ class FluteVoiceCore {
   /// overblow edge without crossing into the silent under-blown regime;
   /// brightness (CC74) opens the open-end reflection filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  void restore_excitation_base() noexcept;
   /// Vibrato depth in [0,1] (CC1 modulation wheel): the voice-local pitch/level
   /// vibrato. 0 = off (the LFO is skipped). Not an excitation axis — it is the
   /// preset's own vibrato rather than anything the exciter does.
@@ -261,6 +262,7 @@ class FluteVoiceCore {
   // pressure (live-smoothed toward breath_ctrl_target_).
   float breath_target_ = 0.55f;
   BreathContour breath_{};
+  bool killed_ = true;
 
   // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ toward
   // these CC targets so a moving controller never zippers. Initialised equal to

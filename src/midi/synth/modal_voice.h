@@ -76,13 +76,15 @@ class ModalVoiceCore {
   void refresh_coefficients(float pitch_ratio) noexcept;
 
   struct Mode {
-    float omega = 0.0f;  // radians/sample at pitch_ratio == 1
-    float r = 0.0f;      // per-sample decay radius
-    float gain = 0.0f;   // impulse weight (mallet curve + sin normalization)
+    float omega = 0.0f;       // radians/sample at pitch_ratio == 1
+    float r = 0.0f;           // per-sample decay radius
+    float excitation = 0.0f;  // impulse weight before sin normalization
+    float gain = 0.0f;        // pitch-adjusted impulse weight
     float a1 = 0.0f;
     float a2 = 0.0f;
     float y1 = 0.0f;
     float y2 = 0.0f;
+    bool audible = false;
   };
 
   std::array<Mode, kMaxModalModes> modes_{};

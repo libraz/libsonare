@@ -166,6 +166,7 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
                                  uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
 
   const float f0 = note_to_hz(note);
   const float period = static_cast<float>(sr) / f0;
@@ -394,6 +395,7 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
 }
 
 float HarpsichordVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (slab_ == nullptr) return 0.0f;
 
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
@@ -531,6 +533,7 @@ void HarpsichordVoiceCore::release() noexcept {
 }
 
 void HarpsichordVoiceCore::kill() noexcept {
+  killed_ = true;
   pluck_pos_ = pluck_span_;
   exc_prev_ = 0.0f;
   for (TiltSection& s : tilt_) {

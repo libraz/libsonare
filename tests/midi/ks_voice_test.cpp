@@ -9,6 +9,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "core/fft.h"
@@ -825,6 +827,74 @@ double harmonic_decay_rate(const std::vector<float>& buf, double f0, int k, size
 
 }  // namespace
 
+TEST_CASE("KS cascade keeps the fundamental T60 when stage B is transparent or active",
+          "[midi][synth][ks]") {
+  // Stage A is deliberately pushed to its single-pole tilt ceiling. With a
+  // long HF target the residual at the quote frequency is already satisfied
+  // (stage B is transparent); with a short target stage B must add the
+  // remaining tilt. In both cases the cascade must preserve the same
+  // fundamental traversal gain as the single-pole control.
+  for (const auto [label, decay, mid_decay, hf_decay] :
+       {std::tuple<const char*, float, float, float>{"transparent B", 15.0f, 0.15f, 12.0f},
+        std::tuple<const char*, float, float, float>{"active B", 30.0f, 30.0f, 0.03f}}) {
+    KsPatchParams control;
+    control.brightness = 0.8f;
+    control.decay_s = decay;
+    control.decay_stretch = 0.0f;
+    control.mid_decay_s = 0.0f;
+    KsPatchParams cascaded = control;
+    cascaded.hf_decay_s = hf_decay;
+    cascaded.mid_decay_s = mid_decay;
+    control.hf_decay_s = hf_decay;
+    for (const uint8_t note : {40, 52, 64, 72}) {
+      const double f0 = 440.0 * std::exp2((static_cast<double>(note) - 69.0) / 12.0);
+      const std::vector<float> off = render_ks_core(control, note, 1.0f, 130000);
+      const std::vector<float> on = render_ks_core(cascaded, note, 1.0f, 130000);
+      const double off_t60_rate = harmonic_decay_rate(off, f0, 1, 12000, 96000);
+      const double on_t60_rate = harmonic_decay_rate(on, f0, 1, 12000, 96000);
+      INFO(label << ", note " << static_cast<int>(note) << ", control " << off_t60_rate
+                 << " dB/s, cascade " << on_t60_rate << " dB/s, target " << -60.0 / decay);
+      // Compare to both the direct target and the no-cascade control so the
+      // test remains about the fundamental, rather than the HF profile.
+      CHECK(std::fabs(on_t60_rate - off_t60_rate) < 0.25);
+      CHECK(std::fabs(on_t60_rate + 60.0 / decay) < 0.75);
+    }
+  }
+}
+
+TEST_CASE("KS mute overrides HF decay independently of hf_decay_s", "[midi][synth][ks]") {
+  KsPatchParams open;
+  open.brightness = 0.95f;
+  open.decay_s = 4.0f;
+  open.decay_stretch = 0.0f;
+  open.hf_decay_s = 0.0f;
+
+  KsPatchParams muted_zero_hf = open;
+  muted_zero_hf.mute_harmonic = 4.0f;
+  KsPatchParams muted_explicit_hf = muted_zero_hf;
+  muted_explicit_hf.hf_decay_s = 0.07f;
+
+  for (const uint8_t note : {40, 52, 64, 72}) {
+    const double f0 = 440.0 * std::exp2((static_cast<double>(note) - 69.0) / 12.0);
+    const std::vector<float> open_tone = render_ks_core(open, note, 1.0f, 110000);
+    const std::vector<float> zero_hf_tone = render_ks_core(muted_zero_hf, note, 1.0f, 110000);
+    const std::vector<float> explicit_hf_tone =
+        render_ks_core(muted_explicit_hf, note, 1.0f, 110000);
+    const bool mute_changes_tone = zero_hf_tone != open_tone;
+    CHECK(mute_changes_tone);
+    INFO("note " << static_cast<int>(note));
+    // mute_harmonic owns both the quote frequency and its target T60; the HF
+    // field is only the old open-string path and must not gate the mute.
+    const bool mute_hf_equivalent = zero_hf_tone == explicit_hf_tone;
+    CHECK(mute_hf_equivalent);
+
+    const double open_h4_rate = harmonic_decay_rate(open_tone, f0, 4, 12000, 84000);
+    const double muted_h4_rate = harmonic_decay_rate(zero_hf_tone, f0, 4, 12000, 84000);
+    INFO("open h4 " << open_h4_rate << " dB/s, muted h4 " << muted_h4_rate << " dB/s");
+    CHECK(muted_h4_rate < open_h4_rate - 8.0);
+  }
+}
+
 TEST_CASE("mid_decay_s cascades a second loop pole; off by default is bit-identical",
           "[midi][synth][ks]") {
   NativeSynthPatch base = ks_base_patch();
@@ -861,4 +931,40 @@ TEST_CASE("mid_decay_s cascades a second loop pole; off by default is bit-identi
 
   // The tilt (high minus low decay rate) is what profile_gate.py gates as `partial_tilt`.
   REQUIRE((h4_on - h1_on) < (h4_off - h1_off) - 15.0);
+}
+
+TEST_CASE("KS kill silences subsequent rendering and permits restart", "[midi][synth][ks]") {
+  KsPatchParams params;
+  const int per_line = ks_buffer_capacity(kRate);
+  std::vector<float> slab(static_cast<size_t>(ks_slab_capacity(kRate)), 0.0f);
+  KsVoiceCore core;
+  core.attach(slab.data(), per_line);
+  core.start(params, kRate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4cULL);
+
+  float sounding = 0.0f;
+  for (int i = 0; i < 12000; ++i) sounding = std::max(sounding, std::fabs(core.render(1.0f)));
+  REQUIRE(sounding > 0.01f);
+
+  core.kill();
+  bool silent = true;
+  for (int i = 0; i < 4 * per_line; ++i) silent = (core.render(1.0f) == 0.0f) && silent;
+  REQUIRE(silent);
+
+  core.start(params, kRate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> restarted_samples(12000, 0.0f);
+  float restarted = 0.0f;
+  for (float& sample : restarted_samples) {
+    sample = core.render(1.0f);
+    restarted = std::max(restarted, std::fabs(sample));
+  }
+  REQUIRE(restarted > 0.01f);
+
+  std::vector<float> fresh_slab(static_cast<size_t>(ks_slab_capacity(kRate)), 0.0f);
+  KsVoiceCore fresh;
+  fresh.attach(fresh_slab.data(), per_line);
+  fresh.start(params, kRate, 60, sonare::midi::Velocity16::from7(110), 0x4b494c4dULL);
+  std::vector<float> fresh_samples(12000, 0.0f);
+  for (float& sample : fresh_samples) sample = fresh.render(1.0f);
+  const bool deterministic = restarted_samples == fresh_samples;
+  REQUIRE(deterministic);
 }

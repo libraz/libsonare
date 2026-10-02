@@ -116,6 +116,19 @@ void note_bound(const char* path, float lo, float hi);
 #endif
 
 #if defined(SONARE_TUNING) && SONARE_TUNING
+/// Declare an externally-linked calibration constant under an explicit scope,
+/// so a knob keeps its `<scope>.<name>` key when its definition moves to a split
+/// implementation file.
+#define SONARE_TUNABLE_SCOPED(scope, name, value) \
+  extern const float name = ::sonare::tuning::tunable_keyed(scope "." #name, (value))
+#else
+/// Normal-build counterpart of SONARE_TUNABLE_SCOPED: an `extern const`, not a
+/// `constexpr`, defined in one translation unit and declared for the others by
+/// a private header, so other TUs load the value instead of folding it.
+#define SONARE_TUNABLE_SCOPED(scope, name, value) extern const float name = (value)
+#endif
+
+#if defined(SONARE_TUNING) && SONARE_TUNING
 /// Qualify a builder whose result is a compile-time constant only in a shipped
 /// build. A tunable resolves from the environment while the process runs, so a
 /// table built from one cannot be constant-initialised in a tuning build, and a

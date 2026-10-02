@@ -2,6 +2,51 @@
 
 namespace sonare::midi::synth {
 
+namespace {
+
+uint32_t excitation_axis_mask(ControllerAxis axis) noexcept {
+  switch (axis) {
+    case ControllerAxis::kExcitation:
+      return kAxisForce;
+    case ControllerAxis::kPosition:
+      return kAxisPosition;
+    case ControllerAxis::kBrightness:
+      return kAxisBrightness;
+    case ControllerAxis::kMorph:
+      return kAxisMorph;
+    case ControllerAxis::kNone:
+    case ControllerAxis::kLoudness:
+    case ControllerAxis::kPitchCents:
+    case ControllerAxis::kVibratoDepth:
+      return kAxisNone;
+  }
+  return kAxisNone;
+}
+
+void store_excitation_value(ExcitationAxes& out, ControllerAxis axis, float value) noexcept {
+  switch (axis) {
+    case ControllerAxis::kExcitation:
+      out.force = value;
+      break;
+    case ControllerAxis::kPosition:
+      out.position = value;
+      break;
+    case ControllerAxis::kBrightness:
+      out.brightness = value;
+      break;
+    case ControllerAxis::kMorph:
+      out.morph = value;
+      break;
+    case ControllerAxis::kNone:
+    case ControllerAxis::kLoudness:
+    case ControllerAxis::kPitchCents:
+    case ControllerAxis::kVibratoDepth:
+      break;
+  }
+}
+
+}  // namespace
+
 ControllerProfile default_controller_profile() noexcept {
   ControllerProfile profile;
   ControllerProfile::preset("gm", &profile);
@@ -12,32 +57,23 @@ ExcitationAxes NativeSynth::channel_excitation(const ControllerAxisState& axes,
                                                uint32_t& present) noexcept {
   ExcitationAxes out{};
   present = kAxisNone;
-  // One row per axis the two layers share. Everything that decides which
-  // controller fills an axis is the profile's, so this is the whole bridge.
-  if (axes.has(ControllerAxis::kExcitation)) {
-    out.force = axes.values[static_cast<size_t>(ControllerAxis::kExcitation)];
-    present |= kAxisForce;
-  }
-  if (axes.has(ControllerAxis::kPosition)) {
-    out.position = axes.values[static_cast<size_t>(ControllerAxis::kPosition)];
-    present |= kAxisPosition;
-  }
-  if (axes.has(ControllerAxis::kBrightness)) {
-    out.brightness = axes.values[static_cast<size_t>(ControllerAxis::kBrightness)];
-    present |= kAxisBrightness;
-  }
-  if (axes.has(ControllerAxis::kMorph)) {
-    out.morph = axes.values[static_cast<size_t>(ControllerAxis::kMorph)];
-    present |= kAxisMorph;
+  // The profile decides which controller fills an axis; this maps each axis to its slot.
+  for (size_t i = 0; i < kControllerAxisCount; ++i) {
+    const ControllerAxis axis = static_cast<ControllerAxis>(i);
+    const uint32_t mask = excitation_axis_mask(axis);
+    if (mask == kAxisNone || !axes.has(axis)) continue;
+    store_excitation_value(out, axis, axes.values[i]);
+    present |= mask;
   }
   return out;
 }
 
-void NativeSynth::push_excitation_control(uint8_t channel) noexcept {
+void NativeSynth::push_excitation_control(uint8_t channel, uint32_t changed_mask) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   uint32_t present = kAxisNone;
   const ExcitationAxes base = channel_excitation(st.axes, present);
+  present &= changed_mask;
   for (NativeSynthVoice& v : pool_) {
     if (!v.active || v.channel != ch || v.patch == nullptr) continue;
     // The axes override the preset only once a controller has reached them, so
@@ -46,12 +82,19 @@ void NativeSynth::push_excitation_control(uint8_t channel) noexcept {
   }
 }
 
+void NativeSynth::restore_excitation_control(uint8_t channel) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  for (NativeSynthVoice& v : pool_) {
+    if (v.active && v.channel == ch && v.patch != nullptr) v.restore_excitation_base();
+  }
+}
+
 bool NativeSynth::set_controller_profile(const ControllerProfile& profile) noexcept {
   controller_profile_ = profile;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].axes.reset();
     refresh_channel_mod(ch);
-    push_excitation_control(ch);
+    restore_excitation_control(ch);
   }
   return true;
 }
@@ -226,6 +269,7 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
   const uint8_t attributed =
       mpe_dimension_of(ump, &dimension) ? mpe_attributed_note(ch, dimension) : kControllerAnyNote;
   bool channel_moved = false;
+  uint32_t channel_changed_mask = kAxisNone;
   for (size_t i = 0; i < count; ++i) {
     ControllerAxisValue value = resolved[i];
     if (value.note == kControllerAnyNote && attributed != kControllerAnyNote &&
@@ -235,16 +279,16 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
     if (value.note == kControllerAnyNote) {
       channels_[ch].axes.set(value.axis, value.value);
       channel_moved = true;
+      channel_changed_mask |= excitation_axis_mask(value.axis);
       continue;
     }
     // A per-note value reaches the voices on that note and no further. It is
     // not stored on the channel, so a later channel-wide value on the same axis
     // overwrites it in those voices: per-voice controller state is what MPE
     // adds, and until then the precedence is simply last writer wins.
-    ControllerAxisState note_axes = channels_[ch].axes;
-    note_axes.set(value.axis, value.value);
-    uint32_t present = kAxisNone;
-    const ExcitationAxes axes = channel_excitation(note_axes, present);
+    const uint32_t present = excitation_axis_mask(value.axis);
+    ExcitationAxes axes{};
+    store_excitation_value(axes, value.axis, value.value);
     if (present == kAxisNone) continue;
     for (NativeSynthVoice& v : pool_) {
       if (v.active && v.note == value.note && v.channel == ch && v.patch != nullptr) {
@@ -254,7 +298,7 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
   }
   if (!channel_moved) return;
   refresh_channel_mod(ch);
-  push_excitation_control(ch);
+  push_excitation_control(ch, channel_changed_mask);
 }
 
 }  // namespace sonare::midi::synth

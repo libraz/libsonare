@@ -88,6 +88,9 @@ class AdditiveVoiceCore {
   /// the caller filled (ExcitationAxisMask); an axis it does not name keeps the
   /// value the note started with.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  /// Restore the patch's start() morph base (before any controller seeded it) while retaining the
+  /// live matrix offset.
+  void restore_excitation_base() noexcept;
   /// Mod-matrix offset on the morph position, in the same normalized units as
   /// the patch field. Composed with the base and clamped; the ramp owns the
   /// approach, so this sets a target rather than a value.
@@ -120,6 +123,7 @@ class AdditiveVoiceCore {
   float sum_a_ = 0.0f;
   float sum_b_ = 0.0f;
   float morph_base_ = 0.0f;
+  float morph_home_ = 0.0f;
   float morph_mod_ = 0.0f;
   float morph_ = 0.0f;
   float morph_target_ = 0.0f;

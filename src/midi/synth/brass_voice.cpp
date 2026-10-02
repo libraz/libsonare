@@ -170,6 +170,7 @@ SONARE_TUNABLE(kCuivreMixMax, 0.85f);
 // Muted upper formant (Hz) and its resonance: the nasal honk of a straight/cup
 // mute. The formant peak is boosted and the direct low-mid scooped.
 SONARE_TUNABLE(kMuteFormantHz, 1800.0f);
+// Pole radius voiced at kLossVoicedSr; start() maps it to the running rate.
 SONARE_TUNABLE(kMuteFormantR, 0.90f);
 SONARE_TUNABLE(kMuteFormantGain, 3.5f);
 SONARE_TUNABLE(kMuteScoop, 0.45f);  // how much direct signal the mute removes
@@ -195,6 +196,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
@@ -256,6 +258,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // enough for the first CC to move a sound the host did not ask to move.
   refresh_excitation_targets();
   snap_excitation();
+  excite_.remember_base();
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                           kLossFloor, kLossCeil);
 
@@ -302,6 +305,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // only thing it changes and the peak calibration above still holds.
   rad_state_ = 0.0f;
   rad_alpha_ = 0.0f;
+  rad_ratio_ = 1.0f;
   rad_scale_ = 1.0f;
   if (bell_cutoff_hz_ > 0.0f) {
     // One flare: what the bell radiates is what it did not reflect, so the two
@@ -312,13 +316,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   } else if (params.bell_radiation_hz > 0.0f) {
     rad_alpha_ = 1.0f - std::exp(-kTwoPi * std::min(params.bell_radiation_hz, 0.45f * srf) / srf);
   }
-  if (rad_alpha_ > 0.0f) {
-    const float pole = 1.0f - rad_alpha_;
-    const float w0 = kTwoPi * f0 / srf;
-    const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
-    const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
-    rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
-  }
+  refresh_radiation_scale(rad_alpha_);
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst so the
   // lip resonator has an f0 component to lock onto rather than swelling up from
@@ -354,9 +352,10 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   if (mute_ > 0.0f) {
     const float fm = std::min(kMuteFormantHz, 0.45f * srf);
     const float wm = kTwoPi * fm / srf;
-    mute_peak_a1_ = 2.0f * kMuteFormantR * std::cos(wm);
-    mute_peak_a2_ = -kMuteFormantR * kMuteFormantR;
-    mute_peak_b0_ = 1.0f - kMuteFormantR;
+    const float mute_r = loss_pole_at_rate(kMuteFormantR, sr);
+    mute_peak_a1_ = 2.0f * mute_r * std::cos(wm);
+    mute_peak_a2_ = -mute_r * mute_r;
+    mute_peak_b0_ = 1.0f - mute_r;
   }
 
   // 4c: half-valve — extra in-loop loss and a small loop detune. Off (0) ->
@@ -439,6 +438,7 @@ float BrassVoiceCore::played_dynamic() const noexcept {
 }
 
 float BrassVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (bore_.buffer == nullptr || bore_.capacity < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
@@ -586,11 +586,20 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
     // is what makes this highpass the power complement of that lowpass: for a
     // one-pole pair, 1 - |a/(1-pz^-1)|^2 is exactly |sqrt(p)(1-z^-1)/(1-pz^-1)|^2,
     // and the plain difference below carries p rather than sqrt(p).
-    rad_alpha_ = lp_alpha_;
+    if (rad_alpha_ != lp_alpha_ || ratio != rad_ratio_) {
+      rad_alpha_ = lp_alpha_;
+      rad_ratio_ = ratio;
+      refresh_radiation_scale(rad_alpha_);
+    }
     const float pole = std::max(1.0f - rad_alpha_, 1.0e-4f);
     rad_state_ += rad_alpha_ * (outp - rad_state_);
     outp = rad_scale_ * (outp - rad_state_) / std::sqrt(pole);
   } else if (rad_alpha_ > 0.0f) {
+    // The makeup is normalized at the sounding fundamental, so it follows the live ratio.
+    if (ratio != rad_ratio_) {
+      rad_ratio_ = ratio;
+      refresh_radiation_scale(rad_alpha_);
+    }
     rad_state_ += rad_alpha_ * (outp - rad_state_);
     outp = rad_scale_ * (outp - rad_state_);
   }
@@ -644,6 +653,11 @@ void BrassVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t pr
   refresh_excitation_targets();
 }
 
+void BrassVoiceCore::restore_excitation_base() noexcept {
+  excite_.restore_base();
+  refresh_excitation_targets();
+}
+
 void BrassVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
   excite_.set_mod(offsets);
   refresh_excitation_targets();
@@ -654,6 +668,15 @@ void BrassVoiceCore::refresh_excitation_targets() noexcept {
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
   // bell_alpha_for_brightness clamps its own argument.
   lp_alpha_target_ = bell_alpha_for_brightness(excite_.bright01_base + excite_.bright_mod01);
+}
+
+void BrassVoiceCore::refresh_radiation_scale(float rad_alpha) noexcept {
+  if (rad_alpha <= 0.0f) return;
+  const float pole = 1.0f - rad_alpha;
+  const float w0 = kTwoPi * bore_f0_ * rad_ratio_ / lip_srf_;
+  const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
+  const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
+  rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
 }
 
 float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
@@ -690,6 +713,7 @@ void BrassVoiceCore::snap_excitation() noexcept {
 void BrassVoiceCore::release() noexcept { breath_.release(); }
 
 void BrassVoiceCore::kill() noexcept {
+  killed_ = true;
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
   rad_state_ = 0.0f;

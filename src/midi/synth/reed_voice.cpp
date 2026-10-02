@@ -106,7 +106,7 @@ SONARE_TUNABLE(kReedResSpanHz, 2000.0f);
 // Reed resonator pole radius (Q) and how strongly its displacement biases the
 // (sharp) reed table's operating point. Kept small so the loop stays bounded —
 // the bias only nudges the already-clamped table, never adds unbounded gain.
-SONARE_TUNABLE(kReedResR, 0.985f);
+SONARE_TUNABLE(kReedResR, 0.985f);  // pole radius voiced at kLossVoicedSr, mapped in start()
 SONARE_TUNABLE(kReedCouple, 0.15f);
 // Damping qr of the dynamic VALVE. Under 1.05 the reed outruns the bore at its
 // own frequency and the lowest bright note speaks there instead — a squeak the
@@ -183,6 +183,7 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   const float srf = static_cast<float>(sr);
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
@@ -274,6 +275,7 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // enough for the first CC to move a sound the host did not ask to move.
   refresh_excitation_targets();
   snap_excitation();
+  excite_.remember_base();
 
   // In-loop sub-fundamental highpass pole. Only the CONE (positive-feedback comb)
   // has a resonant sub-fundamental (DC) mode that the rectified reed drive can
@@ -343,9 +345,10 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   if (reed_dyn_ && closing_pressure_ == 0.0f) {
     const float f_reed = reed_natural_hz(params.reed_resonance, srf);
     const float w = kTwoPi * f_reed / srf;
-    reed_a1_ = 2.0f * kReedResR * std::cos(w);
-    reed_a2_ = -kReedResR * kReedResR;
-    reed_b0_ = 1.0f - kReedResR;  // unity-ish peak so the bias stays bounded
+    const float reed_r = loss_pole_at_rate(kReedResR, sr);
+    reed_a1_ = 2.0f * reed_r * std::cos(w);
+    reed_a2_ = -reed_r * reed_r;
+    reed_b0_ = 1.0f - reed_r;  // unity-ish peak so the bias stays bounded
     reed_couple_ = kReedCouple;
   }
 
@@ -397,6 +400,7 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
 }
 
 float ReedVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (bore_.buffer == nullptr || bore_.capacity < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
@@ -558,6 +562,11 @@ void ReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t pre
   refresh_excitation_targets();
 }
 
+void ReedVoiceCore::restore_excitation_base() noexcept {
+  excite_.restore_base();
+  refresh_excitation_targets();
+}
+
 void ReedVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
   excite_.set_mod(offsets);
   refresh_excitation_targets();
@@ -593,6 +602,7 @@ void ReedVoiceCore::snap_excitation() noexcept {
 void ReedVoiceCore::release() noexcept { breath_.release(); }
 
 void ReedVoiceCore::kill() noexcept {
+  killed_ = true;
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
   bore_.out = 0.0f;

@@ -230,6 +230,7 @@ class KsVoiceCore {
   void kill() noexcept;
 
  private:
+  bool killed_ = true;
   /// The delay slab attach() handed over, and the span length each loop takes
   /// out of it. start() carves the three spans.
   float* slab_ = nullptr;

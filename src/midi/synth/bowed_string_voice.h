@@ -205,6 +205,13 @@ class BowedStringVoiceCore {
     }
     refresh_bow_targets();
   }
+  /// Restore the transformed note-on bases without trying to invert the axis
+  /// mapping; matrix offsets remain live and are recomposed below.
+  void restore_excitation_base() noexcept {
+    slope_base_ = slope_home_;
+    beta_base_ = beta_home_;
+    refresh_bow_targets();
+  }
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an
@@ -223,6 +230,7 @@ class BowedStringVoiceCore {
   }
 
  private:
+  bool killed_ = true;
   // Bow-table friction-curve slope from bow force (Smith / STK: slope in [1,5],
   // harder force -> lower slope -> wider sticking region).
   static constexpr float kBowSlopeMax_ = 5.0f;
@@ -316,6 +324,8 @@ class BowedStringVoiceCore {
   // The un-modulated halves of the two targets above, plus the matrix offsets.
   float slope_base_ = 3.0f;
   float beta_base_ = 0.13f;
+  float slope_home_ = 3.0f;
+  float beta_home_ = 0.13f;
   float force_mod01_ = 0.0f;
   float position_mod01_ = 0.0f;
   float ctrl_coeff_ = 1.0f;

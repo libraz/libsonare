@@ -35,33 +35,34 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
                                    uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
+  killed_ = false;
 
   const float f0 = note_to_hz(note);
   base_period_ = static_cast<float>(sr) / f0;
 
-  // Decay: t60 stretched per octave below A4 (low strings ring longer). This
-  // target is already correct in Hz/seconds; only the loop-lowpass pole below
-  // was defective (fixed in samples, so the same brightness rendered a
-  // different instrument at a different sample rate).
+  // Decay: t60 stretched per octave below A4 (low strings ring longer).
   const float stretch = std::clamp(params.decay_stretch, 0.0f, 1.0f);
   const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
   const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
 
-  // Loop loss: brightness sets the pole, voiced at kLossVoicedSr and mapped onto
-  // the running rate. The gain is per traversal and already in seconds through
-  // t60, so it needs no mapping.
-  const float a = loss_pole_at_rate((1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f, sr);
+  // Loop loss: brightness sets the pole, capped so the fundamental keeps its t60.
+  const float omega = kTwoPi / base_period_;
+  const float g0 = string_loop_gain_for(base_period_, sr, t60);
+  const float requested_a =
+      loss_pole_at_rate((1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f, sr);
+  const float a = cap_loss_pole(requested_a, omega, g0);
   loop_alpha_ = 1.0f - a;
-  loop_gain_ = string_loop_gain_for(base_period_, sr, t60);
+  loop_gain_ = compensated_loop_gain(a, omega, g0);
   lp_state_ = 0.0f;
   // Tuning: compensate the EXACT phase delay of the loop filter at the
   // fundamental (not just its DC group delay) plus the one-sample feedback
   // path, so the sounding pitch matches the note to a few cents.
-  const float omega = kTwoPi / base_period_;
   const float tau_lp = onepole_group_delay_samples(a, omega);
   loop_comp_ = 1.0f + tau_lp;
 
-  release_gain_ = string_loop_gain_for(base_period_, sr, std::max(0.01f, params.release_damp_s));
+  const float release_g0 =
+      string_loop_gain_for(base_period_, sr, std::max(0.01f, params.release_damp_s));
+  release_gain_ = compensated_loop_gain(a, omega, release_g0);
 
   // Buzzing bridge: a stronger jawari sits the threshold lower into the
   // string's swing, so the returning wave grazes the curved surface on more of
@@ -100,6 +101,7 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
 }
 
 float PluckedStringVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
   if (buffer_ == nullptr || capacity_ < 8) return 0.0f;
 
   float exc = 0.0f;
@@ -146,6 +148,7 @@ void PluckedStringVoiceCore::release() noexcept {
 }
 
 void PluckedStringVoiceCore::kill() noexcept {
+  killed_ = true;
   exc_pos_ = exc_total_ + pick_delay_;
   loop_gain_ = 0.0f;
   lp_state_ = 0.0f;
