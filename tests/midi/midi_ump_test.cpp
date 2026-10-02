@@ -11,6 +11,43 @@
 
 #include "midi/ump.h"
 
+TEST_CASE("Default MIDI translation isolates UMP groups", "[midi]") {
+  using namespace sonare::midi;
+  Midi1ToMidi2Translator translator;
+  translator.translate(make_midi1_control_change(1, 3, 0, 12));
+  translator.translate(make_midi1_control_change(1, 3, 32, 34));
+  const auto other = translator.translate(make_midi1_program_change(2, 3, 7));
+  REQUIRE(other.count == 1);
+  CHECK((other.messages[0].words[0] & 1u) == 0);
+  const auto original = translator.translate(make_midi1_program_change(1, 3, 7));
+  REQUIRE(original.count == 1);
+  CHECK((original.messages[0].words[0] & 1u) == 1);
+  translator.translate(make_midi1_control_change(1, 3, 101, 0));
+  translator.translate(make_midi1_control_change(1, 3, 100, 1));
+  translator.translate(make_midi1_control_change(2, 3, 6, 50));
+  CHECK(translator.translate(make_midi1_control_change(2, 3, 38, 20)).count == 0);
+  translator.translate(make_midi1_control_change(1, 3, 6, 50));
+  CHECK(translator.translate(make_midi1_control_change(1, 3, 38, 20)).count == 1);
+}
+
+TEST_CASE("SysEx store rejects an oversized payload without eviction", "[midi]") {
+  using namespace sonare::midi;
+  SysExStore store;
+  store.set_retention_budget(8, 4);
+  const std::vector<uint8_t> small{1, 2, 3};
+  const std::vector<uint8_t> large(16, 42);
+  const auto handle = store.add(small);
+  REQUIRE(handle != 0);
+  CHECK(store.add(large) == 0);
+  CHECK_FALSE(store.add_with_handle(handle, large.data(), large.size()));
+  CHECK_FALSE(store.add_with_handle(99, large.data(), large.size()));
+  REQUIRE(store.lookup(handle) != nullptr);
+  CHECK(*store.lookup(handle) == small);
+  CHECK(store.lookup(99) == nullptr);
+  CHECK(store.retained_bytes() == small.size());
+  CHECK(store.evicted_count() == 0);
+}
+
 namespace {
 
 using sonare::midi::Ump;

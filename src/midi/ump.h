@@ -327,17 +327,18 @@ inline constexpr size_t kLiveSysExRetentionBudgetEntries = 4096u;
 /// set_retention_budget(), or it grows for the lifetime of the device.
 class SysExStore {
  public:
-  /// Stores `size` bytes and returns a non-zero handle, or 0 on invalid input /
-  /// allocation failure. The bytes are copied and remain stable until remove()
-  /// or clear().
+  /// Stores `size` bytes and returns a non-zero handle, or 0 on invalid input
+  /// or a payload larger than the retention byte budget. The bytes are copied
+  /// and remain stable until remove(), clear(), or retention eviction.
   SysExHandle add(const uint8_t* data, size_t size);
   SysExHandle add(const std::vector<uint8_t>& data) { return add(data.data(), data.size()); }
 
   /// Stores `size` bytes under the explicit, non-zero `handle`, replacing any
   /// existing payload for it. Returns false for a zero handle or a null/empty
-  /// buffer. Lets a producer that must assign a handle before the payload reaches
-  /// the store (e.g. a realtime MIDI reader staging completed SysEx for a control
-  /// thread) commit the bytes later under the pre-assigned handle.
+  /// buffer or a payload larger than the retention byte budget. Lets a producer
+  /// that must assign a handle before the payload reaches the store (e.g. a
+  /// realtime MIDI reader staging completed SysEx for a control thread) commit
+  /// the bytes later under the pre-assigned handle.
   bool add_with_handle(SysExHandle handle, const uint8_t* data, size_t size);
 
   /// Returns the payload for `handle`, or nullptr if unknown / zero.
@@ -355,6 +356,10 @@ class SysExStore {
   /// Either being 0 means unbounded, which is the default and what an import
   /// store keeps. A live input installs kLiveSysExRetentionBudgetBytes /
   /// kLiveSysExRetentionBudgetEntries here.
+  ///
+  /// A single payload larger than @p max_bytes is refused (add() returns 0,
+  /// add_with_handle() false, an existing payload under that handle is kept)
+  /// rather than evicting the store.
   ///
   /// Over either cap the OLDEST entries are dropped until the new one fits, and
   /// each drop bumps evicted_count(). Eviction is by insertion order, not by
@@ -439,7 +444,7 @@ struct Midi2MessageList {
 };
 
 /// Stateful MIDI 1.0 -> MIDI 2.0 Default Translation (M2-104-UM D.3.3, D.3.4).
-/// One instance serves one external port and holds, per channel, the bank select
+/// One instance serves one external port and holds, per group and channel, the bank select
 /// latch and the RPN / NRPN selection with its Data Entry MSB. Owned by the
 /// caller; RT-safe (no allocation, no exceptions).
 ///
@@ -468,7 +473,7 @@ struct Midi1ToMidi2Translator {
     bool data_msb_valid = false;
     bool data_pending = false;
   };
-  std::array<Channel, 16> channels{};
+  std::array<Channel, 16 * 16> channels{};
 
   /// Translates one UMP into zero or one MIDI 2.0 UMPs.
   Midi2MessageList translate(const Ump& ump) noexcept;

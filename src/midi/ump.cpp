@@ -435,6 +435,7 @@ bool SysExStore::evict_oldest() noexcept {
 }
 
 bool SysExStore::store_payload(SysExHandle handle, const uint8_t* data, size_t size) {
+  if (max_retained_bytes_ != 0 && size > max_retained_bytes_) return false;
   const auto existing = payloads_.find(handle);
   if (existing != payloads_.end()) {
     // Replacing an existing handle: swap the byte accounting and leave its place
@@ -496,15 +497,14 @@ bool SysExStore::add_with_handle(SysExHandle handle, const uint8_t* data, size_t
 }
 
 SysExHandle SysExStore::add(const uint8_t* data, size_t size) {
-  if (data == nullptr || size == 0) {
+  if (data == nullptr || size == 0 || (max_retained_bytes_ != 0 && size > max_retained_bytes_)) {
     return 0;
   }
   const SysExHandle handle = allocate_handle();
   if (handle == 0) {
     return 0;
   }
-  store_payload(handle, data, size);
-  return handle;
+  return store_payload(handle, data, size) ? handle : 0;
 }
 
 const std::vector<uint8_t>* SysExStore::lookup(SysExHandle handle) const noexcept {
@@ -761,7 +761,7 @@ Midi2MessageList Midi1ToMidi2Translator::translate(const Ump& ump) noexcept {
     emit(ump);
     return out;
   }
-  Channel& ch = channels[ump.channel()];
+  Channel& ch = channels[static_cast<size_t>(ump.group & 0x0Fu) * 16 + ump.channel()];
   const uint8_t group = ump.group;
   const uint8_t channel = ump.channel();
   const uint8_t d1 = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
