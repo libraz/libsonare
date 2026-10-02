@@ -173,6 +173,11 @@ class ClockGenerator {
 /// Incremental parser for incoming sync bytes. Tracks the last received SPP
 /// position (in MIDI beats / PPQ) and counts clock ticks since the last SPP /
 /// start, plus assembles MTC from quarter-frame pieces. Alloc-0 state machine.
+///
+/// Clock ticks count only while the transport runs: Start and Continue set the
+/// running state, Stop clears it, and a 0xF8 received while stopped is ignored.
+/// A fresh or reset parser is running (a stream with no transport messages
+/// free-runs), so it stops counting only after a Stop is seen.
 class ClockParser {
  public:
   void reset() noexcept;
@@ -181,12 +186,13 @@ class ClockParser {
   /// completed a meaningful message (a clock tick, an SPP, or a full MTC frame).
   bool parse_byte(uint8_t byte) noexcept;
 
-  /// Clock ticks received since the last SPP / start / reset.
+  /// Clock ticks since the last SPP / Start / reset (Continue keeps the count;
+  /// ticks while stopped are not counted).
   int64_t clock_ticks() const noexcept { return clock_ticks_; }
   /// Estimated current position in PPQ: the SPP anchor plus elapsed clock ticks.
   double position_ppq() const noexcept;
 
-  /// True once a complete SPP has been parsed since reset.
+  /// True once a complete SPP has been parsed since reset or the last Start.
   bool has_spp() const noexcept { return has_spp_; }
   uint16_t spp_beats() const noexcept { return spp_beats_; }
 
@@ -203,6 +209,7 @@ class ClockParser {
   bool has_spp_ = false;
   uint16_t spp_beats_ = 0;
   int64_t clock_ticks_ = 0;
+  bool running_ = true;
 
   // MTC quarter-frame assembly: 8 nibbles into a scratch MtcTime.
   std::array<uint8_t, 8> mtc_pieces_{};

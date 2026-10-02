@@ -626,7 +626,10 @@ export class RealtimeEngine {
   /**
    * Route a destination's (track lane's) MIDI to the external output queue
    * instead of the internal instrument rack, so the track plays an external
-   * device. Clearing it restores internal-synth playback.
+   * device. Clearing it restores internal-synth playback. Control-thread only.
+   * The change takes effect at the next processed block; switching a
+   * destination's route first releases its notes and resets its controllers
+   * through the old route, and drops its pending MIDI-FX events. Single writer.
    */
   setMidiDestinationExternal(destinationId: number, external: boolean): void {
     this.native.setMidiDestinationExternal(destinationId, external);
@@ -918,10 +921,20 @@ export class RealtimeEngine {
     this.native.play(renderFrame);
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   stop(renderFrame = -1): void {
     this.native.stop(renderFrame);
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   seekSample(timelineSample: number, renderFrame = -1): void {
     this.native.seekSample(timelineSample, renderFrame);
   }
@@ -951,6 +964,11 @@ export class RealtimeEngine {
     this.native.applyCommandsDueNowPreservingFuture();
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   seekPpq(ppq: number, renderFrame = -1): void {
     this.native.seekPpq(ppq, renderFrame);
   }
@@ -976,6 +994,11 @@ export class RealtimeEngine {
     return Number(this.native.sampleAtPpq(ppq));
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
     this.native.setLoop(startPpq, endPpq, enabled);
   }

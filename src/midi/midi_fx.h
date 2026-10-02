@@ -167,6 +167,26 @@ class MidiFxChain {
     clear_note_timings();
   }
 
+  /// AUDIO thread: forget every pending note timing without resetting the
+  /// transform overflow telemetry. Used when playback is stopped or a live
+  /// destination is replaced while keeping the configured chain.
+  void clear_note_tracking() noexcept { clear_note_timings(); }
+  /// AUDIO thread: forget note timing pairs addressed by one UMP group/channel
+  /// without disturbing other lanes in this chain.
+  void clear_note_tracking(uint8_t group, uint8_t channel) noexcept;
+  /// AUDIO thread: forget every note timing row owned by one exact note lane.
+  /// This is used when a clip-owned note is released during a schedule refresh,
+  /// so a replacement on another source lane or clip cannot inherit its shift.
+  /// The optional clip provenance is false/0 for direct or offline callers.
+  void clear_note_tracking(uint8_t group, uint8_t channel, uint8_t note, uint32_t source_track_id,
+                           bool from_clip = false, uint32_t clip_id = 0) noexcept;
+  /// AUDIO thread: forget one queued note-on's timing row. The row is selected
+  /// by its shaped frame and full note owner, with the earliest timing order
+  /// winning when multiple queued note-ons share that frame. Note-offs are
+  /// ignored because their timing row was already consumed while shaping them.
+  void clear_pending_note_tracking(const MidiEvent& event, bool from_clip = false,
+                                   uint32_t clip_id = 0) noexcept;
+
   void set_transpose(const TransposeConfig& c) noexcept { transpose_ = c; }
   void set_quantize(const QuantizeConfig& c) noexcept { quantize_ = c; }
   void set_velocity_curve(const VelocityCurveConfig& c) noexcept { velocity_ = c; }
@@ -188,9 +208,12 @@ class MidiFxChain {
 
   /// RT-safe chunk variant whose first input keeps its ordinal from a larger
   /// logical batch. Control-thread callers use this to drain large clips through
-  /// fixed-capacity buffers without changing deterministic humanize seeds.
+  /// fixed-capacity buffers without changing deterministic humanize seeds. When
+  /// the chunk belongs to a scheduled clip, `from_clip`/`clip_id` are carried
+  /// into note timing state so same-track clips remain independent. Direct and
+  /// offline callers may use the defaults.
   void process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
-                     MidiFxBuffer* out) noexcept;
+                     MidiFxBuffer* out, bool from_clip = false, uint32_t clip_id = 0) noexcept;
 
   /// Telemetry: number of output events dropped because the buffer was full.
   uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
@@ -200,6 +223,9 @@ class MidiFxChain {
     uint8_t group = 0;
     uint8_t channel = 0;
     uint8_t note = 0;
+    uint32_t source_track_id = 0;
+    bool from_clip = false;
+    uint32_t clip_id = 0;
     int64_t frame_shift = 0;
     int64_t shaped_on_frame = 0;
     uint64_t order = 0;
@@ -210,8 +236,10 @@ class MidiFxChain {
   // `out`; pure transforms mutate the single event before it is pushed.
   void push_or_overflow(const MidiEvent& ev, MidiFxBuffer* out) noexcept;
   void clear_note_timings() noexcept;
-  void push_note_timing(const Ump& ump, int64_t frame_shift, int64_t shaped_on_frame) noexcept;
-  bool pop_note_timing(const Ump& ump, ActiveNoteTiming* out) noexcept;
+  void push_note_timing(const MidiEvent& event, int64_t frame_shift, int64_t shaped_on_frame,
+                        bool from_clip, uint32_t clip_id) noexcept;
+  bool pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
+                       ActiveNoteTiming* out) noexcept;
 
   TransposeConfig transpose_{};
   QuantizeConfig quantize_{};

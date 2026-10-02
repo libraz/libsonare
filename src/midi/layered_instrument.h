@@ -9,9 +9,12 @@
 /// of instrument, so a sampled tone can sit under a modelled one.
 ///
 /// A note-off carries a different velocity from the note-on that opened it, so
-/// the layer set is recorded per (channel, note) at note-on and replayed at
-/// note-off rather than recomputed — recomputing strands a note in a
-/// velocity-split layer. Everything that is not a note message is broadcast.
+/// the layer set is recorded at note-on and replayed at note-off rather than
+/// recomputed — recomputing strands a note in a velocity-split layer. The
+/// bounded ledger also carries the destination, source track and wire group,
+/// because a shared instrument can have the same source key open more than
+/// once. Note-addressed controllers are routed to every layer whose source key
+/// range contains the addressed key, then receive that layer's transpose.
 ///
 /// Latency: children must agree, and prepare() throws when they do not. Summing
 /// outputs of unequal latency would smear the attack, and a layered patch has
@@ -27,6 +30,7 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "rt/overflow_counter.h"
 
 namespace sonare::midi {
 
@@ -45,7 +49,7 @@ struct InstrumentLayerSpec {
   float pan = 0.0f;
 };
 
-/// Maximum layers in one patch (the note table holds a bit per layer).
+/// Maximum layers in one patch (each note-ledger entry holds a bit per layer).
 inline constexpr size_t kMaxInstrumentLayers = 32;
 
 /// Parameter-id stride per layer: a child's own id is added to
@@ -83,6 +87,10 @@ class LayeredInstrument final : public MidiInstrument {
   bool describe_parameter(unsigned int param_id,
                           automation::ParameterDescription* out) const override;
 
+  /// ANY thread: note-ons dropped because the note ledger was full.
+  uint32_t ledger_overflow_count() const noexcept { return ledger_overflow_count_.load(); }
+  void reset_telemetry() noexcept { ledger_overflow_count_.reset(); }
+
  private:
   struct Layer {
     std::unique_ptr<MidiInstrument> instrument;
@@ -106,15 +114,40 @@ class LayeredInstrument final : public MidiInstrument {
     std::vector<std::shared_ptr<const PreparedMidiSysEx>> children;
   };
 
-  /// Bit per layer, per (channel, note): who took the sounding note.
-  static constexpr size_t kNoteSlots = 16u * 128u;
+  /// A bounded prepared-time ledger entry for one source key identity. A
+  /// retrigger with the same identity merges its layer owners, so one exact
+  /// note-off releases every layer opened by that key without broadcasting an
+  /// unmatched note-off to arbitrary children.
+  struct ActiveNote {
+    bool active = false;
+    uint8_t group = 0;
+    uint8_t channel = 0;
+    uint8_t source_note = 0;
+    uint32_t source_track_id = 0;
+    uint32_t destination_id = 0;
+    uint32_t owners = 0;
+  };
+
+  /// Drop counter that stays with the instance that counted: a move starts the
+  /// destination at zero, so the patch itself remains movable.
+  struct LedgerOverflowCounter : rt::OverflowCounter {
+    LedgerOverflowCounter() = default;
+    LedgerOverflowCounter(LedgerOverflowCounter&&) noexcept {}
+    LedgerOverflowCounter& operator=(LedgerOverflowCounter&&) noexcept { return *this; }
+  };
+
+  static constexpr size_t kNoteLedgerCapacity = 256u;
+  static constexpr size_t kNoNoteLedgerEntry = static_cast<size_t>(-1);
 
   bool covers(const Layer& layer, uint8_t note, uint8_t velocity) const noexcept;
-  /// @p ump with its note number replaced; both protocols store it in the same
-  /// bits of word 0.
-  static Ump retune(const Ump& ump, uint8_t note) noexcept;
-  void send_note(size_t layer_index, const MidiEvent& event, uint8_t note, uint32_t destination_id,
-                 const PreparedLayeredSysEx* prepared) noexcept;
+  /// Retunes the note field and any absolute per-note pitch carried by @p ump.
+  /// Returns false when a layer's transpose would move an absolute pitch out
+  /// of its MIDI range, in which case the layer must receive no event.
+  static bool retune(const Ump& ump, uint8_t note, int transpose, Ump* out) noexcept;
+  bool send_note(size_t layer_index, const MidiEvent& event, uint8_t note, int transpose,
+                 uint32_t destination_id, const PreparedLayeredSysEx* prepared) noexcept;
+  size_t find_note_ledger_entry(uint32_t destination_id, const MidiEvent& event) const noexcept;
+  void retire_note_ledger_channel(uint32_t destination_id, uint8_t group, uint8_t channel) noexcept;
   const PreparedLayeredSysEx* valid_prepared_sysex(
       const PreparedMidiSysEx* prepared) const noexcept;
   void invalidate_prepared_domain() noexcept {
@@ -141,7 +174,8 @@ class LayeredInstrument final : public MidiInstrument {
   }
 
   std::vector<Layer> layers_;
-  std::vector<uint32_t> note_owners_;
+  std::vector<ActiveNote> note_ledger_;
+  LedgerOverflowCounter ledger_overflow_count_;
   /// Per-child render scratch: max_block_size frames for each of two legs.
   std::vector<float> scratch_;
   /// Per-layer source-track render scratch, reused across layers (zero-cleared

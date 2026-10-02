@@ -31,7 +31,10 @@ extern "C" {
 ///   `sonare_engine_seek_sample`, `sonare_engine_seek_ppq`,
 ///   `sonare_engine_set_tempo`, `sonare_engine_set_time_signature`,
 ///   `sonare_engine_set_loop`, `sonare_engine_seek_marker`,
-///   `sonare_engine_set_loop_from_markers`.
+///   `sonare_engine_set_loop_from_markers`. A playback discontinuity (loop
+///   wrap, seek, stop) sends note-offs plus CC64=0, CC121, CC123 and pitch-bend
+///   centre on every channel the sequencer has played since the last reset, so
+///   controller values set before a loop region are not restored at the wrap.
 /// - Live parameter / MIDI: `sonare_engine_set_parameter`,
 ///   `sonare_engine_set_parameter_smoothed`, `sonare_engine_push_midi_cc`,
 ///   `sonare_engine_push_midi_panic`.
@@ -1476,7 +1479,10 @@ SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, cons
 /// @details A destination marked external bypasses the internal instrument rack:
 ///   its sequenced events are buffered in the engine's external-MIDI output queue
 ///   for the host to drain with @ref sonare_engine_drain_external_midi and deliver
-///   to an external device. Control-thread only. @p external != 0 marks, 0 clears.
+///   to an external device. Control-thread only. The change takes effect at the
+///   next processed block; switching a destination's route first releases its
+///   notes and resets its controllers through the old route, and drops its pending
+///   MIDI-FX events. Single writer. @p external != 0 marks, 0 clears.
 ///   At most 16 destinations can be external at once; marking a 17th distinct
 ///   destination returns @ref SONARE_ERROR_INVALID_PARAMETER instead of silently
 ///   routing it to the internal rack.

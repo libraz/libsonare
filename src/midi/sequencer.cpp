@@ -1,6 +1,7 @@
 #include "midi/sequencer.h"
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <utility>
 
@@ -8,6 +9,35 @@
 #include "util/exception.h"
 
 namespace sonare::midi {
+
+namespace {
+
+bool is_midi_channel_voice(const Ump& ump) noexcept {
+  return ump.message_type() == UmpMessageType::kMidi1ChannelVoice ||
+         ump.message_type() == UmpMessageType::kMidi2ChannelVoice;
+}
+
+bool is_channel_mode_reset(const Ump& ump) noexcept {
+  if (!is_midi_channel_voice(ump) ||
+      ump.status_nibble() != static_cast<uint8_t>(UmpStatus::kControlChange)) {
+    return false;
+  }
+  const uint8_t controller = ump.note_number();
+  return controller == 120 || (controller >= 123 && controller <= 127);
+}
+
+int64_t saturating_clip_end(const MidiClipSchedule& clip) noexcept {
+  if (clip.length_samples <= 0) return std::numeric_limits<int64_t>::max();
+  const int64_t max = std::numeric_limits<int64_t>::max();
+  if (clip.start_sample > max - clip.length_samples) return max;
+  return clip.start_sample + clip.length_samples;
+}
+
+bool clip_contains_frame(const MidiClipSchedule& clip, int64_t frame) noexcept {
+  return frame >= clip.start_sample && frame < saturating_clip_end(clip);
+}
+
+}  // namespace
 
 void MidiSequencer::prepare(double sample_rate) {
   // Allocated once before any state changes, so a failure leaves the sequencer intact.
@@ -22,6 +52,14 @@ void MidiSequencer::prepare(double sample_rate) {
 void MidiSequencer::reset() noexcept {
   active_count_ = 0;
   pending_fx_count_ = 0;
+  if (runtime_storage_ != nullptr) {
+    for (DestinationFx& fx : runtime_storage_->midi_fx) {
+      fx.chain.reset();
+      fx.buffer.clear();
+      fx.next_input_ordinal = 0;
+    }
+  }
+  for (RetainedChannelState& state : retained_channels_) state = RetainedChannelState{};
   last_clips_ = nullptr;
   last_midi_fx_snapshot_ = nullptr;
   dispatched_event_count_.store(0, std::memory_order_relaxed);
@@ -91,12 +129,58 @@ void MidiSequencer::track_note_off(uint8_t group, uint8_t channel, uint8_t note,
         --active_count_;
         return;
       }
-      if (fallback == kMaxActiveNotes) fallback = i;
+      // Fallback match only within the same source track; never steal another track's note.
+      if (active_[i].source_track_id == source_track_id && fallback == kMaxActiveNotes) {
+        fallback = i;
+      }
     }
   }
   if (fallback != kMaxActiveNotes) {
     active_[fallback] = active_[active_count_ - 1];
     --active_count_;
+  }
+}
+
+bool MidiSequencer::retain_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel,
+                                         bool* inserted) noexcept {
+  if (inserted != nullptr) *inserted = false;
+  for (const RetainedChannelState& state : retained_channels_) {
+    if (state.active && state.destination_id == destination_id && state.group == group &&
+        state.channel == channel) {
+      return true;
+    }
+  }
+  for (RetainedChannelState& state : retained_channels_) {
+    if (state.active) continue;
+    state.active = true;
+    state.destination_id = destination_id;
+    state.group = group;
+    state.channel = channel;
+    if (inserted != nullptr) *inserted = true;
+    return true;
+  }
+  retained_channel_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+  return false;
+}
+
+void MidiSequencer::release_retained_channel_state(uint32_t destination_id, uint8_t group,
+                                                   uint8_t channel, bool inserted) noexcept {
+  if (!inserted) return;
+  for (RetainedChannelState& state : retained_channels_) {
+    if (!state.active || state.destination_id != destination_id || state.group != group ||
+        state.channel != channel) {
+      continue;
+    }
+    state = RetainedChannelState{};
+    return;
+  }
+}
+
+void MidiSequencer::clear_retained_channel_states(bool single_destination,
+                                                  uint32_t destination_id) noexcept {
+  for (RetainedChannelState& state : retained_channels_) {
+    if (!state.active || (single_destination && state.destination_id != destination_id)) continue;
+    state = RetainedChannelState{};
   }
 }
 
@@ -184,9 +268,11 @@ void MidiSequencer::acquire_midi_fx(int64_t render_frame) noexcept {
   if (snapshot == last_midi_fx_snapshot_) return;
 
   // Flush every live destination whose exact configuration generation is not
-  // present in the new snapshot. This runs on the audio thread, so sink calls
-  // are correctly ordered before the replacement becomes visible.
-  for (const DestinationFx& live : runtime_storage_->midi_fx) {
+  // present in the new snapshot. Unchanged destinations stay in place so their
+  // pending note timings and input ordinals survive an unrelated destination
+  // edit. This runs on the audio thread, so sink calls are correctly ordered
+  // before the replacement becomes visible.
+  for (DestinationFx& live : runtime_storage_->midi_fx) {
     if (!live.active) continue;
     bool unchanged = false;
     if (snapshot != nullptr) {
@@ -198,32 +284,49 @@ void MidiSequencer::acquire_midi_fx(int64_t render_frame) noexcept {
         }
       }
     }
-    if (!unchanged) all_notes_off_for_destination(live.destination_id, render_frame);
-  }
-
-  for (DestinationFx& live : runtime_storage_->midi_fx) {
+    if (unchanged) continue;
+    all_notes_off_for_destination(live.destination_id, render_frame);
+    live.chain.reset();
     live.active = false;
     live.destination_id = 0;
     live.generation = 0;
     live.buffer.clear();
     live.next_input_ordinal = 0;
   }
+
   if (snapshot != nullptr) {
-    for (size_t i = 0; i < snapshot->destinations.size(); ++i) {
-      const DestinationFxConfig& config = snapshot->destinations[i];
+    for (const DestinationFxConfig& config : snapshot->destinations) {
       if (!config.active) continue;
-      DestinationFx& live = runtime_storage_->midi_fx[i];
-      live.active = true;
-      live.destination_id = config.destination_id;
-      live.generation = config.generation;
-      live.chain.set_transpose(config.transpose);
-      live.chain.set_quantize(config.quantize);
-      live.chain.set_velocity_curve(config.velocity);
-      live.chain.set_chord(config.chord);
-      live.chain.set_arpeggiator(config.arpeggiator);
-      live.chain.set_humanize(config.humanize);
-      live.chain.prepare();
-      live.next_input_ordinal = 0;
+
+      DestinationFx* live = nullptr;
+      for (DestinationFx& candidate : runtime_storage_->midi_fx) {
+        if (candidate.active && candidate.destination_id == config.destination_id &&
+            candidate.generation == config.generation) {
+          live = &candidate;
+          break;
+        }
+      }
+      if (live != nullptr) continue;
+
+      for (DestinationFx& candidate : runtime_storage_->midi_fx) {
+        if (!candidate.active) {
+          live = &candidate;
+          break;
+        }
+      }
+      if (live == nullptr) continue;
+      live->active = true;
+      live->destination_id = config.destination_id;
+      live->generation = config.generation;
+      live->chain.set_transpose(config.transpose);
+      live->chain.set_quantize(config.quantize);
+      live->chain.set_velocity_curve(config.velocity);
+      live->chain.set_chord(config.chord);
+      live->chain.set_arpeggiator(config.arpeggiator);
+      live->chain.set_humanize(config.humanize);
+      live->chain.prepare();
+      live->buffer.clear();
+      live->next_input_ordinal = 0;
     }
   }
   last_midi_fx_snapshot_ = snapshot;
@@ -236,16 +339,90 @@ void MidiSequencer::dispatch(uint32_t destination_id, const MidiEvent& event) no
   }
 }
 
+void MidiSequencer::clear_active_notes_for_channel(uint32_t destination_id, uint8_t group,
+                                                   uint8_t channel) noexcept {
+  size_t i = 0;
+  while (i < active_count_) {
+    if (active_[i].destination_id != destination_id || active_[i].group != group ||
+        active_[i].channel != channel) {
+      ++i;
+      continue;
+    }
+    active_[i] = active_[active_count_ - 1];
+    --active_count_;
+  }
+}
+
+void MidiSequencer::clear_note_tracking_for_event(uint32_t destination_id, const MidiEvent& event,
+                                                  bool from_clip, uint32_t clip_id) noexcept {
+  if (!is_midi_channel_voice(event.ump) || (!event.ump.is_note_on() && !event.ump.is_note_off())) {
+    return;
+  }
+  DestinationFx* fx = find_midi_fx(destination_id);
+  if (fx != nullptr) {
+    fx->chain.clear_note_tracking(event.ump.group, event.ump.channel(), event.ump.note_number(),
+                                  event.source_track_id, from_clip, clip_id);
+  }
+}
+
+void MidiSequencer::clear_pending_note_tracking_for_event(const PendingFxEvent& pending) noexcept {
+  DestinationFx* fx = find_midi_fx(pending.destination_id);
+  if (fx != nullptr) {
+    fx->chain.clear_pending_note_tracking(pending.event, pending.from_clip, pending.clip_id);
+  }
+}
+
+void MidiSequencer::clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,
+                                                          uint8_t channel) noexcept {
+  if (runtime_storage_ == nullptr) return;
+  size_t i = 0;
+  while (i < pending_fx_count_) {
+    const PendingFxEvent& pending = runtime_storage_->pending_fx[i];
+    if (pending.destination_id != destination_id || pending.event.ump.group != group ||
+        pending.event.ump.channel() != channel || !is_midi_channel_voice(pending.event.ump) ||
+        (!pending.event.ump.is_note_on() && !pending.event.ump.is_note_off())) {
+      ++i;
+      continue;
+    }
+    clear_pending_note_tracking_for_event(pending);
+    runtime_storage_->pending_fx[i] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
+    --pending_fx_count_;
+  }
+}
+
+void MidiSequencer::retire_channel_mode_reset(uint32_t destination_id, uint8_t group,
+                                              uint8_t channel) noexcept {
+  clear_active_notes_for_channel(destination_id, group, channel);
+  clear_pending_note_events_for_channel(destination_id, group, channel);
+  DestinationFx* fx = find_midi_fx(destination_id);
+  if (fx != nullptr) fx->chain.clear_note_tracking(group, channel);
+  // Keep retained_channels_: a later seek, stop or route change still owes the full reset.
+}
+
 void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEvent& event,
                                          bool from_clip, uint32_t clip_id) noexcept {
+  const bool channel_voice = is_midi_channel_voice(event.ump);
+  const bool semantic_note_off = channel_voice && event.ump.is_note_off();
+  bool inserted_channel_state = false;
+  if (channel_voice && !semantic_note_off &&
+      !retain_channel_state(destination_id, event.ump.group, event.ump.channel(),
+                            &inserted_channel_state)) {
+    // Ledger full: forwarding would leave a channel no later reset can reach.
+    return;
+  }
   if (event.ump.is_note_on()) {
     if (!track_note_on(event.ump.group, event.ump.channel(), event.ump.note_number(),
                        destination_id, event.source_track_id, from_clip, clip_id)) {
+      release_retained_channel_state(destination_id, event.ump.group, event.ump.channel(),
+                                     inserted_channel_state);
       return;
     }
   } else if (event.ump.is_note_off()) {
     track_note_off(event.ump.group, event.ump.channel(), event.ump.note_number(), destination_id,
                    event.source_track_id, from_clip, clip_id);
+  }
+  if (is_channel_mode_reset(event.ump)) {
+    retire_channel_mode_reset(destination_id, event.ump.group, event.ump.channel());
   }
   dispatch(destination_id, event);
 }
@@ -278,6 +455,9 @@ void MidiSequencer::dispatch_pending_through(int64_t block_start_frame, int64_t 
     if (selected == pending_fx_count_) return;
 
     PendingFxEvent pending = runtime_storage_->pending_fx[selected];
+    // Remove before dispatch: a channel-mode reset may clear other pending slots.
+    runtime_storage_->pending_fx[selected] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
+    --pending_fx_count_;
     // An event carried over from an earlier block still holds that block's
     // render_frame; clamp it to the current block start so sample-accurate
     // consumers never see a timestamp in the past. (BuiltinSynth ignores the
@@ -286,8 +466,6 @@ void MidiSequencer::dispatch_pending_through(int64_t block_start_frame, int64_t 
       pending.event.render_frame = block_start_frame;
     }
     dispatch_transformed(pending.destination_id, pending.event, pending.from_clip, pending.clip_id);
-    runtime_storage_->pending_fx[selected] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
-    --pending_fx_count_;
   }
 }
 
@@ -299,6 +477,7 @@ void MidiSequencer::clear_pending_for_destination(uint32_t destination_id) noexc
       ++i;
       continue;
     }
+    clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[i]);
     runtime_storage_->pending_fx[i] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
     --pending_fx_count_;
   }
@@ -313,6 +492,7 @@ void MidiSequencer::clear_pending_for_clip(uint32_t clip_id) noexcept {
       ++i;
       continue;
     }
+    clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[i]);
     runtime_storage_->pending_fx[i] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
     --pending_fx_count_;
   }
@@ -331,6 +511,7 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_fram
     off.render_frame = render_frame;
     off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
     off.source_track_id = note.source_track_id;
+    clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.clip_id);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
@@ -342,16 +523,21 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_fram
 
 void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSchedule>* clips,
                                                    int64_t render_frame) noexcept {
-  const auto present = [clips](uint32_t clip_id) noexcept -> bool {
+  const auto present = [clips](uint32_t clip_id, uint32_t destination_id, uint32_t source_track_id,
+                               int64_t frame) noexcept -> bool {
     if (clips == nullptr) return false;
     for (const MidiClipSchedule& c : *clips) {
-      if (c.id == clip_id) return true;
+      if (c.id == clip_id && c.destination_id == destination_id && c.track_id == source_track_id &&
+          clip_contains_frame(c, frame)) {
+        return true;
+      }
     }
     return false;
   };
   size_t i = 0;
   while (i < active_count_) {
-    if (!active_[i].from_clip || present(active_[i].clip_id)) {
+    if (!active_[i].from_clip || present(active_[i].clip_id, active_[i].destination_id,
+                                         active_[i].source_track_id, render_frame)) {
       ++i;
       continue;
     }
@@ -360,6 +546,7 @@ void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSch
     off.render_frame = render_frame;
     off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
     off.source_track_id = note.source_track_id;
+    clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.clip_id);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
@@ -368,10 +555,14 @@ void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSch
   if (runtime_storage_ == nullptr) return;
   while (p < pending_fx_count_) {
     if (!runtime_storage_->pending_fx[p].from_clip ||
-        present(runtime_storage_->pending_fx[p].clip_id)) {
+        present(runtime_storage_->pending_fx[p].clip_id,
+                runtime_storage_->pending_fx[p].destination_id,
+                runtime_storage_->pending_fx[p].event.source_track_id,
+                runtime_storage_->pending_fx[p].event.render_frame)) {
       ++p;
       continue;
     }
+    clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[p]);
     runtime_storage_->pending_fx[p] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
     --pending_fx_count_;
   }
@@ -390,7 +581,7 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
     dispatch_transformed(destination_id, event, from_clip, clip_id);
     return;
   }
-  fx->chain.process_chunk(&event, 1, fx->next_input_ordinal++, &fx->buffer);
+  fx->chain.process_chunk(&event, 1, fx->next_input_ordinal++, &fx->buffer, from_clip, clip_id);
   for (size_t i = 0; i < fx->buffer.size; ++i) {
     const MidiEvent& transformed = fx->buffer.events[i];
     // Generated future events must rejoin the sequencer's chronological merge
@@ -556,20 +747,12 @@ void MidiSequencer::emit_controller_reset(uint32_t destination_id, uint8_t group
 
 void MidiSequencer::emit_active_controller_resets(bool single_destination, uint32_t destination_id,
                                                   int64_t render_frame) noexcept {
-  for (size_t i = 0; i < active_count_; ++i) {
-    const ActiveNote& note = active_[i];
-    if (single_destination && note.destination_id != destination_id) continue;
-    // Reset each channel once: skip if an earlier slot already covered this
-    // (destination, group, channel) triple.
-    bool seen = false;
-    for (size_t j = 0; j < i; ++j) {
-      if (active_[j].destination_id == note.destination_id && active_[j].group == note.group &&
-          active_[j].channel == note.channel) {
-        seen = true;
-        break;
-      }
+  // The retained table outlives note-offs, so it covers sounding and released channels alike.
+  for (const RetainedChannelState& state : retained_channels_) {
+    if (!state.active || (single_destination && state.destination_id != destination_id)) {
+      continue;
     }
-    if (!seen) emit_controller_reset(note.destination_id, note.group, note.channel, render_frame);
+    emit_controller_reset(state.destination_id, state.group, state.channel, render_frame);
   }
 }
 
@@ -590,6 +773,12 @@ void MidiSequencer::all_notes_off(int64_t render_frame) noexcept {
   emit_active_controller_resets(/*single_destination=*/false, 0, render_frame);
   active_count_ = 0;
   pending_fx_count_ = 0;
+  if (runtime_storage_ != nullptr) {
+    for (DestinationFx& fx : runtime_storage_->midi_fx) {
+      if (fx.active) fx.chain.clear_note_tracking();
+    }
+  }
+  clear_retained_channel_states(/*single_destination=*/false, 0);
 }
 
 void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
@@ -619,6 +808,10 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
     dispatch(destination_id, off);
   }
   clear_pending_for_destination(destination_id);
+  if (DestinationFx* fx = find_midi_fx(destination_id); fx != nullptr) {
+    fx->chain.clear_note_tracking();
+  }
+  clear_retained_channel_states(/*single_destination=*/true, destination_id);
 }
 
 void MidiSequencer::inject_event(uint32_t destination_id, int64_t render_frame,

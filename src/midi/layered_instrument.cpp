@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <limits>
 #include <new>
 
 #include "midi/channel_voice_decode.h"
@@ -21,6 +22,27 @@ uint8_t velocity7(const Ump& u) noexcept {
   ChannelVoiceEvent ev;
   if (!decode_channel_voice(u, &ev)) return 0;
   return ev.velocity.u7();
+}
+
+bool is_note_addressed(ChannelVoiceKind kind) noexcept {
+  switch (kind) {
+    case ChannelVoiceKind::PolyPressure:
+    case ChannelVoiceKind::RegisteredPerNote:
+    case ChannelVoiceKind::AssignablePerNote:
+    case ChannelVoiceKind::PerNotePitchBend:
+    case ChannelVoiceKind::PerNoteManagement:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool transpose_note(uint8_t source_note, int transpose, uint8_t* out) noexcept {
+  if (out == nullptr) return false;
+  const int64_t result = static_cast<int64_t>(source_note) + static_cast<int64_t>(transpose);
+  if (result < 0 || result > 127) return false;
+  *out = static_cast<uint8_t>(result);
+  return true;
 }
 
 }  // namespace
@@ -63,7 +85,7 @@ void LayeredInstrument::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = std::max(0, max_block_size);
   scratch_.assign(static_cast<size_t>(max_block_size_) * 2u, 0.0f);
   source_scratch_.assign(kMaxResidualSources * 2u * static_cast<size_t>(max_block_size_), 0.0f);
-  note_owners_.assign(kNoteSlots, 0u);
+  note_ledger_.assign(kNoteLedgerCapacity, ActiveNote{});
   if (prepared_identity_.get() == nullptr) {
     prepared_identity_ = std::make_shared<const PreparedLayeredSysExIdentity>();
   }
@@ -73,7 +95,7 @@ void LayeredInstrument::prepare(double sample_rate, int max_block_size) {
 
 void LayeredInstrument::reset() {
   for (Layer& layer : layers_) layer.instrument->reset();
-  std::fill(note_owners_.begin(), note_owners_.end(), 0u);
+  std::fill(note_ledger_.begin(), note_ledger_.end(), ActiveNote{});
 }
 
 bool LayeredInstrument::covers(const Layer& layer, uint8_t note, uint8_t velocity) const noexcept {
@@ -81,21 +103,66 @@ bool LayeredInstrument::covers(const Layer& layer, uint8_t note, uint8_t velocit
   return note >= s.key_lo && note <= s.key_hi && velocity >= s.vel_lo && velocity <= s.vel_hi;
 }
 
-Ump LayeredInstrument::retune(const Ump& ump, uint8_t note) noexcept {
-  Ump out = ump;
-  out.words[0] = (out.words[0] & ~(0x7Fu << 8)) | (static_cast<uint32_t>(note & 0x7Fu) << 8);
-  return out;
+bool LayeredInstrument::retune(const Ump& ump, uint8_t note, int transpose, Ump* out) noexcept {
+  if (out == nullptr) return false;
+  Ump copy = ump;
+  copy.words[0] = (copy.words[0] & ~(0x7Fu << 8)) | (static_cast<uint32_t>(note & 0x7Fu) << 8);
+
+  if (copy.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+    const uint8_t status = copy.status_nibble();
+    if (status == 0x9u && note_attribute_type(copy) == 3u) {
+      const int64_t pitch =
+          static_cast<int64_t>(note_attribute_data(copy)) + static_cast<int64_t>(transpose) * 512;
+      if (pitch < 0 || pitch > std::numeric_limits<uint16_t>::max()) return false;
+      copy.words[1] = (copy.words[1] & ~uint32_t{0xFFFFu}) | static_cast<uint32_t>(pitch);
+    } else if (status == 0x0u && (copy.words[0] & 0xFFu) == 3u) {
+      const int64_t pitch = static_cast<int64_t>(copy.words[1]) +
+                            static_cast<int64_t>(transpose) * (int64_t{1} << 25);
+      if (pitch < 0 || pitch > std::numeric_limits<uint32_t>::max()) return false;
+      copy.words[1] = static_cast<uint32_t>(pitch);
+    }
+  }
+  *out = copy;
+  return true;
 }
 
-void LayeredInstrument::send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
-                                  uint32_t destination_id,
+bool LayeredInstrument::send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
+                                  int transpose, uint32_t destination_id,
                                   const PreparedLayeredSysEx* prepared) noexcept {
   MidiEvent copy = event;
-  copy.ump = retune(event.ump, note);
+  if (!retune(event.ump, note, transpose, &copy.ump)) return false;
   if (prepared != nullptr) {
     copy.prepared_sysex = prepared->children[layer_index].get();
   }
   layers_[layer_index].instrument->on_event(destination_id, copy);
+  return true;
+}
+
+size_t LayeredInstrument::find_note_ledger_entry(uint32_t destination_id,
+                                                 const MidiEvent& event) const noexcept {
+  const Ump& ump = event.ump;
+  const uint8_t group = ump_group_from_word0(ump.words[0]);
+  const uint8_t channel = ump.channel();
+  const uint8_t source_note = ump.note_number();
+  for (size_t i = 0; i < note_ledger_.size(); ++i) {
+    const ActiveNote& note = note_ledger_[i];
+    if (note.active && note.group == group && note.channel == channel &&
+        note.source_note == source_note && note.source_track_id == event.source_track_id &&
+        note.destination_id == destination_id) {
+      return i;
+    }
+  }
+  return kNoNoteLedgerEntry;
+}
+
+void LayeredInstrument::retire_note_ledger_channel(uint32_t destination_id, uint8_t group,
+                                                   uint8_t channel) noexcept {
+  for (ActiveNote& note : note_ledger_) {
+    if (note.active && note.destination_id == destination_id && note.group == group &&
+        note.channel == channel) {
+      note = ActiveNote{};
+    }
+  }
 }
 
 const LayeredInstrument::PreparedLayeredSysEx* LayeredInstrument::valid_prepared_sysex(
@@ -119,7 +186,24 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
   const Ump& u = event.ump;
   const bool note_on = u.is_note_on();
   const bool note_off = u.is_note_off();
+  ChannelVoiceEvent decoded;
+  const bool is_channel_voice = decode_channel_voice(u, &decoded);
   if (!note_on && !note_off) {
+    if (is_channel_voice && decoded.kind == ChannelVoiceKind::ControlChange &&
+        (decoded.note == 120u || (decoded.note >= 123u && decoded.note <= 125u))) {
+      retire_note_ledger_channel(destination_id, ump_group_from_word0(u.words[0]), u.channel());
+    }
+    if (is_channel_voice && is_note_addressed(decoded.kind)) {
+      const uint8_t source_note = decoded.note;
+      for (size_t i = 0; i < layers_.size(); ++i) {
+        const Layer& layer = layers_[i];
+        if (source_note < layer.spec.key_lo || source_note > layer.spec.key_hi) continue;
+        uint8_t transposed = 0;
+        if (!transpose_note(source_note, layer.spec.transpose, &transposed)) continue;
+        send_note(i, event, transposed, layer.spec.transpose, destination_id, nullptr);
+      }
+      return;
+    }
     if (prepared == nullptr) {
       // Unprepared events broadcast unchanged, including borrowed SysEx views.
       for (Layer& layer : layers_) layer.instrument->on_event(destination_id, event);
@@ -136,34 +220,62 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
     return;
   }
 
-  const uint8_t note = u.note_number();
-  const size_t slot = static_cast<size_t>(u.channel()) * 128u + note;
-  if (slot >= note_owners_.size()) return;
-
   if (note_on) {
+    const uint8_t note = u.note_number();
     const uint8_t vel = velocity7(u);
+    size_t entry = find_note_ledger_entry(destination_id, event);
+    if (entry == kNoNoteLedgerEntry) {
+      for (size_t i = 0; i < note_ledger_.size(); ++i) {
+        if (!note_ledger_[i].active) {
+          entry = i;
+          break;
+        }
+      }
+      // Full ledger: drop and count a new identity; an existing one stays retriggerable.
+      if (entry == kNoNoteLedgerEntry) {
+        ledger_overflow_count_.bump();
+        return;
+      }
+    }
+
     uint32_t owners = 0;
     for (size_t i = 0; i < layers_.size(); ++i) {
       if (!covers(layers_[i], note, vel)) continue;
-      const int transposed = static_cast<int>(note) + layers_[i].spec.transpose;
-      if (transposed < 0 || transposed > 127) continue;
-      owners |= 1u << i;
-      send_note(i, event, static_cast<uint8_t>(transposed), destination_id, prepared);
+      uint8_t transposed = 0;
+      if (!transpose_note(note, layers_[i].spec.transpose, &transposed)) continue;
+      if (send_note(i, event, transposed, layers_[i].spec.transpose, destination_id, prepared)) {
+        owners |= 1u << i;
+      }
     }
-    // A retrigger before the note-off replaces the owner set; the layers that
-    // held the previous strike are exactly the ones that just received a
-    // second note-on, which each resolves in its own voice pool.
-    note_owners_[slot] = owners;
+    if (owners == 0) return;
+
+    ActiveNote& active = note_ledger_[entry];
+    if (!active.active) {
+      active.active = true;
+      active.group = ump_group_from_word0(u.words[0]);
+      active.channel = u.channel();
+      active.source_note = note;
+      active.source_track_id = event.source_track_id;
+      active.destination_id = destination_id;
+      active.owners = owners;
+    } else {
+      // A retrigger may open another velocity split; keep every owner until note-off.
+      active.owners |= owners;
+    }
     return;
   }
 
-  const uint32_t owners = note_owners_[slot];
-  note_owners_[slot] = 0;
+  const size_t entry = find_note_ledger_entry(destination_id, event);
+  if (entry == kNoNoteLedgerEntry) return;
+  const ActiveNote active = note_ledger_[entry];
+  note_ledger_[entry] = ActiveNote{};
+  const uint32_t owners = active.owners;
+  const uint8_t note = u.note_number();
   for (size_t i = 0; i < layers_.size(); ++i) {
     if ((owners & (1u << i)) == 0) continue;
-    const int transposed = static_cast<int>(note) + layers_[i].spec.transpose;
-    if (transposed < 0 || transposed > 127) continue;
-    send_note(i, event, static_cast<uint8_t>(transposed), destination_id, prepared);
+    uint8_t transposed = 0;
+    if (!transpose_note(note, layers_[i].spec.transpose, &transposed)) continue;
+    send_note(i, event, transposed, layers_[i].spec.transpose, destination_id, prepared);
   }
 }
 

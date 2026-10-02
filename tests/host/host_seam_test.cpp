@@ -10,8 +10,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -20,6 +22,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "engine/realtime_engine.h"
@@ -34,6 +37,7 @@
 #include "midi/sequencer.h"
 #include "midi/ump.h"
 #include "rt/command.h"
+#include "support/alloc_guard.h"
 
 namespace {
 
@@ -1049,6 +1053,175 @@ TEST_CASE("fixed MIDI input retains absolute future-frame events", "[host]") {
   REQUIRE(input.drain_block(drained.data(), drained.size(), 2016, 16) == 1);
   REQUIRE(drained[0].render_frame == 2020);
   REQUIRE(input.pending_count() == 0);
+}
+
+TEST_CASE("fixed MIDI input drains due events behind future timestamps", "[host]") {
+  FixedMidiInputSource<4> input;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  const auto off = sonare::midi::make_midi1_note_off(0, 0, 60, 0);
+  REQUIRE(input.push_event_at_render_frame(on, 2020));
+  REQUIRE(input.push_event_at_render_frame(off, 2010));
+  REQUIRE(input.push_event(off, 5));
+  std::array<MidiEvent, 4> out{};
+  size_t drained = 0;
+  size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    drained = input.drain_block(out.data(), out.size(), 2000, 16);
+    allocations = guard.count();
+  }
+  REQUIRE(drained == 2);
+  CHECK(allocations == 0);
+  CHECK(out[0].render_frame == 2005);
+  CHECK(out[1].render_frame == 2010);
+  CHECK(out[0].ump.is_note_off());
+  CHECK(out[1].ump.is_note_off());
+  CHECK(input.pending_count() == 1);
+  REQUIRE(input.drain_block(out.data(), out.size(), 2016, 16) == 1);
+  CHECK(out[0].render_frame == 2020);
+  CHECK(input.pending_count() == 0);
+}
+
+TEST_CASE("deferred MIDI input keeps capacity and lifecycle semantics", "[host]") {
+  FixedMidiInputSource<2> input;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  REQUIRE(input.push_event_at_render_frame(on, 3000));
+  REQUIRE(input.push_event_at_render_frame(on, 4000));
+  std::array<MidiEvent, 2> out{};
+  REQUIRE(input.drain_block(out.data(), out.size(), 2000, 16) == 0);
+  CHECK(input.pending_count() == 2);
+  CHECK_FALSE(input.push_event(on, 0));
+  CHECK(input.dropped_count() == 1);
+  REQUIRE(input.drain(out.data(), 1, 2000) == 1);
+  CHECK(out[0].render_frame == 3000);
+  CHECK(input.pending_count() == 1);
+  REQUIRE(input.push_event(on, 2));
+  REQUIRE(input.drain_block(out.data(), out.size(), 2000, 16) == 1);
+  CHECK(out[0].render_frame == 2002);
+  CHECK(input.pending_count() == 1);
+  input.clear();
+  CHECK(input.pending_count() == 0);
+  CHECK(input.drain(out.data(), out.size(), 2000) == 0);
+}
+
+TEST_CASE("cleared MIDI input drops deferred events and keeps accepting", "[host]") {
+  FixedMidiInputSource<4> input;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  REQUIRE(input.push_event_at_render_frame(on, 9000));
+  REQUIRE(input.push_event_at_render_frame(on, 9100));
+  std::array<MidiEvent, 4> out{};
+  REQUIRE(input.drain_block(out.data(), out.size(), 2000, 16) == 0);
+  REQUIRE(input.pending_count() == 2);
+  input.clear();
+  CHECK(input.pending_count() == 0);
+  for (int i = 0; i < 4; ++i) REQUIRE(input.push_event(on, i));
+  CHECK(input.pending_count() == 4);
+  CHECK_FALSE(input.push_event(on, 0));
+  REQUIRE(input.drain_block(out.data(), out.size(), 20000, 16) == 4);
+  CHECK(input.pending_count() == 0);
+  REQUIRE(input.drain_block(out.data(), out.size(), 20016, 16) == 0);
+}
+
+TEST_CASE("MIDI input clear racing a drain never corrupts the pending count", "[host]") {
+  FixedMidiInputSource<8> input;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  std::atomic<bool> stop{false};
+  std::atomic<int64_t> block{0};
+  std::thread consumer([&] {
+    std::array<MidiEvent, 8> out{};
+    while (!stop.load(std::memory_order_relaxed)) {
+      const int64_t start = block.fetch_add(16, std::memory_order_relaxed);
+      input.drain_block(out.data(), out.size(), start, 16);
+    }
+  });
+  std::thread clearer([&] {
+    while (!stop.load(std::memory_order_relaxed)) input.clear();
+  });
+  bool corrupted = false;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+  for (int i = 0; std::chrono::steady_clock::now() < deadline; ++i) {
+    const int64_t now = block.load(std::memory_order_relaxed);
+    if ((i & 1) != 0) {
+      input.push_event_at_render_frame(on, now + 64);
+    } else {
+      input.push_event(on, 0);
+    }
+    if (input.pending_count() > 8) {
+      corrupted = true;
+      break;
+    }
+  }
+  stop.store(true);
+  consumer.join();
+  clearer.join();
+  CHECK_FALSE(corrupted);
+  std::array<MidiEvent, 8> out{};
+  int drains = 0;
+  do {
+    input.drain_block(out.data(), out.size(), block.fetch_add(1 << 20), 1 << 20);
+  } while (++drains < 64 && input.pending_count() != 0);
+  CHECK(input.pending_count() == 0);
+  REQUIRE(input.push_event(on, 0));
+  CHECK(input.pending_count() == 1);
+}
+
+TEST_CASE("fixed MIDI input saturates relative timestamps instead of wrapping", "[host]") {
+  FixedMidiInputSource<2> input;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
+  REQUIRE(input.push_event(on, kMaxFrame));
+
+  std::array<MidiEvent, 2> out{};
+  size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    REQUIRE(input.drain(out.data(), out.size(), 100) == 1);
+    allocations = guard.count();
+  }
+  CHECK(allocations == 0);
+  CHECK(out[0].render_frame == kMaxFrame);
+}
+
+TEST_CASE("fixed MIDI input handles a block whose end saturates at INT64_MAX", "[host]") {
+  FixedMidiInputSource<4> input;
+  const auto low = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  const auto high = sonare::midi::make_midi1_note_on(0, 0, 62, 100);
+  const auto absolute = sonare::midi::make_midi1_note_on(0, 0, 64, 100);
+  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
+  constexpr int64_t kBlockStart = kMaxFrame - 4;
+  REQUIRE(input.push_event(low, 3));
+  REQUIRE(input.push_event(high, 100));
+  REQUIRE(input.push_event_at_render_frame(absolute, kMaxFrame));
+
+  std::array<MidiEvent, 4> out{};
+  size_t allocations = 0;
+  size_t drained = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    drained = input.drain_block(out.data(), out.size(), kBlockStart, 16);
+    allocations = guard.count();
+  }
+  REQUIRE(drained == 3);
+  CHECK(allocations == 0);
+  CHECK(out[0].render_frame == kMaxFrame - 1);
+  CHECK(out[1].render_frame == kMaxFrame);
+  CHECK(out[2].render_frame == kMaxFrame);
+  CHECK(out[0].ump.note_number() == 60);
+  CHECK(out[1].ump.note_number() == 62);
+  CHECK(out[2].ump.note_number() == 64);
+  CHECK(input.pending_count() == 0);
+}
+
+TEST_CASE("base MIDI input drain_block also treats a saturated end as due", "[host]") {
+  MockMidiInput input;
+  const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
+  REQUIRE(input.push_event(on, 4));
+
+  std::array<MidiEvent, 2> out{};
+  REQUIRE(input.drain_block(out.data(), out.size(), kMaxFrame - 4, 16) == 1);
+  CHECK(out[0].render_frame == kMaxFrame);
+  CHECK(input.pending_count() == 0);
 }
 
 // ===========================================================================

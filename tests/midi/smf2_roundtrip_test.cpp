@@ -3,9 +3,11 @@
 ///        lossless MIDI 2.0 channel-voice preservation, Flex Data meta, and
 ///        malformed-input safety.
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <vector>
@@ -67,6 +69,44 @@ void push_word(std::vector<uint8_t>* bytes, uint32_t w) {
   bytes->push_back(static_cast<uint8_t>((w >> 16) & 0xFFu));
   bytes->push_back(static_cast<uint8_t>((w >> 8) & 0xFFu));
   bytes->push_back(static_cast<uint8_t>(w & 0xFFu));
+}
+
+void push_sysex7_packet(std::vector<uint8_t>* bytes, uint8_t group, uint8_t status,
+                        std::initializer_list<uint8_t> payload) {
+  std::array<uint8_t, 6> data{};
+  size_t count = 0;
+  for (const uint8_t value : payload) {
+    REQUIRE(count < data.size());
+    data[count++] = value;
+  }
+  push_word(bytes, (0x3u << 28) | (static_cast<uint32_t>(group) << 24) |
+                       (static_cast<uint32_t>(status) << 20) |
+                       (static_cast<uint32_t>(count) << 16) |
+                       (static_cast<uint32_t>(data[0]) << 8) | data[1]);
+  push_word(bytes, (static_cast<uint32_t>(data[2]) << 24) | (static_cast<uint32_t>(data[3]) << 16) |
+                       (static_cast<uint32_t>(data[4]) << 8) | data[5]);
+}
+
+void push_sysex8_packet(std::vector<uint8_t>* bytes, uint8_t group, uint8_t stream_id,
+                        uint8_t status, std::initializer_list<uint8_t> payload) {
+  std::array<uint8_t, 13> data{};
+  size_t count = 0;
+  for (const uint8_t value : payload) {
+    REQUIRE(count < data.size());
+    data[count++] = value;
+  }
+  REQUIRE(count + 1u <= 0x0Fu);
+  push_word(bytes, (0x5u << 28) | (static_cast<uint32_t>(group) << 24) |
+                       (static_cast<uint32_t>(status) << 20) |
+                       (static_cast<uint32_t>(count + 1u) << 16) |
+                       (static_cast<uint32_t>(stream_id) << 8) | data[0]);
+  push_word(bytes, (static_cast<uint32_t>(data[1]) << 24) | (static_cast<uint32_t>(data[2]) << 16) |
+                       (static_cast<uint32_t>(data[3]) << 8) | data[4]);
+  push_word(bytes, (static_cast<uint32_t>(data[5]) << 24) | (static_cast<uint32_t>(data[6]) << 16) |
+                       (static_cast<uint32_t>(data[7]) << 8) | data[8]);
+  push_word(bytes, (static_cast<uint32_t>(data[9]) << 24) |
+                       (static_cast<uint32_t>(data[10]) << 16) |
+                       (static_cast<uint32_t>(data[11]) << 8) | data[12]);
 }
 
 uint32_t read_word(const std::vector<uint8_t>& bytes, size_t offset) {
@@ -373,6 +413,80 @@ TEST_CASE("SMF2 imports a SysEx8 data message payload", "[midi][smf2]") {
   const std::vector<uint8_t>* recovered = imported.sysex_store.lookup(events[0].ump.sysex_handle);
   REQUIRE(recovered != nullptr);
   REQUIRE(*recovered == std::vector<uint8_t>{0x11, 0x22, 0x33});
+}
+
+TEST_CASE("SMF2 keeps interleaved SysEx groups, types, and streams independent", "[midi][smf2]") {
+  std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+  // A SysEx7 message on group 0 is interleaved with two SysEx8 streams on
+  // group 1. The packet status alone is insufficient to identify a fragment:
+  // type, group, and SysEx8 stream ID all belong to the pending-message key.
+  push_sysex7_packet(&bytes, 0, 0x1, {0x10});
+  push_sysex8_packet(&bytes, 1, 0x11, 0x1, {0xA0});
+  push_sysex8_packet(&bytes, 1, 0x22, 0x1, {0xB0});
+  push_sysex7_packet(&bytes, 0, 0x3, {0x11});
+  push_sysex8_packet(&bytes, 1, 0x22, 0x3, {0xB1});
+  push_sysex8_packet(&bytes, 1, 0x11, 0x3, {0xA1});
+
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 0);
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  REQUIRE(events.size() == 3);
+
+  const auto* first = imported.sysex_store.lookup(events[0].ump.sysex_handle);
+  const auto* second = imported.sysex_store.lookup(events[1].ump.sysex_handle);
+  const auto* third = imported.sysex_store.lookup(events[2].ump.sysex_handle);
+  REQUIRE(first != nullptr);
+  REQUIRE(second != nullptr);
+  REQUIRE(third != nullptr);
+  CHECK(events[0].ump.group == 0);
+  CHECK(*first == std::vector<uint8_t>{0x10, 0x11});
+  CHECK(events[1].ump.group == 1);
+  CHECK(*second == std::vector<uint8_t>{0xB0, 0xB1});
+  CHECK(events[2].ump.group == 1);
+  CHECK(*third == std::vector<uint8_t>{0xA0, 0xA1});
+}
+
+TEST_CASE("SMF2 counts unfinished interleaved SysEx fragments without corrupting valid data",
+          "[midi][smf2]") {
+  std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+  push_sysex7_packet(&bytes, 0, 0x1, {0x10});
+  push_sysex8_packet(&bytes, 1, 0x33, 0x0, {0xA0});
+
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 1);
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  REQUIRE(events.size() == 1);
+  REQUIRE(events[0].ump.group == 1);
+  const auto* payload = imported.sysex_store.lookup(events[0].ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  CHECK(*payload == std::vector<uint8_t>{0xA0});
+}
+
+TEST_CASE("SMF2 keeps the same SysEx8 stream ID separate across groups", "[midi][smf2]") {
+  std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+  push_sysex8_packet(&bytes, 0, 0x44, 0x1, {0x10});
+  push_sysex8_packet(&bytes, 1, 0x44, 0x1, {0x20});
+  push_sysex8_packet(&bytes, 0, 0x44, 0x3, {0x11});
+  push_sysex8_packet(&bytes, 1, 0x44, 0x3, {0x21});
+
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 0);
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  REQUIRE(events.size() == 2);
+  REQUIRE(events[0].ump.group == 0);
+  REQUIRE(events[1].ump.group == 1);
+  const auto* group0 = imported.sysex_store.lookup(events[0].ump.sysex_handle);
+  const auto* group1 = imported.sysex_store.lookup(events[1].ump.sysex_handle);
+  REQUIRE(group0 != nullptr);
+  REQUIRE(group1 != nullptr);
+  CHECK(*group0 == std::vector<uint8_t>{0x10, 0x11});
+  CHECK(*group1 == std::vector<uint8_t>{0x20, 0x21});
 }
 
 TEST_CASE("SMF2 exports high-bit SysEx payloads as SysEx8", "[midi][smf2]") {

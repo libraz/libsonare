@@ -349,6 +349,35 @@ void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
   }
 }
 
+void RealtimeEngine::adopt_midi_destination_routes(int64_t render_frame) noexcept {
+  MidiDispatchSink& sink = midi_dispatch_sink_;
+  MidiDispatchSink::ExternalRouteTable requested{};
+  // A torn or in-progress table defers adoption to the next block, never a partial route set.
+  if (!sink.requested_external_routes_reader.try_load_into(&requested)) return;
+  if (sink.active_external_destinations == requested.slots) return;
+
+  const auto contains = [](const auto& table, uint64_t encoded) noexcept {
+    for (const uint64_t slot : table) {
+      if (slot == encoded) return true;
+    }
+    return false;
+  };
+
+  // Flush with the old table still installed so the final messages leave through the old route.
+  for (const uint64_t active : sink.active_external_destinations) {
+    if (active != 0 && !contains(requested.slots, active)) {
+      midi_sequencer_.all_notes_off_for_destination(static_cast<uint32_t>(active), render_frame);
+    }
+  }
+  for (const uint64_t next : requested.slots) {
+    if (next != 0 && !contains(sink.active_external_destinations, next)) {
+      midi_sequencer_.all_notes_off_for_destination(static_cast<uint32_t>(next), render_frame);
+    }
+  }
+
+  sink.active_external_destinations = requested.slots;
+}
+
 bool RealtimeEngine::set_midi_destination_external(uint32_t destination_id,
                                                    bool external) noexcept {
   return midi_dispatch_sink_.set_external(destination_id, external);
@@ -374,14 +403,14 @@ void RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexce
   // arrived on.
   //
   // observe_live_cc is the kind-aware decoder: it accumulates 14-bit MSB/LSB
-  // pairs and RPN/NRPN selector + Data Entry state per channel, so a
+  // pairs and RPN/NRPN selector + Data Entry state per UMP group and channel, so a
   // high-resolution controller drives its parameter at full precision instead of
   // MSB-only 7 bits, and Data Entry resolves against the selector currently
   // addressed on that channel. The cc_number-only lookup_param / value_to_unit
   // pair cannot do either, which is why no live path calls it any more.
   //
   // AUDIO thread: called from apply_command and from dispatch_live_midi_input,
-  // both inside process(). The per-channel accumulator it mutates is owned by
+  // both inside process(). The per UMP group and channel accumulator it mutates is owned by
   // that single thread.
   const midi::CcMap* cc_map = midi_cc_maps_.current();
   if (cc_map == nullptr) return;

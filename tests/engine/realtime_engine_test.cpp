@@ -112,20 +112,39 @@ void fill_signal(std::array<float, N>& left, std::array<float, N>& right) {
 
 class CaptureProcessor final : public sonare::rt::ProcessorBase {
  public:
+  explicit CaptureProcessor(const sonare::transport::Transport* transport = nullptr)
+      : transport_(transport) {}
+
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
   bool set_parameter_impl(unsigned int param_id, float value) override {
     params[static_cast<size_t>(count)] = param_id;
     values[static_cast<size_t>(count)] = value;
+    render_frames[static_cast<size_t>(count)] =
+        transport_ != nullptr ? transport_->render_frame() : -1;
     ++count;
     return true;
   }
 
-  std::array<unsigned int, 8> params{};
-  std::array<float, 8> values{};
+  std::array<unsigned int, 128> params{};
+  std::array<float, 128> values{};
+  std::array<int64_t, 128> render_frames{};
   int count = 0;
+
+ private:
+  const sonare::transport::Transport* transport_ = nullptr;
 };
+
+std::vector<int64_t> parameter_change_frames(const CaptureProcessor& processor) {
+  std::vector<int64_t> frames;
+  for (int i = 1; i < processor.count; ++i) {
+    if (processor.values[static_cast<size_t>(i)] > processor.values[static_cast<size_t>(i - 1)]) {
+      frames.push_back(processor.render_frames[static_cast<size_t>(i)]);
+    }
+  }
+  return frames;
+}
 
 #if defined(SONARE_WITH_MIXING)
 class InsertCommandProbe final : public sonare::rt::ProcessorBase {
@@ -573,6 +592,143 @@ TEST_CASE("RealtimeEngine applies automation at sub-block boundaries", "[engine]
   REQUIRE(processor.values[0] == 0.0f);
   REQUIRE(processor.params[1] == 7);
   REQUIRE(processor.values[1] == 0.5f);
+}
+
+TEST_CASE("RealtimeEngine reapplies automation after every loop wrap in one block",
+          "[engine][realtime]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kLoopSamples = 100;
+  constexpr int kBreakpointSamples = 25;
+  constexpr int kFrames = 350;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSampleRate, kFrames);
+  engine.set_tempo(60.0);
+  engine.set_loop(0.0, static_cast<double>(kLoopSamples) / kSampleRate, true);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kLoopSamples> priming_output{};
+  float* priming_io[] = {priming_output.data()};
+  engine.process(priming_io, 1, kLoopSamples);
+  REQUIRE(engine.transport().playing());
+  REQUIRE(engine.transport().sample_position() == 0);
+  REQUIRE(engine.sample_at_ppq(static_cast<double>(kLoopSamples) / kSampleRate) == kLoopSamples);
+  const int64_t block_render_start = engine.transport().render_frame();
+
+  CaptureProcessor processor(&engine.transport());
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold},
+                   {static_cast<double>(kBreakpointSamples) / kSampleRate, 1.0f,
+                    sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+  engine.automation().bind_target(7, &processor);
+
+  std::array<float, kFrames> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kFrames);
+
+  std::vector<int64_t> changes = parameter_change_frames(processor);
+  for (int64_t& frame : changes) frame -= block_render_start;
+  const std::vector<int64_t> expected{25, 125, 225, 325};
+  REQUIRE(changes == expected);
+}
+
+TEST_CASE("RealtimeEngine repeats loop automation from a mid-loop block start",
+          "[engine][realtime]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kLoopSamples = 100;
+  constexpr int kStartSample = 50;
+  constexpr int kBreakpointSamples = 25;
+  constexpr int kFrames = 350;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSampleRate, kFrames);
+  engine.set_tempo(60.0);
+  engine.set_loop(0.0, static_cast<double>(kLoopSamples) / kSampleRate, true);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kLoopSamples + kStartSample> priming_output{};
+  float* priming_io[] = {priming_output.data()};
+  engine.process(priming_io, 1, kLoopSamples + kStartSample);
+  REQUIRE(engine.transport().playing());
+  REQUIRE(engine.transport().sample_position() == kStartSample);
+  REQUIRE(engine.sample_at_ppq(static_cast<double>(kLoopSamples) / kSampleRate) == kLoopSamples);
+  const int64_t block_render_start = engine.transport().render_frame();
+
+  CaptureProcessor processor(&engine.transport());
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold},
+                   {static_cast<double>(kBreakpointSamples) / kSampleRate, 1.0f,
+                    sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+  engine.automation().bind_target(7, &processor);
+
+  std::array<float, kFrames> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kFrames);
+
+  std::vector<int64_t> changes = parameter_change_frames(processor);
+  for (int64_t& frame : changes) frame -= block_render_start;
+  const std::vector<int64_t> expected{75, 175, 275};
+  REQUIRE(changes == expected);
+}
+
+TEST_CASE("RealtimeEngine keeps automation boundaries correct without multiple wraps",
+          "[engine][realtime]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kLoopSamples = 100;
+  constexpr int kBreakpointSamples = 25;
+
+  auto run = [&](int frames, bool looping) {
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(kSampleRate, frames);
+    engine.set_tempo(60.0);
+    if (looping) {
+      engine.set_loop(0.0, static_cast<double>(kLoopSamples) / kSampleRate, true);
+    }
+
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+
+    const int priming_frames = looping ? kLoopSamples : 1;
+    std::vector<float> priming_output(static_cast<size_t>(priming_frames));
+    float* priming_io[] = {priming_output.data()};
+    engine.process(priming_io, 1, priming_frames);
+    REQUIRE(engine.transport().playing());
+    if (looping) REQUIRE(engine.transport().sample_position() == 0);
+    const int64_t block_render_start = engine.transport().render_frame();
+
+    CaptureProcessor processor(&engine.transport());
+    sonare::automation::AutomationLane lane(7);
+    lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold},
+                     {static_cast<double>(kBreakpointSamples) / kSampleRate, 1.0f,
+                      sonare::automation::CurveType::Hold}});
+    engine.automation().set_lanes({lane});
+    engine.automation().bind_target(7, &processor);
+
+    std::vector<float> output(static_cast<size_t>(frames));
+    float* io[] = {output.data()};
+    engine.process(io, 1, frames);
+    std::vector<int64_t> changes = parameter_change_frames(processor);
+    for (int64_t& frame : changes) frame -= block_render_start;
+    return changes;
+  };
+
+  const std::vector<int64_t> no_wrap{24};
+  REQUIRE(run(80, false) == no_wrap);
+
+  const std::vector<int64_t> one_wrap{25, 125};
+  REQUIRE(run(150, true) == one_wrap);
 }
 
 TEST_CASE("ParameterBaseTable records, looks up, and updates values", "[engine]") {

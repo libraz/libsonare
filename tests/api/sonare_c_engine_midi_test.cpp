@@ -395,13 +395,22 @@ TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the stru
   REQUIRE((drained[1].bytes[0] & 0xF0u) == 0x80u);
 
   // Stopping releases every note the sequencer still believes is sounding. The
-  // pair above matched, so there is nothing left to release and the queue stays
-  // empty; an unmatched note-on would surface here as an extra release.
+  // pair above matched, so only its retained channel's controller reset remains;
+  // an unmatched note-on would surface here as an extra note-off or reset group.
   REQUIRE(sonare_engine_stop(engine, -1) == SONARE_OK);
   REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
   REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
           SONARE_OK);
-  REQUIRE(count == 0);
+  REQUIRE(count == 4);
+  const std::array<std::array<uint8_t, 3>, 4> expected_resets{
+      {{0xB1, 64, 0}, {0xB1, 121, 0}, {0xB1, 123, 0}, {0xE1, 0, 64}}};
+  for (size_t i = 0; i < count; ++i) {
+    REQUIRE(drained[i].destination_id == 5);
+    REQUIRE(drained[i].byte_count == 3);
+    for (size_t byte = 0; byte < 3; ++byte) {
+      REQUIRE(drained[i].bytes[byte] == expected_resets[i][byte]);
+    }
+  }
 
   // An out-of-range group is still a malformed struct and is still rejected,
   // exactly like a non-zero `reserved`.

@@ -22,6 +22,7 @@
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
+#include "midi/midi_fx.h"
 #include "midi/prepared_sysex.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
@@ -1629,6 +1630,251 @@ TEST_CASE("RealtimeEngine routes external destinations to the output queue, bypa
   std::fill(right.begin(), right.end(), 0.0f);
   engine.process(channels, 2, 64);
   REQUIRE(external_slot.received_events_ > 0);
+
+  // The old external route retains the channel's controller state even though
+  // the clip's note-off already removed its active note. Route adoption sends
+  // the standard destination reset through that old route before committing
+  // the internal route.
+  const size_t reset_count = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(reset_count == 4);
+  const std::array<uint8_t, 4> expected_status = {0xB, 0xB, 0xB, 0xE};
+  const std::array<uint8_t, 3> expected_controllers = {64, 121, 123};
+  for (size_t i = 0; i < reset_count; ++i) {
+    const uint32_t word = drained[i].event.ump.words[0];
+    REQUIRE(drained[i].destination_id == 5);
+    REQUIRE(((word >> 28) & 0x0Fu) == 0x2u);  // MIDI 1.0 channel voice
+    REQUIRE(((word >> 24) & 0x0Fu) == 0u);    // group 0 on the wire
+    REQUIRE(((word >> 16) & 0x0Fu) == 1u);    // channel 1 on the wire
+    REQUIRE(((word >> 20) & 0x0Fu) == expected_status[i]);
+    REQUIRE_FALSE(drained[i].event.ump.is_note_on());
+    REQUIRE_FALSE(drained[i].event.ump.is_note_off());
+    if (i < expected_controllers.size()) {
+      REQUIRE(((word >> 8) & 0x7Fu) == expected_controllers[i]);
+      REQUIRE((word & 0x7Fu) == 0u);
+    } else {
+      REQUIRE((((word & 0x7Fu) << 7u) | ((word >> 8u) & 0x7Fu)) == 8192u);
+    }
+  }
+}
+
+TEST_CASE("RealtimeEngine releases an internal note through the old route on an external flip",
+          "[engine][midi]") {
+  constexpr uint32_t kDestination = 5;
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  CountingInstrument internal;
+  REQUIRE(engine.set_midi_instrument(kDestination, &internal));
+
+  auto clips = note_on_at_zero();
+  clips.front().destination_id = kDestination;
+  engine.set_midi_clips(std::move(clips));
+  push_play(engine);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_on_count_ == 1);
+  REQUIRE(internal.note_off_count_ == 0);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+  // The control call is adopted at the next audio block. The note-off must be
+  // sent through the internal route that created the note before the new
+  // external route becomes active.
+  REQUIRE(engine.set_midi_destination_external(kDestination, true));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_off_count_ == 1);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+
+  // The adopted route is usable immediately after the boundary release.
+  const auto note_on = sonare::midi::make_midi1_note_on(0, 0, 67, 100);
+  REQUIRE(engine.push_midi_ump(kDestination, note_on.words, note_on.word_count, -1) ==
+          sonare::engine::MidiUmpPushResult::kQueued);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  const size_t count = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(count == 1);
+  REQUIRE(drained[0].destination_id == kDestination);
+  REQUIRE(drained[0].event.ump.is_note_on());
+  REQUIRE(drained[0].event.ump.note_number() == 67);
+  REQUIRE(internal.note_on_count_ == 1);
+}
+
+TEST_CASE("RealtimeEngine releases an external note through the old route on an internal flip",
+          "[engine][midi]") {
+  constexpr uint32_t kDestination = 5;
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  CountingInstrument internal;
+  REQUIRE(engine.set_midi_instrument(kDestination, &internal));
+  REQUIRE(engine.set_midi_destination_external(kDestination, true));
+
+  auto clips = note_on_at_zero();
+  clips.front().destination_id = kDestination;
+  engine.set_midi_clips(std::move(clips));
+  push_play(engine);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.received_events_ == 0);
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 1);
+  REQUIRE(drained[0].event.ump.is_note_on());
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+  // A route flip must return the note-off and controller reset messages to the
+  // external device before the destination is allowed back into the rack.
+  REQUIRE(engine.set_midi_destination_external(kDestination, false));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_off_count_ == 0);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+  const size_t released = engine.drain_external_midi(drained.data(), drained.size());
+  bool saw_note_off = false;
+  for (size_t i = 0; i < released; ++i) {
+    saw_note_off = saw_note_off || drained[i].event.ump.is_note_off();
+    REQUIRE(drained[i].destination_id == kDestination);
+  }
+  REQUIRE(saw_note_off);
+
+  // Subsequent events use the newly adopted internal route.
+  const auto note_on = sonare::midi::make_midi1_note_on(0, 0, 67, 100);
+  REQUIRE(engine.push_midi_ump(kDestination, note_on.words, note_on.word_count, -1) ==
+          sonare::engine::MidiUmpPushResult::kQueued);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_on_count_ == 1);
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+}
+
+TEST_CASE("RealtimeEngine route flips discard pending arpeggiator events", "[engine][midi]") {
+  constexpr uint32_t kDestination = 5;
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  CountingInstrument internal;
+  REQUIRE(engine.set_midi_instrument(kDestination, &internal));
+
+  sonare::midi::MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = kBlock;
+  arp.gate_frames = kBlock / 2;
+  fx.set_arpeggiator(arp);
+  REQUIRE(engine.set_midi_fx(kDestination, fx));
+
+  auto clips = note_on_at_zero();
+  clips.front().destination_id = kDestination;
+  engine.set_midi_clips(std::move(clips));
+  push_play(engine);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_on_count_ == 1);
+  REQUIRE(internal.note_off_count_ == 1);
+
+  // The second arpeggiator step is pending at frame 64. Changing the route at
+  // this boundary must clear that pending event along with the old destination
+  // state, so it cannot be emitted through either route later.
+  REQUIRE(engine.set_midi_destination_external(kDestination, true));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+  REQUIRE(internal.note_on_count_ == 1);
+  REQUIRE(internal.note_off_count_ == 1);
+}
+
+TEST_CASE("RealtimeEngine coalesces a route flip before the next audio block", "[engine][midi]") {
+  constexpr uint32_t kDestination = 5;
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  CountingInstrument internal;
+  REQUIRE(engine.set_midi_instrument(kDestination, &internal));
+
+  auto clips = note_on_at_zero();
+  clips.front().destination_id = kDestination;
+  engine.set_midi_clips(std::move(clips));
+  push_play(engine);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_on_count_ == 1);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+  // The final requested route is the original internal route. No transient
+  // external state was audible, so adopting this coalesced request must not
+  // manufacture a note-off or clear the held note.
+  REQUIRE(engine.set_midi_destination_external(kDestination, true));
+  REQUIRE(engine.set_midi_destination_external(kDestination, false));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.note_off_count_ == 0);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+}
+
+TEST_CASE("RealtimeEngine route cleanup resets a released channel through its old route",
+          "[engine][midi]") {
+  constexpr uint32_t kDestination = 5;
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  ControllerRecordingInstrument internal;
+  REQUIRE(engine.set_midi_instrument(kDestination, &internal));
+
+  const auto sustain_down = sonare::midi::make_midi1_control_change(0, 0, 64, 127);
+  const auto note_on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  const auto note_off = sonare::midi::make_midi1_note_off(0, 0, 60, 0);
+  REQUIRE(engine.push_midi_ump(kDestination, sustain_down.words, sustain_down.word_count, -1) ==
+          sonare::engine::MidiUmpPushResult::kQueued);
+  REQUIRE(engine.push_midi_ump(kDestination, note_on.words, note_on.word_count, -1) ==
+          sonare::engine::MidiUmpPushResult::kQueued);
+  REQUIRE(engine.push_midi_ump(kDestination, note_off.words, note_off.word_count, -1) ==
+          sonare::engine::MidiUmpPushResult::kQueued);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+  REQUIRE_FALSE(internal.sustain_off_);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+
+  // The key is already up, but the channel's damper state belongs to the old
+  // internal route. The route boundary must still reset that channel before
+  // the requested external table is committed.
+  REQUIRE(engine.set_midi_destination_external(kDestination, true));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(io, 2, kBlock);
+  REQUIRE(internal.sustain_off_);
+  REQUIRE(internal.reset_all_controllers_);
+  REQUIRE(internal.all_notes_off_cc_);
+  REQUIRE(internal.pitch_bend_seen_);
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
   REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
 }
 

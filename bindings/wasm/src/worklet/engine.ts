@@ -243,6 +243,11 @@ export class SonareEngine {
     tempo.setTimeSignatureSegments(this.tempoContext, segments);
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   setLoop(startPpq: number, endPpq: number, enabled = true): boolean {
     return tempo.setLoop(this.tempoContext, startPpq, endPpq, enabled);
   }
@@ -905,7 +910,10 @@ export class SonareEngine {
   /**
    * Route a track's MIDI to the external output (drained via {@link onMidiOut})
    * instead of an internal instrument, so the track plays an external device.
-   * Pass `external=false` to restore internal-synth playback.
+   * Pass `external=false` to restore internal-synth playback. The change takes
+   * effect at the next processed block; switching a destination's route first
+   * releases its notes and resets its controllers through the old route, and
+   * drops its pending MIDI-FX events.
    */
   setMidiDestinationExternal(trackId: string | number, external: boolean): void {
     strips.setMidiDestinationExternal(this.stripContext, trackId, external);

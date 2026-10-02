@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <utility>
 
 #include "util/constants.h"
 
@@ -318,10 +319,42 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   double last_event_ppq = 0.0;
   double end_clip_ppq = 0.0;
 
-  std::vector<uint8_t> pending_sysex;
-  double pending_sysex_ppq = 0.0;
-  uint8_t pending_sysex_group = 0;
-  bool pending_sysex_active = false;
+  struct PendingSysex {
+    bool sysex8 = false;
+    uint8_t group = 0;
+    uint8_t stream_id = 0;
+    double ppq = 0.0;
+    std::vector<uint8_t> payload;
+  };
+  // One SysEx7 stream per group and one SysEx8 stream per (group, stream ID).
+  // The lookup table keeps the pending set bounded even when an input file
+  // starts thousands of fragments without ever terminating them.
+  constexpr size_t kPendingSysex7Keys = 16u;
+  constexpr size_t kPendingSysex8Keys = 16u * 256u;
+  constexpr size_t kPendingSysexKeys = kPendingSysex7Keys + kPendingSysex8Keys;
+  std::vector<PendingSysex> pending_sysex;
+  std::array<int, kPendingSysexKeys> pending_lookup{};
+  pending_lookup.fill(-1);
+
+  const auto pending_key = [](bool sysex8, uint8_t group, uint8_t stream_id) noexcept {
+    return sysex8 ? kPendingSysex7Keys + static_cast<size_t>(group) * 256u + stream_id
+                  : static_cast<size_t>(group);
+  };
+  const auto pending_index = [&](bool sysex8, uint8_t group, uint8_t stream_id) noexcept {
+    return pending_lookup[pending_key(sysex8, group, stream_id)];
+  };
+  const auto remove_pending = [&](size_t key) {
+    const int index = pending_lookup[key];
+    if (index < 0) return;
+    const size_t last = pending_sysex.size() - 1u;
+    if (static_cast<size_t>(index) != last) {
+      pending_sysex[static_cast<size_t>(index)] = std::move(pending_sysex[last]);
+      const PendingSysex& moved = pending_sysex[static_cast<size_t>(index)];
+      pending_lookup[pending_key(moved.sysex8, moved.group, moved.stream_id)] = index;
+    }
+    pending_sysex.pop_back();
+    pending_lookup[key] = -1;
+  };
 
   size_t event_count = 0;
   size_t metadata_bytes = 0;
@@ -335,21 +368,47 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     return true;
   };
 
-  auto store_pending_sysex = [&](uint8_t group) {
+  auto store_sysex = [&](const std::vector<uint8_t>& payload, double ppq, uint8_t group) {
     if (!consume_event()) return false;
-    const SysExHandle handle = result.sysex_store.add(pending_sysex);
-    pending_sysex.clear();
-    pending_sysex_active = false;
+    const SysExHandle handle = result.sysex_store.add(payload);
     if (handle == 0) {
       ++result.skipped_events;
       return true;
     }
     MidiClipEvent ev;
-    ev.ppq = pending_sysex_ppq;
+    ev.ppq = ppq;
     ev.ump = make_sysex_handle(group, handle);
     clip.add_event(ev);
     has_events = true;
-    last_event_ppq = std::max(last_event_ppq, pending_sysex_ppq);
+    last_event_ppq = std::max(last_event_ppq, ppq);
+    return true;
+  };
+
+  const auto start_pending = [&](bool sysex8, uint8_t group, uint8_t stream_id, double ppq,
+                                 std::vector<uint8_t>&& payload) {
+    const size_t key = pending_key(sysex8, group, stream_id);
+    int index = pending_lookup[key];
+    if (index >= 0) {
+      ++result.skipped_events;
+      PendingSysex& existing = pending_sysex[static_cast<size_t>(index)];
+      existing.ppq = ppq;
+      existing.payload = std::move(payload);
+      return true;
+    }
+    if (pending_sysex.size() >= kPendingSysexKeys) {
+      ++result.skipped_events;
+      return true;
+    }
+    if (pending_sysex.capacity() == 0) pending_sysex.reserve(kPendingSysexKeys);
+    PendingSysex pending;
+    pending.sysex8 = sysex8;
+    pending.group = group;
+    pending.stream_id = stream_id;
+    pending.ppq = ppq;
+    pending.payload = std::move(payload);
+    pending_sysex.push_back(std::move(pending));
+    index = static_cast<int>(pending_sysex.size() - 1u);
+    pending_lookup[key] = index;
     return true;
   };
 
@@ -476,37 +535,42 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
         result.diagnostic = "MIDI Clip File import resource limit exceeded: SysEx";
         break;
       }
+      const size_t key = pending_key(false, group, 0);
       if (packet_status == kSysex7Complete) {
-        pending_sysex.clear();
-        pending_sysex_ppq = ppq;
-        append_sysex7_bytes(words[0], words[1], &pending_sysex);
-        if (!store_pending_sysex(group)) break;
+        if (pending_index(false, group, 0) >= 0) {
+          ++result.skipped_events;
+          remove_pending(key);
+        }
+        std::vector<uint8_t> payload;
+        append_sysex7_bytes(words[0], words[1], &payload);
+        if (!store_sysex(payload, ppq, group)) break;
         continue;
       }
       if (packet_status == kSysex7Start) {
-        if (pending_sysex_active) ++result.skipped_events;
-        pending_sysex.clear();
-        pending_sysex_ppq = ppq;
-        pending_sysex_group = group;
-        pending_sysex_active = true;
-        append_sysex7_bytes(words[0], words[1], &pending_sysex);
+        std::vector<uint8_t> payload;
+        append_sysex7_bytes(words[0], words[1], &payload);
+        start_pending(false, group, 0, ppq, std::move(payload));
         continue;
       }
       if (packet_status == kSysex7Continue) {
-        if (!pending_sysex_active) {
+        const int index = pending_index(false, group, 0);
+        if (index < 0) {
           ++result.skipped_events;
           continue;
         }
-        append_sysex7_bytes(words[0], words[1], &pending_sysex);
+        append_sysex7_bytes(words[0], words[1], &pending_sysex[static_cast<size_t>(index)].payload);
         continue;
       }
       if (packet_status == kSysex7End) {
-        if (!pending_sysex_active) {
+        const int index = pending_index(false, group, 0);
+        if (index < 0) {
           ++result.skipped_events;
           continue;
         }
-        append_sysex7_bytes(words[0], words[1], &pending_sysex);
-        if (!store_pending_sysex(pending_sysex_group)) break;
+        PendingSysex& pending = pending_sysex[static_cast<size_t>(index)];
+        append_sysex7_bytes(words[0], words[1], &pending.payload);
+        if (!store_sysex(pending.payload, pending.ppq, pending.group)) break;
+        remove_pending(key);
         continue;
       }
       ++result.skipped_events;
@@ -518,43 +582,49 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
       // continue/end) in word0 bits 20..23.
       const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
+      const uint8_t stream_id = static_cast<uint8_t>((word0 >> 8) & 0xFFu);
       if (!resource::bounded_accumulate(sysex8_data_bytes(word0), limits.max_sysex_bytes,
                                         &sysex_bytes)) {
         result.status = Smf2Status::kInvalidArgument;
         result.diagnostic = "MIDI Clip File import resource limit exceeded: SysEx";
         break;
       }
+      const size_t key = pending_key(true, group, stream_id);
       if (packet_status == kSysex7Complete) {
-        pending_sysex.clear();
-        pending_sysex_ppq = ppq;
-        append_sysex8_bytes(words, &pending_sysex);
-        if (!store_pending_sysex(group)) break;
+        if (pending_index(true, group, stream_id) >= 0) {
+          ++result.skipped_events;
+          remove_pending(key);
+        }
+        std::vector<uint8_t> payload;
+        append_sysex8_bytes(words, &payload);
+        if (!store_sysex(payload, ppq, group)) break;
         continue;
       }
       if (packet_status == kSysex7Start) {
-        if (pending_sysex_active) ++result.skipped_events;
-        pending_sysex.clear();
-        pending_sysex_ppq = ppq;
-        pending_sysex_group = group;
-        pending_sysex_active = true;
-        append_sysex8_bytes(words, &pending_sysex);
+        std::vector<uint8_t> payload;
+        append_sysex8_bytes(words, &payload);
+        start_pending(true, group, stream_id, ppq, std::move(payload));
         continue;
       }
       if (packet_status == kSysex7Continue) {
-        if (!pending_sysex_active) {
+        const int index = pending_index(true, group, stream_id);
+        if (index < 0) {
           ++result.skipped_events;
           continue;
         }
-        append_sysex8_bytes(words, &pending_sysex);
+        append_sysex8_bytes(words, &pending_sysex[static_cast<size_t>(index)].payload);
         continue;
       }
       if (packet_status == kSysex7End) {
-        if (!pending_sysex_active) {
+        const int index = pending_index(true, group, stream_id);
+        if (index < 0) {
           ++result.skipped_events;
           continue;
         }
-        append_sysex8_bytes(words, &pending_sysex);
-        if (!store_pending_sysex(pending_sysex_group)) break;
+        PendingSysex& pending = pending_sysex[static_cast<size_t>(index)];
+        append_sysex8_bytes(words, &pending.payload);
+        if (!store_sysex(pending.payload, pending.ppq, pending.group)) break;
+        remove_pending(key);
         continue;
       }
       ++result.skipped_events;
@@ -565,9 +635,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     ++result.skipped_events;
   }
 
-  if (pending_sysex_active) {
-    ++result.skipped_events;
-  }
+  result.skipped_events += pending_sysex.size();
 
   if (result.status != Smf2Status::kOk && result.status != Smf2Status::kMissingDctpq) {
     return result;

@@ -8,6 +8,7 @@
 #include "midi/layered_instrument.h"
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -39,6 +40,7 @@ using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 
 constexpr double kRate = 48000.0;
+constexpr uint32_t kPitch725Scale = uint32_t{1} << 25;
 
 using sonare::test::event;
 
@@ -64,7 +66,8 @@ class ProbeInstrument : public MidiInstrument {
   void prepare(double, int) override {
     // Reserved so the probe itself cannot allocate on the audio thread and
     // be mistaken for the layer mixer doing it.
-    notes.reserve(64);
+    notes.reserve(512);
+    received_umps.reserve(512);
     prepared_ = true;
   }
   void process(float* const* channels, int num_channels, int num_samples) override {
@@ -82,6 +85,7 @@ class ProbeInstrument : public MidiInstrument {
       last_event_prepared = e.prepared_sysex;
       return;
     }
+    received_umps.push_back(e.ump);
     const sonare::midi::Ump& u = e.ump;
     if (u.is_note_on()) {
       notes.push_back({u.note_number(), u.data2_7bit(), true});
@@ -133,6 +137,7 @@ class ProbeInstrument : public MidiInstrument {
   void set_tail(int tail) noexcept { tail_ = tail; }
 
   std::vector<Note> notes;
+  std::vector<sonare::midi::Ump> received_umps;
   int other_events = 0;
   int sysex_events = 0;
   int prepare_calls = 0;
@@ -169,6 +174,91 @@ class DiscardingProbe final : public ProbeInstrument {
   }
 
   int discards_per_call = 0;
+};
+
+/// A child that exposes the actual sounding state needed by ownership tests.
+/// Its render is silent until a child-owned note is active, so a note that the
+/// layer router forgets to release remains audible in the assertion.
+class SoundingProbe final : public MidiInstrument {
+ public:
+  void prepare(double, int) override {}
+
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    const float level = active_count_ > 0 ? 1.0f : 0.0f;
+    for (int channel = 0; channel < num_channels; ++channel) {
+      if (channels[channel] == nullptr) continue;
+      for (int sample = 0; sample < num_samples; ++sample) channels[channel][sample] += level;
+    }
+  }
+
+  void reset() override {
+    voices_ = {};
+    active_count_ = 0;
+  }
+
+  void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override {
+    const auto& ump = event.ump;
+    const Key key{sonare::midi::ump_group_from_word0(ump.words[0]), ump.channel(),
+                  ump.note_number(), event.source_track_id, destination_id};
+    if (ump.is_note_on()) {
+      ++note_on_events;
+      for (Voice& voice : voices_) {
+        if (voice.active && voice.key == key) {
+          ++voice.count;
+          ++active_count_;
+          return;
+        }
+      }
+      for (Voice& voice : voices_) {
+        if (!voice.active) {
+          voice.active = true;
+          voice.key = key;
+          voice.count = 1;
+          ++active_count_;
+          return;
+        }
+      }
+      return;
+    }
+    if (!ump.is_note_off()) return;
+    ++note_off_events;
+    for (Voice& voice : voices_) {
+      if (!voice.active || !(voice.key == key)) continue;
+      if (voice.count > 0) {
+        --voice.count;
+        --active_count_;
+      }
+      if (voice.count == 0) voice.active = false;
+      return;
+    }
+  }
+
+  bool sounding() const noexcept { return active_count_ > 0; }
+  int note_off_count() const noexcept { return note_off_events; }
+
+ private:
+  struct Key {
+    uint8_t group = 0;
+    uint8_t channel = 0;
+    uint8_t note = 0;
+    uint32_t source_track_id = 0;
+    uint32_t destination_id = 0;
+
+    bool operator==(const Key& other) const noexcept {
+      return group == other.group && channel == other.channel && note == other.note &&
+             source_track_id == other.source_track_id && destination_id == other.destination_id;
+    }
+  };
+  struct Voice {
+    bool active = false;
+    Key key;
+    int count = 0;
+  };
+
+  std::array<Voice, 32> voices_{};
+  int active_count_ = 0;
+  int note_on_events = 0;
+  int note_off_events = 0;
 };
 
 /// Renders one block and returns the summed leg peaks.
@@ -264,6 +354,345 @@ TEST_CASE("A velocity split routes note-off by the note-on that opened it", "[mi
   CHECK(loud_p->notes[0].on);
   CHECK_FALSE(loud_p->notes[1].on);
   CHECK(loud_p->notes[1].note == 60);
+}
+
+TEST_CASE("Layered velocity retrigger releases every layer it opened", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto soft = std::make_unique<SoundingProbe>();
+  auto loud = std::make_unique<SoundingProbe>();
+  SoundingProbe* soft_p = soft.get();
+  SoundingProbe* loud_p = loud.get();
+
+  InstrumentLayerSpec soft_spec;
+  soft_spec.vel_lo = 1;
+  soft_spec.vel_hi = 63;
+  InstrumentLayerSpec loud_spec;
+  loud_spec.vel_lo = 64;
+  loud_spec.vel_hi = 127;
+  REQUIRE(inst.add_layer(std::move(soft), soft_spec));
+  REQUIRE(inst.add_layer(std::move(loud), loud_spec));
+  inst.prepare(kRate, 128);
+
+  constexpr uint32_t kDestination = 17;
+  inst.on_event(kDestination, event(sonare::midi::make_midi1_note_on(0, 0, 60, 40)));
+  inst.on_event(kDestination, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  CHECK(soft_p->sounding());
+  CHECK(loud_p->sounding());
+
+  inst.on_event(kDestination, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  CHECK_FALSE(soft_p->sounding());
+  CHECK_FALSE(loud_p->sounding());
+  CHECK(soft_p->note_off_count() == 1);
+  CHECK(loud_p->note_off_count() == 1);
+}
+
+TEST_CASE("Layered note ownership keeps source tracks independent", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<SoundingProbe>();
+  SoundingProbe* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  MidiEvent on_a = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  on_a.source_track_id = 101;
+  MidiEvent on_b = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  on_b.source_track_id = 202;
+  inst.on_event(0, on_a);
+  inst.on_event(0, on_b);
+  REQUIRE(child_p->sounding());
+
+  MidiEvent off_a = event(sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  off_a.source_track_id = 101;
+  inst.on_event(0, off_a);
+  CHECK(child_p->sounding());
+  CHECK(child_p->note_off_count() == 1);
+
+  MidiEvent off_b = event(sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  off_b.source_track_id = 202;
+  inst.on_event(0, off_b);
+  CHECK_FALSE(child_p->sounding());
+  CHECK(child_p->note_off_count() == 2);
+}
+
+TEST_CASE("Layered note-off requires the complete ledger key", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<SoundingProbe>();
+  SoundingProbe* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  constexpr uint32_t kDestination = 31;
+  constexpr uint32_t kSourceTrack = 303;
+  MidiEvent on = event(sonare::midi::make_midi1_note_on(3, 0, 60, 100));
+  on.source_track_id = kSourceTrack;
+  inst.on_event(kDestination, on);
+  REQUIRE(child_p->sounding());
+
+  MidiEvent wrong_group = event(sonare::midi::make_midi1_note_off(4, 0, 60, 0));
+  wrong_group.source_track_id = kSourceTrack;
+  inst.on_event(kDestination, wrong_group);
+  CHECK(child_p->sounding());
+  CHECK(child_p->note_off_count() == 0);
+
+  MidiEvent wrong_destination = event(sonare::midi::make_midi1_note_off(3, 0, 60, 0));
+  wrong_destination.source_track_id = kSourceTrack;
+  inst.on_event(kDestination + 1, wrong_destination);
+  CHECK(child_p->sounding());
+  CHECK(child_p->note_off_count() == 0);
+
+  MidiEvent exact_off = event(sonare::midi::make_midi1_note_off(3, 0, 60, 0));
+  exact_off.source_track_id = kSourceTrack;
+  inst.on_event(kDestination, exact_off);
+  CHECK_FALSE(child_p->sounding());
+  CHECK(child_p->note_off_count() == 1);
+}
+
+TEST_CASE("Layered note ledger drops an overflow before child dispatch", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  constexpr uint32_t kLedgerCapacity = 256;
+  for (uint32_t source_track = 1; source_track <= kLedgerCapacity + 1; ++source_track) {
+    MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    on.source_track_id = source_track;
+    inst.on_event(0, on);
+  }
+  CHECK(child_p->notes.size() == kLedgerCapacity);
+
+  child_p->notes.clear();
+  child_p->received_umps.clear();
+  MidiEvent overflow_off = event(sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  overflow_off.source_track_id = kLedgerCapacity + 1;
+  inst.on_event(0, overflow_off);
+  CHECK(child_p->notes.empty());
+  CHECK(child_p->received_umps.empty());
+
+  MidiEvent first_off = event(sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  first_off.source_track_id = 1;
+  inst.on_event(0, first_off);
+  REQUIRE(child_p->notes.size() == 1);
+  CHECK_FALSE(child_p->notes[0].on);
+}
+
+TEST_CASE("Layered CC123 retires its channel ledger entries", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  constexpr uint32_t kLedgerCapacity = 256;
+  for (uint32_t source_track = 1; source_track <= kLedgerCapacity; ++source_track) {
+    MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    on.source_track_id = source_track;
+    inst.on_event(9, on);
+  }
+  child_p->notes.clear();
+  inst.on_event(9, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
+
+  MidiEvent next = event(sonare::midi::make_midi1_note_on(0, 0, 61, 100));
+  next.source_track_id = 1001;
+  inst.on_event(9, next);
+  REQUIRE(child_p->notes.size() == 1);
+  CHECK(child_p->notes[0].on);
+  CHECK(child_p->notes[0].note == 61);
+}
+
+TEST_CASE("Layered MIDI2 CC120 retires its channel ledger entries", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  constexpr uint32_t kLedgerCapacity = 256;
+  for (uint32_t source_track = 1; source_track <= kLedgerCapacity; ++source_track) {
+    MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    on.source_track_id = source_track;
+    inst.on_event(9, on);
+  }
+  child_p->notes.clear();
+  inst.on_event(9, event(sonare::midi::make_midi2_control_change(0, 0, 120, 0)));
+
+  MidiEvent next = event(sonare::midi::make_midi1_note_on(0, 0, 61, 100));
+  next.source_track_id = 1002;
+  inst.on_event(9, next);
+  REQUIRE(child_p->notes.size() == 1);
+  CHECK(child_p->notes[0].on);
+  CHECK(child_p->notes[0].note == 61);
+}
+
+TEST_CASE("Layered CC126 and CC127 leave the ledger so a later note-off still arrives",
+          "[midi][layered]") {
+  for (const uint8_t cc : {uint8_t{126}, uint8_t{127}}) {
+    INFO("controller " << static_cast<int>(cc));
+    LayeredInstrument inst;
+    auto child = std::make_unique<ProbeInstrument>();
+    ProbeInstrument* child_p = child.get();
+    REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+    inst.prepare(kRate, 128);
+
+    inst.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    inst.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, cc, 0)));
+    child_p->notes.clear();
+
+    inst.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    REQUIRE(child_p->notes.size() == 1);
+    CHECK_FALSE(child_p->notes[0].on);
+    CHECK(child_p->notes[0].note == 60);
+  }
+}
+
+TEST_CASE("Layered counts a note-on dropped because the ledger is full", "[midi][layered]") {
+  LayeredInstrument inst;
+  REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  constexpr uint32_t kLedgerCapacity = 256;
+  for (uint32_t source_track = 1; source_track <= kLedgerCapacity; ++source_track) {
+    MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    on.source_track_id = source_track;
+    inst.on_event(0, on);
+  }
+  CHECK(inst.ledger_overflow_count() == 0);
+
+  MidiEvent extra = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  extra.source_track_id = kLedgerCapacity + 1;
+  inst.on_event(0, extra);
+  CHECK(inst.ledger_overflow_count() == 1);
+
+  inst.reset_telemetry();
+  CHECK(inst.ledger_overflow_count() == 0);
+}
+
+TEST_CASE("Layered Reset All Controllers preserves note ledger ownership", "[midi][layered]") {
+  LayeredInstrument inst;
+  auto child = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* child_p = child.get();
+  REQUIRE(inst.add_layer(std::move(child), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  on.source_track_id = 404;
+  inst.on_event(9, on);
+  child_p->notes.clear();
+  inst.on_event(9, event(sonare::midi::make_midi2_control_change(0, 0, 121, 0)));
+
+  MidiEvent off = event(sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  off.source_track_id = 404;
+  inst.on_event(9, off);
+  REQUIRE(child_p->notes.size() == 1);
+  CHECK_FALSE(child_p->notes[0].on);
+  CHECK(child_p->notes[0].note == 60);
+}
+
+TEST_CASE("Layered retunes note-addressed messages within the source key range",
+          "[midi][layered]") {
+  LayeredInstrument inst;
+  auto up = std::make_unique<ProbeInstrument>();
+  auto down = std::make_unique<ProbeInstrument>();
+  auto outside = std::make_unique<ProbeInstrument>();
+  ProbeInstrument* up_p = up.get();
+  ProbeInstrument* down_p = down.get();
+  ProbeInstrument* outside_p = outside.get();
+
+  InstrumentLayerSpec up_spec;
+  up_spec.key_lo = 60;
+  up_spec.key_hi = 60;
+  up_spec.vel_lo = 1;
+  up_spec.vel_hi = 63;
+  up_spec.transpose = 12;
+  InstrumentLayerSpec down_spec = up_spec;
+  down_spec.vel_lo = 64;
+  down_spec.vel_hi = 127;
+  down_spec.transpose = -12;
+  InstrumentLayerSpec outside_spec;
+  outside_spec.key_lo = 61;
+  outside_spec.key_hi = 127;
+
+  REQUIRE(inst.add_layer(std::move(up), up_spec));
+  REQUIRE(inst.add_layer(std::move(down), down_spec));
+  REQUIRE(inst.add_layer(std::move(outside), outside_spec));
+  inst.prepare(kRate, 128);
+
+  constexpr uint16_t kPitch79 = static_cast<uint16_t>(60u * 512u + 128u);
+  inst.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, 0x2000, 3, kPitch79)));
+  REQUIRE(up_p->received_umps.size() == 1);
+  CHECK(up_p->received_umps[0].note_number() == 72);
+  CHECK(sonare::midi::note_attribute_type(up_p->received_umps[0]) == 3);
+  CHECK(sonare::midi::note_attribute_data(up_p->received_umps[0]) ==
+        static_cast<uint16_t>(72u * 512u + 128u));
+  CHECK(down_p->received_umps.empty());
+  CHECK(outside_p->received_umps.empty());
+
+  inst.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, 0xE000, 3, kPitch79)));
+  REQUIRE(down_p->received_umps.size() == 1);
+  CHECK(down_p->received_umps[0].note_number() == 48);
+  CHECK(sonare::midi::note_attribute_type(down_p->received_umps[0]) == 3);
+  CHECK(sonare::midi::note_attribute_data(down_p->received_umps[0]) ==
+        static_cast<uint16_t>(48u * 512u + 128u));
+  CHECK(outside_p->received_umps.empty());
+
+  const auto expect_addressed = [&](const sonare::midi::Ump& source, uint8_t expected_up,
+                                    uint8_t expected_down) {
+    up_p->received_umps.clear();
+    down_p->received_umps.clear();
+    outside_p->received_umps.clear();
+    inst.on_event(0, event(source));
+    REQUIRE(up_p->received_umps.size() == 1);
+    REQUIRE(down_p->received_umps.size() == 1);
+    CHECK(up_p->received_umps[0].note_number() == expected_up);
+    CHECK(down_p->received_umps[0].note_number() == expected_down);
+    CHECK(outside_p->received_umps.empty());
+  };
+
+  expect_addressed(sonare::midi::make_midi1_poly_pressure(0, 0, 60, 77), 72, 48);
+  expect_addressed(sonare::midi::make_midi2_per_note_pitch_bend(0, 0, 60, 0xC0000000u), 72, 48);
+  expect_addressed(sonare::midi::make_midi2_per_note_management(0, 0, 60, false, true), 72, 48);
+
+  const uint32_t pitch_725 = (60u * kPitch725Scale) + (kPitch725Scale / 2u);
+  expect_addressed(sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, pitch_725), 72, 48);
+  CHECK(up_p->received_umps[0].words[1] == (72u * kPitch725Scale) + (kPitch725Scale / 2u));
+  CHECK(down_p->received_umps[0].words[1] == (48u * kPitch725Scale) + (kPitch725Scale / 2u));
+}
+
+TEST_CASE("Layered drops transposed absolute pitches outside MIDI range", "[midi][layered]") {
+  {
+    LayeredInstrument inst;
+    auto child = std::make_unique<ProbeInstrument>();
+    ProbeInstrument* child_p = child.get();
+    InstrumentLayerSpec spec;
+    spec.transpose = 12;
+    REQUIRE(inst.add_layer(std::move(child), spec));
+    inst.prepare(kRate, 128);
+
+    inst.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3,
+                                                            static_cast<uint16_t>(120u * 512u))));
+    CHECK(child_p->received_umps.empty());
+    inst.on_event(
+        0, event(sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 120u * kPitch725Scale)));
+    CHECK(child_p->received_umps.empty());
+  }
+
+  {
+    LayeredInstrument inst;
+    auto child = std::make_unique<ProbeInstrument>();
+    ProbeInstrument* child_p = child.get();
+    InstrumentLayerSpec spec;
+    spec.transpose = -12;
+    REQUIRE(inst.add_layer(std::move(child), spec));
+    inst.prepare(kRate, 128);
+
+    inst.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3,
+                                                            static_cast<uint16_t>(6u * 512u))));
+    CHECK(child_p->received_umps.empty());
+    inst.on_event(
+        0, event(sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 6u * kPitch725Scale)));
+    CHECK(child_p->received_umps.empty());
+  }
 }
 
 TEST_CASE("A layer transposes the note it receives, note-off included", "[midi][layered]") {

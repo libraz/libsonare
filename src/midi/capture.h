@@ -12,19 +12,28 @@
 ///  - AUDIO thread (PRODUCER): the live MIDI-in handler pushes incoming
 ///    MidiEvents (absolute render frame + UMP) into the SpscQueue. push() is
 ///    wait-free and alloc-0. A full queue drops the event (push returns false);
-///    the dropped count is surfaced via dropped_count() telemetry.
+///    the dropped count is surfaced via dropped_count() telemetry. Any
+///    MidiEvent::sysex_payload is a borrowed view; its backing storage must stay
+///    valid until the returned MidiClip is no longer used.
 ///  - CONTROL thread (CONSUMER): drain() pops every queued event, converts its
 ///    render frame to clip-relative PPQ via the TempoMap, optionally quantizes
-///    it, and appends a MidiClipEvent to the target MidiClip. drain() MAY
-///    allocate (it grows the MidiClip's event vector) and is NOT RT-safe.
+///    it, and appends a MidiClipEvent to the target MidiClip. It copies the
+///    borrowed SysEx payload view (pointer and size), not the payload bytes;
+///    the caller keeps those bytes alive for the returned clip's lifetime.
+///    drain() MAY allocate (it grows the MidiClip's event vector) and is NOT
+///    RT-safe.
 ///
 /// Determinism: quantization is pure integer/PPQ math (no clock / random); the
-/// same queued events with the same config always yield the same MidiClip.
+/// same queued events with the same config always yield the same MidiClip. The
+/// control-thread note-shift FIFO survives drain() calls for one clip/config
+/// context and is cleared when the clip, config, or prepared capture session
+/// changes.
 
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
@@ -75,8 +84,10 @@ class MidiCapture {
 
   /// CONTROL thread (consumer): pop every queued event, convert render frame ->
   /// clip-relative PPQ (optionally quantized), and append to `clip`. The clip is
-  /// sorted stably afterwards. Returns the number of events drained. MAY
-  /// allocate. Returns 0 (no-op) if `clip` or the tempo map is null.
+  /// sorted stably afterwards. SysEx payload pointers and sizes are copied as
+  /// borrowed views; their backing storage must remain valid until `clip` is no
+  /// longer used. Returns the number of events drained. MAY allocate. Returns
+  /// 0 (no-op) if `clip` or the tempo map is null.
   size_t drain(const CaptureConfig& config, MidiClip* clip);
 
   /// Number of events the producer failed to enqueue because the queue was full.
@@ -86,9 +97,25 @@ class MidiCapture {
   size_t queue_capacity() const noexcept { return queue_.capacity(); }
 
  private:
+  struct ActiveNoteShift {
+    // The source track is part of note identity when several arrangement lanes
+    // share one destination/channel/note and are captured into one clip.
+    uint8_t group = 0;
+    uint8_t channel = 0;
+    uint8_t note = 0;
+    uint32_t source_track_id = 0;
+    std::vector<double> shifts;
+  };
+
+  void reset_note_shift_context() noexcept;
+
   rt::SpscQueue<MidiEvent> queue_;
   const transport::TempoMap* tempo_map_ = nullptr;
   std::atomic<uint32_t> dropped_count_{0};
+  bool note_shift_context_valid_ = false;
+  const MidiClip* note_shift_clip_ = nullptr;
+  CaptureConfig note_shift_config_{};
+  std::vector<ActiveNoteShift> active_note_shifts_;
 };
 
 /// Quantize a PPQ position to a grid. `grid_ppq` is the step in quarter notes,

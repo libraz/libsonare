@@ -40,6 +40,18 @@ MidiEvent note_off(int64_t frame, uint8_t note) {
   return {frame, sonare::midi::make_midi1_note_off(0, 0, note, 0)};
 }
 
+MidiEvent tracked_note_on(int64_t frame, uint8_t note, uint8_t vel, uint32_t source_track_id) {
+  MidiEvent event = note_on(frame, note, vel);
+  event.source_track_id = source_track_id;
+  return event;
+}
+
+MidiEvent tracked_note_off(int64_t frame, uint8_t note, uint32_t source_track_id) {
+  MidiEvent event = note_off(frame, note);
+  event.source_track_id = source_track_id;
+  return event;
+}
+
 }  // namespace
 
 TEST_CASE("MidiFx transpose shifts note numbers and clamps", "[midi]") {
@@ -169,6 +181,42 @@ TEST_CASE("MidiFx quantize preserves short note gates instead of sorting off bef
   fx.process(&pair[1], 1, &out);
   REQUIRE(out.events[0].ump.is_note_off());
   REQUIRE(out.events[0].render_frame == 10);
+}
+
+TEST_CASE("MidiFx quantize pairs note gates by source track", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  fx.set_quantize(q);
+
+  // Two source tracks share the same destination, group, channel and pitch.
+  // Their gates overlap, so pairing by only the MIDI address swaps the two
+  // timing shifts: B's off must use B's +30 shift and A's off its +40 shift.
+  const MidiEvent input[] = {
+      tracked_note_on(60, 60, 100, 10),
+      tracked_note_on(70, 60, 100, 20),
+      tracked_note_off(90, 60, 20),
+      tracked_note_off(110, 60, 10),
+  };
+  MidiFxBuffer out;
+  fx.process(input, 4, &out);
+
+  REQUIRE(out.size == 4);
+  REQUIRE(out.events[0].source_track_id == 10);
+  REQUIRE(out.events[0].ump.is_note_on());
+  REQUIRE(out.events[0].render_frame == 100);
+  REQUIRE(out.events[1].source_track_id == 20);
+  REQUIRE(out.events[1].ump.is_note_on());
+  REQUIRE(out.events[1].render_frame == 100);
+  REQUIRE(out.events[2].source_track_id == 20);
+  REQUIRE(out.events[2].ump.is_note_off());
+  REQUIRE(out.events[2].render_frame == 120);
+  REQUIRE(out.events[3].source_track_id == 10);
+  REQUIRE(out.events[3].ump.is_note_off());
+  REQUIRE(out.events[3].render_frame == 150);
 }
 
 TEST_CASE("MidiFx quantize can swing odd grid lines", "[midi]") {

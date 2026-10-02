@@ -222,6 +222,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def stop(self, render_frame: int = -1) -> None:
+        """Stop the transport.
+
+        A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+        centred pitch bend on every channel played since the last reset, so
+        controller values set before a loop region are not restored at the wrap.
+        """
         _check(
             _get_lib().sonare_engine_stop(
                 self._require_handle(), _to_c_int64(render_frame, "render_frame")
@@ -229,6 +235,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def seek_sample(self, timeline_sample: int, render_frame: int = -1) -> None:
+        """Move the playhead to a timeline sample.
+
+        A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+        centred pitch bend on every channel played since the last reset, so
+        controller values set before a loop region are not restored at the wrap.
+        """
         _check(
             _get_lib().sonare_engine_seek_sample(
                 self._require_handle(),
@@ -279,6 +291,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def seek_ppq(self, ppq: float, render_frame: int = -1) -> None:
+        """Move the playhead to a PPQ position.
+
+        A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+        centred pitch bend on every channel played since the last reset, so
+        controller values set before a loop region are not restored at the wrap.
+        """
         _check(
             _get_lib().sonare_engine_seek_ppq(
                 self._require_handle(), float(ppq), _to_c_int64(render_frame, "render_frame")
@@ -384,6 +402,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     def set_loop(self, start_ppq: float, end_ppq: float, enabled: bool = True) -> None:
+        """Set the loop region and whether it is enabled.
+
+        A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+        centred pitch bend on every channel played since the last reset, so
+        controller values set before a loop region are not restored at the wrap.
+        """
         _check(
             _get_lib().sonare_engine_set_loop(
                 self._require_handle(), float(start_ppq), float(end_ppq), 1 if enabled else 0
@@ -738,7 +762,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         A destination marked external bypasses the internal instrument rack; its
         sequenced events are buffered in the engine's external-MIDI output queue
         for the host to drain with :meth:`drain_external_midi`. ``external`` False
-        clears the mark.
+        clears the mark. Control-thread only. The change takes effect at the next
+        processed block; switching a destination's route first releases its notes
+        and resets its controllers through the old route, and drops its pending
+        MIDI-FX events. Single writer.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_midi_destination_external"):

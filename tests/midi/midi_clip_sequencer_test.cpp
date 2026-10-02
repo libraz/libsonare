@@ -628,6 +628,273 @@ TEST_CASE("MidiSequencer keeps notes sounding when a republished set still conta
   REQUIRE(seq.active_note_count() == 1);  // still sounding, not released
 }
 
+TEST_CASE(
+    "MidiSequencer refresh releases a clip whose destination changed and drops its pending FX",
+    "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 40;
+  arp.gate_frames = 40;
+  fx.set_arpeggiator(arp);
+  REQUIRE(seq.set_midi_fx(5, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule original;
+  original.id = 43;
+  original.destination_id = 5;
+  original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({original});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 32);
+
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].destination == 5);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.ump.note_number() == 60);
+  REQUIRE(seq.active_note_count() == 1);
+
+  // A refreshed schedule may reuse the clip id while routing the clip to a new
+  // instrument. The old note and generated events belong to destination 5 and
+  // must not survive the refresh under the id-only identity check.
+  MidiClipSchedule replacement = original;
+  replacement.destination_id = 6;
+  replacement.events.clear();
+  seq.set_midi_clips({replacement});
+  seq.acquire_midi_clips();
+  sink.events.clear();
+  seq.process_block(32, 32);
+
+  REQUIRE(seq.active_note_count() == 0);
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].destination == 5);
+  REQUIRE(sink.events[0].event.render_frame == 32);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
+  REQUIRE(sink.events[0].event.ump.note_number() == 60);
+}
+
+TEST_CASE("MidiSequencer refresh releases a clip whose source track changed", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 40;
+  arp.gate_frames = 40;
+  fx.set_arpeggiator(arp);
+  REQUIRE(seq.set_midi_fx(5, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule original;
+  original.id = 44;
+  original.track_id = 10;
+  original.destination_id = 5;
+  original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({original});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 32);
+
+  REQUIRE(seq.active_note_count() == 1);
+  MidiClipSchedule replacement = original;
+  replacement.track_id = 20;
+  replacement.events.clear();
+  seq.set_midi_clips({replacement});
+  seq.acquire_midi_clips();
+  sink.events.clear();
+  seq.process_block(32, 32);
+
+  REQUIRE(seq.active_note_count() == 0);
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].destination == 5);
+  REQUIRE(sink.events[0].event.render_frame == 32);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
+  REQUIRE(sink.events[0].event.ump.note_number() == 60);
+  REQUIRE(sink.events[0].event.source_track_id == 10);
+}
+
+TEST_CASE("MidiSequencer note-off fallback keeps a different source track active", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule track_a;
+  track_a.id = 101;
+  track_a.track_id = 10;
+  track_a.destination_id = 5;
+  track_a.events = {
+      {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+      {10, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
+      {20, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
+  };
+  MidiClipSchedule track_b;
+  track_b.id = 102;
+  track_b.track_id = 20;
+  track_b.destination_id = 5;
+  track_b.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({track_a, track_b});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 32);
+
+  // The duplicate A note-off must not consume B's same-pitch note.
+  REQUIRE(seq.active_note_count() == 1);
+
+  sink.events.clear();
+  seq.set_midi_clips({track_a});
+  seq.acquire_midi_clips();
+  seq.process_block(32, 32);
+
+  REQUIRE(seq.active_note_count() == 0);
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].destination == 5);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
+  REQUIRE(sink.events[0].event.ump.note_number() == 60);
+  REQUIRE(sink.events[0].event.source_track_id == 20);
+}
+
+TEST_CASE("MidiSequencer retains sustain state for global and destination stop resets", "[midi]") {
+  constexpr uint32_t kDestination = 11;
+  const auto seed_sustain_state = [&](MidiSequencer& seq) {
+    seq.inject_event(kDestination, 0, sonare::midi::make_midi1_control_change(0, 0, 64, 127));
+    seq.inject_event(kDestination, 1, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(kDestination, 2, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  };
+  const auto require_reset = [&](const CapturingSink& sink, int64_t render_frame) {
+    REQUIRE(sink.events.size() == 4);
+    for (const auto& captured : sink.events) {
+      REQUIRE(captured.destination == kDestination);
+      REQUIRE(captured.event.render_frame == render_frame);
+    }
+    REQUIRE(sink.events[0].event.ump == sonare::midi::make_midi1_control_change(0, 0, 64, 0));
+    REQUIRE(sink.events[1].event.ump == sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+    REQUIRE(sink.events[2].event.ump == sonare::midi::make_midi1_control_change(0, 0, 123, 0));
+    REQUIRE(sink.events[3].event.ump == sonare::midi::make_midi1_pitch_bend(0, 0, 8192));
+  };
+
+  SECTION("global stop") {
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+    seed_sustain_state(seq);
+    REQUIRE(seq.active_note_count() == 0);
+    sink.events.clear();
+
+    seq.all_notes_off(/*render_frame=*/3);
+    require_reset(sink, 3);
+  }
+
+  SECTION("destination stop") {
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+    seed_sustain_state(seq);
+    REQUIRE(seq.active_note_count() == 0);
+    sink.events.clear();
+
+    seq.all_notes_off_for_destination(kDestination, /*render_frame=*/4);
+    require_reset(sink, 4);
+  }
+}
+
+TEST_CASE("MidiSequencer resets all retained channel triples at ledger capacity", "[midi]") {
+  constexpr uint32_t kDestination = 12;
+  constexpr size_t kChannelTriples = 16u * 16u;
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  for (uint8_t group = 0; group < 16; ++group) {
+    for (uint8_t channel = 0; channel < 16; ++channel) {
+      seq.inject_event(kDestination, 0,
+                       sonare::midi::make_midi1_control_change(group, channel, 64, 127));
+    }
+  }
+  sink.events.clear();
+  seq.all_notes_off_for_destination(kDestination, /*render_frame=*/256);
+
+  REQUIRE(sink.events.size() == kChannelTriples * 4);
+  std::array<std::array<std::array<int, 4>, 16>, 16> reset_counts{};
+  for (const auto& captured : sink.events) {
+    REQUIRE(captured.destination == kDestination);
+    REQUIRE(captured.event.render_frame == 256);
+    const uint8_t group = captured.event.ump.group;
+    const uint8_t channel = captured.event.ump.channel();
+    REQUIRE(group < 16);
+    REQUIRE(channel < 16);
+    if (captured.event.ump.status_nibble() ==
+        static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange)) {
+      const uint8_t controller = captured.event.ump.note_number();
+      if (controller == 64) {
+        ++reset_counts[group][channel][0];
+      } else if (controller == 121) {
+        ++reset_counts[group][channel][1];
+      } else if (controller == 123) {
+        ++reset_counts[group][channel][2];
+      } else {
+        FAIL("unexpected controller in retained-channel reset");
+      }
+    } else if (captured.event.ump.status_nibble() ==
+               static_cast<uint8_t>(sonare::midi::UmpStatus::kPitchBend)) {
+      ++reset_counts[group][channel][3];
+    } else {
+      FAIL("unexpected message in retained-channel reset");
+    }
+  }
+  for (const auto& by_channel : reset_counts) {
+    for (const auto& counts : by_channel) {
+      REQUIRE(counts[0] == 1);
+      REQUIRE(counts[1] == 1);
+      REQUIRE(counts[2] == 1);
+      REQUIRE(counts[3] == 1);
+    }
+  }
+}
+
+TEST_CASE("MidiSequencer drops new stateful events when the ledger is full but forwards note-offs",
+          "[midi]") {
+  constexpr uint32_t kFullDestination = 13;
+  constexpr uint32_t kOverflowDestination = 14;
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  for (uint8_t group = 0; group < 16; ++group) {
+    for (uint8_t channel = 0; channel < 16; ++channel) {
+      seq.inject_event(kFullDestination, 0,
+                       sonare::midi::make_midi1_control_change(group, channel, 1, 127));
+    }
+  }
+  sink.events.clear();
+
+  seq.inject_event(kOverflowDestination, 1, sonare::midi::make_midi1_control_change(0, 0, 64, 127));
+  REQUIRE(sink.events.empty());
+  REQUIRE(seq.retained_channel_overflow_count() == 1);
+
+  seq.inject_event(kOverflowDestination, 2, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].destination == kOverflowDestination);
+  REQUIRE(sink.events[0].event.render_frame == 2);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
+}
+
 TEST_CASE("MidiSequencer dispatches in-block events in order and frame", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;
@@ -1206,6 +1473,417 @@ TEST_CASE("MidiSequencer MIDI FX clear releases generated notes at the audio bou
   }
 }
 
+TEST_CASE("MidiSequencer clears MIDI FX timing state on stop", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
+
+  // The first note stores a +40-frame quantize shift (60 -> 100) in the live
+  // MIDI FX chain. all_notes_off() must retire that pairing state as well as
+  // the sequencer's sounding-note table.
+  MidiClipSchedule clip;
+  clip.id = 501;
+  clip.destination_id = 7;
+  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.render_frame == 100);
+  REQUIRE(seq.active_note_count() == 1);
+
+  seq.all_notes_off(128);
+  REQUIRE(seq.active_note_count() == 0);
+  sink.events.clear();
+
+  // A new stream starts at the origin. Its short gate must retain its own
+  // zero shift and close at frame 20, rather than inheriting the old shaped
+  // onset at 100 and being forced to frame 101.
+  seq.inject_event(7, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  seq.inject_event(7, 20, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.render_frame == 0);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(sink.events[1].event.render_frame == 20);
+  REQUIRE(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer keeps unchanged destination MIDI FX timing across updates", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain destination_a;
+  sonare::midi::QuantizeConfig quantize_a;
+  quantize_a.enabled = true;
+  quantize_a.grid_frames = 100;
+  quantize_a.strength = 1.0f;
+  destination_a.set_quantize(quantize_a);
+  REQUIRE(seq.set_midi_fx(7, destination_a));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule clip;
+  clip.id = 502;
+  clip.destination_id = 7;
+  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {80, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  // Leave the transformed note-on pending at frame 100 while the source
+  // note-off remains in the next block. This preserves the A-chain timing
+  // ledger across the unrelated B update below.
+  seq.process_block(0, 70);
+  REQUIRE(sink.events.empty());
+
+  MidiFxChain destination_b;
+  sonare::midi::QuantizeConfig quantize_b;
+  quantize_b.enabled = true;
+  quantize_b.grid_frames = 80;
+  quantize_b.strength = 1.0f;
+  destination_b.set_quantize(quantize_b);
+  REQUIRE(seq.set_midi_fx(8, destination_b));
+  seq.acquire_midi_fx(70);
+
+  seq.process_block(70, 100);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].destination == 7);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.render_frame == 100);
+  REQUIRE(sink.events[1].destination == 7);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(sink.events[1].event.render_frame == 120);
+  REQUIRE(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer releases an active clip note after its published end is shortened",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule original;
+  original.id = 503;
+  original.track_id = 17;
+  original.destination_id = 7;
+  original.length_samples = 1000;
+  original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({original});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+  REQUIRE(seq.active_note_count() == 1);
+
+  // The clip keeps the same identity, but its new exclusive end (128) is
+  // already behind the playhead when the replacement is adopted at 256.
+  MidiClipSchedule shortened = original;
+  shortened.length_samples = 128;
+  seq.set_midi_clips({shortened});
+  seq.acquire_midi_clips();
+  sink.events.clear();
+  seq.process_block(256, 64);
+
+  REQUIRE(seq.active_note_count() == 0);
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].destination == 7);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
+  REQUIRE(sink.events[0].event.ump.note_number() == 60);
+  REQUIRE(sink.events[0].event.render_frame == 256);
+  REQUIRE(sink.events[0].event.source_track_id == original.track_id);
+}
+
+TEST_CASE("MidiSequencer clears only a removed clip's MIDI FX timing state", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule removed;
+  removed.id = 504;
+  removed.track_id = 10;
+  removed.destination_id = 7;
+  removed.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  MidiClipSchedule retained;
+  retained.id = 505;
+  retained.track_id = 20;
+  retained.destination_id = 7;
+  retained.events = {{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({removed, retained});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+  REQUIRE(seq.active_note_count() == 2);
+
+  // Remove only track 10 and publish a replacement clip on that same track.
+  // Its new onset at 170 quantizes to 200 (+30 shift), so a stale +40 timing
+  // entry from the removed onset would move its off to frame 230 instead of
+  // the correct frame 220.
+  MidiClipSchedule replacement;
+  replacement.id = 506;
+  replacement.track_id = 10;
+  replacement.destination_id = 7;
+  replacement.events = {{170, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                        {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({replacement, retained});
+  seq.acquire_midi_clips();
+  sink.events.clear();
+  seq.process_block(128, 128);
+
+  bool saw_removed_off = false;
+  bool saw_replacement_off = false;
+  for (const auto& captured : sink.events) {
+    if (captured.destination == 7 && captured.event.source_track_id == 10 &&
+        captured.event.ump.is_note_off() && captured.event.ump.note_number() == 60) {
+      if (captured.event.render_frame == 128) {
+        saw_removed_off = true;
+      } else if (captured.event.render_frame == 220) {
+        saw_replacement_off = true;
+      } else {
+        FAIL("unexpected source-track note-off frame");
+      }
+    }
+  }
+  REQUIRE(saw_removed_off);
+  REQUIRE(saw_replacement_off);
+  REQUIRE(seq.active_note_count() == 1);  // retained track 20 is still held.
+}
+
+TEST_CASE("MidiSequencer clears matching MIDI FX timing after a channel-mode reset", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule clip;
+  clip.id = 507;
+  clip.track_id = 10;
+  clip.destination_id = 7;
+  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+  REQUIRE(seq.active_note_count() == 1);
+
+  seq.inject_event(7, 128, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  REQUIRE(seq.active_note_count() == 0);
+
+  // Keep the clip identity so only the channel-mode reset can retire the old
+  // timing entry. The new in-block gate quantizes 170 -> 200 (+30), and its
+  // off must land at 220 rather than inherit the old +40 shift and land at
+  // 230.
+  clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {170, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  sink.events.clear();
+  seq.process_block(128, 128);
+
+  bool saw_restarted_off = false;
+  for (const auto& captured : sink.events) {
+    if (captured.destination == 7 && captured.event.source_track_id == 10 &&
+        captured.event.ump.is_note_off() && captured.event.ump.note_number() == 60) {
+      REQUIRE(captured.event.render_frame == 220);
+      saw_restarted_off = true;
+    }
+  }
+  REQUIRE(saw_restarted_off);
+  REQUIRE(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer channel-mode resets retire the active-note ledger", "[midi]") {
+  constexpr std::array<uint8_t, 6> kResetControllers = {120, 123, 124, 125, 126, 127};
+  for (const uint8_t controller : kResetControllers) {
+    INFO("controller=" << static_cast<int>(controller));
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+
+    constexpr uint32_t kDestination = 31;
+    for (size_t i = 0; i < MidiSequencer::kMaxActiveNotes; ++i) {
+      const uint8_t channel = static_cast<uint8_t>((i / 128u) & 0x0Fu);
+      const uint8_t note = static_cast<uint8_t>(i % 128u);
+      seq.inject_event(kDestination, static_cast<int64_t>(i),
+                       sonare::midi::make_midi1_note_on(0, channel, note, 100));
+    }
+    REQUIRE(seq.active_note_count() == MidiSequencer::kMaxActiveNotes);
+    REQUIRE(seq.active_note_overflow_count() == 0);
+
+    seq.inject_event(kDestination, 1000,
+                     sonare::midi::make_midi1_control_change(0, 0, controller, 0));
+    // The reset is channel-scoped: the 128 notes on channel 1 remain tracked
+    // while all 128 notes on channel 0 are retired.
+    REQUIRE(seq.active_note_count() == 128);
+    REQUIRE(seq.active_note_overflow_count() == 0);
+
+    const size_t dispatched_after_reset = sink.events.size();
+    seq.inject_event(kDestination, 1001, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    REQUIRE(seq.active_note_count() == 129);
+    REQUIRE(seq.active_note_overflow_count() == 0);
+    REQUIRE(sink.events.size() > dispatched_after_reset);
+    REQUIRE(seq.retained_channel_overflow_count() == 0);
+  }
+}
+
+TEST_CASE("MidiSequencer channel-mode reset cancels only matching pending MIDI FX notes",
+          "[midi]") {
+  const auto configure_arpeggiator = [](MidiFxChain& fx) {
+    sonare::midi::ArpeggiatorConfig arp;
+    arp.enabled = true;
+    arp.steps = 2;
+    arp.intervals[0] = 0;
+    arp.intervals[1] = 12;
+    arp.step_frames = 40;
+    arp.gate_frames = 10;
+    fx.set_arpeggiator(arp);
+  };
+
+  SECTION("destination isolation") {
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+    MidiFxChain destination_a;
+    MidiFxChain destination_b;
+    configure_arpeggiator(destination_a);
+    configure_arpeggiator(destination_b);
+    REQUIRE(seq.set_midi_fx(9, destination_a));
+    REQUIRE(seq.set_midi_fx(10, destination_b));
+    seq.acquire_midi_fx(0);
+
+    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(10, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    sink.events.clear();
+    seq.inject_event(9, 20, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+    seq.process_block(20, 64);
+
+    size_t surviving_destination_b = 0;
+    for (const auto& captured : sink.events) {
+      if (captured.destination == 9 && captured.event.render_frame >= 40) {
+        FAIL("channel-mode reset leaked a pending note on its own destination");
+      }
+      if (captured.destination == 10 && captured.event.render_frame >= 40) {
+        ++surviving_destination_b;
+      }
+    }
+    REQUIRE(surviving_destination_b == 2);
+  }
+
+  SECTION("group and channel isolation") {
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+    MidiFxChain destination;
+    configure_arpeggiator(destination);
+    REQUIRE(seq.set_midi_fx(9, destination));
+    seq.acquire_midi_fx(0);
+
+    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 1, 60, 100));
+    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(1, 0, 60, 100));
+    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(1, 1, 60, 100));
+    sink.events.clear();
+    seq.inject_event(9, 20, sonare::midi::make_midi1_control_change(0, 0, 123, 0));
+    seq.process_block(20, 64);
+
+    size_t surviving_other_lanes = 0;
+    for (const auto& captured : sink.events) {
+      if (captured.event.render_frame < 40) continue;
+      const uint8_t group = captured.event.ump.group;
+      const uint8_t channel = captured.event.ump.channel();
+      if (group == 0 && channel == 0) {
+        FAIL("channel-mode reset leaked a pending note on its own channel");
+      }
+      if ((group == 0 && channel == 1) || (group == 1 && channel == 0) ||
+          (group == 1 && channel == 1)) {
+        ++surviving_other_lanes;
+      }
+    }
+    REQUIRE(surviving_other_lanes == 6);
+  }
+}
+
+TEST_CASE("MidiSequencer removes queued notes before dispatching a queued channel reset",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 200;
+  arp.gate_frames = 50;
+  fx.set_arpeggiator(arp);
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
+
+  // The second arpeggiator gate is pending in the future. The controller reset
+  // is also pending (60 -> 100), so its cleanup must remove the selected slot
+  // safely before it erases the remaining future note slots.
+  seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  seq.inject_event(9, 60, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  sink.events.clear();
+  seq.process_block(61, 300);
+
+  bool saw_queued_reset = false;
+  for (const auto& captured : sink.events) {
+    if (captured.destination != 9) continue;
+    if (captured.event.render_frame == 100 &&
+        captured.event.ump.status_nibble() ==
+            static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange)) {
+      saw_queued_reset = true;
+    }
+    REQUIRE((captured.event.render_frame < 200 || !captured.event.ump.is_note_on()));
+  }
+  REQUIRE(saw_queued_reset);
+  REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
+  REQUIRE(seq.active_note_count() == 0);
+}
+
 TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety)", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;
@@ -1443,15 +2121,28 @@ TEST_CASE("MidiSequencer note-off is keyed by destination", "[midi]") {
 
   sink.events.clear();
   seq.all_notes_off(128);
-  // 1 note-off (dest 10) plus its channel's 4-message controller reset.
-  REQUIRE(sink.events.size() == 1 + 4);
+  // 1 note-off (dest 10) plus one 4-message controller reset for each
+  // destination that received a channel event. Destination 20's note-off
+  // already removed its active note, but its channel state remains retained
+  // until this global reset.
+  REQUIRE(sink.events.size() == 1 + 2 * 4);
   size_t note_offs = 0;
+  size_t destination10_events = 0;
+  size_t destination20_events = 0;
   for (const auto& cap : sink.events) {
-    REQUIRE(cap.destination == 10);  // every released/reset message belongs to dest 10
+    REQUIRE((cap.destination == 10 || cap.destination == 20));
+    if (cap.destination == 10) {
+      ++destination10_events;
+    } else {
+      ++destination20_events;
+    }
     if (cap.event.ump.is_note_off()) ++note_offs;
   }
   REQUIRE(note_offs == 1);
+  REQUIRE(destination10_events == 1 + 4);
+  REQUIRE(destination20_events == 4);
   REQUIRE(sink.events[0].event.ump.is_note_off());  // note-off dispatched before the resets
+  REQUIRE(sink.events[0].destination == 10);
   REQUIRE(seq.active_note_count() == 0);
 }
 
@@ -1623,4 +2314,80 @@ TEST_CASE("MidiSequencer gives a groupless clip event group 0, not the packed ni
   // word0 is untouched: normalization only ever rewrites the cached field.
   REQUIRE(sink.events[0].event.ump.words[0] == stream.words[0]);
   REQUIRE(sink.events[1].event.ump.words[0] == utility.words[0]);
+}
+
+TEST_CASE("MidiSequencer clip removal preserves another clip's gate on the same track", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule removed;
+  removed.id = 901;
+  removed.track_id = 10;
+  removed.destination_id = 7;
+  removed.length_samples = 1000;
+  removed.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  MidiClipSchedule surviving = removed;
+  surviving.id = 902;
+  surviving.events = {{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                      {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({removed, surviving});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+  REQUIRE(seq.active_note_count() == 2);
+  sink.events.clear();
+  seq.set_midi_clips({surviving});
+  seq.acquire_midi_clips();
+  seq.process_block(128, 128);
+  REQUIRE(sink.events.size() == 2);
+  CHECK(sink.events[0].event.render_frame == 128);
+  CHECK(sink.events[1].event.render_frame == 220);
+  CHECK(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer pending clip trim preserves an earlier overlapping note's gate",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
+  MidiClipSchedule clip;
+  clip.id = 903;
+  clip.track_id = 10;
+  clip.destination_id = 7;
+  clip.length_samples = 1000;
+  clip.events = {{99, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {151, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {195, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+  seq.process_block(128, 64);
+  REQUIRE(seq.active_note_count() == 1);
+  sink.events.clear();
+
+  // Cancel the second onset at 200 while keeping the first onset's +1 shift.
+  clip.length_samples = 199;
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(192, 64);
+  REQUIRE(sink.events.size() == 1);
+  CHECK(sink.events[0].event.ump.is_note_off());
+  CHECK(sink.events[0].event.render_frame == 196);
+  CHECK(seq.active_note_count() == 0);
 }

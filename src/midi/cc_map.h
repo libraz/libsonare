@@ -139,16 +139,20 @@ class CcMap {
   /// [min_value, max_value]. Re-arming overrides any pending learn.
   ///
   /// `min_movement` is an activity threshold in 7-bit CC units (0..127). When it
-  /// is 0 (the default) the FIRST observed control-change binds immediately, as
-  /// before. When it is > 0, a controller is only learned once its value has
-  /// MOVED by at least `min_movement` from the first value observed for that
-  /// (cc_number, channel) while armed — so idle / noise traffic (a controller
-  /// sitting still, or jittering by less than the threshold) does not trigger a
-  /// spurious learn. The threshold is compared in 7-bit units for both MIDI 1.0
-  /// (native 7-bit) and MIDI 2.0 (down-scaled) control-change values. It applies
-  /// only to standalone 7-bit controllers; multi-message controllers (14-bit CC
-  /// pairs, RPN, NRPN) are assembled from a sequence of distinct CC numbers and
-  /// so bypass the per-CC movement gate.
+  /// is 0 (the default) the FIRST observed standalone control-change binds
+  /// immediately. A low-numbered CC (0..31) is held until the next message so
+  /// it can still form a 14-bit MSB/LSB pair; a repeated low CC is treated as a
+  /// standalone controller, while an RPN/NRPN selector CC (98..101) discards
+  /// the held low CC without committing it. When it is > 0, a controller is only
+  /// learned once its value has MOVED by at least `min_movement` from the first
+  /// value observed for that controller on its UMP group and channel while
+  /// armed — so idle / noise traffic (a controller sitting still, or jittering
+  /// by less than the threshold) does not trigger a spurious learn. The
+  /// threshold is compared in 7-bit units for both MIDI 1.0 (native 7-bit) and
+  /// MIDI 2.0 (down-scaled) control-change values. It applies only to
+  /// standalone 7-bit controllers; multi-message controllers (14-bit CC pairs,
+  /// RPN, NRPN) are assembled from a sequence of distinct CC numbers and so
+  /// bypass the per-CC movement gate.
   void begin_learn(uint32_t param_id, float min_value = 0.0f, float max_value = 1.0f,
                    uint8_t min_movement = 0) noexcept;
   /// Disarm a pending learn without binding.
@@ -166,31 +170,35 @@ class CcMap {
 
   /// Resolve the parameter id bound to (cc_number, channel). A binding with
   /// kCcAnyChannel matches any channel; an exact-channel binding takes priority
-  /// over an any-channel one. Returns false if unbound. RT-safe.
+  /// over an any-channel one. Returns false if unbound. Selector-addressed
+  /// kRpn / kNrpn bindings are not reached by cc_number. RT-safe.
   bool lookup_param(uint8_t cc_number, uint8_t channel, uint32_t* out_param) const noexcept;
 
   /// Map a normalized (0..1) CC value to the bound parameter's unit range.
-  /// Returns false if (cc_number, channel) is unbound. RT-safe.
+  /// Returns false if (cc_number, channel) is unbound. Selector-addressed
+  /// kRpn / kNrpn bindings are not reached by cc_number. RT-safe.
   bool value_to_unit(uint8_t cc_number, uint8_t channel, float norm,
                      float* out_unit) const noexcept;
 
   /// AUDIO thread: decode a live control-change UMP at the binding's full
   /// resolution. Unlike the cc_number-only lookup_param/value_to_unit pair, this
   /// is kind-aware: it accumulates 14-bit MSB/LSB pairs and RPN/NRPN selector +
-  /// Data Entry state per channel (mirroring the learn state machine), so a
+  /// Data Entry state per UMP group and channel (mirroring the learn state machine), so a
   /// high-resolution controller drives its parameter at 14-bit precision instead
   /// of the MSB-only 7 bits, and Data Entry routes to the currently-selected
   /// RPN/NRPN binding. A plain 7-bit bound CC (and any MIDI 2.0 control-change,
   /// already full-resolution) resolves immediately. Selector / LSB-only / unbound
   /// messages update state and return false. On a resolved value writes the
   /// target param id to @p out_param and the unit value to @p out_unit and
-  /// returns true. RT-safe: no allocation, no lock; mutates only the per-channel
-  /// live-decode state. Must be called from a single (audio) thread.
+  /// returns true. RT-safe: no allocation, no lock; mutates only the
+  /// per-group/channel live-decode state. Must be called from a single (audio)
+  /// thread.
   bool observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) const noexcept;
 
-  /// Resets the per-channel live-decode accumulator state (14-bit MSB pending,
-  /// RPN/NRPN selectors, Data Entry MSB). Does not touch bindings. Call when the
-  /// live input stream is (re)started so stale partial state cannot leak across.
+  /// Resets the per-group/channel live-decode accumulator state (14-bit MSB
+  /// pending, RPN/NRPN selectors, Data Entry MSB). Does not touch bindings. Call
+  /// when the live input stream is (re)started so stale partial state cannot leak
+  /// across.
   void reset_live_decode() noexcept;
 
   // -- CONTROL thread: CC <-> automation conversion ------------------------
@@ -248,35 +256,50 @@ class CcMap {
   float learn_min_ = 0.0f;
   float learn_max_ = 1.0f;
 
-  // Activity threshold (7-bit units): a controller must move at least this far
-  // from its first observed value before it is learned. 0 disables the gate.
+  static constexpr size_t kStateKeyCount = 16u * 16u;
+
+  static constexpr size_t state_key(uint8_t group, uint8_t channel) noexcept {
+    return (static_cast<size_t>(group & 0x0Fu) << 4u) | (channel & 0x0Fu);
+  }
+
+  // MIDI learn state is keyed by the physical UMP stream (group + channel).
+  // Bindings intentionally remain group-agnostic, but selector and 14-bit
+  // messages from separate streams must never complete one another.
+  struct LearnChannelState {
+    // Movement-gate baselines are per controller. Background motion on CC#71
+    // must not replace the baseline that CC#74 is measured against.
+    std::array<bool, 128> baseline_valid{};
+    std::array<uint8_t, 128> baseline_values{};
+
+    bool pending_cc_msb_valid = false;
+    uint8_t pending_cc_msb = 0;
+    uint8_t pending_cc_msb_value = 0;
+
+    bool rpn_msb_valid = false;
+    bool rpn_lsb_valid = false;
+    uint8_t rpn_msb = 0;
+    uint8_t rpn_lsb = 0;
+
+    bool nrpn_msb_valid = false;
+    bool nrpn_lsb_valid = false;
+    uint8_t nrpn_msb = 0;
+    uint8_t nrpn_lsb = 0;
+  };
+  std::array<LearnChannelState, kStateKeyCount> learn_states_{};
+
+  // Activity threshold configuration (7-bit units) is shared by the armed
+  // learn operation; the accumulated state above is per UMP group + channel.
   uint8_t learn_min_movement_ = 0;
-  bool learn_baseline_valid_ = false;
-  uint8_t learn_baseline_cc_ = 0;
-  uint8_t learn_baseline_channel_ = 0;
-  uint8_t learn_baseline_value_ = 0;
 
-  bool pending_cc_msb_valid_ = false;
-  uint8_t pending_cc_msb_ = 0;
-  uint8_t pending_cc_msb_channel_ = 0;
-
-  bool rpn_msb_valid_ = false;
-  bool rpn_lsb_valid_ = false;
-  uint8_t rpn_msb_ = 0;
-  uint8_t rpn_lsb_ = 0;
-
-  bool nrpn_msb_valid_ = false;
-  bool nrpn_lsb_valid_ = false;
-  uint8_t nrpn_msb_ = 0;
-  uint8_t nrpn_lsb_ = 0;
-
-  // Per-channel live-decode accumulator (AUDIO thread; observe_live_cc only).
-  // Distinct from the control-thread learn state above.
+  // Per-group/channel live-decode accumulator (AUDIO thread; observe_live_cc only).
+  // Distinct from the control-thread learn state above. Each MSB controller has
+  // its own pending value: MIDI permits CC#1 and CC#7 gestures to interleave on
+  // one channel, so one shared MSB slot would make the first LSB address the
+  // wrong controller (or disappear entirely).
   struct LiveChannelState {
     // 14-bit Control Change: MSB (CC 0..31) seen, awaiting its LSB (CC msb+32).
-    bool cc_msb_valid = false;
-    uint8_t cc_msb_number = 0;
-    uint8_t cc_msb_value = 0;
+    std::array<bool, 32> cc_msb_valid{};
+    std::array<uint8_t, 32> cc_msb_values{};
     // Currently-addressed RPN/NRPN selector and which space is active.
     bool nrpn_active = false;
     uint8_t rpn_msb = 0x7Fu;
@@ -288,7 +311,7 @@ class CcMap {
     uint8_t data_msb = 0;
   };
   struct LiveDecodeState {
-    std::array<LiveChannelState, 16> channels{};
+    std::array<LiveChannelState, kStateKeyCount> channels{};
   };
   // The published binding snapshots share this audio-thread-owned state across
   // revisions. The shared_ptr itself is immutable after construction/copy, so

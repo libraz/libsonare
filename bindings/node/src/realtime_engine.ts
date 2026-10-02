@@ -131,10 +131,20 @@ export class RealtimeEngine {
     this.native.play(renderFrame);
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   stop(renderFrame = -1): void {
     this.native.stop(renderFrame);
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   seekSample(timelineSample: number, renderFrame = -1): void {
     this.native.seekSample(timelineSample, renderFrame);
   }
@@ -180,6 +190,11 @@ export class RealtimeEngine {
     this.native.applyCommandsDueNowPreservingFuture();
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   seekPpq(ppq: number, renderFrame = -1): void {
     this.native.seekPpq(ppq, renderFrame);
   }
@@ -214,6 +229,11 @@ export class RealtimeEngine {
     return this.native.sampleAtPpq(ppq);
   }
 
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
     this.native.setLoop(startPpq, endPpq, enabled);
   }
@@ -1562,7 +1582,10 @@ export class RealtimeEngine {
    * Routes a MIDI destination (a track lane) to the external-MIDI output queue
    * instead of the internal instrument rack, so the track drives an external
    * device. Its sequenced events are buffered for {@link drainExternalMidi}.
-   * Clearing it restores internal-synth playback. Control-thread only.
+   * Clearing it restores internal-synth playback. Control-thread only. The
+   * change takes effect at the next processed block; switching a destination's
+   * route first releases its notes and resets its controllers through the old
+   * route, and drops its pending MIDI-FX events. Single writer.
    */
   setMidiDestinationExternal(destinationId: number, external: boolean): void {
     this.native.setMidiDestinationExternal(destinationId, external);

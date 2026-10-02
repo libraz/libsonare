@@ -87,6 +87,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.acquire_midi_clips();
   midi_sequencer_.acquire_midi_fx(state.render_frame);
+  // Adopt routes after MIDI-FX cleanup (old route) and before any event dispatches this block.
+  adopt_midi_destination_routes(state.render_frame);
   midi_cc_maps_.acquire();
   host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
   live_midi_input_destination_id_ = midi_input_destination_id_.load(std::memory_order_relaxed);
@@ -154,42 +156,39 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
 
   automation::AutomationBoundaryList automation_boundaries;
   if (boundary_context.loop_wrap) {
-    // On a loop-wrap block the playhead is NOT a single linear ppq span: it runs
-    // from ppq_position up to loop_end_ppq (offsets [0, loop_wrap_offset)), then
-    // jumps back and runs from loop_start_ppq (offsets [loop_wrap_offset,
-    // frames)). Collecting one span ppq_position..block_end_ppq would overshoot
-    // past loop_end and miss every breakpoint in the looped-back region, so
-    // those breakpoints never become sub-block boundaries and apply a full block
-    // late. Collect each region separately and map breakpoints to their offset
-    // using the same fold the boundary splitter applies.
-    const int wrap_offset = boundary_context.loop_wrap_offset;
-    // Pre-wrap region: timeline runs forward to loop_end.
-    automation_.collect_boundaries(state.ppq_position, state.loop_end_ppq, &automation_boundaries);
-    for (size_t i = 0; i < automation_boundaries.size; ++i) {
-      const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
-      const int offset = static_cast<int>(timeline_sample - state.sample_position);
-      if (offset >= 0 && offset < wrap_offset) {
-        boundary_splitter_.add_automation(offset);
-      }
-    }
-    // Post-wrap region: timeline restarts at loop_start. The tail of this block
-    // renders (frames - wrap_offset) samples from the loop start; collect that
-    // far past loop_start_ppq.
-    const int64_t tail_frames = static_cast<int64_t>(frames) - wrap_offset;
-    if (tail_frames > 0) {
-      const double post_wrap_end_ppq =
-          tempo_map.sample_to_ppq(boundary_context.loop_start_timeline_sample + tail_frames);
-      automation_.collect_boundaries(state.loop_start_ppq, post_wrap_end_ppq,
-                                     &automation_boundaries);
-      for (size_t i = 0; i < automation_boundaries.size; ++i) {
-        const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
-        const int offset =
-            wrap_offset +
-            static_cast<int>(timeline_sample - boundary_context.loop_start_timeline_sample);
-        if (offset >= wrap_offset && offset < frames) {
-          boundary_splitter_.add_automation(offset);
+    // One linear interval per wrap plus the tail; the upper bound is exclusive
+    // so a breakpoint at loop_end applies at the wrap.
+    const int64_t loop_start_sample = boundary_context.loop_start_timeline_sample;
+    const int64_t loop_end_sample = tempo_map.ppq_to_sample(state.loop_end_ppq);
+    int interval_offset = 0;
+    int64_t interval_start_sample = state.sample_position;
+    for (size_t loop_index = 0; loop_index <= loop_boundaries.size(); ++loop_index) {
+      const bool ends_at_wrap = loop_index < loop_boundaries.size();
+      const int interval_end_offset = ends_at_wrap ? loop_boundaries[loop_index].offset : frames;
+      const int interval_frames = interval_end_offset - interval_offset;
+      const int64_t interval_end_sample =
+          ends_at_wrap ? loop_end_sample
+                       : interval_start_sample + static_cast<int64_t>(interval_frames);
+
+      if (interval_frames > 0) {
+        const double interval_start_ppq = tempo_map.sample_to_ppq(interval_start_sample);
+        const double interval_end_ppq = tempo_map.sample_to_ppq(interval_end_sample);
+        automation_.collect_boundaries(interval_start_ppq, interval_end_ppq,
+                                       &automation_boundaries);
+        for (size_t i = 0; i < automation_boundaries.size; ++i) {
+          const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
+          if (timeline_sample < interval_start_sample || timeline_sample >= interval_end_sample) {
+            continue;
+          }
+          const int64_t relative_sample = timeline_sample - interval_start_sample;
+          if (relative_sample < 0 || relative_sample >= interval_frames) continue;
+          boundary_splitter_.add_automation(interval_offset + static_cast<int>(relative_sample));
         }
       }
+
+      if (!ends_at_wrap) break;
+      interval_offset = interval_end_offset;
+      interval_start_sample = loop_start_sample;
     }
   } else {
     const double block_end_ppq = tempo_map.sample_to_ppq(state.sample_position + frames);

@@ -51,6 +51,29 @@ inline bool midi_event_has_borrowed_sysex(const midi::MidiEvent& event) noexcept
          event.prepared_sysex != nullptr;
 }
 
+namespace detail {
+
+/// Adds a non-negative frame offset without wrapping the signed timeline.
+inline int64_t saturating_add_nonnegative(int64_t base, int64_t offset) noexcept {
+  if (offset <= 0) return base;
+  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
+  if (base > kMaxFrame - offset) return kMaxFrame;
+  return base + offset;
+}
+
+/// Computes an exclusive block end and reports when the mathematical end is
+/// beyond the representable render-frame timeline.
+inline int64_t block_end_frame(int64_t block_start_frame, int num_frames,
+                               bool* overflowed) noexcept {
+  const int64_t delta = static_cast<int64_t>(num_frames);
+  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
+  const bool end_overflowed = delta > 0 && block_start_frame > kMaxFrame - delta;
+  if (overflowed != nullptr) *overflowed = end_overflowed;
+  return end_overflowed ? kMaxFrame : block_start_frame + delta;
+}
+
+}  // namespace detail
+
 /// Lock-free correlation between a monotonic host clock and the engine's
 /// absolute render-frame timeline. A device backend publishes an anchor at the
 /// first frame of each audio callback; timestamped MIDI backends read the latest
@@ -198,10 +221,14 @@ class MidiInputSource {
                              int num_frames) noexcept {
     if (num_frames <= 0) return 0;
     const size_t n = drain(out, capacity, block_start_frame);
-    const int64_t block_end_frame = block_start_frame + num_frames;
+    bool block_end_overflowed = false;
+    const int64_t block_end =
+        detail::block_end_frame(block_start_frame, num_frames, &block_end_overflowed);
     for (size_t i = 0; i < n; ++i) {
       if (out[i].render_frame < block_start_frame) out[i].render_frame = block_start_frame;
-      if (out[i].render_frame >= block_end_frame) out[i].render_frame = block_end_frame - 1;
+      if (!block_end_overflowed && out[i].render_frame >= block_end) {
+        out[i].render_frame = block_end - 1;
+      }
     }
     return n;
   }
@@ -238,8 +265,8 @@ class MidiOutputSink {
 /// Header-only fixed-capacity MIDI input buffer. This is a concrete seam
 /// implementation suitable for tests, embedded hosts, and simple backends that
 /// already call push_event() from a single MIDI callback thread and drain() from
-/// the audio thread. It is single-producer/single-consumer by contract; no heap
-/// allocation after construction.
+/// the audio thread. It is single-producer/single-consumer by contract, plus a
+/// clear() that may run on a third thread; no heap allocation after construction.
 template <size_t Capacity>
 class FixedMidiInputSource final : public MidiInputSource {
  public:
@@ -259,24 +286,37 @@ class FixedMidiInputSource final : public MidiInputSource {
     if (out == nullptr || capacity == 0) {
       return 0;
     }
-    size_t read = read_index_.load(std::memory_order_relaxed);
-    const size_t write = write_index_.load(std::memory_order_acquire);
+    uint64_t read = read_seq_.load(std::memory_order_relaxed);
+    honour_clear(&read);
+    const uint64_t write = write_seq_.load(std::memory_order_acquire);
     size_t n = 0;
+    size_t consumed_deferred = 0;
+    while (consumed_deferred < deferred_count_ && n < capacity) {
+      const Slot& slot = deferred_absolute_[consumed_deferred++];
+      out[n] = midi::MidiEvent{};
+      out[n].render_frame = slot.time_samples;
+      out[n++].ump = slot.ump;
+    }
+    for (size_t i = consumed_deferred; i < deferred_count_; ++i) {
+      deferred_absolute_[i - consumed_deferred] = deferred_absolute_[i];
+    }
+    deferred_count_ -= consumed_deferred;
     while (read != write && n < capacity) {
-      const Slot& slot = buffer_[read];
+      const Slot& slot = buffer_[read % Capacity];
       const int64_t offset = slot.time_samples < 0 ? 0 : slot.time_samples;
       // A live input event owns no track lane and no resolved SysEx view, so the
       // slot is reset first: a caller-owned scratch buffer reused across drains
       // would otherwise keep the previous drain's source_track_id and its
       // (by now dangling) sysex_payload pointer.
       out[n] = midi::MidiEvent{};
-      out[n].render_frame =
-          slot.absolute_render_frame ? slot.time_samples : block_start_frame + offset;
+      out[n].render_frame = slot.absolute_render_frame
+                                ? slot.time_samples
+                                : detail::saturating_add_nonnegative(block_start_frame, offset);
       out[n].ump = slot.ump;
-      read = increment(read);
+      ++read;
       ++n;
     }
-    read_index_.store(read, std::memory_order_release);
+    publish_consumer_state(read, n);
     for (size_t i = 1; i < n; ++i) {
       midi::MidiEvent value = out[i];
       size_t j = i;
@@ -292,16 +332,35 @@ class FixedMidiInputSource final : public MidiInputSource {
   size_t drain_block(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame,
                      int num_frames) noexcept override {
     if (out == nullptr || capacity == 0 || num_frames <= 0) return 0;
-    const int64_t block_end_frame = block_start_frame + num_frames;
-    size_t read = read_index_.load(std::memory_order_relaxed);
-    const size_t write = write_index_.load(std::memory_order_acquire);
+    bool block_end_overflowed = false;
+    const int64_t block_end =
+        detail::block_end_frame(block_start_frame, num_frames, &block_end_overflowed);
+    uint64_t read = read_seq_.load(std::memory_order_relaxed);
+    honour_clear(&read);
+    const uint64_t write = write_seq_.load(std::memory_order_acquire);
     size_t n = 0;
+    size_t retained = 0;
+    for (size_t i = 0; i < deferred_count_; ++i) {
+      const Slot& slot = deferred_absolute_[i];
+      if ((!block_end_overflowed && slot.time_samples >= block_end) || n == capacity) {
+        deferred_absolute_[retained++] = slot;
+        continue;
+      }
+      out[n] = midi::MidiEvent{};
+      out[n].render_frame =
+          slot.time_samples < block_start_frame ? block_start_frame : slot.time_samples;
+      out[n++].ump = slot.ump;
+    }
+    deferred_count_ = retained;
     while (read != write && n < capacity) {
-      const Slot& slot = buffer_[read];
-      if (slot.absolute_render_frame && slot.time_samples >= block_end_frame) {
-        // CoreMIDI delivers timestamp-ordered packets. Leave a future event and
-        // everything after it queued until the block containing its frame.
-        break;
+      const Slot& slot = buffer_[read % Capacity];
+      if (slot.absolute_render_frame && !block_end_overflowed && slot.time_samples >= block_end) {
+        // Host injection can be out of order. Retain this future event in
+        // consumer-owned storage and continue to expose due events behind it.
+        if (deferred_count_ == Capacity) break;
+        deferred_absolute_[deferred_count_++] = slot;
+        ++read;
+        continue;
       }
       // Reset the slot before filling it: see drain() for why a reused caller
       // buffer must not inherit the previous drain's non-UMP fields.
@@ -311,14 +370,16 @@ class FixedMidiInputSource final : public MidiInputSource {
             slot.time_samples < block_start_frame ? block_start_frame : slot.time_samples;
       } else {
         const int64_t offset = slot.time_samples < 0 ? 0 : slot.time_samples;
-        out[n].render_frame = block_start_frame + offset;
-        if (out[n].render_frame >= block_end_frame) out[n].render_frame = block_end_frame - 1;
+        out[n].render_frame = detail::saturating_add_nonnegative(block_start_frame, offset);
+        if (!block_end_overflowed && out[n].render_frame >= block_end) {
+          out[n].render_frame = block_end - 1;
+        }
       }
       out[n].ump = slot.ump;
-      read = increment(read);
+      ++read;
       ++n;
     }
-    read_index_.store(read, std::memory_order_release);
+    publish_consumer_state(read, n);
     for (size_t i = 1; i < n; ++i) {
       midi::MidiEvent value = out[i];
       size_t j = i;
@@ -331,51 +392,97 @@ class FixedMidiInputSource final : public MidiInputSource {
     return n;
   }
 
+  /// Queued plus deferred events, net of a clear() the consumer has not yet
+  /// honoured. Advisory.
   size_t pending_count() const noexcept override {
-    return distance(read_index_.load(std::memory_order_acquire),
-                    write_index_.load(std::memory_order_acquire));
+    const uint64_t live_from = live_from_seq();
+    const uint64_t write = write_seq_.load(std::memory_order_acquire);
+    return write > live_from ? static_cast<size_t>(write - live_from) : 0;
   }
 
   uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
 
-  /// HOST lifecycle thread: discard queued events after the producer has been
-  /// stopped (for example before reopening a MIDI device on a new timeline).
+  /// HOST lifecycle thread: discard every event published before this call
+  /// (for example before reopening a MIDI device on a new timeline). Safe while
+  /// the producer and consumer run: it writes no queue state, and the consumer
+  /// drops the events, reclaiming their ring slots, at the start of its next drain.
   void clear() noexcept {
-    const size_t write = write_index_.load(std::memory_order_acquire);
-    read_index_.store(write, std::memory_order_release);
+    clear_request_.store(write_seq_.load(std::memory_order_acquire) + 1, std::memory_order_release);
   }
 
   void reset_telemetry() noexcept { dropped_count_.store(0, std::memory_order_relaxed); }
 
  private:
   bool enqueue(const midi::Ump& ump, int64_t time_samples, bool absolute_render_frame) noexcept {
-    const size_t write = write_index_.load(std::memory_order_relaxed);
-    const size_t next = increment(write);
-    if (next == read_index_.load(std::memory_order_acquire)) {
+    const uint64_t write = write_seq_.load(std::memory_order_relaxed);
+    // Slots are bounded by the real read; logical capacity nets a pending clear().
+    if (write - read_seq_.load(std::memory_order_acquire) >= Capacity ||
+        write - live_from_seq() >= Capacity) {
       dropped_count_.fetch_add(1, std::memory_order_relaxed);
       return false;
     }
-    buffer_[write] = Slot{ump, time_samples, absolute_render_frame};
-    write_index_.store(next, std::memory_order_release);
+    buffer_[write % Capacity] = Slot{ump, time_samples, absolute_render_frame, write};
+    write_seq_.store(write + 1, std::memory_order_release);
     return true;
   }
-  static constexpr size_t kSlots = Capacity + 1;
 
   struct Slot {
     midi::Ump ump{};
     int64_t time_samples = 0;
     bool absolute_render_frame = false;
+    uint64_t seq = 0;
   };
 
-  static constexpr size_t increment(size_t index) noexcept { return (index + 1) % kSlots; }
-
-  static constexpr size_t distance(size_t read, size_t write) noexcept {
-    return write >= read ? write - read : kSlots - read + write;
+  // First sequence still pending: past every released event and any pending
+  // clear() target. Load the write position after calling this.
+  uint64_t live_from_seq() const noexcept {
+    const uint64_t request = clear_request_.load(std::memory_order_acquire);
+    const uint64_t released = released_.load(std::memory_order_acquire);
+    return request != 0 && request - 1 > released ? request - 1 : released;
   }
 
-  std::array<Slot, kSlots> buffer_{};
-  std::atomic<size_t> read_index_{0};
-  std::atomic<size_t> write_index_{0};
+  // Consumer only: apply a pending clear() to the ring position and deferred store.
+  void honour_clear(uint64_t* read) noexcept {
+    uint64_t request = clear_request_.load(std::memory_order_acquire);
+    if (request == 0) return;
+    const uint64_t target = request - 1;
+    uint64_t discarded = 0;
+    if (target > *read) {
+      discarded = target - *read;
+      *read = target;
+    }
+    size_t retained = 0;
+    for (size_t i = 0; i < deferred_count_; ++i) {
+      if (deferred_absolute_[i].seq >= target) {
+        deferred_absolute_[retained++] = deferred_absolute_[i];
+      }
+    }
+    discarded += deferred_count_ - retained;
+    deferred_count_ = retained;
+    publish_consumer_state(*read, discarded);
+    // Withdraw the request only after the release it covers is visible; a newer
+    // clear() keeps its request for the next drain.
+    clear_request_.compare_exchange_strong(request, 0, std::memory_order_acq_rel,
+                                           std::memory_order_relaxed);
+  }
+
+  void publish_consumer_state(uint64_t read, uint64_t released) noexcept {
+    released_total_ += released;
+    released_.store(released_total_, std::memory_order_release);
+    read_seq_.store(read, std::memory_order_release);
+  }
+
+  // Monotonic sequence numbers; slot index is seq % Capacity. Each atomic has
+  // one writer, except clear_request_, which clear() raises and the consumer
+  // withdraws. released_ counts events emitted or discarded.
+  std::array<Slot, Capacity> buffer_{};
+  std::array<Slot, Capacity> deferred_absolute_{};
+  size_t deferred_count_ = 0;
+  uint64_t released_total_ = 0;
+  std::atomic<uint64_t> released_{0};
+  std::atomic<uint64_t> clear_request_{0};
+  std::atomic<uint64_t> read_seq_{0};
+  std::atomic<uint64_t> write_seq_{0};
   std::atomic<uint32_t> dropped_count_{0};
 };
 

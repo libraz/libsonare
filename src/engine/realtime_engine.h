@@ -493,6 +493,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // destinations may be external at once; excess requests are ignored. Routing
   // a destination external does not by itself produce audio, so no internal
   // synth voices are stolen for it (the rack never receives its events).
+  // The requested table becomes effective at the next process() block boundary;
+  // a route change releases notes and resets controllers through the old route
+  // and drops pending MIDI-FX events before the new route is used.
   // Returns false when enabling a new external destination would exceed the
   // kMaxExternalDestinations slot table; true otherwise (idempotent enable/disable).
   bool set_midi_destination_external(uint32_t destination_id, bool external) noexcept;
@@ -995,6 +998,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
                              int num_frames) noexcept;
   void dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept;
+  // AUDIO thread: adopt one coherent external-routing snapshot at the block
+  // boundary. Changed destinations are released through the old route before
+  // the fixed active table is committed.
+  void adopt_midi_destination_routes(int64_t render_frame) noexcept;
 #endif
   void publish_tempo_map_snapshot();
   void adopt_tempo_map_snapshot() noexcept;
@@ -1042,11 +1049,20 @@ class RealtimeEngine : private ClipPageRequestSink {
     // INSTEAD of the instrument rack, so the track drives an external device
     // rather than a built-in synth.
     ExternalMidiQueue* external = nullptr;
-    // Published set of destinations routed externally. Each slot is 0 (empty) or
-    // ((1<<32) | destination_id); the high marker bit keeps destination 0
-    // representable. Linear-scanned on the audio thread (<= 16 slots); the
-    // control thread publishes via set_external().
-    std::array<std::atomic<uint64_t>, kMaxExternalDestinations> external_destinations{};
+    // CONTROL-owned requested set of destinations routed externally. Each slot
+    // is 0 (empty) or ((1<<32) | destination_id); the high marker bit keeps
+    // destination 0 representable. SeqlockCell publishes the complete table
+    // so AUDIO never adopts a half-updated route set.
+    struct ExternalRouteTable {
+      std::array<uint64_t, kMaxExternalDestinations> slots{};
+    };
+    rt::SeqlockCell<ExternalRouteTable> requested_external_routes{};
+    rt::SeqlockCell<ExternalRouteTable>::Reader requested_external_routes_reader =
+        requested_external_routes.reader();
+    // AUDIO-owned route used by on_event. Keeping this table separate from the
+    // requested table prevents a control-thread slot write from exposing a
+    // half-updated routing set to one MIDI event.
+    std::array<uint64_t, kMaxExternalDestinations> active_external_destinations{};
     // AUDIO thread only: added to a sequenced event's render_frame to convert it
     // from the TIMELINE sample position (which wraps backward on a loop / jumps
     // on a seek) to the monotonic DEVICE render frame. Every consumer downstream
@@ -1062,8 +1078,8 @@ class RealtimeEngine : private ClipPageRequestSink {
     }
     bool is_external(uint32_t destination_id) const noexcept {
       const uint64_t want = encode(destination_id);
-      for (const auto& slot : external_destinations) {
-        if (slot.load(std::memory_order_acquire) == want) return true;
+      for (const uint64_t slot : active_external_destinations) {
+        if (slot == want) return true;
       }
       return false;
     }
@@ -1072,24 +1088,36 @@ class RealtimeEngine : private ClipPageRequestSink {
     // slots are already taken (so the caller can surface the overflow instead of
     // silently routing the track to the internal rack); enabling an
     // already-external destination and any disable are idempotent and return true.
+    // Single writer: the control thread only.
     bool set_external(uint32_t destination_id, bool on) noexcept {
       const uint64_t want = encode(destination_id);
+      ExternalRouteTable next = requested_external_routes.load();
       if (on) {
-        for (auto& slot : external_destinations) {
-          if (slot.load(std::memory_order_acquire) == want) return true;
+        for (const uint64_t slot : next.slots) {
+          if (slot == want) return true;
         }
-        for (auto& slot : external_destinations) {
-          uint64_t empty = 0;
-          if (slot.compare_exchange_strong(empty, want, std::memory_order_acq_rel)) return true;
+        size_t empty_index = next.slots.size();
+        for (size_t i = 0; i < next.slots.size(); ++i) {
+          if (next.slots[i] == 0) {
+            empty_index = i;
+            break;
+          }
         }
-        return false;
+        if (empty_index == next.slots.size()) return false;
+        next.slots[empty_index] = want;
+        requested_external_routes.store(next);
+        return true;
       }
-      for (auto& slot : external_destinations) {
-        if (slot.load(std::memory_order_acquire) == want) {
-          slot.store(0, std::memory_order_release);
-          return true;
+      size_t found_index = next.slots.size();
+      for (size_t i = 0; i < next.slots.size(); ++i) {
+        if (next.slots[i] == want) {
+          found_index = i;
+          break;
         }
       }
+      if (found_index == next.slots.size()) return true;
+      next.slots[found_index] = 0;
+      requested_external_routes.store(next);
       return true;
     }
 

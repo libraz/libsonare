@@ -5,9 +5,11 @@
 ///        capture draining queued events into a MidiClip with correct PPQ/order.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "midi/capture.h"
@@ -36,6 +38,7 @@ using sonare::midi::make_midi1_note_on;
 using sonare::midi::make_midi2_control_change;
 using sonare::midi::MidiCapture;
 using sonare::midi::MidiClip;
+using sonare::midi::MidiClipEvent;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiRouteConfig;
 using sonare::midi::MidiRouteOutput;
@@ -326,6 +329,28 @@ TEST_CASE("CcMap MIDI learn assembles RPN and NRPN selectors", "[midi]") {
   }
 }
 
+TEST_CASE("CcMap MIDI learn keeps selector state scoped to channel", "[midi]") {
+  CcMap map;
+  map.begin_learn(192);
+  CcBinding learned;
+
+  // A selector MSB on channel 1 must not combine with a selector LSB on
+  // channel 2 and make that channel's first Data Entry appear complete.
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 1, 101, 0), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 2, 100, 1), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 2, 6, 64), &learned));
+  REQUIRE(map.is_learning());
+
+  // Completing the selector on one channel then commits the intended RPN.
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 2, 101, 0), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 2, 100, 1), &learned));
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 2, 6, 64), &learned));
+  REQUIRE(learned.kind == sonare::midi::CcBindingKind::kRpn);
+  REQUIRE(learned.channel == 2);
+  REQUIRE(learned.selector_msb == 0);
+  REQUIRE(learned.selector_lsb == 1);
+}
+
 TEST_CASE("CcMap MIDI learn honors the movement gate for standalone CCs", "[midi]") {
   CcMap map;
   const uint8_t min_movement = 8;
@@ -341,6 +366,85 @@ TEST_CASE("CcMap MIDI learn honors the movement gate for standalone CCs", "[midi
   REQUIRE(learned.cc_number == 74);
   REQUIRE(learned.channel == 5);
   REQUIRE(learned.param_id == 70);
+}
+
+TEST_CASE("CcMap MIDI learn gates standalone low-numbered CCs", "[midi]") {
+  CcMap map;
+  map.begin_learn(303, 0.0f, 1.0f, 10);
+
+  CcBinding learned;
+  // CC#7 is a normal standalone controller even though it is below CC#32.
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 64), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 64), &learned));
+  REQUIRE(map.is_learning());
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 74), &learned));
+  REQUIRE_FALSE(map.is_learning());
+  REQUIRE(learned.cc_number == 7);
+  REQUIRE(learned.channel == 5);
+  REQUIRE(learned.param_id == 303);
+}
+
+TEST_CASE("CcMap MIDI learn keeps low-CC jitter and unrelated traffic pending", "[midi]") {
+  CcMap map;
+  map.begin_learn(304, 0.0f, 1.0f, 10);
+
+  CcBinding learned;
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 64), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 65), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 63), &learned));
+  REQUIRE(map.is_learning());
+
+  // A different controller must not commit the pending low-numbered CC.
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 8, 127), &learned));
+  REQUIRE(map.is_learning());
+
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 74), &learned));
+  REQUIRE_FALSE(map.is_learning());
+  REQUIRE(learned.cc_number == 7);
+  REQUIRE(learned.channel == 5);
+  REQUIRE(learned.param_id == 304);
+}
+
+TEST_CASE("CcMap MIDI learn keeps movement baselines per controller", "[midi]") {
+  CcMap map;
+  map.begin_learn(306, 0.0f, 1.0f, 10);
+
+  CcBinding learned;
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 10), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 71, 50), &learned));
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 25), &learned));
+  REQUIRE_FALSE(map.is_learning());
+  REQUIRE(learned.cc_number == 74);
+  REQUIRE(learned.channel == 5);
+  REQUIRE(learned.param_id == 306);
+}
+
+TEST_CASE("CcMap MIDI learn preserves the default low-CC fallback", "[midi]") {
+  CcMap map;
+  map.begin_learn(307);
+
+  CcBinding learned;
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 64), &learned));
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 64), &learned));
+  REQUIRE_FALSE(map.is_learning());
+  REQUIRE(learned.cc_number == 7);
+  REQUIRE(learned.channel == 5);
+  REQUIRE(learned.param_id == 307);
+}
+
+TEST_CASE("CcMap MIDI learn can promote a moving controller behind low-CC traffic", "[midi]") {
+  CcMap map;
+  map.begin_learn(305, 0.0f, 1.0f, 10);
+
+  CcBinding learned;
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 7, 64), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 10), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 15), &learned));
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 25), &learned));
+  REQUIRE_FALSE(map.is_learning());
+  REQUIRE(learned.cc_number == 74);
+  REQUIRE(learned.channel == 5);
+  REQUIRE(learned.param_id == 305);
 }
 
 TEST_CASE("CcMap MIDI learn assembles multi-message controllers past the movement gate", "[midi]") {
@@ -419,6 +523,40 @@ TEST_CASE("CcMap observe_live_cc decodes 14-bit CC at full resolution", "[midi]"
   REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 2, 33, 5), &param, &unit));
 }
 
+TEST_CASE("CcMap live decode keeps interleaved 14-bit CC pairs independent", "[midi]") {
+  CcMap map;
+
+  CcBinding first;
+  first.cc_number = 1;
+  first.cc_lsb_number = 33;
+  first.channel = 2;
+  first.param_id = 301;
+  first.kind = sonare::midi::CcBindingKind::kControlChange14;
+  REQUIRE(map.bind(first));
+
+  CcBinding second = first;
+  second.cc_number = 7;
+  second.cc_lsb_number = 39;
+  second.param_id = 302;
+  REQUIRE(map.bind(second));
+
+  uint32_t param = 0;
+  float unit = 0.0f;
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 1, 64), &param, &unit));
+  REQUIRE(param == first.param_id);
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 7, 80), &param, &unit));
+  REQUIRE(param == second.param_id);
+
+  // The second MSB must not overwrite the first controller's pending LSB.
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 33, 1), &param, &unit));
+  REQUIRE(param == first.param_id);
+  REQUIRE(std::abs(unit - static_cast<float>((64 << 7) | 1) / 16383.0f) < 1.0e-5f);
+
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 39, 2), &param, &unit));
+  REQUIRE(param == second.param_id);
+  REQUIRE(std::abs(unit - static_cast<float>((80 << 7) | 2) / 16383.0f) < 1.0e-5f);
+}
+
 TEST_CASE("CcMap observe_live_cc routes RPN/NRPN Data Entry to the selected binding", "[midi]") {
   CcMap map;
   uint32_t param = 0;
@@ -464,6 +602,97 @@ TEST_CASE("CcMap observe_live_cc routes RPN/NRPN Data Entry to the selected bind
     REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 4, 6, 100), &param, &unit));
     REQUIRE(param == 91);
   }
+}
+
+TEST_CASE("CcMap live decode keeps RPN and 14-bit state scoped to UMP group", "[midi]") {
+  SECTION("RPN selectors on one channel do not cross groups") {
+    CcMap map;
+    CcBinding binding;
+    binding.cc_number = 6;
+    binding.channel = 2;
+    binding.param_id = 220;
+    binding.kind = sonare::midi::CcBindingKind::kRpn;
+    binding.selector_msb = 0;
+    binding.selector_lsb = 1;
+    REQUIRE(map.bind(binding));
+
+    uint32_t param = 0;
+    float unit = 0.0f;
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 2, 101, 0), &param, &unit));
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(1, 2, 100, 1), &param, &unit));
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 2, 6, 64), &param, &unit));
+
+    // Each group becomes valid only after receiving both selector bytes itself.
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 2, 100, 1), &param, &unit));
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 6, 64), &param, &unit));
+    REQUIRE(param == 220);
+
+    map.reset_live_decode();
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(1, 2, 101, 0), &param, &unit));
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(1, 2, 100, 1), &param, &unit));
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(1, 2, 6, 64), &param, &unit));
+    REQUIRE(param == 220);
+  }
+
+  SECTION("14-bit CC pairs on one channel do not cross groups") {
+    CcMap map;
+    CcBinding binding;
+    binding.cc_number = 1;
+    binding.cc_lsb_number = 33;
+    binding.channel = 2;
+    binding.param_id = 221;
+    binding.kind = sonare::midi::CcBindingKind::kControlChange14;
+    REQUIRE(map.bind(binding));
+
+    uint32_t param = 0;
+    float unit = 0.0f;
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 1, 64), &param, &unit));
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(1, 2, 33, 12), &param, &unit));
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 33, 12), &param, &unit));
+    REQUIRE(param == 221);
+    const float expected = static_cast<float>((64 << 7) | 12) / 16383.0f;
+    REQUIRE(std::abs(unit - expected) < 1e-5f);
+  }
+}
+
+TEST_CASE("CcMap keeps an unselected RPN Data Entry away from plain CC fallback", "[midi]") {
+  CcMap map;
+  CcBinding rpn;
+  rpn.cc_number = 6;  // RPN Data Entry MSB
+  rpn.channel = 3;
+  rpn.param_id = 190;
+  rpn.kind = sonare::midi::CcBindingKind::kRpn;
+  rpn.selector_msb = 0;
+  rpn.selector_lsb = 1;  // RPN 0,1
+  REQUIRE(map.bind(rpn));
+
+  // Selector-addressed bindings do not make CC#6 a standalone controller.
+  uint32_t param = 0;
+  float unit = 0.0f;
+  REQUIRE_FALSE(map.lookup_param(6, 3, &param));
+  REQUIRE_FALSE(map.value_to_unit(6, 3, 0.5f, &unit));
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 6, 64), &param, &unit));
+
+  // A different RPN selector must remain unbound as well.
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 101, 0), &param, &unit));
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 100, 2), &param, &unit));
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 6, 64), &param, &unit));
+
+  // The matching selector routes Data Entry at 14-bit resolution.
+  map.reset_live_decode();
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 101, 0), &param, &unit));
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 100, 1), &param, &unit));
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 3, 6, 64), &param, &unit));
+  REQUIRE(param == 190);
+
+  // A real plain CC#6 binding keeps its historical direct behavior.
+  CcMap plain;
+  plain.bind(CcBinding{6, 3, 191, 0.0f, 1.0f});
+  REQUIRE(plain.lookup_param(6, 3, &param));
+  REQUIRE(param == 191);
+  REQUIRE(plain.value_to_unit(6, 3, 0.5f, &unit));
+  REQUIRE(plain.observe_live_cc(make_midi1_control_change(0, 3, 6, 64), &param, &unit));
+  REQUIRE(param == 191);
 }
 
 TEST_CASE("CcMap binding snapshot copy preserves live decode state", "[midi][rt]") {
@@ -1019,7 +1248,7 @@ TEST_CASE("a transport command interleaved in an MTC quarter-frame is transparen
   }
 }
 
-TEST_CASE("Start and Continue re-anchor the tick count, Stop does not", "[midi]") {
+TEST_CASE("ClockParser Continue resumes the stopped tick position", "[midi]") {
   ClockParser parser;
   parser.reset();
 
@@ -1033,12 +1262,93 @@ TEST_CASE("Start and Continue re-anchor the tick count, Stop does not", "[midi]"
   REQUIRE(parser.clock_ticks() == 5);
 
   REQUIRE(parser.parse_byte(sonare::midi::kStatusContinue));
-  REQUIRE(parser.clock_ticks() == 0);
+  // Continue resumes from the stopped position; it must not rewind the clock
+  // accumulator to the SPP/start anchor.
+  REQUIRE(parser.clock_ticks() == 5);
 
   REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
-  REQUIRE(parser.clock_ticks() == 1);
+  REQUIRE(parser.clock_ticks() == 6);
   REQUIRE(parser.parse_byte(sonare::midi::kStatusStart));
   REQUIRE(parser.clock_ticks() == 0);
+}
+
+TEST_CASE("ClockParser counts clock ticks only while the transport runs", "[midi]") {
+  constexpr int kBeforeStop = 7;
+  constexpr int kWhileStopped = 11;
+  constexpr int kAfterContinue = 5;
+  ClockParser parser;
+  parser.reset();
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusStart));
+  for (int i = 0; i < kBeforeStop; ++i) parser.parse_byte(sonare::midi::kStatusClock);
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusStop));
+  for (int i = 0; i < kWhileStopped; ++i) parser.parse_byte(sonare::midi::kStatusClock);
+  REQUIRE(parser.clock_ticks() == kBeforeStop);
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusContinue));
+  for (int i = 0; i < kAfterContinue; ++i) parser.parse_byte(sonare::midi::kStatusClock);
+  REQUIRE(parser.clock_ticks() == kBeforeStop + kAfterContinue);
+}
+
+TEST_CASE("ClockParser reset returns to the free-running initial state", "[midi]") {
+  ClockParser parser;
+  parser.parse_byte(sonare::midi::kStatusStop);
+  parser.parse_byte(sonare::midi::kStatusClock);
+  REQUIRE(parser.clock_ticks() == 0);
+
+  parser.reset();
+  parser.parse_byte(sonare::midi::kStatusClock);
+  REQUIRE(parser.clock_ticks() == 1);
+}
+
+TEST_CASE("ClockParser Continue preserves an SPP anchor", "[midi]") {
+  ClockParser parser;
+  parser.reset();
+
+  uint8_t spp[3] = {0, 0, 0};
+  REQUIRE(sonare::midi::encode_spp(8, spp, sizeof(spp)) == 3);
+  for (uint8_t byte : spp) {
+    parser.parse_byte(byte);
+  }
+  REQUIRE(parser.has_spp());
+  REQUIRE(parser.spp_beats() == 8);
+  REQUIRE(parser.position_ppq() == 2.0);
+
+  for (int i = 0; i < 12; ++i) {
+    REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  }
+  REQUIRE(parser.clock_ticks() == 12);
+  REQUIRE(parser.position_ppq() == 2.5);
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusStop));
+  REQUIRE(parser.clock_ticks() == 12);
+  REQUIRE(parser.position_ppq() == 2.5);
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusContinue));
+  REQUIRE(parser.clock_ticks() == 12);
+  REQUIRE(parser.position_ppq() == 2.5);
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  REQUIRE(parser.clock_ticks() == 13);
+  REQUIRE(parser.position_ppq() == 2.5 + (1.0 / 24.0));
+}
+
+TEST_CASE("ClockParser Start resets an SPP position to sequence origin", "[midi]") {
+  ClockParser parser;
+  parser.reset();
+
+  uint8_t spp[3] = {0, 0, 0};
+  REQUIRE(sonare::midi::encode_spp(8, spp, sizeof(spp)) == 3);
+  for (uint8_t byte : spp) {
+    parser.parse_byte(byte);
+  }
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  REQUIRE(parser.position_ppq() > 2.0);
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusStart));
+  REQUIRE_FALSE(parser.has_spp());
+  REQUIRE(parser.spp_beats() == 0);
+  REQUIRE(parser.clock_ticks() == 0);
+  REQUIRE(parser.position_ppq() == 0.0);
 }
 
 TEST_CASE("MTC quarter-frame generate and parse round-trip", "[midi]") {
@@ -1255,6 +1565,32 @@ TEST_CASE("MidiCapture drains queued events into a MidiClip", "[midi]") {
   REQUIRE(events[2].ump.note_number() == 62);
 }
 
+TEST_CASE("MidiCapture preserves borrowed SysEx payload views through drain", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  // MidiCapture copies the view into the clip; the caller owns the backing
+  // bytes and must keep them alive through drain (and while the clip uses it).
+  const std::array<uint8_t, 4> payload = {0xF0u, 0x7Eu, 0x01u, 0xF7u};
+  MidiEvent event = note_on_event(0, 0, 0, 60);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  REQUIRE(capture.push(event));
+
+  MidiClip clip;
+  sonare::midi::CaptureConfig cfg;
+  REQUIRE(capture.drain(cfg, &clip) == 1);
+  REQUIRE(clip.events().size() == 1);
+
+  const MidiClipEvent& captured = clip.events().front();
+  REQUIRE(captured.sysex_payload == payload.data());
+  REQUIRE(captured.sysex_payload_size == payload.size());
+  REQUIRE(std::equal(captured.sysex_payload, captured.sysex_payload + captured.sysex_payload_size,
+                     payload.begin()));
+}
+
 TEST_CASE("MidiCapture clip_start_ppq offset and quantize", "[midi]") {
   TempoMap map;
   configure_tempo_map(&map, 120.0);
@@ -1370,6 +1706,217 @@ TEST_CASE("MidiCapture quantize preserves note length", "[midi]") {
   REQUIRE(events[0].ppq == 0.5);
   REQUIRE(events[1].ppq > 0.59);
   REQUIRE(events[1].ppq < 0.61);
+}
+
+TEST_CASE("MidiCapture keeps note shift state across split drains", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  MidiEvent on = note_on_event(10800, 0, 2, 68);  // 0.45 PPQ -> 0.5
+  REQUIRE(capture.push(on));
+
+  MidiClip clip;
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.5;
+  cfg.quantize.strength = 1.0;
+  REQUIRE(capture.drain(cfg, &clip) == 1);
+
+  MidiEvent off;
+  off.render_frame = 13200;  // 0.55 PPQ; preserve the +0.05 shift -> 0.60
+  off.ump = make_midi1_note_off(0, 2, 68, 0);
+  REQUIRE(capture.push(off));
+  REQUIRE(capture.drain(cfg, &clip) == 1);
+
+  REQUIRE(clip.events().size() == 2);
+  double on_ppq = -1.0;
+  double off_ppq = -1.0;
+  for (const MidiClipEvent& event : clip.events()) {
+    if (event.ump.is_note_on()) on_ppq = event.ppq;
+    if (event.ump.is_note_off()) off_ppq = event.ppq;
+  }
+  REQUIRE(on_ppq == 0.5);
+  REQUIRE(off_ppq > 0.59);
+  REQUIRE(off_ppq < 0.61);
+}
+
+TEST_CASE("MidiCapture clears note shift state when the clip changes", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.5;
+  cfg.quantize.strength = 1.0;
+
+  MidiClip first_clip;
+  REQUIRE(capture.push(note_on_event(10800, 0, 2, 69)));
+  REQUIRE(capture.drain(cfg, &first_clip) == 1);
+
+  MidiClip second_clip;
+  MidiEvent off;
+  off.render_frame = 13200;
+  off.ump = make_midi1_note_off(0, 2, 69, 0);
+  REQUIRE(capture.push(off));
+  REQUIRE(capture.drain(cfg, &second_clip) == 1);
+
+  REQUIRE(first_clip.events().size() == 1);
+  REQUIRE(first_clip.events().front().ppq == 0.5);
+  REQUIRE(second_clip.events().size() == 1);
+  REQUIRE(second_clip.events().front().ump.is_note_off());
+  REQUIRE(second_clip.events().front().ppq == 0.5);
+}
+
+TEST_CASE("MidiCapture clears note shift state when quantize config changes", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  sonare::midi::CaptureConfig first_config;
+  first_config.quantize.enabled = true;
+  first_config.quantize.grid_ppq = 0.5;
+  first_config.quantize.strength = 1.0;
+  REQUIRE(capture.push(note_on_event(10800, 0, 2, 70)));
+
+  MidiClip clip;
+  REQUIRE(capture.drain(first_config, &clip) == 1);
+
+  sonare::midi::CaptureConfig second_config = first_config;
+  second_config.quantize.grid_ppq = 0.25;
+  MidiEvent off;
+  off.render_frame = 13200;
+  off.ump = make_midi1_note_off(0, 2, 70, 0);
+  REQUIRE(capture.push(off));
+  REQUIRE(capture.drain(second_config, &clip) == 1);
+
+  REQUIRE(clip.events().size() == 2);
+  for (const MidiClipEvent& event : clip.events()) {
+    if (event.ump.is_note_on()) REQUIRE(event.ppq == 0.5);
+    if (event.ump.is_note_off()) REQUIRE(event.ppq == 0.5);
+  }
+}
+
+TEST_CASE("MidiCapture clears note shift state when prepare starts a session", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.5;
+  cfg.quantize.strength = 1.0;
+  MidiClip clip;
+  REQUIRE(capture.push(note_on_event(10800, 0, 2, 71)));
+  REQUIRE(capture.drain(cfg, &clip) == 1);
+
+  capture.prepare(&map, 64);
+  MidiEvent off;
+  off.render_frame = 13200;
+  off.ump = make_midi1_note_off(0, 2, 71, 0);
+  REQUIRE(capture.push(off));
+  REQUIRE(capture.drain(cfg, &clip) == 1);
+
+  REQUIRE(clip.events().size() == 2);
+  for (const MidiClipEvent& event : clip.events()) {
+    if (event.ump.is_note_on()) REQUIRE(event.ppq == 0.5);
+    if (event.ump.is_note_off()) REQUIRE(event.ppq == 0.5);
+  }
+}
+
+TEST_CASE("MidiCapture pairs note shifts by source track", "[midi]") {
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  MidiCapture capture;
+  capture.prepare(&map, 64);
+
+  sonare::midi::CaptureConfig cfg;
+  cfg.quantize.enabled = true;
+  cfg.quantize.grid_ppq = 0.5;
+  cfg.quantize.strength = 1.0;
+
+  MidiEvent on_a = note_on_event(6240, 0, 2, 72);   // 0.26 -> 0.50 (+0.24)
+  MidiEvent on_b = note_on_event(10800, 0, 2, 72);  // 0.45 -> 0.50 (+0.05)
+  on_a.source_track_id = 1;
+  on_b.source_track_id = 2;
+  REQUIRE(capture.push(on_a));
+  REQUIRE(capture.push(on_b));
+
+  MidiClip clip;
+  REQUIRE(capture.drain(cfg, &clip) == 2);
+
+  MidiEvent off_b;
+  off_b.render_frame = 13200;  // 0.55 + 0.05 -> 0.60
+  off_b.ump = make_midi1_note_off(0, 2, 72, 0);
+  off_b.source_track_id = 2;
+  MidiEvent off_a;
+  off_a.render_frame = 14400;  // 0.60 + 0.24 -> 0.84
+  off_a.ump = make_midi1_note_off(0, 2, 72, 0);
+  off_a.source_track_id = 1;
+  REQUIRE(capture.push(off_b));
+  REQUIRE(capture.push(off_a));
+  REQUIRE(capture.drain(cfg, &clip) == 2);
+
+  std::vector<double> off_positions;
+  for (const MidiClipEvent& event : clip.events()) {
+    if (event.ump.is_note_off()) off_positions.push_back(event.ppq);
+  }
+  REQUIRE(off_positions.size() == 2);
+  REQUIRE(std::abs(off_positions[0] - 0.60) < 1.0e-9);
+  REQUIRE(std::abs(off_positions[1] - 0.84) < 1.0e-9);
+}
+
+TEST_CASE("MidiCapture quantize rejects nonfinite and out-of-range settings", "[midi]") {
+  constexpr double ppq = 0.375;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+
+  auto require_identity = [&](const sonare::midi::CaptureQuantize& quantize) {
+    const double result = sonare::midi::quantize_ppq(ppq, quantize);
+    REQUIRE(std::isfinite(result));
+    REQUIRE(result == ppq);
+  };
+
+  SECTION("tiny grids do not overflow the grid-line index") {
+    sonare::midi::CaptureQuantize tiny_grid;
+    tiny_grid.grid_ppq = 1.0e-30;
+    tiny_grid.strength = 1.0;
+    tiny_grid.groove_steps = 2;
+    require_identity(tiny_grid);
+  }
+
+  SECTION("nonfinite grids fall back to the original position") {
+    sonare::midi::CaptureQuantize invalid_grid;
+    invalid_grid.grid_ppq = nan;
+    require_identity(invalid_grid);
+    invalid_grid.grid_ppq = inf;
+    require_identity(invalid_grid);
+  }
+
+  SECTION("nonfinite strength falls back to the original position") {
+    sonare::midi::CaptureQuantize invalid_strength;
+    invalid_strength.strength = nan;
+    require_identity(invalid_strength);
+  }
+
+  SECTION("nonfinite swing falls back to the original position") {
+    sonare::midi::CaptureQuantize invalid_swing;
+    invalid_swing.swing = nan;
+    require_identity(invalid_swing);
+  }
+
+  SECTION("nonfinite source positions bypass grid arithmetic") {
+    sonare::midi::CaptureQuantize valid;
+    const double nan_result = sonare::midi::quantize_ppq(nan, valid);
+    REQUIRE(std::isnan(nan_result));
+    const double inf_result = sonare::midi::quantize_ppq(inf, valid);
+    REQUIRE(std::isinf(inf_result));
+  }
 }
 
 TEST_CASE("MidiCapture push drop telemetry on full queue", "[midi]") {

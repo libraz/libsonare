@@ -67,6 +67,11 @@ class MidiSequencer {
   /// 256 voices comfortably covers multi-channel orchestral MIDI within one
   /// block while staying small enough to live inline in the engine.
   static constexpr size_t kMaxActiveNotes = 256;
+  /// Maximum retained (destination, group, channel) states used to make
+  /// controller resets cover channels whose notes have already received a
+  /// natural or clip note-off. New stateful events are dropped when this
+  /// fixed table is full; semantic note-offs still pass through.
+  static constexpr size_t kMaxRetainedChannelStates = 256;
   static constexpr size_t kMaxMidiFxInserts = 32;
   static constexpr size_t kMaxPendingFxEvents = 512;
 
@@ -167,6 +172,9 @@ class MidiSequencer {
   uint32_t active_note_overflow_count() const noexcept {
     return active_note_overflow_count_.load(std::memory_order_relaxed);
   }
+  uint32_t retained_channel_overflow_count() const noexcept {
+    return retained_channel_overflow_count_.load(std::memory_order_relaxed);
+  }
   uint32_t dispatched_event_count() const noexcept {
     return dispatched_event_count_.load(std::memory_order_relaxed);
   }
@@ -233,6 +241,12 @@ class MidiSequencer {
     uint32_t clip_id = 0;
     bool from_clip = false;
   };
+  struct RetainedChannelState {
+    uint32_t destination_id = 0;
+    uint8_t group = 0;
+    uint8_t channel = 0;
+    bool active = false;
+  };
   struct DestinationFx {
     uint32_t destination_id = 0;
     uint64_t generation = 0;
@@ -277,9 +291,19 @@ class MidiSequencer {
                      uint32_t source_track_id, bool from_clip, uint32_t clip_id) noexcept;
   // Removes a sounding note if present. Keyed by destination_id too, so a
   // note-off on one destination never releases an identically-pitched note
-  // sounding on a different destination/instrument.
+  // sounding on a different destination/instrument. A fallback match never
+  // crosses source tracks.
   void track_note_off(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
                       uint32_t source_track_id, bool from_clip, uint32_t clip_id) noexcept;
+  // Retains a channel triple for later controller-reset emission. `inserted`
+  // identifies a new slot so a rejected note-on can roll that slot back when
+  // the active-note table is full. Returns false only when a new slot cannot
+  // be retained; existing entries always succeed.
+  bool retain_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel,
+                            bool* inserted) noexcept;
+  void release_retained_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel,
+                                      bool inserted) noexcept;
+  void clear_retained_channel_states(bool single_destination, uint32_t destination_id) noexcept;
   void dispatch(uint32_t destination_id, const MidiEvent& event) noexcept;
   // Emit the standard reset sequence (damper off, reset-all-controllers,
   // all-notes-off, pitch-bend center) for one channel at render_frame. Used on a
@@ -287,9 +311,8 @@ class MidiSequencer {
   // keep ringing and stale pitch-bend / CC state does not carry across.
   void emit_controller_reset(uint32_t destination_id, uint8_t group, uint8_t channel,
                              int64_t render_frame) noexcept;
-  // Emit emit_controller_reset() once per distinct (destination, group, channel)
-  // sounding in the active-note table, optionally limited to one destination.
-  // Non-mutating; dedup is bounded by kMaxActiveNotes. RT-safe, no alloc.
+  // Emit emit_controller_reset() once per retained (destination, group, channel),
+  // optionally limited to one destination. Non-mutating; RT-safe, no alloc.
   void emit_active_controller_resets(bool single_destination, uint32_t destination_id,
                                      int64_t render_frame) noexcept;
   DestinationFx* find_midi_fx(uint32_t destination_id) noexcept;
@@ -302,14 +325,23 @@ class MidiSequencer {
                        uint32_t clip_id) noexcept;
   void dispatch_pending_through(int64_t block_start_frame, int64_t block_end_frame,
                                 int64_t through_frame) noexcept;
+  void clear_active_notes_for_channel(uint32_t destination_id, uint8_t group,
+                                      uint8_t channel) noexcept;
+  void clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,
+                                             uint8_t channel) noexcept;
+  void clear_note_tracking_for_event(uint32_t destination_id, const MidiEvent& event,
+                                     bool from_clip = false, uint32_t clip_id = 0) noexcept;
+  void clear_pending_note_tracking_for_event(const PendingFxEvent& pending) noexcept;
+  void retire_channel_mode_reset(uint32_t destination_id, uint8_t group, uint8_t channel) noexcept;
   void clear_pending_for_destination(uint32_t destination_id) noexcept;
   void clear_pending_for_clip(uint32_t clip_id) noexcept;
   void release_notes_for_clip(uint32_t clip_id, int64_t render_frame,
                               bool clear_pending = true) noexcept;
   // Release note-offs for every sounding note (and drop pending FX events) whose
-  // source clip is no longer present in `clips` (nullptr = empty set). Called
-  // once when the published clip set changes so a live mute / clip delete that
-  // recompiles and republishes without a clip does not hang its notes.
+  // (clip id, destination, source track) is no longer present in `clips`
+  // (nullptr = empty set). Called once when the published clip set changes so a
+  // live mute / clip delete that recompiles and republishes without a clip does
+  // not hang its notes.
   void release_notes_for_absent_clips(const std::vector<MidiClipSchedule>* clips,
                                       int64_t render_frame) noexcept;
 
@@ -326,6 +358,11 @@ class MidiSequencer {
   std::array<ActiveNote, kMaxActiveNotes> active_{};
   size_t active_count_ = 0;
   std::atomic<uint32_t> active_note_overflow_count_{0};
+  // Fixed-capacity channel-state table (audio thread only). It survives
+  // natural/clip note-offs and is cleared only by reset or a global/destination
+  // all-notes-off operation.
+  std::array<RetainedChannelState, kMaxRetainedChannelStates> retained_channels_{};
+  std::atomic<uint32_t> retained_channel_overflow_count_{0};
   std::atomic<uint32_t> dispatched_event_count_{0};
   mutable rt::RtPublisher<MidiFxSnapshot> midi_fx_snapshots_;
   const MidiFxSnapshot* last_midi_fx_snapshot_ = nullptr;

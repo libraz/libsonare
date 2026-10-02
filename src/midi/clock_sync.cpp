@@ -256,6 +256,7 @@ void ClockParser::reset() noexcept {
   has_spp_ = false;
   spp_beats_ = 0;
   clock_ticks_ = 0;
+  running_ = true;
   mtc_pieces_.fill(0);
   mtc_seen_.fill(false);
   mtc_complete_ = false;
@@ -293,16 +294,25 @@ bool ClockParser::parse_byte(uint8_t byte) noexcept {
         // A clock tick may arrive between the status and data bytes of a System
         // Common message, so it must not disturb a half-assembled SPP or MTC:
         // pending_ is deliberately left alone here.
-        ++clock_ticks_;
+        if (running_) ++clock_ticks_;
         return true;
       case kStatusStart:
-      case kStatusContinue:
         // Every System Real-Time byte is transparent to System Common assembly,
-        // not just the clock tick, so pending_ survives here too. Transport
-        // semantics still apply: Start / Continue re-anchor the tick count.
+        // not just the clock tick, so pending_ survives here too. Start begins
+        // the sequence at its origin and discards any previous SPP anchor.
+        has_spp_ = false;
+        spp_beats_ = 0;
         clock_ticks_ = 0;
+        running_ = true;
+        return true;
+      case kStatusContinue:
+        // Continue resumes at the stopped position. It is still transparent to
+        // a pending System Common message, but must leave both the SPP anchor
+        // and accumulated clock ticks untouched.
+        running_ = true;
         return true;
       case kStatusStop:
+        running_ = false;
         return true;
       case kStatusSongPosition:
         pending_ = Pending::kSppLsb;

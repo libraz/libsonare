@@ -15,14 +15,15 @@ constexpr uint8_t kNrpnMsb = 99;
 constexpr uint8_t kRpnLsb = 100;
 constexpr uint8_t kRpnMsb = 101;
 
-// A control-change of either protocol, decoded to its controller number, channel
-// and value at MIDI 2.0 width.
-bool decode_control_change(const Ump& ump, uint8_t* cc, uint8_t* channel,
+// A control-change of either protocol, decoded to its UMP group, controller
+// number, channel and value at MIDI 2.0 width.
+bool decode_control_change(const Ump& ump, uint8_t* group, uint8_t* cc, uint8_t* channel,
                            Control32* value) noexcept {
   ChannelVoiceEvent event;
   if (!decode_channel_voice(ump, &event) || event.kind != ChannelVoiceKind::ControlChange) {
     return false;
   }
+  *group = event.group;
   *cc = event.note;
   *channel = event.channel;
   *value = event.value;
@@ -192,12 +193,7 @@ bool CcMap::unbind(uint8_t cc_number, uint8_t channel) noexcept {
 void CcMap::clear() noexcept {
   count_ = 0;
   learning_ = false;
-  pending_cc_msb_valid_ = false;
-  rpn_msb_valid_ = false;
-  rpn_lsb_valid_ = false;
-  nrpn_msb_valid_ = false;
-  nrpn_lsb_valid_ = false;
-  learn_baseline_valid_ = false;
+  learn_states_.fill(LearnChannelState{});
   reset_live_decode();
 }
 
@@ -214,24 +210,17 @@ void CcMap::begin_learn(uint32_t param_id, float min_value, float max_value,
   learn_min_ = min_value;
   learn_max_ = max_value;
   learn_min_movement_ = min_movement;
-  learn_baseline_valid_ = false;
-  pending_cc_msb_valid_ = false;
-  rpn_msb_valid_ = false;
-  rpn_lsb_valid_ = false;
-  nrpn_msb_valid_ = false;
-  nrpn_lsb_valid_ = false;
+  learn_states_.fill(LearnChannelState{});
 }
 
 void CcMap::cancel_learn() noexcept {
   learning_ = false;
-  pending_cc_msb_valid_ = false;
-  learn_baseline_valid_ = false;
+  learn_states_.fill(LearnChannelState{});
 }
 
 bool CcMap::commit_learned_binding(const CcBinding& binding, CcBinding* out_binding) {
   learning_ = false;
-  pending_cc_msb_valid_ = false;
-  learn_baseline_valid_ = false;
+  learn_states_.fill(LearnChannelState{});
   if (!bind(binding)) {
     return false;
   }
@@ -245,87 +234,112 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
   if (!learning_) {
     return false;
   }
+  uint8_t group = 0;
   uint8_t cc = 0;
   uint8_t channel = 0;
   Control32 control{0};
-  if (!decode_control_change(ump, &cc, &channel, &control)) {
+  if (!decode_control_change(ump, &group, &cc, &channel, &control)) {
     return false;
   }
   const uint8_t value = control.u7();
+  LearnChannelState& state = learn_states_[state_key(group, channel)];
 
-  // Multi-message controllers (14-bit CC pairs, RPN, NRPN) are assembled from a
-  // sequence of distinct CC numbers: a 14-bit pair sends its MSB on a CC < 32
-  // then its LSB on CC+32, and RPN/NRPN send selector CCs (98-101) followed by
-  // data-entry (6/38). The activity threshold below re-baselines whenever the
-  // observed CC changes, so applied to those assembly messages it would reset on
-  // every step and never let such a controller bind — leaving only standalone
-  // 7-bit CCs learnable with a threshold. Assembly / selector messages only
-  // accumulate state (they return false below), so they bypass the gate; the
-  // gate then guards the terminal commit of a standalone 7-bit controller.
-  const bool is_assembly_cc = cc == kDataEntryMsb || cc == kDataEntryLsb || cc == kNrpnLsb ||
-                              cc == kNrpnMsb || cc == kRpnLsb || cc == kRpnMsb || cc < 32 ||
-                              pending_cc_msb_valid_;
-
-  // Activity threshold: a controller must MOVE by at least learn_min_movement_
-  // (7-bit units) from its first observed value before any learn logic runs, so
-  // idle / noise traffic does not bind. A threshold of 0 disables the gate.
-  if (learn_min_movement_ > 0 && !is_assembly_cc) {
-    if (!learn_baseline_valid_ || learn_baseline_cc_ != cc || learn_baseline_channel_ != channel) {
-      learn_baseline_valid_ = true;
-      learn_baseline_cc_ = cc;
-      learn_baseline_channel_ = channel;
-      learn_baseline_value_ = value;
-      return false;
-    }
-    const int delta = static_cast<int>(value) - static_cast<int>(learn_baseline_value_);
-    const int magnitude = delta < 0 ? -delta : delta;
-    if (magnitude < static_cast<int>(learn_min_movement_)) {
-      return false;
-    }
+  // A selector starts a new RPN/NRPN gesture; drop a provisional 14-bit MSB.
+  const bool is_selector_cc = cc == kRpnMsb || cc == kRpnLsb || cc == kNrpnMsb || cc == kNrpnLsb;
+  if (is_selector_cc) {
+    state.pending_cc_msb_valid = false;
   }
 
-  if (pending_cc_msb_valid_) {
-    const bool matching_lsb = cc >= 32 && cc < 64 && pending_cc_msb_channel_ == channel &&
-                              cc == static_cast<uint8_t>(pending_cc_msb_ + 32u);
+  // A held low CC may be a 14-bit MSB; a matching LSB completes the pair ungated.
+  if (state.pending_cc_msb_valid) {
+    const bool matching_lsb =
+        cc >= 32 && cc < 64 && cc == static_cast<uint8_t>(state.pending_cc_msb + 32u);
+    if (matching_lsb) {
+      CcBinding binding;
+      binding.cc_number = state.pending_cc_msb;
+      binding.channel = channel;
+      binding.param_id = learn_param_id_;
+      binding.min_value = learn_min_;
+      binding.max_value = learn_max_;
+      binding.kind = CcBindingKind::kControlChange14;
+      binding.cc_lsb_number = cc;
+      return commit_learned_binding(binding, out_binding);
+    }
+
+    // With no threshold, any other controller commits the held low CC as 7-bit.
+    if (cc != state.pending_cc_msb) {
+      if (learn_min_movement_ == 0) {
+        CcBinding binding;
+        binding.cc_number = state.pending_cc_msb;
+        binding.channel = channel;
+        binding.param_id = learn_param_id_;
+        binding.min_value = learn_min_;
+        binding.max_value = learn_max_;
+        return commit_learned_binding(binding, out_binding);
+      }
+
+      // Keep the held low CC pending; other traffic is gated on its own baseline.
+      if (!state.baseline_valid[cc]) {
+        state.baseline_valid[cc] = true;
+        state.baseline_values[cc] = value;
+        return false;
+      }
+      const int delta = static_cast<int>(value) - static_cast<int>(state.baseline_values[cc]);
+      const int magnitude = delta < 0 ? -delta : delta;
+      if (magnitude < static_cast<int>(learn_min_movement_)) {
+        return false;
+      }
+      CcBinding binding;
+      binding.cc_number = cc;
+      binding.channel = channel;
+      binding.param_id = learn_param_id_;
+      binding.min_value = learn_min_;
+      binding.max_value = learn_max_;
+      return commit_learned_binding(binding, out_binding);
+    }
+    if (learn_min_movement_ > 0) {
+      const int delta = static_cast<int>(value) - static_cast<int>(state.pending_cc_msb_value);
+      const int magnitude = delta < 0 ? -delta : delta;
+      if (magnitude < static_cast<int>(learn_min_movement_)) {
+        return false;
+      }
+    }
+
     CcBinding binding;
-    binding.cc_number = pending_cc_msb_;
-    binding.channel = pending_cc_msb_channel_;
+    binding.cc_number = state.pending_cc_msb;
+    binding.channel = channel;
     binding.param_id = learn_param_id_;
     binding.min_value = learn_min_;
     binding.max_value = learn_max_;
-    if (matching_lsb) {
-      binding.kind = CcBindingKind::kControlChange14;
-      binding.cc_lsb_number = cc;
-    }
     return commit_learned_binding(binding, out_binding);
   }
 
   if (cc == kRpnMsb) {
-    rpn_msb_ = value;
-    rpn_msb_valid_ = true;
-    nrpn_msb_valid_ = false;
-    nrpn_lsb_valid_ = false;
+    state.rpn_msb = value;
+    state.rpn_msb_valid = true;
+    state.nrpn_msb_valid = false;
+    state.nrpn_lsb_valid = false;
     return false;
   }
   if (cc == kRpnLsb) {
-    rpn_lsb_ = value;
-    rpn_lsb_valid_ = true;
-    nrpn_msb_valid_ = false;
-    nrpn_lsb_valid_ = false;
+    state.rpn_lsb = value;
+    state.rpn_lsb_valid = true;
+    state.nrpn_msb_valid = false;
+    state.nrpn_lsb_valid = false;
     return false;
   }
   if (cc == kNrpnMsb) {
-    nrpn_msb_ = value;
-    nrpn_msb_valid_ = true;
-    rpn_msb_valid_ = false;
-    rpn_lsb_valid_ = false;
+    state.nrpn_msb = value;
+    state.nrpn_msb_valid = true;
+    state.rpn_msb_valid = false;
+    state.rpn_lsb_valid = false;
     return false;
   }
   if (cc == kNrpnLsb) {
-    nrpn_lsb_ = value;
-    nrpn_lsb_valid_ = true;
-    rpn_msb_valid_ = false;
-    rpn_lsb_valid_ = false;
+    state.nrpn_lsb = value;
+    state.nrpn_lsb_valid = true;
+    state.rpn_msb_valid = false;
+    state.rpn_lsb_valid = false;
     return false;
   }
 
@@ -336,24 +350,39 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
   binding.min_value = learn_min_;
   binding.max_value = learn_max_;
 
-  if ((cc == kDataEntryMsb || cc == kDataEntryLsb) && rpn_msb_valid_ && rpn_lsb_valid_) {
+  if ((cc == kDataEntryMsb || cc == kDataEntryLsb) && state.rpn_msb_valid && state.rpn_lsb_valid) {
     binding.kind = CcBindingKind::kRpn;
-    binding.selector_msb = rpn_msb_;
-    binding.selector_lsb = rpn_lsb_;
+    binding.selector_msb = state.rpn_msb;
+    binding.selector_lsb = state.rpn_lsb;
     return commit_learned_binding(binding, out_binding);
   }
-  if ((cc == kDataEntryMsb || cc == kDataEntryLsb) && nrpn_msb_valid_ && nrpn_lsb_valid_) {
+  if ((cc == kDataEntryMsb || cc == kDataEntryLsb) && state.nrpn_msb_valid &&
+      state.nrpn_lsb_valid) {
     binding.kind = CcBindingKind::kNrpn;
-    binding.selector_msb = nrpn_msb_;
-    binding.selector_lsb = nrpn_lsb_;
+    binding.selector_msb = state.nrpn_msb;
+    binding.selector_lsb = state.nrpn_lsb;
     return commit_learned_binding(binding, out_binding);
   }
 
   if (cc < 32) {
-    pending_cc_msb_valid_ = true;
-    pending_cc_msb_ = cc;
-    pending_cc_msb_channel_ = channel;
+    state.pending_cc_msb_valid = true;
+    state.pending_cc_msb = cc;
+    state.pending_cc_msb_value = value;
     return false;
+  }
+
+  // A standalone controller must move learn_min_movement_ from its first value.
+  if (learn_min_movement_ > 0) {
+    if (!state.baseline_valid[cc]) {
+      state.baseline_valid[cc] = true;
+      state.baseline_values[cc] = value;
+      return false;
+    }
+    const int delta = static_cast<int>(value) - static_cast<int>(state.baseline_values[cc]);
+    const int magnitude = delta < 0 ? -delta : delta;
+    if (magnitude < static_cast<int>(learn_min_movement_)) {
+      return false;
+    }
   }
 
   return commit_learned_binding(binding, out_binding);
@@ -366,7 +395,7 @@ bool CcMap::lookup_param(uint8_t cc_number, uint8_t channel, uint32_t* out_param
   // Exact-channel binding wins over an any-channel binding.
   size_t any_idx = kMaxBindings;
   for (size_t i = 0; i < count_; ++i) {
-    if (bindings_[i].cc_number != cc_number) {
+    if (is_selector_kind(bindings_[i].kind) || bindings_[i].cc_number != cc_number) {
       continue;
     }
     if (bindings_[i].channel == channel) {
@@ -391,7 +420,7 @@ bool CcMap::value_to_unit(uint8_t cc_number, uint8_t channel, float norm,
   }
   size_t any_idx = kMaxBindings;
   for (size_t i = 0; i < count_; ++i) {
-    if (bindings_[i].cc_number != cc_number) {
+    if (is_selector_kind(bindings_[i].kind) || bindings_[i].cc_number != cc_number) {
       continue;
     }
     if (bindings_[i].channel == channel) {
@@ -440,14 +469,15 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
     return true;
   }
 
+  uint8_t group = 0;
   uint8_t cc = 0;
   uint8_t channel = 0;
   Control32 control{0};
-  if (!decode_control_change(ump, &cc, &channel, &control)) {
+  if (!decode_control_change(ump, &group, &cc, &channel, &control)) {
     return false;
   }
   const uint8_t value7 = control.u7();
-  LiveChannelState& st = live_->channels[channel & 0x0Fu];
+  LiveChannelState& st = live_->channels[state_key(group, channel)];
 
   auto emit_from = [&](size_t idx, float norm) {
     const CcBinding& b = bindings_[idx];
@@ -515,9 +545,10 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
       return b.kind == CcBindingKind::kControlChange14 && b.cc_lsb_number == cc;
     });
     if (idx != kMaxBindings) {
-      if (st.cc_msb_valid && static_cast<uint8_t>(st.cc_msb_number + 32u) == cc) {
-        const uint16_t value14 =
-            static_cast<uint16_t>((static_cast<uint16_t>(st.cc_msb_value) << 7u) | value7);
+      const uint8_t msb_number = static_cast<uint8_t>(cc - 32u);
+      if (st.cc_msb_valid[msb_number]) {
+        const uint16_t value14 = static_cast<uint16_t>(
+            (static_cast<uint16_t>(st.cc_msb_values[msb_number]) << 7u) | value7);
         emit_from(idx, static_cast<float>(value14) / kCc14BitMax);
         return true;
       }
@@ -534,9 +565,8 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
       return b.kind == CcBindingKind::kControlChange14 && b.cc_number == cc;
     });
     if (idx != kMaxBindings) {
-      st.cc_msb_valid = true;
-      st.cc_msb_number = cc;
-      st.cc_msb_value = value7;
+      st.cc_msb_valid[cc] = true;
+      st.cc_msb_values[cc] = value7;
       const uint16_t value14 = static_cast<uint16_t>(static_cast<uint16_t>(value7) << 7u);
       emit_from(idx, static_cast<float>(value14) / kCc14BitMax);
       return true;
