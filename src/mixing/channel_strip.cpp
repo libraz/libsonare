@@ -265,6 +265,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   }
   sort_events_by_offset(insert_events, insert_count);
 
+  const bool muted = effectively_muted();
   if (num_channels > kMaxStackChannels) {
     // Wide layouts cannot use the segmented stack-array path. Apply the drained
     // events to advance fader / pan / width / insert parameters to their
@@ -284,21 +285,15 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     return;
   }
 
-  if (effectively_muted()) {
-    // The events were already drained from the SPSC lanes above; discarding them
-    // would leave parameter state stale on unmute. Apply them (advancing fader /
-    // pan / width / insert parameters to their block-final values) before the
-    // muted passthrough so the strip resumes with correct parameters.
-    for (size_t i = 0; i < fader_count; ++i) apply_automation_event(fader_events[i].event);
-    for (size_t i = 0; i < pan_count; ++i) apply_automation_event(pan_events[i].event);
-    for (size_t i = 0; i < width_count; ++i) apply_automation_event(width_events[i].event);
-    for (size_t i = 0; i < insert_count; ++i) apply_automation_event(insert_events[i].event);
-    process_unsegmented(channels, num_channels, num_samples);
-    note_member_discards();
-    return;
-  }
-
   const int clamped_samples = std::min(num_samples, max_block_size_);
+  if (muted) {
+    // Run the segmented path on silence so automation lands at its sample offsets.
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] != nullptr) {
+        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+      }
+    }
+  }
   zero_taps(pre_tap_, num_channels, 0, clamped_samples);
   zero_taps(post_tap_, num_channels, 0, clamped_samples);
 
@@ -336,10 +331,12 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     const int segment_samples = std::max(0, next_offset - cursor);
     if (segment_samples > 0) {
       process_segment(channels, num_channels, cursor, segment_samples, cursor);
-      pre_gain_reduction_db =
-          std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(pre_inserts_));
-      post_gain_reduction_db =
-          std::min(post_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+      if (!muted) {
+        pre_gain_reduction_db =
+            std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(pre_inserts_));
+        post_gain_reduction_db =
+            std::min(post_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+      }
       cursor += segment_samples;
     } else {
       // Defensive guard for duplicate or unsorted offsets; consume matching events next loop.
@@ -350,6 +347,19 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // post GR is clamped to be no less aggressive than pre GR for snapshot
   // consistency, matching the unsegmented path.
   post_gain_reduction_db = std::min(pre_gain_reduction_db, post_gain_reduction_db);
+
+  if (muted) {
+    // Keep the inserts' state advance but publish exact silence.
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] != nullptr) {
+        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+      }
+    }
+    zero_taps(pre_tap_, num_channels, 0, clamped_samples);
+    zero_taps(post_tap_, num_channels, 0, clamped_samples);
+    pre_gain_reduction_db = 0.0f;
+    post_gain_reduction_db = 0.0f;
+  }
 
   // Meter every plane the strip just processed, not just the front pair. The
   // unsegmented path already drives the pre meter from the full-width buffer;
@@ -385,24 +395,15 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   }
 
   const int clamped_samples = std::min(num_samples, max_block_size_);
+  const bool muted = effectively_muted();
 
-  if (effectively_muted()) {
+  if (muted) {
+    // Feed silence through so stateful stages decay their tails while muted.
     for (int ch = 0; ch < num_channels; ++ch) {
       if (channels[ch] != nullptr) {
         std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
       }
     }
-    zero_taps(pre_tap_, num_channels, clamped_samples);
-    zero_taps(post_tap_, num_channels, clamped_samples);
-    if (pre_meter_) {
-      pre_meter_->set_gain_reduction_db(0.0f);
-      pre_meter_->process(channels, num_channels, num_samples);
-    }
-    if (post_meter_) {
-      post_meter_->set_gain_reduction_db(0.0f);
-      post_meter_->process(channels, num_channels, num_samples);
-    }
-    return;
   }
 
   input_trim_.process(channels, num_channels, num_samples);
@@ -430,7 +431,15 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
     }
     process_insert_chain(pre_inserts_, pre_insert_spo_, staged, num_channels, num_samples, 0, 0);
   }
-  const float pre_gain_reduction_db = aggregate_gain_reduction_db(pre_inserts_);
+  // A muted pre-insert tail stays out of the output and meters.
+  if (muted) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] != nullptr) {
+        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+      }
+    }
+  }
+  const float pre_gain_reduction_db = muted ? 0.0f : aggregate_gain_reduction_db(pre_inserts_);
 
   // Pre-fader tap (after trim, polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux.
   copy_to_taps(channels, pre_tap_, num_channels, clamped_samples);
@@ -451,12 +460,20 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
     process_insert_chain(post_inserts_, post_insert_spo_, staged, num_channels, num_samples,
                          pre_inserts_.size(), 0);
   }
+  // Post inserts advanced on silence; discard their tail before publishing.
+  if (muted) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] != nullptr) {
+        std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+      }
+    }
+  }
   const float post_gain_reduction_db =
-      std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+      muted ? 0.0f : std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
 
-  if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
+  if (!muted && num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) {
       goniometer_.push(channels[0][i], channels[1][i]);
     }
@@ -503,6 +520,12 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
     process_insert_chain(pre_inserts_, pre_insert_spo_, staged, num_channels, num_samples, 0,
                          start);
   }
+  const bool muted = effectively_muted();
+  if (muted) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (segment[ch]) std::fill(segment[ch], segment[ch] + num_samples, 0.0f);
+    }
+  }
   copy_to_taps(segment, pre_tap_, num_channels, num_samples, tap_offset);
 
   fader_.process(segment, num_channels, num_samples);
@@ -517,9 +540,14 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
     process_insert_chain(post_inserts_, post_insert_spo_, staged, num_channels, num_samples,
                          pre_inserts_.size(), start);
   }
+  if (muted) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (segment[ch]) std::fill(segment[ch], segment[ch] + num_samples, 0.0f);
+    }
+  }
   if (num_channels <= 2) width_.process(segment, num_channels, num_samples);
 
-  if (num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
+  if (!effectively_muted() && num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) {
       goniometer_.push(segment[0][i], segment[1][i]);
     }

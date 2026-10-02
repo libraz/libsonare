@@ -123,6 +123,37 @@ class AutomationLane {
     const int64_t block_end = block_start + static_cast<int64_t>(num_samples);
     size_t consumed = 0;
 
+    // One-shot after a seek/discard: publish the value valid at block start at offset zero.
+    bool baseline_pending = baseline_pending_;
+    bool baseline_emitted = false;
+
+    auto emit_baseline = [&](const AutomationEvent* next) {
+      if (!baseline_pending || baseline_emitted || !has_active_event_) {
+        return;
+      }
+      // A breakpoint at block start is authoritative; the event callback publishes it.
+      if (next != nullptr && next->sample_pos == block_start) {
+        baseline_pending = false;
+        baseline_pending_ = false;
+        return;
+      }
+
+      AutomationEvent baseline = active_event_;
+      if (next != nullptr && active_event_.target == next->target &&
+          active_event_.curve != AutomationCurveType::Hold && next->sample_pos > block_start) {
+        baseline.sample_pos = block_start;
+        baseline.value =
+            interpolate_automation_value(active_event_, *next, static_cast<double>(block_start));
+      } else {
+        baseline.sample_pos = block_start;
+      }
+      callback(AutomationBlockEvent{baseline, 0});
+      ++consumed;
+      baseline_emitted = true;
+      baseline_pending = false;
+      baseline_pending_ = false;
+    };
+
     auto emit_curve_events = [&](const AutomationEvent& start, const AutomationEvent& end,
                                  int64_t emit_start, int64_t emit_end) {
       if (!(start.target == end.target) || start.curve == AutomationCurveType::Hold ||
@@ -152,20 +183,29 @@ class AutomationLane {
       const size_t tail = tail_.load(std::memory_order_relaxed);
       const size_t head = head_.load(std::memory_order_acquire);
       if (tail == head) {
+        emit_baseline(nullptr);
         return consumed;
       }
 
-      const AutomationEvent& event = buffer_[tail];
+      // Copy first: after the tail release store the producer may reuse this slot.
+      const AutomationEvent event = buffer_[tail];
       if (event.sample_pos >= block_end) {
         if (has_active_event_ && active_event_.sample_pos < block_start) {
-          emit_curve_events(active_event_, event, block_start, block_end - 1);
+          const bool baseline_was_pending = baseline_pending;
+          emit_baseline(&event);
+          emit_curve_events(active_event_, event,
+                            baseline_was_pending ? block_start + 1 : block_start, block_end - 1);
         }
         return consumed;
       }
 
       if (has_active_event_ && active_event_.sample_pos < block_start &&
           event.sample_pos > block_start) {
-        emit_curve_events(active_event_, event, block_start, event.sample_pos - 1);
+        const bool baseline_was_pending = baseline_pending;
+        emit_baseline(&event);
+        emit_curve_events(active_event_, event,
+                          baseline_was_pending ? block_start + 1 : block_start,
+                          event.sample_pos - 1);
       }
 
       const size_t next_tail = increment(tail);
@@ -174,6 +214,8 @@ class AutomationLane {
       if (event.sample_pos < block_start) {
         active_event_ = event;
         has_active_event_ = true;
+        baseline_pending = true;
+        baseline_pending_ = true;
         continue;
       }
 
@@ -181,6 +223,8 @@ class AutomationLane {
       ++consumed;
       active_event_ = event;
       has_active_event_ = true;
+      baseline_pending = false;
+      baseline_pending_ = false;
 
       const size_t peek_tail = next_tail;
       const size_t latest_head = head_.load(std::memory_order_acquire);
@@ -207,6 +251,9 @@ class AutomationLane {
   // discard_before(). Callers must serialize those two on the audio thread.
   AutomationEvent active_event_{};
   bool has_active_event_ = false;
+  // Set when discard_before() or consume_block() advances over a past
+  // breakpoint. The next consume_block() emits one offset-zero baseline.
+  bool baseline_pending_ = false;
 };
 
 }  // namespace sonare::mixing

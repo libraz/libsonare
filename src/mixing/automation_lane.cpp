@@ -48,6 +48,7 @@ size_t AutomationLane::discard_before(int64_t sample_pos) noexcept {
 
     active_event_ = event;
     has_active_event_ = true;
+    baseline_pending_ = true;
     tail_.store(increment(tail), std::memory_order_release);
     ++discarded;
   }
@@ -58,6 +59,7 @@ void AutomationLane::clear() noexcept {
   has_last_pushed_sample_ = false;
   last_pushed_sample_ = 0;
   has_active_event_ = false;
+  baseline_pending_ = false;
 }
 
 size_t AutomationLane::increment(size_t index) const noexcept {

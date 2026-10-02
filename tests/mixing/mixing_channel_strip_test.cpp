@@ -5,6 +5,9 @@
 #include <atomic>
 #include <limits>
 
+#if defined(SONARE_WITH_FX)
+#include "effects/delay/stereo_delay.h"
+#endif
 #include "mastering/api/insert_factory.h"
 #include "mastering/dynamics/compressor.h"
 #include "mixing/api/scene.h"
@@ -882,6 +885,302 @@ TEST_CASE("ChannelStrip applies fader automation at block sample offsets", "[mix
   REQUIRE_THAT(strip.fader_db(), WithinAbs(-6.0206f, 0.0001f));
   REQUIRE(strip.meter_snapshot().seq == 1);
 }
+
+TEST_CASE("ChannelStrip automation follows a held value across a forward seek",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kBlock = 64;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_fader_automation(0, -6.0f, sonare::AutomationCurve::Hold));
+  REQUIRE(strip.schedule_fader_automation(100, -12.0f, sonare::AutomationCurve::Hold));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, 0);
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-6.0f, 0.0001f));
+  REQUIRE_THAT(left.front(), WithinAbs(sonare::db_to_linear(-6.0f), 0.0001f));
+
+  // A seek can jump over the second breakpoint without rendering the samples
+  // between 64 and 200. The last held value must still be applied before the
+  // first post-seek block, otherwise the fader remains at -6 dB indefinitely.
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, 200);
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-12.0f, 0.0001f));
+  REQUIRE_THAT(left.front(), WithinAbs(sonare::db_to_linear(-12.0f), 0.0001f));
+}
+
+TEST_CASE("ChannelStrip automation starts at the final value when playback begins after all points",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kBlock = 32;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_fader_automation(100, -6.0f, sonare::AutomationCurve::Hold));
+  REQUIRE(strip.schedule_fader_automation(200, -12.0f, sonare::AutomationCurve::Hold));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(1.0f);
+  right.fill(1.0f);
+  float* channels[] = {left.data(), right.data()};
+  strip.process_at(channels, 2, kBlock, 300);
+
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-12.0f, 0.0001f));
+  REQUIRE_THAT(left.front(), WithinAbs(sonare::db_to_linear(-12.0f), 0.0001f));
+}
+
+TEST_CASE("ChannelStrip automation interpolates continuously after a forward seek",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kBlock = 16;
+  constexpr int64_t kStart = 32;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_fader_automation(0, 0.0f, sonare::AutomationCurve::Linear));
+  REQUIRE(strip.schedule_fader_automation(64, -12.0f, sonare::AutomationCurve::Linear));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(1.0f);
+  right.fill(1.0f);
+  float* channels[] = {left.data(), right.data()};
+  strip.process_at(channels, 2, kBlock, kStart);
+
+  // The first post-seek sample is halfway through the ramp. Every following
+  // sample must continue toward the endpoint without a reset or a jump back to
+  // the initial fader value.
+  REQUIRE_THAT(left.front(), WithinAbs(sonare::db_to_linear(-6.0f), 0.0001f));
+  for (int i = 1; i < kBlock; ++i) {
+    CAPTURE(i);
+    REQUIRE(left[static_cast<size_t>(i)] <= left[static_cast<size_t>(i - 1)] + 0.0001f);
+    REQUIRE(left[static_cast<size_t>(i - 1)] - left[static_cast<size_t>(i)] < 0.1f);
+  }
+  REQUIRE(left.back() < left.front());
+}
+
+TEST_CASE("ChannelStrip automation keeps continuous ramps and target lanes independent",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kBlock = 64;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 5.0f});
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_fader_automation(0, 0.0f, sonare::AutomationCurve::Linear));
+  REQUIRE(strip.schedule_fader_automation(kBlock, -12.0f, sonare::AutomationCurve::Linear));
+  REQUIRE(strip.schedule_pan_automation(32, 1.0f, sonare::AutomationCurve::Hold));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(1.0f);
+  right.fill(1.0f);
+  float* channels[] = {left.data(), right.data()};
+  strip.process_at(channels, 2, kBlock, 0);
+
+  // The fader's ordinary smoother still moves in one direction through the
+  // automation ramp. A pan event on its own lane must not reset that fader or
+  // make the later samples jump back to unity.
+  for (int i = 1; i < kBlock; ++i) {
+    CAPTURE(i);
+    REQUIRE(left[static_cast<size_t>(i)] <= left[static_cast<size_t>(i - 1)] + 0.0001f);
+  }
+  REQUIRE(left.back() < left.front());
+  REQUIRE_THAT(left[0], WithinAbs(right[0], 0.0001f));
+  REQUIRE(left.back() < right.back());
+
+  // The endpoint at the block boundary belongs to the next block. Consuming
+  // it there must settle the fader target without disturbing the pan target.
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, kBlock);
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-12.0f, 0.0001f));
+  REQUIRE_THAT(strip.pan(), WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("ChannelStrip insert automation catches up after a forward seek",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kBlock = 8;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(1.0f));
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_insert_automation(0, 0, 0, 2.0f, sonare::AutomationCurve::Hold));
+  REQUIRE(strip.schedule_insert_automation(0, 0, 100, 4.0f, sonare::AutomationCurve::Hold));
+
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, 0);
+  REQUIRE_THAT(left.front(), WithinAbs(2.0f, 0.0001f));
+
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, 200);
+  REQUIRE_THAT(left.front(), WithinAbs(4.0f, 0.0001f));
+}
+
+TEST_CASE("ChannelStrip send automation catches up after discard_before on a seek",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kBlock = 8;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kBlock);
+  const size_t send = strip.add_send({0.0f, sonare::mixing::SendTiming::PostFader, 0.0f});
+  REQUIRE(strip.schedule_send_automation(send, 0, -6.0f, sonare::AutomationCurve::Hold));
+  REQUIRE(strip.schedule_send_automation(send, 100, -12.0f, sonare::AutomationCurve::Hold));
+
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, 0);
+  left.fill(1.0f);
+  right.fill(1.0f);
+  strip.process_at(channels, 2, kBlock, 200);
+
+  std::array<float, kBlock> send_left{};
+  std::array<float, kBlock> send_right{};
+  float* destination[] = {send_left.data(), send_right.data()};
+  strip.mix_send_at(send, destination, 2, kBlock, 200);
+  REQUIRE_THAT(send_left.front(), WithinAbs(sonare::db_to_linear(-12.0f), 0.0001f));
+  REQUIRE_THAT(send_right.front(), WithinAbs(sonare::db_to_linear(-12.0f), 0.0001f));
+}
+
+#if defined(SONARE_WITH_FX)
+TEST_CASE("ChannelStrip mute and solo gate do not freeze a real delay insert",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlock = 64;
+  constexpr float kDelayMs = 2.0f;  // 96 samples, longer than one test block.
+
+  const auto make_strip = [=] {
+    sonare::effects::delay::StereoDelayConfig delay_config;
+    delay_config.delay_time_l_ms = kDelayMs;
+    delay_config.delay_time_r_ms = kDelayMs;
+    delay_config.feedback = 0.0f;
+    delay_config.dry_wet = 1.0f;
+
+    auto strip = std::make_unique<sonare::mixing::ChannelStrip>(
+        sonare::mixing::ChannelStripConfig{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    strip->add_pre_insert(std::make_unique<sonare::effects::delay::StereoDelay>(delay_config));
+    strip->prepare(kSampleRate, kBlock);
+    return strip;
+  };
+
+  const auto max_abs = [](const std::array<float, kBlock>& samples) {
+    float peak = 0.0f;
+    for (const float sample : samples) peak = std::max(peak, std::abs(sample));
+    return peak;
+  };
+
+  // Positive control: the real built-in delay must produce an audible delayed
+  // impulse over the same deterministic two-block duration used below.
+  auto reference = make_strip();
+  std::array<float, kBlock> reference_l{};
+  std::array<float, kBlock> reference_r{};
+  reference_l[0] = 1.0f;
+  reference_r[0] = 1.0f;
+  float* reference_channels[] = {reference_l.data(), reference_r.data()};
+  reference->process_at(reference_channels, 2, kBlock, 0);
+  reference_l.fill(0.0f);
+  reference_r.fill(0.0f);
+  reference->process_at(reference_channels, 2, kBlock, kBlock);
+  REQUIRE(max_abs(reference_l) > 0.5f);
+
+  for (const bool implied_solo_mute : {false, true}) {
+    CAPTURE(implied_solo_mute);
+    auto strip = make_strip();
+    std::array<float, kBlock> left{};
+    std::array<float, kBlock> right{};
+    float* channels[] = {left.data(), right.data()};
+
+    left[0] = 1.0f;
+    right[0] = 1.0f;
+    strip->process_at(channels, 2, kBlock, 0);
+    REQUIRE(max_abs(left) < 0.0001f);
+
+    if (implied_solo_mute) {
+      // An implied mute is the state produced when another strip is soloed.
+      strip->set_solo_safe(false);
+      strip->set_implied_mute(true);
+    } else {
+      strip->set_muted(true);
+    }
+
+    left.fill(0.0f);
+    right.fill(0.0f);
+    strip->process_at(channels, 2, kBlock, kBlock);
+    REQUIRE(max_abs(left) < 0.0001f);
+
+    if (implied_solo_mute) {
+      strip->set_implied_mute(false);
+    } else {
+      strip->set_muted(false);
+    }
+
+    // Unmuting with silent input must not reveal the delayed impulse that was
+    // already in the real insert before the muted block.
+    left.fill(0.0f);
+    right.fill(0.0f);
+    strip->process_at(channels, 2, kBlock, 2 * kBlock);
+    REQUIRE(max_abs(left) < 0.0001f);
+    REQUIRE(max_abs(right) < 0.0001f);
+  }
+}
+#endif  // SONARE_WITH_FX
+
+// Pre-stage tails must not enter post-stage state just because an unrelated
+// automation breakpoint selects segmented processing during a muted block.
+#if defined(SONARE_WITH_FX)
+TEST_CASE("ChannelStrip muted insert state agrees with and without segmented automation",
+          "[mixing][automation][audio_workflow]") {
+  constexpr int block = 64;
+  const auto render = [](bool automated) {
+    sonare::effects::delay::StereoDelayConfig config;
+    config.delay_time_l_ms = 2.0f;
+    config.delay_time_r_ms = 2.0f;
+    config.feedback = 0;
+    config.dry_wet = 1;
+    sonare::mixing::ChannelStrip strip(
+        sonare::mixing::ChannelStripConfig{0, 0, sonare::mixing::PanLaw::Linear0dB, 0});
+    strip.add_pre_insert(std::make_unique<sonare::effects::delay::StereoDelay>(config));
+    strip.add_post_insert(std::make_unique<sonare::effects::delay::StereoDelay>(config));
+    strip.prepare(48000, block);
+    if (automated) REQUIRE(strip.schedule_fader_automation(block + 16, 0));
+    std::array<float, block> left{}, right{};
+    float* channels[] = {left.data(), right.data()};
+    left[0] = right[0] = 1;
+    strip.process_at(channels, 2, block, 0);
+    strip.set_muted(true);
+    left.fill(0);
+    right.fill(0);
+    strip.process_at(channels, 2, block, block);
+    strip.set_muted(false);
+    std::vector<float> result;
+    for (int frame = 2 * block; frame < 5 * block; frame += block) {
+      left.fill(0);
+      right.fill(0);
+      strip.process_at(channels, 2, block, frame);
+      result.insert(result.end(), left.begin(), left.end());
+      result.insert(result.end(), right.begin(), right.end());
+    }
+    return result;
+  };
+  const auto unsegmented = render(false);
+  const auto segmented = render(true);
+  REQUIRE(unsegmented.size() == segmented.size());
+  for (size_t i = 0; i < segmented.size(); ++i) {
+    CHECK_THAT(unsegmented[i], WithinAbs(0, 1.0e-6f));
+    CHECK_THAT(segmented[i], WithinAbs(unsegmented[i], 1.0e-6f));
+  }
+}
+#endif
 
 TEST_CASE("ChannelStrip reaches the block-final fader value past the per-block event cap",
           "[mixing]") {
