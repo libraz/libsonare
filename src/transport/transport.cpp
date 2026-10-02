@@ -9,12 +9,11 @@ namespace sonare::transport {
 namespace {
 
 const TempoMap& fallback_tempo_map() noexcept {
-  // Used when no tempo map is set. A default-constructed TempoMap has no
+  // Used only by an unprepared transport. A default-constructed TempoMap has no
   // segments, so sample_to_ppq() would freeze musical time at PPQ 0. prepare()
-  // seeds the default single 120 BPM segment; a standard 48 kHz rate is fine
-  // here because this is only a degenerate fallback (a real transport supplies
-  // its own prepared map at the actual rate). Prepared exactly once via
-  // thread-safe static initialization.
+  // seeds the default single 120 BPM segment; the prepared transport path owns
+  // a map at its actual rate instead. Prepared exactly once via thread-safe
+  // static initialization.
   static TempoMap map;
   static const bool prepared = [] {
     map.prepare(48000.0);
@@ -62,14 +61,30 @@ bool BoundaryList::add(Boundary boundary) noexcept {
 }
 
 void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
-  sample_rate_.store(sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate,
-                     std::memory_order_release);
-  tempo_map_.store(tempo_map ? tempo_map : &fallback_tempo_map(), std::memory_order_release);
+  const double accepted_rate = sample_rate > 0.0 && std::isfinite(sample_rate)
+                                   ? sample_rate
+                                   : constants::kDefaultDawSampleRate;
+  // Control thread: prepare the owned fallback so a null map stays allocation-free at this rate.
+  fallback_tempo_map_.prepare(accepted_rate);
+  fallback_prepared_.store(true, std::memory_order_release);
+  sample_rate_.store(accepted_rate, std::memory_order_release);
+  tempo_map_.store(tempo_map ? tempo_map : &fallback_tempo_map_, std::memory_order_release);
   render_frame_.store(0, std::memory_order_release);
   sample_position_.store(0, std::memory_order_release);
   playing_.store(false, std::memory_order_release);
   loop_overflow_count_.store(0, std::memory_order_relaxed);
   loop_state_.store({});
+}
+
+void Transport::set_tempo_map(const TempoMap* tempo_map) noexcept {
+  if (tempo_map != nullptr) {
+    tempo_map_.store(tempo_map, std::memory_order_release);
+    return;
+  }
+  // Once prepared, null restores this instance's map rather than the shared fallback.
+  const TempoMap* fallback =
+      fallback_prepared_.load(std::memory_order_acquire) ? &fallback_tempo_map_ : nullptr;
+  tempo_map_.store(fallback, std::memory_order_release);
 }
 
 TransportState Transport::snapshot() const noexcept {

@@ -43,9 +43,7 @@ class BoundaryList {
 class Transport {
  public:
   void prepare(double sample_rate, const TempoMap* tempo_map);
-  void set_tempo_map(const TempoMap* tempo_map) noexcept {
-    tempo_map_.store(tempo_map, std::memory_order_release);
-  }
+  void set_tempo_map(const TempoMap* tempo_map) noexcept;
   TransportState snapshot() const noexcept;
   TransportState snapshot_control() const noexcept;
   void advance(int num_frames) noexcept;
@@ -97,6 +95,10 @@ class Transport {
 
   int64_t loop_folded(int64_t position) const noexcept;
 
+  // Prepared at the transport's rate in prepare(); before prepare() a null map
+  // uses the shared 48 kHz fallback.
+  TempoMap fallback_tempo_map_{};
+  std::atomic<bool> fallback_prepared_{false};
   std::atomic<const TempoMap*> tempo_map_{nullptr};
   std::atomic<double> sample_rate_{constants::kDefaultDawSampleRate};
   std::atomic<bool> playing_{false};

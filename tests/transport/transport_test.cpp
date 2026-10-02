@@ -142,6 +142,52 @@ TEST_CASE("TempoMap reports bar and beat positions", "[transport]") {
   REQUIRE_THAT(map.bar_start_ppq(10.0), WithinAbs(8.0, 1.0e-9));
 }
 
+TEST_CASE("TempoMap clamps both endpoints before integrating a tempo ramp", "[transport][tempo]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+
+  // Both raw endpoints are positive but below the playhead's 1e-6 BPM floor.
+  // Once clamped, this is a constant-tempo segment and must use the exact
+  // constant-tempo conversion instead of a zero-slope logarithmic ramp.
+  sonare::transport::TempoSegment ramp{};
+  ramp.start_ppq = 0.0;
+  ramp.bpm = 1.0e-7;
+  ramp.end_bpm = 5.0e-7;
+  sonare::transport::TempoSegment tail{};
+  tail.start_ppq = 4.0;
+  tail.bpm = 5.0e-7;
+  map.set_segments({ramp, tail});
+
+  constexpr int64_t kSamplesPerPpqAtMinBpm = 2'880'000'000'000;
+  REQUIRE(map.ppq_to_sample(1.0) == kSamplesPerPpqAtMinBpm);
+  REQUIRE(map.ppq_to_sample(4.0) == 4 * kSamplesPerPpqAtMinBpm);
+  REQUIRE_THAT(map.sample_to_ppq(kSamplesPerPpqAtMinBpm), WithinAbs(1.0, 1.0e-12));
+  REQUIRE_THAT(map.bpm_at_sample(0), WithinAbs(1.0e-6, 1.0e-12));
+}
+
+TEST_CASE("TempoMap ramps from a clamped low endpoint consistently", "[transport][tempo]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+
+  sonare::transport::TempoSegment ramp{};
+  ramp.start_ppq = 0.0;
+  ramp.bpm = 1.0e-7;
+  ramp.end_bpm = 5.0e-6;
+  sonare::transport::TempoSegment tail{};
+  tail.start_ppq = 4.0;
+  tail.bpm = 5.0e-6;
+  map.set_segments({ramp, tail});
+
+  const int64_t sample_at_one_ppq = map.ppq_to_sample(1.0);
+  REQUIRE(sample_at_one_ppq > 0);
+  REQUIRE_THAT(map.sample_to_ppq(sample_at_one_ppq), WithinAbs(1.0, 5.0e-4));
+  REQUIRE_THAT(map.bpm_at_sample(0), WithinAbs(1.0e-6, 1.0e-12));
+  // The instantaneous value must use the clamped start endpoint too. Using the
+  // raw 1e-7 BPM base shifts the middle of the ramp by 9e-7 BPM.
+  const double expected_at_one_ppq = 1.0e-6 + (5.0e-6 - 1.0e-6) / 4.0;
+  REQUIRE_THAT(map.bpm_at_sample(sample_at_one_ppq), WithinAbs(expected_at_one_ppq, 1.0e-12));
+}
+
 TEST_CASE("TempoMap reported tempo tracks the clamped playhead tempo", "[transport]") {
   // A positive-but-sub-kMinBpm segment passes the finite-positive load guard, but
   // the playhead advances at kMinBpm (samples_per_ppq clamps). The reported tempo
@@ -277,6 +323,73 @@ TEST_CASE("Transport without a tempo map advances musical time via the fallback"
   REQUIRE(state.sample_position == 48000);
   REQUIRE(state.ppq_position > 0.0);
   REQUIRE(state.bpm > 0.0);
+}
+
+TEST_CASE("Transport fallback tempo maps follow each instance's sample rate",
+          "[transport][tempo]") {
+  sonare::transport::Transport at_44100;
+  sonare::transport::Transport at_96000;
+  at_44100.prepare(44100.0, nullptr);
+  at_96000.prepare(96000.0, nullptr);
+
+  at_44100.play();
+  at_96000.play();
+  at_44100.advance(44100);
+  at_96000.advance(96000);
+
+  auto state_44100 = at_44100.snapshot();
+  auto state_96000 = at_96000.snapshot();
+  REQUIRE(state_44100.sample_position == 44100);
+  REQUIRE(state_96000.sample_position == 96000);
+  REQUIRE_THAT(state_44100.ppq_position, WithinAbs(2.0, 1.0e-12));
+  REQUIRE_THAT(state_96000.ppq_position, WithinAbs(2.0, 1.0e-12));
+  REQUIRE_THAT(state_44100.sample_rate, WithinAbs(44100.0, 1.0e-12));
+  REQUIRE_THAT(state_96000.sample_rate, WithinAbs(96000.0, 1.0e-12));
+
+  // Seeking and loop conversion must use the same per-instance map. The two
+  // transports share no fallback state: a seek in one does not affect the other.
+  at_44100.seek_ppq(1.0);
+  at_96000.seek_ppq(1.0);
+  REQUIRE(at_44100.sample_position() == 22050);
+  REQUIRE(at_96000.sample_position() == 48000);
+
+  at_44100.set_loop(0.0, 1.0, true);
+  at_96000.set_loop(0.0, 1.0, true);
+  at_44100.advance(1);
+  at_96000.advance(1);
+  REQUIRE(at_44100.sample_position() == 1);
+  REQUIRE(at_96000.sample_position() == 1);
+  REQUIRE(at_44100.snapshot().looping);
+  REQUIRE(at_96000.snapshot().looping);
+}
+
+TEST_CASE("Transport::set_tempo_map(nullptr) restores the owned fallback", "[transport][tempo]") {
+  sonare::transport::TempoMap custom;
+  custom.prepare(44100.0);
+  custom.set_segments({{0.0, 60.0, 0.0}});
+
+  sonare::transport::Transport transport;
+  transport.prepare(44100.0, &custom);
+  transport.seek_ppq(1.0);
+  REQUIRE(transport.sample_position() == 44100);
+
+  transport.set_tempo_map(nullptr);
+  transport.seek_ppq(1.0);
+  REQUIRE(transport.sample_position() == 22050);
+  REQUIRE_THAT(transport.snapshot().ppq_position, WithinAbs(1.0, 1.0e-12));
+}
+
+TEST_CASE("Transport rebuilds its fallback map when a prepared rate changes",
+          "[transport][tempo]") {
+  sonare::transport::Transport transport;
+  transport.prepare(44100.0, nullptr);
+  transport.seek_ppq(1.0);
+  REQUIRE(transport.sample_position() == 22050);
+
+  transport.prepare(96000.0, nullptr);
+  transport.seek_ppq(1.0);
+  REQUIRE(transport.sample_position() == 48000);
+  REQUIRE_THAT(transport.snapshot().sample_rate, WithinAbs(96000.0, 1.0e-12));
 }
 
 TEST_CASE("Transport loop boundaries and wrap are sample accurate", "[transport]") {
