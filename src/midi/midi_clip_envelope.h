@@ -6,10 +6,12 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "core/fade_curve.h"
 #include "midi/midi_clip.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi {
 
@@ -29,7 +31,7 @@ inline MidiClipEnvelopeWinner find_midi_clip_envelope_winner(
   int64_t last_ended_at = 0;
   for (const MidiClipSchedule& clip : clips) {
     if (clip.destination_id != destination_id || clip.start_sample > t) continue;
-    const int64_t end_sample = clip.start_sample + clip.length_samples;
+    const int64_t end_sample = numeric::saturating_add(clip.start_sample, clip.length_samples);
     const bool ended = clip.length_samples > 0 && t >= end_sample;
     if (!ended) {
       const MidiClipSchedule* active = winner.active;
@@ -61,7 +63,8 @@ inline float midi_clip_envelope_gain(const std::vector<MidiClipSchedule>& clips,
                                      uint32_t destination_id, int64_t t) noexcept {
   const MidiClipEnvelopeWinner winner = find_midi_clip_envelope_winner(clips, destination_id, t);
   if (winner.active != nullptr) {
-    return midi_clip_gain_at(*winner.active, t - winner.active->start_sample);
+    return midi_clip_gain_at(*winner.active,
+                             numeric::saturating_sub(t, winner.active->start_sample));
   }
   if (winner.last_ended != nullptr) {
     return midi_clip_gain_at(*winner.last_ended, winner.last_ended->length_samples);
@@ -97,7 +100,9 @@ inline void resolve_midi_clip_envelope(const std::vector<MidiClipSchedule>& clip
   out->run_count = 0;
   out->overflowed = false;
   if (length_samples <= 0) return;
-  const int64_t block_end = block_start + length_samples;
+  int64_t block_end = 0;
+  const bool block_end_overflowed = !numeric::checked_add(block_start, length_samples, &block_end);
+  if (block_end_overflowed) block_end = std::numeric_limits<int64_t>::max();
 
   // Boundaries strictly inside the block, sorted; one fewer than kMaxRuns.
   std::array<int64_t, MidiClipEnvelopeBlock::kMaxRuns - 1> breakpoints{};
@@ -123,27 +128,46 @@ inline void resolve_midi_clip_envelope(const std::vector<MidiClipSchedule>& clip
   for (const MidiClipSchedule& clip : clips) {
     if (clip.destination_id != destination_id) continue;
     add_breakpoint(clip.start_sample);
-    if (clip.length_samples > 0) add_breakpoint(clip.start_sample + clip.length_samples);
+    if (clip.length_samples > 0) {
+      add_breakpoint(numeric::saturating_add(clip.start_sample, clip.length_samples));
+    }
   }
   if (breakpoint_overflow) {
     out->overflowed = true;
     return;
   }
 
-  int64_t segment_start = block_start;
-  for (size_t i = 0; i <= breakpoint_count; ++i) {
-    const int64_t segment_end = i < breakpoint_count ? breakpoints[i] : block_end;
+  const auto append_run = [&](int64_t frames, int64_t sample) noexcept {
+    if (frames <= 0) return true;
+    if (out->run_count >= MidiClipEnvelopeBlock::kMaxRuns) {
+      out->overflowed = true;
+      return false;
+    }
     MidiClipEnvelopeRun& run = out->runs[out->run_count++];
     run = MidiClipEnvelopeRun{};
-    run.frames = segment_end - segment_start;
+    run.frames = frames;
     const MidiClipEnvelopeWinner winner =
-        find_midi_clip_envelope_winner(clips, destination_id, segment_start);
+        find_midi_clip_envelope_winner(clips, destination_id, sample);
     if (winner.active != nullptr) {
       run.clip = winner.active;
     } else if (winner.last_ended != nullptr) {
       run.constant_gain = midi_clip_gain_at(*winner.last_ended, winner.last_ended->length_samples);
     }
+    return true;
+  };
+
+  int64_t segment_start = block_start;
+  for (size_t i = 0; i <= breakpoint_count; ++i) {
+    const int64_t segment_end = i < breakpoint_count ? breakpoints[i] : block_end;
+    if (!append_run(segment_end - segment_start, segment_start)) return;
     segment_start = segment_end;
+  }
+
+  // A saturated block end: the remaining frames all evaluate at INT64_MAX.
+  if (block_end_overflowed) {
+    const int64_t represented = numeric::saturating_sub(segment_start, block_start);
+    const int64_t remainder = numeric::saturating_sub(length_samples, represented);
+    if (!append_run(remainder, block_end)) return;
   }
 }
 
@@ -165,7 +189,9 @@ inline void apply_midi_clip_envelope(const MidiClipEnvelopeBlock& block,
   };
   if (block.overflowed) {
     for (int i = 0; i < num_frames; ++i) {
-      scale(i, midi_clip_envelope_gain(clips, destination_id, block_start + i));
+      scale(i,
+            midi_clip_envelope_gain(clips, destination_id,
+                                    numeric::saturating_add(block_start, static_cast<int64_t>(i))));
     }
     return;
   }
@@ -176,12 +202,15 @@ inline void apply_midi_clip_envelope(const MidiClipEnvelopeBlock& block,
       offset += run.frames;
       continue;
     }
-    for (int64_t i = offset; i < offset + run.frames; ++i) {
+    const int64_t run_end = numeric::saturating_add(offset, run.frames);
+    for (int64_t i = offset; i < run_end; ++i) {
+      const int64_t sample = numeric::saturating_add(block_start, i);
       scale(i, run.clip != nullptr
-                   ? midi_clip_gain_at(*run.clip, block_start + i - run.clip->start_sample)
+                   ? midi_clip_gain_at(*run.clip,
+                                       numeric::saturating_sub(sample, run.clip->start_sample))
                    : run.constant_gain);
     }
-    offset += run.frames;
+    offset = run_end;
   }
 }
 

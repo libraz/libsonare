@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <utility>
@@ -492,6 +493,65 @@ TEST_CASE(
                                 0.5f + 0.01f * static_cast<float>(i)));
     }
     check(clips, /*expect_overflow=*/true);
+  }
+}
+
+TEST_CASE("MIDI clip envelope resolver saturates clip and block boundaries at INT64_MAX",
+          "[midi_clip_engine]") {
+  using sonare::midi::apply_midi_clip_envelope;
+  using sonare::midi::MidiClipEnvelopeBlock;
+  using sonare::midi::resolve_midi_clip_envelope;
+
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  constexpr uint32_t kDest = 8;
+  const std::vector<MidiClipSchedule> clips = {
+      make_clip(1, kDest, kMax - 5, 20, 0.5f, /*fade_in=*/0, /*fade_out=*/10)};
+
+  SECTION("the clip end remains an active boundary") {
+    constexpr int64_t kBlockStart = kMax - 10;
+    constexpr int64_t kBlockLength = 10;
+    MidiClipEnvelopeBlock block;
+    resolve_midi_clip_envelope(clips, kDest, kBlockStart, kBlockLength, &block);
+
+    REQUIRE_FALSE(block.overflowed);
+    REQUIRE(block.run_count == 2);
+    REQUIRE(block.runs[0].frames == 5);
+    REQUIRE(block.runs[1].frames == 5);
+
+    std::array<float, 10> rendered{};
+    rendered.fill(1.0f);
+    float* channels[] = {rendered.data()};
+    apply_midi_clip_envelope(block, clips, kDest, kBlockStart, channels, 1,
+                             static_cast<int>(kBlockLength));
+    for (size_t i = 0; i < rendered.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE(rendered[i] == Catch::Approx(i < 5 ? 1.0f : 0.5f));
+    }
+  }
+
+  SECTION("a block end beyond INT64_MAX does not wrap into a negative run") {
+    constexpr int64_t kBlockStart = kMax - 10;
+    constexpr int64_t kBlockLength = 20;
+    MidiClipEnvelopeBlock block;
+    resolve_midi_clip_envelope(clips, kDest, kBlockStart, kBlockLength, &block);
+
+    REQUIRE_FALSE(block.overflowed);
+    REQUIRE(block.run_count == 3);
+    REQUIRE(block.runs[0].frames == 5);
+    REQUIRE(block.runs[1].frames == 5);
+    REQUIRE(block.runs[2].frames == 10);
+
+    std::array<float, 20> rendered{};
+    rendered.fill(1.0f);
+    float* channels[] = {rendered.data()};
+    apply_midi_clip_envelope(block, clips, kDest, kBlockStart, channels, 1,
+                             static_cast<int>(kBlockLength));
+    for (size_t i = 0; i < rendered.size(); ++i) {
+      const int64_t sample = i < 10 ? kBlockStart + static_cast<int64_t>(i) : kMax;
+      const float expected = sonare::midi::midi_clip_envelope_gain(clips, kDest, sample);
+      CAPTURE(i, sample);
+      REQUIRE(rendered[i] == Catch::Approx(expected));
+    }
   }
 }
 

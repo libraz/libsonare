@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "arrangement/edit_compiler.h"
@@ -127,6 +128,26 @@ TEST_CASE(
   REQUIRE(midi_clip_envelope_gain(clips, 1, 20) ==
           Catch::Approx(1.0f));  // B ended; A resumes, unfaded
   REQUIRE(midi_clip_envelope_gain(clips, 1, 99) == Catch::Approx(1.0f));  // still A
+}
+
+TEST_CASE("midi clip envelope saturates signed timeline arithmetic at int64 limits",
+          "[midi_clip_gain]") {
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  constexpr int64_t kMin = std::numeric_limits<int64_t>::lowest();
+
+  // The clip end is beyond INT64_MAX: it saturates there, so the clip is active
+  // through INT64_MAX - 1 and reads as ended at INT64_MAX.
+  const std::vector<MidiClipSchedule> ending = {
+      make_clip(1, /*dest=*/9, kMax - 5, 20, 1.0f, /*fade_in=*/0, /*fade_out=*/10)};
+  REQUIRE(midi_clip_envelope_gain(ending, 9, kMax - 1) == Catch::Approx(1.0f));
+  REQUIRE(midi_clip_envelope_gain(ending, 9, kMax) == Catch::Approx(0.0f));
+
+  // The active position is t - start_sample. Saturating subtraction keeps an
+  // open-ended clip that starts at INT64_MIN active at INT64_MAX, after its
+  // finite fade-in, instead of producing a wrapped negative position.
+  const std::vector<MidiClipSchedule> open = {
+      make_clip(2, /*dest=*/9, kMin, /*length_samples=*/0, 0.75f, /*fade_in=*/10)};
+  REQUIRE(midi_clip_envelope_gain(open, 9, kMax) == Catch::Approx(0.75f));
 }
 
 TEST_CASE("midi_clip_envelope_gain: partial overlap follows the later-starting clip",
