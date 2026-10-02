@@ -122,9 +122,15 @@ describe('RealtimeEngine native binding', () => {
     engine.process([new Float32Array(128), new Float32Array(128)]);
     expect(engine.drainExternalMidi().length).toBe(2);
 
+    // Stopping resets the played channel and releases no note.
     engine.stop();
     engine.process([new Float32Array(128), new Float32Array(128)]);
-    expect(engine.drainExternalMidi().length).toBe(0);
+    expect(engine.drainExternalMidi().map((event) => Array.from(event.bytes))).toEqual([
+      [0xb0, 64, 0],
+      [0xb0, 121, 0],
+      [0xb0, 123, 0],
+      [0xe0, 0, 64],
+    ]);
     engine.destroy();
   });
 

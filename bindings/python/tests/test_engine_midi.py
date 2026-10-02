@@ -307,9 +307,15 @@ def test_engine_clip_event_group_comes_from_word0() -> None:
         engine.process([[0.0] * 128, [0.0] * 128])
         assert len(engine.drain_external_midi()) == 2
 
+        # Stopping resets the played channel and releases no note.
         engine.stop()
         engine.process([[0.0] * 128, [0.0] * 128])
-        assert engine.drain_external_midi() == []
+        assert [event.bytes for event in engine.drain_external_midi()] == [
+            bytes([0xB0, 64, 0]),
+            bytes([0xB0, 121, 0]),
+            bytes([0xB0, 123, 0]),
+            bytes([0xE0, 0, 64]),
+        ]
 
 
 def test_engine_external_destination_table_overflow() -> None:
