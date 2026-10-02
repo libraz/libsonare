@@ -40,15 +40,35 @@ struct NoteRenderConfig {
 void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
                 int64_t fade);
 
+/// @brief Checks the edit fields shared by render, split/merge and bindings.
+/// @details The predicate includes the derived linear gain and every
+///          envelope-times-gain multiplier, so a finite dB/envelope pair that
+///          cannot be represented by the renderer is refused before it reaches
+///          an operation-specific path. A C or JavaScript zero stretch sentinel
+///          must be normalized to 1.0 before calling this function.
+bool is_valid_note_edit(const NoteEdit& edit) noexcept;
+
+/// @brief Checks a note's physical sample span against an audio buffer.
+/// @details Ordering is checked before any length arithmetic, so malformed
+///          signed 64-bit bounds remain defined. The upper bound is inclusive
+///          at the half-open endpoint: @p offset_sample may equal
+///          @p audio_samples.
+bool is_valid_note_span(const NoteObject& note, int64_t audio_samples) noexcept;
+
 /// @brief Validates one note's span and edit fields as @ref render_notes does.
 /// @details Exposed because the polyphonic chain makes the same per-note checks
 ///          and has to make them before it inverts anything, while the
 ///          disjointness check @ref render_notes also makes does not apply to it.
 /// @throws SonareException(InvalidParameter) on a span that is empty, reversed or
 ///         starts before zero; a non-finite or non-positive edit field; a
-///         non-finite or negative envelope value; or a vibrato or drift edit on a
-///         note that carries no usable pitch curve to apply it to.
+///         non-finite or negative envelope value; a gain times envelope product
+///         that is not finite; or a vibrato or drift edit on a note that carries
+///         no usable pitch curve to apply it to.
 void validate_note_for_render(const NoteObject& note);
+
+/// @brief As the overload above, and also rejects a span past @p audio_samples
+///        (the span bound is skipped when @p audio_samples is negative).
+void validate_note_for_render(const NoteObject& note, int64_t audio_samples);
 
 /// @brief Validates the config fields @ref render_notes checks before rendering.
 /// @details Covers only what that function checks up front. @c decomposition is
@@ -92,7 +112,8 @@ void validate_render_config(const NoteRenderConfig& config);
 ///         is empty or reversed, overlapping source spans, a non-finite or
 ///         non-positive edit field, a non-finite or negative envelope value, a
 ///         non-finite config value, or a vibrato/drift edit on a note that
-///         carries no usable pitch curve to apply it to.
+///         carries no usable pitch curve to apply it to, a span past the end of
+///         @p audio, or a gain times envelope product that is not finite.
 Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
                    const NoteRenderConfig& config = {});
 

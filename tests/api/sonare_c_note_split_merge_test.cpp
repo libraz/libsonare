@@ -11,11 +11,13 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
@@ -753,6 +755,95 @@ TEST_CASE("sonare_split_note normalizes a time_stretch_ratio of 0 to 1",
     REQUIRE(split.notes[i].edit.envelope_count == 0);
   }
   sonare_free_note_objects(&split);
+  sonare_free_note_objects(&extracted);
+}
+
+TEST_CASE("sonare split and merge validate negative stretch on every note",
+          "[c_api][note_split_merge]") {
+  const Source source = gapped_source();
+  SonareNoteObjectsResult extracted{};
+  REQUIRE(extract_from(source, &extracted) == SONARE_OK);
+  REQUIRE(extracted.count == 3);
+
+  auto expect_split_invalid = [&](const std::vector<SonareNoteObject>& notes) {
+    SonareNoteObjectsResult result{};
+    CHECK(split_from(source, notes.data(), notes.size(), nullptr, 0, 0, 5, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    if (result.notes != nullptr) sonare_free_note_objects(&result);
+  };
+  auto expect_merge_invalid = [&](const std::vector<SonareNoteObject>& notes) {
+    SonareNoteObjectsResult result{};
+    CHECK(merge_from(source, notes.data(), notes.size(), nullptr, 0, 0, 1, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    if (result.notes != nullptr) sonare_free_note_objects(&result);
+  };
+
+  std::vector<SonareNoteObject> selected_invalid(extracted.notes,
+                                                 extracted.notes + extracted.count);
+  selected_invalid[0].edit.time_stretch_ratio = -1.0f;
+  expect_split_invalid(selected_invalid);
+  expect_merge_invalid(selected_invalid);
+
+  // The untouched/pass-through note is still part of the input set. A wrapper
+  // that validates only the selected first note would let this edit through.
+  std::vector<SonareNoteObject> pass_through_invalid(extracted.notes,
+                                                     extracted.notes + extracted.count);
+  pass_through_invalid[1].edit.time_stretch_ratio = -1.0f;
+  expect_split_invalid(pass_through_invalid);
+  expect_merge_invalid(pass_through_invalid);
+
+  using EditSetter = void (*)(SonareNoteEdit&, float);
+  const std::array<std::pair<const char*, EditSetter>, 6> fields = {{
+      {"pitch_shift_semitones",
+       [](SonareNoteEdit& edit, float value) { edit.pitch_shift_semitones = value; }},
+      {"gain_db", [](SonareNoteEdit& edit, float value) { edit.gain_db = value; }},
+      {"time_stretch_ratio",
+       [](SonareNoteEdit& edit, float value) { edit.time_stretch_ratio = value; }},
+      {"formant_shift_semitones",
+       [](SonareNoteEdit& edit, float value) { edit.formant_shift_semitones = value; }},
+      {"vibrato_depth_change",
+       [](SonareNoteEdit& edit, float value) { edit.vibrato_depth_change = value; }},
+      {"drift_change", [](SonareNoteEdit& edit, float value) { edit.drift_change = value; }},
+  }};
+  for (const auto& [name, set_field] : fields) {
+    for (const float bad : {kNaN, kInf, -kInf}) {
+      INFO(name << " selected value " << bad);
+      std::vector<SonareNoteObject> selected(extracted.notes, extracted.notes + extracted.count);
+      set_field(selected[0].edit, bad);
+      expect_split_invalid(selected);
+      expect_merge_invalid(selected);
+
+      INFO(name << " pass-through value " << bad);
+      std::vector<SonareNoteObject> pass_through(extracted.notes,
+                                                 extracted.notes + extracted.count);
+      set_field(pass_through[1].edit, bad);
+      expect_split_invalid(pass_through);
+      expect_merge_invalid(pass_through);
+    }
+  }
+
+  // C's zeroed edit remains the documented identity sentinel on both paths.
+  std::vector<SonareNoteObject> zeroed(extracted.notes, extracted.notes + extracted.count);
+  zeroed[0].edit = SonareNoteEdit{};
+  SonareNoteObjectsResult split{};
+  CHECK(split_from(source, zeroed.data(), zeroed.size(), nullptr, 0, 0, 5, &split) == SONARE_OK);
+  if (split.notes != nullptr) {
+    CHECK(split.count == zeroed.size() + 1);
+    for (size_t i = 0; i < split.count; ++i) {
+      INFO("split note " << i);
+      CHECK(split.notes[i].edit.time_stretch_ratio == 1.0f);
+    }
+    sonare_free_note_objects(&split);
+  }
+
+  SonareNoteObjectsResult merged{};
+  CHECK(merge_from(source, zeroed.data(), zeroed.size(), nullptr, 0, 0, 1, &merged) == SONARE_OK);
+  if (merged.notes != nullptr) {
+    CHECK(merged.count == zeroed.size() - 1);
+    CHECK(merged.notes[0].edit.time_stretch_ratio == 1.0f);
+    sonare_free_note_objects(&merged);
+  }
+
   sonare_free_note_objects(&extracted);
 }
 

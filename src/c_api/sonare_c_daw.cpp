@@ -247,10 +247,7 @@ SonareError to_core_edit_checked(const SonareNoteEdit& edit, const float* envelo
                                  size_t envelope_count, editing::note_model::NoteEdit& out) {
   const SonareError error = to_core_edit(edit, envelopes, envelope_count, out);
   if (error != SONARE_OK) return error;
-  for (const float value : out.amplitude_envelope) {
-    if (!std::isfinite(value) || value < 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
+  return editing::note_model::is_valid_note_edit(out) ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
 }
 
 /// Marshals a core note list into a heap-owned C result: the notes, their
@@ -640,6 +637,8 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   // The track is optional; only a curve edit reads it.

@@ -41,8 +41,10 @@ namespace sonare::editing::note_model {
 ///          inspect the edit envelope directly.
 /// @param frame Track frame to cut at, strictly inside the note's own span.
 /// @throws SonareException(InvalidParameter) on an out-of-range @p index, a
-///         @p frame outside (frame_start, frame_end), or the inputs
-///         @ref extract_notes itself rejects.
+///         @p frame outside (frame_start, frame_end), a note span past the end of
+///         @p audio, a gain times envelope product that is not finite, non-finite
+///         source or output samples, an invalid edit on any note in the set, or
+///         the inputs @ref extract_notes itself rejects.
 std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Track& track,
                                    const std::vector<NoteObject>& notes, size_t index, int frame,
                                    const NoteExtractorConfig& config = {});
@@ -56,8 +58,10 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
 ///          have no single correct answer here, so the rule is stated rather
 ///          than guessed at -- a host that cares sets the edit afterwards.
 /// @throws SonareException(InvalidParameter) unless
-///         @c first < last < notes.size(), or on the inputs
-///         @ref extract_notes itself rejects.
+///         @c first < last < notes.size(), a note span past the end of @p audio,
+///         a gain times envelope product that is not finite, non-finite source
+///         or output samples, an invalid edit on any note in the set, or the
+///         inputs @ref extract_notes itself rejects.
 std::vector<NoteObject> merge_notes(const Audio& audio, const pitch_editor::F0Track& track,
                                     const std::vector<NoteObject>& notes, size_t first, size_t last,
                                     const NoteExtractorConfig& config = {});

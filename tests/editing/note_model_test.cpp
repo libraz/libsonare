@@ -367,6 +367,18 @@ TEST_CASE("NoteEdit reports a non-finite field as non-identity", "[note_model]")
   }
 }
 
+TEST_CASE("NoteObject length_samples saturates malformed signed bounds", "[note_model]") {
+  NoteObject reversed;
+  reversed.onset_sample = std::numeric_limits<int64_t>::max();
+  reversed.offset_sample = std::numeric_limits<int64_t>::min();
+  CHECK(reversed.length_samples() == std::numeric_limits<int64_t>::min());
+
+  NoteObject ascending;
+  ascending.onset_sample = std::numeric_limits<int64_t>::min();
+  ascending.offset_sample = std::numeric_limits<int64_t>::max();
+  CHECK(ascending.length_samples() == std::numeric_limits<int64_t>::max());
+}
+
 // --- extract_notes --------------------------------------------------------
 
 TEST_CASE("extract_notes segments a synthetic signal into the expected notes", "[note_model]") {
@@ -943,6 +955,96 @@ TEST_CASE("render_notes rejects malformed spans, edits and config", "[note_model
   valid.fade_ms = 5.0f;
   valid.stretch_backend = sonare::StretchBackend::NativeSpectral;
   REQUIRE_NOTHROW(render_notes(audio, {edited(1920, 4800)}, valid));
+}
+
+TEST_CASE("render_notes rejects source bounds outside the audio and at int64 extremes",
+          "[note_model]") {
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(6400, 0.25f), kSampleRate);
+
+  // An otherwise valid note that reaches past the final sample must not be
+  // silently clipped: clipping would hide a bad physical span from callers.
+  NoteObject outside = synthetic_note(6399, 6401, 440.0f);
+  CHECK_THROWS_AS(render_notes(audio, {outside}), sonare::SonareException);
+
+  // These spans have a positive mathematical length, but their positions are
+  // not representable in this audio. They also exercise validation before any
+  // signed length subtraction can overflow.
+  NoteObject positive_extreme = synthetic_note(0, 6400, 440.0f);
+  positive_extreme.onset_sample = std::numeric_limits<int64_t>::max() - 1;
+  positive_extreme.offset_sample = std::numeric_limits<int64_t>::max();
+  CHECK_THROWS_AS(render_notes(audio, {positive_extreme}), sonare::SonareException);
+
+  NoteObject negative_extreme = synthetic_note(0, 6400, 440.0f);
+  negative_extreme.onset_sample = std::numeric_limits<int64_t>::min();
+  negative_extreme.offset_sample = std::numeric_limits<int64_t>::min() + 1;
+  CHECK_THROWS_AS(render_notes(audio, {negative_extreme}), sonare::SonareException);
+
+  // Every member of a note set is part of the render contract, including a
+  // pass-through identity note that would otherwise be returned untouched.
+  const std::vector<NoteObject> with_bad_pass_through = {synthetic_note(0, 3200, 440.0f), outside};
+  CHECK_THROWS_AS(render_notes(audio, with_bad_pass_through), sonare::SonareException);
+}
+
+TEST_CASE("render_notes rejects finite edits whose derived samples are non-finite",
+          "[note_model]") {
+  const sonare::Audio loud_audio =
+      sonare::Audio::from_vector(std::vector<float>(6400, 2.0f), kSampleRate);
+  const NoteObject base = synthetic_note(0, 6400, 440.0f);
+
+  NoteObject huge_gain = base;
+  huge_gain.edit.gain_db = 1000.0f;
+  CHECK_THROWS_AS(render_notes(loud_audio, {huge_gain}), sonare::SonareException);
+
+  NoteObject huge_envelope = base;
+  huge_envelope.edit.amplitude_envelope = {3.0e38f};
+  CHECK_THROWS_AS(render_notes(loud_audio, {huge_envelope}), sonare::SonareException);
+
+  // Finite, ordinary edits remain usable and prove the checks above are about
+  // the derived signal rather than a blanket gain/envelope prohibition.
+  NoteObject finite_gain = base;
+  finite_gain.edit.gain_db = 6.0f;
+  const sonare::Audio gain_rendered = render_notes(loud_audio, {finite_gain});
+  CHECK(std::all_of(gain_rendered.begin(), gain_rendered.end(),
+                    [](float sample) { return std::isfinite(sample); }));
+
+  NoteObject finite_envelope = base;
+  finite_envelope.edit.amplitude_envelope = {1.0f};
+  const sonare::Audio envelope_rendered = render_notes(loud_audio, {finite_envelope});
+  CHECK(std::all_of(envelope_rendered.begin(), envelope_rendered.end(),
+                    [](float sample) { return std::isfinite(sample); }));
+}
+
+TEST_CASE("render_notes validates every scalar edit field on selected and pass-through notes",
+          "[note_model]") {
+  const sonare::Audio audio = tone(440.0f, 0.4f, 6400);
+  using EditSetter = void (*)(NoteEdit&, float);
+  const std::array<std::pair<const char*, EditSetter>, 6> fields = {{
+      {"pitch_shift_semitones",
+       [](NoteEdit& edit, float value) { edit.pitch_shift_semitones = value; }},
+      {"gain_db", [](NoteEdit& edit, float value) { edit.gain_db = value; }},
+      {"time_stretch_ratio", [](NoteEdit& edit, float value) { edit.time_stretch_ratio = value; }},
+      {"formant_shift_semitones",
+       [](NoteEdit& edit, float value) { edit.formant_shift_semitones = value; }},
+      {"vibrato_depth_change",
+       [](NoteEdit& edit, float value) { edit.vibrato_depth_change = value; }},
+      {"drift_change", [](NoteEdit& edit, float value) { edit.drift_change = value; }},
+  }};
+
+  for (const auto& [name, set_field] : fields) {
+    for (const float bad : {kNaN, kInf, -kInf}) {
+      INFO(name << " selected value " << bad);
+      NoteObject selected = synthetic_note(0, 3200, 440.0f);
+      set_field(selected.edit, bad);
+      CHECK_THROWS_AS(render_notes(audio, {selected}), sonare::SonareException);
+
+      INFO(name << " pass-through value " << bad);
+      NoteObject pass_through = synthetic_note(3200, 6400, 440.0f);
+      set_field(pass_through.edit, bad);
+      CHECK_THROWS_AS(render_notes(audio, {synthetic_note(0, 3200, 440.0f), pass_through}),
+                      sonare::SonareException);
+    }
+  }
 }
 
 TEST_CASE("extract_notes rejects a voicing array whose length is not the track's frames",
@@ -1981,6 +2083,69 @@ TEST_CASE("split_note rejects an out-of-range index and a frame outside the note
     REQUIRE(split.size() == 2);
     REQUIRE(split[0].length_samples() > 0);
     REQUIRE(split[1].length_samples() > 0);
+  }
+}
+
+TEST_CASE("split_note and merge_notes reject negative stretch on every note", "[note_model]") {
+  const sonare::Audio audio = two_pitch_tone(6400);
+  const F0Track track = two_pitch_track(40);
+  const std::vector<NoteObject> extracted = extract_notes(audio, track);
+  REQUIRE(extracted.size() == 2);
+
+  // The selected note is invalid in both operations.
+  std::vector<NoteObject> selected_invalid = extracted;
+  selected_invalid[0].edit.time_stretch_ratio = -1.0f;
+  CHECK_THROWS_AS(split_note(audio, track, selected_invalid, 0, 8), sonare::SonareException);
+  CHECK_THROWS_AS(merge_notes(audio, track, selected_invalid, 0, 1), sonare::SonareException);
+
+  // The untouched/pass-through note is still an input to the operation and
+  // must not be allowed to carry an invalid edit through the returned set.
+  std::vector<NoteObject> pass_through_invalid = extracted;
+  pass_through_invalid[1].edit.time_stretch_ratio = -1.0f;
+  CHECK_THROWS_AS(split_note(audio, track, pass_through_invalid, 0, 8), sonare::SonareException);
+  CHECK_THROWS_AS(merge_notes(audio, track, pass_through_invalid, 0, 1), sonare::SonareException);
+
+  // Physical sample bounds are also part of native split/merge input. This
+  // keeps repair_split_boundary and envelope coordinates away from signed
+  // extreme arithmetic, including when the malformed note is pass-through.
+  std::vector<NoteObject> extreme_span = extracted;
+  extreme_span[0].onset_sample = std::numeric_limits<int64_t>::max() - 1;
+  extreme_span[0].offset_sample = std::numeric_limits<int64_t>::max();
+  CHECK_THROWS_AS(split_note(audio, track, extreme_span, 0, 8), sonare::SonareException);
+  CHECK_THROWS_AS(merge_notes(audio, track, extreme_span, 0, 1), sonare::SonareException);
+
+  std::vector<NoteObject> pass_through_extreme = extracted;
+  pass_through_extreme[1].onset_sample = std::numeric_limits<int64_t>::min();
+  pass_through_extreme[1].offset_sample = std::numeric_limits<int64_t>::min() + 1;
+  CHECK_THROWS_AS(split_note(audio, track, pass_through_extreme, 0, 8), sonare::SonareException);
+  CHECK_THROWS_AS(merge_notes(audio, track, pass_through_extreme, 0, 1), sonare::SonareException);
+
+  using EditSetter = void (*)(NoteEdit&, float);
+  const std::array<std::pair<const char*, EditSetter>, 6> fields = {{
+      {"pitch_shift_semitones",
+       [](NoteEdit& edit, float value) { edit.pitch_shift_semitones = value; }},
+      {"gain_db", [](NoteEdit& edit, float value) { edit.gain_db = value; }},
+      {"time_stretch_ratio", [](NoteEdit& edit, float value) { edit.time_stretch_ratio = value; }},
+      {"formant_shift_semitones",
+       [](NoteEdit& edit, float value) { edit.formant_shift_semitones = value; }},
+      {"vibrato_depth_change",
+       [](NoteEdit& edit, float value) { edit.vibrato_depth_change = value; }},
+      {"drift_change", [](NoteEdit& edit, float value) { edit.drift_change = value; }},
+  }};
+  for (const auto& [name, set_field] : fields) {
+    for (const float bad : {kNaN, kInf, -kInf}) {
+      INFO(name << " selected value " << bad);
+      std::vector<NoteObject> selected = extracted;
+      set_field(selected[0].edit, bad);
+      CHECK_THROWS_AS(split_note(audio, track, selected, 0, 8), sonare::SonareException);
+      CHECK_THROWS_AS(merge_notes(audio, track, selected, 0, 1), sonare::SonareException);
+
+      INFO(name << " pass-through value " << bad);
+      std::vector<NoteObject> pass_through = extracted;
+      set_field(pass_through[1].edit, bad);
+      CHECK_THROWS_AS(split_note(audio, track, pass_through, 0, 8), sonare::SonareException);
+      CHECK_THROWS_AS(merge_notes(audio, track, pass_through, 0, 1), sonare::SonareException);
+    }
   }
 }
 

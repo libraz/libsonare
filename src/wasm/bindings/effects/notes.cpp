@@ -235,12 +235,8 @@ std::vector<NoteSetEntry> noteSetFromVal(const val& notes, const char* entry_poi
     entry.frame_end = noteFrameArg(requireNumberProperty(row, "frameEnd", subject.c_str()),
                                    (subject + ".frameEnd").c_str());
     entry.edit = noteRowEditFromVal(row, entry_point, cumulative_count);
-    for (const float value : entry.edit.amplitude_envelope) {
-      if (!std::isfinite(value) || value < 0.0f) {
-        throw SonareException(
-            ErrorCode::InvalidParameter,
-            subject + ".edit.amplitudeEnvelope values must be finite and non-negative");
-      }
+    if (!editing::note_model::is_valid_note_edit(entry.edit)) {
+      throw SonareException(ErrorCode::InvalidParameter, subject + ".edit contains invalid values");
     }
     out.push_back(std::move(entry));
   }

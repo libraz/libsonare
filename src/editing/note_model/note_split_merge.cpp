@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "editing/note_model/note_renderer.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
@@ -209,6 +210,11 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
                                    const std::vector<NoteObject>& notes, size_t index, int frame,
                                    const NoteExtractorConfig& config) {
   SONARE_CHECK(index < notes.size(), ErrorCode::InvalidParameter);
+  for (const NoteObject& note : notes) {
+    SONARE_CHECK(is_valid_note_span(note, static_cast<int64_t>(audio.size())),
+                 ErrorCode::InvalidParameter);
+    SONARE_CHECK(is_valid_note_edit(note.edit), ErrorCode::InvalidParameter);
+  }
   const NoteObject& source = notes[index];
   SONARE_CHECK(frame > source.frame_start && frame < source.frame_end, ErrorCode::InvalidParameter);
 
@@ -247,6 +253,11 @@ std::vector<NoteObject> merge_notes(const Audio& audio, const pitch_editor::F0Tr
                                     const std::vector<NoteObject>& notes, size_t first, size_t last,
                                     const NoteExtractorConfig& config) {
   SONARE_CHECK(first < last && last < notes.size(), ErrorCode::InvalidParameter);
+  for (const NoteObject& note : notes) {
+    SONARE_CHECK(is_valid_note_span(note, static_cast<int64_t>(audio.size())),
+                 ErrorCode::InvalidParameter);
+    SONARE_CHECK(is_valid_note_edit(note.edit), ErrorCode::InvalidParameter);
+  }
 
   NoteObject merged =
       make_note(audio, track, notes[first].frame_start, notes[last].frame_end, config);

@@ -19,6 +19,7 @@ import {
   init,
   isSonareError,
   mergeNotes,
+  type NoteEditInput,
   type NoteObject,
   type NoteObjectInput,
   type NoteSetEntry,
@@ -843,6 +844,179 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       { frameStart: 2, frameEnd: 3 },
     ];
     expectInvalidParameter(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
+  });
+});
+
+describe('note input validation', () => {
+  const loudSamples = new Float32Array(6400).fill(2);
+  const loudSource = { samples: loudSamples, sampleRate: fixtureRate };
+
+  it('rejects note bounds outside the source, including safe int64 extrema', () => {
+    const outside: NoteObjectInput = {
+      ...handNote(0, 6400),
+      onsetSample: 6399,
+      offsetSample: 6401,
+    };
+    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [outside] }));
+
+    const positiveExtreme: NoteObjectInput = {
+      ...handNote(0, 6400),
+      onsetSample: Number.MAX_SAFE_INTEGER - 1,
+      offsetSample: Number.MAX_SAFE_INTEGER,
+    };
+    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [positiveExtreme] }));
+
+    const negativeExtreme: NoteObjectInput = {
+      ...handNote(0, 6400),
+      onsetSample: -Number.MAX_SAFE_INTEGER,
+      offsetSample: -Number.MAX_SAFE_INTEGER + 1,
+    };
+    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [negativeExtreme] }));
+
+    // The parser also keeps values outside the signed 64-bit range out of the
+    // core; this is distinct from a representable position past this audio.
+    const outsideInt64: NoteObjectInput = {
+      ...handNote(0, 6400),
+      onsetSample: 0,
+      offsetSample: Number.MAX_VALUE,
+    };
+    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [outsideInt64] }));
+
+    // A bad pass-through row must be validated along with the selected row.
+    expectInvalidParameter(() =>
+      renderNotes({ ...loudSource, notes: [handNote(0, 3200), outside] }),
+    );
+  });
+
+  it('rejects finite gain and envelope edits that would produce non-finite samples', () => {
+    expectInvalidParameter(() =>
+      renderNotes({
+        ...loudSource,
+        notes: [{ ...handNote(0, 6400), edit: { gainDb: 1000 } }],
+      }),
+    );
+    expectInvalidParameter(() =>
+      renderNotes({
+        ...loudSource,
+        notes: [
+          {
+            ...handNote(0, 6400),
+            edit: { amplitudeEnvelope: new Float32Array([3.0e38]) },
+          },
+        ],
+      }),
+    );
+
+    const finiteGain = renderNotes({
+      ...loudSource,
+      notes: [{ ...handNote(0, 6400), edit: { gainDb: 6 } }],
+    });
+    expect([...finiteGain].every(Number.isFinite)).toBe(true);
+
+    const finiteEnvelope = renderNotes({
+      ...loudSource,
+      notes: [{ ...handNote(0, 6400), edit: { amplitudeEnvelope: new Float32Array([1]) } }],
+    });
+    expect([...finiteEnvelope].every(Number.isFinite)).toBe(true);
+  });
+
+  it('validates every scalar edit field on selected and pass-through rows', () => {
+    const fields = [
+      'pitchShiftSemitones',
+      'gainDb',
+      'timeStretchRatio',
+      'formantShiftSemitones',
+      'vibratoDepthChange',
+      'driftChange',
+    ] as const;
+    const badEdit = (field: (typeof fields)[number], value: number): NoteEditInput =>
+      ({ [field]: value }) as NoteEditInput;
+
+    for (const field of fields) {
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        expectInvalidParameter(() =>
+          renderNotes({
+            ...loudSource,
+            notes: [{ ...handNote(0, 3200), edit: badEdit(field, bad) }],
+          }),
+        );
+        expectInvalidParameter(() =>
+          renderNotes({
+            ...loudSource,
+            notes: [handNote(0, 3200), { ...handNote(3200, 6400), edit: badEdit(field, bad) }],
+          }),
+        );
+      }
+    }
+  });
+
+  it('rejects negative stretch through split and merge while keeping zero as identity', () => {
+    const source = gappedSource();
+    const extracted = extractNotes(source);
+    expect(extracted).toHaveLength(3);
+
+    const selectedInvalid = extracted.map((note, index) =>
+      index === 0 ? { ...note, edit: { timeStretchRatio: -1 } } : note,
+    );
+    expectInvalidParameter(() =>
+      splitNote({ ...source, notes: selectedInvalid, index: 0, frame: 5 }),
+    );
+    expectInvalidParameter(() =>
+      mergeNotes({ ...source, notes: selectedInvalid, first: 0, last: 1 }),
+    );
+
+    const passThroughInvalid = extracted.map((note, index) =>
+      index === 1 ? { ...note, edit: { timeStretchRatio: -1 } } : note,
+    );
+    expectInvalidParameter(() =>
+      splitNote({ ...source, notes: passThroughInvalid, index: 0, frame: 5 }),
+    );
+    expectInvalidParameter(() =>
+      mergeNotes({ ...source, notes: passThroughInvalid, first: 0, last: 1 }),
+    );
+
+    const fields = [
+      'pitchShiftSemitones',
+      'gainDb',
+      'timeStretchRatio',
+      'formantShiftSemitones',
+      'vibratoDepthChange',
+      'driftChange',
+    ] as const;
+    const badEdit = (field: (typeof fields)[number], value: number): NoteEditInput =>
+      ({ [field]: value }) as NoteEditInput;
+    for (const field of fields) {
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        const selected = extracted.map((note, index) =>
+          index === 0 ? { ...note, edit: badEdit(field, bad) } : note,
+        );
+        expectInvalidParameter(() => splitNote({ ...source, notes: selected, index: 0, frame: 5 }));
+        expectInvalidParameter(() => mergeNotes({ ...source, notes: selected, first: 0, last: 1 }));
+
+        const passThrough = extracted.map((note, index) =>
+          index === 1 ? { ...note, edit: badEdit(field, bad) } : note,
+        );
+        expectInvalidParameter(() =>
+          splitNote({ ...source, notes: passThrough, index: 0, frame: 5 }),
+        );
+        expectInvalidParameter(() =>
+          mergeNotes({ ...source, notes: passThrough, first: 0, last: 1 }),
+        );
+      }
+    }
+
+    const zeroed = extracted.map((note, index) =>
+      index === 0 ? { ...note, edit: { timeStretchRatio: 0 } } : note,
+    );
+    const split = splitNote({ ...source, notes: zeroed, index: 0, frame: 5 });
+    expect(split).toHaveLength(4);
+    for (const note of split) {
+      expect(note.edit.timeStretchRatio).toBe(1);
+    }
+
+    const merged = mergeNotes({ ...source, notes: zeroed, first: 0, last: 1 });
+    expect(merged).toHaveLength(2);
+    expect(merged[0].edit.timeStretchRatio).toBe(1);
   });
 });
 

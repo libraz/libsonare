@@ -96,16 +96,34 @@ void overlay(std::vector<float>& output, const std::vector<float>& segment, int6
   }
 }
 
-/// Scales @p segment by @p envelope stretched over its whole length. The
-/// envelope is a set of gain points rather than a signal, so it is resampled by
-/// linear interpolation between its endpoints; one entry is a constant gain.
-void apply_envelope(std::vector<float>& segment, const std::vector<float>& envelope) {
+/// Scales @p segment by @p envelope and the note's linear gain in one double
+/// precision operation. The envelope is a set of gain points rather than a
+/// signal, so it is resampled by linear interpolation between its endpoints;
+/// one entry is a constant gain. Combining the two factors before narrowing
+/// avoids an intermediate float overflow that a later finite gain could undo.
+void apply_envelope(std::vector<float>& segment, const std::vector<float>& envelope,
+                    float linear_gain) {
   const size_t n = segment.size();
   const size_t points = envelope.size();
-  if (points == 0 || n == 0) return;
+  if (n == 0) return;
+  const double max_float = static_cast<double>(std::numeric_limits<float>::max());
+  const auto scale_sample = [linear_gain, max_float](float sample, double envelope_gain) {
+    const double scaled =
+        static_cast<double>(sample) * envelope_gain * static_cast<double>(linear_gain);
+    SONARE_CHECK(std::isfinite(scaled) && std::abs(scaled) <= max_float,
+                 ErrorCode::InvalidParameter);
+    return static_cast<float>(scaled);
+  };
   if (points == 1) {
     for (float& sample : segment) {
-      sample *= envelope[0];
+      sample = scale_sample(sample, static_cast<double>(envelope[0]));
+    }
+    return;
+  }
+
+  if (points == 0) {
+    for (float& sample : segment) {
+      sample = scale_sample(sample, 1.0);
     }
     return;
   }
@@ -116,8 +134,10 @@ void apply_envelope(std::vector<float>& segment, const std::vector<float>& envel
     const double position = static_cast<double>(i) * step;
     const size_t lo = std::min(static_cast<size_t>(position), points - 1);
     const size_t hi = std::min(lo + 1, points - 1);
-    const float frac = static_cast<float>(position - static_cast<double>(lo));
-    segment[i] *= envelope[lo] * (1.0f - frac) + envelope[hi] * frac;
+    const double frac = position - static_cast<double>(lo);
+    const double envelope_gain =
+        static_cast<double>(envelope[lo]) * (1.0 - frac) + static_cast<double>(envelope[hi]) * frac;
+    segment[i] = scale_sample(segment[i], envelope_gain);
   }
 }
 
@@ -176,14 +196,41 @@ void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, 
   }
 }
 
-void validate_note_for_render(const NoteObject& note) {
-  SONARE_CHECK(note.onset_sample >= 0 && note.length_samples() > 0, ErrorCode::InvalidParameter);
-  const NoteEdit& edit = note.edit;
-  SONARE_CHECK(std::isfinite(edit.pitch_shift_semitones) && std::isfinite(edit.gain_db) &&
-                   std::isfinite(edit.time_stretch_ratio) && edit.time_stretch_ratio > 0.0f &&
-                   std::isfinite(edit.formant_shift_semitones) &&
-                   std::isfinite(edit.vibrato_depth_change) && std::isfinite(edit.drift_change),
+bool is_valid_note_edit(const NoteEdit& edit) noexcept {
+  if (!std::isfinite(edit.pitch_shift_semitones) || !std::isfinite(edit.gain_db) ||
+      !std::isfinite(edit.time_stretch_ratio) || edit.time_stretch_ratio <= 0.0f ||
+      !std::isfinite(edit.formant_shift_semitones) || !std::isfinite(edit.vibrato_depth_change) ||
+      !std::isfinite(edit.drift_change)) {
+    return false;
+  }
+
+  const float linear_gain = db_to_linear(edit.gain_db);
+  if (!std::isfinite(linear_gain)) return false;
+  const double gain = static_cast<double>(linear_gain);
+  const double max_float = static_cast<double>(std::numeric_limits<float>::max());
+  for (const float value : edit.amplitude_envelope) {
+    if (!std::isfinite(value) || value < 0.0f) return false;
+    const double combined_gain = gain * static_cast<double>(value);
+    if (!std::isfinite(combined_gain) || combined_gain > max_float) return false;
+  }
+  return true;
+}
+
+bool is_valid_note_span(const NoteObject& note, int64_t audio_samples) noexcept {
+  return audio_samples >= 0 && note.onset_sample >= 0 && note.offset_sample > note.onset_sample &&
+         note.offset_sample <= audio_samples;
+}
+
+void validate_note_for_render(const NoteObject& note, int64_t audio_samples) {
+  // Check the ordering and the optional audio bound before deriving a length:
+  // malformed INT64_MIN/MAX pairs must never reach a signed subtraction.
+  SONARE_CHECK(note.onset_sample >= 0 && note.offset_sample > note.onset_sample,
                ErrorCode::InvalidParameter);
+  if (audio_samples >= 0) {
+    SONARE_CHECK(is_valid_note_span(note, audio_samples), ErrorCode::InvalidParameter);
+  }
+  const NoteEdit& edit = note.edit;
+  SONARE_CHECK(is_valid_note_edit(edit), ErrorCode::InvalidParameter);
   // A pitch-curve edit with no curve to read is a wiring bug, not a no-op.
   // The frames are scanned too: a median can outlive every frame that
   // produced it, and decompose_pitch reports such a note as unmeasured.
@@ -197,6 +244,8 @@ void validate_note_for_render(const NoteObject& note) {
   }
 }
 
+void validate_note_for_render(const NoteObject& note) { validate_note_for_render(note, -1); }
+
 void validate_render_config(const NoteRenderConfig& config) {
   SONARE_CHECK(std::isfinite(config.fade_ms) && config.fade_ms >= 0.0f,
                ErrorCode::InvalidParameter);
@@ -209,18 +258,20 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
 
   bool all_identity = true;
   for (const NoteObject& note : notes) {
-    validate_note_for_render(note);
+    validate_note_for_render(note, static_cast<int64_t>(audio.size()));
     all_identity = all_identity && note.edit.is_identity();
   }
   check_disjoint_spans(notes);
 
   // Nothing to resynthesize: the source passes through unchanged, bit for bit.
   if (all_identity) {
+    SONARE_CHECK(
+        std::all_of(audio.begin(), audio.end(), [](float sample) { return std::isfinite(sample); }),
+        ErrorCode::InvalidParameter);
     return Audio::from_buffer(audio.data(), audio.size(), audio.sample_rate());
   }
 
   const int sample_rate = audio.sample_rate();
-  const int64_t n_samples = static_cast<int64_t>(audio.size());
   std::vector<float> output(audio.begin(), audio.end());
 
   // Vacate every edited source span before rendering any destination. A moved
@@ -229,9 +280,8 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
   for (const NoteObject& note : notes) {
     if (note.edit.is_identity()) continue;
 
-    const int64_t onset = std::min(note.onset_sample, n_samples);
-    const int64_t offset = std::clamp(note.offset_sample, onset, n_samples);
-    if (offset <= onset) continue;
+    const int64_t onset = note.onset_sample;
+    const int64_t offset = note.offset_sample;
 
     erase_span(output, audio, onset, offset,
                fade_samples(config.fade_ms, sample_rate, offset - onset));
@@ -242,9 +292,8 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
   for (const NoteObject& note : notes) {
     if (note.edit.is_identity() || note.edit.muted) continue;
 
-    const int64_t onset = std::min(note.onset_sample, n_samples);
-    const int64_t offset = std::clamp(note.offset_sample, onset, n_samples);
-    if (offset <= onset) continue;
+    const int64_t onset = note.onset_sample;
+    const int64_t offset = note.offset_sample;
 
     std::vector<float> segment(audio.begin() + onset, audio.begin() + offset);
     if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
@@ -274,19 +323,17 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
           FormantWarp(warp_config).process(Audio::from_vector(segment, sample_rate));
       segment.assign(warped.begin(), warped.end());
     }
-    apply_envelope(segment, note.edit.amplitude_envelope);
-    if (note.edit.gain_db != 0.0f) {
-      const float gain = db_to_linear(note.edit.gain_db);
-      for (float& sample : segment) {
-        sample *= gain;
-      }
-    }
+    const float gain = db_to_linear(note.edit.gain_db);
+    apply_envelope(segment, note.edit.amplitude_envelope, gain);
 
     const int64_t fade =
         fade_samples(config.fade_ms, sample_rate, static_cast<int64_t>(segment.size()));
     overlay(output, segment, saturating_add(onset, note.edit.time_offset_samples), fade);
   }
 
+  SONARE_CHECK(
+      std::all_of(output.begin(), output.end(), [](float sample) { return std::isfinite(sample); }),
+      ErrorCode::InvalidParameter);
   return Audio::from_vector(std::move(output), sample_rate);
 }
 

@@ -485,6 +485,11 @@ void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result);
 ///          against something else. A set whose re-derived notes would include
 ///          one with no sample span is rejected with
 ///          @c SONARE_ERROR_INVALID_PARAMETER rather than shortened.
+///
+///          The same code rejects a note whose sample span runs past the end of
+///          @p samples, an edit whose gain times envelope cannot be represented
+///          as a finite value, non-finite @p samples or output values, and an
+///          invalid edit on any note in the set.
 /// @param notes The current note set. Each note's @c [frame_start, frame_end)
 ///        must be non-empty and inside the track.
 /// @param envelopes The envelope array @p notes index into, or NULL.
@@ -513,7 +518,9 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
 ///          afterwards.
 ///
 ///          Every note in the set is re-derived from @p samples and the track,
-///          exactly as @ref sonare_split_note describes.
+///          exactly as @ref sonare_split_note describes, and the rejections it
+///          lists (span past the audio end, unrepresentable gain times envelope,
+///          non-finite input or output, invalid edit on any note) apply here too.
 /// @param notes The current note set. Each note's @c [frame_start, frame_end)
 ///        must be non-empty and inside the track.
 /// @param first Index of the first note to join; must be < @p last.

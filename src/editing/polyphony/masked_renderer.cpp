@@ -1,6 +1,7 @@
 #include "editing/polyphony/masked_renderer.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -15,13 +16,20 @@ Audio render_masked_notes(const Spectrogram& spec, const NoteMaskSet& masks,
   SONARE_CHECK(notes.size() == masks.notes.size(), ErrorCode::InvalidParameter);
   SONARE_CHECK(length >= 0, ErrorCode::InvalidParameter);
   note_model::validate_render_config(config);
+  // Length 0 takes the framing's own count, known only once an inverse has run.
+  const int64_t span_bound = length > 0 ? length : -1;
   for (const note_model::NoteObject& note : notes) {
-    note_model::validate_note_for_render(note);
+    note_model::validate_note_for_render(note, span_bound);
   }
 
   const Audio residual = residual_spectrum(spec, masks).to_audio(length);
   // A framing that reconstructs to nothing is rejected here, not once per note.
   SONARE_CHECK(!residual.empty(), ErrorCode::InvalidParameter);
+  if (length == 0) {
+    for (const note_model::NoteObject& note : notes) {
+      note_model::validate_note_for_render(note, static_cast<int64_t>(residual.size()));
+    }
+  }
   std::vector<float> accumulator(residual.begin(), residual.end());
 
   for (std::size_t i = 0; i < notes.size(); ++i) {

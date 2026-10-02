@@ -8,6 +8,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -1396,6 +1397,102 @@ TEST_CASE("sonare_render_notes rejects malformed spans, edits and config",
   REQUIRE(render_at(samples, &note, 1, &valid, &out, &out_length) == SONARE_OK);
   REQUIRE(out_length == samples.size());
   sonare_free_floats(out);
+}
+
+TEST_CASE("sonare_render_notes validates workflow bounds, scalar edits and finite output",
+          "[c_api][note_objects]") {
+  const std::vector<float> samples = sine(440.0f, 0.4f, 6400);
+  const std::vector<float> loud_samples(6400, 2.0f);
+
+  auto expect_invalid = [&](const std::vector<float>& source, const SonareNoteObject* notes,
+                            size_t note_count, const float* envelopes = nullptr,
+                            size_t envelope_count = 0) {
+    float* output = poisoned_floats();
+    size_t output_length = 123;
+    const SonareError error = render_with(source, notes, note_count, envelopes, envelope_count,
+                                          nullptr, 0, nullptr, &output, &output_length);
+    CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(output == nullptr);
+    CHECK(output_length == 0);
+    if (output != nullptr && output != poisoned_floats()) sonare_free_floats(output);
+  };
+
+  SonareNoteObject outside = hand_note(6399, 6401);
+  expect_invalid(samples, &outside, 1);
+
+  SonareNoteObject positive_extreme = hand_note(0, 6400);
+  positive_extreme.onset_sample = std::numeric_limits<int64_t>::max() - 1;
+  positive_extreme.offset_sample = std::numeric_limits<int64_t>::max();
+  expect_invalid(samples, &positive_extreme, 1);
+
+  SonareNoteObject negative_extreme = hand_note(0, 6400);
+  negative_extreme.onset_sample = std::numeric_limits<int64_t>::min();
+  negative_extreme.offset_sample = std::numeric_limits<int64_t>::min() + 1;
+  expect_invalid(samples, &negative_extreme, 1);
+
+  const SonareNoteObject with_bad_pass_through[2] = {hand_note(0, 3200), outside};
+  expect_invalid(samples, with_bad_pass_through, 2);
+
+  SonareNoteObject huge_gain = hand_note(0, 6400);
+  huge_gain.edit.gain_db = 1000.0f;
+  expect_invalid(loud_samples, &huge_gain, 1);
+
+  const float huge_envelope = 3.0e38f;
+  SonareNoteObject huge_enveloped = hand_note(0, 6400);
+  huge_enveloped.edit.envelope_offset = 0;
+  huge_enveloped.edit.envelope_count = 1;
+  expect_invalid(loud_samples, &huge_enveloped, 1, &huge_envelope, 1);
+
+  // Finite controls remain renderable and the result is finite throughout.
+  SonareNoteObject finite_gain = hand_note(0, 6400);
+  finite_gain.edit.gain_db = 6.0f;
+  float* output = nullptr;
+  size_t output_length = 0;
+  REQUIRE(render_at(loud_samples, &finite_gain, 1, nullptr, &output, &output_length) == SONARE_OK);
+  REQUIRE(output_length == loud_samples.size());
+  CHECK(std::all_of(output, output + output_length,
+                    [](float sample) { return std::isfinite(sample); }));
+  sonare_free_floats(output);
+
+  SonareNoteObject finite_enveloped = hand_note(0, 6400);
+  finite_enveloped.edit.envelope_offset = 0;
+  finite_enveloped.edit.envelope_count = 1;
+  const float unit_envelope = 1.0f;
+  output = nullptr;
+  output_length = 0;
+  REQUIRE(render_with(loud_samples, &finite_enveloped, 1, &unit_envelope, 1, nullptr, 0, nullptr,
+                      &output, &output_length) == SONARE_OK);
+  CHECK(std::all_of(output, output + output_length,
+                    [](float sample) { return std::isfinite(sample); }));
+  sonare_free_floats(output);
+
+  using EditSetter = void (*)(SonareNoteEdit&, float);
+  const std::array<std::pair<const char*, EditSetter>, 6> fields = {{
+      {"pitch_shift_semitones",
+       [](SonareNoteEdit& edit, float value) { edit.pitch_shift_semitones = value; }},
+      {"gain_db", [](SonareNoteEdit& edit, float value) { edit.gain_db = value; }},
+      {"time_stretch_ratio",
+       [](SonareNoteEdit& edit, float value) { edit.time_stretch_ratio = value; }},
+      {"formant_shift_semitones",
+       [](SonareNoteEdit& edit, float value) { edit.formant_shift_semitones = value; }},
+      {"vibrato_depth_change",
+       [](SonareNoteEdit& edit, float value) { edit.vibrato_depth_change = value; }},
+      {"drift_change", [](SonareNoteEdit& edit, float value) { edit.drift_change = value; }},
+  }};
+  for (const auto& [name, set_field] : fields) {
+    for (const float bad : {kNaN, kInf, -kInf}) {
+      INFO(name << " selected value " << bad);
+      SonareNoteObject selected = hand_note(0, 3200);
+      set_field(selected.edit, bad);
+      expect_invalid(samples, &selected, 1);
+
+      INFO(name << " pass-through value " << bad);
+      SonareNoteObject pass_through = hand_note(3200, 6400);
+      set_field(pass_through.edit, bad);
+      const SonareNoteObject notes[2] = {hand_note(0, 3200), pass_through};
+      expect_invalid(samples, notes, 2);
+    }
+  }
 }
 
 TEST_CASE("sonare_free_note_objects clears the result it releases", "[c_api][note_objects]") {

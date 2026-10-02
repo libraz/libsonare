@@ -16,6 +16,7 @@
 /// two is rendering it.
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace sonare::editing::note_model {
@@ -107,7 +108,28 @@ struct NoteObject {
 
   NoteEdit edit{};
 
-  int64_t length_samples() const noexcept { return offset_sample - onset_sample; }
+  /// @brief Returns the signed span without allowing signed subtraction to
+  ///        overflow on malformed caller supplied bounds.
+  /// @details A valid sample span is small and positive, but note objects cross
+  ///        C and JavaScript boundaries as well as native code. Saturating an
+  ///        impossible span keeps diagnostics and validation defined even for
+  ///        INT64_MIN/INT64_MAX probes.
+  int64_t length_samples() const noexcept {
+    const uint64_t onset = static_cast<uint64_t>(onset_sample);
+    const uint64_t offset = static_cast<uint64_t>(offset_sample);
+    if (offset_sample >= onset_sample) {
+      const uint64_t magnitude = offset - onset;
+      return magnitude > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())
+                 ? std::numeric_limits<int64_t>::max()
+                 : static_cast<int64_t>(magnitude);
+    }
+
+    const uint64_t magnitude = onset - offset;
+    if (magnitude > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+      return std::numeric_limits<int64_t>::min();
+    }
+    return -static_cast<int64_t>(magnitude);
+  }
 };
 
 }  // namespace sonare::editing::note_model
