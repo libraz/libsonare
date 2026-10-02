@@ -118,6 +118,8 @@ std::vector<float> resample_impulse_response(const float* samples, size_t size, 
   }
 
   constexpr double kStableDcRelative = 1e-4;
+  constexpr double kMinDcGainRelative = 0.5;
+  constexpr double kMaxDcGainRelative = 2.0;
   const bool source_stable = std::isfinite(source_dc) && std::isfinite(source_l1) &&
                              source_l1 > 0.0 && std::abs(source_dc) > kStableDcRelative * source_l1;
   const bool target_stable = std::isfinite(target_dc) && std::isfinite(target_l1) &&
@@ -125,10 +127,15 @@ std::vector<float> resample_impulse_response(const float* samples, size_t size, 
   const bool same_sign =
       (source_dc > 0.0 && target_dc > 0.0) || (source_dc < 0.0 && target_dc < 0.0);
 
-  double gain = static_cast<double>(src_sr) / static_cast<double>(target_sr);
+  const double ratio = static_cast<double>(src_sr) / static_cast<double>(target_sr);
+  double gain = ratio;
   if (source_stable && target_stable && same_sign) {
     const double dc_gain = source_dc / target_dc;
-    if (std::isfinite(dc_gain)) gain = dc_gain;
+    // A measured gain far from the rate ratio is resampler residue, not the response.
+    if (std::isfinite(dc_gain) && dc_gain >= kMinDcGainRelative * ratio &&
+        dc_gain <= kMaxDcGainRelative * ratio) {
+      gain = dc_gain;
+    }
   }
   for (float& sample : result) sample *= static_cast<float>(gain);
   return result;

@@ -434,9 +434,9 @@ void AmpSim::rebuild_cab_ir() {
   const int source_rate =
       cab_ir_source_rate_ > 0.0 ? static_cast<int>(std::lround(cab_ir_source_rate_)) : target_rate;
   if (source_rate != target_rate) {
-    // One-shot r8brain, the same conversion every other rate change in the
-    // library goes through. Control thread only, which this is.
-    cab_ir_ = resample(cab_ir_source_.data(), cab_ir_source_.size(), source_rate, target_rate);
+    // One-shot r8brain, keeping the IR's DC gain. Control thread only, which this is.
+    cab_ir_ = resample_impulse_response(cab_ir_source_.data(), cab_ir_source_.size(), source_rate,
+                                        target_rate);
   } else {
     cab_ir_ = cab_ir_source_;
   }

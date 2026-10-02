@@ -23,10 +23,12 @@
 #include "mastering/saturation/triode.h"
 #include "rt/oversampler.h"
 #include "support/audio_fixtures.h"
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace {
 
+using sonare::constants::kTwoPiD;
 using sonare::mastering::api::apply_named_processor;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::make_insert;
@@ -1366,6 +1368,48 @@ TEST_CASE("a cab IR captured at another rate is resampled, not transposed",
 
   // Resampling also renumbers the length: the same duration at twice the rate.
   CHECK(resampled.cab_ir_samples() == Catch::Approx(2 * matched.cab_ir_samples()).margin(4));
+}
+
+TEST_CASE("a resampled cab IR keeps its low-frequency level at every processing rate",
+          "[mastering][saturation][amp]") {
+  // A smooth low-pass IR: its response at 200 Hz is its DC gain, which is the
+  // coefficient sum, so a rate change that scales the sum moves this level.
+  constexpr double kIrRate = 48000.0;
+  std::vector<float> ir(256, 0.0f);
+  for (size_t i = 0; i < ir.size(); ++i) {
+    ir[i] = static_cast<float>(0.05 * std::exp(-static_cast<double>(i) / kIrRate * 2000.0));
+  }
+
+  auto level_at = [&](double rate) {
+    AmpSimConfig config;
+    config.drive = 0.0f;
+    AmpSim amp{config};
+    amp.load_cab_ir(ir, kIrRate);
+    amp.prepare(rate, 512);
+    const int total = static_cast<int>(rate);
+    std::vector<float> signal(static_cast<size_t>(total));
+    for (int i = 0; i < total; ++i) {
+      signal[static_cast<size_t>(i)] =
+          0.1f * static_cast<float>(std::sin(kTwoPiD * 200.0 * i / rate));
+    }
+    for (int off = 0; off < total; off += 512) {
+      float* block[1] = {signal.data() + off};
+      amp.process(block, 1, std::min(512, total - off));
+    }
+    double energy = 0.0;
+    for (int i = total / 2; i < total; ++i) {
+      energy +=
+          static_cast<double>(signal[static_cast<size_t>(i)]) * signal[static_cast<size_t>(i)];
+    }
+    return std::sqrt(energy / (total - total / 2));
+  };
+
+  const double reference = level_at(kIrRate);
+  REQUIRE(reference > 0.0);
+  for (const double rate : {44100.0, 96000.0}) {
+    INFO("rate " << rate);
+    CHECK(level_at(rate) == Catch::Approx(reference).epsilon(0.02));
+  }
 }
 
 TEST_CASE("saturation.ampSim carries the circuit topology and a cab IR through the param bag",

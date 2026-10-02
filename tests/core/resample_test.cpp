@@ -168,16 +168,40 @@ TEST_CASE("resample preserves DC offset", "[resample]") {
 }
 
 TEST_CASE("resample impulse response preserves DC gain across rates", "[resample]") {
-  std::vector<float> source(256, 0.0f);
-  source[128] = 1.0f;
+  for (const int impulse_tap : {0, 128}) {
+    std::vector<float> source(256, 0.0f);
+    source[static_cast<size_t>(impulse_tap)] = 1.0f;
 
-  for (const int source_rate : {24000, 44100, 96000}) {
-    INFO("source rate " << source_rate);
-    const std::vector<float> result =
-        resample_impulse_response(source.data(), source.size(), source_rate, 48000);
-    const double output_sum = sum(result);
-    INFO("output sum " << output_sum);
-    CHECK(std::abs(output_sum - 1.0) < 1e-3);
+    for (const int source_rate : {24000, 44100, 96000}) {
+      INFO("impulse tap " << impulse_tap << " source rate " << source_rate);
+      const std::vector<float> result =
+          resample_impulse_response(source.data(), source.size(), source_rate, 48000);
+      const double output_sum = sum(result);
+      INFO("output sum " << output_sum);
+      CHECK(std::abs(output_sum - 1.0) < 1e-3);
+    }
+  }
+}
+
+TEST_CASE("resample impulse response rejects a measured DC gain far from the rate ratio",
+          "[resample]") {
+  // Content above the target Nyquist leaves a source sum of ordinary size and a
+  // target sum that is only the resampler's residue (measured gain about 15).
+  constexpr int kSourceRate = 96000;
+  constexpr int kTargetRate = 48000;
+  std::vector<float> source(256);
+  for (size_t i = 0; i < source.size(); ++i) {
+    source[i] = std::sin(kTwoPi * 0.6f * static_cast<float>(i) + 0.3f);
+  }
+  const std::vector<float> generic =
+      resample(source.data(), source.size(), kSourceRate, kTargetRate);
+  const std::vector<float> result =
+      resample_impulse_response(source.data(), source.size(), kSourceRate, kTargetRate);
+  REQUIRE(result.size() == generic.size());
+
+  const float ratio = static_cast<float>(kSourceRate) / static_cast<float>(kTargetRate);
+  for (size_t index = 0; index < result.size(); ++index) {
+    CHECK(std::abs(result[index] - ratio * generic[index]) < 1e-6f);
   }
 }
 
