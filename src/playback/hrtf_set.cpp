@@ -46,8 +46,8 @@ HrtfSet HrtfSet::resampled(int sample_rate) const {
     for (int ear = 0; ear < 2; ++ear) {
       const size_t old_offset =
           (direction * 2 + static_cast<size_t>(ear)) * static_cast<size_t>(old_taps);
-      const std::vector<float> channel =
-          resample(&data_.hrir[old_offset], static_cast<size_t>(old_taps), src_sr, sample_rate);
+      const std::vector<float> channel = resample_impulse_response(
+          &data_.hrir[old_offset], static_cast<size_t>(old_taps), src_sr, sample_rate);
       if (new_taps == 0) {
         new_taps = static_cast<int>(channel.size());
         result.header.taps = new_taps;

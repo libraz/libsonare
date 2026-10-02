@@ -95,6 +95,45 @@ std::vector<float> resample(const float* samples, size_t size, int src_sr, int t
   return result;
 }
 
+std::vector<float> resample_impulse_response(const float* samples, size_t size, int src_sr,
+                                             int target_sr) {
+  // Restore the coefficient sum (DC gain); fall back to the rate ratio when the sum cancels.
+  std::vector<float> result = resample(samples, size, src_sr, target_sr);
+  if (src_sr == target_sr || result.empty()) return result;
+
+  double source_dc = 0.0;
+  double source_l1 = 0.0;
+  for (size_t index = 0; index < size; ++index) {
+    const double sample = static_cast<double>(samples[index]);
+    source_dc += sample;
+    source_l1 += std::abs(sample);
+  }
+
+  double target_dc = 0.0;
+  double target_l1 = 0.0;
+  for (const float sample : result) {
+    const double value = static_cast<double>(sample);
+    target_dc += value;
+    target_l1 += std::abs(value);
+  }
+
+  constexpr double kStableDcRelative = 1e-4;
+  const bool source_stable = std::isfinite(source_dc) && std::isfinite(source_l1) &&
+                             source_l1 > 0.0 && std::abs(source_dc) > kStableDcRelative * source_l1;
+  const bool target_stable = std::isfinite(target_dc) && std::isfinite(target_l1) &&
+                             target_l1 > 0.0 && std::abs(target_dc) > kStableDcRelative * target_l1;
+  const bool same_sign =
+      (source_dc > 0.0 && target_dc > 0.0) || (source_dc < 0.0 && target_dc < 0.0);
+
+  double gain = static_cast<double>(src_sr) / static_cast<double>(target_sr);
+  if (source_stable && target_stable && same_sign) {
+    const double dc_gain = source_dc / target_dc;
+    if (std::isfinite(dc_gain)) gain = dc_gain;
+  }
+  for (float& sample : result) sample *= static_cast<float>(gain);
+  return result;
+}
+
 Audio resample(const Audio& audio, int target_sr) {
   if (audio.empty()) {
     return Audio::from_buffer(nullptr, 0, target_sr);

@@ -112,7 +112,7 @@ void BinauralPanner::prepare(double sample_rate, int max_block_size) {
           static_cast<float>(ring::kRingHrir[az][t]) * ring::kRingScale;
     }
     const std::vector<float> host =
-        resample(stored.data(), stored.size(), ring::kRingSampleRate, host_rate);
+        resample_impulse_response(stored.data(), stored.size(), ring::kRingSampleRate, host_rate);
     if (taps_ == 0) {
       taps_ = static_cast<int>(host.size());
       ring_.assign(static_cast<size_t>(ring::kRingAzimuths) * static_cast<size_t>(taps_), 0.0f);

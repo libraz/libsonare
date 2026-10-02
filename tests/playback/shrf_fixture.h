@@ -19,6 +19,7 @@ namespace sonare::playback::test {
 struct ShrfFixtureSpec {
   int sample_rate = 48000;
   int taps = 16;
+  int impulse_tap = 0;
   int n_az = 8;
   float az_step_deg = 45.0f;
   int n_el = 1;
@@ -64,8 +65,8 @@ inline void push_i16(std::vector<uint8_t>& out, int16_t value) {
 
 }  // namespace detail
 
-/// SHRF v1 bytes of @p spec: unit-impulse HRIRs (tap 0 = 1, rest 0, both ears)
-/// and `fixture_itd_samples`.
+/// SHRF v1 bytes of @p spec: unit-impulse HRIRs (tap `spec.impulse_tap` = 1, rest 0,
+/// both ears) and `fixture_itd_samples`.
 inline std::vector<uint8_t> make_shrf_fixture(const ShrfFixtureSpec& spec = {}) {
   std::vector<uint8_t> bytes;
   bytes.reserve(kShrfHeaderBytes);
@@ -98,7 +99,7 @@ inline std::vector<uint8_t> make_shrf_fixture(const ShrfFixtureSpec& spec = {}) 
     for (int az = 0; az < spec.n_az; ++az) {
       for (int ear = 0; ear < 2; ++ear) {
         for (int tap = 0; tap < spec.taps; ++tap) {
-          const float value = (tap == 0) ? 1.0f : 0.0f;
+          const float value = (tap == spec.impulse_tap) ? 1.0f : 0.0f;
           if (spec.quant == ShrfQuant::Int16) {
             detail::push_i16(bytes, static_cast<int16_t>(std::lround(value / scale)));
           } else {

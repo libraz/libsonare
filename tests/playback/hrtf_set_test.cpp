@@ -248,13 +248,49 @@ TEST_CASE("HRTF interpolation clamps elevation to the nearest row", "[playback][
 }
 
 TEST_CASE("resampling to the same rate is a no-op", "[playback][hrtf]") {
-  const ShrfFixtureSpec spec;
+  ShrfFixtureSpec spec;
+  spec.taps = 256;
+  spec.impulse_tap = 128;
   const std::unique_ptr<HrtfSet> set = load(make_shrf_fixture(spec));
   const HrtfSet same = set->resampled(spec.sample_rate);
   CHECK(same.sample_rate() == spec.sample_rate);
   CHECK(same.taps() == spec.taps);
   for (int az = 0; az < spec.n_az; ++az) {
     CHECK(same.itd_samples(0, az) == set->itd_samples(0, az));
+    for (int ear = 0; ear < 2; ++ear) {
+      for (int tap = 0; tap < spec.taps; ++tap) {
+        CHECK(same.hrir(0, az, ear)[tap] == set->hrir(0, az, ear)[tap]);
+      }
+    }
+  }
+}
+
+TEST_CASE("resampling preserves HRIR DC gain for causal and centered impulses",
+          "[playback][hrtf]") {
+  constexpr int kTargetRate = 48000;
+  for (const int source_rate : {24000, 44100, 96000}) {
+    INFO("source rate " << source_rate);
+    for (const int impulse_tap : {0, 128}) {
+      INFO("impulse tap " << impulse_tap);
+      ShrfFixtureSpec spec;
+      spec.sample_rate = source_rate;
+      spec.taps = 256;
+      spec.impulse_tap = impulse_tap;
+      const std::unique_ptr<HrtfSet> source = load(make_shrf_fixture(spec));
+      const HrtfSet resampled = source->resampled(kTargetRate);
+
+      REQUIRE(resampled.sample_rate() == kTargetRate);
+      for (int az = 0; az < spec.n_az; ++az) {
+        for (int ear = 0; ear < 2; ++ear) {
+          double sum = 0.0;
+          const float* taps = resampled.hrir(0, az, ear);
+          for (int tap = 0; tap < resampled.taps(); ++tap) sum += taps[tap];
+          INFO("azimuth " << az << ", ear " << ear);
+          INFO("tap sum " << sum);
+          CHECK(std::abs(sum - 1.0) < 1e-3);
+        }
+      }
+    }
   }
 }
 

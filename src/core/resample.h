@@ -26,4 +26,14 @@ Audio resample(const Audio& audio, int target_sr);
 /// @return Resampled samples
 std::vector<float> resample(const float* samples, size_t size, int src_sr, int target_sr);
 
+/// @brief Resamples a finite impulse response while preserving its DC gain.
+/// @param samples Input FIR coefficients.
+/// @param size Number of input coefficients.
+/// @param src_sr Source sample rate in Hz.
+/// @param target_sr Target sample rate in Hz.
+/// @return Coefficients scaled so their sum matches the input's; when either sum is near zero
+///         relative to its L1 norm, or the signs differ, scaled by src_sr / target_sr instead.
+std::vector<float> resample_impulse_response(const float* samples, size_t size, int src_sr,
+                                             int target_sr);
+
 }  // namespace sonare

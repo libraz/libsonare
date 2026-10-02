@@ -135,6 +135,24 @@ TEST_CASE("binaural front is left/right symmetric and mirrored azimuths swap the
   }
 }
 
+TEST_CASE("binaural front HRIR gain is stable across host sample rates", "[binaural]") {
+  BinauralPannerConfig config;
+  const Pair reference = impulse_response(config, kRate);
+  const double expected_left = sum(reference.left);
+  const double expected_right = sum(reference.right);
+
+  for (const double rate : {24000.0, 44100.0, 96000.0}) {
+    INFO("host rate " << rate);
+    const Pair actual = impulse_response(config, rate);
+    const double actual_left = sum(actual.left);
+    const double actual_right = sum(actual.right);
+    INFO("left DC sum " << actual_left << " vs " << expected_left);
+    CHECK(std::abs(actual_left - expected_left) < 5e-3);
+    INFO("right DC sum " << actual_right << " vs " << expected_right);
+    CHECK(std::abs(actual_right - expected_right) < 5e-3);
+  }
+}
+
 TEST_CASE("binaural interpolation between ring points is continuous", "[binaural]") {
   // Across a ring point the response moves by as little as the angle does.
   const Pair below = response_at(9.99f);

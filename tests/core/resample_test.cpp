@@ -21,6 +21,16 @@ namespace {
 using sonare::constants::kTwoPi;
 using sonare::test::generate_sine;
 using sonare::test::rms;
+
+double sum(const std::vector<float>& samples) {
+  return std::accumulate(samples.begin(), samples.end(), 0.0);
+}
+
+double l1_norm(const std::vector<float>& samples) {
+  double total = 0.0;
+  for (const float sample : samples) total += std::abs(static_cast<double>(sample));
+  return total;
+}
 }  // namespace
 
 TEST_CASE("resample same rate returns copy", "[resample]") {
@@ -155,4 +165,60 @@ TEST_CASE("resample preserves DC offset", "[resample]") {
   // Compute mean of result (should be close to DC)
   float mean = std::accumulate(result.begin(), result.end(), 0.0f) / result.size();
   REQUIRE_THAT(mean, WithinRel(dc, 0.05f));
+}
+
+TEST_CASE("resample impulse response preserves DC gain across rates", "[resample]") {
+  std::vector<float> source(256, 0.0f);
+  source[128] = 1.0f;
+
+  for (const int source_rate : {24000, 44100, 96000}) {
+    INFO("source rate " << source_rate);
+    const std::vector<float> result =
+        resample_impulse_response(source.data(), source.size(), source_rate, 48000);
+    const double output_sum = sum(result);
+    INFO("output sum " << output_sum);
+    CHECK(std::abs(output_sum - 1.0) < 1e-3);
+  }
+}
+
+TEST_CASE("resample impulse response uses area fallback for unstable DC sums", "[resample]") {
+  std::vector<float> all_zero(256, 0.0f);
+  const std::vector<float> zero_result =
+      resample_impulse_response(all_zero.data(), all_zero.size(), 24000, 48000);
+  REQUIRE(zero_result.size() == 512);
+  CHECK(l1_norm(zero_result) == 0.0);
+
+  std::vector<float> cancelling(256, 0.0f);
+  cancelling[128] = 1.0f;
+  cancelling[129] = -1.0f;
+  const std::vector<float> generic_result =
+      resample(cancelling.data(), cancelling.size(), 24000, 48000);
+  const std::vector<float> cancelling_result =
+      resample_impulse_response(cancelling.data(), cancelling.size(), 24000, 48000);
+  REQUIRE(cancelling_result.size() == generic_result.size());
+  INFO("cancelling output sum " << sum(cancelling_result));
+  INFO("cancelling output L1 " << l1_norm(cancelling_result));
+  CHECK(std::abs(sum(cancelling_result) - 0.5 * sum(generic_result)) < 1e-6);
+  for (size_t index = 0; index < cancelling_result.size(); ++index) {
+    const float sample = cancelling_result[index];
+    CHECK(std::isfinite(sample));
+    CHECK(std::abs(sample - 0.5f * generic_result[index]) < 1e-6f);
+  }
+}
+
+TEST_CASE("resample impulse response preserves negative polarity", "[resample]") {
+  std::vector<float> source(256, 0.0f);
+  source[128] = -1.0f;
+  const std::vector<float> result =
+      resample_impulse_response(source.data(), source.size(), 24000, 48000);
+  INFO("negative output sum " << sum(result));
+  CHECK(std::abs(sum(result) + 1.0) < 1e-3);
+}
+
+TEST_CASE("resample impulse response keeps same-rate coefficients bit-exact", "[resample]") {
+  const std::vector<float> source = {0.25f, -0.5f, 1.0f, -2.0f};
+  const std::vector<float> result =
+      resample_impulse_response(source.data(), source.size(), 48000, 48000);
+  REQUIRE(result.size() == source.size());
+  CHECK(result == source);
 }
