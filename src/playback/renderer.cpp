@@ -246,8 +246,10 @@ struct PlaybackRenderer::Impl {
     }
     main_limiter.process(main_ptrs.data(), main_count, frames);
     if (lfe_plane >= 0) lfe_limiter.process(&out_ptrs[static_cast<size_t>(lfe_plane)], 1, frames);
-    limiter_gain_reduction_db.store(main_limiter.last_gain_reduction_db(),
-                                    std::memory_order_relaxed);
+    const float gain_reduction = lfe_plane >= 0 ? std::min(main_limiter.last_gain_reduction_db(),
+                                                           lfe_limiter.last_gain_reduction_db())
+                                                : main_limiter.last_gain_reduction_db();
+    limiter_gain_reduction_db.store(gain_reduction, std::memory_order_relaxed);
   }
 
   /// Output plane p of the last render (limited or bypassed).

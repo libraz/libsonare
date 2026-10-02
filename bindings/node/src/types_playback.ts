@@ -158,6 +158,7 @@ export interface PlaybackDiagnostics {
   loudness_gain_clamped: boolean;
   /** True when a headphones-target `hrtf` was ignored (the target is speakers). */
   hrtf_ignored: boolean;
+  /** Deepest last-block gain reduction across the main and LFE limiters, in dB (<= 0). */
   limiter_gain_reduction_db: number;
   non_finite_discards: number;
 }

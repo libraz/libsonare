@@ -15,6 +15,39 @@ using sonare::ChannelLayout;
 using sonare::SpeakerRole;
 using namespace sonare::playback;
 
+TEST_CASE("playback limiter diagnostics include the independent LFE limiter",
+          "[playback][limiter]") {
+  for (const InputLayout layout : {InputLayout::FivePointOne, InputLayout::SevenPointOne}) {
+    RendererConfig config;
+    config.prepare.input_layout = layout;
+    config.prepare.target_kind = TargetKind::Speakers;
+    config.prepare.target_layout = to_channel_layout(layout);
+    config.prepare.bass_management.enabled = false;
+    config.realtime.limiter_ceiling_db = -6.0f;
+    constexpr int kFrames = 256;
+    const int channels = sonare::channel_count(config.prepare.target_layout);
+    for (const int driven_plane : {0, 3}) {
+      INFO("channels " << channels << ", driven plane " << driven_plane);
+      PlaybackRenderer renderer(config, nullptr, 48000, kFrames);
+      std::vector<float> input(static_cast<size_t>(channels * kFrames), 0.0f);
+      std::vector<float> output(input.size(), 0.0f);
+      for (int i = 0; i < kFrames; ++i) {
+        input[static_cast<size_t>(i * channels + driven_plane)] = 1.0f;
+      }
+      for (int block = 0; block < 32; ++block) {
+        REQUIRE(
+            renderer.process_interleaved(input.data(), channels, output.data(), channels, kFrames));
+      }
+      const float amplitude = output[static_cast<size_t>((kFrames - 1) * channels + driven_plane)];
+      REQUIRE(amplitude > 0.0f);
+      REQUIRE(amplitude <= std::pow(10.0f, -6.0f / 20.0f) + 1e-5f);
+      const float reduction = renderer.diagnostics().limiter_gain_reduction_db;
+      INFO("limited amplitude " << amplitude << ", gain reduction " << reduction);
+      CHECK(reduction < -5.0f);
+    }
+  }
+}
+
 namespace {
 
 constexpr int kBlock = 256;

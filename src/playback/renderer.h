@@ -45,6 +45,7 @@ struct RendererDiagnostics {
   float loudness_gain_db = 0.0f;
   bool loudness_gain_clamped = false;
   bool hrtf_ignored = false;  ///< an HRTF set was supplied to a speakers target
+  /// Deepest last-block main/LFE limiter reduction (dB, <= 0).
   float limiter_gain_reduction_db = 0.0f;
   uint32_t non_finite_discards = 0;
 };
