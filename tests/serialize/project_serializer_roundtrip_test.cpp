@@ -167,6 +167,17 @@ Fixture make_fixture() {
   aclip.comp_segments = {{0.0, 480.0, 1, 0.0}, {480.0, 960.0, 2, 120.0}};
   const ClipId aclip_id = p.add_clip(aclip);
 
+  // Non-looped clip carrying internal comp render geometry (schema 4); a looped
+  // clip may not hold hidden comp overlap.
+  EditClip rclip = aclip;
+  rclip.start_ppq = 4000.0;
+  rclip.loop_mode = LoopMode::kOff;
+  rclip.comp_render_parts = {
+      {0.0, 960.0, 0.0, 960.0, 1, 0.0, 120.0},
+      {720.0, 1920.0, 720.0, 1920.0, 2, 120.0, 0.0},
+  };
+  REQUIRE(p.add_clip(rclip) != 0);
+
   WarpMapRef warp;
   warp.id = 5;
   warp.name = "audio warp";
@@ -407,9 +418,10 @@ bool eq(const EditClip& a, const EditClip& b) {
          a.loop_mode == b.loop_mode && a.loop_length_ppq == b.loop_length_ppq &&
          a.loop_crossfade_ppq == b.loop_crossfade_ppq && a.loop_anchor == b.loop_anchor &&
          a.warp_ref_id == b.warp_ref_id && a.warp_mode == b.warp_mode && a.takes == b.takes &&
-         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments;
+         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments &&
+         a.comp_render_parts == b.comp_render_parts;
 }
-static_assert(field_count<EditClip>() == 19,
+static_assert(field_count<EditClip>() == 20,
               "EditClip gained or lost a field: add it to eq(const EditClip&) above, then update "
               "this count and set it to a non-default value in make_fixture()");
 // Types the helper above reaches into: ClipFade field by field, ClipTake and
@@ -426,6 +438,9 @@ static_assert(field_count<LoopAnchor>() == 2,
               "update this count");
 static_assert(field_count<ClipCompSegment>() == 4,
               "ClipCompSegment gained or lost a field: add it to ClipCompSegment::operator== and "
+              "update this count");
+static_assert(field_count<ClipCompRenderPart>() == 8,
+              "ClipCompRenderPart gained or lost a field: add it to its equality operator and "
               "update this count");
 
 bool eq(const ChordSymbol& a, const ChordSymbol& b) {
@@ -656,9 +671,9 @@ TEST_CASE("project serialize is deterministic and stable across calls", "[serial
   const auto root = util::json::parse(a);
   REQUIRE(root.is_object());
   REQUIRE(root.contains("version"));
-  // The fixture carries physical clip offsets, which select the newest schema.
+  // The fixture carries internal comp geometry, which selects schema 4.
   CHECK(root["version"].as_int() ==
-        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP));
+        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS));
 }
 
 TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[serialize]") {
@@ -1446,6 +1461,40 @@ TEST_CASE("project deserialize accepts the clip fields the edit API admits", "[s
   REQUIRE(result.project->clips().size() == 1);
   CHECK(result.project->clips()[0].takes.size() == 1);
   CHECK(result.project->clips()[0].comp_segments.size() == 1);
+}
+
+TEST_CASE("schema-v4 rejects malformed comp render geometry", "[serialize]") {
+  const std::string prologue =
+      R"({"version":4,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4,"takes":[{"id":1,"source_id":1}],"active_take_id":1,"comp_render_parts":)";
+  const std::vector<std::string> malformed = {
+      R"([{"visible_start_ppq":0,"visible_end_ppq":1,"reference_start_ppq":0.5,"reference_end_ppq":1,"take_id":1}])",
+      R"([{"visible_start_ppq":0,"visible_end_ppq":1,"reference_start_ppq":0,"reference_end_ppq":1,"take_id":2}])",
+      R"([{"visible_start_ppq":0,"visible_end_ppq":1,"reference_start_ppq":0,"reference_end_ppq":1,"take_id":1},{"visible_start_ppq":2,"visible_end_ppq":4,"reference_start_ppq":2,"reference_end_ppq":4,"take_id":1}])",
+  };
+  for (const std::string& parts : malformed) {
+    INFO(parts);
+    const auto result = project_from_json(prologue + parts + "}]}");
+    CHECK_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_clip_comp_render_part");
+  }
+}
+
+TEST_CASE("schema-v4 defaults an omitted retained flag to an active part", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":4,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":2,"takes":[{"id":1,"source_id":1}],"active_take_id":1,"comp_render_parts":[{"visible_start_ppq":0,"visible_end_ppq":2,"reference_start_ppq":0,"reference_end_ppq":2,"take_id":1}]}]})");
+  REQUIRE(result.ok());
+  REQUIRE(result.project->clips().size() == 1);
+  REQUIRE(result.project->clips()[0].comp_render_parts.size() == 1);
+  CHECK_FALSE(result.project->clips()[0].comp_render_parts[0].retained_only);
+}
+
+TEST_CASE("schema-v4 rejects a loop cache that selects a different authored take", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":4,"sources":[{"id":1,"kind":0},{"id":2,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":2,"loop_mode":1,"takes":[{"id":1,"source_id":1},{"id":2,"source_id":2}],"active_take_id":1,"comp_segments":[{"start_ppq":0,"end_ppq":2,"take_id":1}],"comp_render_parts":[{"visible_start_ppq":0,"visible_end_ppq":2,"reference_start_ppq":0,"reference_end_ppq":2,"take_id":2}]}]})");
+  CHECK_FALSE(result.ok());
+  REQUIRE_FALSE(result.diagnostics.empty());
+  CHECK(result.diagnostics.back().code == "invalid_clip_comp_render_part");
 }
 
 TEST_CASE("project deserialize round-trips signed and unwrapped loop phases", "[serialize]") {

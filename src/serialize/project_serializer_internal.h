@@ -127,7 +127,8 @@ Value track_to_json(const arrangement::Track& t);
 Value fade_to_json(const arrangement::ClipFade& f);
 Value take_to_json(const arrangement::ClipTake& take);
 Value comp_segment_to_json(const arrangement::ClipCompSegment& segment);
-Value clip_to_json(const arrangement::EditClip& c);
+Value comp_render_part_to_json(const arrangement::ClipCompRenderPart& part);
+Value clip_to_json(const arrangement::EditClip& c, uint32_t schema_version);
 Value warp_map_to_json(const arrangement::WarpMapRef& map);
 Value source_to_json(const arrangement::ClipSource& src);
 Value marker_to_json(const arrangement::ProjectMarker& m);
@@ -175,6 +176,7 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
 arrangement::ClipFade fade_from_json(const Value& v);
 arrangement::ClipTake take_from_json(const Value& v, uint32_t schema_version);
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v);
+arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v);
 arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version);
 arrangement::WarpMapRef warp_map_from_json(const Value& v);
 arrangement::ClipSource source_from_json(const Value& v);

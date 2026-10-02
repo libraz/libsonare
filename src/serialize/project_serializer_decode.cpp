@@ -168,6 +168,19 @@ arrangement::ClipCompSegment comp_segment_from_json(const Value& v) {
   return segment;
 }
 
+arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v) {
+  arrangement::ClipCompRenderPart part;
+  part.visible_start_ppq = num_or(v, "visible_start_ppq", 0.0);
+  part.visible_end_ppq = num_or(v, "visible_end_ppq", 0.0);
+  part.reference_start_ppq = num_or(v, "reference_start_ppq", 0.0);
+  part.reference_end_ppq = num_or(v, "reference_end_ppq", 0.0);
+  part.take_id = uint_or(v, "take_id", 0);
+  part.seam_fade_in_ppq = num_or(v, "seam_fade_in_ppq", 0.0);
+  part.seam_fade_out_ppq = num_or(v, "seam_fade_out_ppq", 0.0);
+  part.retained_only = bool_or(v, "retained_only", false);
+  return part;
+}
+
 arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
   // Physical fields are read from schema 3 on, as a schema-2 reader would ignore them.
   const bool physical = schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
@@ -210,6 +223,13 @@ arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
   if (const auto* arr = array_at(v, "comp_segments")) {
     for (const auto& sv : *arr) {
       if (sv.is_object()) c.comp_segments.push_back(comp_segment_from_json(sv));
+    }
+  }
+  if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS) {
+    if (const auto* arr = array_at(v, "comp_render_parts")) {
+      for (const auto& pv : *arr) {
+        if (pv.is_object()) c.comp_render_parts.push_back(comp_render_part_from_json(pv));
+      }
     }
   }
   return c;
@@ -505,6 +525,11 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
             "invalid_clip_comp_segment_ppq",
             label + "comp segment bounds must be finite with 0 <= start_ppq < end_ppq"};
       }
+    }
+    if (!arrangement::valid_clip_render_parts(c)) {
+      return InvariantViolation{
+          "invalid_clip_comp_render_part",
+          label + "comp render geometry is invalid or conflicts with the clip's loop"};
     }
   }
 

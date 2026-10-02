@@ -86,7 +86,8 @@ inline std::size_t dynamic_bytes(const ClipTake& value) noexcept {
 
 inline std::size_t dynamic_bytes(const EditClip& value) noexcept {
   std::size_t total = dynamic_bytes(value.takes);
-  return saturating_add(total, dynamic_bytes(value.comp_segments));
+  total = saturating_add(total, dynamic_bytes(value.comp_segments));
+  return saturating_add(total, dynamic_bytes(value.comp_render_parts));
 }
 
 inline std::size_t dynamic_bytes(const Track& value) noexcept {

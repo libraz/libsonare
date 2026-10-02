@@ -20,7 +20,10 @@
 /// Project (no rand / no clock). Track, clip, and source ids share independent
 /// counters but each is monotonic and never reused within a Project instance.
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -36,7 +39,7 @@ namespace sonare::arrangement {
 
 /// ABI / schema version of the arrangement project struct layout. Bumped when
 /// the model.s field layout changes in a way that affects serialization.
-inline constexpr uint32_t kProjectVersion = 1;
+inline constexpr uint32_t kProjectVersion = 2;
 
 /// Stable identifiers. 0 means "unset/invalid".
 using TrackId = uint32_t;
@@ -145,6 +148,34 @@ struct ClipCompSegment {
   bool operator!=(const ClipCompSegment& o) const noexcept { return !(*this == o); }
 };
 
+/// Internal render geometry for a comp lane. ClipCompSegment remains the
+/// authored/edit representation (and therefore keeps its C-facing shape),
+/// while this optional cache records the visible fragment and the reference
+/// domain from which its seam fade was authored. The reference seam may lie
+/// outside the visible fragment after a cut; that is what preserves the phase
+/// of a crossfade when an edit lands inside it. A retained-only part has a
+/// zero-width visible sentinel and keeps only a reference outside the current
+/// clip for a later extension.
+struct ClipCompRenderPart {
+  double visible_start_ppq = 0.0;
+  double visible_end_ppq = 0.0;
+  double reference_start_ppq = 0.0;
+  double reference_end_ppq = 0.0;
+  TakeId take_id = 0;
+  double seam_fade_in_ppq = 0.0;
+  double seam_fade_out_ppq = 0.0;
+  bool retained_only = false;
+
+  bool operator==(const ClipCompRenderPart& o) const noexcept {
+    return visible_start_ppq == o.visible_start_ppq && visible_end_ppq == o.visible_end_ppq &&
+           reference_start_ppq == o.reference_start_ppq &&
+           reference_end_ppq == o.reference_end_ppq && take_id == o.take_id &&
+           seam_fade_in_ppq == o.seam_fade_in_ppq && seam_fade_out_ppq == o.seam_fade_out_ppq &&
+           retained_only == o.retained_only;
+  }
+  bool operator!=(const ClipCompRenderPart& o) const noexcept { return !(*this == o); }
+};
+
 /// Physical loop anchor retained when a looped clip is trimmed across a tempo
 /// map. The anchor is intentionally separate from the musical loop_length_ppq:
 /// the latter remains the authored edit value while this pair preserves the
@@ -219,9 +250,78 @@ struct EditClip {
   /// absent so their existing PPQ scheduling remains unchanged.
   std::optional<LoopAnchor> loop_anchor = std::nullopt;
 
+  /// Internal render geometry materialized by a cut/trim that intersects a
+  /// comp seam. It is absent on untouched/legacy clips and is serialized only
+  /// in schema 4 documents when present.
+  std::vector<ClipCompRenderPart> comp_render_parts;
+
   /// End position on the timeline (PPQ).
   double end_ppq() const noexcept { return start_ppq + length_ppq; }
 };
+
+/// Returns the take that an authored whole-body comp lane would render, or
+/// nullopt when the authored lane is split/non-whole and therefore cannot be
+/// represented by a trivial loop cache.
+inline std::optional<TakeId> effective_whole_comp_take(const EditClip& clip) noexcept {
+  if (clip.comp_segments.empty()) return clip.active_take_id;
+  if (clip.comp_segments.size() != 1) return std::nullopt;
+  const ClipCompSegment& segment = clip.comp_segments.front();
+  if (segment.start_ppq != 0.0 || segment.end_ppq != clip.length_ppq ||
+      segment.crossfade_ppq != 0.0) {
+    return std::nullopt;
+  }
+  return segment.take_id != 0 ? segment.take_id : clip.active_take_id;
+}
+
+/// Whether @p part is exactly the authored whole-body take the clip's comp lane
+/// would render, with no seam fades.
+inline bool is_whole_body_render_part(const EditClip& clip,
+                                      const ClipCompRenderPart& part) noexcept {
+  const std::optional<TakeId> expected_take = effective_whole_comp_take(clip);
+  return expected_take.has_value() && !part.retained_only && part.visible_start_ppq == 0.0 &&
+         part.visible_end_ppq == clip.length_ppq && part.reference_start_ppq == 0.0 &&
+         part.reference_end_ppq == clip.length_ppq && part.seam_fade_in_ppq == 0.0 &&
+         part.seam_fade_out_ppq == 0.0 && part.take_id == *expected_take;
+}
+
+/// A loop can retain a render cache only when that cache is exactly the
+/// authored whole-body take. Hidden comp overlap or a cache selecting another
+/// take would silently change the loop's source when the cache is cleared.
+inline bool is_trivial_loop_comp_render_parts(const EditClip& clip) noexcept {
+  if (clip.comp_render_parts.empty()) return true;
+  return clip.comp_render_parts.size() == 1 &&
+         is_whole_body_render_part(clip, clip.comp_render_parts.front());
+}
+
+/// Like @ref is_trivial_loop_comp_render_parts but judged over the visible
+/// parts alone: retained-only parts play nothing, so enabling a loop may drop
+/// them. A non-empty cache with no visible part is not trivial.
+inline bool is_trivial_loop_visible_render_parts(const EditClip& clip) noexcept {
+  if (clip.comp_render_parts.empty()) return true;
+  const ClipCompRenderPart* visible = nullptr;
+  for (const ClipCompRenderPart& part : clip.comp_render_parts) {
+    if (part.retained_only) continue;
+    if (visible != nullptr) return false;
+    visible = &part;
+  }
+  return visible != nullptr && is_whole_body_render_part(clip, *visible);
+}
+
+/// Tolerance for comparing PPQ endpoints that differ only by rounding.
+inline bool ppq_nearly_equal(double lhs, double rhs) noexcept {
+  const double scale = std::max({1.0, std::abs(lhs), std::abs(rhs)});
+  return std::abs(lhs - rhs) <= 8.0 * std::numeric_limits<double>::epsilon() * scale;
+}
+
+/// Validates render-part geometry against a clip length: finite, ordered
+/// references, visible spans matching their reference domain, and full
+/// coverage. An empty list is valid.
+bool valid_comp_render_geometry(const std::vector<ClipCompRenderPart>& parts,
+                                double clip_length_ppq) noexcept;
+
+/// Validates a clip's render cache: geometry, take ids, and the trivial-cache
+/// requirement of a looped clip. An empty cache is valid.
+bool valid_clip_render_parts(const EditClip& clip) noexcept;
 
 // ===========================================================================
 // Track

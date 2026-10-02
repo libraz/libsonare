@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "arrangement/edit_command.h"
@@ -51,6 +52,7 @@ inline bool clip_can_be_inserted(const Project& project, const EditClip& clip,
       return false;
     }
   }
+  if (!valid_clip_render_parts(clip)) return false;
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(clip.track_id, clip.start_ppq, clip.length_ppq, ignore_clip_id)) {
     return false;
@@ -231,6 +233,11 @@ inline bool comp_segments_split_clip(const std::vector<ClipCompSegment>& segment
          segments.front().end_ppq != clip_length_ppq;
 }
 
+inline double canonicalize_ppq_endpoint(double value, double target) {
+  if (!std::isfinite(value) || !std::isfinite(target)) return value;
+  return ppq_nearly_equal(value, target) ? target : value;
+}
+
 inline std::vector<ClipCompSegment> shifted_clamped_comp_segments(
     const std::vector<ClipCompSegment>& segments, double delta_ppq, double clip_length_ppq) {
   std::vector<ClipCompSegment> out;
@@ -238,6 +245,8 @@ inline std::vector<ClipCompSegment> shifted_clamped_comp_segments(
   for (ClipCompSegment segment : segments) {
     segment.start_ppq = std::max(0.0, segment.start_ppq + delta_ppq);
     segment.end_ppq = std::min(clip_length_ppq, segment.end_ppq + delta_ppq);
+    segment.start_ppq = canonicalize_ppq_endpoint(segment.start_ppq, 0.0);
+    segment.end_ppq = canonicalize_ppq_endpoint(segment.end_ppq, clip_length_ppq);
     if (segment.end_ppq > segment.start_ppq) {
       // A clamped segment is shorter than it was, and a segment pushed to 0 has
       // lost what it faded over, so the fade follows the span rather than
@@ -248,6 +257,116 @@ inline std::vector<ClipCompSegment> shifted_clamped_comp_segments(
     }
   }
   return out;
+}
+
+/// Materializes the compiler's comp fragments before an edit. The authored
+/// segments stay the editable source of truth; the fragments carry seam
+/// references and retained_only parts so hidden comp content survives a cut/trim
+/// and is restored when the clip is re-extended.
+inline bool materialize_comp_render_parts(EditClip* clip) {
+  if (clip == nullptr) return false;
+  if (!clip->comp_render_parts.empty()) return valid_clip_render_parts(*clip);
+  if (clip->comp_segments.empty()) return true;
+  if (!valid_comp_segments(clip->takes, clip->comp_segments, clip->length_ppq)) return false;
+
+  std::vector<ClipCompRenderPart> parts;
+  const TakeId fallback_take_id = clip->active_take_id;
+  const auto push = [&](TakeId take_id, double visible_start, double visible_end,
+                        double seam_fade_in) {
+    if (!(visible_end > visible_start)) return;
+    ClipCompRenderPart part;
+    part.visible_start_ppq = visible_start;
+    part.visible_end_ppq = visible_end;
+    part.reference_start_ppq = visible_start;
+    part.reference_end_ppq = visible_end;
+    part.take_id = take_id;
+    part.seam_fade_in_ppq = seam_fade_in;
+    if (seam_fade_in > 0.0 && !parts.empty()) {
+      parts.back().seam_fade_out_ppq = seam_fade_in;
+    }
+    parts.push_back(part);
+  };
+
+  double cursor = 0.0;
+  for (const ClipCompSegment& segment : clip->comp_segments) {
+    if (segment.start_ppq > cursor) {
+      push(fallback_take_id, cursor, segment.start_ppq, 0.0);
+    }
+    const double render_start = segment.start_ppq - segment.crossfade_ppq;
+    push(segment.take_id == 0 ? fallback_take_id : segment.take_id, render_start, segment.end_ppq,
+         segment.crossfade_ppq);
+    cursor = segment.end_ppq;
+  }
+  if (cursor < clip->length_ppq) {
+    push(fallback_take_id, cursor, clip->length_ppq, 0.0);
+  }
+  clip->comp_render_parts = std::move(parts);
+  return valid_clip_render_parts(*clip);
+}
+
+/// Clips render fragments to [window_start, window_end) in the old clip-local
+/// domain and shifts the retained geometry into the new clip-local origin.
+inline bool remap_comp_render_parts(const std::vector<ClipCompRenderPart>& source,
+                                    double window_start, double window_end, double shift,
+                                    std::vector<ClipCompRenderPart>* out,
+                                    TakeId fallback_take_id = 0) {
+  if (out == nullptr || !(std::isfinite(window_start) && std::isfinite(window_end) &&
+                          window_end > window_start && std::isfinite(shift))) {
+    return false;
+  }
+  out->clear();
+  const auto append_fallback = [&](double start, double end) {
+    if (!(end > start)) return;
+    ClipCompRenderPart fallback;
+    fallback.visible_start_ppq = start - shift;
+    fallback.visible_end_ppq = end - shift;
+    fallback.reference_start_ppq = fallback.visible_start_ppq;
+    fallback.reference_end_ppq = fallback.visible_end_ppq;
+    fallback.take_id = fallback_take_id;
+    fallback.retained_only = false;
+    out->push_back(fallback);
+  };
+  double covered_until = window_start;
+  bool appended_trailing_fallback = false;
+  for (const ClipCompRenderPart& part : source) {
+    const double visible_start = std::max(part.reference_start_ppq, window_start);
+    const double visible_end = std::min(part.reference_end_ppq, window_end);
+    ClipCompRenderPart mapped = part;
+    mapped.reference_start_ppq = part.reference_start_ppq - shift;
+    mapped.reference_end_ppq = part.reference_end_ppq - shift;
+    if (visible_end > visible_start) {
+      if (visible_start > covered_until) append_fallback(covered_until, visible_start);
+      mapped.visible_start_ppq = canonicalize_ppq_endpoint(visible_start - shift, 0.0);
+      mapped.visible_end_ppq = canonicalize_ppq_endpoint(visible_end - shift, window_end - shift);
+      mapped.retained_only = false;
+      // Keep the complete seam reference domain even when the visible fragment
+      // is clipped. The player uses this hidden range to evaluate the fade at
+      // the same phase after a split or trim.
+      mapped.reference_start_ppq =
+          canonicalize_ppq_endpoint(mapped.reference_start_ppq, mapped.visible_start_ppq);
+      mapped.reference_end_ppq =
+          canonicalize_ppq_endpoint(mapped.reference_end_ppq, mapped.visible_end_ppq);
+      covered_until = std::max(covered_until, visible_end);
+    } else {
+      // Preserve a part whose full seam reference is currently outside the
+      // visible window. A later extension can intersect it and revive the
+      // original take/fade; a zero-width visible sentinel keeps it out of the
+      // compiler and visible coverage calculations.
+      mapped.visible_start_ppq = 0.0;
+      mapped.visible_end_ppq = 0.0;
+      mapped.retained_only = true;
+      if (part.reference_start_ppq >= window_end && covered_until < window_end) {
+        append_fallback(covered_until, window_end);
+        appended_trailing_fallback = true;
+        covered_until = window_end;
+      }
+    }
+    out->push_back(mapped);
+  }
+  if (!appended_trailing_fallback && covered_until < window_end) {
+    append_fallback(covered_until, window_end);
+  }
+  return valid_comp_render_geometry(*out, window_end - shift);
 }
 
 inline bool shift_take_offsets(std::vector<ClipTake>* takes, double delta_ppq) {

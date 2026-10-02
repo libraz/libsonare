@@ -2,9 +2,12 @@
 /// @brief edit command tests: apply/invert round-trips, deterministic replay,
 /// and undo/redo stack behaviour for the arrangement subsystem.
 
+#include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -18,7 +21,9 @@
 #include "arrangement/edit_history.h"
 #include "arrangement/edit_model.h"
 #include "arrangement/edit_source.h"
+#include "engine/clip_player.h"
 #include "serialize/project_serializer.h"
+#include "transport/tempo_map.h"
 
 using namespace sonare::arrangement;
 
@@ -142,7 +147,8 @@ bool clip_equal(const EditClip& a, const EditClip& b) {
          a.loop_mode == b.loop_mode && a.loop_length_ppq == b.loop_length_ppq &&
          a.source_offset_seconds == b.source_offset_seconds && a.loop_anchor == b.loop_anchor &&
          a.warp_ref_id == b.warp_ref_id && a.takes == b.takes &&
-         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments;
+         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments &&
+         a.comp_render_parts == b.comp_render_parts;
 }
 
 bool source_equal(const ClipSource& a, const ClipSource& b) {
@@ -395,6 +401,102 @@ struct Rng {
   uint32_t below(uint32_t n) { return next() % n; }
   double unit() { return static_cast<double>(next() % 100000) / 100000.0; }
 };
+
+struct CrossfadeFixture {
+  Project project;
+  MidiContentStore midi;
+  AudioContentStore audio;
+  ClipId clip_id = 0;
+};
+
+CrossfadeFixture make_crossfade_fixture(bool tempo_change, bool reverse_polarity = false) {
+  CrossfadeFixture fixture;
+  fixture.project.set_sample_rate(48000.0);
+  fixture.project.set_tempo_segments(
+      tempo_change
+          ? std::vector<sonare::transport::TempoSegment>{{0.0, 120.0, 0.0}, {1.0, 60.0, 0.0}}
+          : std::vector<sonare::transport::TempoSegment>{{0.0, 120.0, 0.0}});
+
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const TrackId track_id = fixture.project.add_track(track);
+
+  AudioSourceRef source_a;
+  source_a.channel_count = 1;
+  source_a.sample_rate_hint = 48000.0;
+  const SourceId source_a_id = fixture.project.add_audio_source(source_a);
+  AudioSourceRef source_b = source_a;
+  const SourceId source_b_id = fixture.project.add_audio_source(source_b);
+
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_a_id;
+  clip.length_ppq = 2.0;
+  clip.takes = {{1, source_a_id, 0.0, "A"}, {2, source_b_id, 0.0, "B"}};
+  clip.active_take_id = 1;
+  clip.comp_segments = {{0.0, 1.0, 1, 0.0}, {1.0, 2.0, 2, 0.5}};
+  fixture.clip_id = fixture.project.add_clip(clip);
+
+  AudioSourceSamples samples_a;
+  samples_a.sample_rate = 48000.0;
+  samples_a.channels.emplace_back(96000, reverse_polarity ? 1.0f : 0.0f);
+  fixture.audio.sources.emplace(source_a_id, std::move(samples_a));
+  AudioSourceSamples samples_b;
+  samples_b.sample_rate = 48000.0;
+  samples_b.channels.emplace_back(96000, reverse_polarity ? 0.0f : 1.0f);
+  fixture.audio.sources.emplace(source_b_id, std::move(samples_b));
+  return fixture;
+}
+
+CrossfadeFixture make_three_take_crossfade_fixture() {
+  CrossfadeFixture fixture;
+  fixture.project.set_sample_rate(48000.0);
+  fixture.project.set_tempo_segments({{0.0, 120.0, 0.0}});
+
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const TrackId track_id = fixture.project.add_track(track);
+  const SourceId source_a_id = fixture.project.add_audio_source(AudioSourceRef{});
+  const SourceId source_b_id = fixture.project.add_audio_source(AudioSourceRef{});
+  const SourceId source_c_id = fixture.project.add_audio_source(AudioSourceRef{});
+
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_a_id;
+  clip.length_ppq = 3.0;
+  clip.takes = {{1, source_a_id, 0.0, "A"}, {2, source_b_id, 0.0, "B"}, {3, source_c_id, 0.0, "C"}};
+  clip.active_take_id = 1;
+  clip.comp_segments = {{0.0, 1.0, 1, 0.0}, {1.0, 2.0, 2, 0.5}, {2.0, 3.0, 3, 0.5}};
+  fixture.clip_id = fixture.project.add_clip(clip);
+
+  for (const auto& [source_id, value] : {std::pair<SourceId, float>{source_a_id, 0.0f},
+                                         std::pair<SourceId, float>{source_b_id, 1.0f},
+                                         std::pair<SourceId, float>{source_c_id, 2.0f}}) {
+    AudioSourceSamples samples;
+    samples.sample_rate = 48000.0;
+    samples.channels.emplace_back(144000, value);
+    fixture.audio.sources.emplace(source_id, std::move(samples));
+  }
+  return fixture;
+}
+
+int64_t timeline_end_sample(const CompiledTimeline& timeline) {
+  int64_t end = 0;
+  for (const auto& clip : timeline.audio_clips) {
+    end = std::max(end, clip.start_sample + clip.length_samples);
+  }
+  return end;
+}
+
+std::vector<float> render_mono(const CompiledTimeline& timeline, int64_t frames) {
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 128);
+  player.set_clips(timeline.audio_clips);
+  std::vector<float> output(static_cast<size_t>(frames), 0.0f);
+  float* channels[] = {output.data()};
+  player.process_at(channels, 1, static_cast<int>(frames), 0);
+  return output;
+}
 
 }  // namespace
 
@@ -2220,4 +2322,410 @@ TEST_CASE("Comp parts use the selected take physical base plus timeline elapsed 
   CHECK(active_part->clip_offset_samples == 6000);
   CHECK(comp_part->clip_offset_samples == 66000);
   CHECK(active_tail_part->clip_offset_samples == 102000);
+}
+
+TEST_CASE("Splitting a crossfaded comp lane preserves PCM before and after the cut",
+          "[arrangement]") {
+  for (const bool tempo_change : {false, true}) {
+    for (const double split_ppq : {0.25, 0.75, 1.5}) {
+      CAPTURE(tempo_change, split_ppq);
+      CrossfadeFixture fixture = make_crossfade_fixture(tempo_change);
+      const auto before = compile(fixture.project, fixture.midi, fixture.audio);
+      REQUIRE_FALSE(before.has_errors());
+      REQUIRE(before.timeline.has_value());
+
+      REQUIRE(SplitClip(fixture.clip_id, split_ppq).apply(fixture.project, fixture.midi));
+      const auto after = compile(fixture.project, fixture.midi, fixture.audio);
+      REQUIRE_FALSE(after.has_errors());
+      REQUIRE(after.timeline.has_value());
+
+      const int64_t frames =
+          std::max(timeline_end_sample(*before.timeline), timeline_end_sample(*after.timeline)) +
+          128;
+      const auto before_pcm = render_mono(*before.timeline, frames);
+      const auto after_pcm = render_mono(*after.timeline, frames);
+      REQUIRE(before_pcm.size() == after_pcm.size());
+      float max_difference = 0.0f;
+      for (size_t frame = 0; frame < before_pcm.size(); ++frame) {
+        max_difference = std::max(max_difference, std::abs(before_pcm[frame] - after_pcm[frame]));
+      }
+      INFO(max_difference);
+      CHECK(max_difference < 1.0e-5f);
+    }
+  }
+}
+
+TEST_CASE("Trimming a crossfaded comp lane preserves the retained PCM", "[arrangement]") {
+  for (const bool tempo_change : {false, true}) {
+    for (const double trim_start : {0.25, 0.75, 1.5}) {
+      CAPTURE(tempo_change, trim_start);
+      CrossfadeFixture fixture = make_crossfade_fixture(tempo_change);
+      const auto before = compile(fixture.project, fixture.midi, fixture.audio);
+      REQUIRE_FALSE(before.has_errors());
+      REQUIRE(before.timeline.has_value());
+
+      const double trim_length = 2.0 - trim_start;
+      REQUIRE(
+          TrimClip(fixture.clip_id, trim_start, trim_length).apply(fixture.project, fixture.midi));
+      const auto after = compile(fixture.project, fixture.midi, fixture.audio);
+      REQUIRE_FALSE(after.has_errors());
+      REQUIRE(after.timeline.has_value());
+
+      sonare::transport::TempoMap tempo_map;
+      tempo_map.prepare(48000.0);
+      tempo_map.set_segments(fixture.project.tempo_segments());
+      const int64_t retained_start = tempo_map.ppq_to_sample(trim_start);
+      const int64_t frames =
+          std::max(timeline_end_sample(*before.timeline), timeline_end_sample(*after.timeline)) +
+          128;
+      const auto before_pcm = render_mono(*before.timeline, frames);
+      const auto after_pcm = render_mono(*after.timeline, frames);
+      REQUIRE(before_pcm.size() == after_pcm.size());
+      float max_difference = 0.0f;
+      for (int64_t frame = retained_start; frame < timeline_end_sample(*before.timeline); ++frame) {
+        max_difference = std::max(max_difference, std::abs(before_pcm[static_cast<size_t>(frame)] -
+                                                           after_pcm[static_cast<size_t>(frame)]));
+      }
+      INFO(max_difference);
+      CHECK(max_difference < 1.0e-5f);
+    }
+  }
+}
+
+TEST_CASE("Crossfaded comp trims preserve the outgoing seam envelope", "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false, true);
+  const auto before = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(before.timeline.has_value());
+  REQUIRE(SplitClip(fixture.clip_id, 0.75).apply(fixture.project, fixture.midi));
+  const auto after = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(after.timeline.has_value());
+  const int64_t frames =
+      std::max(timeline_end_sample(*before.timeline), timeline_end_sample(*after.timeline)) + 128;
+  const auto before_pcm = render_mono(*before.timeline, frames);
+  const auto after_pcm = render_mono(*after.timeline, frames);
+  for (size_t frame = 0; frame < before_pcm.size(); ++frame) {
+    CHECK(after_pcm[frame] == Catch::Approx(before_pcm[frame]).margin(1.0e-5f));
+  }
+}
+
+TEST_CASE("Fractional full comp loop trims remain editable and round-trip", "[arrangement]") {
+  Project project;
+  project.set_sample_rate(48000.0);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const TrackId track_id = project.add_track(track);
+  const SourceId source_id = project.add_audio_source({});
+
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 0.3;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.takes = {{1, source_id, 0.0, "only"}};
+  clip.active_take_id = 1;
+  clip.comp_segments = {{0.0, 0.3, 1, 0.0}};
+  const ClipId clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000.0;
+  audio.sources[source_id].channels = {std::vector<float>(20000, 0.25f)};
+  EditHistory history{std::move(project)};
+  REQUIRE(history.apply(std::make_unique<TrimClip>(clip_id, 0.1, 0.2)));
+
+  const EditClip* trimmed = history.project().find_clip(clip_id);
+  REQUIRE(trimmed != nullptr);
+  CHECK(trimmed->comp_render_parts.empty());
+  CHECK(trimmed->start_ppq == Catch::Approx(0.1));
+  CHECK(trimmed->length_ppq == Catch::Approx(0.2));
+  REQUIRE(trimmed->comp_segments.size() == 1);
+  CHECK(trimmed->comp_segments.front().start_ppq == Catch::Approx(0.0));
+  CHECK(trimmed->comp_segments.front().end_ppq == Catch::Approx(0.2));
+
+  const auto compiled = compile(history.project(), history.midi_content(), audio);
+  REQUIRE_FALSE(compiled.has_errors());
+  REQUIRE(compiled.timeline.has_value());
+  REQUIRE(compiled.timeline->audio_clips.size() == 1);
+
+  const std::string json =
+      sonare::serialize::project_to_json(history.project(), history.midi_content());
+  const auto decoded = sonare::serialize::project_from_json(json);
+  REQUIRE(decoded.ok());
+  const EditClip* decoded_clip = decoded.project->find_clip(clip_id);
+  REQUIRE(decoded_clip != nullptr);
+  CHECK(decoded_clip->start_ppq == Catch::Approx(0.1));
+  CHECK(decoded_clip->length_ppq == Catch::Approx(0.2));
+  REQUIRE(decoded_clip->comp_segments.size() == 1);
+  CHECK(decoded_clip->comp_segments.front().end_ppq == Catch::Approx(0.2));
+
+  REQUIRE(history.undo());
+  CHECK(history.project().find_clip(clip_id)->length_ppq == Catch::Approx(0.3));
+  REQUIRE(history.redo());
+  CHECK(history.project().find_clip(clip_id)->length_ppq == Catch::Approx(0.2));
+  CHECK(history.project().find_clip(clip_id)->comp_segments.front().end_ppq == Catch::Approx(0.2));
+}
+
+TEST_CASE("Comp render geometry preserves a middle take's two seam fades", "[arrangement]") {
+  CrossfadeFixture fixture = make_three_take_crossfade_fixture();
+  const auto before = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(before.timeline.has_value());
+
+  EditHistory history{fixture.project};
+  REQUIRE(history.apply(std::make_unique<TrimClip>(fixture.clip_id, 0.75, 1.0)));
+  const EditClip* left = history.project().find_clip(fixture.clip_id);
+  REQUIRE(left != nullptr);
+  REQUIRE(left->comp_render_parts.size() >= 3);
+  const auto middle =
+      std::find_if(left->comp_render_parts.begin(), left->comp_render_parts.end(),
+                   [](const ClipCompRenderPart& part) { return part.take_id == 2; });
+  REQUIRE(middle != left->comp_render_parts.end());
+  CHECK(middle->seam_fade_in_ppq == Catch::Approx(0.5));
+  CHECK(middle->seam_fade_out_ppq == Catch::Approx(0.5));
+  CHECK(middle->reference_start_ppq < middle->visible_start_ppq);
+  CHECK(middle->visible_end_ppq < middle->reference_end_ppq);
+
+  const auto after = compile(history.project(), history.midi_content(), fixture.audio);
+  REQUIRE(after.timeline.has_value());
+  const int64_t frames =
+      std::max(timeline_end_sample(*before.timeline), timeline_end_sample(*after.timeline)) + 128;
+  const auto before_pcm = render_mono(*before.timeline, frames);
+  const auto after_pcm = render_mono(*after.timeline, frames);
+  REQUIRE(before_pcm.size() == after_pcm.size());
+  float max_difference = 0.0f;
+  const int64_t retained_start = 0.75 * 24000;
+  const int64_t retained_end = 1.75 * 24000;
+  for (int64_t frame = retained_start; frame < retained_end; ++frame) {
+    max_difference = std::max(max_difference, std::abs(before_pcm[static_cast<size_t>(frame)] -
+                                                       after_pcm[static_cast<size_t>(frame)]));
+  }
+  CHECK(max_difference < 1.0e-5f);
+}
+
+TEST_CASE("Split then extending the retained child re-exposes its seam reference",
+          "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false);
+  const auto before = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(before.timeline.has_value());
+  EditHistory history{fixture.project};
+  auto split = std::make_unique<SplitClip>(fixture.clip_id, 0.75);
+  SplitClip* split_ptr = split.get();
+  REQUIRE(history.apply(std::move(split)));
+  REQUIRE(split_ptr->new_clip_id() != 0);
+  REQUIRE(history.apply(std::make_unique<RemoveClip>(split_ptr->new_clip_id())));
+  REQUIRE(history.apply(std::make_unique<TrimClip>(fixture.clip_id, 0.0, 2.0)));
+
+  const auto after = compile(history.project(), history.midi_content(), fixture.audio);
+  REQUIRE(after.timeline.has_value());
+  const int64_t frames =
+      std::max(timeline_end_sample(*before.timeline), timeline_end_sample(*after.timeline)) + 128;
+  const auto before_pcm = render_mono(*before.timeline, frames);
+  const auto after_pcm = render_mono(*after.timeline, frames);
+  REQUIRE(before_pcm.size() == after_pcm.size());
+  for (size_t frame = 0; frame < before_pcm.size(); ++frame) {
+    CHECK(after_pcm[frame] == Catch::Approx(before_pcm[frame]).margin(1.0e-5f));
+  }
+}
+
+TEST_CASE("Shrinking then re-extending a comp clip retains discarded seam references",
+          "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false, true);
+  const auto before = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(before.timeline.has_value());
+
+  // The first trim leaves only the tail of B visible. A must remain latent so
+  // that the second trim can re-expose the original A/B crossfade rather than
+  // filling the restored interval with the active take as a new butt join.
+  REQUIRE(TrimClip(fixture.clip_id, 1.5, 0.5).apply(fixture.project, fixture.midi));
+  const EditClip* narrow = fixture.project.find_clip(fixture.clip_id);
+  REQUIRE(narrow != nullptr);
+  CHECK(narrow->comp_render_parts.size() == 2);
+  if (narrow->comp_render_parts.size() == 2) {
+    CHECK(narrow->comp_render_parts[0].take_id == 1);
+    CHECK(narrow->comp_render_parts[0].visible_start_ppq == 0.0);
+    CHECK(narrow->comp_render_parts[0].visible_end_ppq == 0.0);
+    CHECK(narrow->comp_render_parts[1].take_id == 2);
+  }
+
+  const std::string narrow_json = sonare::serialize::project_to_json(fixture.project, fixture.midi);
+  REQUIRE(narrow_json.find("\"version\":4") != std::string::npos);
+  auto narrow_decoded = sonare::serialize::project_from_json(narrow_json);
+  REQUIRE(narrow_decoded.ok());
+  const EditClip* decoded_narrow = narrow_decoded.project->find_clip(fixture.clip_id);
+  REQUIRE(decoded_narrow != nullptr);
+  CHECK(decoded_narrow->comp_render_parts == narrow->comp_render_parts);
+
+  const auto narrow_compiled = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(narrow_compiled.timeline.has_value());
+  REQUIRE(narrow_compiled.timeline->audio_clips.size() == 1);
+  CHECK(narrow_compiled.timeline->audio_clips.front().storage->channels[0][0] ==
+        Catch::Approx(0.0f));
+
+  REQUIRE(TrimClip(fixture.clip_id, 0.0, 2.0).apply(*narrow_decoded.project, narrow_decoded.midi));
+  const auto decoded_after = compile(*narrow_decoded.project, narrow_decoded.midi, fixture.audio);
+  REQUIRE(decoded_after.timeline.has_value());
+
+  REQUIRE(TrimClip(fixture.clip_id, 0.0, 2.0).apply(fixture.project, fixture.midi));
+
+  const auto after = compile(fixture.project, fixture.midi, fixture.audio);
+  REQUIRE(after.timeline.has_value());
+  const int64_t frames =
+      std::max(timeline_end_sample(*before.timeline), timeline_end_sample(*after.timeline)) + 128;
+  const auto before_pcm = render_mono(*before.timeline, frames);
+  const auto after_pcm = render_mono(*after.timeline, frames);
+  REQUIRE(before_pcm.size() == after_pcm.size());
+  float max_difference = 0.0f;
+  for (size_t frame = 0; frame < before_pcm.size(); ++frame) {
+    max_difference = std::max(max_difference, std::abs(before_pcm[frame] - after_pcm[frame]));
+  }
+  INFO(max_difference);
+  CHECK(max_difference < 1.0e-5f);
+
+  const auto decoded_pcm = render_mono(*decoded_after.timeline, frames);
+  REQUIRE(decoded_pcm.size() == before_pcm.size());
+  float decoded_max_difference = 0.0f;
+  for (size_t frame = 0; frame < before_pcm.size(); ++frame) {
+    decoded_max_difference =
+        std::max(decoded_max_difference, std::abs(before_pcm[frame] - decoded_pcm[frame]));
+  }
+  INFO(decoded_max_difference);
+  CHECK(decoded_max_difference < 1.0e-5f);
+}
+
+TEST_CASE("Comp render geometry survives undo redo and JSON, while real loop gaps reject",
+          "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false);
+  EditHistory history{fixture.project};
+  const Project before = history.project();
+  REQUIRE(history.apply(std::make_unique<SplitClip>(fixture.clip_id, 0.75)));
+  const EditClip* split_clip = history.project().find_clip(fixture.clip_id);
+  REQUIRE(split_clip != nullptr);
+  REQUIRE_FALSE(split_clip->comp_render_parts.empty());
+  const auto expected_parts = split_clip->comp_render_parts;
+
+  const std::string json =
+      sonare::serialize::project_to_json(history.project(), history.midi_content());
+  REQUIRE(json.find("\"version\":4") != std::string::npos);
+  const auto decoded = sonare::serialize::project_from_json(json);
+  REQUIRE(decoded.ok());
+  CHECK(decoded.project->find_clip(fixture.clip_id)->comp_render_parts == expected_parts);
+
+  REQUIRE(history.undo());
+  CHECK(project_equal(history.project(), before));
+  REQUIRE(history.redo());
+  CHECK(history.project().find_clip(fixture.clip_id)->comp_render_parts == expected_parts);
+
+  Project gap_project;
+  gap_project.set_overlap_policy(OverlapPolicy::kAllow);
+  Track gap_track;
+  gap_track.kind = Track::Kind::kAudio;
+  const TrackId track_id = gap_project.add_track(gap_track);
+  const SourceId source_id = gap_project.add_audio_source(AudioSourceRef{});
+  EditClip loop;
+  loop.track_id = track_id;
+  loop.source_id = source_id;
+  loop.length_ppq = 4.0;
+  loop.loop_mode = LoopMode::kLoop;
+  loop.takes = {{1, source_id, 0.0, "take"}};
+  loop.active_take_id = 1;
+  loop.comp_segments = {{0.0, 1.0, 1, 0.0}, {2.0, 4.0, 1, 0.0}};
+  const ClipId loop_id = gap_project.add_clip(loop);
+  REQUIRE(loop_id != 0);
+  MidiContentStore midi;
+  const Project gap_before = gap_project;
+  REQUIRE_FALSE(TrimClip(loop_id, 0.0, 4.0).apply(gap_project, midi));
+  CHECK(project_equal(gap_project, gap_before));
+}
+
+TEST_CASE("Explicit comp and take reauthoring clears only the derived render cache",
+          "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false);
+  EditHistory history{fixture.project};
+  REQUIRE(history.apply(std::make_unique<SplitClip>(fixture.clip_id, 0.75)));
+  const EditClip* split_clip = history.project().find_clip(fixture.clip_id);
+  REQUIRE(split_clip != nullptr);
+  REQUIRE_FALSE(split_clip->comp_render_parts.empty());
+  const auto authored_segments = split_clip->comp_segments;
+  REQUIRE(history.apply(std::make_unique<SetClipCompSegments>(fixture.clip_id, authored_segments)));
+  CHECK(history.project().find_clip(fixture.clip_id)->comp_render_parts.empty());
+  REQUIRE(history.undo());
+  CHECK_FALSE(history.project().find_clip(fixture.clip_id)->comp_render_parts.empty());
+  REQUIRE(history.apply(std::make_unique<SetClipTakes>(
+      fixture.clip_id, history.project().find_clip(fixture.clip_id)->takes, 1)));
+  CHECK(history.project().find_clip(fixture.clip_id)->comp_render_parts.empty());
+  REQUIRE(history.undo());
+  CHECK_FALSE(history.project().find_clip(fixture.clip_id)->comp_render_parts.empty());
+}
+
+TEST_CASE("Loop enabling rejects hidden comp overlap left by a split", "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false);
+  MidiContentStore midi;
+  REQUIRE(SplitClip(fixture.clip_id, 0.75).apply(fixture.project, midi));
+  const EditClip* left = fixture.project.find_clip(fixture.clip_id);
+  REQUIRE(left != nullptr);
+  REQUIRE(left->comp_segments.size() == 1);
+  REQUIRE(left->comp_segments.front().start_ppq == 0.0);
+  REQUIRE(left->comp_segments.front().end_ppq == left->length_ppq);
+  REQUIRE(left->comp_render_parts.size() > 1);
+  const EditClip before = *left;
+  REQUIRE_FALSE(SetClipLoop(fixture.clip_id, LoopMode::kLoop, 0.0).apply(fixture.project, midi));
+  CHECK(clip_equal(*fixture.project.find_clip(fixture.clip_id), before));
+}
+
+TEST_CASE("Loop enabling drops retained-only parts left by trimming to the first segment",
+          "[arrangement]") {
+  CrossfadeFixture fixture = make_crossfade_fixture(false);
+  EditHistory history{fixture.project};
+  REQUIRE(history.apply(std::make_unique<SetClipCompSegments>(
+      fixture.clip_id, std::vector<ClipCompSegment>{{0.0, 1.0, 1, 0.0}, {1.0, 2.0, 2, 0.0}})));
+  REQUIRE(history.apply(std::make_unique<TrimClip>(fixture.clip_id, 0.0, 1.0)));
+  const EditClip* trimmed = history.project().find_clip(fixture.clip_id);
+  REQUIRE(trimmed != nullptr);
+  REQUIRE(trimmed->comp_segments.size() == 1);
+  REQUIRE(trimmed->comp_render_parts.size() == 2);
+  REQUIRE(trimmed->comp_render_parts[1].retained_only);
+  const std::vector<ClipCompRenderPart> retained = trimmed->comp_render_parts;
+
+  REQUIRE(history.apply(std::make_unique<SetClipLoop>(fixture.clip_id, LoopMode::kLoop, 0.0)));
+  const EditClip* looped = history.project().find_clip(fixture.clip_id);
+  CHECK(looped->loop_mode == LoopMode::kLoop);
+  CHECK(looped->comp_render_parts.empty());
+
+  REQUIRE(history.undo());
+  const EditClip* restored = history.project().find_clip(fixture.clip_id);
+  CHECK(restored->loop_mode == LoopMode::kOff);
+  CHECK(restored->comp_render_parts == retained);
+}
+
+TEST_CASE("Loop enabling rejects a whole cache that selects a different take", "[arrangement]") {
+  Project project;
+  project.set_overlap_policy(OverlapPolicy::kAllow);
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const TrackId track_id = project.add_track(track);
+  const SourceId source_a = project.add_audio_source(AudioSourceRef{});
+  const SourceId source_b = project.add_audio_source(AudioSourceRef{});
+
+  EditClip clip;
+  clip.id = 91;
+  clip.track_id = track_id;
+  clip.source_id = source_a;
+  clip.length_ppq = 2.0;
+  clip.loop_mode = LoopMode::kOff;
+  clip.takes = {{1, source_a, 0.0, "authored"}, {2, source_b, 0.0, "cached"}};
+  clip.active_take_id = 1;
+  clip.comp_segments = {{0.0, 2.0, 1, 0.0}};
+  // Bypass add_clip only to exercise the command-side guard against a
+  // malformed state that can arrive from a schema-v4 document or raw restore.
+  clip.comp_render_parts = {{0.0, 2.0, 0.0, 2.0, 2, 0.0, 0.0}};
+  Project model_check_project = project;
+  EditClip model_check_clip = clip;
+  model_check_clip.loop_mode = LoopMode::kLoop;
+  CHECK(model_check_project.add_clip(model_check_clip) == 0);
+  REQUIRE(project.insert_clip_raw(clip));
+  const EditClip before = *project.find_clip(clip.id);
+  MidiContentStore midi;
+
+  REQUIRE_FALSE(SetClipLoop(clip.id, LoopMode::kLoop, 0.0).apply(project, midi));
+  CHECK(clip_equal(*project.find_clip(clip.id), before));
 }

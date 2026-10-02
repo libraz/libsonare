@@ -3,6 +3,7 @@
 
 #include "arrangement/edit_model.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <type_traits>
@@ -28,6 +29,73 @@ void ensure_next_entity_id(Id id, Id& next) noexcept {
 }
 
 }  // namespace
+
+bool valid_comp_render_geometry(const std::vector<ClipCompRenderPart>& parts,
+                                double clip_length_ppq) noexcept {
+  if (!(std::isfinite(clip_length_ppq) && clip_length_ppq > 0.0)) return false;
+  double previous_reference_start = 0.0;
+  double previous_reference_end = 0.0;
+  double covered_until = 0.0;
+  bool have_previous_reference = false;
+  bool have_active = false;
+  for (const ClipCompRenderPart& part : parts) {
+    if (!std::isfinite(part.visible_start_ppq) || !std::isfinite(part.visible_end_ppq) ||
+        !std::isfinite(part.reference_start_ppq) || !std::isfinite(part.reference_end_ppq) ||
+        !(part.reference_end_ppq > part.reference_start_ppq) ||
+        !std::isfinite(part.seam_fade_in_ppq) || part.seam_fade_in_ppq < 0.0 ||
+        !std::isfinite(part.seam_fade_out_ppq) || part.seam_fade_out_ppq < 0.0 ||
+        part.seam_fade_in_ppq > part.reference_end_ppq - part.reference_start_ppq ||
+        part.seam_fade_out_ppq > part.reference_end_ppq - part.reference_start_ppq) {
+      return false;
+    }
+    if (have_previous_reference && (part.reference_start_ppq < previous_reference_start ||
+                                    part.reference_end_ppq < previous_reference_end)) {
+      return false;
+    }
+    if (part.retained_only) {
+      if (part.visible_start_ppq != 0.0 || part.visible_end_ppq != 0.0 ||
+          !(part.reference_end_ppq <= 0.0 || part.reference_start_ppq >= clip_length_ppq)) {
+        return false;
+      }
+    } else {
+      if (part.visible_start_ppq < 0.0 || !(part.visible_end_ppq > part.visible_start_ppq) ||
+          part.visible_end_ppq > clip_length_ppq) {
+        return false;
+      }
+      const double expected_start = std::max(0.0, part.reference_start_ppq);
+      const double expected_end = std::min(clip_length_ppq, part.reference_end_ppq);
+      if (!(expected_end > expected_start) ||
+          !ppq_nearly_equal(part.visible_start_ppq, expected_start) ||
+          !ppq_nearly_equal(part.visible_end_ppq, expected_end)) {
+        return false;
+      }
+      if (part.visible_start_ppq > covered_until &&
+          !ppq_nearly_equal(part.visible_start_ppq, covered_until)) {
+        return false;
+      }
+      covered_until = std::max(covered_until, part.visible_end_ppq);
+      have_active = true;
+    }
+    previous_reference_start = part.reference_start_ppq;
+    previous_reference_end = part.reference_end_ppq;
+    have_previous_reference = true;
+  }
+  return parts.empty() || (have_active && ppq_nearly_equal(covered_until, clip_length_ppq) &&
+                           covered_until <= clip_length_ppq);
+}
+
+bool valid_clip_render_parts(const EditClip& clip) noexcept {
+  if (clip.comp_render_parts.empty()) return true;
+  if (!valid_comp_render_geometry(clip.comp_render_parts, clip.length_ppq)) return false;
+  const bool takes_exist = std::all_of(
+      clip.comp_render_parts.begin(), clip.comp_render_parts.end(), [&clip](const auto& part) {
+        return part.take_id == 0 ||
+               std::any_of(clip.takes.begin(), clip.takes.end(),
+                           [&part](const ClipTake& take) { return take.id == part.take_id; });
+      });
+  return takes_exist &&
+         (clip.loop_mode != LoopMode::kLoop || is_trivial_loop_comp_render_parts(clip));
+}
 
 SourceId Project::add_audio_source(AudioSourceRef ref) {
   const SourceId id = allocate_entity_id(next_source_id_);
@@ -134,6 +202,7 @@ ClipId Project::add_clip(EditClip clip) {
       return 0;
     }
   }
+  if (!valid_clip_render_parts(clip)) return 0;
   // Overlap policy.
   if (overlap_policy_ == OverlapPolicy::kDisallow &&
       clip_overlaps(clip.track_id, clip.start_ppq, clip.length_ppq)) {

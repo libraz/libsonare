@@ -106,6 +106,7 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   // Materialize on private copies so a failed insert leaves the project untouched.
   const EditClip before = *current;
   EditClip original = before;
+  if (!detail::materialize_comp_render_parts(&original)) return false;
   if (!detail::materialize_audio_source_offsets(project, &original)) return false;
   EditClip left = original;
   EditClip right = original;
@@ -117,6 +118,12 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   right.source_offset_ppq = original.source_offset_ppq + left_len;
   right.comp_segments =
       detail::shifted_clamped_comp_segments(original.comp_segments, -left_len, right_len);
+  if (!original.comp_render_parts.empty() &&
+      !detail::remap_comp_render_parts(original.comp_render_parts, left_len, original.length_ppq,
+                                       left_len, &right.comp_render_parts,
+                                       original.active_take_id)) {
+    return false;
+  }
   if (!detail::shift_take_offsets(&right.takes, left_len)) {
     return false;
   }
@@ -141,10 +148,19 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   const auto shorten_left = [&] {
     left.length_ppq = left_len;
     left.comp_segments = detail::shifted_clamped_comp_segments(left.comp_segments, 0.0, left_len);
+    if (!original.comp_render_parts.empty()) {
+      // The left half keeps the original clip-local origin, so its render
+      // geometry only needs the right edge clipped to the split point.
+      if (!detail::remap_comp_render_parts(original.comp_render_parts, 0.0, left_len, 0.0,
+                                           &left.comp_render_parts, original.active_take_id)) {
+        return false;
+      }
+    }
     left.fade_out = ClipFade{};    // inner edge has no fade-out
     clamp_fades_to_length(&left);  // the outer fade-in now has a shorter clip
+    return true;
   };
-  shorten_left();
+  if (!shorten_left()) return false;
   const bool allocate_new_id = new_clip_id_ == 0;
   if (!allocate_new_id) {
     right.id = new_clip_id_;
@@ -221,6 +237,15 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   const double old_start = current->start_ppq;
   const double delta = new_start_ppq_ - old_start;
   EditClip next = *current;
+  if (next.loop_mode == LoopMode::kLoop) {
+    // Loop schedules must describe one source body. A hidden multi-part comp
+    // cache would silently disable looping for the fragment, so reject that
+    // state; a trivial single-part cache is redundant and can be discarded.
+    if (!is_trivial_loop_comp_render_parts(next)) return false;
+    next.comp_render_parts.clear();
+  } else if (!detail::materialize_comp_render_parts(&next)) {
+    return false;
+  }
   if (!detail::materialize_audio_source_offsets(project, &next)) return false;
   const ClipSource* source = project.find_source(next.source_id);
   const bool audio_clip = source != nullptr && source_kind(*source) == SourceKind::kAudio;
@@ -281,6 +306,14 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   if (!preserve_loop_source_offsets) next.source_offset_ppq = new_offset;
   next.length_ppq = new_length_ppq_;
   next.comp_segments = std::move(shifted_segments);
+  if (!next.comp_render_parts.empty()) {
+    const double window_end = delta + new_length_ppq_;
+    const std::vector<ClipCompRenderPart> before_render_parts = next.comp_render_parts;
+    if (!detail::remap_comp_render_parts(before_render_parts, delta, window_end, delta,
+                                         &next.comp_render_parts, next.active_take_id)) {
+      return false;
+    }
+  }
   clamp_fades_to_length(&next);
   *current = std::move(next);
   return true;
@@ -438,6 +471,12 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
        detail::comp_segments_split_clip(c->comp_segments, c->length_ppq))) {
     return false;
   }
+  if (mode_ == LoopMode::kLoop && !is_trivial_loop_visible_render_parts(*c)) {
+    // Visible seam overlap left by a cut would render as a non-looped fragment,
+    // so it must be cleaned up first. Retained-only parts play nothing and are
+    // dropped with the cache below; undo restores them.
+    return false;
+  }
   if (!(loop_crossfade_ppq_ >= 0.0)) {  // rejects negatives and NaN
     return false;
   }
@@ -446,6 +485,7 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
   c->loop_crossfade_ppq = loop_crossfade_ppq_;
   // A newly authored loop supersedes any period/phase kept by an earlier loop trim.
   c->loop_anchor.reset();
+  if (mode_ == LoopMode::kLoop) c->comp_render_parts.clear();
   return true;
 }
 
@@ -507,6 +547,9 @@ bool SetClipTakes::apply(Project& project, MidiContentStore& /*store*/) {
   }
   c->takes = takes_;
   c->active_take_id = active_take_id_;
+  // Changing the take table reauthors the render source of every fragment. The
+  // old cache may refer to removed ids, so it must not survive this command.
+  c->comp_render_parts.clear();
   return true;
 }
 
@@ -516,7 +559,7 @@ EditCommandPtr SetClipTakes::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<SetClipTakes>(id_, c->takes, c->active_take_id);
+  return std::make_unique<detail::RestoreClip>(*c);
 }
 
 bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
@@ -528,6 +571,9 @@ bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
     return false;
   }
   c->comp_segments = segments_;
+  // The authored comp lane is now the source of truth; cached fragments belong
+  // to the previous lane and would otherwise override this edit in the compiler.
+  c->comp_render_parts.clear();
   return true;
 }
 
@@ -537,7 +583,7 @@ EditCommandPtr SetClipCompSegments::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<SetClipCompSegments>(id_, c->comp_segments);
+  return std::make_unique<detail::RestoreClip>(*c);
 }
 
 bool SetWarpMap::apply(Project& project, MidiContentStore& /*store*/) {

@@ -114,8 +114,13 @@ Value project_to_value(const arrangement::Project& project,
                              return take.source_offset_seconds.has_value();
                            });
       });
+  const bool has_comp_render_parts = std::any_of(
+      project.clips().begin(), project.clips().end(),
+      [](const arrangement::EditClip& clip) { return !clip.comp_render_parts.empty(); });
   uint32_t schema_version = SONARE_PROJECT_SCHEMA_VERSION_OPAQUE;
-  if (has_physical_clip_field) {
+  if (has_comp_render_parts) {
+    schema_version = SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS;
+  } else if (has_physical_clip_field) {
     schema_version = SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
   } else if (has_typed_automation_lane) {
     schema_version = SONARE_PROJECT_SCHEMA_VERSION_TYPED_AUTOMATION;
@@ -141,7 +146,7 @@ Value project_to_value(const arrangement::Project& project,
   root["tracks"] = std::move(tracks);
 
   Array clips;
-  for (const auto& c : project.clips()) clips.push_back(clip_to_json(c));
+  for (const auto& c : project.clips()) clips.push_back(clip_to_json(c, schema_version));
   root["clips"] = std::move(clips);
 
   Array warp_maps;

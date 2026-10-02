@@ -57,13 +57,15 @@ namespace sonare::serialize {
 ///        document is emitted at the lowest version that carries its content, so
 ///        older readers reject what they would misread: version 1 by default,
 ///        version 2 when a typed automation lane is present, version 3 when a
-///        clip or take carries a physical source offset or loop anchor.
+///        clip or take carries a physical source offset or loop anchor, and
+///        version 4 when a clip carries internal comp render geometry.
 ///        Distinct from the engine RT ABI (rt::kEngineAbiVersion) and from the
 ///        flat project struct ABI; this layer only owns the JSON schema.
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 3;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 4;
 inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_OPAQUE = 1;
 inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_TYPED_AUTOMATION = 2;
 inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP = 3;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS = 4;
 
 /// @brief Severity of a deserialize diagnostic.
 ///

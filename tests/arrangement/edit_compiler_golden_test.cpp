@@ -822,6 +822,7 @@ TEST_CASE("compiler rejects a multi-source comp carrying pre-baked warped audio"
   f.audio.warped_sources.emplace(77, std::move(warped));
 
   clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kRepitch;
   clip->takes = {{1, 0, 0.0, "base"}, {2, take_source, 0.0, "alternate"}};
   clip->active_take_id = 1;
   clip->comp_segments = {{0.0, 1.0, 1}, {1.0, 2.0, 2}};
@@ -1012,6 +1013,43 @@ TEST_CASE("compiler uses pre-baked warped audio when a warp reference is registe
   REQUIRE(sched.storage != nullptr);
   REQUIRE(sched.storage->channels[0][0] == 0.75f);
   REQUIRE(sched.storage->channels[1][2] == -0.75f);
+}
+
+TEST_CASE("compiler ignores a pre-baked warp cache while warp mode is off", "[arrangement]") {
+  Fixture f = make_fixture(48000, kProjectSr);
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kOff;
+
+  for (auto& channel : f.audio.sources.at(f.source_id).channels) {
+    channel.assign(48000, 0.25f);
+  }
+  arr::AudioSourceSamples warped;
+  warped.sample_rate = kProjectSr;
+  warped.channels.assign(2, std::vector<float>(48000, 0.75f));
+  f.audio.warped_sources.emplace(77, std::move(warped));
+
+  const arr::CompileResult off = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(off.has_errors());
+  REQUIRE(off.timeline.has_value());
+  REQUIRE(off.timeline->audio_clips.size() == 1);
+  const auto& off_schedule = off.timeline->audio_clips.front();
+  REQUIRE(off_schedule.storage != nullptr);
+  CHECK(off_schedule.storage->channels[0][0] == Catch::Approx(0.25f));
+  CHECK(render(*off.timeline, 1).front() == Catch::Approx(0.25f));
+
+  // The same cache is valid once a realtime warp mode actively requests it.
+  clip->warp_mode = arr::WarpMode::kRepitch;
+  REQUIRE(f.project.set_warp_map({77, "repitch", {{0.0, 0.0}, {48000.0, 24000.0}}}));
+  const arr::CompileResult active = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(active.has_errors());
+  REQUIRE(active.timeline.has_value());
+  REQUIRE(active.timeline->audio_clips.size() == 1);
+  const auto& active_schedule = active.timeline->audio_clips.front();
+  REQUIRE(active_schedule.storage != nullptr);
+  CHECK(active_schedule.storage->channels[0][0] == Catch::Approx(0.75f));
+  CHECK(render(*active.timeline, 1).front() == Catch::Approx(0.75f));
 }
 
 TEST_CASE("compiler bakes tempo-sync warp clips when warped audio is absent", "[arrangement]") {

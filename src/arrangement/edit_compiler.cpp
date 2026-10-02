@@ -19,6 +19,7 @@
 #include "rt/pan_law.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::arrangement {
 
@@ -240,6 +241,12 @@ struct AudioClipPart {
   // before it carries the matching fade-out.
   double seam_fade_in_ppq = 0.0;
   double seam_fade_out_ppq = 0.0;
+  // Full reference domain for seam fades. The visible part may be a clipped
+  // intersection of this range after a cut, while source playback still starts
+  // at start_ppq.
+  double reference_start_ppq = 0.0;
+  double reference_end_ppq = 0.0;
+  bool has_seam_reference = false;
 };
 
 const ClipTake* find_take(const EditClip& clip, TakeId id) noexcept {
@@ -275,6 +282,25 @@ bool resolve_take_part(const EditClip& clip, TakeId take_id, double start_ppq, d
 std::vector<AudioClipPart> build_audio_clip_parts(const EditClip& clip, bool* ok) {
   if (ok != nullptr) *ok = true;
   std::vector<AudioClipPart> parts;
+  if (!clip.comp_render_parts.empty()) {
+    parts.reserve(clip.comp_render_parts.size());
+    for (const ClipCompRenderPart& render_part : clip.comp_render_parts) {
+      if (render_part.retained_only) continue;
+      AudioClipPart part;
+      if (!resolve_take_part(clip, render_part.take_id, render_part.visible_start_ppq,
+                             render_part.visible_end_ppq, &part)) {
+        if (ok != nullptr) *ok = false;
+        return parts;
+      }
+      part.reference_start_ppq = render_part.reference_start_ppq;
+      part.reference_end_ppq = render_part.reference_end_ppq;
+      part.seam_fade_in_ppq = render_part.seam_fade_in_ppq;
+      part.seam_fade_out_ppq = render_part.seam_fade_out_ppq;
+      part.has_seam_reference = part.seam_fade_in_ppq > 0.0 || part.seam_fade_out_ppq > 0.0;
+      parts.push_back(part);
+    }
+    return parts;
+  }
   const auto push_part = [&](TakeId take_id, double start_ppq, double end_ppq, double crossfade) {
     if (!(end_ppq > start_ppq)) return;
     AudioClipPart part;
@@ -287,8 +313,14 @@ std::vector<AudioClipPart> build_audio_clip_parts(const EditClip& clip, bool* ok
       if (ok != nullptr) *ok = false;
       return;
     }
+    part.reference_start_ppq = part.start_ppq;
+    part.reference_end_ppq = part.end_ppq;
     part.seam_fade_in_ppq = crossfade;
-    if (crossfade > 0.0 && !parts.empty()) parts.back().seam_fade_out_ppq = crossfade;
+    if (crossfade > 0.0 && !parts.empty()) {
+      parts.back().seam_fade_out_ppq = crossfade;
+      parts.back().has_seam_reference = true;
+      part.has_seam_reference = true;
+    }
     parts.push_back(part);
   };
 
@@ -744,6 +776,11 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                "clip has invalid comp segments");
       continue;
     }
+    if (!valid_clip_render_parts(clip)) {
+      add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kError, clip.id,
+               "clip has invalid comp render geometry");
+      continue;
+    }
 
     bool parts_ok = true;
     const std::vector<AudioClipPart> parts = build_audio_clip_parts(clip, &parts_ok);
@@ -756,7 +793,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     // A baked warped rendition is keyed on the clip, not on a take, so selecting
     // it for a comp that spans several sources would render one take's audio for
     // all of them.
-    if (audio.find_warped(clip.warp_ref_id) != nullptr &&
+    const bool warp_enabled = clip.warp_mode != WarpMode::kOff;
+    if (warp_enabled && clip.warp_ref_id != 0 && audio.find_warped(clip.warp_ref_id) != nullptr &&
         std::any_of(parts.begin(), parts.end(), [&parts](const AudioClipPart& part) {
           return part.source_id != parts.front().source_id;
         })) {
@@ -784,7 +822,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       }
 
       const AudioSourceSamples* samples =
-          clip.warp_ref_id != 0 ? audio.find_warped(clip.warp_ref_id) : nullptr;
+          warp_enabled && clip.warp_ref_id != 0 ? audio.find_warped(clip.warp_ref_id) : nullptr;
       const WarpRefId baked_warp_ref = samples != nullptr ? clip.warp_ref_id : 0;
       const WarpMapRef* rt_warp_map =
           (baked_warp_ref == 0 &&
@@ -1050,16 +1088,28 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // tempo change rather than its sample length.
       sched.seam_fade_in_samples =
           part.seam_fade_in_ppq > 0.0
-              ? std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq +
-                                                             part.seam_fade_in_ppq) -
-                                         start_sample)
+              ? std::max<int64_t>(
+                    0, tempo_map.ppq_to_sample(clip.start_ppq + part.reference_start_ppq +
+                                               part.seam_fade_in_ppq) -
+                           tempo_map.ppq_to_sample(clip.start_ppq + part.reference_start_ppq))
               : 0;
       sched.seam_fade_out_samples =
           part.seam_fade_out_ppq > 0.0
               ? std::max<int64_t>(
-                    0, end_sample - tempo_map.ppq_to_sample(clip.start_ppq + part.end_ppq -
-                                                            part.seam_fade_out_ppq))
+                    0, tempo_map.ppq_to_sample(clip.start_ppq + part.reference_end_ppq) -
+                           tempo_map.ppq_to_sample(clip.start_ppq + part.reference_end_ppq -
+                                                   part.seam_fade_out_ppq))
               : 0;
+      if (part.has_seam_reference) {
+        const int64_t reference_start_sample =
+            tempo_map.ppq_to_sample(clip.start_ppq + part.reference_start_ppq);
+        const int64_t reference_end_sample =
+            tempo_map.ppq_to_sample(clip.start_ppq + part.reference_end_ppq);
+        sched.seam_reference_offset_samples =
+            numeric::saturating_sub(start_sample, reference_start_sample);
+        sched.seam_reference_length_samples = std::max<int64_t>(
+            0, numeric::saturating_sub(reference_end_sample, reference_start_sample));
+      }
       sched.warp_ref_id = clip.warp_ref_id;
       sched.warp_mode = baked_warp_ref == 0 && !compile_baked_tempo_sync
                             ? to_engine_warp_mode(clip.warp_mode)

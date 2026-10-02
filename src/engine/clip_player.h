@@ -200,6 +200,11 @@ struct ClipSchedule {
   /// matching fade-out; both are 0 for a butt join.
   int64_t seam_fade_in_samples = 0;
   int64_t seam_fade_out_samples = 0;
+  /// Optional full reference domain for comp seam fades. A fragment's visible
+  /// schedule can be clipped inside this domain after a cut; zero length measures
+  /// fades against the visible fragment itself.
+  int64_t seam_reference_offset_samples = 0;
+  int64_t seam_reference_length_samples = 0;
   /// Legacy combined curve view. New code should use fade_in_curve /
   /// fade_out_curve; kept so existing aggregate users keep the old shape.
   FadeCurve fade_curve = FadeCurve::Linear;
