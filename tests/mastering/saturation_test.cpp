@@ -277,6 +277,22 @@ TEST_CASE("SoftClipper and HardClipper support ADAA mode", "[mastering][saturati
   REQUIRE_THAT(repeated[0], WithinAbs(hard_signal[0], 0.0001f));
 }
 
+TEST_CASE("HardClipper ADAA2 stays within the ceiling on a low-frequency sine",
+          "[mastering][saturation]") {
+  constexpr int kSampleRate = 48000;
+  constexpr float kCeiling = 0.5f;
+  constexpr int kSamples = kSampleRate;
+
+  auto output = generate_sine_samples(20.0f, kSampleRate, kSamples, 1.07f);
+  HardClipper clipper({kCeiling, sonare::rt::AliasingControl::Adaa2});
+  clipper.prepare(kSampleRate, kSamples);
+  process(clipper, output);
+
+  const float peak = peak_abs(output);
+  CAPTURE(peak);
+  REQUIRE(peak <= kCeiling + 1.0e-4f);
+}
+
 // The oversampled mode bounds the signal at 4x; its decimation lowpass rings
 // above that bound (Gibbs), and any re-bound of the decimated output folds the
 // aliases the mode removes back in. The overshoot is therefore documented as a

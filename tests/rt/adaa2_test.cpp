@@ -23,6 +23,39 @@ using sonare::rt::ArctanNonlinearity;
 using sonare::rt::CubicSoftClipNonlinearity;
 using sonare::rt::HardClipNonlinearity;
 
+namespace {
+
+// A deliberately smooth transfer whose second antiderivative is evaluated in
+// double. The input steps are just above Adaa2's divided-difference guard, so
+// a float history still loses the curvature needed to recover this exact
+// linear average.
+struct LinearNonlinearity {
+  float apply(float x) const noexcept { return x; }
+  double antiderivative(double x) const noexcept { return 0.5 * x * x; }
+  double second_antiderivative(double x) const noexcept { return x * x * x / 6.0; }
+};
+
+}  // namespace
+
+TEST_CASE("Adaa2 preserves a linear average for near-identical samples", "[adaa][adaa2]") {
+  Adaa2<LinearNonlinearity> adaa;
+  adaa.reset(0.2f);
+
+  const std::vector<float> input = {0.20002f, 0.20004f, 0.20006f, 0.20008f};
+  const std::vector<float> expected = {
+      (0.2f + 0.2f + 0.20002f) / 3.0f,
+      (0.2f + 0.20002f + 0.20004f) / 3.0f,
+      (0.20002f + 0.20004f + 0.20006f) / 3.0f,
+      (0.20004f + 0.20006f + 0.20008f) / 3.0f,
+  };
+
+  for (size_t i = 0; i < input.size(); ++i) {
+    const float y = adaa.process(input[i]);
+    CAPTURE(i, input[i], y, expected[i]);
+    REQUIRE(std::abs(y - expected[i]) < 1.0e-6f);
+  }
+}
+
 TEST_CASE("Adaa2 converges to the nonlinearity for constant input", "[adaa][adaa2]") {
   constexpr int kNumSamples = 1000;
   constexpr int kWarmup = 3;

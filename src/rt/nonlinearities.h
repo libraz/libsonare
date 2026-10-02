@@ -124,6 +124,15 @@ struct HardClipNonlinearity {
     return limit * ax - 0.5f * limit * limit;
   }
 
+  double antiderivative_double(double x) const noexcept {
+    const double l = static_cast<double>(limit);
+    const double ax = std::abs(x);
+    if (ax <= l) {
+      return 0.5 * x * x;
+    }
+    return l * ax - 0.5 * l * l;
+  }
+
   float second_antiderivative(float x) const noexcept {
     const float ax = std::abs(x);
     if (ax <= limit) {
@@ -133,6 +142,18 @@ struct HardClipNonlinearity {
       return limit * x * x * 0.5f - limit * limit * x * 0.5f + limit * limit * limit / 6.0f;
     }
     return -limit * x * x * 0.5f - limit * limit * x * 0.5f - limit * limit * limit / 6.0f;
+  }
+
+  double second_antiderivative_double(double x) const noexcept {
+    const double l = static_cast<double>(limit);
+    const double ax = std::abs(x);
+    if (ax <= l) {
+      return x * x * x / 6.0;
+    }
+    if (x > 0.0) {
+      return l * x * x * 0.5 - l * l * x * 0.5 + l * l * l / 6.0;
+    }
+    return -l * x * x * 0.5 - l * l * x * 0.5 - l * l * l / 6.0;
   }
 };
 
