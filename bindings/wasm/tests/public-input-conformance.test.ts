@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, mixStereo, RealtimeEngine } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  mixStereo,
+  Project,
+  RealtimeEngine,
+} from '../dist/index.js';
 import type { MixOptions } from '../src/public_types_mixing';
 
 type CorpusMarker = { id: number | 'uint32_max'; ppq: number | 'nan' | 'inf'; name: string };
@@ -66,6 +73,24 @@ const mixOptions = (testCase: MixOptionCase): MixOptions => {
 describe('shared public-input conformance corpus (WASM)', () => {
   beforeAll(async () => {
     await init();
+  });
+
+  it('rejects out-of-byte-range MIDI CC learn movement', () => {
+    const events = [60, 70].map((value) => Project.midiCc(0, 0, 0, 74, value));
+    for (const minMovement of [-1, 256]) {
+      let caught: unknown;
+      try {
+        Project.midiCcLearn(events, 3, { minMovement });
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      if (isSonareError(caught)) {
+        expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      }
+    }
+    expect(Project.midiCcLearn(events, 3, { minMovement: 10 })).not.toBeNull();
+    expect(Project.midiCcLearn(events, 3, { minMovement: 11 })).toBeNull();
   });
 
   for (const testCase of corpus.marker_transaction.cases) {

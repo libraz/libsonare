@@ -389,7 +389,7 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
   const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
   const float min_value = checkedFloatFromVal(min_value_val, "minValue");
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
-  const int min_movement = checkedIntFromVal(min_movement_val, "minMovement");
+  const uint8_t min_movement = checkedByteFromVal(min_movement_val, "minMovement");
   const size_t count =
       events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);
@@ -399,7 +399,7 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
   SonareMidiCcBinding learned{};
   const SonareError err =
       sonare_midi_cc_learn(pods.empty() ? nullptr : pods.data(), pods.size(), param_id, min_value,
-                           max_value, static_cast<uint8_t>(min_movement), &learned);
+                           max_value, min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
     throwCError(err, "invalid MIDI CC learn arguments");
