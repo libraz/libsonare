@@ -37,19 +37,32 @@ MixerWasm::MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "mixer block size must be positive");
   }
+  out_scratch_left_.resize(static_cast<size_t>(block_size_));
+  out_scratch_right_.resize(static_cast<size_t>(block_size_));
+  ensureScratchBuffers();
+}
+
+void MixerWasm::ensureScratchBuffers() {
   const size_t strip_count = sonare_mixer_strip_count(mixer_);
+  if (left_scratch_.size() == strip_count && right_scratch_.size() == strip_count &&
+      left_ptrs_.size() == strip_count && right_ptrs_.size() == strip_count) {
+    return;
+  }
+
   left_scratch_.resize(strip_count);
   right_scratch_.resize(strip_count);
   left_ptrs_.resize(strip_count);
   right_ptrs_.resize(strip_count);
   for (size_t index = 0; index < strip_count; ++index) {
-    left_scratch_[index].resize(static_cast<size_t>(block_size_));
-    right_scratch_[index].resize(static_cast<size_t>(block_size_));
+    if (left_scratch_[index].size() != static_cast<size_t>(block_size_)) {
+      left_scratch_[index].resize(static_cast<size_t>(block_size_));
+    }
+    if (right_scratch_[index].size() != static_cast<size_t>(block_size_)) {
+      right_scratch_[index].resize(static_cast<size_t>(block_size_));
+    }
     left_ptrs_[index] = left_scratch_[index].data();
     right_ptrs_[index] = right_scratch_[index].data();
   }
-  out_scratch_left_.resize(static_cast<size_t>(block_size_));
-  out_scratch_right_.resize(static_cast<size_t>(block_size_));
 }
 
 MixerWasm::~MixerWasm() {
@@ -114,6 +127,7 @@ void MixerWasm::compile() {
         sonare::ErrorCode::InvalidState,
         std::string("failed to compile mixer graph: ") + sonare_error_message(err));
   }
+  ensureScratchBuffers();
 }
 
 size_t MixerWasm::stripCount() const { return sonare_mixer_strip_count(mixer_); }

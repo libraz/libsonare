@@ -35,6 +35,8 @@ void MixerWasm::addStrip(std::string id, val metering) {
         sonare::ErrorCode::InvalidState,
         std::string("failed to add strip: ") + sonare_last_error_message());
   }
+  // Size the new strip's scratch planes before a realtime caller asks for its views.
+  ensureScratchBuffers();
 }
 
 // Adds a bus to the mixer topology. role is one of "master", "aux", "submix"

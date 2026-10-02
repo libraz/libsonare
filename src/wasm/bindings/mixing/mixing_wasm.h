@@ -280,6 +280,9 @@ class MixerWasm {
   static val mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot);
 
  private:
+  // Growing keeps existing per-strip buffers, so JS views of earlier strips stay valid.
+  void ensureScratchBuffers();
+
   static void checkStripError(SonareError err, const char* what);
 
   SonareMixer* mixer_ = nullptr;

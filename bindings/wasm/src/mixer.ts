@@ -188,50 +188,70 @@ export class Mixer {
    * after {@link delete}.
    */
   createRealtimeBuffer(): MixerRealtimeBuffer {
-    const stripCount = this.stripCount();
-    let leftInputs: Float32Array[] = [];
-    let rightInputs: Float32Array[] = [];
+    const leftInputs: Float32Array[] = [];
+    const rightInputs: Float32Array[] = [];
     let outLeft = this.mixer.outputLeftView();
     let outRight = this.mixer.outputRightView();
+    let acquiredStripCount = -1;
+
+    // Every view shares one heap buffer, so a growth detaches the output views too.
+    const viewsDetached = (): boolean => outLeft.byteLength === 0 || outRight.byteLength === 0;
+
     const acquire = (): void => {
-      leftInputs = [];
-      rightInputs = [];
-      for (let index = 0; index < stripCount; index++) {
+      const stripCount = this.stripCount();
+      const detached = viewsDetached();
+      if (detached) {
+        // A heap growth detached every view: reacquire all planes.
+        leftInputs.length = 0;
+        rightInputs.length = 0;
+      } else {
+        // Topology growth keeps existing planes in place: append views for new strips only.
+        leftInputs.length = Math.min(leftInputs.length, stripCount);
+        rightInputs.length = Math.min(rightInputs.length, stripCount);
+      }
+      for (let index = leftInputs.length; index < stripCount; index++) {
         leftInputs.push(this.mixer.inputLeftView(index));
+      }
+      for (let index = rightInputs.length; index < stripCount; index++) {
         rightInputs.push(this.mixer.inputRightView(index));
       }
-      outLeft = this.mixer.outputLeftView();
-      outRight = this.mixer.outputRightView();
+      if (detached) {
+        outLeft = this.mixer.outputLeftView();
+        outRight = this.mixer.outputRightView();
+      }
+      acquiredStripCount = stripCount;
     };
     acquire();
+
     // The cached heap views can detach if WASM linear memory grows (the embind
-    // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
-    // (byteLength === 0) before use, mirroring the worklet RT path.
-    const reacquireIfDetached = (): void => {
-      if (outLeft.byteLength === 0 || (leftInputs[0]?.byteLength ?? 1) === 0) {
+    // module is built ALLOW_MEMORY_GROWTH). Also refresh the view list when a
+    // caller adds a strip and recompiles the graph after this buffer was made.
+    const acquireIfNeeded = (): void => {
+      if (acquiredStripCount !== this.stripCount() || viewsDetached()) {
         acquire();
       }
     };
     return {
       get leftInputs(): Float32Array[] {
-        reacquireIfDetached();
+        acquireIfNeeded();
         return leftInputs;
       },
       get rightInputs(): Float32Array[] {
-        reacquireIfDetached();
+        acquireIfNeeded();
         return rightInputs;
       },
       get outLeft(): Float32Array {
-        reacquireIfDetached();
+        acquireIfNeeded();
         return outLeft;
       },
       get outRight(): Float32Array {
-        reacquireIfDetached();
+        acquireIfNeeded();
         return outRight;
       },
-      process: (numSamples = outLeft.length) => {
-        reacquireIfDetached();
-        this.mixer.processPreparedStereo(numSamples);
+      process: (numSamples?: number) => {
+        acquireIfNeeded();
+        // Resolve the default only after reacquiring: a detached view reports length 0.
+        this.mixer.processPreparedStereo(numSamples ?? outLeft.length);
       },
     };
   }
