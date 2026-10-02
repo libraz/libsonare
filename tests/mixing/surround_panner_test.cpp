@@ -9,6 +9,7 @@
 #include <cmath>
 #include <vector>
 
+#include "playback/speaker_geometry.h"
 #include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
@@ -53,6 +54,30 @@ TEST_CASE("surround panner places point sources at exact speaker azimuths", "[mi
     CHECK_THAT(g.gain[c.plane], WithinAbs(1.0f, 1e-5f));
     for (int plane = 0; plane < 6; ++plane) {
       if (plane != c.plane) CHECK_THAT(g.gain[plane], WithinAbs(0.0f, 1e-5f));
+    }
+  }
+}
+
+TEST_CASE("surround panner follows canonical 5.1 and 7.1 speaker positions", "[mixing][surround]") {
+  // The mixing ring must agree with the playback geometry (BS.2051): 5.1 Ls/Rs at +/-110,
+  // 7.1 Ls/Rs (rear) at +/-135 and Lss/Rss (side) at +/-90.
+  for (const ChannelLayout layout : {ChannelLayout::FivePointOne, ChannelLayout::SevenPointOne}) {
+    const int count = sonare::channel_count(layout);
+    const sonare::SpeakerRole* roles = sonare::speaker_roles(layout);
+    for (int target = 0; target < count; ++target) {
+      if (roles[target] == sonare::SpeakerRole::LFE) continue;
+
+      SurroundPanParams p;
+      p.azimuth = sonare::playback::speaker_direction(layout, roles[target]).azimuth_deg;
+      const SurroundPanGains g = compute_surround_pan_gains(p, layout);
+      INFO("layout " << static_cast<int>(layout) << " target plane " << target << " azimuth "
+                     << p.azimuth);
+
+      REQUIRE(g.count == count);
+      CHECK_THAT(g.gain[target], WithinAbs(1.0f, 1e-5f));
+      for (int plane = 0; plane < count; ++plane) {
+        if (plane != target) CHECK_THAT(g.gain[plane], WithinAbs(0.0f, 1e-5f));
+      }
     }
   }
 }

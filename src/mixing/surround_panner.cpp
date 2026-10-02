@@ -39,7 +39,7 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
   int ring_size = 0;
   for (int p = 0; p < count && ring_size < kMaxSurroundPlanes; ++p) {
     if (p == lfe) continue;
-    ring[ring_size++] = {p, speaker_azimuth_deg(roles[p])};
+    ring[ring_size++] = {p, speaker_azimuth_deg(roles[p], layout)};
   }
   // Insertion sort by azimuth. ring_size <= kMaxSurroundPlanes (8) so this is
   // trivially cheap; it also avoids a GCC -Warray-bounds false positive that
