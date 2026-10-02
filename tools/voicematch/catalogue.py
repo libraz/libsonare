@@ -8,7 +8,8 @@ A parse of the sources could not see a clamp bound at all, and would drift from
 them besides — the catalogue is produced by the same code the render uses.
 
 `scan_tunables` goes the other way and exists only for the write-back: it finds
-the `SONARE_TUNABLE` declaration whose literal a fitted value has to replace.
+the `SONARE_TUNABLE` (or explicitly scoped `SONARE_TUNABLE_SCOPED`) declaration
+whose literal a fitted value has to replace.
 """
 
 from __future__ import annotations
@@ -28,11 +29,16 @@ HERE = Path(__file__).resolve().parent
 TUNABLE_DEF = re.compile(
     r"SONARE_TUNABLE\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(-?[0-9.]+(?:[eE][-+]?[0-9]+)?)f?\s*\)"
 )
+SCOPED_TUNABLE_DEF = re.compile(
+    r'SONARE_TUNABLE_SCOPED\(\s*"([^"]+)"\s*,\s*'
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
+    r"(-?[0-9.]+(?:[eE][-+]?[0-9]+)?)f?\s*\)"
+)
 
 
 @dataclass
 class TunableDef:
-    """Where a `SONARE_TUNABLE` is declared and what its compiled-in default is."""
+    """Where a tunable macro is declared and its compiled-in default."""
 
     file: Path
     value: float
@@ -41,32 +47,40 @@ class TunableDef:
 
 
 def scan_tunables() -> dict[str, TunableDef]:
-    """Map every `SONARE_TUNABLE` to its declaration, keyed `<file stem>.<name>`.
+    """Map every tunable macro to its declaration and stable tuning key.
 
-    The scope prefix is what the library itself derives from `__FILE__`, and it
-    is what makes the keys unique: `kBreathBase` is declared by four different
-    voices, each in its own anonymous namespace, while the override table has
-    one flat key space.
+    The ordinary macro derives its scope from the file stem. The explicitly
+    scoped form carries the scope in the source, which lets a split voice keep
+    its existing tuning keys.
 
     This scan exists for the write-back, not for validation — it is how a
     fitted value finds the literal it has to replace in the source. The knob
     catalogue (`--dump-knobs`) is the authority on what exists, because it also
-    covers the per-program patch fields, which are not `SONARE_TUNABLE`
-    declarations at all.
+    covers the per-program patch fields, which are not tunable declarations at
+    all.
     """
     found: dict[str, TunableDef] = {}
     for path in sorted((REPO_ROOT / "src").rglob("*")):
         if path.suffix not in (".cpp", ".h", ".hpp"):
             continue
-        for m in TUNABLE_DEF.finditer(path.read_text()):
-            key = f"{path.stem}.{m.group(1)}"
+        text = path.read_text()
+        matches = [
+            (m.start(), f"{path.stem}.{m.group(1)}", m, 2) for m in TUNABLE_DEF.finditer(text)
+        ]
+        matches.extend(
+            (m.start(), f"{m.group(1)}.{m.group(2)}", m, 3)
+            for m in SCOPED_TUNABLE_DEF.finditer(text)
+        )
+        for _, key, m, value_group in sorted(matches):
             if key in found:
                 raise ValueError(
                     f"{key} is declared twice in {path.relative_to(REPO_ROOT)}; "
                     f"the override table is keyed by scope and name, so the two "
                     f"would move together"
                 )
-            found[key] = TunableDef(path, float(m.group(2)), m.start(2), m.end(2))
+            found[key] = TunableDef(
+                path, float(m.group(value_group)), m.start(value_group), m.end(value_group)
+            )
     return found
 
 
