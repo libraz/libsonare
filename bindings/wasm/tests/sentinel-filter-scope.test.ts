@@ -449,6 +449,10 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'Documented as "<= 0 => the project\'s", and any positive value other than the project\'s own rate is refused.',
   ],
   [
+    'src/c_api/project_bounce_mixer.cpp:stage_latency_q8',
+    'A measured insert-chain latency used to shift authored automation to its processing stage. Zero means no arrival delay; it never selects a caller option default.',
+  ],
+  [
     'src/c_api/project_bounce_internal.h:max_block_size',
     'The block size the engine prepared a hosted instrument with, not a caller field; the floor of 1 keeps a pending-event buffer non-empty.',
   ],

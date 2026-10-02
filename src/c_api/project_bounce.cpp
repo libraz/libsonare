@@ -170,6 +170,10 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // destination included: a mixer built here is reused there as-is, so deciding
   // the direct strip only afterwards would hand the summing pass one more input
   // than the mixer has strips.
+  const bool mixer_required =
+      timeline_requires_mixer(*compiled.timeline, routing) ||
+      has_shared_hosted_midi_destination(*compiled.timeline, instruments,
+                                         /*all_hosts_source_aware=*/nullptr);
   const bool mixer_route_direct =
       timeline_has_unbound_tracks(*compiled.timeline, routing) ||
       has_shared_hosted_midi_destination(*compiled.timeline, instruments,
@@ -221,7 +225,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       return SONARE_ERROR_INVALID_PARAMETER;
     }
 #if defined(SONARE_WITH_MIXING)
-    if (frames > 0 && !routing.bound_tracks.empty()) {
+    if (frames > 0 && mixer_required) {
       MixerPtr* reusable = mixer_route_direct ? nullptr : &reusable_mixer;
       const MixerLatencyTail mixer_delay =
           mixer_latency_tail_for_timeline(*compiled.timeline, routing, sample_rate, block_size,
@@ -270,7 +274,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 
 #if defined(SONARE_WITH_MIXING)
   // Per-track channel-strip bounce when the project binds tracks to scene strips.
-  if (!routing.bound_tracks.empty()) {
+  if (mixer_required) {
     return bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
                                 num_channels, frames, pdc, mixer_input_frames, out_interleaved,
                                 out_len, reusable_mixer.release(),

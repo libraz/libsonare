@@ -36,6 +36,12 @@ using MixerPtr = std::unique_ptr<SonareMixer, MixerDeleter>;
 bool timeline_has_unbound_tracks(const arr::CompiledTimeline& timeline,
                                  const MixerRouting& routing);
 
+// A project with no track-to-strip binding can still have an authored bus or
+// master processing stage. Such a scene must use the mixer path so that its
+// trim, inserts, EQ, layout and tail are observable; a completely empty or
+// identity scene keeps the legacy direct render path.
+bool timeline_requires_mixer(const arr::CompiledTimeline& timeline, const MixerRouting& routing);
+
 // Resolves the compiled timeline's mixer bindings against its scene. Only
 // bindings whose strip actually exists in the scene are honored; a binding to a
 // missing strip leaves its track unbound (rendered dry into the master).

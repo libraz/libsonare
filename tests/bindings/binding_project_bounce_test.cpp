@@ -1889,11 +1889,10 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
 
 namespace {
 
-// Counts every dispatched event and separately the control-changes, so a test
-// can assert nothing was dropped rather than only that something arrived.
+// Records authored control payloads separately from playback cleanup messages.
 struct DenseTickState {
   int events = 0;
-  int control_changes = 0;
+  std::vector<uint32_t> authored_controls;
 };
 
 void dense_on_event(void* user, uint32_t /*destination_id*/, const uint32_t* words, int word_count,
@@ -1901,7 +1900,11 @@ void dense_on_event(void* user, uint32_t /*destination_id*/, const uint32_t* wor
   if (word_count < 1) return;
   auto* state = static_cast<DenseTickState*>(user);
   state->events += 1;
-  if (static_cast<uint8_t>((words[0] >> 16) & 0xF0u) == 0xB0u) state->control_changes += 1;
+  if (static_cast<uint8_t>((words[0] >> 16) & 0xF0u) == 0xB0u) {
+    if ((words[0] & 0x7Fu) == 0x40u && ((words[0] >> 8) & 0x7Fu) < 120) {
+      state->authored_controls.push_back(words[0]);
+    }
+  }
 }
 
 void dense_render(void* /*user*/, float* const* /*channels*/, int /*num_channels*/,
@@ -1963,9 +1966,24 @@ TEST_CASE("a tick denser than the per-block event hold loses no events", "[proje
           SONARE_OK);
   sonare_free_floats(out);
 
-  // Every control-change dispatched must have reached the host. More than the
-  // hold's 512 were sent, so this fails on the pre-fix adapter.
-  REQUIRE(state.control_changes == kEvents);
+  // End-of-render controller resets are separate from these authored events.
+  // Same-tick bank-select CC0/CC32 precede ordinary controllers; the remaining
+  // authored gesture retains stream order. Check full payloads in that order
+  // so cleanup messages cannot hide a dropped or duplicated authored event.
+  std::vector<uint32_t> expected_controls;
+  for (const uint32_t bank_controller : {0u, 32u}) {
+    for (const auto& event : events) {
+      if (((event.data0 >> 8) & 0x7Fu) == bank_controller) {
+        expected_controls.push_back(event.data0);
+      }
+    }
+  }
+  for (const auto& event : events) {
+    const uint32_t controller = (event.data0 >> 8) & 0x7Fu;
+    if (controller != 0 && controller != 32) expected_controls.push_back(event.data0);
+  }
+  REQUIRE(state.authored_controls.size() == kEvents);
+  REQUIRE(state.authored_controls == expected_controls);
   REQUIRE(state.events >= kEvents);
 
   sonare_project_destroy(project);
@@ -2239,6 +2257,439 @@ TEST_CASE("channel-strip bounce opens at the static fader gain without a first-b
 }
 #endif  // SONARE_WITH_MIXING
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("project bounce applies the master trim when every track is unbound",
+          "[project][audio_workflow]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  // Keep one unused strip in the scene so this exercises the direct-stem mixer
+  // input while leaving the only authored track unbound. The master trim must
+  // still be in the signal path in that all-unbound case.
+  const char* scene_json =
+      "{\"version\":1,\"strips\":[{\"id\":\"unused\"}],"
+      "\"buses\":[{\"id\":\"master\",\"role\":\"master\","
+      "\"input_trim_db\":-12}],"
+      "\"connections\":[{\"source\":\"unused\",\"destination\":\"master\"}]}";
+  SECTION("the generated direct strip avoids explicit bus IDs") {
+    scene_json =
+        R"({"version":1,"strips":[{"id":"unused"}],"buses":[{"id":"__sonare_direct_master__","role":"master","input_trim_db":-12},{"id":"__sonare_direct_master___1","role":"aux"}]})";
+  }
+  SECTION("the generated direct strip avoids implicit send bus IDs") {
+    scene_json =
+        R"({"version":1,"strips":[{"id":"unused","sends":[{"destination_bus_id":"__sonare_direct_master__","send_db":-6}]}],"buses":[{"id":"master","role":"master","input_trim_db":-12}]})";
+  }
+  SECTION("ordinary master IDs retain their existing rendering") {}
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "unbound-voice";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+
+  constexpr int kClipFrames = 1024;
+  std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2u, 1.0f);
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.is_midi = 0;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = dc.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = kClipFrames;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+
+  // -12 dB is 10^(-12/20) linear. Read a late frame so the assertion is about
+  // the settled trim, rather than a possible initial smoother transition.
+  const float expected = std::pow(10.0f, -12.0f / 20.0f);
+  REQUIRE(out[2u * 768u] == Catch::Approx(expected).margin(1.0e-4f));
+  REQUIRE(out[2u * 768u + 1u] == Catch::Approx(expected).margin(1.0e-4f));
+
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+#endif  // SONARE_WITH_MIXING
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
+TEST_CASE("all-unbound project bounce auto-length includes the master FX tail",
+          "[project][audio_workflow][tail]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  const char* scene_json =
+      "{\"version\":1,\"strips\":[{\"id\":\"unused\"}],"
+      "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
+      "{\"slot\":\"post\",\"processor\":\"effects.delay.stereo\","
+      "\"params\":\"{\\\"delayTimeLMs\\\":10,\\\"delayTimeRMs\\\":10,"
+      "\\\"feedback\\\":0,\\\"dryWet\\\":1}\"}]}],"
+      "\"connections\":[{\"source\":\"unused\",\"destination\":\"master\"}]}";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  // Measure the real graph tail from the same scene the bounce consumes. This
+  // avoids hard-coding the delay implementation's internal tail convention.
+  SonareMixer* probe = sonare_mixer_from_scene_json(scene_json, 48000, 128);
+  REQUIRE(probe != nullptr);
+  int expected_tail = 0;
+  REQUIRE(sonare_mixer_tail_samples(probe, &expected_tail) == SONARE_OK);
+  REQUIRE(expected_tail > 0);
+  sonare_mixer_destroy(probe);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "unbound-impulse";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+
+  constexpr int kClipFrames = 240;
+  std::vector<float> impulse(static_cast<size_t>(kClipFrames) * 2u, 0.0f);
+  impulse[0] = 1.0f;
+  impulse[1] = 1.0f;
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.is_midi = 0;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = 0.01;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = impulse.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(kClipFrames + expected_tail) * 2u);
+  REQUIRE(buffer_peak(out, out_len, static_cast<size_t>(kClipFrames) * 2u) > 0.1f);
+
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+#endif  // SONARE_WITH_MIXING && SONARE_WITH_FX
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("legacy opaque fader automation stays on musical time after channel PDC",
+          "[project][audio_workflow][pdc]") {
+  const auto render = [](int channel_delay_samples) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+    const std::string scene_json =
+        "{\"version\":1,\"strips\":[{\"id\":\"voice\","
+        "\"channelDelaySamples\":" +
+        std::to_string(channel_delay_samples) +
+        "}],"
+        "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
+    REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
+
+    SonareProjectTrackDesc track_desc{};
+    track_desc.kind = SONARE_TRACK_AUDIO;
+    track_desc.name = "automated-voice";
+    uint32_t track = 0;
+    REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, "voice", nullptr) == SONARE_OK);
+
+    constexpr int kClipFrames = 2048;
+    std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2u, 1.0f);
+    SonareProjectClipDesc clip_desc{};
+    clip_desc.track_id = track;
+    clip_desc.is_midi = 0;
+    clip_desc.start_ppq = 0.0;
+    clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+    clip_desc.gain = 1.0f;
+    clip_desc.audio_interleaved = dc.data();
+    clip_desc.audio_frames = kClipFrames;
+    clip_desc.audio_channels = 2;
+    clip_desc.audio_sample_rate = 48000;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+    // Legacy opaque fader lane: full gain through frame 479, then a held -12 dB
+    // value beginning at musical frame 480 (0.02 PPQ at 120 BPM).
+    const SonareAutomationPoint points[] = {
+        {0.0, 0.0f, SONARE_CURVE_HOLD},
+        {0.02, -12.0f, SONARE_CURVE_HOLD},
+    };
+    SonareAutomationLaneDesc lane{};
+    lane.target_param_id = 1;  // MixingRuntime::kFaderDb, legacy opaque route.
+    lane.points = points;
+    lane.point_count = std::size(points);
+    REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = kClipFrames;
+    options.block_size = 128;
+    options.num_channels = 2;
+    options.sample_rate = 48000;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+    std::vector<float> result(out, out + out_len);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return result;
+  };
+
+  const std::vector<float> no_pdc = render(0);
+  const std::vector<float> with_pdc = render(256);
+  REQUIRE(no_pdc.size() == with_pdc.size());
+
+  // PDC changes the internal mixer clock, not the returned musical clock: the
+  // automation transition must begin at output frame 480 in both renders.
+  REQUIRE(no_pdc[2u * 479u] == Catch::Approx(1.0f).margin(1.0e-5f));
+  REQUIRE(with_pdc[2u * 479u] == Catch::Approx(1.0f).margin(1.0e-5f));
+  REQUIRE(no_pdc[2u * 480u] < 0.999f);
+  REQUIRE(with_pdc[2u * 480u] < 0.999f);
+
+  float max_delta = 0.0f;
+  for (size_t i = 0; i < no_pdc.size(); ++i) {
+    max_delta = std::max(max_delta, std::abs(no_pdc[i] - with_pdc[i]));
+  }
+  INFO("max output trajectory delta after PDC compensation: " << max_delta);
+  REQUIRE(max_delta < 1.0e-3f);
+}
+
+TEST_CASE("legacy opaque automation follows the pre-fader insert clock",
+          "[project][audio_workflow][pdc]") {
+  const auto render = [](int channel_delay_samples) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+    const std::string scene_json =
+        "{\"version\":1,\"strips\":[{\"id\":\"voice\","
+        "\"channelDelaySamples\":" +
+        std::to_string(channel_delay_samples) +
+        ","
+        "\"inserts\":[{\"slot\":\"pre\","
+        "\"processor\":\"dynamics.brickwallLimiter\","
+        "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}],"
+        "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
+    REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
+
+    SonareProjectTrackDesc track_desc{};
+    track_desc.kind = SONARE_TRACK_AUDIO;
+    track_desc.name = "pre-insert-voice";
+    uint32_t track = 0;
+    REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, "voice", nullptr) == SONARE_OK);
+
+    constexpr int kClipFrames = 2048;
+    std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2u, 1.0f);
+    SonareProjectClipDesc clip_desc{};
+    clip_desc.track_id = track;
+    clip_desc.is_midi = 0;
+    clip_desc.start_ppq = 0.0;
+    clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+    clip_desc.gain = 1.0f;
+    clip_desc.audio_interleaved = dc.data();
+    clip_desc.audio_frames = kClipFrames;
+    clip_desc.audio_channels = 2;
+    clip_desc.audio_sample_rate = 48000;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+    const SonareAutomationPoint points[] = {
+        {0.0, 0.0f, SONARE_CURVE_HOLD},
+        {0.02, -12.0f, SONARE_CURVE_HOLD},
+    };
+    SonareAutomationLaneDesc lane{};
+    lane.target_param_id = 1;
+    lane.points = points;
+    lane.point_count = std::size(points);
+    REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = kClipFrames;
+    options.block_size = 128;
+    options.num_channels = 2;
+    options.sample_rate = 48000;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+    std::vector<float> result(out, out + out_len);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return result;
+  };
+
+  const std::vector<float> no_channel_delay = render(0);
+  const std::vector<float> with_channel_delay = render(256);
+  REQUIRE(no_channel_delay.size() == with_channel_delay.size());
+  REQUIRE(no_channel_delay[2u * 479u] == Catch::Approx(1.0f).margin(1.0e-5f));
+  REQUIRE(with_channel_delay[2u * 479u] == Catch::Approx(1.0f).margin(1.0e-5f));
+  REQUIRE(no_channel_delay[2u * 480u] < 0.999f);
+  REQUIRE(with_channel_delay[2u * 480u] < 0.999f);
+
+  float max_delta = 0.0f;
+  for (size_t i = 0; i < no_channel_delay.size(); ++i) {
+    max_delta = std::max(max_delta, std::abs(no_channel_delay[i] - with_channel_delay[i]));
+  }
+  INFO("max output trajectory delta with pre-fader latency: " << max_delta);
+  REQUIRE(max_delta < 1.0e-3f);
+}
+
+TEST_CASE("legacy opaque automation ignores master-only latency for its stage clock",
+          "[project][audio_workflow][pdc]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  // The master look-ahead is after the strip fader. PDC must trim that latency
+  // from the returned audio without moving the fader breakpoint itself.
+  const char* scene_json =
+      "{\"version\":1,\"strips\":[{\"id\":\"voice\"}],"
+      "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
+      "{\"slot\":\"post\",\"processor\":\"dynamics.brickwallLimiter\","
+      "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}]}";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "master-pdc-voice";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "voice", nullptr) == SONARE_OK);
+
+  constexpr int kClipFrames = 2048;
+  std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2u, 1.0f);
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.is_midi = 0;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = dc.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  const SonareAutomationPoint points[] = {
+      {0.0, 0.0f, SONARE_CURVE_HOLD},
+      {0.02, -12.0f, SONARE_CURVE_HOLD},
+  };
+  SonareAutomationLaneDesc lane{};
+  lane.target_param_id = 1;
+  lane.points = points;
+  lane.point_count = std::size(points);
+  REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = kClipFrames;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+  REQUIRE(out[2u * 479u] == Catch::Approx(1.0f).margin(1.0e-5f));
+  REQUIRE(out[2u * 480u] < 0.999f);
+  REQUIRE(out[2u * 900u] < 0.4f);
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("typed track fader automation remains a single gain stage in bounce",
+          "[project][audio_workflow]") {
+  const auto render = [](bool with_typed_lane) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    const char* scene_json =
+        "{\"version\":1,\"strips\":[{\"id\":\"voice\"}],"
+        "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
+    REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+    SonareProjectTrackDesc track_desc{};
+    track_desc.kind = SONARE_TRACK_AUDIO;
+    track_desc.name = "typed-voice";
+    uint32_t track = 0;
+    REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, "voice", nullptr) == SONARE_OK);
+
+    constexpr int kClipFrames = 1024;
+    std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2u, 1.0f);
+    SonareProjectClipDesc clip_desc{};
+    clip_desc.track_id = track;
+    clip_desc.is_midi = 0;
+    clip_desc.start_ppq = 0.0;
+    clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+    clip_desc.gain = 1.0f;
+    clip_desc.audio_interleaved = dc.data();
+    clip_desc.audio_frames = kClipFrames;
+    clip_desc.audio_channels = 2;
+    clip_desc.audio_sample_rate = 48000;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+    if (with_typed_lane) {
+      const SonareAutomationPoint point = {0.0, -6.0206f, SONARE_CURVE_HOLD};
+      SonareAutomationLaneDescEx lane{};
+      lane.target_param_id = 1;  // TrackMixerRuntime::kFaderDb.
+      lane.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
+      lane.points = &point;
+      lane.point_count = 1;
+      REQUIRE(sonare_project_add_automation_lane_ex(project, track, &lane, nullptr) == SONARE_OK);
+    }
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = kClipFrames;
+    options.block_size = 128;
+    options.num_channels = 2;
+    options.sample_rate = 48000;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+    const float sample = out[2u * 768u];
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return sample;
+  };
+
+  const float unity = render(false);
+  const float fader = render(true);
+  REQUIRE(unity == Catch::Approx(1.0f).margin(1.0e-4f));
+  // -6.0206 dB is one half linear. Applying the typed lane once yields 0.5;
+  // scheduling it again on the scene strip would incorrectly yield 0.25.
+  REQUIRE(fader == Catch::Approx(0.5f).margin(1.0e-3f));
+  REQUIRE(fader / unity == Catch::Approx(0.5f).margin(1.0e-3f));
+}
+#endif  // SONARE_WITH_MIXING
+
 TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expression", "[project]") {
   // 120 BPM: one quarter note is 24000 frames at 48 kHz.
   constexpr uint32_t kNoteOn = 0x20903C64u;   // note-on, note 60, vel 100
@@ -2317,3 +2768,92 @@ TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expressio
   REQUIRE(left_energy > 0.0);
   REQUIRE(right_energy < left_energy * 1e-4);
 }
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
+TEST_CASE("legacy opaque width automation follows the post-insert clock",
+          "[project][audio_workflow][pdc]") {
+  const auto render = [](bool post_insert) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+    const std::string inserts =
+        post_insert
+            ? R"(,"inserts":[{"slot":"post","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])"
+            : "";
+    const std::string scene_json = R"({"version":1,"strips":[{"id":"voice")" + inserts +
+                                   R"(}],"buses":[{"id":"master","role":"master"}]})";
+    REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
+
+    SonareProjectTrackDesc track_desc{};
+    track_desc.kind = SONARE_TRACK_AUDIO;
+    track_desc.name = "automated-voice";
+    uint32_t track = 0;
+    REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, "voice", nullptr) == SONARE_OK);
+
+    constexpr int kClipFrames = 2048;
+    std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2u);
+    for (int frame = 0; frame < kClipFrames; ++frame) {
+      dc[2u * frame] = 0.25f;
+      dc[2u * frame + 1u] = -0.25f;
+    }
+    SonareProjectClipDesc clip_desc{};
+    clip_desc.track_id = track;
+    clip_desc.is_midi = 0;
+    clip_desc.start_ppq = 0.0;
+    clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+    clip_desc.gain = 1.0f;
+    clip_desc.audio_interleaved = dc.data();
+    clip_desc.audio_frames = kClipFrames;
+    clip_desc.audio_channels = 2;
+    clip_desc.audio_sample_rate = 48000;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+    const SonareAutomationPoint points[] = {
+        {0.0, 1.0f, SONARE_CURVE_HOLD},
+        {0.02, 0.0f, SONARE_CURVE_HOLD},
+    };
+    SonareAutomationLaneDesc lane{};
+    lane.target_param_id = 3;  // MixingRuntime::kWidth, after post inserts.
+    lane.points = points;
+    lane.point_count = std::size(points);
+    REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = kClipFrames;
+    options.block_size = 128;
+    options.num_channels = 2;
+    options.sample_rate = 48000;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+    std::vector<float> result(out, out + out_len);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return result;
+  };
+
+  const std::vector<float> no_pdc = render(false);
+  const std::vector<float> with_pdc = render(true);
+  REQUIRE(no_pdc.size() == with_pdc.size());
+
+  // The width stage follows the post insert, so its event clock must include
+  // that insert latency. PDC then returns both transitions at musical frame 480.
+  REQUIRE(no_pdc[2u * 479u] == Catch::Approx(0.25f).margin(1.0e-5f));
+  REQUIRE(with_pdc[2u * 479u] == Catch::Approx(0.25f).margin(1.0e-5f));
+  REQUIRE(no_pdc[2u * 480u] < 0.2499f);
+  REQUIRE(with_pdc[2u * 480u] < 0.2499f);
+
+  float max_delta = 0.0f;
+  for (size_t i = 0; i < no_pdc.size(); ++i) {
+    max_delta = std::max(max_delta, std::abs(no_pdc[i] - with_pdc[i]));
+  }
+  INFO("max output trajectory delta after PDC compensation: " << max_delta);
+  REQUIRE(max_delta < 1.0e-3f);
+}
+
+#endif

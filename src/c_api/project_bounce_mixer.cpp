@@ -3,7 +3,9 @@
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <map>
+#include <set>
 
 #include "c_api/mixing_internal.h"
 #include "c_api/project_bounce_stems.h"
@@ -43,13 +45,48 @@ bool timeline_has_unbound_tracks(const arr::CompiledTimeline& timeline,
 
 namespace {
 
+bool bus_has_authored_processing(const sonare::mixing::api::Bus& bus) noexcept {
+  // These are the bus fields that alter its rendered signal or its graph
+  // timing. A role-only/default stereo bus is intentionally left on the
+  // legacy path; it has no observable processing to apply.
+  return bus.layout != sonare::ChannelLayout::Stereo || bus.input_trim_db != 0.0f ||
+         bus.width != 1.0f || bus.polarity_invert_left || bus.polarity_invert_right ||
+         bus.pan != 0.0f || bus.pan_mode != 0 || bus.dual_pan_left != -1.0f ||
+         bus.dual_pan_right != 1.0f || bus.pan_law != 0 || !bus.inserts.empty() ||
+         !bus.eq.bands.empty();
+}
+
+}  // namespace
+
+bool timeline_requires_mixer(const arr::CompiledTimeline& timeline, const MixerRouting& routing) {
+  if (!routing.bound_tracks.empty()) return true;
+  return std::any_of(timeline.mixer.scene.buses.begin(), timeline.mixer.scene.buses.end(),
+                     bus_has_authored_processing);
+}
+
+namespace {
+
 std::string unique_direct_strip_id(const sonare::mixing::api::Scene& scene) {
   constexpr const char* kBase = "__sonare_direct_master__";
-  auto exists = [&](const std::string& candidate) {
-    return std::any_of(
-        scene.strips.begin(), scene.strips.end(),
-        [&](const sonare::mixing::api::Strip& strip) { return strip.id == candidate; });
-  };
+  std::set<std::string> reserved;
+  for (const auto& strip : scene.strips) {
+    reserved.insert(strip.id);
+    for (const auto& send : strip.sends) reserved.insert(send.destination_bus_id);
+    for (const auto& insert : strip.inserts) reserved.insert(insert.sidechain_key);
+  }
+  for (const auto& bus : scene.buses) {
+    reserved.insert(bus.id);
+    for (const auto& insert : bus.inserts) reserved.insert(insert.sidechain_key);
+  }
+  for (const auto& group : scene.vca_groups) {
+    reserved.insert(group.id);
+    reserved.insert(group.members.begin(), group.members.end());
+  }
+  for (const auto& connection : scene.connections) {
+    reserved.insert(connection.source);
+    reserved.insert(connection.destination);
+  }
+  const auto exists = [&](const std::string& candidate) { return reserved.count(candidate) != 0; };
   if (!exists(kBase)) return kBase;
   for (int suffix = 1;; ++suffix) {
     std::string candidate = std::string(kBase) + "_" + std::to_string(suffix);
@@ -156,6 +193,15 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
       }
     };
 
+    // Fader and pan follow the pre inserts; width also follows the post
+    // inserts. Shift authored breakpoints by their stage's arrival latency
+    // before PDC trimming. The initial value at zero establishes the baseline.
+    const int stage_latency_q8 = lane.target_param_id() == sonare::engine::MixingRuntime::kWidth
+                                     ? strip->strip.post_fader_latency_samples_q8()
+                                     : strip->strip.pre_fader_latency_samples_q8();
+    const int64_t stage_latency_samples =
+        stage_latency_q8 > 0 ? (static_cast<int64_t>(stage_latency_q8) + 255) / 256 : 0;
+
     bool lane_full = false;
     if (schedule(0, initial_value, sonare::mixing::AutomationCurveType::Hold) ==
         sonare::mixing::AutomationPushResult::Full) {
@@ -163,7 +209,13 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
     }
     for (const auto& point : points) {
       if (lane_full) break;
-      const int64_t sample = std::max<int64_t>(0, tempo_map.ppq_to_sample(point.ppq));
+      int64_t sample = std::max<int64_t>(0, tempo_map.ppq_to_sample(point.ppq));
+      if (stage_latency_samples > 0 &&
+          sample <= std::numeric_limits<int64_t>::max() - stage_latency_samples) {
+        sample += stage_latency_samples;
+      } else if (stage_latency_samples > 0) {
+        sample = std::numeric_limits<int64_t>::max();
+      }
       if (schedule(sample, point.value, to_mixing_curve(point.curve_to_next)) ==
           sonare::mixing::AutomationPushResult::Full) {
         lane_full = true;
