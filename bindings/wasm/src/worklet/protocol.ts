@@ -41,6 +41,10 @@ export interface SonareWorkletMeterSnapshot {
   shortTermLufs: number;
   integratedLufs: number;
   gainReductionDb: number;
+  /** Maximum pre-trim input peak for the left channel, in dBFS. */
+  inputPeakDbL: number;
+  /** Maximum pre-trim input peak for the right channel, in dBFS. */
+  inputPeakDbR: number;
 }
 
 export interface SonareWorkletSpectrumSnapshot {
@@ -52,12 +56,12 @@ export interface SonareWorkletSpectrumSnapshot {
 export const SONARE_METER_RING_HEADER_INTS = 4;
 // Record layout: [frameLo, frameHi, targetId, peakDbL, peakDbR, rmsDbL, rmsDbR,
 // correlation, truePeakDbL, truePeakDbR, momentaryLufs, shortTermLufs,
-// integratedLufs, gainReductionDb].
+// integratedLufs, gainReductionDb, inputPeakDbL, inputPeakDbR].
 // The sample-frame index is monotonically increasing and quickly exceeds the
 // 2^24 exact-integer range of a single Float32 slot (~349 s at 48 kHz), so it is
 // stored split across two Float32 lanes (low 24 bits + high bits) for exact
 // reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
-export const SONARE_METER_RING_RECORD_FLOATS = 14;
+export const SONARE_METER_RING_RECORD_FLOATS = 16;
 export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
 // Scope ring header: [writeIndex, capacity, recordFloats, bands, maxPoints,
 // reserved]. Record layout: [frameLo, frameHi, targetId, bandCount, pointCount,
@@ -121,6 +125,10 @@ export enum SonareEngineCommandType {
   // Queueable lane monitor-mode transition. The worklet command vocabulary
   // deliberately leaves 18..25 unused; this is the stable ABI-v3 ordinal.
   SetTrackMonitorMode = 26,
+  // Queueable master-meter integrated-loudness reset. Numeric value 28 mirrors
+  // rt::CommandType::kResetMasterMeterIntegrated; 27 remains the appended MIDI
+  // UMP slot command in the native vocabulary.
+  ResetMasterLoudnessMeter = 28,
 }
 
 export enum SonareEngineTelemetryType {
@@ -387,6 +395,8 @@ export function readSonareMeterRingBuffer(
       shortTermLufs: ring.records[offset + 11],
       integratedLufs: ring.records[offset + 12],
       gainReductionDb: ring.records[offset + 13],
+      inputPeakDbL: ring.records[offset + 14],
+      inputPeakDbR: ring.records[offset + 15],
     });
   }
   return { nextReadIndex: writeIndex, meters };
@@ -1102,6 +1112,8 @@ export function meterFromEngine(meter: EngineMeterTelemetry): SonareWorkletMeter
     shortTermLufs: meter.shortTermLufs,
     integratedLufs: meter.integratedLufs,
     gainReductionDb: meter.gainReductionDb,
+    inputPeakDbL: meter.inputPeakDbL,
+    inputPeakDbR: meter.inputPeakDbR,
   };
 }
 

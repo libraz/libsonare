@@ -2,12 +2,10 @@ import { panLawCode, panModeCode } from '../codes';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine } from '../index';
 import type { InsertParamOverrideMap } from './engine-mixer-facade';
 import {
-  applyFullStripJson,
-  clearInsertParamOverrides,
   emptyStripJson,
-  hasInsertParamOverrides,
   type InsertParamOverride,
   insertParamOverrideKey,
+  replaceStripScene,
   type StripJsonTarget,
 } from './engine-mixer-facade';
 import type { SonareEngineInstrumentSyncMessage, SonareEngineSyncMessage } from './messages';
@@ -27,6 +25,7 @@ export interface EngineStripContext {
   readStripJson(target: StripJsonTarget): string | undefined;
   writeStripJson(target: StripJsonTarget, sceneJson: string): void;
   readonly insertParamOverrides: InsertParamOverrideMap;
+  clearInsertAutomationLanes(target: StripJsonTarget): void;
 }
 
 function trackIdFor(ctx: EngineStripContext, target: string | number): number {
@@ -92,15 +91,11 @@ export function setTrackStripJson(
   trackId: number,
   sceneJson: string,
   trackStripJson: Map<number, string>,
-): { resetInserts: boolean } {
+): { insertBaseResets: StripJsonTarget[]; constructionOverrides: InsertParamOverride[] } {
   const target: StripJsonTarget = { kind: 'track', trackId };
-  const resetInserts =
-    (trackStripJson.has(trackId) && trackStripJson.get(trackId) !== sceneJson) ||
-    hasInsertParamOverrides(ctx.insertParamOverrides, target);
-  applyFullStripJson(ctx.offlineEngine, target, sceneJson, resetInserts);
-  clearInsertParamOverrides(ctx.insertParamOverrides, target);
+  const result = replaceStripScene(ctx, target, trackStripJson.get(trackId), sceneJson);
   trackStripJson.set(trackId, sceneJson);
-  return { resetInserts };
+  return result;
 }
 
 export function setTrackStripEqBand(

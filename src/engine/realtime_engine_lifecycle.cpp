@@ -449,6 +449,7 @@ void RealtimeEngine::finish_offline_render() noexcept {
   // above already covers the mixing lines when both features are present, and
   // the reset is idempotent.
   track_mixer_runtime_.flush_pdc_delays();
+  track_mixer_runtime_.flush_clip_pdc_delays();
 #endif
 }
 

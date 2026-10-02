@@ -44,6 +44,7 @@ export interface NativeEngine {
   countInEndSample(startSample: unknown, bars?: unknown): number;
   setTempo(bpm: unknown): void;
   setTimeSignature(numerator: unknown, denominator: unknown): void;
+  resetMasterLoudnessMeter(renderFrame?: unknown): void;
   getTransportState(): NativeTransportState;
   setMarkers(markers: unknown): void;
   markerByIndex(index: unknown): unknown;
@@ -273,6 +274,7 @@ export interface NativeEngine {
   ): number;
   resolveMasterInsertAutomationId(insertIndex: unknown, paramName: unknown): number;
   resolveBusInsertAutomationId(busId: unknown, insertIndex: unknown, paramName: unknown): number;
+  insertParameterConstructedValue(paramId: unknown): number;
   resolveInstrumentAutomationId(destinationId: unknown, paramName: unknown): number;
   setTrackStripPan(trackId: unknown, pan: unknown): void;
   setTrackStripPanLaw(trackId: unknown, panLaw: unknown): void;

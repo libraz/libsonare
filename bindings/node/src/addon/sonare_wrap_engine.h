@@ -25,6 +25,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SeekPpq(const Napi::CallbackInfo& info);
   Napi::Value SetTempo(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignature(const Napi::CallbackInfo& info);
+  Napi::Value ResetMasterLoudnessMeter(const Napi::CallbackInfo& info);
   Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignatureSegments(const Napi::CallbackInfo& info);
   Napi::Value SampleAtPpq(const Napi::CallbackInfo& info);
@@ -75,6 +76,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveBusInsertAutomationId(const Napi::CallbackInfo& info);
+  Napi::Value InsertParameterConstructedValue(const Napi::CallbackInfo& info);
   Napi::Value ResolveInstrumentAutomationId(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPan(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanLaw(const Napi::CallbackInfo& info);

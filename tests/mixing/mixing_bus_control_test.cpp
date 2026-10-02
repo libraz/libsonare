@@ -1,10 +1,36 @@
 /// @file mixing_bus_control_test.cpp
 /// @brief Mixing bus, VCA, controller, delay, width, and meter tests.
 
+#include <catch2/catch_approx.hpp>
 #include <cstdint>
 
+#include "mixing/bus.h"
 #include "mixing/solo_mute.h"
 #include "mixing_test_helpers.h"
+
+TEST_CASE("BusProcessor meter reports active insert gain reduction and ignores bypass state",
+          "[mixing][meter]") {
+  constexpr int kFrames = 64;
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.add_insert(std::make_unique<PeakGainReductionProcessor>());
+  bus.prepare(48000.0, kFrames);
+
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  left.fill(0.5f);
+  right.fill(0.5f);
+  float* channels[] = {left.data(), right.data()};
+  bus.process(channels, 2, kFrames);
+  REQUIRE(bus.meter_snapshot().gain_reduction_db == Catch::Approx(-5.0f));
+
+  REQUIRE(bus.set_insert_bypassed(0, true));
+  left.fill(0.5f);
+  right.fill(0.5f);
+  bus.process(channels, 2, kFrames);
+  // The bypassed processor retains its previous last_gain_reduction_db(), but
+  // the bus meter must report no active insert reduction.
+  REQUIRE(bus.meter_snapshot().gain_reduction_db == Catch::Approx(0.0f));
+}
 
 TEST_CASE("SendProcessor exposes pre and post fader timing", "[mixing]") {
   sonare::mixing::SendProcessor send({-3.0f, sonare::mixing::SendTiming::PreFader, 0.0f});
@@ -535,6 +561,116 @@ TEST_CASE("StereoWidthProcessor smooths width changes (no zipper)", "[mixing]") 
   const float side_diff = std::abs(left[0] - right[0]);
   REQUIRE(side_diff > 0.1f);
   REQUIRE(side_diff < 2.0f);
+}
+
+TEST_CASE("StereoWidthProcessor copies an in-flight smoother without resetting it",
+          "[mixing][state-copy]") {
+  constexpr int kWarmSamples = 8;
+  constexpr int kCompareSamples = 32;
+  sonare::mixing::StereoWidthProcessor source(1.0f, 5.0f);
+  source.prepare(48000.0, kCompareSamples);
+  source.set_width(0.0f);
+  std::array<float, kCompareSamples> warm_left{};
+  std::array<float, kCompareSamples> warm_right{};
+  warm_left.fill(1.0f);
+  warm_right.fill(-1.0f);
+  float* warm_channels[] = {warm_left.data(), warm_right.data()};
+  source.process(warm_channels, 2, kWarmSamples);
+
+  sonare::mixing::StereoWidthProcessor copied(1.0f, 20.0f);
+  copied.prepare(44100.0, kCompareSamples);
+  REQUIRE(noexcept(copied.copy_state_from(source)));
+  copied.copy_state_from(source);
+
+  REQUIRE(copied.width() == source.width());
+  REQUIRE_THAT(copied.current_width(), WithinAbs(source.current_width(), 1.0e-7f));
+
+  std::array<float, kCompareSamples> source_left{};
+  std::array<float, kCompareSamples> source_right{};
+  std::array<float, kCompareSamples> copied_left{};
+  std::array<float, kCompareSamples> copied_right{};
+  for (int i = 0; i < kCompareSamples; ++i) {
+    source_left[static_cast<size_t>(i)] = copied_left[static_cast<size_t>(i)] =
+        0.2f + 0.01f * static_cast<float>(i);
+    source_right[static_cast<size_t>(i)] = copied_right[static_cast<size_t>(i)] =
+        -0.4f + 0.005f * static_cast<float>(i);
+  }
+  float* source_channels[] = {source_left.data(), source_right.data()};
+  float* copied_channels[] = {copied_left.data(), copied_right.data()};
+  source.process(source_channels, 2, kCompareSamples);
+  copied.process(copied_channels, 2, kCompareSamples);
+
+  for (int i = 0; i < kCompareSamples; ++i) {
+    REQUIRE_THAT(copied_left[static_cast<size_t>(i)],
+                 WithinAbs(source_left[static_cast<size_t>(i)], 1.0e-6f));
+    REQUIRE_THAT(copied_right[static_cast<size_t>(i)],
+                 WithinAbs(source_right[static_cast<size_t>(i)], 1.0e-6f));
+  }
+}
+
+TEST_CASE("PannerProcessor copies every pan mode's in-flight state", "[mixing][state-copy]") {
+  constexpr int kWarmSamples = 13;
+  constexpr int kCompareSamples = 32;
+
+  const auto compare_mode = [&](sonare::mixing::PanMode mode) {
+    sonare::mixing::PannerConfig source_config;
+    source_config.pan = 0.25f;
+    source_config.pan_law = sonare::mixing::PanLaw::Const4p5dB;
+    source_config.smoothing_ms = 5.0f;
+    source_config.mode = mode;
+    sonare::mixing::PannerProcessor source(source_config);
+    source.prepare(48000.0, kCompareSamples);
+    source.set_pan(-0.65f);
+    source.set_pan_law(sonare::mixing::PanLaw::Linear0dB);
+    source.set_pan_mode(mode);
+    source.set_dual_pan(-0.35f, 0.45f);
+
+    std::array<float, kCompareSamples> warm_left{};
+    std::array<float, kCompareSamples> warm_right{};
+    for (int i = 0; i < kCompareSamples; ++i) {
+      warm_left[static_cast<size_t>(i)] = 0.3f + 0.01f * static_cast<float>(i);
+      warm_right[static_cast<size_t>(i)] = -0.2f + 0.007f * static_cast<float>(i);
+    }
+    float* warm_channels[] = {warm_left.data(), warm_right.data()};
+    source.process(warm_channels, 2, kWarmSamples);
+
+    sonare::mixing::PannerProcessor copied;
+    copied.prepare(44100.0, kCompareSamples);
+    REQUIRE(noexcept(copied.copy_state_from(source)));
+    copied.copy_state_from(source);
+
+    REQUIRE(copied.pan() == source.pan());
+    REQUIRE(copied.pan_law() == source.pan_law());
+    REQUIRE(copied.pan_mode() == source.pan_mode());
+    REQUIRE(copied.dual_pan_left() == source.dual_pan_left());
+    REQUIRE(copied.dual_pan_right() == source.dual_pan_right());
+
+    std::array<float, kCompareSamples> source_left{};
+    std::array<float, kCompareSamples> source_right{};
+    std::array<float, kCompareSamples> copied_left{};
+    std::array<float, kCompareSamples> copied_right{};
+    for (int i = 0; i < kCompareSamples; ++i) {
+      source_left[static_cast<size_t>(i)] = copied_left[static_cast<size_t>(i)] =
+          0.2f + 0.01f * static_cast<float>(i);
+      source_right[static_cast<size_t>(i)] = copied_right[static_cast<size_t>(i)] =
+          -0.3f + 0.004f * static_cast<float>(i);
+    }
+    float* source_channels[] = {source_left.data(), source_right.data()};
+    float* copied_channels[] = {copied_left.data(), copied_right.data()};
+    source.process(source_channels, 2, kCompareSamples);
+    copied.process(copied_channels, 2, kCompareSamples);
+
+    for (int i = 0; i < kCompareSamples; ++i) {
+      REQUIRE_THAT(copied_left[static_cast<size_t>(i)],
+                   WithinAbs(source_left[static_cast<size_t>(i)], 1.0e-6f));
+      REQUIRE_THAT(copied_right[static_cast<size_t>(i)],
+                   WithinAbs(source_right[static_cast<size_t>(i)], 1.0e-6f));
+    }
+  };
+
+  SECTION("balance") { compare_mode(sonare::mixing::PanMode::Balance); }
+  SECTION("stereo pan") { compare_mode(sonare::mixing::PanMode::StereoPan); }
+  SECTION("dual pan") { compare_mode(sonare::mixing::PanMode::DualPan); }
 }
 
 TEST_CASE("MeterProcessor seqlock increments per block and stays consistent", "[mixing]") {

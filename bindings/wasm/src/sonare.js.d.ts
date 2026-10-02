@@ -965,6 +965,8 @@ export interface WasmEngineTrackSend {
   busId: number;
   levelDb?: number;
   enabled?: boolean;
+  /** Native send tap: 0 post-fader (default), 1 pre-fader. */
+  sendTiming?: number;
 }
 
 export interface WasmEngineTrackLane {
@@ -1165,6 +1167,10 @@ export interface WasmEngineMeterTelemetry {
   shortTermLufs: number;
   integratedLufs: number;
   gainReductionDb: number;
+  /** Maximum pre-trim input peak for the left channel, in dBFS. */
+  inputPeakDbL: number;
+  /** Maximum pre-trim input peak for the right channel, in dBFS. */
+  inputPeakDbR: number;
   droppedRecords: number;
 }
 
@@ -1199,6 +1205,8 @@ export interface WasmEngineMeterTelemetryWide {
   shortTermLufs: number;
   integratedLufs: number;
   gainReductionDb: number;
+  /** Pre-trim input peak for each valid plane, in dBFS. */
+  inputPeakDb: number[];
   droppedRecords: number;
 }
 
@@ -1363,6 +1371,8 @@ export interface WasmRealtimeEngine {
   getTransportState: () => WasmEngineTransportState;
   play: (renderFrame?: number) => void;
   stop: (renderFrame?: number) => void;
+  resetMasterLoudnessMeter: (renderFrame?: number) => void;
+  insertParameterConstructedValue: (paramId: number) => number;
   seekSample: (timelineSample: number, renderFrame?: number) => void;
   settleParameters: () => void;
   settleInsertParameters: () => void;
@@ -1707,6 +1717,8 @@ export interface WasmRealtimeEngine {
   meterScratchTargetId: () => number;
   meterScratchRenderFrame: () => number;
   meterScratchValue: (field: number) => number;
+  meterScratchInputPeakDbL: () => number;
+  meterScratchInputPeakDbR: () => number;
   drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
   drainMeterTelemetryWide: (maxRecords: number) => WasmEngineMeterTelemetryWide[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;

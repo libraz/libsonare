@@ -48,4 +48,13 @@ void StereoWidthProcessor::set_width(float width) noexcept {
   width_target_.store(clamp_width(width), std::memory_order_relaxed);
 }
 
+void StereoWidthProcessor::copy_state_from(const StereoWidthProcessor& other) noexcept {
+  if (this == &other) return;
+  sample_rate_ = other.sample_rate_;
+  smoothing_ms_ = other.smoothing_ms_;
+  smoother_ = other.smoother_;
+  width_target_.store(other.width_target_.load(std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+}
+
 }  // namespace sonare::mixing

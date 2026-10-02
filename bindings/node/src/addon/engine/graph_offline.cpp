@@ -345,16 +345,16 @@ Napi::Value RealtimeEngineWrap::DrainTelemetry(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return DrainTelemetryInto<SonareMeterTelemetryRecord>(
-      info, engine_, sonare_engine_drain_meter_telemetry, MeterTelemetryToObject);
+  return DrainTelemetryInto<SonareMeterTelemetryRecordV2>(
+      info, engine_, sonare_engine_drain_meter_telemetry_v2, MeterTelemetryV2ToObject);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return DrainTelemetryInto<SonareMeterTelemetryRecordWide>(
-      info, engine_, sonare_engine_drain_meter_telemetry_wide, MeterTelemetryWideToObject);
+  return DrainTelemetryInto<SonareMeterTelemetryRecordWideV2>(
+      info, engine_, sonare_engine_drain_meter_telemetry_wide_v2, MeterTelemetryWideV2ToObject);
   SONARE_NODE_CATCH(env)
 }
 

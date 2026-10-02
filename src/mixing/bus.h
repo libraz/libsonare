@@ -55,15 +55,20 @@ class BusProcessor : public rt::ProcessorBase {
     return insert_index < inserts_.size() && inserts_[insert_index] != nullptr &&
            inserts_[insert_index]->constructed_parameter_value(param_id, out);
   }
+  bool last_applied_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
+                                           float* out) const noexcept {
+    return insert_index < inserts_.size() && inserts_[insert_index] != nullptr &&
+           inserts_[insert_index]->last_applied_parameter_value(param_id, out);
+  }
   // Toggles bypass for the insert at @p insert_index. When @p reset_on_bypass is
   // true the processor is reset as it is bypassed. Returns false for an
   // out-of-range insert. Mirrors ChannelStrip::set_insert_bypassed.
   bool set_insert_bypassed(unsigned int insert_index, bool bypassed,
                            bool reset_on_bypass = false) noexcept;
   // Resolves a processor JSON-key parameter name to its integer param_id for the
-  // insert at @p insert_index, or -1 if unknown. Control-thread API: reads the
-  // processor's static descriptor table, touching no mutable audio state. Mirrors
-  // ChannelStrip::insert_parameter_id_for_key.
+  // insert at @p insert_index, or -1 if unknown/non-realtime-safe. Control-thread
+  // API: reads the processor's static descriptor table, touching no mutable audio
+  // state. Mirrors ChannelStrip::insert_parameter_id_for_key.
   int insert_parameter_id_for_key(unsigned int insert_index, const std::string& key) const noexcept;
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
@@ -89,6 +94,8 @@ class BusProcessor : public rt::ProcessorBase {
   static constexpr size_t kMaxInserts = 64;
 
  private:
+  static constexpr int kMaxBusScratchChannels = 8;
+
   void prepare_insert_alignment_delays(size_t insert_index);
 
   /// @brief Every owned processor's discard count added together -- the inserts
@@ -128,6 +135,10 @@ class BusProcessor : public rt::ProcessorBase {
   // Both banks stay primed while unused so a toggle is continuous. Mirrors
   // ChannelStrip's soft-bypass contract.
   std::array<AlignmentDelay, kMaxInserts> bypass_alignment_delays_;
+  // Reusable planar copy for warming bypassed inserts. Bus layouts are capped
+  // at eight planes here, and the rows are allocated once in prepare().
+  std::array<std::vector<float>, kMaxBusScratchChannels> bypass_scratch_;
+  std::array<float*, kMaxBusScratchChannels> bypass_scratch_channels_{};
   MeterProcessor meter_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

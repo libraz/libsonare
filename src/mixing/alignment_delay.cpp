@@ -155,6 +155,60 @@ bool AlignmentDelay::try_set_delay_samples_q8(int delay_samples_q8,
   }
 }
 
+bool AlignmentDelay::prepare_update(int delay_samples_q8, FractionalDelayMode mode,
+                                    PreparedUpdate& out) const noexcept {
+  PreparedUpdate next;
+  next.delay_samples_q8 = std::min(std::max(0, delay_samples_q8), kMaxAlignmentDelaySamples << 8);
+  next.delay_samples = next.delay_samples_q8 >> 8;
+  next.fractional_mode = (next.delay_samples_q8 & 0xff) == 0 ? FractionalDelayMode::None : mode;
+  next.prepared_channels = prepared_channels_;
+  next.integer_delay = static_cast<size_t>(next.delay_samples);
+  if (next.fractional_mode != FractionalDelayMode::None && (next.delay_samples_q8 & 0xff) != 0) {
+    next.fractional_size = static_cast<size_t>(std::max(8, (next.delay_samples_q8 >> 8) + 8));
+  }
+
+  const StorageSpec want{next.prepared_channels, next.integer_delay, next.fractional_size};
+  const bool same_shape =
+      want == storage_ && delays_.size() == static_cast<size_t>(want.channels) &&
+      fractional_.size() == (want.fractional_size == 0 ? 0u : static_cast<size_t>(want.channels));
+  if (same_shape) {
+    next.replace_storage = false;
+    out = std::move(next);
+    return true;
+  }
+
+  try {
+    next.delays.resize(static_cast<size_t>(want.channels));
+    for (rt::DelayLine& delay : next.delays) {
+      delay.prepare(want.integer_delay);
+    }
+    if (want.fractional_size != 0) {
+      next.fractional.assign(static_cast<size_t>(want.channels), FractionalState{});
+      for (FractionalState& state : next.fractional) {
+        state.buffer.assign(want.fractional_size, 0.0f);
+        state.write_index = 0;
+      }
+    }
+  } catch (...) {
+    return false;
+  }
+  next.replace_storage = true;
+  out = std::move(next);
+  return true;
+}
+
+void AlignmentDelay::commit_update(PreparedUpdate& update) noexcept {
+  if (update.replace_storage) {
+    delays_.swap(update.delays);
+    fractional_.swap(update.fractional);
+    storage_ = StorageSpec{update.prepared_channels, update.integer_delay, update.fractional_size};
+    ++storage_generation_;
+  }
+  delay_samples_ = update.delay_samples;
+  delay_samples_q8_ = update.delay_samples_q8;
+  fractional_mode_ = update.fractional_mode;
+}
+
 AlignmentDelay::StorageSpec AlignmentDelay::required_storage() const noexcept {
   StorageSpec spec;
   spec.channels = prepared_channels_;

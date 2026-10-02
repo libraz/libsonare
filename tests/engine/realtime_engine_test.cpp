@@ -13,6 +13,7 @@
 #include "engine/engine_controller.h"
 #if defined(SONARE_WITH_MIXING)
 #include "engine/insert_automation_id.h"
+#include "mastering/dynamics/compressor.h"
 #endif
 #include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
@@ -152,6 +153,12 @@ class InsertCommandProbe final : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id == 0 || param_id == 7;
+  }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    return {{"gain", 0}, {"unrelated", 7}};
+  }
   bool set_parameter_impl(unsigned int param_id, float value) override {
     if (param_id == 0) {
       insert_value = value;
@@ -374,6 +381,125 @@ TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
   REQUIRE(found_master);
 #endif
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("Queued master integrated meter reset starts a new loudness program",
+          "[engine][realtime][meter]") {
+  constexpr int kBlock = 1024;
+  constexpr int kProgramBlocks = 160;  // More than the 3 s short-term window.
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, 64, 16);
+  engine.set_input_monitor(true, 1.0f);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    const float sample =
+        0.5f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
+    left[static_cast<size_t>(i)] = sample;
+    right[static_cast<size_t>(i)] = sample;
+  }
+  float* io[] = {left.data(), right.data()};
+
+  for (int block = 0; block < kProgramBlocks; ++block) {
+    engine.process(io, 2, kBlock);
+  }
+
+  sonare::engine::MeterTelemetryRecord record{};
+  sonare::engine::MeterTelemetryRecord before_reset{};
+  bool found_before_reset = false;
+  while (engine.pop_meter_telemetry(record)) {
+    if (record.target_id == 0) {
+      before_reset = record;
+      found_before_reset = true;
+    }
+  }
+  REQUIRE(found_before_reset);
+  REQUIRE(std::isfinite(before_reset.integrated_lufs));
+  REQUIRE(before_reset.integrated_lufs > sonare::constants::kFloorDb + 1.0f);
+
+  // A queued transport command proves that the meter reset is one ordinary
+  // command and does not purge commands already waiting behind it.
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  REQUIRE(engine.push_command(play));
+  REQUIRE(engine.reset_master_meter_integrated());
+  engine.process(io, 2, kBlock);
+  REQUIRE(engine.transport().playing());
+
+  sonare::engine::MeterTelemetryRecord after_reset{};
+  bool found_after_reset = false;
+  while (engine.pop_meter_telemetry(record)) {
+    if (record.target_id == 0) {
+      after_reset = record;
+      found_after_reset = true;
+    }
+  }
+  REQUIRE(found_after_reset);
+  REQUIRE(after_reset.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
+  // reset_integrated() must retain the short/momentary and true-peak windows.
+  REQUIRE(after_reset.momentary_lufs > sonare::constants::kFloorDb + 1.0f);
+  REQUIRE(after_reset.short_term_lufs > sonare::constants::kFloorDb + 1.0f);
+  REQUIRE(after_reset.max_true_peak_db > sonare::constants::kFloorDb + 1.0f);
+
+  for (int block = 0; block < kProgramBlocks; ++block) {
+    engine.process(io, 2, kBlock);
+  }
+  sonare::engine::MeterTelemetryRecord after_new_program{};
+  bool found_new_program = false;
+  while (engine.pop_meter_telemetry(record)) {
+    if (record.target_id == 0) {
+      after_new_program = record;
+      found_new_program = true;
+    }
+  }
+  REQUIRE(found_new_program);
+  REQUIRE(std::isfinite(after_new_program.integrated_lufs));
+  REQUIRE(after_new_program.integrated_lufs > sonare::constants::kFloorDb + 1.0f);
+}
+
+TEST_CASE("Insert constructed values are readable through resolved track bus and master ids",
+          "[engine][realtime][mixing]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+
+  sonare::mixing::api::Strip track;
+  track.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":-3})"});
+  REQUIRE(engine.set_track_lanes({{10}}));
+  REQUIRE(engine.set_track_strip(10, track));
+
+  sonare::mixing::api::Bus bus;
+  bus.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":-6})"});
+  REQUIRE(engine.set_track_buses({{1}}));
+  REQUIRE(engine.set_bus_strip(1, bus));
+
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":-12})"});
+  REQUIRE(engine.set_master_strip(master));
+
+  const int64_t track_id = engine.resolve_track_insert_automation_id(10, 0, "levelDb");
+  const int64_t bus_id = engine.resolve_bus_insert_automation_id(1, 0, "levelDb");
+  const int64_t master_id = engine.resolve_master_insert_automation_id(0, "levelDb");
+  REQUIRE(track_id >= 0);
+  REQUIRE(bus_id >= 0);
+  REQUIRE(master_id >= 0);
+
+  float value = 0.0f;
+  REQUIRE(engine.insert_parameter_constructed_value(static_cast<uint32_t>(track_id), &value));
+  REQUIRE(value == Catch::Approx(-3.0f));
+  REQUIRE(engine.insert_parameter_constructed_value(static_cast<uint32_t>(bus_id), &value));
+  REQUIRE(value == Catch::Approx(-6.0f));
+  REQUIRE(engine.insert_parameter_constructed_value(static_cast<uint32_t>(master_id), &value));
+  REQUIRE(value == Catch::Approx(-12.0f));
+
+  REQUIRE_FALSE(engine.insert_parameter_constructed_value(0, &value));
+  REQUIRE_FALSE(
+      engine.insert_parameter_constructed_value(static_cast<uint32_t>(track_id), nullptr));
+}
+#endif
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine routes monitor PFL bus into output", "[engine][realtime]") {
@@ -1027,6 +1153,626 @@ TEST_CASE("Bus removal scrubs retired selectors while preserving active bus comm
   }
   REQUIRE(unknown_target_count == 0);
   REQUIRE(overflow_count == 0);
+}
+
+TEST_CASE("Queued track insert edits follow the track through a lane reorder",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip track_a;
+  sonare::mixing::ChannelStrip track_b;
+  auto probe_a = std::make_unique<InsertCommandProbe>();
+  auto probe_b = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* probe_a_ptr = probe_a.get();
+  InsertCommandProbe* probe_b_ptr = probe_b.get();
+  track_a.add_pre_insert(std::move(probe_a));
+  track_b.add_pre_insert(std::move(probe_b));
+  REQUIRE(engine.bind_track_strip(10, &track_a));
+  REQUIRE(engine.bind_track_strip(20, &track_b));
+
+  // Resolve by track id while the original lane order is still in force, then
+  // reorder before the audio/control command is drained. The command must keep
+  // naming track 10 instead of silently becoming lane 0 (track 20).
+  REQUIRE(engine.set_track_insert_param_detailed(10, 0, "gain", 0.25f) ==
+          sonare::engine::InsertParamSetResult::kQueued);
+  sonare::rt::Command legacy{};
+  legacy.type = sonare::rt::CommandType::kSetTrackInsertParam;
+  legacy.target_id = (1u << 16u) | 0u;  // lane 1, insert 0, param 0
+  legacy.sample_time = -1;
+  legacy.arg.f = 0.5f;
+  REQUIRE(engine.push_command(legacy));
+  REQUIRE(engine.set_track_lanes({{20}, {10}}));
+  engine.flush_control_commands();
+  engine.settle_parameters();
+
+  REQUIRE(probe_a_ptr->insert_value == Catch::Approx(0.25f));
+  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(0.5f));
+
+  // The raw legacy command must retain the same manual base as the generic
+  // helper. Automation release should return track 20 to 0.5, not its
+  // construction value of 1.0.
+  const int64_t target = engine.resolve_track_insert_automation_id(20, 0, "gain");
+  REQUIRE(target >= 0);
+  sonare::automation::AutomationLane automated(static_cast<uint32_t>(target));
+  automated.set_points({{0.0, 0.75f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({automated});
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(0.75f));
+
+  sonare::automation::AutomationLane released(static_cast<uint32_t>(target));
+  engine.automation().set_lanes({released});
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(0.5f));
+}
+
+TEST_CASE("Published track insert automation follows the track through a lane reorder",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip track_a;
+  sonare::mixing::ChannelStrip track_b;
+  auto probe_a = std::make_unique<InsertCommandProbe>();
+  auto probe_b = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* probe_a_ptr = probe_a.get();
+  InsertCommandProbe* probe_b_ptr = probe_b.get();
+  track_a.add_pre_insert(std::move(probe_a));
+  track_b.add_pre_insert(std::move(probe_b));
+  REQUIRE(engine.bind_track_strip(10, &track_a));
+  REQUIRE(engine.bind_track_strip(20, &track_b));
+
+  const int64_t target = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(target >= 0);
+  sonare::automation::AutomationLane lane(static_cast<uint32_t>(target));
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  // The lane is already published when the control-thread reorder occurs. It
+  // must retain track 10's identity instead of following the old lane 0 slot.
+  REQUIRE(engine.set_track_lanes({{20}, {10}}));
+
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+
+  REQUIRE(probe_a_ptr->insert_value == Catch::Approx(0.25f));
+  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Track insert automation smoother keeps continuity through a lane reorder",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 32;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::api::Strip strip;
+  strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(mixer.set_track_strip(10, strip));
+  mixer.settle_smoothers();
+
+  size_t lane_index = 0;
+  unsigned int param_id = 0;
+  REQUIRE(mixer.resolve_track_insert_param(10, 0, "levelDb", &lane_index, &param_id));
+  REQUIRE(mixer.route_lane_insert_param_smoothed(lane_index, 0, param_id, -12.0f));
+  mixer.settle_insert_automations();
+
+  std::array<float, kBlock> source{};
+  std::array<float, kBlock> output{};
+  source.fill(1.0f);
+  float* source_channels[] = {source.data()};
+  float* output_channels[] = {output.data()};
+  REQUIRE(mixer.mix_source(10, source_channels, output_channels, 1, kBlock));
+  const float before_reorder = output.back();
+  REQUIRE(before_reorder == Catch::Approx(std::pow(10.0f, -12.0f / 20.0f)));
+
+  // The active automation target is addressed again after the selector moves
+  // from lane 0 to lane 1. Rendering this block must retain the settled value;
+  // reclaiming a fresh slot would glide from the insert's construction value.
+  REQUIRE(mixer.set_track_lanes({{20}, {10}}));
+  REQUIRE(mixer.resolve_track_insert_param(10, 0, "levelDb", &lane_index, &param_id));
+  REQUIRE(lane_index == 1);
+  REQUIRE(mixer.route_lane_insert_param_smoothed(lane_index, 0, param_id, -12.0f));
+  output.fill(0.0f);
+  REQUIRE(mixer.mix_source(10, source_channels, output_channels, 1, kBlock));
+  REQUIRE(output.back() == Catch::Approx(before_reorder));
+}
+
+TEST_CASE("Removed published track automation does not retarget a replacement lane",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip old_track;
+  sonare::mixing::ChannelStrip retained_track;
+  auto old_probe = std::make_unique<InsertCommandProbe>();
+  auto retained_probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* old_probe_ptr = old_probe.get();
+  InsertCommandProbe* retained_probe_ptr = retained_probe.get();
+  old_track.add_pre_insert(std::move(old_probe));
+  retained_track.add_pre_insert(std::move(retained_probe));
+  REQUIRE(engine.bind_track_strip(10, &old_track));
+  REQUIRE(engine.bind_track_strip(20, &retained_track));
+
+  const int64_t target = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(target >= 0);
+  sonare::automation::AutomationLane lane(static_cast<uint32_t>(target));
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  REQUIRE(engine.set_track_lanes({{20}}));
+
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+
+  REQUIRE(old_probe_ptr->insert_value == Catch::Approx(1.0f));
+  REQUIRE(retained_probe_ptr->insert_value == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Future queued track insert edits follow the track through a lane reorder",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip track_a;
+  sonare::mixing::ChannelStrip track_b;
+  auto probe_a = std::make_unique<InsertCommandProbe>();
+  auto probe_b = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* probe_a_ptr = probe_a.get();
+  InsertCommandProbe* probe_b_ptr = probe_b.get();
+  track_a.add_pre_insert(std::move(probe_a));
+  track_b.add_pre_insert(std::move(probe_b));
+  REQUIRE(engine.bind_track_strip(10, &track_a));
+  REQUIRE(engine.bind_track_strip(20, &track_b));
+
+  sonare::rt::Command future{};
+  future.type = sonare::rt::CommandType::kSetParam;
+  future.target_id = sonare::engine::make_insert_param_id(0, 0, 0);
+  future.sample_time = engine.transport().render_frame() + 2 * kBlock;
+  future.arg.f = 0.25f;
+  REQUIRE(engine.push_command(future));
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);  // Stage the future command in pending_.
+
+  REQUIRE(engine.set_track_lanes({{20}, {10}}));
+  for (int block = 0; block < 3; ++block) engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+
+  REQUIRE(probe_a_ptr->insert_value == Catch::Approx(0.25f));
+  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Queued generic lane fader and pan edits follow a lane reorder",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 8;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE_FALSE(engine.set_track_lanes({{0}}));
+
+  // Give the two tracks different levels so applying the commands to the
+  // wrong positional lane remains observable after the reorder. Track 10 is
+  // deliberately louder and is the track that receives both generic edits.
+  std::array<float, kFrames> track_a_l{};
+  std::array<float, kFrames> track_a_r{};
+  std::array<float, kFrames> track_b_l{};
+  std::array<float, kFrames> track_b_r{};
+  track_a_l.fill(2.0f);
+  track_a_r.fill(2.0f);
+  track_b_l.fill(1.0f);
+  track_b_r.fill(1.0f);
+  const float* a[] = {track_a_l.data(), track_a_r.data()};
+  const float* b[] = {track_b_l.data(), track_b_r.data()};
+  sonare::engine::ClipSchedule clip_a{1, {a, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+  clip_a.track_id = 10;
+  sonare::engine::ClipSchedule clip_b{2, {b, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+  clip_b.track_id = 20;
+  engine.set_clips({clip_a, clip_b});
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+
+  sonare::rt::Command fader{};
+  fader.type = sonare::rt::CommandType::kSetParam;
+  fader.target_id = engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  fader.sample_time = -1;
+  fader.arg.f = -12.0f;
+  REQUIRE(engine.push_command(fader));
+
+  sonare::rt::Command pan{};
+  pan.type = sonare::rt::CommandType::kSetParam;
+  pan.target_id = engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kPan);
+  pan.sample_time = -1;
+  pan.arg.f = 1.0f;
+  REQUIRE(engine.push_command(pan));
+
+  // Both commands still carry the original lane 0 selector. Remapping them
+  // before the next process block must leave track 20 centered and apply the
+  // gain/pan pair to track 10 now at lane 1.
+  REQUIRE(engine.set_track_lanes({{20}, {10}}));
+  left.fill(0.0f);
+  right.fill(0.0f);
+  engine.process(io, 2, kBlock);
+
+  REQUIRE(left.back() < 1.6f);
+  REQUIRE(right.back() > left.back() + 0.2f);
+}
+
+TEST_CASE("Queued track insert edits remain the latest manual base after automation release",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  sonare::mixing::ChannelStrip strip;
+  auto probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* probe_ptr = probe.get();
+  strip.add_pre_insert(std::move(probe));
+  REQUIRE(engine.bind_track_strip(10, &strip));
+  REQUIRE(engine.set_track_insert_param_detailed(10, 0, "gain", 0.25f) ==
+          sonare::engine::InsertParamSetResult::kQueued);
+  engine.flush_control_commands();
+  engine.settle_parameters();
+  REQUIRE(probe_ptr->insert_value == Catch::Approx(0.25f));
+
+  const int64_t target = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(target >= 0);
+  sonare::automation::AutomationLane lane(static_cast<uint32_t>(target));
+  lane.set_points({{0.0, 0.75f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  REQUIRE(probe_ptr->insert_value == Catch::Approx(0.75f));
+
+  sonare::automation::AutomationLane emptied(static_cast<uint32_t>(target));
+  engine.automation().set_lanes({emptied});
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  REQUIRE(probe_ptr->insert_value == Catch::Approx(0.25f));
+}
+
+TEST_CASE("Removed track selectors do not retarget a replacement lane",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip old_strip;
+  auto old_probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* old_probe_ptr = old_probe.get();
+  old_strip.add_pre_insert(std::move(old_probe));
+  sonare::mixing::ChannelStrip retained_strip;
+  auto retained_probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* retained_probe_ptr = retained_probe.get();
+  retained_strip.add_pre_insert(std::move(retained_probe));
+  REQUIRE(engine.bind_track_strip(10, &old_strip));
+  REQUIRE(engine.bind_track_strip(20, &retained_strip));
+
+  // Record a base for the removed track and leave a second edit queued. Both
+  // the old base and the queued command use selector 0, which the replacement
+  // track will occupy after the republish.
+  REQUIRE(engine.apply_track_insert_param_by_name_now(10, 0, "gain", 0.25f));
+  engine.settle_insert_parameters();
+  REQUIRE(engine.set_track_insert_param_detailed(10, 0, "gain", 0.5f) ==
+          sonare::engine::InsertParamSetResult::kQueued);
+  REQUIRE(old_probe_ptr->insert_value == Catch::Approx(0.25f));
+
+  REQUIRE(engine.set_track_lanes({{30}, {20}}));
+  sonare::mixing::ChannelStrip replacement_strip;
+  auto replacement_probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* replacement_probe_ptr = replacement_probe.get();
+  replacement_strip.add_pre_insert(std::move(replacement_probe));
+  REQUIRE(engine.bind_track_strip(30, &replacement_strip));
+  engine.flush_control_commands();
+  engine.settle_parameters();
+
+  REQUIRE(retained_probe_ptr->insert_value == Catch::Approx(1.0f));
+  REQUIRE(replacement_probe_ptr->insert_value == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Removed and re-added track selectors drop queued commands and bases",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip old_strip;
+  auto old_probe = std::make_unique<InsertCommandProbe>();
+  old_strip.add_pre_insert(std::move(old_probe));
+  sonare::mixing::ChannelStrip retained_strip;
+  auto retained_probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* retained_probe_ptr = retained_probe.get();
+  retained_strip.add_pre_insert(std::move(retained_probe));
+  REQUIRE(engine.bind_track_strip(10, &old_strip));
+  REQUIRE(engine.bind_track_strip(20, &retained_strip));
+
+  REQUIRE(engine.apply_track_insert_param_by_name_now(10, 0, "gain", 0.25f));
+  engine.settle_insert_parameters();
+  REQUIRE(engine.set_track_insert_param_detailed(10, 0, "gain", 0.5f) ==
+          sonare::engine::InsertParamSetResult::kQueued);
+
+  REQUIRE(engine.set_track_lanes({{20}}));
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+  sonare::mixing::ChannelStrip readded_strip;
+  auto readded_probe = std::make_unique<InsertCommandProbe>();
+  InsertCommandProbe* readded_probe_ptr = readded_probe.get();
+  readded_strip.add_pre_insert(std::move(readded_probe));
+  REQUIRE(engine.bind_track_strip(10, &readded_strip));
+  engine.flush_control_commands();
+  engine.settle_parameters();
+  REQUIRE(retained_probe_ptr->insert_value == Catch::Approx(1.0f));
+  REQUIRE(readded_probe_ptr->insert_value == Catch::Approx(1.0f));
+
+  const int64_t target = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(target >= 0);
+  sonare::automation::AutomationLane automated(static_cast<uint32_t>(target));
+  automated.set_points({{0.0, 0.75f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({automated});
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  REQUIRE(readded_probe_ptr->insert_value == Catch::Approx(0.75f));
+
+  engine.automation().set_lanes(
+      {sonare::automation::AutomationLane(static_cast<uint32_t>(target))});
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  // The removed track's 0.25 base was erased; release leaves the new track's
+  // current 0.75 value in place instead of restoring stale state.
+  REQUIRE(readded_probe_ptr->insert_value == Catch::Approx(0.75f));
+}
+
+TEST_CASE("Queued master insert edits remain the latest manual base after automation release",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(engine.set_master_strip(master));
+  const int64_t target = engine.resolve_master_insert_automation_id(0, "levelDb");
+  REQUIRE(target >= 0);
+
+  REQUIRE(engine.set_master_insert_param_detailed(0, "levelDb", -6.0f) ==
+          sonare::engine::InsertParamSetResult::kQueued);
+  engine.flush_control_commands();
+  engine.settle_parameters();
+
+  sonare::automation::AutomationLane lane(static_cast<uint32_t>(target));
+  lane.set_points({{0.0, -18.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+
+  sonare::automation::AutomationLane emptied(static_cast<uint32_t>(target));
+  engine.automation().set_lanes({emptied});
+  engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+  // The queued manual -6 dB must be restored; the construction default is 0 dB.
+  output.fill(1.0f);
+  engine.process(io, 1, kBlock);
+  REQUIRE(output.back() == Catch::Approx(std::pow(10.0f, -6.0f / 20.0f)).margin(0.02f));
+}
+
+TEST_CASE("First master insert touch ramps from the retained manual base",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(engine.set_master_strip(master));
+  REQUIRE(engine.apply_master_insert_param_by_name_now(0, "levelDb", -6.0f));
+  engine.settle_insert_parameters();
+
+  // Replacing the chain clears the assigned smoother slot while retaining the
+  // manual base for the same reserved master id. The next first touch must
+  // start from -6 dB, rather than snapping the fresh strip to its -12 dB target.
+  auto replacement = master;
+  replacement.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(engine.set_master_strip(replacement));
+  REQUIRE(engine.set_master_insert_param_detailed(0, "levelDb", -12.0f) ==
+          sonare::engine::InsertParamSetResult::kQueued);
+  engine.flush_control_commands();
+
+  std::array<float, kBlock> output{};
+  output.fill(1.0f);
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  const float target_gain = std::pow(10.0f, -12.0f / 20.0f);
+  REQUIRE(output.back() > target_gain + 0.02f);
+  REQUIRE(output.back() < std::pow(10.0f, -6.0f / 20.0f));
+}
+
+TEST_CASE("Rejected master insert restore preserves its automation slot",
+          "[engine][realtime][mixing]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "effects.delay.stereo", "{}"});
+  REQUIRE(engine.set_master_strip(master));
+
+  // The delay's realtime-safe invertL parameter rejects fractional values. The
+  // engine may still have a live smoother slot for a previously published
+  // target; restore must leave that slot assigned when the processor rejects
+  // the edit.
+  constexpr size_t kSlots = 16;
+  const std::array<const char*, kSlots> keys = {
+      "delayTimeLMs", "delayTimeRMs", "feedback",    "pingPong",    "dryWet",      "dampingHz",
+      "tap3Ms",       "tap4Ms",       "tap1LevelDb", "tap2LevelDb", "tap3LevelDb", "tap4LevelDb",
+      "tap3Pan",      "tap4Pan",      "invertL",     "invertR"};
+  std::array<int64_t, kSlots> targets{};
+  for (size_t i = 0; i < targets.size(); ++i) {
+    const int64_t target = engine.resolve_master_insert_automation_id(0, keys[i]);
+    REQUIRE(target >= 0);
+    targets[i] = target;
+    REQUIRE(engine.automation().set_parameter(static_cast<uint32_t>(target), -12.0f));
+  }
+
+  REQUIRE_FALSE(engine.restore_master_insert_param_by_name(0, "invertL", 0.5f));
+
+  // All sixteen smoother slots are still occupied. A seventeenth target must
+  // therefore be refused instead of reusing the slot whose restore failed.
+  const int64_t seventeenth = engine.resolve_master_insert_automation_id(0, "modRateHz");
+  REQUIRE(seventeenth >= 0);
+  REQUIRE_FALSE(engine.automation().set_parameter(static_cast<uint32_t>(seventeenth), -12.0f));
+  REQUIRE(engine.insert_automation_overflow_count() == 1);
+}
+
+TEST_CASE("First master insert automation seeds from the processor's last applied value",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(engine.set_master_strip(master));
+  const int64_t target = engine.resolve_master_insert_automation_id(0, "levelDb");
+  REQUIRE(target >= 0);
+
+  // This direct processor edit updates last_applied without adding a manual
+  // base-table entry. The first smoother claim must still begin at -6 dB.
+  REQUIRE(engine.mixing().strip() != nullptr);
+  REQUIRE(engine.mixing().strip()->apply_insert_parameter(0, 0, -6.0f));
+  REQUIRE(engine.automation().set_parameter(static_cast<uint32_t>(target), -12.0f));
+
+  std::array<float, kBlock> output{};
+  output.fill(1.0f);
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  const float target_gain = std::pow(10.0f, -12.0f / 20.0f);
+  REQUIRE(output.back() > target_gain + 0.02f);
+  REQUIRE(output.back() < std::pow(10.0f, -6.0f / 20.0f));
+}
+
+TEST_CASE("Settled master insert automation ignores a stale manual base",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  REQUIRE(engine.set_master_strip(master));
+  REQUIRE(engine.apply_master_insert_param_by_name_now(0, "levelDb", -6.0f));
+  engine.settle_insert_parameters();
+
+  const int64_t target = engine.resolve_master_insert_automation_id(0, "levelDb");
+  REQUIRE(target >= 0);
+  REQUIRE(engine.automation().set_parameter(static_cast<uint32_t>(target), -12.0f));
+  engine.settle_insert_parameters();
+  REQUIRE(engine.automation().set_parameter(static_cast<uint32_t>(target), -18.0f));
+
+  std::array<float, kBlock> output{};
+  output.fill(1.0f);
+  float* io[] = {output.data()};
+  engine.process(io, 1, kBlock);
+  const float target_gain = std::pow(10.0f, -18.0f / 20.0f);
+  REQUIRE(output.back() > target_gain + 0.02f);
+  // The previous -6 dB manual base must not be reused for this settled slot.
+  REQUIRE(output.back() < 0.30f);
+}
+
+TEST_CASE("Non-realtime insert parameters are rejected before queueing",
+          "[engine][realtime][mixing]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+
+  const sonare::mixing::api::Insert non_realtime_insert{sonare::mixing::api::InsertSlot::PreFader,
+                                                        "eq.linearPhase", "{}"};
+
+  REQUIRE(engine.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip track;
+  track.inserts.push_back(non_realtime_insert);
+  REQUIRE(engine.set_track_strip(10, track));
+  REQUIRE(engine.resolve_track_insert_automation_id(10, 0, "band0.frequencyHz") == -1);
+  REQUIRE(engine.set_track_insert_param_detailed(10, 0, "band0.frequencyHz", 1200.0f) ==
+          sonare::engine::InsertParamSetResult::kInvalidTarget);
+  REQUIRE_FALSE(engine.set_track_insert_param(10, 0, "band0.frequencyHz", 1200.0f));
+
+  REQUIRE(engine.set_track_buses({{20, 0.0f}}));
+  sonare::mixing::api::Bus bus;
+  bus.inserts.push_back(non_realtime_insert);
+  REQUIRE(engine.set_bus_strip(20, bus));
+  REQUIRE(engine.resolve_bus_insert_automation_id(20, 0, "band0.frequencyHz") == -1);
+  REQUIRE(engine.set_bus_insert_param_detailed(20, 0, "band0.frequencyHz", 1200.0f) ==
+          sonare::engine::InsertParamSetResult::kInvalidTarget);
+  REQUIRE_FALSE(engine.set_bus_insert_param(20, 0, "band0.frequencyHz", 1200.0f));
+
+  sonare::mixing::api::Strip master;
+  master.inserts.push_back(non_realtime_insert);
+  REQUIRE(engine.set_master_strip(master));
+  REQUIRE(engine.resolve_master_insert_automation_id(0, "band0.frequencyHz") == -1);
+  REQUIRE(engine.set_master_insert_param_detailed(0, "band0.frequencyHz", 1200.0f) ==
+          sonare::engine::InsertParamSetResult::kInvalidTarget);
+  REQUIRE_FALSE(engine.set_master_insert_param(0, "band0.frequencyHz", 1200.0f));
 }
 #endif
 
@@ -2540,3 +3286,46 @@ TEST_CASE("RealtimeEngine does not keep a wider configuration a failed prepare a
   REQUIRE(engine.prepared_scratch_bytes() == 0);
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("Master telemetry measures input without an owned master strip",
+          "[engine][meter][input_peak]") {
+  for (const bool external_strip : {false, true}) {
+    CAPTURE(external_strip);
+    sonare::mixing::ChannelStripConfig config;
+    config.enable_metering = false;
+    sonare::mixing::ChannelStrip strip(config);
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    engine.set_input_monitor(true, 1.0f);
+    if (external_strip) {
+      sonare::mastering::dynamics::CompressorConfig compressor;
+      compressor.threshold_db = -30.0f;
+      compressor.ratio = 8.0f;
+      compressor.attack_ms = 0.0f;
+      compressor.detector = sonare::mastering::dynamics::DetectorMode::Peak;
+      strip.add_pre_insert(std::make_unique<sonare::mastering::dynamics::Compressor>(compressor));
+      REQUIRE(engine.bind_mixing_strip(&strip));
+      engine.set_mixing_enabled(true);
+    }
+    std::array<float, 64> left, right;
+    left.fill(0.8f);
+    right.fill(0.4f);
+    float* io[] = {left.data(), right.data()};
+    engine.process(io, 2, 64);
+    sonare::engine::MeterTelemetryRecord record;
+    bool found = false;
+    while (engine.pop_meter_telemetry(record)) {
+      if (record.target_id != 0) continue;
+      found = true;
+      CHECK(record.input_peak_db[0] == Catch::Approx(-1.9382f).margin(0.001f));
+      CHECK(record.input_peak_db[1] == Catch::Approx(-7.9588f).margin(0.001f));
+      if (external_strip)
+        CHECK(record.gain_reduction_db < -10.0f);
+      else
+        CHECK(record.gain_reduction_db == 0.0f);
+    }
+    REQUIRE(found);
+  }
+}
+#endif

@@ -651,6 +651,17 @@ class _EngineMixingMixin:
         (``repair.*``, ``loudness``, and the match stages) have no insert form
         and no automation id: they buffer the entire signal by construction and
         do not run on the realtime path.
+
+        The returned id uses the track's current positional lane selector. When
+        :meth:`set_track_lanes` successfully changes lane order or membership,
+        the engine remaps already queued and published track automation by
+        track id, but it cannot update a numeric id retained by the caller.
+        Resolve every track insert id again after such a topology change before
+        passing it to :meth:`set_automation_lane`, :meth:`set_parameter`, or
+        :meth:`set_parameter_smoothed`. Use
+        :meth:`set_track_strip_insert_param_by_name` when the operation needs a
+        stable track identity. Master and bus insert ids are separate and are
+        not invalidated by track-lane changes.
         """
         out_id = ctypes.c_uint32()
         _check(

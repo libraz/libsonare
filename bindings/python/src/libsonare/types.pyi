@@ -2143,6 +2143,8 @@ class MeterTelemetryRecord:
     integrated_lufs: float
     gain_reduction_db: float
     dropped_records: int
+    input_peak_db_l: float
+    input_peak_db_r: float
     def __init__(
         self,
         target_id: int,
@@ -2162,6 +2164,8 @@ class MeterTelemetryRecord:
         integrated_lufs: float,
         gain_reduction_db: float,
         dropped_records: int,
+        input_peak_db_l: float = ...,
+        input_peak_db_r: float = ...,
     ) -> None: ...
 
 class MeterTelemetryRecordWide:
@@ -2188,6 +2192,7 @@ class MeterTelemetryRecordWide:
     integrated_lufs: float
     gain_reduction_db: float
     dropped_records: int
+    input_peak_db: list[float]
     def __init__(
         self,
         target_id: int,
@@ -2205,6 +2210,7 @@ class MeterTelemetryRecordWide:
         integrated_lufs: float,
         gain_reduction_db: float,
         dropped_records: int,
+        input_peak_db: list[float] = ...,
     ) -> None: ...
 
 class ScopeTelemetryRecord:

@@ -255,7 +255,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         processor.receiveSync({
           type: 'syncMixer',
           lanes: [{ trackId: 7 }],
-          forceInsertResets: [{ kind: 'track', trackId: 7 }],
+          insertBaseResets: [{ kind: 'track', trackId: 7 }],
         });
         expect(Atomics.load(commandRing.header, 1)).toBe(1080);
         expect(posted).not.toEqual(
@@ -266,6 +266,50 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             }),
           ]),
         );
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('clears requested insert bases after the strip replay without settling ramps', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize: 128, channelCount: 2 },
+        { postMessage: () => undefined },
+      );
+      try {
+        const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
+        const calls: string[] = [];
+        const record = <K extends keyof RealtimeEngine>(name: K) => {
+          const original = (engine[name] as (...args: unknown[]) => unknown).bind(engine);
+          vi.spyOn(engine, name).mockImplementation(((...args: unknown[]) => {
+            calls.push(String(name));
+            return original(...args);
+          }) as never);
+        };
+        record('settleInsertParameters');
+        record('setTrackStripJson');
+        record('clearTrackInsertParameterBases');
+        record('restoreTrackStripInsertParamByName');
+        processor.receiveSync({
+          type: 'syncMixer',
+          lanes: [{ trackId: 7 }],
+          trackStrips: [
+            {
+              trackId: 7,
+              sceneJson:
+                '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+            },
+          ],
+          insertBaseResets: [{ kind: 'track', trackId: 7 }],
+          insertParamOverrides: [
+            { kind: 'track', trackId: 7, insertIndex: 0, paramName: 'band0.gainDb', value: 0 },
+          ],
+        });
+        expect(calls).toEqual([
+          'setTrackStripJson',
+          'clearTrackInsertParameterBases',
+          'restoreTrackStripInsertParamByName',
+        ]);
       } finally {
         processor.destroy();
       }

@@ -160,9 +160,10 @@ class ProcessorBase {
   ///   a member may be driven several times per the owner's block.
   uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
 
-  // Generic host bypass state. Containers such as graph nodes and insert
-  // chains consume this flag by leaving the dry buffer untouched and skipping
-  // process(); processors may still override for plugin-specific bypass.
+  // Generic host bypass state. Containers leave the audible buffer dry, with
+  // any required latency alignment. They may skip process() or run it on an
+  // isolated scratch copy to keep hidden state current. Processors may still
+  // override for plugin-specific bypass.
   virtual bool set_bypassed(bool bypassed, bool reset_on_bypass = false) {
     const bool was = bypassed_.exchange(bypassed, std::memory_order_acq_rel);
     if (bypassed && reset_on_bypass && !was) {
@@ -195,7 +196,14 @@ class ProcessorBase {
   // value, so no override has to guard for one or can launder one into range.
   bool set_parameter(unsigned int param_id, float value) {
     if (!std::isfinite(value)) return false;
-    return set_parameter_impl(param_id, value);
+    if (!set_parameter_impl(param_id, value)) return false;
+    const auto it = std::lower_bound(
+        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), param_id,
+        [](const auto& entry, unsigned int id) { return entry.id < id; });
+    if (it != constructed_parameter_values_.end() && it->id == param_id) {
+      it->last_applied = value;
+    }
+    return true;
   }
 
   // Returns whether set_parameter(param_id, ...) is safe to call from an audio
@@ -220,20 +228,41 @@ class ProcessorBase {
 
   /// The insert factory supplies the effective values of realtime parameters
   /// after aliases, presets, and construction-time conversions have resolved.
+  /// Hosts adding processors directly can supply the same metadata so the
+  /// first automation ramp starts from a known value. Without it, a newly
+  /// claimed target starts at its first requested value.
   /// Publish before the processor is handed to an audio thread.
   void set_constructed_parameter_values(std::vector<std::pair<unsigned int, float>> values) {
     std::sort(values.begin(), values.end(),
               [](const auto& left, const auto& right) { return left.first < right.first; });
-    constructed_parameter_values_ = std::move(values);
+    std::vector<ParameterValue> captured;
+    captured.reserve(values.size());
+    for (const auto& value : values) {
+      captured.push_back({value.first, value.second, value.second});
+    }
+    constructed_parameter_values_ = std::move(captured);
   }
 
   /// Lookup is allocation-free and reads only immutable construction metadata.
   bool constructed_parameter_value(unsigned int id, float* out) const noexcept {
     const auto it = std::lower_bound(
         constructed_parameter_values_.begin(), constructed_parameter_values_.end(), id,
-        [](const auto& entry, unsigned int value) { return entry.first < value; });
-    if (it == constructed_parameter_values_.end() || it->first != id) return false;
-    *out = it->second;
+        [](const auto& entry, unsigned int value) { return entry.id < value; });
+    if (it == constructed_parameter_values_.end() || it->id != id) return false;
+    *out = it->constructed;
+    return true;
+  }
+
+  /// Allocation-free lookup of the last successful parameter request, initially
+  /// the construction value. Read on the processor's owning thread. This is a
+  /// logical request value, which can differ from a processor's clamped value.
+  bool last_applied_parameter_value(unsigned int id, float* out) const noexcept {
+    if (out == nullptr) return false;
+    const auto it = std::lower_bound(
+        constructed_parameter_values_.begin(), constructed_parameter_values_.end(), id,
+        [](const auto& entry, unsigned int value) { return entry.id < value; });
+    if (it == constructed_parameter_values_.end() || it->id != id) return false;
+    *out = it->last_applied;
     return true;
   }
 
@@ -283,7 +312,12 @@ class ProcessorBase {
  private:
   std::atomic<bool> bypassed_{false};
   std::atomic<int> detector_excluded_channel_{-1};
-  std::vector<std::pair<unsigned int, float>> constructed_parameter_values_;
+  struct ParameterValue {
+    unsigned int id;
+    float constructed;
+    float last_applied;
+  };
+  std::vector<ParameterValue> constructed_parameter_values_;
   OverflowCounter non_finite_discards_;
 };
 

@@ -41,6 +41,12 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_seek_sample.argtypes = [ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64]
     lib.sonare_engine_seek_ppq.restype = ctypes.c_int32
     lib.sonare_engine_seek_ppq.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int64]
+    if hasattr(lib, "sonare_engine_reset_master_loudness_meter"):
+        lib.sonare_engine_reset_master_loudness_meter.restype = ctypes.c_int32
+        lib.sonare_engine_reset_master_loudness_meter.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int64,
+        ]
     lib.sonare_engine_settle_parameters.restype = ctypes.c_int32
     lib.sonare_engine_settle_parameters.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_flush_control_commands.restype = ctypes.c_int32
@@ -457,6 +463,13 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_uint32),
         ]
+    if hasattr(lib, "sonare_engine_insert_parameter_constructed_value"):
+        lib.sonare_engine_insert_parameter_constructed_value.restype = ctypes.c_int32
+        lib.sonare_engine_insert_parameter_constructed_value.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_float),
+        ]
     if hasattr(lib, "sonare_engine_resolve_master_insert_automation_id"):
         lib.sonare_engine_resolve_master_insert_automation_id.restype = ctypes.c_int32
         lib.sonare_engine_resolve_master_insert_automation_id.argtypes = [
@@ -697,6 +710,22 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_engine_drain_meter_telemetry_wide.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(SonareMeterTelemetryRecordWide),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_drain_meter_telemetry_v2"):
+        lib.sonare_engine_drain_meter_telemetry_v2.restype = ctypes.c_int32
+        lib.sonare_engine_drain_meter_telemetry_v2.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMeterTelemetryRecordV2),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_drain_meter_telemetry_wide_v2"):
+        lib.sonare_engine_drain_meter_telemetry_wide_v2.restype = ctypes.c_int32
+        lib.sonare_engine_drain_meter_telemetry_wide_v2.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMeterTelemetryRecordWideV2),
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_size_t),
         ]

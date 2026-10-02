@@ -31,6 +31,12 @@ BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inpu
 void BusProcessor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   max_block_size_ = max_block_size;
+  const size_t scratch_samples = static_cast<size_t>(std::max(0, max_block_size_));
+  for (int ch = 0; ch < kMaxBusScratchChannels; ++ch) {
+    bypass_scratch_[static_cast<size_t>(ch)].assign(scratch_samples, 0.0f);
+    bypass_scratch_channels_[static_cast<size_t>(ch)] =
+        bypass_scratch_[static_cast<size_t>(ch)].data();
+  }
   for (size_t index = 0; index < inserts_.size(); ++index) {
     inserts_[index]->prepare(sample_rate_, max_block_size_);
     prepare_insert_alignment_delays(index);
@@ -52,7 +58,15 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   run_insert_chain(inserts_, insert_spo_, insert_sidechains_, channels, num_channels, num_samples,
                    /*first_insert_index=*/0, /*sidechain_offset=*/0, shifted.data(),
                    kMaxSidechainChannels, lfe_index(layout_), stereo_pair_alignment_delays_.data(),
-                   bypass_alignment_delays_.data());
+                   bypass_alignment_delays_.data(), bypass_scratch_channels_.data(),
+                   kMaxBusScratchChannels, max_block_size_);
+  float gain_reduction_db = 0.0f;
+  for (const auto& insert : inserts_) {
+    if (insert != nullptr && !insert->bypassed()) {
+      gain_reduction_db = std::min(gain_reduction_db, insert->last_gain_reduction_db());
+    }
+  }
+  meter_.set_gain_reduction_db(gain_reduction_db);
   meter_.process(channels, num_channels, num_samples);
   if (member_discard_sum() != member_discards_before) note_non_finite_discard();
 }
@@ -154,7 +168,7 @@ int BusProcessor::insert_parameter_id_for_key(unsigned int insert_index,
   }
   for (const auto& desc : insert->parameter_descriptors()) {
     if (desc.key == key) {
-      return static_cast<int>(desc.id);
+      return insert->parameter_is_realtime_safe(desc.id) ? static_cast<int>(desc.id) : -1;
     }
   }
   return -1;

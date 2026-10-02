@@ -15,6 +15,7 @@ import {
   meterRingFromSharedBuffer,
   type SharedMeterRingWriter,
   type SharedSpectrumRingWriter,
+  SONARE_FLOOR_DB,
   SONARE_METER_RING_RECORD_FLOATS,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletSpectrumSnapshot,
@@ -47,8 +48,8 @@ export class SonareWorkletProcessor {
    *
    * `targetId` is always the master and the four LUFS / gain-reduction fields
    * are always unavailable here — the mixer worklet does not run the
-   * K-weighting filters, and a floor value would read as silence — so both are
-   * set once rather than per interval.
+   * K-weighting filters or the engine's pre-trim input tap — so finite floor
+   * values are set once rather than per interval.
    */
   private readonly meterScratch: SonareWorkletMeterSnapshot = {
     type: 'meter',
@@ -65,6 +66,8 @@ export class SonareWorkletProcessor {
     shortTermLufs: Number.NaN,
     integratedLufs: Number.NaN,
     gainReductionDb: Number.NaN,
+    inputPeakDbL: SONARE_FLOOR_DB,
+    inputPeakDbR: SONARE_FLOOR_DB,
   };
   private spectrumRing?: SharedSpectrumRingWriter;
   private spectrumBands: Float32Array;
@@ -276,6 +279,8 @@ export class SonareWorkletProcessor {
       shortTermLufs: Number.NaN,
       integratedLufs: Number.NaN,
       gainReductionDb: Number.NaN,
+      inputPeakDbL: SONARE_FLOOR_DB,
+      inputPeakDbR: SONARE_FLOOR_DB,
     };
     // Alternative channels for one record, not a broadcast pair: a transport
     // that supplies both (the engine registration resolves both to
@@ -309,6 +314,8 @@ export class SonareWorkletProcessor {
     ring.records[offset + 11] = meter.shortTermLufs;
     ring.records[offset + 12] = meter.integratedLufs;
     ring.records[offset + 13] = meter.gainReductionDb;
+    ring.records[offset + 14] = meter.inputPeakDbL;
+    ring.records[offset + 15] = meter.inputPeakDbR;
     Atomics.store(ring.header, 0, writeIndex + 1);
     // writeIndex is a free-running monotonic counter, so an overflow guard here
     // would fire on essentially every write past the first `capacity` records
@@ -377,7 +384,7 @@ export class SonareWorkletProcessor {
       return;
     }
     const writeIndex = Atomics.load(ring.header, 0);
-    const offset = (writeIndex % ring.capacity) * ring.recordFloats;
+    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
     ring.records[offset] = encodeFrameLo(frame);
     ring.records[offset + 1] = encodeFrameHi(frame);
     ring.records[offset + 2] = bands.length;

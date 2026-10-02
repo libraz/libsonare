@@ -278,6 +278,8 @@ describe('Sonare worklet ring buffers', () => {
         rmsDbL: number,
         rmsDbR: number,
         correlation: number,
+        inputPeakDbL: number,
+        inputPeakDbR: number,
       ): void => {
         const writeIndex = header[0];
         const offset = (writeIndex % capacity) * SONARE_METER_RING_RECORD_FLOATS;
@@ -295,13 +297,15 @@ describe('Sonare worklet ring buffers', () => {
         records[offset + 11] = -24;
         records[offset + 12] = -25;
         records[offset + 13] = -2;
+        records[offset + 14] = inputPeakDbL;
+        records[offset + 15] = inputPeakDbR;
         header[0] = writeIndex + 1;
       };
 
       const ring = { sharedBuffer: sab, header, records, capacity };
 
-      writeRecord(128, 0, -1, -2, -3, -4, 0.5);
-      writeRecord(256, 1, -5, -6, -7, -8, 0.25);
+      writeRecord(128, 0, -1, -2, -3, -4, 0.5, -9, -10);
+      writeRecord(256, 1, -5, -6, -7, -8, 0.25, -11, -12);
 
       const first = readSonareMeterRingBuffer(ring, 0);
       expect(first.meters).toHaveLength(2);
@@ -321,13 +325,15 @@ describe('Sonare worklet ring buffers', () => {
         shortTermLufs: -24,
         integratedLufs: -25,
         gainReductionDb: -2,
+        inputPeakDbL: -9,
+        inputPeakDbR: -10,
       });
 
       // Overflow the ring; only the most-recent `capacity` survive.
-      writeRecord(384, 0, -9, -10, -11, -12, 0);
-      writeRecord(512, 1, -13, -14, -15, -16, 0);
-      writeRecord(640, 33, -17, -18, -19, -20, 0);
-      writeRecord(768, 0xffff, -21, -22, -23, -24, 0);
+      writeRecord(384, 0, -9, -10, -11, -12, 0, -13, -14);
+      writeRecord(512, 1, -13, -14, -15, -16, 0, -15, -16);
+      writeRecord(640, 33, -17, -18, -19, -20, 0, -17, -18);
+      writeRecord(768, 0xffff, -21, -22, -23, -24, 0, -19, -20);
 
       const wrapped = readSonareMeterRingBuffer(ring, first.nextReadIndex);
       expect(wrapped.meters.length).toBeLessThanOrEqual(capacity);

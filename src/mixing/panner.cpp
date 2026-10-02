@@ -151,6 +151,25 @@ void PannerProcessor::set_dual_pan(float left_pan, float right_pan) noexcept {
   dual_pan_right_.store(clamp_pan(right_pan), std::memory_order_relaxed);
 }
 
+void PannerProcessor::copy_state_from(const PannerProcessor& other) noexcept {
+  if (this == &other) return;
+  sample_rate_ = other.sample_rate_;
+  smoothing_ms_ = other.smoothing_ms_;
+  left_ = other.left_;
+  right_ = other.right_;
+  dual_ll_ = other.dual_ll_;
+  dual_lr_ = other.dual_lr_;
+  dual_rl_ = other.dual_rl_;
+  dual_rr_ = other.dual_rr_;
+  pan_.store(other.pan_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  dual_pan_left_.store(other.dual_pan_left_.load(std::memory_order_relaxed),
+                       std::memory_order_relaxed);
+  dual_pan_right_.store(other.dual_pan_right_.load(std::memory_order_relaxed),
+                        std::memory_order_relaxed);
+  pan_law_.store(other.pan_law_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  pan_mode_.store(other.pan_mode_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+}
+
 bool PannerProcessor::at_rest_identity() const noexcept {
   if (pan_mode_.load(std::memory_order_relaxed) != PanMode::Balance ||
       pan_.load(std::memory_order_relaxed) != 0.0f) {

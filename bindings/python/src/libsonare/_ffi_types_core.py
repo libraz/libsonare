@@ -181,6 +181,55 @@ class SonareMeterTelemetryRecordWide(CStruct):
     ]
 
 
+class SonareMeterTelemetryRecordV2(CStruct):
+    """Maps to the append-only V2 stereo meter telemetry ABI record."""
+
+    _fields_ = [
+        ("target_id", ctypes.c_uint32),
+        ("render_frame", ctypes.c_int64),
+        ("seq", ctypes.c_uint64),
+        ("peak_db_l", ctypes.c_float),
+        ("peak_db_r", ctypes.c_float),
+        ("rms_db_l", ctypes.c_float),
+        ("rms_db_r", ctypes.c_float),
+        ("true_peak_db_l", ctypes.c_float),
+        ("true_peak_db_r", ctypes.c_float),
+        ("max_true_peak_db", ctypes.c_float),
+        ("correlation", ctypes.c_float),
+        ("mono_compat_width", ctypes.c_float),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+        ("gain_reduction_db", ctypes.c_float),
+        ("dropped_records", ctypes.c_uint32),
+        ("input_peak_db_l", ctypes.c_float),
+        ("input_peak_db_r", ctypes.c_float),
+    ]
+
+
+class SonareMeterTelemetryRecordWideV2(CStruct):
+    """Maps to the append-only V2 wide meter telemetry ABI record."""
+
+    _fields_ = [
+        ("target_id", ctypes.c_uint32),
+        ("render_frame", ctypes.c_int64),
+        ("seq", ctypes.c_uint64),
+        ("channel_count", ctypes.c_int32),
+        ("peak_db", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
+        ("rms_db", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
+        ("true_peak_db", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
+        ("max_true_peak_db", ctypes.c_float),
+        ("correlation", ctypes.c_float),
+        ("mono_compat_width", ctypes.c_float),
+        ("momentary_lufs", ctypes.c_float),
+        ("short_term_lufs", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+        ("gain_reduction_db", ctypes.c_float),
+        ("dropped_records", ctypes.c_uint32),
+        ("input_peak_db", ctypes.c_float * SONARE_METER_MAX_CHANNELS),
+    ]
+
+
 class SonareExternalMidiEvent(CStruct):
     """Maps to SonareExternalMidiEvent in sonare_c.h."""
 

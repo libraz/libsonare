@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "engine/clip_player.h"
@@ -32,10 +33,13 @@ class ScopeTelemetryTap;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec);
 
-/// True when two insert chains match entry by entry (slot, processor, params,
-/// sidechain key), so a strip or bus can be updated in place instead of rebuilt.
+/// True when two insert chains have the same effective processors and semantic
+/// parameters, so a strip or bus can be updated in place instead of rebuilt.
+/// Track/master strips use the runtime's combined [pre...post...] order;
+/// buses retain their declared order because their send graph addresses it.
 bool strip_inserts_equal(const std::vector<mixing::api::Insert>& a,
-                         const std::vector<mixing::api::Insert>& b);
+                         const std::vector<mixing::api::Insert>& b,
+                         bool canonical_track_order = true);
 
 /// Applies every scalar of @p next to an existing strip through its setters
 /// (smoothed values ramp rather than snap), and its EQ as a diff against
@@ -131,6 +135,21 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // level); the floor is constants::kFloorDb. parameterInfo reports it too.
   static constexpr float kMaxGainDb = 24.0f;
 
+  // CONTROL-thread staging for the raw-clip PDC banks. The banks are carried
+  // by LaneState in the live runtime, while this value owns a complete
+  // replacement set so a PDC recompute can fail without changing audio state.
+  // A successful commit only swaps already-prepared objects and therefore
+  // cannot allocate or fail on the audio path.
+  struct ClipPdcPlan {
+    std::array<mixing::AlignmentDelay, kMaxTrackLanes> banks;
+    int delay_samples_q8 = 0;
+
+    // A user-provided constructor makes the array elements default-initialize
+    // through AlignmentDelay's explicit zero-delay constructor. Aggregate
+    // brace initialization would otherwise reject that explicit constructor.
+    ClipPdcPlan() noexcept {}
+  };
+
   enum ParamId : unsigned int {
     kFaderDb = 1,
     kPan = 2,
@@ -206,15 +225,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // or insert is unknown.
   bool set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index, bool bypassed,
                                bool reset_on_bypass = false) noexcept;
-  // Control-thread resolution for a realtime insert-parameter change: maps a
-  // track id + JSON-key parameter name to the strip's lane index and integer
-  // param_id. Read-only: the lane index comes from the control-side lane
-  // snapshot and the strip from the control-thread binding table, so it never
-  // calls acquire_lanes() (the audio thread's single-consumer side) and never
-  // touches lane_states_ -- safe to call while process() renders. The track must
-  // be present in the currently published lane config. Returns false if the
-  // track, insert, or key is unknown. The engine enqueues the resolved ids and
-  // applies them on the audio thread via apply_lane_insert_parameter().
+  // Control-thread-only resolution for a realtime insert-parameter change:
+  // maps a track id + JSON-key parameter name to the strip's lane index and
+  // integer param_id. It is read-only with respect to the audio snapshot, but
+  // the std::string lookup and control-side binding table are not an audio-RT
+  // operation; callers must reject it on the process thread and enqueue the
+  // resolved ids for apply_lane_insert_parameter(). The track must be present
+  // in the currently published lane config. Returns false if the track,
+  // insert, or key is unknown.
   bool resolve_track_insert_param(uint32_t track_id, unsigned int insert_index,
                                   const std::string& key, size_t* out_lane_index,
                                   unsigned int* out_param_id) noexcept;
@@ -242,10 +260,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // concurrently with process().
   bool apply_lane_insert_parameter(size_t lane_index, unsigned int insert_index,
                                    unsigned int param_id, float value) noexcept;
-  // Control-thread resolution for a realtime BUS insert-parameter change: maps a
-  // bus id + JSON-key parameter name to the bus index and integer param_id.
-  // Returns false if the bus, insert, or key is unknown. Mirrors
-  // resolve_track_insert_param for the bus insert chain.
+  // Control-thread-only resolution for a realtime BUS insert-parameter change:
+  // maps a bus id + JSON-key parameter name to the bus index and integer
+  // param_id. The string lookup and control-side binding table are not
+  // audio-realtime safe; process-thread callers must reject the request and
+  // enqueue the resolved ids for apply_bus_insert_parameter(). Returns false if
+  // the bus, insert, or key is unknown.
   bool resolve_bus_insert_param(uint32_t bus_id, unsigned int insert_index, const std::string& key,
                                 size_t* out_bus_index, unsigned int* out_param_id) noexcept;
   bool apply_bus_insert_param_by_name_now(uint32_t bus_id, unsigned int insert_index,
@@ -360,6 +380,24 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void flush_pdc_delays() noexcept;
+  /// CONTROL thread: sets the compensation applied to raw clip audio before it
+  /// enters a lane strip. Each lane owns an independent bank, so processing
+  /// several clips in sequence cannot mix their delay histories. The update is
+  /// staged for every lane and committed only after all banks accept it.
+  bool set_clip_pdc_delay_q8(int delay_samples_q8) noexcept;
+  /// AUDIO thread: advances every configured lane's raw-clip PDC bank with
+  /// silence. Call after begin_block() when the transport is stopped so a held
+  /// delay line cannot reappear as stale audio when playback resumes.
+  void drain_clip_pdc_delays(int num_channels, int num_samples) noexcept;
+  /// CONTROL thread: stages a complete raw-clip PDC bank set without touching
+  /// the live lanes. Existing bank history is copied when the storage shape is
+  /// unchanged. Returns false on allocation failure.
+  bool prepare_clip_pdc_delay_q8(int delay_samples_q8, ClipPdcPlan& out) const noexcept;
+  /// CONTROL thread: commits a plan produced by prepare_clip_pdc_delay_q8().
+  /// This is a no-fail swap of already-prepared banks.
+  void commit_clip_pdc_delay(ClipPdcPlan& prepared) noexcept;
+  /// AUDIO thread: clears raw-clip PDC state during a transport discontinuity.
+  void flush_clip_pdc_delays() noexcept;
   /// @brief Total number of times any PDC alignment bank reallocated storage.
   /// @details The observable form of the contract that a control-thread edit
   ///          which does not change an alignment must not disturb the delay
@@ -382,6 +420,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void settle_smoothers() noexcept;
   /// Snap only insert automation slots without changing fader/pan ramps.
   void settle_insert_automations() noexcept;
+  void settle_insert_automations(const std::vector<TrackLaneConfig>& next_lanes,
+                                 bool preserve_surviving_lanes) noexcept;
   bool mix_source(uint32_t track_id, float* const* source, float* const* channels, int num_channels,
                   int num_samples, MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
                   ScopeTelemetryTap* scope_tap = nullptr) noexcept;
@@ -402,11 +442,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   //                             advances the insert-parameter smoothers once
   //   render_clips_into_lanes() accumulates clip audio into the lanes
   //   mix_source_into_lane()    accumulates one instrument source into its lane
-  //   finish_block()            runs each active lane's strip / sends / fader
+  //   finish_block()            runs every configured lane's strip / sends / fader
   //                             and each bus chain exactly once, into the master
   //
-  // Only lanes that actually received audio are processed, so a block with no
-  // clip pass still leaves untouched lanes alone.
+  // An opened block processes configured lanes that received audio and silent
+  // lanes alike; zero input keeps stateful strip/bus tails advancing.
   bool begin_block(int num_channels, int num_samples) noexcept;
   // Accumulates this block's clip audio into the lanes (and sums lane-less
   // clips straight into @p channels). Does not run any strip, send, or bus.
@@ -453,6 +493,17 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     bool mute = false;
     TrackMonitorMode monitor_mode = TrackMonitorMode::kOff;
     mixing::ChannelStrip* strip = nullptr;
+    // Raw clip compensation is before the strip and therefore cannot share the
+    // engine's one direct/unmatched clip delay bank. This bank lives with the
+    // lane state so prepare_lanes_from_snapshot() carries its history by track
+    // id across a positional reorder and resets it for a new track identity.
+    mixing::AlignmentDelay clip_pdc_delay{0};
+    // Peak level of the source entering the lane strip, captured before its
+    // input trim. The render path reuses this fixed array when publishing the
+    // lane's post-fader telemetry record, so no audio-thread allocation is
+    // needed to report both sides of the dynamics stage.
+    std::array<float, mixing::kMaxMeterChannels> input_peak_db =
+        mixing::detail::meter_floor_array();
     // Per-output-plane scatter gains carried block-to-block so a moving surround
     // pan ramps click-free. Unused on the stereo path.
     //
@@ -480,6 +531,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // glides, which is the same contract its first block gets.
     int surround_primed_channels = -1;
   };
+
+  static_assert(std::is_nothrow_move_constructible_v<LaneState>);
+  static_assert(std::is_nothrow_move_assignable_v<LaneState>);
+  static_assert(std::is_nothrow_swappable_v<mixing::AlignmentDelay>);
 
   struct OwnedStrip {
     uint32_t track_id = 0;
@@ -592,7 +647,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // free one. Bus slots are keyed by identity so reordering cannot retarget a
   // live smoother.
   // Returns nullptr only when the table is full (overflow counter bumped). On the
-  // first claim the smoother resets to @p value so it does not fade in from 0.
+  // first claim the smoother starts from the processor's last-applied value,
+  // then immutable construction metadata, and finally @p value for custom
+  // inserts without either kind of metadata.
   InsertAutoSlot* find_or_claim_insert_slot(bool is_bus, size_t index, uint32_t bus_id,
                                             unsigned int insert_index, unsigned int param_id,
                                             float value) noexcept;
@@ -642,11 +699,32 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     int master_q8 = 0;
     int latency_q8 = 0;
   };
+  struct PreparedPdc {
+    PdcPlan plan{};
+    std::array<int, kMaxTrackLanes> lane_source{};
+    std::array<bool, kMaxTrackLanes> lane_reset{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_pre_send_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes> bus_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes * kBusEdgesPerBus>
+        edge_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxSidechainBindings> key_updates{};
+    mixing::AlignmentDelay::PreparedUpdate master_update{};
+  };
   BusGraphView current_bus_graph_view() const noexcept;
   // Pure: derives every delay for @p view. False when one exceeds
   // mixing::kMaxAlignmentDelaySamples, which the caller refuses.
-  bool plan_pdc(const std::vector<TrackLaneConfig>& lanes, const BusGraphView& view,
-                PdcPlan* plan) const noexcept;
+  bool plan_pdc(const std::vector<TrackLaneConfig>& lanes, const BusGraphView& view, PdcPlan* plan,
+                const std::array<mixing::ChannelStrip*, kMaxTrackLanes>* candidate_strips =
+                    nullptr) const noexcept;
+  void make_lane_pdc_sources(const std::vector<TrackLaneConfig>& lanes,
+                             std::array<int, kMaxTrackLanes>* sources,
+                             std::array<bool, kMaxTrackLanes>* reset) const noexcept;
+  bool prepare_pdc_updates(
+      const PdcPlan& plan, const std::array<int, kMaxTrackLanes>& sources,
+      const std::array<bool, kMaxTrackLanes>& reset, PreparedPdc* prepared,
+      const std::array<int, kMaxBusLanes>* bus_sources = nullptr) const noexcept;
+  void commit_pdc_updates(PreparedPdc& prepared) noexcept;
   bool apply_pdc(const PdcPlan& plan) noexcept;
   // Removes binding @p index (swap with the last entry). Control thread.
   void remove_sidechain_binding(size_t index) noexcept;
@@ -700,14 +778,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // The configured bus @p bus_id when its layout is at most two channels wide.
   BusState* pannable_bus_state_for(uint32_t bus_id) noexcept;
   // Moves one bus's contents into another slot (set_buses keys buses by id).
-  // The destination's panner and smoothers are rebuilt from the moved settings;
-  // dedicated EQ history follows the bus identity and is reset only when
-  // set_buses changes that bus's channel layout.
+  // Full in-flight DSP scalar and smoother state follows the bus identity;
+  // dedicated EQ history follows it too and resets only when set_buses changes
+  // that bus's channel layout.
   static void transfer_bus_state(BusState& from, BusState& to);
   // Returns a slot to the state of a bus that was never configured.
   static void retire_bus_state(BusState& state);
   static void apply_bus_pan(BusState& state, const mixing::api::Bus& bus) noexcept;
   static void refresh_bus_eq_active(BusState& state) noexcept;
+  void remap_lane_insert_automations(const std::vector<TrackLaneConfig>& lanes) noexcept;
   float* lane_channel(size_t lane_index, int channel) noexcept;
   float* bus_channel(size_t bus_index, int channel) noexcept;
   // Render width of a configured bus. A surround group bus (5.1/7.1 layout)
@@ -722,6 +801,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                          int num_samples) noexcept;
   bool any_lane_solo(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   void prepare_lanes_from_snapshot(const std::vector<TrackLaneConfig>& lanes) noexcept;
+  void prepare_lanes_from_snapshot(
+      const std::vector<TrackLaneConfig>& lanes,
+      const std::array<mixing::ChannelStrip*, kMaxTrackLanes>* candidate_strips) noexcept;
   /// Re-derives every PDC alignment bank (lane stage and bus stage) and the
   /// runtime's advertised latency. Returns false, changing nothing, when a
   /// delay would exceed mixing::kMaxAlignmentDelaySamples, and false when a
@@ -729,7 +811,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// control-thread setters that call it can report that instead of letting an
   /// allocation failure escape and terminate the process.
   bool recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept;
-  void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes);
+  // Rebuilds lane send tables, every lane or only @p only_track_id's. A lane's
+  // table is built in full before it replaces the live one.
+  void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes, uint32_t only_track_id = 0);
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;
   void add_lane_monitor_pfl(size_t lane_index, int num_channels, int num_samples) noexcept;
@@ -853,6 +937,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   float* const* monitor_bus_ = nullptr;
   int monitor_bus_channel_count_ = 0;
   std::vector<TrackBusConfig> bus_configs_;
+  // Last committed raw-clip PDC target. The engine owns the common direct-clip
+  // bank; this target is carried by each lane's staged bank.
+  int clip_pdc_delay_q8_ = 0;
   // A reserved insert id keeps its selector for the bus identity that minted
   // it. Retired entries are intentionally never recycled: an old scheduled
   // command therefore becomes a no-op instead of targeting a later bus.
@@ -888,6 +975,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // is safe); the sole publisher (set_track_lanes) always remaps synchronously,
   // so a still-current snapshot is always the applied one.
   const std::vector<TrackLaneConfig>* applied_lane_snapshot_ = nullptr;
+  // Number of leading LaneState slots that represented the previously applied
+  // active snapshot. Retired metadata remains in the inactive tail for a
+  // remove/re-add, but its raw clip delay bank is reset before reuse.
+  size_t applied_lane_count_ = 0;
   int latency_samples_q8_ = 0;
 };
 

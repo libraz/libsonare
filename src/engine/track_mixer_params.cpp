@@ -189,6 +189,7 @@ bool TrackMixerRuntime::restore_track_insert_param_by_name(uint32_t track_id,
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
     if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   }
+  if (!apply_lane_insert_parameter(lane_index, insert_index, param_id, value)) return false;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (slot.assigned && !slot.is_bus && slot.index == lane_index &&
         slot.insert_index == insert_index && slot.param_id == param_id) {
@@ -196,7 +197,7 @@ bool TrackMixerRuntime::restore_track_insert_param_by_name(uint32_t track_id,
       slot.assigned = false;
     }
   }
-  return apply_lane_insert_parameter(lane_index, insert_index, param_id, value);
+  return true;
 }
 
 bool TrackMixerRuntime::track_insert_constructed_parameter_value(uint32_t track_id,
@@ -261,6 +262,7 @@ bool TrackMixerRuntime::restore_bus_insert_param_by_name(uint32_t bus_id, unsign
   size_t bus_index = 0;
   unsigned int param_id = 0;
   if (!resolve_bus_insert_param(bus_id, insert_index, key, &bus_index, &param_id)) return false;
+  if (!apply_bus_insert_parameter(bus_index, insert_index, param_id, value)) return false;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (slot.assigned && slot.is_bus && slot.bus_id == bus_id &&
         slot.insert_index == insert_index && slot.param_id == param_id) {
@@ -268,7 +270,7 @@ bool TrackMixerRuntime::restore_bus_insert_param_by_name(uint32_t bus_id, unsign
       slot.assigned = false;
     }
   }
-  return apply_bus_insert_parameter(bus_index, insert_index, param_id, value);
+  return true;
 }
 
 bool TrackMixerRuntime::bus_insert_constructed_parameter_value(uint32_t bus_id,
@@ -305,10 +307,7 @@ TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
       free_slot = &slot;
     }
   }
-  if (settled_match != nullptr) {
-    settled_match->active = true;
-    return settled_match;
-  }
+  if (settled_match != nullptr) free_slot = settled_match;
   if (free_slot == nullptr) {
     ++insert_automation_overflow_count_;
     return nullptr;
@@ -320,9 +319,22 @@ TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
   free_slot->bus_id = bus_id;
   free_slot->insert_index = insert_index;
   free_slot->param_id = param_id;
-  // Snap to the first observed value so the smoother does not glide up from the
-  // reset 0 the first time this target is automated.
-  free_slot->smoother.reset(value);
+  // A newly claimed or settled slot starts from the last successful processor
+  // value, including scene restores. A retained custom insert without metadata
+  // keeps its settled smoother value; a newly claimed one falls back to target.
+  float baseline = settled_match != nullptr ? settled_match->smoother.current() : value;
+  bool captured = false;
+  if (is_bus && index < bus_states_.size() && bus_states_[index].bus != nullptr) {
+    const auto& bus = bus_states_[index].bus->bus();
+    captured = bus.last_applied_insert_parameter_value(insert_index, param_id, &baseline) ||
+               constructed_bus_parameter_value(bus, insert_index, param_id, &baseline, 0);
+  } else if (!is_bus && index < lane_states_.size() && lane_states_[index].strip != nullptr) {
+    const auto* strip = lane_states_[index].strip;
+    captured = strip->last_applied_insert_parameter_value(insert_index, param_id, &baseline) ||
+               strip->constructed_insert_parameter_value(insert_index, param_id, &baseline);
+  }
+  free_slot->smoother.reset(
+      (captured || settled_match != nullptr) && std::isfinite(baseline) ? baseline : value);
   return free_slot;
 }
 

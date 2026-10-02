@@ -1538,6 +1538,12 @@ if(BUILD_WASM)
       TARGET_DIRECTORY sonare_arrangement
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
+  if(TARGET sonare_automation)
+    set_source_files_properties(
+      automation/automation_engine.cpp
+      TARGET_DIRECTORY sonare_automation
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
   if(TARGET sonare_core_objects)
     set_source_files_properties(
       c_api/core_analysis.cpp
@@ -1576,6 +1582,7 @@ if(BUILD_WASM)
       engine/realtime_engine_mixing.cpp
       engine/track_mixer.cpp
       engine/track_mixer_params.cpp
+      engine/track_mixer_routing.cpp
       TARGET_DIRECTORY sonare_engine
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
@@ -1602,6 +1609,7 @@ if(BUILD_WASM)
   if(TARGET sonare_mixing)
     set_source_files_properties(
       mixing/alignment_delay.cpp
+      mixing/channel_strip.cpp
       mixing/channel_strip_automation.cpp
       TARGET_DIRECTORY sonare_mixing
       PROPERTIES COMPILE_OPTIONS -fexceptions)

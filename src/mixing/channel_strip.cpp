@@ -35,14 +35,18 @@ void zero_taps(std::vector<std::vector<float>>& taps, int num_channels, int star
 
 void copy_to_taps(float* const* channels, std::vector<std::vector<float>>& taps, int num_channels,
                   int num_samples, int tap_offset = 0) {
-  const int rows = std::min<int>(num_channels, static_cast<int>(taps.size()));
+  if (channels == nullptr || num_samples <= 0) return;
+  // Visit every prepared row, not just the rows present in this block. A
+  // shorter layout or a null source plane must publish silence into the tap;
+  // leaving the old row in place makes the next aux send replay stale audio.
+  const int rows = static_cast<int>(taps.size());
   for (int ch = 0; ch < rows; ++ch) {
-    if (channels[ch] == nullptr) {
-      continue;
-    }
     const int begin = std::min<int>(tap_offset, static_cast<int>(taps[ch].size()));
     const int end = std::min<int>(tap_offset + num_samples, static_cast<int>(taps[ch].size()));
-    if (begin < end) {
+    if (begin >= end) continue;
+    if (ch >= num_channels || channels[ch] == nullptr) {
+      std::fill(taps[ch].begin() + begin, taps[ch].begin() + end, 0.0f);
+    } else {
       std::copy(channels[ch], channels[ch] + (end - begin), taps[ch].begin() + begin);
     }
   }
@@ -57,12 +61,10 @@ int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inse
 }
 
 // The meter reports the reduction the block actually took, so a bypassed insert
-// contributes nothing. InsertChain skips its process(), which leaves
-// last_gain_reduction_db() holding whatever the last active block cached, and
-// folding that in kept a bypassed compressor's frozen reading in the strip
-// snapshot indefinitely. Same rule the mute path already applies, where a strip
-// that is not processing forces its meters to 0 dB rather than letting the last
-// value stand.
+// contributes nothing. The hidden processor runs on scratch to keep its state
+// current, but its gain reduction is not applied to the audible bypass path.
+// Exclude that hidden reading from the strip snapshot, as the mute path also
+// forces inaudible reduction to 0 dB.
 float aggregate_gain_reduction_db(
     const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
   float reduction_db = 0.0f;
@@ -73,24 +75,10 @@ float aggregate_gain_reduction_db(
   return reduction_db;
 }
 
-/// @brief Store a consumed automation event, collapsing into the last slot on
-///        overflow so no breakpoint is ever silently dropped after the lane's
-///        ring tail has already advanced.
-/// @details consume_block() advances the SPSC lane tail for every event it
-///          emits, so an event the caller fails to store is gone for good — and
-///          because the dropped events are the highest-offset ones, the affected
-///          parameter would stay stuck at the last *stored* value and never reach
-///          its true block-final value (permanent divergence). Deferring them to
-///          the next block is not an option: a sample_pos < the next block_start
-///          is reclassified as a baseline (past) event and loses its offset. So
-///          on overflow we overwrite the last slot with the newer (higher-offset)
-///          event: the block-final value is preserved and only intra-block
-///          segmentation resolution degrades. For the single-target fader/pan/
-///          width lanes (events are offset-monotonic) this is exact. The shared
-///          insert array mixes up to kMaxInsertAutomationLanes single-target
-///          lanes, so only the last-overflowing target's final value is kept;
-///          this is still strictly better than dropping and is the documented
-///          graceful-degradation limit under extreme multi-lane density.
+/// @brief Preserve the final event of a single-target lane when its storage fills.
+/// @details Deferring the overflow to the next block is not an option: an event
+///          before that block's start is reclassified as a baseline and loses its
+///          offset, so the last slot is overwritten and only the final value kept.
 template <size_t Capacity>
 void store_block_event(std::array<AutomationBlockEvent, Capacity>& dest, size_t& count,
                        const AutomationBlockEvent& event) {
@@ -202,6 +190,11 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   send_temp_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   null_planes_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   stage_channels_.assign(tap_rows, nullptr);
+  bypass_scratch_.assign(tap_rows, std::vector<float>(cols, 0.0f));
+  bypass_scratch_channels_.resize(tap_rows);
+  for (size_t row = 0; row < tap_rows; ++row) {
+    bypass_scratch_channels_[row] = bypass_scratch_[row].data();
+  }
 }
 
 void ChannelStrip::process(float* const* channels, int num_channels, int num_samples) {
@@ -259,8 +252,17 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   for (size_t li = 0; li < lanes_size; ++li) {
     InsertAutomationLane& lane = insert_automation_[li];
     if (!lane.lane) continue;
+    const size_t lane_start = insert_count;
+    const size_t lane_limit = insert_events.size() - (lanes_size - li - 1);
     lane.lane->consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
-      store_block_event(insert_events, insert_count, event);
+      // Reserve a final-value slot for each remaining published lane.
+      if (insert_count > lane_start && insert_events[insert_count - 1].offset == event.offset) {
+        insert_events[insert_count - 1] = event;
+      } else if (insert_count < lane_limit) {
+        insert_events[insert_count++] = event;
+      } else {
+        insert_events[insert_count - 1] = event;
+      }
     });
   }
   sort_events_by_offset(insert_events, insert_count);
@@ -378,6 +380,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     pre_meter_->set_gain_reduction_db(pre_gain_reduction_db);
     pre_meter_->process(pre_meter_channels.data(), meter_rows, clamped_samples);
   }
+  last_gain_reduction_db_ = post_gain_reduction_db;
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   // Drive the post-fader meter over the SAME window length as the pre-fader
   // meter. The pre-fader meter reads pre_tap_, which is only max_block_size_
@@ -470,6 +473,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   }
   const float post_gain_reduction_db =
       muted ? 0.0f : std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+  last_gain_reduction_db_ = post_gain_reduction_db;
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
 
@@ -591,10 +595,13 @@ void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::Processo
   };
   AlignmentDelay* stereo_pair_delays = segment_bank(stereo_pair_alignment_delays_);
   AlignmentDelay* bypass_delays = segment_bank(bypass_alignment_delays_);
+  float* const* bypass_scratch =
+      bypass_scratch_channels_.empty() ? nullptr : bypass_scratch_channels_.data();
   run_insert_chain(inserts, stereo_pair_only, insert_sidechains_, channels, num_channels,
                    num_samples, first_insert_index, sidechain_offset, shifted_sidechain.data(),
                    kPreparedChannels, /*detector_excluded_channel=*/-1, stereo_pair_delays,
-                   bypass_delays);
+                   bypass_delays, bypass_scratch, static_cast<int>(bypass_scratch_channels_.size()),
+                   max_block_size_);
 }
 
 void ChannelStrip::prepare_insert_alignment_delays() {
@@ -628,6 +635,7 @@ void ChannelStrip::prepare_insert_alignment_delays() {
 }
 
 void ChannelStrip::reset() {
+  last_gain_reduction_db_ = 0.0f;
   input_trim_.reset();
   alignment_delay_.reset();
   fader_.reset();
@@ -732,6 +740,15 @@ void ChannelStrip::set_prepared_channels(int num_channels) {
   for (auto* taps : {&pre_tap_, &post_tap_, &send_temp_}) {
     if (!taps->empty() && taps->size() != tap_rows) {
       taps->resize(tap_rows, std::vector<float>((*taps)[0].size(), 0.0f));
+    }
+  }
+  if (!bypass_scratch_.empty() && bypass_scratch_.size() != tap_rows) {
+    bypass_scratch_.resize(tap_rows, std::vector<float>(bypass_scratch_[0].size(), 0.0f));
+  }
+  if (!bypass_scratch_.empty()) {
+    bypass_scratch_channels_.resize(bypass_scratch_.size());
+    for (size_t row = 0; row < bypass_scratch_.size(); ++row) {
+      bypass_scratch_channels_[row] = bypass_scratch_[row].data();
     }
   }
 }
@@ -840,6 +857,34 @@ size_t ChannelStrip::add_send(const SendConfig& cfg) {
 void ChannelStrip::clear_sends() {
   sends_.clear();
   send_automation_.clear();
+}
+
+bool ChannelStrip::prepare_sends(const SendConfig* configs, size_t count,
+                                 PreparedSends& out) const noexcept {
+  if (count > kMaxSends || (count != 0 && configs == nullptr)) {
+    return false;
+  }
+  PreparedSends next;
+  try {
+    next.sends.reserve(count);
+    next.automation.reserve(count);
+    for (size_t index = 0; index < count; ++index) {
+      next.sends.push_back(std::make_unique<SendProcessor>(configs[index]));
+      if (max_block_size_ > 0) {
+        next.sends.back()->prepare(sample_rate_, max_block_size_);
+      }
+      next.automation.push_back(std::make_unique<AutomationLane>());
+    }
+  } catch (...) {
+    return false;
+  }
+  out = std::move(next);
+  return true;
+}
+
+void ChannelStrip::commit_sends(PreparedSends& prepared) noexcept {
+  sends_.swap(prepared.sends);
+  send_automation_.swap(prepared.automation);
 }
 
 void ChannelStrip::remove_send(size_t index) {

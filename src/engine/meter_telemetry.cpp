@@ -4,9 +4,27 @@
 #include <cmath>
 
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/math_utils.h"
 
 namespace sonare::engine {
+
+void capture_input_peak_db(float* const* channels, int num_channels, int num_samples,
+                           std::array<float, mixing::kMaxMeterChannels>& output) noexcept {
+  output = mixing::detail::meter_floor_array();
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
+  const int channel_count = std::min(num_channels, mixing::kMaxMeterChannels);
+  for (int channel = 0; channel < channel_count; ++channel) {
+    const float* source = channels[channel];
+    if (source == nullptr) continue;
+    float peak = 0.0f;
+    for (int sample = 0; sample < num_samples; ++sample) {
+      const float value = source[sample];
+      if (std::isfinite(value)) peak = std::max(peak, std::abs(value));
+    }
+    output[static_cast<size_t>(channel)] = linear_to_db(peak);
+  }
+}
 
 using constants::kFloorDb;
 
@@ -30,6 +48,12 @@ void MeterTelemetryTap::reset() noexcept {
   staged_count_ = 0;
 }
 
+void MeterTelemetryTap::reset_integrated() noexcept {
+  if (meter_.has_value()) {
+    meter_->reset_integrated();
+  }
+}
+
 void MeterTelemetryTap::begin_block() noexcept {
   block_active_ = true;
   staged_count_ = 0;
@@ -45,23 +69,30 @@ void MeterTelemetryTap::end_block() noexcept {
 }
 
 void MeterTelemetryTap::process(float* const* channels, int num_channels, int num_frames,
-                                int64_t render_frame) noexcept {
+                                int64_t render_frame, const float* input_peak_db,
+                                float gain_reduction_db) noexcept {
   if (!meter_.has_value()) {
     return;
   }
+  meter_->set_gain_reduction_db(gain_reduction_db);
   meter_->process(channels, num_channels, num_frames);
   push_goniometer(channels, num_channels, num_frames);
-  publish(meter_->snapshot(), render_frame, num_frames);
+  publish(meter_->snapshot(), render_frame, num_frames, input_peak_db);
 }
 
 void MeterTelemetryTap::process_lightweight(float* const* channels, int num_channels,
                                             int num_frames, int64_t render_frame,
-                                            uint32_t target_id) noexcept {
+                                            uint32_t target_id, const float* input_peak_db,
+                                            float gain_reduction_db) noexcept {
   if (channels == nullptr || num_channels <= 0 || num_frames <= 0) return;
 
   MeterTelemetryRecord record{};
   record.target_id = target_id;
   record.render_frame = render_frame;
+  record.gain_reduction_db = std::min(0.0f, gain_reduction_db);
+  if (input_peak_db != nullptr) {
+    std::copy_n(input_peak_db, mixing::kMaxMeterChannels, record.input_peak_db.begin());
+  }
   // Own monotonic counter -- the full meter's seq only advances inside the full
   // publish() path, so reusing it here would stamp every lightweight record
   // with a stale/zero seq.
@@ -123,13 +154,16 @@ size_t MeterTelemetryTap::read_goniometer(mixing::GoniometerPoint* out,
 }
 
 void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame,
-                                int num_frames) noexcept {
+                                int num_frames, const float* input_peak_db) noexcept {
   MeterTelemetryRecord record{};
   record.target_id = target_id_;
   record.render_frame = render_frame;
   record.seq = snapshot.seq;
   record.peak_db = snapshot.peak_db;
   record.rms_db = snapshot.rms_db;
+  if (input_peak_db != nullptr) {
+    std::copy_n(input_peak_db, mixing::kMaxMeterChannels, record.input_peak_db.begin());
+  }
   record.true_peak_db = snapshot.true_peak_db;
   record.channel_count = snapshot.channel_count;
   record.max_true_peak_db = snapshot.max_true_peak_db;
@@ -174,6 +208,9 @@ void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexc
     // and RMS is recomputed from accumulated energy rather than overwritten.
     MeterTelemetryRecord& staged = staged_records_[i];
     StagedEnergy& energy = staged_energy_[i];
+    for (size_t c = 0; c < mixing::kMaxMeterChannels; ++c) {
+      staged.input_peak_db[c] = std::max(staged.input_peak_db[c], record.input_peak_db[c]);
+    }
     const int channel_count = std::clamp(record.channel_count, 0, mixing::kMaxMeterChannels);
     for (int ch = 0; ch < channel_count; ++ch) {
       const size_t c = static_cast<size_t>(ch);
@@ -204,7 +241,7 @@ void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexc
     staged.momentary_lufs = record.momentary_lufs;
     staged.short_term_lufs = record.short_term_lufs;
     staged.integrated_lufs = record.integrated_lufs;
-    staged.gain_reduction_db = record.gain_reduction_db;
+    staged.gain_reduction_db = std::min(staged.gain_reduction_db, record.gain_reduction_db);
     return;
   }
   if (staged_count_ < staged_records_.size()) {

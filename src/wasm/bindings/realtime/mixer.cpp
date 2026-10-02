@@ -816,8 +816,26 @@ void RealtimeEngineWasm::setTrackStripChannelDelaySamples(const val& track_id_va
 #endif
 }
 
+float RealtimeEngineWasm::insertParameterConstructedValue(const val& param_id_val) {
+  const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
+#if defined(SONARE_WITH_MIXING)
+  float value = 0.0f;
+  if (!engine_.insert_parameter_constructed_value(param_id, &value)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown insert construction value");
+  }
+  return value;
+#else
+  (void)param_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
   cls.function("setTrackLanes", &RealtimeEngineWasm::setTrackLanes)
+      .function("insertParameterConstructedValue",
+                &RealtimeEngineWasm::insertParameterConstructedValue)
       .function("setLaneSidechain", &RealtimeEngineWasm::setLaneSidechain)
       .function("setTrackBuses", &RealtimeEngineWasm::setTrackBuses)
       .function("setBusSidechain", &RealtimeEngineWasm::setBusSidechain)

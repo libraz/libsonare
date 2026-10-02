@@ -327,6 +327,15 @@ export class SonareEngine {
    * mixer lane first (like automationParamId) so the offline engine resolves the
    * same strip selector the realtime engine uses.
    *
+   * The returned id uses the track's current positional lane selector. When
+   * setTrackLanes successfully changes lane order or membership, the engine
+   * remaps already queued and published track automation by track id, but it
+   * cannot update a numeric id retained by the caller. Re-resolve every track
+   * insert id after such a topology change before passing it to
+   * setAutomationLane. Use setTrackStripInsertParamByName when the operation
+   * needs a stable track identity. Master and bus insert ids are separate and
+   * are not invalidated by track-lane changes.
+   *
    * @param target Track id (declares a mixer lane on first use).
    * @param insertIndex Index into the strip's combined insert sequence.
    * @param paramName Processor JSON-key parameter name.
@@ -460,14 +469,24 @@ export class SonareEngine {
     return sent;
   }
 
+  /** Resets the master's integrated loudness accumulator in both engine mirrors. */
+  resetMasterLoudnessMeter(renderFrame = -1): boolean {
+    this.offlineEngine.resetMasterLoudnessMeter(renderFrame);
+    return this.sendMirroredCommand({
+      type: SonareEngineCommandType.ResetMasterLoudnessMeter,
+      sampleTime: renderFrame,
+    });
+  }
+
   /**
    * Declares the mixer track lanes in an explicit order.
    *
-   * Lane indices are append-only: once a track id occupies a lane, its index
-   * stays fixed for the engine's lifetime. The given list must therefore start
-   * with the already-declared lane ids in their current order and may only
-   * append new track ids after them. Entries carrying `sends` replace that
-   * track's send list; entries without `sends` leave existing sends untouched.
+   * A successful call may reorder existing track ids, remove track ids, or add
+   * new ones. Existing queued and published track automation follows the track
+   * id, while numeric track-insert automation ids retained by the caller do
+   * not; re-resolve those ids after every topology change. Entries carrying
+   * `sends` replace that track's send list; entries without `sends` leave
+   * existing sends untouched.
    *
    * @param lanes Track ids or lane descriptors in the desired lane order.
    */
@@ -534,19 +553,18 @@ export class SonareEngine {
   }
 
   setTrackStripJson(target: string | number, sceneJson: string): void {
+    // Parse before declaring a new lane so malformed text cannot declare one.
+    mixer.decodedInsertSignature(sceneJson, { kind: 'track', trackId: 0 });
     const laneIndex = this.ensureTrackLane(target);
     const trackId = this.trackLaneIds[laneIndex];
-    const { resetInserts } = strips.setTrackStripJson(
+    const { insertBaseResets, constructionOverrides } = strips.setTrackStripJson(
       this.stripContext,
       trackId,
       sceneJson,
       this.trackStripJson,
     );
-    if (resetInserts) {
-      this.clearInsertAutomationLanes({ kind: 'track', trackId });
-    }
     mixer.pruneStripSidechains(this.mixerContext, { kind: 'track', trackId }, sceneJson);
-    this.syncMixer(resetInserts ? [{ kind: 'track', trackId }] : []);
+    this.syncMixer(insertBaseResets, constructionOverrides);
   }
 
   setTrackStripEqBand(target: string | number, bandIndex: number, band: EqBand | string): void {
@@ -631,18 +649,7 @@ export class SonareEngine {
   }
 
   setMasterStripJson(sceneJson: string): void {
-    const target = { kind: 'master' } as const;
-    const resetInserts =
-      (this.masterStripJson !== undefined && this.masterStripJson !== sceneJson) ||
-      mixer.hasInsertParamOverrides(this.insertParamOverrides, target);
-    mixer.applyFullStripJson(this.offlineEngine, target, sceneJson, resetInserts);
-    if (resetInserts) {
-      this.clearInsertAutomationLanes(target);
-    }
-    mixer.pruneStripSidechains(this.mixerContext, target, sceneJson);
-    mixer.clearInsertParamOverrides(this.insertParamOverrides, target);
-    this.masterStripJson = sceneJson;
-    this.syncMixer(resetInserts ? [target] : []);
+    mixer.setMasterStripJson(this.mixerContext, sceneJson);
   }
 
   setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
@@ -1406,8 +1413,11 @@ export class SonareEngine {
     return mixer.mixerLanes(this.mixerContext);
   }
 
-  private syncMixer(forceInsertResets: mixer.StripJsonTarget[] = []): void {
-    mixer.syncMixer(this.mixerContext, false, forceInsertResets);
+  private syncMixer(
+    insertBaseResets: mixer.StripJsonTarget[] = [],
+    oneShotInsertParamOverrides: mixer.InsertParamOverride[] = [],
+  ): void {
+    mixer.syncMixer(this.mixerContext, false, insertBaseResets, oneShotInsertParamOverrides);
   }
 
   private insertAutomationTargetKey(target: mixer.StripJsonTarget): string {
@@ -1516,7 +1526,8 @@ export class SonareEngine {
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       ensureBus: (busId) => this.ensureBus(busId),
       mixerLanes: () => this.mixerLanes(),
-      syncMixer: (forceInsertResets) => this.syncMixer(forceInsertResets),
+      syncMixer: (insertBaseResets, oneShotInsertParamOverrides) =>
+        this.syncMixer(insertBaseResets, oneShotInsertParamOverrides),
       clearInsertAutomationLanes: (target, forgetResolvedIds) =>
         this.clearInsertAutomationLanes(target, forgetResolvedIds),
       sendSmoothedParam: (paramId, value) => this.sendSmoothedParam(paramId, value),
@@ -1542,6 +1553,7 @@ export class SonareEngine {
       writeStripJson: (target, sceneJson) =>
         mixer.cacheStripJson(this.mixerContext, target, sceneJson),
       insertParamOverrides: this.insertParamOverrides,
+      clearInsertAutomationLanes: (target) => this.clearInsertAutomationLanes(target),
     };
   }
 

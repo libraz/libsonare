@@ -36,7 +36,9 @@ from ._runtime import (
     SonareEngineTelemetry,
     SonareEngineWarpAnchor,
     SonareMeterTelemetryRecord,
+    SonareMeterTelemetryRecordV2,
     SonareMeterTelemetryRecordWide,
+    SonareMeterTelemetryRecordWideV2,
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
     SonareValueError,
@@ -319,7 +321,9 @@ def _telemetry_from_c(raw: SonareEngineTelemetry) -> EngineTelemetry:
     )
 
 
-def _meter_telemetry_from_c(raw: SonareMeterTelemetryRecord) -> MeterTelemetryRecord:
+def _meter_telemetry_from_c(
+    raw: SonareMeterTelemetryRecord | SonareMeterTelemetryRecordV2,
+) -> MeterTelemetryRecord:
     return MeterTelemetryRecord(
         target_id=int(raw.target_id),
         render_frame=int(raw.render_frame),
@@ -338,13 +342,16 @@ def _meter_telemetry_from_c(raw: SonareMeterTelemetryRecord) -> MeterTelemetryRe
         integrated_lufs=float(raw.integrated_lufs),
         gain_reduction_db=float(raw.gain_reduction_db),
         dropped_records=int(raw.dropped_records),
+        input_peak_db_l=float(getattr(raw, "input_peak_db_l", -120.0)),
+        input_peak_db_r=float(getattr(raw, "input_peak_db_r", -120.0)),
     )
 
 
 def _meter_telemetry_wide_from_c(
-    raw: SonareMeterTelemetryRecordWide,
+    raw: SonareMeterTelemetryRecordWide | SonareMeterTelemetryRecordWideV2,
 ) -> MeterTelemetryRecordWide:
     planes = max(0, min(int(raw.channel_count), len(raw.peak_db)))
+    input_peak_db = getattr(raw, "input_peak_db", ())
     return MeterTelemetryRecordWide(
         target_id=int(raw.target_id),
         render_frame=int(raw.render_frame),
@@ -361,6 +368,7 @@ def _meter_telemetry_wide_from_c(
         integrated_lufs=float(raw.integrated_lufs),
         gain_reduction_db=float(raw.gain_reduction_db),
         dropped_records=int(raw.dropped_records),
+        input_peak_db=[float(input_peak_db[i]) for i in range(planes)] if input_peak_db else [],
     )
 
 

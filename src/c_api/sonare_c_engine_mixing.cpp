@@ -618,6 +618,20 @@ SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareRealtimeEngine*
 #endif
 }
 
+SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngine* engine,
+                                                             uint32_t param_id, float* out_value) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_value) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)param_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return engine->engine.insert_parameter_constructed_value(param_id, out_value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+#endif
+}
+
 SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
                                                              uint32_t track_id,
                                                              unsigned int insert_index,

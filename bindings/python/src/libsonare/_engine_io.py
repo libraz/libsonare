@@ -33,8 +33,8 @@ from ._ffi_types_core import (
     SonareEngineGraphParameterBinding,
     SonareEngineGraphSpec,
     SonareEngineTelemetry,
-    SonareMeterTelemetryRecord,
-    SonareMeterTelemetryRecordWide,
+    SonareMeterTelemetryRecordV2,
+    SonareMeterTelemetryRecordWideV2,
     SonareScopeTelemetryRecord,
 )
 from ._runtime import (
@@ -403,6 +403,17 @@ class _EngineIoMixin:
         )
         return [_telemetry_from_c(raw[i]) for i in range(written.value)]
 
+    def reset_master_loudness_meter(self, render_frame: int = -1) -> None:
+        """Queue a reset of the master integrated-loudness meter."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_reset_master_loudness_meter"):
+            raise RuntimeError("libsonare was built without master-meter reset support")
+        _check(
+            lib.sonare_engine_reset_master_loudness_meter(
+                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+            )
+        )
+
     def pop_clip_page_request(self) -> ClipPageRequest | None:
         raw = SonareClipPageRequest()
         has_request = ctypes.c_int()
@@ -460,13 +471,13 @@ class _EngineIoMixin:
         if max_records <= 0:
             return []
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_drain_meter_telemetry"):
+        if not hasattr(lib, "sonare_engine_drain_meter_telemetry_v2"):
             raise RuntimeError("libsonare was built without meter-telemetry support")
         capacity = _to_c_size_t(max_records, "max_records")
-        raw = (SonareMeterTelemetryRecord * capacity.value)()
+        raw = (SonareMeterTelemetryRecordV2 * capacity.value)()
         written = ctypes.c_size_t()
         _check(
-            lib.sonare_engine_drain_meter_telemetry(
+            lib.sonare_engine_drain_meter_telemetry_v2(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
@@ -476,23 +487,36 @@ class _EngineIoMixin:
         """Drain pending per-plane meter telemetry for a surround target.
 
         Use this drain for a surround mix target; :meth:`drain_meter_telemetry`
-        stays the stereo fast path. The two share one queue, so call only one
-        per target.
+        stays the stereo fast path. The two share one queue and each consumes
+        every target's records, so an engine uses only one of them.
         """
         if max_records <= 0:
             return []
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_drain_meter_telemetry_wide"):
+        if not hasattr(lib, "sonare_engine_drain_meter_telemetry_wide_v2"):
             raise RuntimeError("libsonare was built without meter-telemetry support")
         capacity = _to_c_size_t(max_records, "max_records")
-        raw = (SonareMeterTelemetryRecordWide * capacity.value)()
+        raw = (SonareMeterTelemetryRecordWideV2 * capacity.value)()
         written = ctypes.c_size_t()
         _check(
-            lib.sonare_engine_drain_meter_telemetry_wide(
+            lib.sonare_engine_drain_meter_telemetry_wide_v2(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
         )
         return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
+
+    def insert_parameter_constructed_value(self, param_id: int) -> float:
+        """Return an insert parameter's immutable construction value."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_insert_parameter_constructed_value"):
+            raise RuntimeError("libsonare was built without insert constructed-value support")
+        out_value = ctypes.c_float()
+        _check(
+            lib.sonare_engine_insert_parameter_constructed_value(
+                self._require_handle(), _to_c_uint(param_id, "param_id"), ctypes.byref(out_value)
+            )
+        )
+        return float(out_value.value)
 
     def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
         """Enable scope telemetry publishing and return the applied band count.

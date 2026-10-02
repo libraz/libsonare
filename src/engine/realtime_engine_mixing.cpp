@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -34,6 +35,119 @@ constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 // method every surface calls, rather than in one binding's wrapper -- the WASM
 // bindings call these methods directly and never see the C ABI's copy of it.
 bool insert_param_value_acceptable(float value) noexcept { return std::isfinite(value); }
+
+enum class TrackLaneRemapResult : uint8_t {
+  kUnchanged,
+  kRemapped,
+  kDrop,
+};
+
+TrackLaneRemapResult remap_track_lane_index(
+    uint32_t old_lane, const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& old_lane_ids,
+    size_t old_lane_count,
+    const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& new_lane_ids,
+    size_t new_lane_count, uint32_t* new_lane) noexcept {
+  if (new_lane == nullptr || old_lane >= old_lane_count || old_lane >= old_lane_ids.size()) {
+    return TrackLaneRemapResult::kDrop;
+  }
+  const uint32_t track_id = old_lane_ids[old_lane];
+  if (track_id == 0) return TrackLaneRemapResult::kDrop;
+  for (size_t lane = 0; lane < new_lane_count && lane < new_lane_ids.size(); ++lane) {
+    if (new_lane_ids[lane] != track_id) continue;
+    *new_lane = static_cast<uint32_t>(lane);
+    return lane == old_lane ? TrackLaneRemapResult::kUnchanged : TrackLaneRemapResult::kRemapped;
+  }
+  return TrackLaneRemapResult::kDrop;
+}
+
+TrackLaneRemapResult remap_track_target_id(
+    uint32_t target_id, const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& old_lane_ids,
+    size_t old_lane_count,
+    const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& new_lane_ids,
+    size_t new_lane_count, uint32_t* remapped_id) noexcept {
+  if (remapped_id == nullptr) return TrackLaneRemapResult::kDrop;
+  if (is_insert_param_id(target_id)) {
+    const uint32_t strip = insert_param_strip(target_id);
+    if (strip >= kInsertStripBusMin) return TrackLaneRemapResult::kUnchanged;
+    uint32_t new_lane = 0;
+    const TrackLaneRemapResult result = remap_track_lane_index(
+        strip, old_lane_ids, old_lane_count, new_lane_ids, new_lane_count, &new_lane);
+    if (result == TrackLaneRemapResult::kRemapped) {
+      *remapped_id = make_insert_param_id(new_lane, insert_param_index(target_id),
+                                          insert_param_param(target_id));
+    }
+    return result;
+  }
+  if ((target_id & kEngineParamNamespaceMask) != kEngineParamNamespace) {
+    return TrackLaneRemapResult::kUnchanged;
+  }
+  const uint32_t old_lane = (target_id & kEngineParamLaneMask) >> kEngineParamLaneShift;
+  if (old_lane >= TrackMixerRuntime::kMaxTrackLanes) {
+    return TrackLaneRemapResult::kUnchanged;
+  }
+  uint32_t new_lane = 0;
+  const TrackLaneRemapResult result = remap_track_lane_index(
+      old_lane, old_lane_ids, old_lane_count, new_lane_ids, new_lane_count, &new_lane);
+  if (result == TrackLaneRemapResult::kRemapped) {
+    *remapped_id = make_track_lane_param_id(new_lane, target_id & kEngineParamKindMask);
+  }
+  return result;
+}
+
+struct TrackLaneAutomationRemapContext {
+  const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& old_lane_ids;
+  size_t old_lane_count = 0;
+  const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& new_lane_ids;
+  size_t new_lane_count = 0;
+};
+
+bool remap_track_automation_target(void* opaque, uint32_t old_param_id,
+                                   uint32_t* new_param_id) noexcept {
+  if (opaque == nullptr) return false;
+  const auto& context = *static_cast<const TrackLaneAutomationRemapContext*>(opaque);
+  return remap_track_target_id(old_param_id, context.old_lane_ids, context.old_lane_count,
+                               context.new_lane_ids, context.new_lane_count,
+                               new_param_id) != TrackLaneRemapResult::kDrop;
+}
+
+TrackLaneRemapResult remap_track_command(
+    rt::Command& command,
+    const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& old_lane_ids,
+    size_t old_lane_count,
+    const std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes>& new_lane_ids,
+    size_t new_lane_count) noexcept {
+  switch (command.type) {
+    case rt::CommandType::kSetParam:
+    case rt::CommandType::kSetParamSmoothed: {
+      uint32_t remapped_id = command.target_id;
+      const TrackLaneRemapResult result =
+          remap_track_target_id(command.target_id, old_lane_ids, old_lane_count, new_lane_ids,
+                                new_lane_count, &remapped_id);
+      if (result == TrackLaneRemapResult::kRemapped) command.target_id = remapped_id;
+      return result;
+    }
+    case rt::CommandType::kSetTrackInsertParam: {
+      const uint32_t old_lane = (command.target_id >> 16u) & 0xFFu;
+      uint32_t new_lane = 0;
+      const TrackLaneRemapResult result = remap_track_lane_index(
+          old_lane, old_lane_ids, old_lane_count, new_lane_ids, new_lane_count, &new_lane);
+      if (result == TrackLaneRemapResult::kRemapped) {
+        command.target_id = (command.target_id & ~0x00FF0000u) | (new_lane << 16u);
+      }
+      return result;
+    }
+    case rt::CommandType::kSetSoloMute:
+    case rt::CommandType::kSetTrackMonitorMode: {
+      uint32_t new_lane = 0;
+      const TrackLaneRemapResult result = remap_track_lane_index(
+          command.target_id, old_lane_ids, old_lane_count, new_lane_ids, new_lane_count, &new_lane);
+      if (result == TrackLaneRemapResult::kRemapped) command.target_id = new_lane;
+      return result;
+    }
+    default:
+      return TrackLaneRemapResult::kUnchanged;
+  }
+}
 
 // Reads @p processor_name's catalog entry for @p param_id out of
 // insert_param_info_json (the same JSON the capability catalog and the C ABI's
@@ -86,6 +200,13 @@ bool describe_insert_param_from_catalog(const std::string& processor_name, unsig
 void RealtimeEngine::set_mixing_enabled(bool enabled) noexcept {
   mixing_enabled_.store(enabled, std::memory_order_relaxed);
   update_reported_graph_latency();
+}
+
+bool RealtimeEngine::reset_master_meter_integrated(int64_t render_frame) noexcept {
+  rt::Command command{};
+  command.type = rt::CommandType::kResetMasterMeterIntegrated;
+  command.sample_time = render_frame;
+  return push_command(command);
 }
 
 bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
@@ -145,8 +266,75 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
 }
 
 bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
+  std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> new_lane_ids{};
+  const size_t new_lane_count = std::min(lanes.size(), new_lane_ids.size());
+  for (size_t lane_index = 0; lane_index < new_lane_count; ++lane_index) {
+    new_lane_ids[lane_index] = lanes[lane_index].track_id;
+  }
+
+  // Prepare the automation remap before lane routing changes; commit it once the mixer accepts.
+  automation::AutomationEngine::PreparedLaneRemap automation_remap;
+  TrackLaneAutomationRemapContext automation_context{track_lane_ids_, track_lane_count_,
+                                                     new_lane_ids, new_lane_count};
+  if (!automation_.prepare_lane_remap_control_quiescent(remap_track_automation_target,
+                                                        &automation_context, &automation_remap)) {
+    return false;
+  }
   const bool ok = track_mixer_runtime_.set_track_lanes(std::move(lanes));
   if (ok) {
+    automation_.commit_lane_remap_control_quiescent(std::move(automation_remap));
+    // Remap queued commands and manual bases by track id so a lane reorder cannot retarget a strip.
+    size_t pending_out = 0;
+    for (size_t i = 0; i < pending_.size(); ++i) {
+      if (!pending_active_[i]) continue;
+      rt::Command command = pending_[i];
+      const TrackLaneRemapResult result = remap_track_command(
+          command, track_lane_ids_, track_lane_count_, new_lane_ids, new_lane_count);
+      if (result == TrackLaneRemapResult::kDrop) {
+        pending_active_[i] = false;
+        continue;
+      }
+      pending_[pending_out] = command;
+      pending_active_[pending_out] = true;
+      if (pending_out != i) pending_active_[i] = false;
+      ++pending_out;
+    }
+    for (size_t i = pending_out; i < pending_.size(); ++i) pending_active_[i] = false;
+
+    const size_t queued = commands_.size_approx();
+    for (size_t i = 0; i < queued; ++i) {
+      rt::Command command{};
+      if (!commands_.pop(command)) break;
+      const TrackLaneRemapResult result = remap_track_command(
+          command, track_lane_ids_, track_lane_count_, new_lane_ids, new_lane_count);
+      if (result != TrackLaneRemapResult::kDrop) (void)commands_.push(command);
+    }
+
+    struct RemappedBase {
+      uint32_t target_id = 0;
+      float value = 0.0f;
+    };
+    std::array<RemappedBase, kParameterBaseTableMaxEntries> remapped_bases{};
+    size_t remapped_count = 0;
+    parameter_base_table_.erase_if([&](uint32_t target_id, float value) noexcept {
+      uint32_t remapped_id = target_id;
+      const TrackLaneRemapResult result =
+          remap_track_target_id(target_id, track_lane_ids_, track_lane_count_, new_lane_ids,
+                                new_lane_count, &remapped_id);
+      if (result == TrackLaneRemapResult::kUnchanged) return false;
+      if (result == TrackLaneRemapResult::kRemapped && remapped_count < remapped_bases.size()) {
+        remapped_bases[remapped_count++] = {remapped_id, value};
+      }
+      // Erase both moved and removed old selectors. Moved values are
+      // re-recorded below after the fixed table has completed its pass.
+      return true;
+    });
+    for (size_t i = 0; i < remapped_count; ++i) {
+      record_parameter_base(remapped_bases[i].target_id, remapped_bases[i].value);
+    }
+
+    track_lane_ids_ = new_lane_ids;
+    track_lane_count_ = new_lane_count;
     update_reported_graph_latency();
   }
   return ok;
@@ -252,9 +440,10 @@ InsertParamSetResult RealtimeEngine::set_track_insert_param_detailed(uint32_t tr
     return InsertParamSetResult::kInvalidTarget;
   }
   rt::Command command;
-  command.type = rt::CommandType::kSetTrackInsertParam;
-  command.target_id = (static_cast<uint32_t>(lane_index) << 16) | ((insert_index & 0xFFu) << 8) |
-                      (param_id & 0xFFu);
+  // Generic reserved id so apply_command records the manual base; set_track_lanes remaps selectors.
+  command.type = rt::CommandType::kSetParam;
+  command.target_id =
+      make_insert_param_id(static_cast<uint32_t>(lane_index), insert_index, param_id);
   command.sample_time = -1;  // block head / immediate
   command.arg.f = value;
   return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
@@ -317,8 +506,10 @@ InsertParamSetResult RealtimeEngine::set_master_insert_param_detailed(unsigned i
     return InsertParamSetResult::kInvalidTarget;
   }
   rt::Command command;
-  command.type = rt::CommandType::kSetMasterInsertParam;
-  command.target_id = ((insert_index & 0xFFu) << 8) | (param_id & 0xFFu);
+  // Route through the generic reserved id so the command path retains the
+  // latest manual base for automation release, matching track/bus edits.
+  command.type = rt::CommandType::kSetParam;
+  command.target_id = make_insert_param_id(kInsertStripMaster, insert_index, param_id);
   command.sample_time = -1;  // block head / immediate
   command.arg.f = value;
   return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
@@ -352,14 +543,17 @@ bool RealtimeEngine::restore_master_insert_param_by_name(unsigned int insert_ind
   const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
   if (id < 0) return false;
   const unsigned int param_id = static_cast<unsigned int>(id);
-  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
-    if (slot.assigned && slot.insert_index == insert_index && slot.param_id == param_id) {
-      slot.active = false;
-      slot.assigned = false;
-    }
-  }
   const bool applied = owned_master_strip_->apply_insert_parameter(insert_index, param_id, value);
   if (applied) {
+    // Retire the smoother only after the processor accepted the restore. A
+    // rejected non-RT-safe or unknown parameter must leave its active target
+    // assigned so the next automation update cannot silently reclaim it.
+    for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+      if (slot.assigned && slot.insert_index == insert_index && slot.param_id == param_id) {
+        slot.active = false;
+        slot.assigned = false;
+      }
+    }
     const int64_t automation_id = resolve_master_insert_automation_id(insert_index, key);
     if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
   }
@@ -758,6 +952,11 @@ bool RealtimeEngine::constructed_insert_parameter_base(uint32_t target_id,
       strip, insert_index, param_id, out_value);
 }
 
+bool RealtimeEngine::insert_parameter_constructed_value(uint32_t target_id,
+                                                        float* out_value) const noexcept {
+  return constructed_insert_parameter_base(target_id, out_value);
+}
+
 bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,
                                                         unsigned int param_id,
                                                         float value) noexcept {
@@ -776,22 +975,44 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
       free_slot = &slot;
     }
   }
-  if (settled_match != nullptr) {
-    settled_match->active = true;
-    settled_match->smoother.set_target(value);
-    return true;
-  }
+  if (settled_match != nullptr) free_slot = settled_match;
   if (free_slot == nullptr) {
     ++master_insert_automation_overflow_count_;
     return false;
+  }
+  // Fresh slot: manual base, last applied, construction, target. Settled: last applied, live value.
+  const uint32_t target_id = make_insert_param_id(kInsertStripMaster, insert_index, param_id);
+  float baseline = value;
+  if (settled_match != nullptr) {
+    // Retained manual bases must not pull a live settled target back to an older edit.
+    baseline = settled_match->smoother.current();
+    float last_applied = baseline;
+    if (owned_master_strip_ != nullptr &&
+        owned_master_strip_->last_applied_insert_parameter_value(insert_index, param_id,
+                                                                 &last_applied) &&
+        std::isfinite(last_applied)) {
+      baseline = last_applied;
+    }
+  } else {
+    // The command handler records this call's manual base only afterwards.
+    baseline = value;
+    if (!parameter_base_lookup(target_id, &baseline) || !std::isfinite(baseline)) {
+      const bool have_last_applied = owned_master_strip_ != nullptr &&
+                                     owned_master_strip_->last_applied_insert_parameter_value(
+                                         insert_index, param_id, &baseline);
+      if (!have_last_applied || !std::isfinite(baseline)) {
+        if (!constructed_insert_parameter_base(target_id, &baseline) || !std::isfinite(baseline)) {
+          baseline = value;
+        }
+      }
+    }
   }
   free_slot->active = true;
   free_slot->assigned = true;
   free_slot->insert_index = insert_index;
   free_slot->param_id = param_id;
-  // Snap to the first observed value so the smoother does not glide up from 0.
   free_slot->smoother.prepare(sample_rate_, 5.0f);
-  free_slot->smoother.reset(value);
+  free_slot->smoother.reset(baseline);
   free_slot->smoother.set_target(value);
   return true;
 }

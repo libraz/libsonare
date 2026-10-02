@@ -6,6 +6,25 @@
 
 namespace sonare::automation {
 
+namespace {
+
+void normalize_lanes(std::vector<AutomationLane>& lanes) {
+  // One lane owns a target parameter. Keeping the first caller-supplied lane
+  // gives a deterministic result and prevents the audio thread from applying
+  // multiple conflicting values with accidental last-wins behavior.
+  std::stable_sort(lanes.begin(), lanes.end(),
+                   [](const AutomationLane& a, const AutomationLane& b) {
+                     return a.target_param_id() < b.target_param_id();
+                   });
+  lanes.erase(std::unique(lanes.begin(), lanes.end(),
+                          [](const AutomationLane& a, const AutomationLane& b) {
+                            return a.target_param_id() == b.target_param_id();
+                          }),
+              lanes.end());
+}
+
+}  // namespace
+
 void AutomationBoundaryList::clear() noexcept {
   size = 0;
   overflowed = false;
@@ -47,20 +66,56 @@ void AutomationEngine::set_parameter_metadata(std::vector<ParameterInfo> paramet
 }
 
 void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
-  // One lane owns a target parameter. Keeping the first caller-supplied lane
-  // gives a deterministic result and prevents the audio thread from applying
-  // multiple conflicting values with accidental last-wins behavior.
-  std::stable_sort(lanes.begin(), lanes.end(),
-                   [](const AutomationLane& a, const AutomationLane& b) {
-                     return a.target_param_id() < b.target_param_id();
-                   });
-  lanes.erase(std::unique(lanes.begin(), lanes.end(),
-                          [](const AutomationLane& a, const AutomationLane& b) {
-                            return a.target_param_id() == b.target_param_id();
-                          }),
-              lanes.end());
+  normalize_lanes(lanes);
   lane_count_.store(lanes.size(), std::memory_order_relaxed);
   lanes_.publish(std::make_shared<const std::vector<AutomationLane>>(std::move(lanes)));
+}
+
+bool AutomationEngine::prepare_lane_remap_control_quiescent(LaneTargetRemapper remapper,
+                                                            void* context,
+                                                            PreparedLaneRemap* out) noexcept {
+  if (remapper == nullptr || out == nullptr) return false;
+  out->snapshot.reset();
+
+  // Adopt the pending snapshot while holding the prior one so its release runs on the old selector.
+  const std::shared_ptr<const std::vector<AutomationLane>> previous = lanes_.current_shared();
+  lanes_.acquire_control_quiescent();
+  const std::shared_ptr<const std::vector<AutomationLane>> current = lanes_.current_shared();
+  if (previous.get() != current.get()) {
+    notify_lane_targets_released(previous.get(), current.get());
+  }
+  if (!current) return true;
+
+  try {
+    std::vector<AutomationLane> remapped;
+    remapped.reserve(current->size());
+    for (const AutomationLane& lane : *current) {
+      const uint32_t old_param_id = lane.target_param_id();
+      uint32_t new_param_id = old_param_id;
+      if (!remapper(context, old_param_id, &new_param_id)) continue;
+      AutomationLane copy = lane;
+      copy.set_target_param_id(new_param_id);
+      remapped.push_back(std::move(copy));
+    }
+
+    // The callback is deliberately allowed to retain every non-track target
+    // unchanged, including an invalid target that the caller may later scrub.
+    // Only an explicit false result drops a lane.
+    normalize_lanes(remapped);
+    out->snapshot = std::make_shared<const std::vector<AutomationLane>>(std::move(remapped));
+    return true;
+  } catch (...) {
+    out->snapshot.reset();
+    return false;
+  }
+}
+
+void AutomationEngine::commit_lane_remap_control_quiescent(PreparedLaneRemap&& prepared) noexcept {
+  if (!prepared.snapshot) return;
+  lane_count_.store(prepared.snapshot->size(), std::memory_order_relaxed);
+  // publish() cannot reject a non-null snapshot; the acquire skips releases for identity rewrites.
+  (void)lanes_.publish(std::move(prepared.snapshot));
+  lanes_.acquire_control_quiescent();
 }
 
 bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept {

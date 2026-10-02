@@ -38,6 +38,14 @@ class StereoWidthProcessor : public rt::ProcessorBase {
   /// The mid (mono/center) component is preserved at all widths; only the side
   /// component is scaled by @p width, so a centered or mono source keeps its level.
   void set_width(float width) noexcept;
+
+  /// @brief Copies the in-flight DSP state from another width processor.
+  /// @details The source and destination must be control-quiescent: neither may
+  ///          be processed or mutated concurrently. This is an allocation-free
+  ///          state handoff for a retained bus slot and deliberately excludes
+  ///          generic @c ProcessorBase metadata such as bypass and detector state.
+  void copy_state_from(const StereoWidthProcessor& other) noexcept;
+
   float width() const noexcept { return width_target_.load(std::memory_order_relaxed); }
 
   /// @brief Current (smoothed) width factor. Lags @ref width() while the

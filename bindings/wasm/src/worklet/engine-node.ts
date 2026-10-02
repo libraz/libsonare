@@ -72,7 +72,8 @@ function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
     !Number.isSafeInteger(type) ||
     type < SonareEngineCommandType.SetParam ||
     (type > SonareEngineCommandType.SeekMarker &&
-      type !== SonareEngineCommandType.SetTrackMonitorMode)
+      type !== SonareEngineCommandType.SetTrackMonitorMode &&
+      type !== SonareEngineCommandType.ResetMasterLoudnessMeter)
   ) {
     return false;
   }
@@ -273,6 +274,13 @@ export class SonareRealtimeEngineNode {
       );
     }
 
+    const meterIntervalFrames = requireIntegerOption(
+      options.meterIntervalFrames,
+      2048,
+      'meterIntervalFrames',
+      0,
+    );
+
     // Resolved before the transport branch, so a capacity the ring could not
     // hold is refused by name whichever transport the caller ends up with.
     const commandRingCapacity = requireIntegerOption(
@@ -352,6 +360,7 @@ export class SonareRealtimeEngineNode {
       sampleRate: options.sampleRate ?? context.sampleRate,
       blockSize,
       channelCount,
+      meterIntervalFrames,
       cueOutput,
       commandSharedBuffer: commandRing?.sharedBuffer,
       commandRingCapacity: commandRing?.capacity,
@@ -414,6 +423,11 @@ export class SonareRealtimeEngineNode {
 
   play(sampleTime = -1): boolean {
     return this.sendCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime });
+  }
+
+  /** Queues a reset of the master's integrated-loudness accumulator. */
+  resetMasterLoudnessMeter(sampleTime = -1): boolean {
+    return this.sendCommand({ type: SonareEngineCommandType.ResetMasterLoudnessMeter, sampleTime });
   }
 
   stop(sampleTime = -1): boolean {

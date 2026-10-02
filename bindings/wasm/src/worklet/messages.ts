@@ -511,8 +511,8 @@ export interface SonareEngineSyncMixerMessage {
   masterStripJson?: string;
   /** Retained by-name insert values, applied after strip and sidechain replay. */
   insertParamOverrides?: SonareEngineSyncMixerInsertParamOverride[];
-  /** Explicit full strip replacements that must reset retained insert state. */
-  forceInsertResets?: Array<
+  /** Strips whose manual insert bases are cleared after the strip replay, before insertParamOverrides. */
+  insertBaseResets?: Array<
     { kind: 'track'; trackId: number } | { kind: 'bus'; busId: number } | { kind: 'master' }
   >;
   /** Lane insert sidechain bindings (replayed after lanes/strips). */

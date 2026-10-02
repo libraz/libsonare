@@ -241,6 +241,8 @@ class ChannelStrip : public rt::ProcessorBase {
   MeterSnapshot meter_snapshot() const noexcept { return meter_snapshot(TapPoint::PostFader); }
   MeterSnapshot meter_snapshot(TapPoint tap) const noexcept;
   bool metering_enabled() const noexcept { return metering_enabled_; }
+  /// Audible insert gain reduction from the last block, including when meters are disabled.
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
   // Inserts are control-thread mutators and must not run concurrently with process().
   // @p stereo_pair_only marks an inherently-stereo insert (mastering ChannelPolicy
@@ -274,8 +276,10 @@ class ChannelStrip : public rt::ProcessorBase {
                               float value) noexcept;
   bool constructed_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
                                           float* out) const noexcept;
+  bool last_applied_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
+                                           float* out) const noexcept;
   // Resolves a processor JSON-key parameter name to its integer param_id for the
-  // insert at @p insert_index, or -1 if unknown. Control-thread API: reads the
+  // insert at @p insert_index, or -1 if unknown or not realtime-safe. Control-thread API: reads the
   // processor's static descriptor table, touching no mutable audio state.
   int insert_parameter_id_for_key(unsigned int insert_index, const std::string& key) const noexcept;
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
@@ -288,6 +292,16 @@ class ChannelStrip : public rt::ProcessorBase {
   // concurrently with process()/mix_send(), matching FxBus::add_insert's contract.
   size_t add_send(const SendConfig& cfg);
   void clear_sends();
+  struct PreparedSends {
+    std::vector<std::unique_ptr<SendProcessor>> sends;
+    std::vector<std::unique_ptr<AutomationLane>> automation;
+  };
+  /// @brief Builds a complete send table without touching the live strip.
+  /// @details The caller can prepare several strips and publish their topology
+  ///          only after every allocation succeeds.
+  bool prepare_sends(const SendConfig* configs, size_t count, PreparedSends& out) const noexcept;
+  /// @brief Swaps a successful prepare_sends() result into the strip.
+  void commit_sends(PreparedSends& prepared) noexcept;
   // Removes the send at @p index (and its paired automation lane), shifting the
   // indices of any higher sends down by one. Control-thread mutator; must not
   // run concurrently with process()/mix_send(), matching add_send's contract.
@@ -447,6 +461,7 @@ class ChannelStrip : public rt::ProcessorBase {
   // pre-fader tap. They remain disengaged for strips configured without
   // internal metering, avoiding their long LUFS rings and TP scratch.
   bool metering_enabled_ = true;
+  float last_gain_reduction_db_ = 0.0f;
   // Fixed at construction; see ChannelStripConfig::meter for why there is no
   // setter.
   MeterConfig meter_config_{/*measure_lufs=*/true, /*measure_true_peak=*/true,
@@ -510,6 +525,11 @@ class ChannelStrip : public rt::ProcessorBase {
   // Silent stand-ins for null rows and the table stage_channels() hands out, sized like the taps.
   std::vector<std::vector<float>> null_planes_;
   std::vector<float*> stage_channels_;
+  // Planar copy used to warm a bypassed insert without touching the program
+  // buffer. Allocated in prepare() at the strip's declared channel width and
+  // reused by every insert/segment on the audio thread.
+  std::vector<std::vector<float>> bypass_scratch_;
+  std::vector<float*> bypass_scratch_channels_;
 };
 
 }  // namespace sonare::mixing

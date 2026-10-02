@@ -126,6 +126,53 @@ typedef struct {
   uint32_t dropped_records;
 } SonareMeterTelemetryRecordWide;
 
+/* Versioned meter records append the pre-trim input peaks without changing the
+   legacy 80-byte/160-byte records above. They are drained from the same queue as
+   the legacy records; each drain consumes records for all targets. A consumer
+   chooses one record shape per drain and cannot retrieve consumed records again. */
+typedef struct {
+  uint32_t target_id;
+  int64_t render_frame;
+  uint64_t seq;
+  float peak_db_l;
+  float peak_db_r;
+  float rms_db_l;
+  float rms_db_r;
+  float true_peak_db_l;
+  float true_peak_db_r;
+  float max_true_peak_db;
+  float correlation;
+  float mono_compat_width;
+  float momentary_lufs;
+  float short_term_lufs;
+  float integrated_lufs;
+  float gain_reduction_db;
+  uint32_t dropped_records;
+  /* Maximum pre-trim input peak for each stereo plane, in dBFS. */
+  float input_peak_db_l;
+  float input_peak_db_r;
+} SonareMeterTelemetryRecordV2;
+
+typedef struct {
+  uint32_t target_id;
+  int64_t render_frame;
+  uint64_t seq;
+  int32_t channel_count;
+  float peak_db[SONARE_METER_MAX_CHANNELS];
+  float rms_db[SONARE_METER_MAX_CHANNELS];
+  float true_peak_db[SONARE_METER_MAX_CHANNELS];
+  float max_true_peak_db;
+  float correlation;
+  float mono_compat_width;
+  float momentary_lufs;
+  float short_term_lufs;
+  float integrated_lufs;
+  float gain_reduction_db;
+  uint32_t dropped_records;
+  /* Maximum pre-trim input peak for each valid plane, in dBFS. */
+  float input_peak_db[SONARE_METER_MAX_CHANNELS];
+} SonareMeterTelemetryRecordWideV2;
+
 /* One lowered MIDI 1.0 message drained from the engine's external-MIDI output
    queue (sonare_engine_drain_external_midi). A single queued channel-voice event
    may lower to more than one message (e.g. a MIDI 2.0 program change with bank
@@ -508,6 +555,14 @@ static_assert(offsetof(SonareMeterTelemetryRecordWide, peak_db) == 28u,
               "SonareMeterTelemetryRecordWide meter prefix offset changed");
 static_assert(offsetof(SonareMeterTelemetryRecordWide, dropped_records) == 152u,
               "SonareMeterTelemetryRecordWide dropped_records offset changed");
+static_assert(sizeof(SonareMeterTelemetryRecordV2) == 88u,
+              "SonareMeterTelemetryRecordV2 layout changed");
+static_assert(offsetof(SonareMeterTelemetryRecordV2, input_peak_db_l) == 80u,
+              "SonareMeterTelemetryRecordV2 input peaks must be appended");
+static_assert(sizeof(SonareMeterTelemetryRecordWideV2) == 192u,
+              "SonareMeterTelemetryRecordWideV2 layout changed");
+static_assert(offsetof(SonareMeterTelemetryRecordWideV2, input_peak_db) == 156u,
+              "SonareMeterTelemetryRecordWideV2 input peaks must be appended");
 
 static_assert(sizeof(SonareTransportState) == 112u, "SonareTransportState layout changed");
 static_assert(offsetof(SonareTransportState, render_frame) == 8u,

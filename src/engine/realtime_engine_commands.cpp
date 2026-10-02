@@ -576,8 +576,24 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const size_t lane_index = (packed >> 16) & 0xFFu;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
-      track_mixer_runtime_.route_lane_insert_param_smoothed(lane_index, insert_index, param_id,
-                                                            command.arg.f);
+      if (track_mixer_runtime_.route_lane_insert_param_smoothed(lane_index, insert_index, param_id,
+                                                                command.arg.f)) {
+        // Keep the legacy public command vocabulary's manual edit semantics
+        // aligned with the generic reserved-id path. set_track_lanes remaps
+        // this positional selector and its retained base by track identity.
+        record_parameter_base(
+            make_insert_param_id(static_cast<uint32_t>(lane_index), insert_index, param_id),
+            command.arg.f);
+      }
+#else
+      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                    transport_.sample_position(), command.target_id);
+#endif
+      break;
+    }
+    case rt::CommandType::kResetMasterMeterIntegrated: {
+#if defined(SONARE_WITH_MIXING)
+      meter_tap_.reset_integrated();
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                     transport_.sample_position(), command.target_id);
@@ -592,7 +608,13 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const uint32_t packed = command.target_id;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
-      route_master_insert_param_smoothed(insert_index, param_id, command.arg.f);
+      if (route_master_insert_param_smoothed(insert_index, param_id, command.arg.f)) {
+        // As above, retain the latest successful manual target so automation
+        // release restores it even for callers that construct legacy commands
+        // directly instead of using the by-name setter.
+        record_parameter_base(make_insert_param_id(kInsertStripMaster, insert_index, param_id),
+                              command.arg.f);
+      }
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                     transport_.sample_position(), command.target_id);

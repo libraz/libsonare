@@ -121,6 +121,11 @@ enum class CommandType : uint16_t {
   // Ordinal 27. New values are appended here so existing ids, kEngineAbiVersion
   // and the SharedArrayBuffer command record layout stay unchanged.
   kMidiUmpSlotImmediate,
+  // Queueable master-meter operation. target_id and arg are unused; the
+  // command's sample_time selects the render-frame boundary at which the
+  // integrated loudness history is cleared. Momentary, short-term, and true
+  // peak state remain intact. Appended to preserve every earlier command id.
+  kResetMasterMeterIntegrated,
 };
 
 union CommandArg {

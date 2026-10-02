@@ -177,6 +177,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SeekPpq>("seekPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
+          InstanceMethod<&RealtimeEngineWrap::ResetMasterLoudnessMeter>("resetMasterLoudnessMeter"),
           InstanceMethod<&RealtimeEngineWrap::SetTempoSegments>("setTempoSegments"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignatureSegments>("setTimeSignatureSegments"),
           InstanceMethod<&RealtimeEngineWrap::SampleAtPpq>("sampleAtPpq"),
@@ -245,6 +246,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "resolveMasterInsertAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::ResolveBusInsertAutomationId>(
               "resolveBusInsertAutomationId"),
+          InstanceMethod<&RealtimeEngineWrap::InsertParameterConstructedValue>(
+              "insertParameterConstructedValue"),
           InstanceMethod<&RealtimeEngineWrap::ResolveInstrumentAutomationId>(
               "resolveInstrumentAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPan>("setTrackStripPan"),
@@ -554,6 +557,18 @@ Napi::Value RealtimeEngineWrap::SetTimeSignature(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_time_signature(engine_, numerator, denominator));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ResetMasterLoudnessMeter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int64_t render_frame = -1;
+  if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &render_frame)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_reset_master_loudness_meter(engine_, render_frame));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -889,6 +904,18 @@ Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
   }
   ThrowIfError(env, sonare_engine_set_parameter(engine_, param_id, value, deadline));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::InsertParameterConstructedValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t param_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "paramId", &param_id)) return env.Undefined();
+  float value = 0.0f;
+  ThrowIfError(env, sonare_engine_insert_parameter_constructed_value(engine_, param_id, &value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, value);
   SONARE_NODE_CATCH(env)
 }
 

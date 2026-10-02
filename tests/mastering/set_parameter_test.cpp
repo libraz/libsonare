@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/utility/gain.h"
 #include "rt/processor_base.h"
 
 namespace {
@@ -323,4 +324,38 @@ TEST_CASE("set_parameter refuses a non-finite value before any processor sees it
   CHECK(processor.calls == 0);
   CHECK(processor.set_parameter(0, std::numeric_limits<float>::max()));
   CHECK(processor.calls == 1);
+}
+
+TEST_CASE("Processor parameter metadata retains construction and last successful values",
+          "[mastering][set_parameter][last_applied]") {
+  auto processor = make_insert("utility.gain", R"({"levelDb":-3})");
+  REQUIRE(processor != nullptr);
+  auto* gain = dynamic_cast<sonare::mastering::utility::Gain*>(processor.get());
+  REQUIRE(gain != nullptr);
+  auto check = [](const sonare::rt::ProcessorBase& value, float expected) {
+    float constructed = 0.0f;
+    float last = 0.0f;
+    REQUIRE(value.constructed_parameter_value(0, &constructed));
+    REQUIRE(constructed == -3.0f);
+    REQUIRE(value.last_applied_parameter_value(0, &last));
+    REQUIRE(last == expected);
+  };
+  check(*gain, -3.0f);
+  REQUIRE(gain->set_parameter(0, -6.0f));
+  check(*gain, -6.0f);
+  REQUIRE_FALSE(gain->set_parameter(999, 1.0f));
+  REQUIRE_FALSE(gain->set_parameter(0, std::numeric_limits<float>::quiet_NaN()));
+  REQUIRE_FALSE(gain->set_parameter(0, std::numeric_limits<float>::infinity()));
+  check(*gain, -6.0f);
+  float untouched = 42.0f;
+  REQUIRE_FALSE(gain->last_applied_parameter_value(999, &untouched));
+  REQUIRE(untouched == 42.0f);
+  REQUIRE_FALSE(gain->last_applied_parameter_value(0, nullptr));
+  auto copied = *gain;
+  check(copied, -6.0f);
+  auto moved = std::move(copied);
+  check(moved, -6.0f);
+  REQUIRE(moved.set_parameter(0, -9.0f));
+  check(moved, -9.0f);
+  check(*gain, -6.0f);
 }

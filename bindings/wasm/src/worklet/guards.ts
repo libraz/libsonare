@@ -331,6 +331,8 @@ export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnap
     typeof value.rmsDbL === 'number' &&
     typeof value.rmsDbR === 'number' &&
     typeof value.correlation === 'number' &&
+    Number.isFinite(value.inputPeakDbL) &&
+    Number.isFinite(value.inputPeakDbR) &&
     (typeof value.targetId === 'number' || value.targetId === undefined)
   );
 }

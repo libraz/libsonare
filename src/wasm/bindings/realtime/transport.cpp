@@ -18,6 +18,20 @@ void RealtimeEngineWasm::play(const val& render_frame_val) {
   }
 }
 
+void RealtimeEngineWasm::resetMasterLoudnessMeter(const val& render_frame_val) {
+  const int64_t render_frame = renderFrameFromVal(render_frame_val);
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.reset_master_meter_integrated(render_frame)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "failed to queue master loudness reset");
+  }
+#else
+  (void)render_frame;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void RealtimeEngineWasm::stop(const val& render_frame_val) {
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportStop;
@@ -338,6 +352,7 @@ void registerRealtimeEngineTransport(class_<RealtimeEngineWasm>& cls) {
   cls.function("getTransportState", &RealtimeEngineWasm::getTransportState)
       .function("play", &RealtimeEngineWasm::play)
       .function("stop", &RealtimeEngineWasm::stop)
+      .function("resetMasterLoudnessMeter", &RealtimeEngineWasm::resetMasterLoudnessMeter)
       .function("seekSample", &RealtimeEngineWasm::seekSample)
       .function("settleParameters", &RealtimeEngineWasm::settleParameters)
       .function("settleInsertParameters", &RealtimeEngineWasm::settleInsertParameters)

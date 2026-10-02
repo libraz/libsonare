@@ -232,6 +232,20 @@ bool ChannelStrip::constructed_insert_parameter_value(unsigned int insert_index,
   return insert != nullptr && insert->constructed_parameter_value(param_id, out);
 }
 
+bool ChannelStrip::last_applied_insert_parameter_value(unsigned int insert_index,
+                                                       unsigned int param_id,
+                                                       float* out) const noexcept {
+  const size_t idx = insert_index;
+  const size_t pre_count = pre_inserts_.size();
+  const rt::ProcessorBase* insert = nullptr;
+  if (idx < pre_count) {
+    insert = pre_inserts_[idx].get();
+  } else if (idx - pre_count < post_inserts_.size()) {
+    insert = post_inserts_[idx - pre_count].get();
+  }
+  return insert != nullptr && insert->last_applied_parameter_value(param_id, out);
+}
+
 int ChannelStrip::insert_parameter_id_for_key(unsigned int insert_index,
                                               const std::string& key) const noexcept {
   const size_t idx = insert_index;
@@ -247,7 +261,7 @@ int ChannelStrip::insert_parameter_id_for_key(unsigned int insert_index,
   }
   for (const auto& desc : insert->parameter_descriptors()) {
     if (desc.key == key) {
-      return static_cast<int>(desc.id);
+      return insert->parameter_is_realtime_safe(desc.id) ? static_cast<int>(desc.id) : -1;
     }
   }
   return -1;

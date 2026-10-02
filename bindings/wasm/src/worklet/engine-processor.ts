@@ -1,7 +1,6 @@
 import type { EngineClip } from '../index';
 import { RealtimeEngine } from '../index';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
-import { emptyStripJson } from './engine-mixer-facade';
 import { requireChannelCount, requireIntegerOption } from './guards';
 import {
   DEFAULT_METRONOME_CONFIG,
@@ -496,28 +495,10 @@ export class SonareRealtimeEngineWorkletProcessor {
         // Complete earlier immediate edits in message order. Scheduled
         // commands remain queued for their render frame.
         this.engine.applyCommandsDueNowPreservingFuture();
-        this.engine.settleInsertParameters();
         if (message.buses) {
           this.engine.setTrackBuses(message.buses);
         }
         this.engine.setTrackLanes(message.lanes);
-        for (const target of message.forceInsertResets ?? []) {
-          const emptyJson = emptyStripJson(target);
-          switch (target.kind) {
-            case 'track':
-              this.engine.clearTrackInsertParameterBases(target.trackId);
-              this.engine.setTrackStripJson(target.trackId, emptyJson);
-              break;
-            case 'bus':
-              this.engine.clearBusInsertParameterBases(target.busId);
-              this.engine.setBusStripJson(target.busId, emptyJson);
-              break;
-            case 'master':
-              this.engine.clearMasterInsertParameterBases();
-              this.engine.setMasterStripJson(emptyJson);
-              break;
-          }
-        }
         for (const strip of message.trackStrips ?? []) {
           this.engine.setTrackStripJson(strip.trackId, strip.sceneJson);
         }
@@ -526,6 +507,19 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         if (message.masterStripJson) {
           this.engine.setMasterStripJson(message.masterStripJson);
+        }
+        for (const target of message.insertBaseResets ?? []) {
+          switch (target.kind) {
+            case 'track':
+              this.engine.clearTrackInsertParameterBases(target.trackId);
+              break;
+            case 'bus':
+              this.engine.clearBusInsertParameterBases(target.busId);
+              break;
+            case 'master':
+              this.engine.clearMasterInsertParameterBases();
+              break;
+          }
         }
         for (const binding of message.laneSidechains ?? []) {
           this.engine.setLaneSidechain(binding.trackId, binding.insertIndex, binding.sourceTrackId);
@@ -1056,6 +1050,9 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.setTrackMonitorMode(laneIndex, mode as 0 | 1 | 2, sampleTime);
         break;
       }
+      case SonareEngineCommandType.ResetMasterLoudnessMeter:
+        this.engine.resetMasterLoudnessMeter(sampleTime);
+        break;
       default:
         this.publishTelemetryRecord({
           type: SonareEngineTelemetryType.Error,
@@ -1175,6 +1172,8 @@ export class SonareRealtimeEngineWorkletProcessor {
     for (let field = 0; field < 11; field++) {
       ring.records[offset + 3 + field] = this.engine.meterScratchValue(field);
     }
+    ring.records[offset + 14] = this.engine.meterScratchInputPeakDbL();
+    ring.records[offset + 15] = this.engine.meterScratchInputPeakDbR();
     Atomics.store(ring.header, 0, writeIndex + 1);
   }
 

@@ -209,6 +209,19 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
+SonareError sonare_engine_reset_master_loudness_meter(SonareRealtimeEngine* engine,
+                                                      int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if defined(SONARE_WITH_MIXING)
+  return engine->engine.reset_master_meter_integrated(render_frame) ? SONARE_OK
+                                                                    : SONARE_ERROR_OUT_OF_MEMORY;
+#else
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
 SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;

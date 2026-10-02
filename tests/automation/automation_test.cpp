@@ -66,6 +66,24 @@ struct ReleaseCapture {
   }
 };
 
+struct TargetRemap {
+  uint32_t old_id = 0;
+  uint32_t new_id = 0;
+  uint32_t dropped_id = 0;
+  uint32_t offset = 0;
+
+  static bool apply(void* context, uint32_t old_param_id, uint32_t* new_param_id) noexcept {
+    auto* self = static_cast<TargetRemap*>(context);
+    if (new_param_id == nullptr || old_param_id == self->dropped_id) return false;
+    if (old_param_id == self->old_id) {
+      *new_param_id = self->new_id;
+    } else {
+      *new_param_id = old_param_id + self->offset;
+    }
+    return true;
+  }
+};
+
 }  // namespace
 
 TEST_CASE("AutomationLane evaluates hold linear exponential and s-curve breakpoints",
@@ -476,6 +494,91 @@ TEST_CASE("AutomationEngine releases a target whose lane emptied", "[automation]
   engine.acquire_lanes();
 
   REQUIRE(release.released == std::vector<uint32_t>{7});
+}
+
+TEST_CASE("AutomationEngine commits an identity remap without synthetic release", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  ReleaseCapture release;
+  engine.set_lane_release_callback(&ReleaseCapture::release, &release);
+
+  sonare::automation::AutomationLane lane(10);
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Hold}});
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+
+  TargetRemap remap{10, 20, 0, 0};
+  sonare::automation::AutomationEngine::PreparedLaneRemap prepared;
+  REQUIRE(engine.prepare_lane_remap_control_quiescent(&TargetRemap::apply, &remap, &prepared));
+  REQUIRE(prepared.snapshot != nullptr);
+  REQUIRE(release.released.empty());
+  engine.commit_lane_remap_control_quiescent(std::move(prepared));
+  REQUIRE(release.released.empty());
+
+  CaptureProcessor processor;
+  REQUIRE(engine.bind_target(20, &processor));
+  engine.apply({}, 0, 64);
+  REQUIRE(processor.set_count == 1);
+  REQUIRE_THAT(processor.last_value, WithinAbs(0.25f, 1.0e-6f));
+
+  // Clearing the remapped id must release the new selector exactly once; the
+  // old numeric id was never treated as a removed target during the commit.
+  engine.set_lanes({sonare::automation::AutomationLane(20)});
+  engine.acquire_lanes();
+  REQUIRE(release.released == std::vector<uint32_t>{20});
+}
+
+TEST_CASE("AutomationEngine drops a removed remapped target without release", "[automation]") {
+  sonare::automation::AutomationEngine engine;
+  ReleaseCapture release;
+  engine.set_lane_release_callback(&ReleaseCapture::release, &release);
+
+  sonare::automation::AutomationLane lane(10);
+  lane.set_points({{0.0, 0.5f, sonare::automation::CurveType::Hold}});
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+
+  TargetRemap remap{0, 0, 10, 0};
+  sonare::automation::AutomationEngine::PreparedLaneRemap prepared;
+  REQUIRE(engine.prepare_lane_remap_control_quiescent(&TargetRemap::apply, &remap, &prepared));
+  engine.commit_lane_remap_control_quiescent(std::move(prepared));
+  REQUIRE(engine.lane_count() == 0);
+  REQUIRE(release.released.empty());
+
+  // The dropped old selector must not be seen as a second release when the
+  // audio-side acquire runs after the control-side commit.
+  engine.acquire_lanes();
+  REQUIRE(release.released.empty());
+}
+
+TEST_CASE("AutomationEngine remap preparation drains a burst to its latest lane set",
+          "[automation]") {
+  sonare::automation::AutomationEngine engine;
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  engine.prepare(48000.0, &tempo);
+
+  constexpr uint32_t kFirstId = 100;
+  constexpr uint32_t kLaneCount = 80;
+  for (uint32_t i = 0; i < kLaneCount; ++i) {
+    sonare::automation::AutomationLane lane(kFirstId + i);
+    lane.set_points({{0.0, static_cast<float>(i), sonare::automation::CurveType::Hold}});
+    engine.set_lanes({lane});
+  }
+
+  TargetRemap remap{0, 0, 0, 1000};
+  sonare::automation::AutomationEngine::PreparedLaneRemap prepared;
+  REQUIRE(engine.prepare_lane_remap_control_quiescent(&TargetRemap::apply, &remap, &prepared));
+  engine.commit_lane_remap_control_quiescent(std::move(prepared));
+
+  CaptureProcessor processor;
+  const uint32_t latest_id = kFirstId + kLaneCount - 1;
+  REQUIRE(engine.bind_target(latest_id + remap.offset, &processor));
+  engine.apply({}, 0, 64);
+  REQUIRE(processor.set_count == 1);
+  REQUIRE_THAT(processor.last_value, WithinAbs(static_cast<float>(kLaneCount - 1), 1.0e-6f));
 }
 
 TEST_CASE("AutomationEngine releases a target dropped from the lane set entirely", "[automation]") {

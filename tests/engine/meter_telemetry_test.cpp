@@ -259,6 +259,80 @@ TEST_CASE("MeterTelemetryTap merges sub-block peak and RMS across a host block",
   REQUIRE(record.rms_db[0] == Approx(static_cast<float>(expected_rms_db)).margin(0.05f));
 }
 
+TEST_CASE("MeterTelemetryTap merges pre-trim input peaks and gain reduction across sub-blocks",
+          "[engine][meter_telemetry]") {
+  // The render path can trim the working buffer before this tap runs. The
+  // caller therefore supplies the pre-trim input peaks explicitly, and the
+  // published record must retain the loudest value from every host sub-block.
+  constexpr int kSubBlock = 64;
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(kSampleRate, kSubBlock, 17, 8, kLufsOnly);
+
+  std::array<float, kSubBlock> loud{};
+  std::array<float, kSubBlock> silent{};
+  loud.fill(1.0f);
+  float* loud_channels[] = {loud.data(), loud.data()};
+  float* silent_channels[] = {silent.data(), silent.data()};
+  std::array<float, sonare::mixing::kMaxMeterChannels> first_input{};
+  std::array<float, sonare::mixing::kMaxMeterChannels> second_input{};
+  first_input.fill(sonare::constants::kFloorDb);
+  second_input.fill(sonare::constants::kFloorDb);
+  first_input[0] = -3.0f;
+  first_input[1] = -6.0f;
+  second_input[0] = -9.0f;
+  second_input[1] = -10.0f;
+
+  tap.begin_block();
+  tap.process(loud_channels, 2, kSubBlock, 0, first_input.data(), -4.0f);
+  tap.process(silent_channels, 2, kSubBlock, kSubBlock, second_input.data(), -1.0f);
+  tap.end_block();
+
+  sonare::engine::MeterTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.input_peak_db[0] == Approx(-3.0f));
+  REQUIRE(record.input_peak_db[1] == Approx(-6.0f));
+  REQUIRE(record.gain_reduction_db == Approx(-4.0f));
+  REQUIRE_FALSE(tap.pop(record));
+
+  // A caller that has no pre-trim measurement gets a finite, explicit floor.
+  tap.process_lightweight(silent_channels, 2, kSubBlock, 128, 17);
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.input_peak_db[0] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(record.input_peak_db[1] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(record.gain_reduction_db == Approx(0.0f));
+}
+
+TEST_CASE("MeterTelemetryTap reset_integrated keeps short-term audio history",
+          "[engine][meter_telemetry]") {
+  // Fill the complete short-term (3 s) window before checking the value. A
+  // 400 ms momentary window is enough in theory, but the K-weighting startup
+  // transient can keep a one-second fixture below the finite floor.
+  constexpr int kFrames = 3 * kSampleRate;
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(kSampleRate, kBlock, 18, 128, kLufsOnly);
+  std::array<float, kBlock> signal{};
+  for (int i = 0; i < kBlock; ++i) {
+    signal[static_cast<size_t>(i)] =
+        0.25f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) /
+                         static_cast<float>(kSampleRate));
+  }
+  float* channels[] = {signal.data(), signal.data()};
+  for (int frame = 0; frame < kFrames; frame += kBlock) {
+    tap.process(channels, 2, kBlock, frame);
+  }
+  const auto before = tap.snapshot();
+  REQUIRE(before.integrated_lufs > sonare::constants::kFloorDb);
+  REQUIRE(before.momentary_lufs > sonare::constants::kFloorDb);
+
+  tap.reset_integrated();
+  std::array<float, kBlock> silence{};
+  float* silence_channels[] = {silence.data(), silence.data()};
+  tap.process(silence_channels, 2, kBlock, kFrames);
+  const auto after = tap.snapshot();
+  REQUIRE(after.integrated_lufs == Approx(sonare::constants::kFloorDb));
+  REQUIRE(after.momentary_lufs > sonare::constants::kFloorDb);
+}
+
 TEST_CASE("MeterTelemetryTap reports an inter-sample peak when configured for true peak",
           "[engine][meter_telemetry][truepeak]") {
   // A sine at a quarter of the sample rate, offset by an eighth of a period:

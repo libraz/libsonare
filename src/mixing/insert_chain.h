@@ -71,6 +71,12 @@ inline void configure_insert_alignment_delay(AlignmentDelay& delay, int prepared
 ///                            chain's reported latency real (soft bypass). Each
 ///                            state must be prepared for every plane the caller
 ///                            can pass and carry the insert's own Q8 latency.
+/// @param bypass_scratch      Preallocated planar rows used to run a bypassed
+///                            insert on a copy of the current block, keeping
+///                            stateful inserts warm for a later un-bypass.
+/// @param bypass_scratch_channels Number of rows available in
+///                            @p bypass_scratch.
+/// @param bypass_scratch_samples Number of samples available in each row.
 /// @note Both delay banks are indexed by the insert's position within @p inserts,
 ///       not by @p first_insert_index + that position. A caller that spreads one
 ///       addressing space across several chain segments offsets the pointer itself.
@@ -81,7 +87,9 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
                              int sidechain_offset, const float** shifted_scratch,
                              int max_forward_rows, int detector_excluded_channel = -1,
                              AlignmentDelay* stereo_pair_alignment_delays = nullptr,
-                             AlignmentDelay* bypass_alignment_delays = nullptr) {
+                             AlignmentDelay* bypass_alignment_delays = nullptr,
+                             float* const* bypass_scratch = nullptr,
+                             int bypass_scratch_channels = 0, int bypass_scratch_samples = 0) {
   for (size_t local = 0; local < inserts.size(); ++local) {
     const size_t index = first_insert_index + local;
     const InsertSidechain* key = index < sidechains.size() ? &sidechains[index] : nullptr;
@@ -105,7 +113,29 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
     }
     const bool latent = inserts[local]->latency_samples_q8() > 0;
     const bool spo = local < stereo_pair_only.size() && stereo_pair_only[local] != 0;
+    // StereoPairOnly inserts get only the front L/R pair; surround planes pass through dry.
+    const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
+    // Warming a bypassed insert uses the same surround detector context as the active path.
+    inserts[local]->set_detector_excluded_channel(detector_excluded_channel);
     if (inserts[local]->bypassed()) {
+      // Run a bypassed stateful insert on a scratch copy so un-bypassing exposes no stale history.
+      bool can_warm = bypass_scratch != nullptr && insert_channels >= 0 &&
+                      insert_channels <= bypass_scratch_channels && num_samples >= 0 &&
+                      num_samples <= bypass_scratch_samples;
+      for (int ch = 0; can_warm && ch < insert_channels; ++ch) {
+        can_warm = bypass_scratch[ch] != nullptr;
+      }
+      if (can_warm) {
+        for (int ch = 0; ch < insert_channels; ++ch) {
+          float* scratch = bypass_scratch[ch];
+          if (channels[ch] != nullptr) {
+            std::copy(channels[ch], channels[ch] + num_samples, scratch);
+          } else {
+            std::fill(scratch, scratch + num_samples, 0.0f);
+          }
+        }
+        inserts[local]->process(bypass_scratch, insert_channels, num_samples);
+      }
       // Soft bypass: the chain keeps reporting this insert's latency, because
       // PDC is recomputed on the control thread and bypass is toggled by an
       // atomic the audio thread reads per block -- a bypass that silently
@@ -136,15 +166,6 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
       // the insert overwrites this buffer in place.
       bypass_alignment_delays[local].prime(channels, num_channels, num_samples);
     }
-    // StereoPairOnly inserts see only the front L/R pair on a surround buffer:
-    // the surround planes (2..N-1) pass through dry, and a width-sensitive insert
-    // (e.g. eq.midSide, which aborts on a non-stereo width) gets the 2-plane view
-    // it requires. At num_channels <= 2 this is the legacy full-buffer call.
-    const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
-    // A surround bus owns the only layout-aware detector context in the mixer.
-    // A StereoPairOnly insert gets only L/R, so its LFE exclusion is necessarily
-    // disabled by ProcessorBase's range check.
-    inserts[local]->set_detector_excluded_channel(detector_excluded_channel);
     inserts[local]->process(channels, insert_channels, num_samples);
 
     // The insert has just delayed its L/R output, while planes 2..N-1 were not

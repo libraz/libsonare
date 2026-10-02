@@ -80,6 +80,8 @@ val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
     item.set("shortTermLufs", meter.short_term_lufs);
     item.set("integratedLufs", meter.integrated_lufs);
     item.set("gainReductionDb", meter.gain_reduction_db);
+    item.set("inputPeakDbL", meter.input_peak_db[0]);
+    item.set("inputPeakDbR", meter.input_peak_db[1]);
     item.set("droppedRecords", meter.dropped_records);
     out.set(count++, item);
   }
@@ -135,6 +137,14 @@ float RealtimeEngineWasm::meterScratchValue(const val& field_val) const {
   }
 }
 
+float RealtimeEngineWasm::meterScratchInputPeakDbL() const {
+  return meter_telemetry_scratch_.input_peak_db[0];
+}
+
+float RealtimeEngineWasm::meterScratchInputPeakDbR() const {
+  return meter_telemetry_scratch_.input_peak_db[1];
+}
+
 // Per-plane meter drain for surround targets. peakDb/rmsDb/truePeakDb are JS
 // arrays of channelCount planes (canonical WAVE order); drainMeterTelemetry
 // stays the stereo fast path. Shares one queue with it — call only one.
@@ -172,6 +182,11 @@ val RealtimeEngineWasm::drainMeterTelemetryWide(const val& max_records_val) {
     item.set("shortTermLufs", meter.short_term_lufs);
     item.set("integratedLufs", meter.integrated_lufs);
     item.set("gainReductionDb", meter.gain_reduction_db);
+    val input_peak = val::array();
+    for (int ch = 0; ch < planes; ++ch) {
+      input_peak.set(ch, meter.input_peak_db[static_cast<size_t>(ch)]);
+    }
+    item.set("inputPeakDb", input_peak);
     item.set("droppedRecords", meter.dropped_records);
     out.set(count++, item);
   }
@@ -284,6 +299,8 @@ void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {
       .function("meterScratchTargetId", &RealtimeEngineWasm::meterScratchTargetId)
       .function("meterScratchRenderFrame", &RealtimeEngineWasm::meterScratchRenderFrame)
       .function("meterScratchValue", &RealtimeEngineWasm::meterScratchValue)
+      .function("meterScratchInputPeakDbL", &RealtimeEngineWasm::meterScratchInputPeakDbL)
+      .function("meterScratchInputPeakDbR", &RealtimeEngineWasm::meterScratchInputPeakDbR)
       .function("drainMeterTelemetryWide", &RealtimeEngineWasm::drainMeterTelemetryWide)
       .function("configureScopeTelemetry", &RealtimeEngineWasm::configureScopeTelemetry)
       .function("drainScopeTelemetry", &RealtimeEngineWasm::drainScopeTelemetry)

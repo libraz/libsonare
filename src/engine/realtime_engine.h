@@ -367,6 +367,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   int64_t clip_page_prefetch_frames() const noexcept { return clip_player_.page_prefetch_frames(); }
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
+  /// Enqueues an audio-thread-safe reset of the master meter's integrated
+  /// loudness history. @p render_frame follows command sample-time semantics:
+  /// -1 applies at the next block head; a non-negative value applies at that
+  /// render-frame boundary. The short-term, momentary, and true-peak windows
+  /// are deliberately retained. Returns false only when the command queue is
+  /// full.
+  bool reset_master_meter_integrated(int64_t render_frame = -1) noexcept;
   bool pop_scope_telemetry(ScopeTelemetryRecord& out) noexcept { return scope_tap_.pop(out); }
   // Enables per-target spectrum + vectorscope capture. @p interval_frames is the
   // minimum render-frame gap between published snapshots per block (0 disables
@@ -739,13 +746,19 @@ class RealtimeEngine : private ClipPageRequestSink {
   // reserved insert-automation id used by setAutomationLane / setParameter. The
   // returned id encodes (strip selector, insert index, processor param id) in the
   // reserved insert namespace (see insert_automation_id.h). Returns -1 when the
-  // strip, insert, or key is unknown. Control-thread; touches no audio state.
+  // strip, insert, or key is unknown, or the parameter is not realtime-safe.
+  // Control-thread; touches no audio state.
   int64_t resolve_track_insert_automation_id(uint32_t track_id, unsigned int insert_index,
                                              const std::string& key) noexcept;
   int64_t resolve_master_insert_automation_id(unsigned int insert_index,
                                               const std::string& key) noexcept;
   int64_t resolve_bus_insert_automation_id(uint32_t bus_id, unsigned int insert_index,
                                            const std::string& key) noexcept;
+  /// Reads the immutable construction value captured by the resolved insert
+  /// parameter. Control-thread only; this never mutates live DSP state and
+  /// returns false for a null output, an unknown target, or a target whose
+  /// processor no longer exists.
+  bool insert_parameter_constructed_value(uint32_t target_id, float* out_value) const noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const mastering::eq::EqBand& band) noexcept;
   bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
@@ -942,10 +955,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // CONTROL thread: refresh the PDC delays from the current instrument rack and
   // report the resulting graph latency. Called from prepare() and whenever an
   // instrument binding changes. Returns false when a replacement bank could not
-  // be allocated: the engine then falls back to no compensation at all rather
-  // than to a half-updated set, and the caller has to say so -- silently
-  // rendering a misaligned mix is the one outcome this must not have. Mirrors
-  // TrackMixerRuntime::recompute_lane_pdc, whose callers all propagate.
+  // be allocated. Preparation leaves the live banks unchanged; a successful
+  // binding commits the staged banks together, so a rejected binding retains
+  // the previous compensation. The caller must propagate a preparation failure.
   struct PreparedPdc {
     static constexpr size_t kSlots = InstrumentRack::kMaxInstruments;
     int total_q8 = 0;
@@ -955,6 +967,9 @@ class RealtimeEngine : private ClipPageRequestSink {
     std::array<size_t, kSlots> reuse_from{};
     size_t count = 0;
     bool reuse_clip = false;
+#if defined(SONARE_WITH_MIXING)
+    TrackMixerRuntime::ClipPdcPlan clip_lanes{};
+#endif
   };
   [[nodiscard]] bool prepare_pdc_for(bool replace_destination, uint32_t destination_id,
                                      midi::MidiInstrument* replacement,
@@ -1357,6 +1372,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   mixing::api::Strip master_strip_spec_{};
   MonitorRuntime monitor_runtime_{};
   TrackMixerRuntime track_mixer_runtime_{};
+  // Snapshot used only by the control-thread lane-transition fix-up above.
+  // TrackMixerRuntime owns the live lane state and remains the source of truth
+  // for rendering; these ids let queued positional commands retain identity
+  // when a host reorders or replaces lanes before the next process block.
+  std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> track_lane_ids_{};
+  size_t track_lane_count_ = 0;
   // Automated master-strip insert parameters. The master insert chain is not part
   // of TrackMixerRuntime, so its smoothers live here and are advanced once per
   // sub-block by tick_smoothed_params, mirroring the lane/bus slot table.

@@ -1,6 +1,8 @@
 /// @file no_alloc_engine_mixing_test.cpp
 /// @brief Engine and mixing no-allocation realtime tests.
 
+#include "engine/track_mixer.h"
+#include "mastering/utility/gain.h"
 #include "no_alloc_test_helpers.h"
 #include "rt/delay_line.h"
 
@@ -51,6 +53,95 @@ class PdcNoAllocInstrument final : public sonare::midi::MidiInstrument {
 #endif
 
 }  // namespace
+
+TEST_CASE("Factory insert first touch ramps from current value without allocation",
+          "[engine][track_mixer][rt][first_touch]") {
+  constexpr int kBlock = 32;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  sonare::engine::TrackLaneConfig lane{10};
+  bool use_bus = false;
+  bool restore_manual = false;
+  SECTION("track insert") {}
+  SECTION("bus insert") { use_bus = true; }
+  SECTION("restored track insert") { restore_manual = true; }
+  SECTION("restored bus insert") {
+    use_bus = true;
+    restore_manual = true;
+  }
+  if (use_bus) {
+    REQUIRE(mixer.set_buses({{1, 0.0f}}));
+    lane.output_bus_id = 1;
+  }
+  REQUIRE(mixer.set_track_lanes({lane}));
+  if (use_bus) {
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    bus.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+    bus.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+    REQUIRE(mixer.set_bus_strip(1, bus));
+  } else {
+    sonare::mixing::api::Strip strip;
+    strip.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+    strip.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+    REQUIRE(mixer.set_track_strip(10, strip));
+  }
+  mixer.settle_smoothers();
+  if (restore_manual) {
+    const bool restored = use_bus
+                              ? mixer.restore_bus_insert_param_by_name(1, 0, "levelDb", -6.0f)
+                              : mixer.restore_track_insert_param_by_name(10, 0, "levelDb", -6.0f);
+    REQUIRE(restored);
+    const bool other_restored =
+        use_bus ? mixer.restore_bus_insert_param_by_name(1, 1, "levelDb", 0.0f)
+                : mixer.restore_track_insert_param_by_name(10, 1, "levelDb", 0.0f);
+    REQUIRE(other_restored);
+  }
+  std::array<float, kBlock> source_left{}, source_right{}, output_left{}, output_right{};
+  source_left.fill(1.0f);
+  source_right.fill(1.0f);
+  float* source[] = {source_left.data(), source_right.data()};
+  float* output[] = {output_left.data(), output_right.data()};
+  REQUIRE(mixer.mix_source(10, source, output, 2, kBlock));
+  const float construction_output = output_left.back();
+  REQUIRE(construction_output > 0.4f);
+  output_left.fill(0.0f);
+  output_right.fill(0.0f);
+  size_t target_index = 0;
+  unsigned int param_id = 0;
+  const bool resolved =
+      use_bus ? mixer.resolve_bus_insert_param(1, 0, "levelDb", &target_index, &param_id)
+              : mixer.resolve_track_insert_param(10, 0, "levelDb", &target_index, &param_id);
+  REQUIRE(resolved);
+  size_t allocations = 0;
+  bool changed = false;
+  bool rendered = false;
+  {
+    AllocationGuard guard;
+    changed = use_bus ? mixer.route_bus_insert_param_smoothed(target_index, 0, param_id, -12.0f)
+                      : mixer.route_lane_insert_param_smoothed(target_index, 0, param_id, -12.0f);
+    rendered = mixer.mix_source(10, source, output, 2, kBlock);
+    allocations = guard.count();
+  }
+  REQUIRE(changed);
+  REQUIRE(rendered);
+  REQUIRE(allocations == 0);
+  const float baseline_db = restore_manual ? -6.0f : 0.0f;
+  const float target_gain = std::pow(10.0f, (-12.0f - baseline_db) / 20.0f);
+  const float first_gain = output_left.back() / construction_output;
+  CHECK(first_gain > target_gain + 0.1f);
+  CHECK(first_gain < 1.0f);
+  for (int block = 0; block < 200; ++block) {
+    output_left.fill(0.0f);
+    output_right.fill(0.0f);
+    REQUIRE(mixer.mix_source(10, source, output, 2, kBlock));
+  }
+  CHECK(std::abs(output_left.back() / construction_output - target_gain) < 1.0e-4f);
+}
 
 TEST_CASE("ChannelStrip process performs no heap allocation after prepare", "[mixing][rt]") {
   constexpr int kBlock = 256;
@@ -574,4 +665,39 @@ TEST_CASE("TrackMixerRuntime bus EQ configured before prepare renders after it",
   REQUIRE(allocations == 0);
   // The band survived prepare: a flat bus passes the DC source unchanged.
   REQUIRE(shaped != 0.25f);
+}
+
+TEST_CASE("Direct insert without factory metadata keeps its settled ramp baseline",
+          "[engine][track_mixer][rt][settled]") {
+  constexpr int block = 32;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, block);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::make_unique<sonare::mastering::utility::Gain>());
+  strip.prepare(48000.0, block);
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, -12.0f));
+  mixer.settle_insert_automations();
+  std::array<float, block> input{}, output{};
+  input.fill(1.0f);
+  float* source[] = {input.data()};
+  float* dest[] = {output.data()};
+  REQUIRE(mixer.mix_source(10, source, dest, 1, block));
+  const float baseline = output.back();
+  output.fill(0.0f);
+  bool routed = false;
+  bool rendered = false;
+  size_t allocations = 0;
+  {
+    AllocationGuard guard;
+    routed = mixer.route_lane_insert_param_smoothed(0, 0, 0, -6.0f);
+    rendered = mixer.mix_source(10, source, dest, 1, block);
+    allocations = guard.count();
+  }
+  REQUIRE(routed);
+  REQUIRE(rendered);
+  REQUIRE(allocations == 0);
+  REQUIRE(output.back() > baseline);
+  REQUIRE(output.back() < std::pow(10.0f, -6.0f / 20.0f) - 0.1f);
 }

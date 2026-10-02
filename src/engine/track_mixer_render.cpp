@@ -15,8 +15,8 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
                                      ScopeTelemetryTap* scope_tap) noexcept {
   // Self-contained clip-only block: exactly begin / render-into-lanes / finish
   // for a block whose only contributor is the clip player. Retained for callers
-  // that have no instrument pass to fold in (the PDC path renders the clip bus
-  // into its own delayed scratch, so its buses genuinely belong to that pass).
+  // that have no instrument pass to fold in. RealtimeEngine combines clip and
+  // instrument contributors in one opened block, including when PDC is active.
   acquire_lanes();
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (!lanes || lanes->empty()) return false;
@@ -48,7 +48,9 @@ bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept 
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     clear_lane(lane_index, render_channels, num_samples);
-    source_mix_lane_active_[lane_index] = false;
+    // An opened block processes every configured lane, including silent ones,
+    // so stateful strip/bus tails advance over zero input.
+    source_mix_lane_active_[lane_index] = true;
   }
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
@@ -74,6 +76,11 @@ bool TrackMixerRuntime::render_clips_into_lanes(ClipPlayer& player, float* const
     }
     player.process_track_at((*lanes)[lane_index].track_id, lane_channel_ptrs_.data(),
                             render_channels, num_samples, timeline_sample);
+    // Clip compensation is source-local: delay this lane's raw clip before it
+    // is combined with hosted-instrument audio, and keep a bank per track so
+    // two lanes rendered back-to-back cannot share delay history.
+    lane_states_[lane_index].clip_pdc_delay.process(lane_channel_ptrs_.data(), render_channels,
+                                                    num_samples);
     // The clip pass touches every lane, including the ones the block leaves
     // silent: a lane strip's inserts are stateful, so skipping a silent lane
     // would freeze a reverb tail or a compressor release mid-decay.
@@ -292,6 +299,8 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
   for (int ch = 0; ch < num_channels; ++ch) {
     lane_channel_ptrs_[static_cast<size_t>(ch)] = lane_channel(lane_index, ch);
   }
+  // Capture the source before the strip mutates the lane buffers in place; kept for telemetry.
+  capture_input_peak_db(lane_channel_ptrs_.data(), num_channels, num_samples, lane.input_peak_db);
   if (lane.strip) {
     deliver_lane_sidechains(lane_index, num_channels, num_samples);
     lane.strip->process_at(lane_channel_ptrs_.data(), num_channels, num_samples, timeline_sample);
@@ -448,6 +457,11 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
       lane_channel_ptrs_[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
     }
     deliver_bus_sidechains(bus_index, lane_channels, num_samples);
+    std::array<float, mixing::kMaxMeterChannels> bus_input_peak_db{};
+    // Capture after bus PDC but before trim, polarity, EQ, or inserts. The
+    // telemetry record can then expose the signal entering the bus controls
+    // alongside the post-insert bus meter and gain reduction.
+    capture_input_peak_db(lane_channel_ptrs_.data(), bus_channels, num_samples, bus_input_peak_db);
     // Input trim (pre-insert), mirroring a strip. The smoother holds a linear
     // gain (like the strip's GainProcessor), so it rests at unity (1.0) and is
     // skipped there, leaving a never-trimmed bus bit-identical.
@@ -538,7 +552,9 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
     // stereo metric on the front pair.
     if (meter_tap) {
       meter_tap->process_lightweight(lane_channel_ptrs_.data(), bus_channels, num_samples,
-                                     render_frame, bus_meter_target(bus_index));
+                                     render_frame, bus_meter_target(bus_index),
+                                     bus_input_peak_db.data(),
+                                     bus.bus->bus().meter_snapshot().gain_reduction_db);
     }
     if (scope_tap) {
       scope_tap->process(lane_channel_ptrs_.data(), std::min(bus_channels, kMaxLaneChannels),
@@ -733,8 +749,10 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     for (int ch = 0; ch < num_channels; ++ch) {
       lane_channel_ptrs_[static_cast<size_t>(ch)] = lane_channel(lane_index, ch);
     }
-    meter_tap->process_lightweight(lane_channel_ptrs_.data(), num_channels, num_samples,
-                                   render_frame, lane_meter_target(lane_index));
+    meter_tap->process_lightweight(
+        lane_channel_ptrs_.data(), num_channels, num_samples, render_frame,
+        lane_meter_target(lane_index), lane.input_peak_db.data(),
+        lane.strip != nullptr ? lane.strip->last_gain_reduction_db() : 0.0f);
   }
   if (scope_tap) {
     for (int ch = 0; ch < num_channels; ++ch) {

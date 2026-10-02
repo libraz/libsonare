@@ -27,6 +27,10 @@ struct MeterTelemetryRecord {
   // right channel of a mono lane) reports silence rather than full-scale, and
   // the record is always JSON-safe (no NaN reaches the host).
   std::array<float, mixing::kMaxMeterChannels> peak_db = mixing::detail::meter_floor_array();
+  // Peak levels captured before the render path's input trim. The render
+  // worker supplies this fixed-width dB array; an absent pointer leaves every
+  // plane at the finite floor.
+  std::array<float, mixing::kMaxMeterChannels> input_peak_db = mixing::detail::meter_floor_array();
   std::array<float, mixing::kMaxMeterChannels> rms_db = mixing::detail::meter_floor_array();
   // Inter-sample (true) peak per plane and its maximum, measured by the tap's
   // MeterProcessor when the prepare() config enables it. See
@@ -49,6 +53,11 @@ struct MeterTelemetryRecord {
 static_assert(std::is_trivially_copyable_v<MeterTelemetryRecord>,
               "Meter telemetry records must stay trivially copyable");
 
+/// Per-plane block peak in dBFS, ignoring non-finite samples; planes past
+/// @p num_channels (or null) read the floor.
+void capture_input_peak_db(float* const* channels, int num_channels, int num_samples,
+                           std::array<float, mixing::kMaxMeterChannels>& output) noexcept;
+
 class MeterTelemetryTap {
  public:
   static constexpr size_t kGoniometerCapacity = 512;
@@ -62,6 +71,9 @@ class MeterTelemetryTap {
   void prepare(double sample_rate, int max_block_size, uint32_t target_id,
                size_t telemetry_capacity, const mixing::MeterConfig& config);
   void reset() noexcept;
+  /// Clears only integrated loudness history; momentary/short-term audio state
+  /// and true-peak history remain intact.
+  void reset_integrated() noexcept;
 
   /// Starts a host render block. Calls to process()/process_lightweight() retain
   /// only the latest record per target until end_block(), so automation-driven
@@ -69,10 +81,12 @@ class MeterTelemetryTap {
   void begin_block() noexcept;
   void end_block() noexcept;
 
-  void process(float* const* channels, int num_channels, int num_frames,
-               int64_t render_frame) noexcept;
+  void process(float* const* channels, int num_channels, int num_frames, int64_t render_frame,
+               const float* input_peak_db = nullptr, float gain_reduction_db = 0.0f) noexcept;
   void process_lightweight(float* const* channels, int num_channels, int num_frames,
-                           int64_t render_frame, uint32_t target_id) noexcept;
+                           int64_t render_frame, uint32_t target_id,
+                           const float* input_peak_db = nullptr,
+                           float gain_reduction_db = 0.0f) noexcept;
 
   bool pop(MeterTelemetryRecord& out) noexcept { return telemetry_.pop(out); }
   mixing::MeterSnapshot snapshot() const noexcept {
@@ -93,8 +107,8 @@ class MeterTelemetryTap {
     int64_t frames = 0;
   };
 
-  void publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame,
-               int num_frames) noexcept;
+  void publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame, int num_frames,
+               const float* input_peak_db) noexcept;
   void publish(MeterTelemetryRecord record) noexcept;
   void stage(MeterTelemetryRecord record, int num_frames) noexcept;
   void push_goniometer(float* const* channels, int num_channels, int num_frames) noexcept;

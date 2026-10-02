@@ -60,6 +60,26 @@ enum class FractionalDelayMode {
 ///             un-delayed.
 class AlignmentDelay : public rt::ProcessorBase {
  public:
+  struct FractionalState {
+    std::vector<float> buffer{0.0f};
+    size_t write_index = 0;
+  };
+
+  // A complete control-thread update.  A shape change owns replacement delay
+  // storage; an unchanged shape only carries the new scalar target, so the
+  // live history and storage generation remain untouched until commit.
+  struct PreparedUpdate {
+    int delay_samples = 0;
+    int delay_samples_q8 = 0;
+    int prepared_channels = 0;
+    size_t integer_delay = 0;
+    size_t fractional_size = 0;
+    FractionalDelayMode fractional_mode = FractionalDelayMode::None;
+    bool replace_storage = false;
+    std::vector<rt::DelayLine> delays;
+    std::vector<FractionalState> fractional;
+  };
+
   explicit AlignmentDelay(int delay_samples = 0);
 
   void prepare(double sample_rate, int max_block_size) override;
@@ -109,6 +129,14 @@ class AlignmentDelay : public rt::ProcessorBase {
   ///          instead of letting a bad_alloc escape and terminate the process.
   bool try_set_delay_samples_q8(int delay_samples_q8,
                                 FractionalDelayMode mode = FractionalDelayMode::Lagrange3) noexcept;
+  /// @brief Stages a delay target without changing this bank.
+  /// @details The replacement vectors are built completely before returning.
+  ///          This makes a set of banks transactional: callers may prepare all
+  ///          of them and publish only after every allocation succeeds.
+  bool prepare_update(int delay_samples_q8, FractionalDelayMode mode,
+                      PreparedUpdate& out) const noexcept;
+  /// @brief Commits a successful prepare_update() without allocation/failure.
+  void commit_update(PreparedUpdate& update) noexcept;
   int delay_samples() const noexcept { return delay_samples_; }
   int delay_samples_q8() const noexcept { return delay_samples_q8_; }
   FractionalDelayMode fractional_mode() const noexcept { return fractional_mode_; }
@@ -126,11 +154,6 @@ class AlignmentDelay : public rt::ProcessorBase {
   int channel_overflow_high_water() const noexcept { return channel_overflow_high_water_.load(); }
 
  private:
-  struct FractionalState {
-    std::vector<float> buffer{0.0f};
-    size_t write_index = 0;
-  };
-
   // Relaxed high-water counter written on the audio thread and read on the
   // control thread. Hand-written copy semantics only so the enclosing bank stays
   // copyable/movable: ChannelStrip keeps its per-insert banks in a std::vector

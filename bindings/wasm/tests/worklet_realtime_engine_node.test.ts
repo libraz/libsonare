@@ -1271,7 +1271,7 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
-    it('settles a raw insert target before an accepted route sync', async () => {
+    it('keeps a raw insert ramp running across an accepted route sync', async () => {
       const blockSize = 128;
       const frames = blockSize * 4;
       const scene = JSON.stringify({
@@ -1323,10 +1323,10 @@ describe('SonareRealtimeEngineNode', () => {
       };
 
       const accepted = await createEngine();
-      const settledBaseline = await createEngine();
+      const untouchedBaseline = await createEngine();
       try {
         const zeroes = () => [new Float32Array(blockSize), new Float32Array(blockSize)];
-        for (const { offline, automationId } of [accepted, settledBaseline]) {
+        for (const { offline, automationId } of [accepted, untouchedBaseline]) {
           offline.process(zeroes());
           offline.setParameterSmoothed(automationId, -12);
           offline.flushControlCommands();
@@ -1334,10 +1334,8 @@ describe('SonareRealtimeEngineNode', () => {
           offline.setParameterSmoothed(automationId, 12);
           offline.flushControlCommands();
         }
-        // The accepted topology change must preserve the raw native target by
-        // settling it before the lane setter clears its automation slot.
-        settledBaseline.offline.settleInsertParameters();
-        const expected = settledBaseline.offline.process(zeroes());
+        // The accepted topology change keeps the in-flight ramp instead of snapping it.
+        const expected = untouchedBaseline.offline.process(zeroes());
         expect(() => accepted.engine.setTrackLanes([7])).not.toThrow();
         const actual = accepted.offline.process(zeroes());
         let maxDiff = 0;
@@ -1349,11 +1347,11 @@ describe('SonareRealtimeEngineNode', () => {
             );
           }
         }
-        expect(expected[0][0]).toBeGreaterThan(0.9);
+        expect(expected[0][0]).toBeLessThan(0.9);
         expect(maxDiff).toBeLessThanOrEqual(1e-6);
       } finally {
         accepted.engine.destroy();
-        settledBaseline.engine.destroy();
+        untouchedBaseline.engine.destroy();
       }
     });
 
@@ -1600,6 +1598,8 @@ describe('SonareRealtimeEngineNode', () => {
         live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
+        // Bus 100's republished -96 dB gain ramps over 5 ms (two blocks) before it is silent.
+        const settledBlock = 3;
         for (let block = 0; block < 30; block += 1) {
           const expected = offline.process([
             new Float32Array(blockSize),
@@ -1609,7 +1609,9 @@ describe('SonareRealtimeEngineNode', () => {
           expect(live.process([[]], [actual])).toBe(true);
           for (let channel = 0; channel < 2; channel += 1) {
             for (let i = 0; i < blockSize; i += 1) {
-              maxAbs = Math.max(maxAbs, Math.abs(expected[channel][i]));
+              if (block >= settledBlock) {
+                maxAbs = Math.max(maxAbs, Math.abs(expected[channel][i]));
+              }
               maxDiff = Math.max(maxDiff, Math.abs(expected[channel][i] - actual[channel][i]));
             }
           }
@@ -2226,9 +2228,9 @@ describe('SonareRealtimeEngineNode', () => {
         const replacements = posted
           .slice(beforeReplacement)
           .filter((message) => (message as { type?: unknown }).type === 'syncMixer') as Array<{
-          forceInsertResets?: Array<{ kind: string }>;
+          insertBaseResets?: Array<{ kind: string }>;
         }>;
-        expect(replacements.map((message) => message.forceInsertResets?.[0]?.kind)).toEqual([
+        expect(replacements.map((message) => message.insertBaseResets?.[0]?.kind)).toEqual([
           'track',
           'master',
           'bus',

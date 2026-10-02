@@ -111,5 +111,7 @@ TEST_CASE("ChannelStrip insert bypass preserves dry signal and reports tail",
   strip.process(channels, 2, 4);
   REQUIRE(left[0] == 1.0f);
   REQUIRE(right[3] == 1.0f);
-  REQUIRE(raw_insert->process_count == 1);
+  // The audible path is dry, while the hidden insert advances on scratch so
+  // unbypassing cannot replay stale history.
+  REQUIRE(raw_insert->process_count == 2);
 }

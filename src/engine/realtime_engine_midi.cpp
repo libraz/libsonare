@@ -624,6 +624,11 @@ bool RealtimeEngine::prepare_pdc_for(bool replace_destination, uint32_t destinat
   out.count = next_count;
   out.reuse_from.fill(kNoReuse);
   out.reuse_clip = clip_pdc_delay_.matches_storage(prepared_channels_, out.total_q8);
+#if defined(SONARE_WITH_MIXING)
+  if (!track_mixer_runtime_.prepare_clip_pdc_delay_q8(out.total_q8, out.clip_lanes)) {
+    return false;
+  }
+#endif
 
   bool configured = out.reuse_clip || out.clip.configure(prepared_channels_, out.total_q8);
   for (size_t slot = 0; slot < next_count && configured; ++slot) {
@@ -678,6 +683,12 @@ void RealtimeEngine::commit_pdc(PreparedPdc& prepared) noexcept {
   instrument_pdc_dest_ = prepared.destinations;
   pdc_total_q8_ = prepared.total_q8;
   pdc_instrument_count_ = prepared.count;
+#if defined(SONARE_WITH_MIXING)
+  // Track-mixer lane banks were staged with the instrument banks above. This
+  // commit is a no-fail swap, so a failed PDC preparation cannot leave the
+  // instrument binding and raw-clip source timebases half updated.
+  track_mixer_runtime_.commit_clip_pdc_delay(prepared.clip_lanes);
+#endif
   update_reported_graph_latency();
 }
 
@@ -698,6 +709,7 @@ void RealtimeEngine::flush_pdc_delays() noexcept {
   }
 #if defined(SONARE_WITH_MIXING)
   track_mixer_runtime_.flush_pdc_delays();
+  track_mixer_runtime_.flush_clip_pdc_delays();
 #endif
 }
 

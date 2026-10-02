@@ -29,6 +29,7 @@ import type {
   WasmEngineAutomationPoint,
   WasmEngineBounceOptions,
   WasmEngineBounceResult,
+  WasmEngineBus,
   WasmEngineCaptureStatus,
   WasmEngineClip,
   WasmEngineFreezeOptions,
@@ -44,6 +45,7 @@ import type {
   WasmEngineTelemetry,
   WasmEngineTempoSegment,
   WasmEngineTimeSignatureSegment,
+  WasmEngineTrackSend,
   WasmEngineTransportState,
   WasmExternalMidiEvent,
   WasmRealtimeEngine,
@@ -917,6 +919,16 @@ export class RealtimeEngine {
     return this.native.getTransportState();
   }
 
+  /** Queues an integrated-loudness reset; short-term and momentary windows are retained. */
+  resetMasterLoudnessMeter(renderFrame = -1): void {
+    this.native.resetMasterLoudnessMeter(renderFrame);
+  }
+
+  /** Reads the immutable factory value for a resolved insert parameter id. */
+  insertParameterConstructedValue(paramId: number): number {
+    return this.native.insertParameterConstructedValue(paramId);
+  }
+
   play(renderFrame = -1): void {
     this.native.play(renderFrame);
   }
@@ -1105,7 +1117,7 @@ export class RealtimeEngine {
    * reads (defaults to post-fader when omitted). Shared by track lanes and
    * buses, which carry the same send shape.
    */
-  private static normalizeSends(sends: EngineTrackSend[]): EngineTrackSend[] {
+  private static normalizeSends(sends: EngineTrackSend[]): WasmEngineTrackSend[] {
     return sends.map((send) => ({
       ...send,
       // Post-fader (0) is the default for an omitted sendTiming.
@@ -1119,10 +1131,10 @@ export class RealtimeEngine {
         if (typeof lane === 'number') {
           return { trackId: lane };
         }
-        if (!lane.sends) {
-          return lane;
-        }
-        return { ...lane, sends: RealtimeEngine.normalizeSends(lane.sends) };
+        return {
+          ...lane,
+          sends: lane.sends ? RealtimeEngine.normalizeSends(lane.sends) : undefined,
+        };
       }),
     );
   }
@@ -1142,10 +1154,11 @@ export class RealtimeEngine {
     // failing here on a `.map` that array-likes do not implement.
     this.native.setTrackBuses(
       Array.isArray(buses)
-        ? buses.map((bus) =>
-            bus.sends ? { ...bus, sends: RealtimeEngine.normalizeSends(bus.sends) } : bus,
-          )
-        : buses,
+        ? buses.map((bus) => ({
+            ...bus,
+            sends: bus.sends ? RealtimeEngine.normalizeSends(bus.sends) : undefined,
+          }))
+        : (buses as WasmEngineBus[]),
     );
   }
 
@@ -1383,6 +1396,16 @@ export class RealtimeEngine {
    * stages of the offline mastering chain (`repair.*`, `loudness`, and the
    * match stages) have no insert form and no automation id: they buffer the
    * entire signal by construction and do not run on the realtime path.
+   *
+   * The returned id uses the track's current positional lane selector. When
+   * `setTrackLanes` successfully changes lane order or membership, the engine
+   * remaps already queued and published track automation by track id, but it
+   * cannot update a numeric id retained by the caller. Re-resolve every track
+   * insert id after such a topology change before passing it to
+   * `setAutomationLane`, `setParameter`, or `setParameterSmoothed`. Use
+   * `setTrackStripInsertParamByName` when the operation needs a stable track
+   * identity. Master and bus insert ids are separate and are not invalidated by
+   * track-lane changes.
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
@@ -1783,6 +1806,12 @@ export class RealtimeEngine {
   meterScratchRenderFrame(): number {
     return Number(this.native.meterScratchRenderFrame());
   }
+  meterScratchInputPeakDbL(): number {
+    return this.native.meterScratchInputPeakDbL();
+  }
+  meterScratchInputPeakDbR(): number {
+    return this.native.meterScratchInputPeakDbR();
+  }
   meterScratchValue(field: number): number {
     return this.native.meterScratchValue(field);
   }
@@ -1794,9 +1823,10 @@ export class RealtimeEngine {
   /**
    * Drains pending meter telemetry as per-plane (wide) records for a surround
    * target. Use this for a surround mix target; {@link drainMeterTelemetry}
-   * stays the stereo fast path. The two share one queue — call only one per
-   * target. The live AudioWorklet path owns the queue via the stereo drain, so
-   * this wide drain is for an offline (non-worklet) engine instance; per-plane
+   * stays the stereo fast path. The two share one queue and each consumes every
+   * target's records, so an engine uses only one of them. The live AudioWorklet
+   * path owns the queue via the stereo drain, so this wide drain is for an
+   * offline (non-worklet) engine instance; per-plane
    * surround meters are not delivered over the live worklet meter ring.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {

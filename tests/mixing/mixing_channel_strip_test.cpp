@@ -251,6 +251,67 @@ void require_continuous_bypass_engage(Chain& chain, int block_size, int blocks, 
   }
 }
 
+// A bypassed stateful insert still has to consume the current block. The dry
+// substitute carries the advertised latency while bypassed, and the insert's
+// own state must be warm when bypass is released again. The input is a block
+// ramp so a stale delay history cannot hide behind a repeated value.
+template <typename Chain>
+void require_continuous_bypass_roundtrip(Chain& chain, int block_size, int blocks, int latency,
+                                         int bypass_block, bool reset_on_bypass) {
+  std::vector<float> rendered;
+  rendered.reserve(static_cast<size_t>(block_size * blocks));
+  for (int block = 0; block < blocks; ++block) {
+    const bool bypassed = block == bypass_block;
+    REQUIRE(chain.set_insert_bypassed(0, bypassed, bypassed && reset_on_bypass));
+    std::vector<float> left(static_cast<size_t>(block_size), 0.0f);
+    std::vector<float> right(static_cast<size_t>(block_size), 0.0f);
+    for (int i = 0; i < block_size; ++i) {
+      left[static_cast<size_t>(i)] = static_cast<float>(block * block_size + i + 1);
+      right[static_cast<size_t>(i)] = left[static_cast<size_t>(i)];
+    }
+    float* channels[] = {left.data(), right.data()};
+    chain.process(channels, 2, block_size);
+    rendered.insert(rendered.end(), left.begin(), left.end());
+  }
+
+  for (int n = 0; n < block_size * blocks; ++n) {
+    const float expected = n < latency ? 0.0f : static_cast<float>(n - latency + 1);
+    INFO("sample " << n);
+    REQUIRE_THAT(rendered[static_cast<size_t>(n)], WithinAbs(expected, 0.0001f));
+  }
+}
+
+template <typename Chain>
+void require_continuous_surround_bypass_roundtrip(Chain& chain, int block_size, int blocks,
+                                                  int latency, int channels, bool reset_on_bypass) {
+  for (int block = 0; block < blocks; ++block) {
+    const bool bypassed = block == 1;
+    REQUIRE(chain.set_insert_bypassed(0, bypassed, bypassed && reset_on_bypass));
+    std::vector<std::vector<float>> planes(static_cast<size_t>(channels),
+                                           std::vector<float>(static_cast<size_t>(block_size)));
+    std::vector<float*> pointers(static_cast<size_t>(channels));
+    for (int ch = 0; ch < channels; ++ch) {
+      pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+      for (int i = 0; i < block_size; ++i) {
+        planes[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+            static_cast<float>(ch * 1000 + block * block_size + i + 1);
+      }
+    }
+    chain.process(pointers.data(), channels, block_size);
+
+    for (int ch = 0; ch < channels; ++ch) {
+      for (int i = 0; i < block_size; ++i) {
+        const int absolute = block * block_size + i;
+        const float expected =
+            absolute < latency ? 0.0f : static_cast<float>(ch * 1000 + absolute - latency + 1);
+        INFO("plane " << ch << " sample " << absolute);
+        REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(i)],
+                     WithinAbs(expected, 0.0001f));
+      }
+    }
+  }
+}
+
 }  // namespace
 
 TEST_CASE("ChannelStrip bypass engages without a dropout", "[mixing]") {
@@ -273,6 +334,98 @@ TEST_CASE("BusProcessor bypass engages without a dropout", "[mixing]") {
   bus.add_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
   bus.prepare(48000.0, kBlock);
   require_continuous_bypass_engage(bus, kBlock, kBlocks, kLatency, /*bypass_from_block=*/2);
+}
+
+TEST_CASE("ChannelStrip bypass roundtrip keeps a latent insert transparent", "[mixing]") {
+  constexpr int kBlock = 16;
+  constexpr int kBlocks = 3;
+  constexpr int kLatency = 5;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
+  strip.prepare(48000.0, kBlock);
+  require_continuous_bypass_roundtrip(strip, kBlock, kBlocks, kLatency,
+                                      /*bypass_block=*/1, /*reset_on_bypass=*/false);
+}
+
+TEST_CASE("BusProcessor bypass roundtrip keeps a latent insert transparent", "[mixing]") {
+  constexpr int kBlock = 16;
+  constexpr int kBlocks = 3;
+  constexpr int kLatency = 5;
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.add_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
+  bus.prepare(48000.0, kBlock);
+  require_continuous_bypass_roundtrip(bus, kBlock, kBlocks, kLatency,
+                                      /*bypass_block=*/1, /*reset_on_bypass=*/false);
+}
+
+TEST_CASE("ChannelStrip bypass roundtrip stays transparent through segmented processing",
+          "[mixing][automation]") {
+  constexpr int kBlock = 16;
+  constexpr int kLatency = 5;
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
+  strip.prepare(48000.0, kBlock);
+
+  std::vector<float> rendered;
+  rendered.reserve(static_cast<size_t>(kBlock * 3));
+  for (int block = 0; block < 3; ++block) {
+    const bool bypassed = block == 1;
+    REQUIRE(strip.set_insert_bypassed(0, bypassed));
+    std::vector<float> left(static_cast<size_t>(kBlock));
+    std::vector<float> right(static_cast<size_t>(kBlock));
+    for (int i = 0; i < kBlock; ++i) {
+      left[static_cast<size_t>(i)] = static_cast<float>(block * kBlock + i + 1);
+      right[static_cast<size_t>(i)] = left[static_cast<size_t>(i)];
+    }
+    float* channels[] = {left.data(), right.data()};
+    if (block == 1) {
+      // A no-op fader event splits the bypassed block into two process_segment
+      // calls, exercising the same scratch and delay state across the boundary.
+      REQUIRE(strip.schedule_fader_automation(kBlock + kBlock / 2, 0.0f,
+                                              sonare::AutomationCurve::Hold));
+    }
+    strip.process_at(channels, 2, kBlock, static_cast<int64_t>(block * kBlock));
+    rendered.insert(rendered.end(), left.begin(), left.end());
+  }
+
+  for (int n = 0; n < kBlock * 3; ++n) {
+    const float expected = n < kLatency ? 0.0f : static_cast<float>(n - kLatency + 1);
+    INFO("sample " << n);
+    REQUIRE_THAT(rendered[static_cast<size_t>(n)], WithinAbs(expected, 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip bypass roundtrip warms a reset insert across surround planes",
+          "[mixing][surround]") {
+  constexpr int kChannels = 6;
+  constexpr int kBlock = 8;
+  constexpr int kBlocks = 3;
+  constexpr int kLatency = 3;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency),
+                       /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kBlock);
+  require_continuous_surround_bypass_roundtrip(strip, kBlock, kBlocks, kLatency, kChannels,
+                                               /*reset_on_bypass=*/true);
+}
+
+TEST_CASE("BusProcessor bypass roundtrip warms a reset insert across surround planes",
+          "[mixing][surround]") {
+  constexpr int kChannels = 6;
+  constexpr int kBlock = 8;
+  constexpr int kBlocks = 3;
+  constexpr int kLatency = 3;
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.set_channel_layout(sonare::ChannelLayout::FivePointOne);
+  bus.add_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency),
+                 /*stereo_pair_only=*/true);
+  bus.prepare(48000.0, kBlock);
+  require_continuous_surround_bypass_roundtrip(bus, kBlock, kBlocks, kLatency, kChannels,
+                                               /*reset_on_bypass=*/true);
 }
 
 TEST_CASE("GainProcessor applies fader and VCA offset", "[mixing]") {
@@ -335,6 +488,71 @@ TEST_CASE("ChannelStrip input trim is independent from fader", "[mixing]") {
   for (int i = 0; i < 4; ++i) {
     REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0002f));
     REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0002f));
+  }
+}
+
+TEST_CASE("ChannelStrip clears stale pre and post send taps for null and absent planes",
+          "[mixing]") {
+  sonare::mixing::ChannelStripConfig config;
+  config.pan_law = sonare::mixing::PanLaw::Linear0dB;
+  config.smoothing_ms = 0.0f;
+  config.enable_metering = false;
+  sonare::mixing::ChannelStrip strip(config);
+  const size_t pre_send = strip.add_send({0.0f, sonare::mixing::SendTiming::PreFader, 0.0f});
+  const size_t post_send = strip.add_send({0.0f, sonare::mixing::SendTiming::PostFader, 0.0f});
+  strip.prepare(48000.0, 4);
+
+  std::array<float, 4> valid_left{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> valid_right{1.0f, 1.0f, 1.0f, 1.0f};
+  float* valid_channels[] = {valid_left.data(), valid_right.data()};
+  strip.process(valid_channels, 2, 4);
+
+  // The second block has a null right plane. Both taps must publish silence for
+  // that row instead of retaining the valid stereo block above.
+  std::array<float, 4> null_left{2.0f, 2.0f, 2.0f, 2.0f};
+  float* null_channels[] = {null_left.data(), nullptr};
+  strip.process(null_channels, 2, 4);
+
+  std::array<float, 4> pre_left{};
+  std::array<float, 4> pre_right{};
+  float* pre_dest[] = {pre_left.data(), pre_right.data()};
+  strip.mix_send(pre_send, pre_dest, 2, 4);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(pre_left[static_cast<size_t>(i)], WithinAbs(2.0f, 0.0001f));
+    REQUIRE_THAT(pre_right[static_cast<size_t>(i)], WithinAbs(0.0f, 0.0001f));
+  }
+
+  std::array<float, 4> post_left{};
+  std::array<float, 4> post_right{};
+  float* post_dest[] = {post_left.data(), post_right.data()};
+  strip.mix_send(post_send, post_dest, 2, 4);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(post_left[static_cast<size_t>(i)], WithinAbs(2.0f, 0.0001f));
+    REQUIRE_THAT(post_right[static_cast<size_t>(i)], WithinAbs(0.0f, 0.0001f));
+  }
+
+  // A following mono block must clear the old right row too. Requesting two
+  // send rows intentionally checks the tap's absent-plane range, not only the
+  // null pointer branch above.
+  std::array<float, 4> mono_left{3.0f, 3.0f, 3.0f, 3.0f};
+  float* mono_channels[] = {mono_left.data()};
+  strip.process(mono_channels, 1, 4);
+
+  pre_left.fill(0.0f);
+  pre_right.fill(0.0f);
+  strip.mix_send(pre_send, pre_dest, 2, 4);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(pre_left[static_cast<size_t>(i)], WithinAbs(3.0f, 0.0001f));
+    REQUIRE_THAT(pre_right[static_cast<size_t>(i)], WithinAbs(0.0f, 0.0001f));
+  }
+
+  post_left.fill(0.0f);
+  post_right.fill(0.0f);
+  strip.mix_send(post_send, post_dest, 2, 4);
+  const float mono_post_level = 3.0f * std::sqrt(2.0f);
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE_THAT(post_left[static_cast<size_t>(i)], WithinAbs(mono_post_level, 0.0001f));
+    REQUIRE_THAT(post_right[static_cast<size_t>(i)], WithinAbs(0.0f, 0.0001f));
   }
 }
 
@@ -1452,9 +1670,7 @@ TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
   maximizer_strip.prepare(48000.0, 128);
 
   REQUIRE(maximizer_strip.schedule_insert_automation(0, 0, 0, 3.0f));
-  REQUIRE(maximizer_strip.schedule_insert_automation_result(0, 1, 0, -2.0f) ==
-          sonare::mixing::InsertAutomationScheduleResult::NotSupported);
-  REQUIRE_FALSE(maximizer_strip.schedule_insert_automation(0, 1, 0, -2.0f));
+  REQUIRE(maximizer_strip.schedule_insert_automation(0, 1, 0, -2.0f));
   REQUIRE(maximizer_strip.schedule_insert_automation(0, 2, 0, 20.0f));
 }
 
@@ -1869,4 +2085,42 @@ TEST_CASE("ChannelStrip treats a null channel as silence in the EQ and insert st
   REQUIRE_NOTHROW(strip->process_at(channels, 2, kN * 2, 0));
   REQUIRE(std::all_of(long_input.begin(), long_input.end(),
                       [](float sample) { return std::isfinite(sample); }));
+}
+
+TEST_CASE("ChannelStrip reports audible gain reduction without embedded meters",
+          "[mixing][meter]") {
+  for (const bool post : {false, true}) {
+    for (const bool segmented : {false, true}) {
+      CAPTURE(post, segmented);
+      sonare::mixing::ChannelStripConfig strip_config;
+      strip_config.enable_metering = false;
+      sonare::mixing::ChannelStrip strip(strip_config);
+      sonare::mastering::dynamics::CompressorConfig config;
+      config.threshold_db = -30.0f;
+      config.ratio = 8.0f;
+      config.attack_ms = 0.0f;
+      config.release_ms = 20.0f;
+      config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
+      auto compressor = std::make_unique<sonare::mastering::dynamics::Compressor>(config);
+      if (post)
+        strip.add_post_insert(std::move(compressor));
+      else
+        strip.add_pre_insert(std::move(compressor));
+      strip.prepare(48000.0, 64);
+      if (segmented) {
+        REQUIRE(strip.schedule_fader_automation(32, -3.0f, sonare::AutomationCurve::Hold));
+      }
+      std::array<float, 64> left, right;
+      left.fill(0.8f);
+      right.fill(0.4f);
+      float* channels[] = {left.data(), right.data()};
+      strip.process_at(channels, 2, 64, 0);
+      CHECK(strip.last_gain_reduction_db() < -10.0f);
+      REQUIRE(strip.set_insert_bypassed(0, true));
+      strip.process_at(channels, 2, 64, 64);
+      CHECK(strip.last_gain_reduction_db() == 0.0f);
+      strip.reset();
+      CHECK(strip.last_gain_reduction_db() == 0.0f);
+    }
+  }
 }

@@ -738,6 +738,11 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.insertParameterConstructedValue',
+    missingRequired: [],
+    badArguments: [{ argument: 'paramId', call: (e) => e.insertParameterConstructedValue('0') }],
+  },
+  {
     name: 'RealtimeEngine.resolveInstrumentAutomationId',
     missingRequired: [],
     badArguments: [{ argument: 'paramName', call: (e) => e.resolveInstrumentAutomationId(1, 42) }],
@@ -933,6 +938,13 @@ export const CASES: AbortGuardCase[] = [
     badTransportArguments: [
       { argument: 'ppq', call: (e) => e.seekPpq('0') },
       { argument: 'renderFrame', call: (e) => e.seekPpq(0, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.resetMasterLoudnessMeter',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'renderFrame', call: (e) => e.resetMasterLoudnessMeter('x') },
     ],
   },
   {

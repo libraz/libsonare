@@ -4157,6 +4157,126 @@
     ],
     "size": 80
   },
+  "SonareMeterTelemetryRecordV2": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "target_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "seq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "peak_db_l",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "peak_db_r",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "rms_db_l",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "rms_db_r",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "true_peak_db_l",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "true_peak_db_r",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_true_peak_db",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "correlation",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "mono_compat_width",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "momentary_lufs",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "short_term_lufs",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "integrated_lufs",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "gain_reduction_db",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "dropped_records",
+        "offset": 76,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "input_peak_db_l",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "input_peak_db_r",
+        "offset": 84,
+        "size": 4
+      }
+    ],
+    "size": 88
+  },
   "SonareMeterTelemetryRecordWide": {
     "align": 8,
     "fields": [
@@ -4252,6 +4372,108 @@
       }
     ],
     "size": 160
+  },
+  "SonareMeterTelemetryRecordWideV2": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "target_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "seq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "channel_count",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "peak_db",
+        "offset": 28,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "rms_db",
+        "offset": 60,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "true_peak_db",
+        "offset": 92,
+        "size": 32
+      },
+      {
+        "kind": "float",
+        "name": "max_true_peak_db",
+        "offset": 124,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "correlation",
+        "offset": 128,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "mono_compat_width",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "momentary_lufs",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "short_term_lufs",
+        "offset": 140,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "integrated_lufs",
+        "offset": 144,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "gain_reduction_db",
+        "offset": 148,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "dropped_records",
+        "offset": 152,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "input_peak_db",
+        "offset": 156,
+        "size": 32
+      }
+    ],
+    "size": 192
   },
   "SonareMfccResult": {
     "align": 8,

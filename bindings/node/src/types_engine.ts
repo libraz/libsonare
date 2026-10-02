@@ -92,6 +92,10 @@ export interface EngineMeterTelemetry {
   gainReductionDb: number;
   /** Number of records dropped before this snapshot. */
   droppedRecords: number;
+  /** Left-channel peak at the engine input tap, in dB. */
+  inputPeakDbL: number;
+  /** Right-channel peak at the engine input tap, in dB. */
+  inputPeakDbR: number;
 }
 
 /**
@@ -167,6 +171,8 @@ export interface EngineMeterTelemetryWide {
   gainReductionDb: number;
   /** Number of records dropped before this snapshot. */
   droppedRecords: number;
+  /** Per-plane peak at the engine input tap, in dB. */
+  inputPeakDb: number[];
 }
 
 /** Scope telemetry record drained from {@link RealtimeEngine.drainScopeTelemetry}. */

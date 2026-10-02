@@ -116,6 +116,12 @@ SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_fram
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
                                       int64_t render_frame);
 SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame);
+/// @brief Queues an integrated-loudness reset for the master meter.
+/// @details The command clears integrated loudness at @p render_frame while
+///   retaining momentary, short-term, and true-peak history. Pass a negative
+///   frame to apply it at the next block head.
+SonareError sonare_engine_reset_master_loudness_meter(SonareRealtimeEngine* engine,
+                                                      int64_t render_frame);
 /// @brief Snaps every in-flight parameter ramp (engine-level smoothed params,
 ///   mixer lane fader/pan/gate, bus gains) to its target value.
 /// @details For offline rendering: call after a priming process() block (which
@@ -245,6 +251,26 @@ SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int6
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count);
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Replaces the configured track-lane order and membership.
+/// @details A successful call may reorder existing track ids, remove track ids,
+///   or add new ones. The engine remaps already queued commands and published
+///   track automation lanes by track id, so those existing targets keep their
+///   track identity. A track-insert automation id returned by
+///   @ref sonare_engine_resolve_track_insert_automation_id is a positional
+///   selector owned by the caller; the engine cannot update a numeric id that
+///   the caller retained. After every successful call that changes lane order
+///   or membership, resolve each track-insert automation id again before using
+///   it with @ref sonare_engine_set_automation_lane,
+///   @ref sonare_engine_set_parameter, or
+///   @ref sonare_engine_set_parameter_smoothed. For a stable track identity,
+///   use a track-id/name setter such as
+///   @ref sonare_engine_set_track_strip_insert_param_by_name. Master- and
+///   bus-strip automation ids are separate selectors and are not invalidated
+///   by a track-lane topology change. Control-thread only; do not call
+///   concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an invalid lane list or a
+///   topology that cannot be published; SONARE_ERROR_NOT_SUPPORTED when
+///   mixing support is disabled.
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
 /// @brief Keys one insert of a lane strip from another lane's post-strip audio.
@@ -438,13 +464,25 @@ SonareError sonare_engine_clear_master_insert_parameter_bases(SonareRealtimeEngi
 ///   every selector the identity held across remove/re-add.
 SonareError sonare_engine_clear_bus_insert_parameter_bases(SonareRealtimeEngine* engine,
                                                            uint32_t bus_id);
+/// @brief Reads the immutable construction value of a resolved insert parameter.
+/// @details Control-thread read-only query. The output is untouched when the
+///   engine, id, or processor is invalid.
+SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngine* engine,
+                                                             uint32_t param_id, float* out_value);
 /// @brief Resolves a track-lane insert parameter to its reserved automation id.
 /// @details The returned id can be driven over time with
 ///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once
 ///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed,
-///   exactly like a fader/pan id. Control-thread resolution of the JSON-key name
-///   to the strip/insert/param triple. Returns SONARE_ERROR_INVALID_PARAMETER if
-///   the track, insert, or name is unknown (and leaves @p out_id untouched).
+///   exactly like a fader/pan id. The id encodes the track's current positional
+///   lane selector. A successful @ref sonare_engine_set_track_lanes call that
+///   changes lane order or membership remaps existing queued/published track
+///   automation internally by track id, but cannot rewrite an id retained by
+///   the caller. Re-resolve after every such topology change before submitting
+///   new automation with the old id. Use a track-id/name setter when the intent
+///   is a stable track target. Master- and bus-strip ids use separate selectors
+///   and are not invalidated by track-lane changes. Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the track, insert, or name is unknown
+///   (and leaves @p out_id untouched).
 ///
 ///   This trio is how a mastering processor gets time-varying automation: the
 ///   `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
@@ -764,6 +802,20 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
 SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count);
+/// @brief Drains meter telemetry with pre-trim input peaks appended to each record.
+/// @details Every meter drain pops from one shared queue and consumes the
+///   records of all targets, so an engine reads its meters through one drain only.
+/// @param out Receives up to @p max_records records; written only on success.
+SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
+                                                   SonareMeterTelemetryRecordV2* out,
+                                                   size_t max_records, size_t* out_count);
+/// @brief Drains surround meter telemetry with pre-trim input peaks appended.
+/// @details Every meter drain pops from one shared queue and consumes the
+///   records of all targets, so an engine reads its meters through one drain only.
+/// @param out Receives up to @p max_records records; written only on success.
+SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* engine,
+                                                        SonareMeterTelemetryRecordWideV2* out,
+                                                        size_t max_records, size_t* out_count);
 /// @brief Enables/configures per-target spectrum + vectorscope telemetry.
 /// @param interval_frames Minimum render-frame gap between published snapshots
 ///   (0 disables capture). @param band_count Requested FFT band resolution

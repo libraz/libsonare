@@ -6,7 +6,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 
 from ._types_analysis import (
@@ -471,6 +471,10 @@ class MeterTelemetryRecord:
     integrated_lufs: float
     gain_reduction_db: float
     dropped_records: int
+    # Input tap peaks are appended to preserve positional construction of the
+    # pre-V2 public record while making the source/input relationship explicit.
+    input_peak_db_l: float = -120.0
+    input_peak_db_r: float = -120.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -506,6 +510,7 @@ class MeterTelemetryRecordWide:
     integrated_lufs: float
     gain_reduction_db: float
     dropped_records: int
+    input_peak_db: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

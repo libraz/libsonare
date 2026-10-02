@@ -60,6 +60,7 @@ class RealtimeEngineWasm {
   // ---- Transport & timing (realtime_engine_transport.cpp) --------------
   void play(const emscripten::val& render_frame_val);
   void stop(const emscripten::val& render_frame_val);
+  void resetMasterLoudnessMeter(const emscripten::val& render_frame_val);
   void settleParameters();
   void settleInsertParameters();
   void applyCommandsDueNowPreservingFuture();
@@ -281,6 +282,7 @@ class RealtimeEngineWasm {
   double resolveBusInsertAutomationId(const emscripten::val& bus_id_val,
                                       const emscripten::val& insert_index_val,
                                       const std::string& param_name);
+  float insertParameterConstructedValue(const emscripten::val& param_id_val);
   void setTrackStripPan(const emscripten::val& track_id_val, const emscripten::val& pan_val);
   void setTrackStripPanLaw(const emscripten::val& track_id_val, const emscripten::val& pan_law_val);
   void setTrackStripPanMode(const emscripten::val& track_id_val,
@@ -371,6 +373,8 @@ class RealtimeEngineWasm {
   uint32_t meterScratchTargetId() const;
   int64_t meterScratchRenderFrame() const;
   float meterScratchValue(const emscripten::val& field_val) const;
+  float meterScratchInputPeakDbL() const;
+  float meterScratchInputPeakDbR() const;
   emscripten::val drainMeterTelemetryWide(const emscripten::val& max_records_val);
   unsigned int configureScopeTelemetry(const emscripten::val& interval_frames_val,
                                        const emscripten::val& band_count_val);

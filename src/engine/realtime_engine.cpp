@@ -390,6 +390,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   const bool capture_input = capture_source() == CaptureSource::kInput;
   const int scratch_channels = std::min(
       {std::max(num_channels, 0), prepared_channels_, static_cast<int>(sub_channels.size())});
+#if defined(SONARE_WITH_MIXING)
+  std::array<float, mixing::kMaxMeterChannels> master_input_peak_db =
+      mixing::detail::meter_floor_array();
+  float master_gain_reduction_db = 0.0f;
+#endif
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {
       if (monitor_out[ch]) {
@@ -465,40 +470,42 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // The decision has to be made BEFORE the clip pass, and whether the rack
     // actually renders is only known after this block's MIDI dispatch (a live
     // note-on arriving on a stopped transport starts an instrument mid-block).
-    // A non-empty rack is therefore enough to open the block: opening it costs
-    // one clear pass and finish_block() only touches lanes that received audio.
-    // Excluded on the PDC path, where the clip bus is rendered into its own
-    // scratch and delayed, so those buses genuinely belong to that pass.
-    const bool block_open = pdc_total_q8_ == 0 && !instrument_rack_.empty() &&
-                            track_mixer_runtime_.begin_block(channels, num_frames);
+    // A configured mixer opens every block, even stopped or with an empty rack, so tails advance.
+    const bool block_open = track_mixer_runtime_.begin_block(channels, num_frames);
 #endif
     if (pdc_total_q8_ > 0) {
-      // PDC active: render the clip bus into scratch, delay it by the project's
-      // total instrument latency so it lands phase-aligned with the
-      // (internally-delayed) instruments, then sum it into the source layer.
-      // Mirrors the additive-into-io contract of the direct path below. While
-      // stopped, the delay keeps running on silence so its tail drains instead
-      // of re-emerging stale on the next play.
+      // PDC: direct clips are delayed by total instrument latency; lane clips get a per-lane delay.
       for (int ch = 0; ch < channels; ++ch) {
         if (clip_scratch_channels_[static_cast<size_t>(ch)]) {
           std::fill(clip_scratch_channels_[static_cast<size_t>(ch)],
                     clip_scratch_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
         }
       }
-      if (transport_rolling) {
 #if defined(SONARE_WITH_MIXING)
-        if (!track_mixer_runtime_.render_clips(clip_player_, clip_scratch_channels_.data(),
-                                               channels, num_frames, transport_.sample_position(),
-                                               &meter_tap_, transport_.render_frame(),
-                                               &scope_tap_)) {
-          clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
-                                  transport_.sample_position());
+      if (block_open) {
+        if (transport_rolling) {
+          track_mixer_runtime_.render_clips_into_lanes(clip_player_, clip_scratch_channels_.data(),
+                                                       channels, num_frames,
+                                                       transport_.sample_position());
+        } else {
+          // A stopped transport does not scan clips, but every opened lane
+          // still advances its raw clip delay with zeros so stale clip audio
+          // cannot reappear after a stop/resume transition.
+          track_mixer_runtime_.drain_clip_pdc_delays(channels, num_frames);
         }
-#else
+      } else if (transport_rolling && !track_mixer_runtime_.render_clips(
+                                          clip_player_, clip_scratch_channels_.data(), channels,
+                                          num_frames, transport_.sample_position(), &meter_tap_,
+                                          transport_.render_frame(), &scope_tap_)) {
         clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
                                 transport_.sample_position());
-#endif
       }
+#else
+      if (transport_rolling) {
+        clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
+                                transport_.sample_position());
+      }
+#endif
       clip_pdc_delay_.process(clip_scratch_channels_.data(), channels, num_frames);
       for (int ch = 0; ch < channels; ++ch) {
         float* out = sub_channels[static_cast<size_t>(ch)];
@@ -524,6 +531,13 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #else
       clip_player_.process_at(sub_channels.data(), channels, num_frames,
                               transport_.sample_position());
+#endif
+#if defined(SONARE_WITH_MIXING)
+    } else if (block_open) {
+      // Keep configured lane strips and their tails advancing over a stopped
+      // block. The lane buffers are silent because begin_block() cleared them;
+      // drain_clip_pdc_delays() also marks each lane for the single finish pass.
+      track_mixer_runtime_.drain_clip_pdc_delays(channels, num_frames);
 #endif
     }
 #else
@@ -593,8 +607,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       // (begin_block above, shared with the clip pass when it ran). Each
       // instrument accumulates into its lane/sends via mix_source_into_lane (no
       // bus processing); finish_block runs every strip and bus chain once
-      // afterwards. On the PDC path the clip pass owns its own delayed scratch,
-      // so the rack still opens its own staging pair here.
+      // afterwards. With PDC, raw clips are delayed within those same lane
+      // accumulators before instruments join them.
       const bool lane_mix_ready =
           block_open || track_mixer_runtime_.begin_source_mix(channels, num_frames);
       bool any_lane_routed = false;
@@ -715,8 +729,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       });
 #if defined(SONARE_WITH_MIXING)
       if (!block_open && lane_mix_ready && any_lane_routed) {
-        // Rack-only staging (PDC path): keep the historic gate and per-lane
-        // interleaving, which the offline bounce goldens depend on.
+        // No block pass opened, so the rack-only source mix is closed here.
         track_mixer_runtime_.finish_source_mix(sub_channels.data(), channels, num_frames,
                                                &meter_tap_, transport_.render_frame(), &scope_tap_);
       }
@@ -735,6 +748,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #endif
 #endif
 #if defined(SONARE_WITH_MIXING)
+    // The input meter remains available even when no master strip is bound.
+    capture_input_peak_db(sub_channels.data(), channels, num_frames, master_input_peak_db);
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
     // sample-accurately at the sub-block's timeline position when enabled.
     if (mixing_enabled_.load(std::memory_order_relaxed)) {
@@ -744,6 +759,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       }
       mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
                                  transport_.sample_position());
+      if (const auto* strip = mixing_runtime_.strip()) {
+        master_gain_reduction_db = strip->last_gain_reduction_db();
+      }
     }
     // Legacy raw-strip solo/mute + PFL/AFL remains an independent producer of
     // the same monitor bus. Lane-owned monitor modes were accumulated above;
@@ -784,7 +802,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #endif
   if (channels > 0 && num_frames > 0) {
 #if defined(SONARE_WITH_MIXING)
-    meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame());
+    meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame(),
+                       master_input_peak_db.data(), master_gain_reduction_db);
 #endif
     const float* const* capture_channels =
         capture_input ? reinterpret_cast<const float* const*>(input_capture_channels_.data())

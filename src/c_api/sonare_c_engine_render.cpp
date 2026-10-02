@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <vector>
 
@@ -59,6 +60,66 @@ mastering::final::DitherType dither_type_from_int(int value) {
     default:
       return mastering::final::DitherType::None;
   }
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING)
+// Each legacy record is a byte prefix of its V2 record, which only appends input peaks.
+static_assert(offsetof(SonareMeterTelemetryRecordV2, input_peak_db_l) ==
+              sizeof(SonareMeterTelemetryRecord));
+static_assert(offsetof(SonareMeterTelemetryRecordWideV2, input_peak_db) ==
+              offsetof(SonareMeterTelemetryRecordWide, dropped_records) + sizeof(uint32_t));
+
+SonareMeterTelemetryRecordV2 meter_record_v2(const engine::MeterTelemetryRecord& record) {
+  SonareMeterTelemetryRecordV2 out{};
+  out.target_id = record.target_id;
+  out.render_frame = record.render_frame;
+  out.seq = record.seq;
+  out.peak_db_l = record.peak_db[0];
+  out.peak_db_r = record.peak_db[1];
+  out.rms_db_l = record.rms_db[0];
+  out.rms_db_r = record.rms_db[1];
+  out.true_peak_db_l = record.true_peak_db[0];
+  out.true_peak_db_r = record.true_peak_db[1];
+  out.max_true_peak_db = record.max_true_peak_db;
+  out.correlation = record.correlation;
+  out.mono_compat_width = record.mono_compat_width;
+  out.momentary_lufs = record.momentary_lufs;
+  out.short_term_lufs = record.short_term_lufs;
+  out.integrated_lufs = record.integrated_lufs;
+  out.gain_reduction_db = record.gain_reduction_db;
+  out.dropped_records = record.dropped_records;
+  out.input_peak_db_l = record.input_peak_db[0];
+  out.input_peak_db_r = record.input_peak_db[1];
+  return out;
+}
+
+SonareMeterTelemetryRecordWideV2 meter_record_wide_v2(const engine::MeterTelemetryRecord& record) {
+  SonareMeterTelemetryRecordWideV2 out{};
+  out.target_id = record.target_id;
+  out.render_frame = record.render_frame;
+  out.seq = record.seq;
+  const int planes =
+      std::clamp(record.channel_count, 0, static_cast<int>(SONARE_METER_MAX_CHANNELS));
+  out.channel_count = planes;
+  for (int ch = 0; ch < SONARE_METER_MAX_CHANNELS; ++ch) {
+    const size_t index = static_cast<size_t>(ch);
+    const bool valid = ch < planes;
+    // Unused planes report the dB floor, so a host ignoring channel_count never reads clipping.
+    out.peak_db[ch] = valid ? record.peak_db[index] : constants::kFloorDb;
+    out.rms_db[ch] = valid ? record.rms_db[index] : constants::kFloorDb;
+    out.true_peak_db[ch] = valid ? record.true_peak_db[index] : constants::kFloorDb;
+    out.input_peak_db[ch] = valid ? record.input_peak_db[index] : constants::kFloorDb;
+  }
+  out.max_true_peak_db = record.max_true_peak_db;
+  out.correlation = record.correlation;
+  out.mono_compat_width = record.mono_compat_width;
+  out.momentary_lufs = record.momentary_lufs;
+  out.short_term_lufs = record.short_term_lufs;
+  out.integrated_lufs = record.integrated_lufs;
+  out.gain_reduction_db = record.gain_reduction_db;
+  out.dropped_records = record.dropped_records;
+  return out;
 }
 #endif
 
@@ -353,23 +414,8 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
   size_t count = 0;
   engine::MeterTelemetryRecord record{};
   while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    out[count].target_id = record.target_id;
-    out[count].render_frame = record.render_frame;
-    out[count].seq = record.seq;
-    out[count].peak_db_l = record.peak_db[0];
-    out[count].peak_db_r = record.peak_db[1];
-    out[count].rms_db_l = record.rms_db[0];
-    out[count].rms_db_r = record.rms_db[1];
-    out[count].true_peak_db_l = record.true_peak_db[0];
-    out[count].true_peak_db_r = record.true_peak_db[1];
-    out[count].max_true_peak_db = record.max_true_peak_db;
-    out[count].correlation = record.correlation;
-    out[count].mono_compat_width = record.mono_compat_width;
-    out[count].momentary_lufs = record.momentary_lufs;
-    out[count].short_term_lufs = record.short_term_lufs;
-    out[count].integrated_lufs = record.integrated_lufs;
-    out[count].gain_reduction_db = record.gain_reduction_db;
-    out[count].dropped_records = record.dropped_records;
+    const SonareMeterTelemetryRecordV2 full = meter_record_v2(record);
+    std::memcpy(&out[count], &full, sizeof(SonareMeterTelemetryRecord));
     ++count;
   }
   *out_count = count;
@@ -392,31 +438,54 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engin
   size_t count = 0;
   engine::MeterTelemetryRecord record{};
   while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
-    out[count].target_id = record.target_id;
-    out[count].render_frame = record.render_frame;
-    out[count].seq = record.seq;
-    const int planes =
-        std::clamp(record.channel_count, 0, static_cast<int>(SONARE_METER_MAX_CHANNELS));
-    out[count].channel_count = planes;
-    for (int ch = 0; ch < SONARE_METER_MAX_CHANNELS; ++ch) {
-      const bool valid = ch < planes;
-      // Unused surround planes report the dB floor (silence), not 0 dBFS: a host
-      // that ignores channel_count and reads every plane must not see the unused
-      // planes pinned to full scale (which would read as clipping).
-      out[count].peak_db[ch] =
-          valid ? record.peak_db[static_cast<size_t>(ch)] : constants::kFloorDb;
-      out[count].rms_db[ch] = valid ? record.rms_db[static_cast<size_t>(ch)] : constants::kFloorDb;
-      out[count].true_peak_db[ch] =
-          valid ? record.true_peak_db[static_cast<size_t>(ch)] : constants::kFloorDb;
-    }
-    out[count].max_true_peak_db = record.max_true_peak_db;
-    out[count].correlation = record.correlation;
-    out[count].mono_compat_width = record.mono_compat_width;
-    out[count].momentary_lufs = record.momentary_lufs;
-    out[count].short_term_lufs = record.short_term_lufs;
-    out[count].integrated_lufs = record.integrated_lufs;
-    out[count].gain_reduction_db = record.gain_reduction_db;
-    out[count].dropped_records = record.dropped_records;
+    const SonareMeterTelemetryRecordWideV2 full = meter_record_wide_v2(record);
+    std::memcpy(&out[count], &full, offsetof(SonareMeterTelemetryRecordWideV2, input_peak_db));
+    ++count;
+  }
+  *out_count = count;
+  return SONARE_OK;
+#else
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
+                                                   SonareMeterTelemetryRecordV2* out,
+                                                   size_t max_records, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_count || (max_records > 0 && !out)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  size_t count = 0;
+  engine::MeterTelemetryRecord record{};
+  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
+    out[count] = meter_record_v2(record);
+    ++count;
+  }
+  *out_count = count;
+  return SONARE_OK;
+#else
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* engine,
+                                                        SonareMeterTelemetryRecordWideV2* out,
+                                                        size_t max_records, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_count || (max_records > 0 && !out)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  size_t count = 0;
+  engine::MeterTelemetryRecord record{};
+  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
+    out[count] = meter_record_wide_v2(record);
     ++count;
   }
   *out_count = count;

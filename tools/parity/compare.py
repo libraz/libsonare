@@ -224,6 +224,11 @@ _ALIAS_COVERAGE = {
     "audio_duration": ("duration", "get_duration"),
     "audio_sample_rate": ("sample_rate", "get_sample_rate"),
     "engine_get_transport_state": ("transport_state",),
+    # The V2 meter drains append input-tap peaks to the legacy record shape;
+    # each facade keeps the established drain method and selects the versioned
+    # C entry point internally rather than exposing a second public spelling.
+    "engine_drain_meter_telemetry_v2": ("drain_meter_telemetry",),
+    "engine_drain_meter_telemetry_wide_v2": ("drain_meter_telemetry_wide",),
     "mixer_get_strip_count": ("strip_count",),
     "realtime_voice_changer_get_config": ("config", "config_json", "config_pod"),
     # Whole-object JSON serialize/deserialize -> to_json / from_json.

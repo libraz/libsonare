@@ -2,10 +2,13 @@
 /// @brief Engine C ABI bus routing (bus output, bus sends), bus/master
 ///        sidechain keys, and MIDI clip gain/fade conversion.
 
+#include <array>
+#include <cmath>
 #include <initializer_list>
 #include <vector>
 
 #include "sonare_c_engine_test_helpers.h"
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace {
@@ -369,6 +372,119 @@ TEST_CASE("sonare_engine_set_midi_clips refuses a bad gain or fade", "[c_engine_
   clip.fade_out_samples = 0;
   clip.fade_in_samples = 256;
   CHECK(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("C engine reads immutable insert construction values",
+          "[c_api][engine][insert_construction]") {
+  SonareRealtimeEngine* engine = make_routing_engine({});
+  REQUIRE(
+      sonare_engine_set_master_strip_json(
+          engine,
+          R"({"version":1,"strips":[{"id":"master","inserts":[{"processor":"utility.gain","params":{"levelDb":-3}}]}],"buses":[]})") ==
+      SONARE_OK);
+  uint32_t id = 0;
+  REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "levelDb", &id) ==
+          SONARE_OK);
+  float value = 42.0f;
+  REQUIRE(sonare_engine_insert_parameter_constructed_value(engine, id, &value) == SONARE_OK);
+  REQUIRE(value == -3.0f);
+  REQUIRE(sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "levelDb", -9.0f) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_insert_parameter_constructed_value(engine, id, &value) == SONARE_OK);
+  REQUIRE(value == -3.0f);
+  value = 42.0f;
+  REQUIRE(sonare_engine_insert_parameter_constructed_value(engine, 0, &value) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(value == 42.0f);
+  REQUIRE(sonare_engine_insert_parameter_constructed_value(engine, id, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_insert_parameter_constructed_value(nullptr, id, &value) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_engine_destroy(engine);
+}
+#endif
+
+TEST_CASE("C engine queues a master loudness reset", "[c_api][engine][loudness_reset]") {
+  constexpr int kBlock = 1024;
+  constexpr int kProgramBlocks = 160;  // More than the 3 s short-term window.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 4, 8) == SONARE_OK);
+  REQUIRE(sonare_engine_set_input_monitor(engine, 1, 1.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_reset_master_loudness_meter(nullptr, -1) == SONARE_ERROR_INVALID_PARAMETER);
+  std::array<float, kBlock> samples{};
+  for (int i = 0; i < kBlock; ++i) {
+    samples[static_cast<size_t>(i)] =
+        0.5f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  float* channels[] = {samples.data()};
+  const auto latest_master = [engine]() {
+    SonareMeterTelemetryRecord latest{};
+    latest.integrated_lufs = 0.0f;
+    std::array<SonareMeterTelemetryRecord, 64> records{};
+    size_t written = 0;
+    do {
+      REQUIRE(sonare_engine_drain_meter_telemetry(engine, records.data(), records.size(),
+                                                  &written) == SONARE_OK);
+      for (size_t index = 0; index < written; ++index) {
+        if (records[index].target_id == 0) latest = records[index];
+      }
+    } while (written == records.size());
+    return latest;
+  };
+  for (int block = 0; block < kProgramBlocks; ++block) {
+    REQUIRE(sonare_engine_process(engine, channels, 1, kBlock) == SONARE_OK);
+  }
+  const SonareMeterTelemetryRecord before = latest_master();
+  REQUIRE(before.integrated_lufs > -60.0f);
+  REQUIRE(before.integrated_lufs < 0.0f);
+
+  REQUIRE(sonare_engine_reset_master_loudness_meter(engine, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, 1, kBlock) == SONARE_OK);
+  const SonareMeterTelemetryRecord after = latest_master();
+  REQUIRE(after.integrated_lufs <= -100.0f);
+  REQUIRE(after.momentary_lufs > -60.0f);
+  sonare_engine_destroy(engine);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("C engine master meter carries pre-trim input and compressor reduction",
+          "[c_api][engine][meter]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_master_strip_json(
+          engine,
+          R"({"version":1,"strips":[{"id":"master","inputTrimDb":-6,"inserts":[{"processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"buses":[]})") ==
+      SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kRoutingBlock> samples{};
+  float* channels[] = {samples.data()};
+  SonareMeterTelemetryRecordV2 master{};
+  bool found = false;
+  for (int block = 0; block < 20; ++block) {
+    samples.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, channels, 1, kRoutingBlock) == SONARE_OK);
+    std::array<SonareMeterTelemetryRecordV2, 16> records{};
+    size_t written = 0;
+    REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
+                                                   &written) == SONARE_OK);
+    for (size_t index = 0; index < written; ++index) {
+      if (records[index].target_id == 0) {
+        master = records[index];
+        found = true;
+      }
+    }
+  }
+  REQUIRE(found);
+  REQUIRE(master.input_peak_db_l == Catch::Approx(0.0f).margin(0.001f));
+  REQUIRE(master.input_peak_db_r <= -100.0f);
+  REQUIRE(master.gain_reduction_db < -10.0f);
+  REQUIRE(master.peak_db_l < master.input_peak_db_l - 10.0f);
   sonare_engine_destroy(engine);
 }
 #endif

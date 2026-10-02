@@ -634,6 +634,16 @@ export class RealtimeEngine {
    * stages of the offline mastering chain (`repair.*`, `loudness`, and the
    * match stages) have no insert form and no automation id: they buffer the
    * entire signal by construction and do not run on the realtime path.
+   *
+   * The returned id uses the track's current positional lane selector. When
+   * `setTrackLanes` successfully changes lane order or membership, the engine
+   * remaps already queued and published track automation by track id, but it
+   * cannot update a numeric id retained by the caller. Re-resolve every track
+   * insert id after such a topology change before passing it to
+   * `setAutomationLane`, `setParameter`, or `setParameterSmoothed`. Use
+   * `setTrackStripInsertParamByName` when the operation needs a stable track
+   * identity. Master and bus insert ids are separate and are not invalidated by
+   * track-lane changes.
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
@@ -647,6 +657,11 @@ export class RealtimeEngine {
   /** Bus-strip counterpart of {@link resolveTrackInsertAutomationId}. */
   resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveBusInsertAutomationId(busId, insertIndex, paramName);
+  }
+
+  /** Return the immutable construction value for a resolved insert parameter. */
+  insertParameterConstructedValue(paramId: number): number {
+    return this.native.insertParameterConstructedValue(paramId);
   }
 
   /**
@@ -990,11 +1005,16 @@ export class RealtimeEngine {
   /**
    * Drain pending meter telemetry as per-plane (wide) records for a surround
    * target. Use this for a surround mix target; {@link drainMeterTelemetry}
-   * stays the stereo fast path. The two share one queue, so call only one per
-   * target.
+   * stays the stereo fast path. The two share one queue and each consumes every
+   * target's records, so an engine uses only one of them.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords);
+  }
+
+  /** Queue a reset of the master integrated-loudness meter. */
+  resetMasterLoudnessMeter(renderFrame = -1): void {
+    this.native.resetMasterLoudnessMeter(renderFrame);
   }
 
   /**

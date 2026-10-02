@@ -1,10 +1,13 @@
 #include "engine/track_mixer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <stdexcept>
+#include <utility>
 
 #include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
@@ -13,6 +16,7 @@
 #include "mixing/pan_law.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/json.h"
 
 namespace sonare::engine {
 
@@ -68,16 +72,80 @@ const std::string* strip_insert_processor_name_at(const mixing::api::Strip& spec
   return nullptr;
 }
 
-bool strip_inserts_equal(const std::vector<mixing::api::Insert>& a,
-                         const std::vector<mixing::api::Insert>& b) {
-  if (a.size() != b.size()) return false;
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (a[i].slot != b[i].slot || a[i].processor_name != b[i].processor_name ||
-        a[i].params_json != b[i].params_json || a[i].sidechain_key != b[i].sidechain_key) {
-      return false;
-    }
+namespace {
+
+util::json::Value canonicalize_json_zeroes(const util::json::Value& value) {
+  if (value.is_number()) {
+    const double number = value.as_number();
+    // The WASM facade's JSON round trip maps -0 to 0; match it so a scene resend compares equal.
+    return util::json::Value(number == 0.0 ? 0.0 : number);
   }
-  return true;
+  if (value.is_array()) {
+    util::json::Array normalized;
+    normalized.reserve(value.as_array().size());
+    for (const util::json::Value& child : value.as_array()) {
+      normalized.push_back(canonicalize_json_zeroes(child));
+    }
+    return util::json::Value(std::move(normalized));
+  }
+  if (value.is_object()) {
+    util::json::Object normalized;
+    for (const auto& [key, child] : value.as_object()) {
+      normalized.emplace(key, canonicalize_json_zeroes(child));
+    }
+    return util::json::Value(std::move(normalized));
+  }
+  return value;
+}
+
+std::string canonical_insert_params(const std::string& params_json) {
+  // Empty text (omitted params) stays distinct from `{}`; invalid text keeps its exact bytes.
+  if (params_json.empty()) return std::string(1, '\0');
+  try {
+    return std::string(1, '\1') +
+           util::json::dump(canonicalize_json_zeroes(util::json::parse(params_json)));
+  } catch (...) {
+    return std::string(1, '\2') + params_json;
+  }
+}
+
+bool inserts_match(const mixing::api::Insert& left, const mixing::api::Insert& right) {
+  return left.processor_name == right.processor_name &&
+         canonical_insert_params(left.params_json) == canonical_insert_params(right.params_json) &&
+         left.sidechain_key == right.sidechain_key;
+}
+
+}  // namespace
+
+bool strip_inserts_equal(const std::vector<mixing::api::Insert>& a,
+                         const std::vector<mixing::api::Insert>& b, bool canonical_track_order) {
+  if (a.size() != b.size()) return false;
+  if (!canonical_track_order) {
+    for (size_t i = 0; i < a.size(); ++i) {
+      if (a[i].slot != b[i].slot || !inserts_match(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  // Track/master strips store pre and post chains separately. Scene JSON may
+  // interleave their entries, so compare each stage in its stable within-stage
+  // order rather than comparing the raw scene vector positions.
+  const auto stage_matches = [&a, &b](mixing::api::InsertSlot slot) {
+    size_t left_index = 0;
+    size_t right_index = 0;
+    while (true) {
+      while (left_index < a.size() && a[left_index].slot != slot) ++left_index;
+      while (right_index < b.size() && b[right_index].slot != slot) ++right_index;
+      if (left_index == a.size() || right_index == b.size()) {
+        return left_index == a.size() && right_index == b.size();
+      }
+      if (!inserts_match(a[left_index], b[right_index])) return false;
+      ++left_index;
+      ++right_index;
+    }
+  };
+  return stage_matches(mixing::api::InsertSlot::PreFader) &&
+         stage_matches(mixing::api::InsertSlot::PostFader);
 }
 
 void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& next,
@@ -136,22 +204,129 @@ bool layout_wider_than_stereo(ChannelLayout layout) noexcept {
   return channel_count(layout) > TrackMixerRuntime::kMaxLaneChannels;
 }
 
+bool lane_sends_equal(const TrackLaneConfig& left, const TrackLaneConfig& right) noexcept {
+  if (left.sends.size() != right.sends.size()) return false;
+  for (size_t send_index = 0; send_index < left.sends.size(); ++send_index) {
+    const TrackLaneConfig::Send& lhs = left.sends[send_index];
+    const TrackLaneConfig::Send& rhs = right.sends[send_index];
+    if (lhs.bus_id != rhs.bus_id || lhs.level_db != rhs.level_db || lhs.enabled != rhs.enabled ||
+        lhs.timing != rhs.timing) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   if (!lane_config_valid(lanes)) return false;
-  const auto snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
-  if (!lanes_.publish(snapshot)) return false;
-  settle_insert_automations();
-  clear_lane_insert_automations();
-  acquire_lanes();
-  prepare_lanes_from_snapshot(*snapshot);
+  constexpr int kMaxLaneClipDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
+  // Refuse a non-empty lane snapshot when the retained direct delay exceeds the lane bank ceiling.
+  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxLaneClipDelayQ8) return false;
+  std::shared_ptr<const std::vector<TrackLaneConfig>> snapshot;
   try {
-    configure_lane_sends(*snapshot);
+    snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
+    // All control-table growth happens before any semantic mutation.  The
+    // commit below only appends into these reserved tables.
+    owned_strips_.reserve(owned_strips_.size() + snapshot->size());
+    track_strip_bindings_.reserve(track_strip_bindings_.size() + snapshot->size());
   } catch (...) {
     return false;
   }
-  if (!recompute_lane_pdc(*snapshot)) return false;
+
+  std::array<mixing::ChannelStrip*, kMaxTrackLanes> candidate_strips{};
+  std::array<std::unique_ptr<mixing::ChannelStrip>, kMaxTrackLanes> staged_owned;
+  std::array<mixing::ChannelStrip::PreparedSends, kMaxTrackLanes> staged_sends;
+  std::array<bool, kMaxTrackLanes> replace_sends{};
+  const std::vector<TrackLaneConfig>* previous_lanes = lanes_.control_current().get();
+  size_t staged_owned_count = 0;
+  try {
+    for (size_t lane_index = 0; lane_index < snapshot->size(); ++lane_index) {
+      const TrackLaneConfig& config = (*snapshot)[lane_index];
+      candidate_strips[lane_index] = bound_strip_for(config.track_id);
+      if (candidate_strips[lane_index] == nullptr) {
+        candidate_strips[lane_index] = owned_strip_for(config.track_id);
+      }
+      if (candidate_strips[lane_index] == nullptr && !config.sends.empty()) {
+        if (owned_strips_.size() + staged_owned_count >= kMaxTrackLanes) return false;
+        auto strip = std::make_unique<mixing::ChannelStrip>(
+            mixing::ChannelStripConfig{0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f,
+                                       mixing::EqPosition::PreFader, 0.0f, false});
+        if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
+        candidate_strips[lane_index] = strip.get();
+        staged_owned[lane_index] = std::move(strip);
+        ++staged_owned_count;
+      }
+      if (candidate_strips[lane_index] == nullptr) continue;
+
+      // Keep the retained send processor and its in-flight ramp when identity and config match.
+      bool retain_sends = false;
+      if (previous_lanes != nullptr && staged_owned[lane_index] == nullptr) {
+        for (size_t previous_index = 0; previous_index < previous_lanes->size(); ++previous_index) {
+          if ((*previous_lanes)[previous_index].track_id != (*snapshot)[lane_index].track_id) {
+            continue;
+          }
+          if (previous_index < lane_states_.size() &&
+              lane_states_[previous_index].track_id == (*snapshot)[lane_index].track_id &&
+              lane_states_[previous_index].strip == candidate_strips[lane_index] &&
+              candidate_strips[lane_index]->num_sends() == (*snapshot)[lane_index].sends.size() &&
+              lane_sends_equal((*previous_lanes)[previous_index], (*snapshot)[lane_index])) {
+            retain_sends = true;
+          }
+          break;
+        }
+      }
+      if (retain_sends) continue;
+      replace_sends[lane_index] = true;
+      std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> sends{};
+      for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
+        const TrackLaneConfig::Send& send = config.sends[send_index];
+        sends[send_index] =
+            mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
+      }
+      if (!candidate_strips[lane_index]->prepare_sends(sends.data(), config.sends.size(),
+                                                       staged_sends[lane_index])) {
+        return false;
+      }
+    }
+  } catch (...) {
+    return false;
+  }
+
+  PdcPlan plan;
+  const BusGraphView view = current_bus_graph_view();
+  if (!plan_pdc(*snapshot, view, &plan, &candidate_strips)) return false;
+  std::array<int, kMaxTrackLanes> lane_sources{};
+  std::array<bool, kMaxTrackLanes> lane_reset{};
+  make_lane_pdc_sources(*snapshot, &lane_sources, &lane_reset);
+  PreparedPdc prepared_pdc;
+  if (!prepare_pdc_updates(plan, lane_sources, lane_reset, &prepared_pdc)) return false;
+
+  // From here on every vector has capacity and every processor is prepared, so nothing can fail.
+  // Insert ramps stay keyed by track identity; only a track leaving the snapshot is retired.
+  settle_insert_automations(*snapshot, true);
+  remap_lane_insert_automations(*snapshot);
+  for (size_t lane_index = 0; lane_index < snapshot->size(); ++lane_index) {
+    if (staged_owned[lane_index] == nullptr) continue;
+    mixing::ChannelStrip* raw = staged_owned[lane_index].get();
+    owned_strips_.push_back(
+        OwnedStrip{(*snapshot)[lane_index].track_id, std::move(staged_owned[lane_index]), {}});
+    record_track_strip_binding((*snapshot)[lane_index].track_id, raw);
+  }
+  for (size_t lane_index = 0; lane_index < snapshot->size(); ++lane_index) {
+    if (candidate_strips[lane_index] != nullptr && replace_sends[lane_index]) {
+      candidate_strips[lane_index]->commit_sends(staged_sends[lane_index]);
+    }
+  }
+  commit_pdc_updates(prepared_pdc);
+  // snapshot is non-null and publish() has no other rejection path.  Treat
+  // this as the publication point so a hypothetical future failure cannot
+  // report false after the no-fail commit has already begun.
+  (void)lanes_.publish(snapshot);
+  lanes_.acquire_control_quiescent();
+  sidechains_reader_.try_load_into(&audio_sidechains_);
+  prepare_lanes_from_snapshot(*snapshot, &candidate_strips);
   return true;
 }
 
@@ -164,8 +339,10 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   std::array<bool, kMaxBusLanes> kept{};
   std::array<bool, kMaxBusLanes> moved_out{};
   std::array<ChannelLayout, kMaxBusLanes> previous_layout{};
+  std::array<float, kMaxBusLanes> previous_gain_db{};
   for (size_t index = 0; index < bus_configs_.size() && index < previous_layout.size(); ++index) {
     previous_layout[index] = bus_configs_[index].layout;
+    previous_gain_db[index] = bus_configs_[index].gain_db;
   }
   bool any_move = false;
   for (size_t index = 0; index < buses.size(); ++index) {
@@ -238,6 +415,128 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   }
   PdcPlan plan;
   if (!plan_pdc(lanes, view, &plan)) return false;
+  std::array<int, kMaxBusLanes> bank_sources{};
+  bank_sources.fill(-1);
+  std::array<bool, kMaxBusLanes> bank_used{};
+  for (size_t index = 0; index < kMaxBusLanes; ++index) {
+    int previous = index < buses.size() ? source[index] : -1;
+    if (previous < 0 || previous >= static_cast<int>(kMaxBusLanes) ||
+        bank_used[static_cast<size_t>(previous)]) {
+      previous = -1;
+      for (size_t candidate = 0; candidate < kMaxBusLanes; ++candidate) {
+        if (!bank_used[candidate]) {
+          previous = static_cast<int>(candidate);
+          break;
+        }
+      }
+    }
+    if (previous < 0) continue;
+    bank_sources[index] = previous;
+    bank_used[static_cast<size_t>(previous)] = true;
+  }
+  // Stage every lane send table before the bus table changes, resolving strips by
+  // track identity so a lane reorder cannot make the staging positional.
+  std::array<mixing::ChannelStrip*, kMaxTrackLanes> lane_send_strips{};
+  std::array<std::unique_ptr<mixing::ChannelStrip>, kMaxTrackLanes> staged_lane_owned;
+  std::array<mixing::ChannelStrip::PreparedSends, kMaxTrackLanes> prepared_lane_sends;
+  std::array<bool, kMaxTrackLanes> replace_lane_sends{};
+  size_t staged_lane_owned_count = 0;
+  try {
+    for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+      const TrackLaneConfig& config = lanes[lane_index];
+      mixing::ChannelStrip* strip = bound_strip_for(config.track_id);
+      if (strip == nullptr) strip = owned_strip_for(config.track_id);
+      if (strip == nullptr) {
+        for (const LaneState& state : lane_states_) {
+          if (state.track_id == config.track_id) {
+            strip = state.strip;
+            break;
+          }
+        }
+      }
+      if (strip == nullptr && !config.sends.empty()) {
+        if (owned_strips_.size() + staged_lane_owned_count >= kMaxTrackLanes) return false;
+        auto owned = std::make_unique<mixing::ChannelStrip>(
+            mixing::ChannelStripConfig{0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f,
+                                       mixing::EqPosition::PreFader, 0.0f, false});
+        if (max_block_size_ > 0) owned->prepare(sample_rate_, max_block_size_);
+        strip = owned.get();
+        staged_lane_owned[lane_index] = std::move(owned);
+        ++staged_lane_owned_count;
+      }
+      lane_send_strips[lane_index] = strip;
+      if (strip == nullptr) continue;
+      // set_buses() leaves the lane snapshot and its strip identity intact.
+      // Preserve the existing send processor in that case, since replacing it
+      // would clear queued send automation even though no lane send changed.
+      const bool retain_sends = staged_lane_owned[lane_index] == nullptr &&
+                                lane_states_[lane_index].track_id == config.track_id &&
+                                lane_states_[lane_index].strip == strip &&
+                                strip->num_sends() == config.sends.size();
+      if (retain_sends) continue;
+      replace_lane_sends[lane_index] = true;
+      std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> configs{};
+      for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
+        const TrackLaneConfig::Send& send = config.sends[send_index];
+        configs[send_index] =
+            mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
+      }
+      if (!strip->prepare_sends(configs.data(), config.sends.size(),
+                                prepared_lane_sends[lane_index])) {
+        return false;
+      }
+    }
+    owned_strips_.reserve(owned_strips_.size() + staged_lane_owned_count);
+    track_strip_bindings_.reserve(track_strip_bindings_.size() + staged_lane_owned_count);
+  } catch (...) {
+    return false;
+  }
+
+  // Prepare new FxBus objects up front so the commit only moves pointers and sets scalars.
+  std::array<std::unique_ptr<mixing::FxBus>, kMaxBusLanes> staged_buses;
+  try {
+    for (size_t index = 0; index < buses.size(); ++index) {
+      const int previous = source[index];
+      const bool missing =
+          previous < 0 || bus_states_[static_cast<size_t>(previous)].bus == nullptr;
+      if (!missing) continue;
+      auto bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
+      bus->set_channel_layout(buses[index].layout);
+      if (max_block_size_ > 0) bus->prepare(sample_rate_, max_block_size_);
+      staged_buses[index] = std::move(bus);
+    }
+  } catch (...) {
+    return false;
+  }
+
+  // Stage PDC replacement storage now; commit_pdc_updates() applies scalar plans after the remap.
+  std::array<int, kMaxTrackLanes> pdc_sources{};
+  std::array<bool, kMaxTrackLanes> pdc_reset{};
+  for (size_t index = 0; index < kMaxTrackLanes; ++index) {
+    pdc_sources[index] = static_cast<int>(index);
+    pdc_reset[index] = false;
+  }
+  PreparedPdc prepared_pdc;
+  if (!prepare_pdc_updates(plan, pdc_sources, pdc_reset, &prepared_pdc, &bank_sources)) {
+    return false;
+  }
+
+  // Reserve every selector entry the new bus identities may need (a stale tombstone counts as new).
+  size_t selectors_needed = 0;
+  for (const TrackBusConfig& config : buses) {
+    bool active = false;
+    for (const BusInsertSelectorBinding& binding : bus_insert_selectors_) {
+      active = active || (binding.active && binding.bus_id == config.bus_id);
+    }
+    if (!active) ++selectors_needed;
+  }
+  if (bus_insert_selectors_.size() + selectors_needed > kMaxBusInsertSelectors) return false;
+  try {
+    bus_insert_selectors_.reserve(bus_insert_selectors_.size() + selectors_needed);
+  } catch (...) {
+    return false;
+  }
+
   decltype(bus_sends_) sends{};
   try {
     for (size_t index = 0; index < buses.size(); ++index) {
@@ -253,14 +552,70 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     return false;
   }
   std::unique_ptr<std::array<BusState, kMaxBusLanes>> staging;
-  if (any_move) staging = std::make_unique<std::array<BusState, kMaxBusLanes>>();
-  for (size_t index = 0; index < bus_states_.size(); ++index) {
-    if (kept[index]) continue;
-    if (moved_out[index]) {
-      (*staging)[index].eq.prepare(sample_rate_, max_block_size_);
-      transfer_bus_state(bus_states_[index], (*staging)[index]);
+  try {
+    if (any_move) staging = std::make_unique<std::array<BusState, kMaxBusLanes>>();
+    for (size_t index = 0; index < bus_states_.size(); ++index) {
+      if (kept[index]) continue;
+      if (moved_out[index]) {
+        (*staging)[index].eq.prepare(sample_rate_, max_block_size_);
+        transfer_bus_state(bus_states_[index], (*staging)[index]);
+      }
+      // No semantic mutation occurs in this loop; it only stages moved state.
     }
-    retire_bus_state(bus_states_[index]);
+  } catch (...) {
+    return false;
+  }
+
+  // Alignment banks move with their bus id; edge histories survive only while routes are unchanged.
+  const auto resolves_to_bus = [](const std::vector<TrackBusConfig>& configs, uint32_t bus_id) {
+    return std::any_of(configs.begin(), configs.end(),
+                       [bus_id](const TrackBusConfig& config) { return config.bus_id == bus_id; });
+  };
+  const auto same_destination = [&](uint32_t old_id, uint32_t next_id) {
+    const bool old_bus = old_id != 0 && resolves_to_bus(bus_configs_, old_id);
+    const bool next_bus = next_id != 0 && resolves_to_bus(buses, next_id);
+    return old_bus == next_bus && (!old_bus || old_id == next_id);
+  };
+  const auto routes_unchanged = [&](size_t index) {
+    const int previous = source[index];
+    if (previous < 0) return false;
+    const TrackBusConfig& old = bus_configs_[static_cast<size_t>(previous)];
+    const TrackBusConfig& next = buses[index];
+    if (old.layout != next.layout || old.sends.size() != next.sends.size() ||
+        !same_destination(old.output_bus_id, next.output_bus_id)) {
+      return false;
+    }
+    for (size_t send = 0; send < old.sends.size(); ++send) {
+      if (old.sends[send].timing != next.sends[send].timing ||
+          !same_destination(old.sends[send].bus_id, next.sends[send].bus_id)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  std::array<mixing::AlignmentDelay, kMaxBusLanes> old_bus_pdc = std::move(bus_pdc_delays_);
+  std::array<mixing::AlignmentDelay, kMaxBusLanes> next_bus_pdc;
+  std::array<mixing::AlignmentDelay, kMaxBusLanes * kBusEdgesPerBus> old_edges =
+      std::move(bus_edge_delays_);
+  std::array<mixing::AlignmentDelay, kMaxBusLanes * kBusEdgesPerBus> next_edges;
+  for (size_t index = 0; index < kMaxBusLanes; ++index) {
+    const int previous = bank_sources[index];
+    if (previous < 0) continue;
+    const bool retained_bus = index < buses.size() && source[index] >= 0;
+    const bool retained_edges = retained_bus && routes_unchanged(index);
+    next_bus_pdc[index] = std::move(old_bus_pdc[static_cast<size_t>(previous)]);
+    if (!retained_bus) next_bus_pdc[index].reset();
+    for (size_t edge = 0; edge < kBusEdgesPerBus; ++edge) {
+      next_edges[index * kBusEdgesPerBus + edge] =
+          std::move(old_edges[static_cast<size_t>(previous) * kBusEdgesPerBus + edge]);
+      if (!retained_edges) next_edges[index * kBusEdgesPerBus + edge].reset();
+    }
+  }
+  bus_pdc_delays_ = std::move(next_bus_pdc);
+  bus_edge_delays_ = std::move(next_edges);
+  for (size_t index = 0; index < bus_states_.size(); ++index) {
+    if (!kept[index]) retire_bus_state(bus_states_[index]);
   }
   bus_configs_ = std::move(buses);
   // Retire selectors for buses that disappeared. Keeping the mapping entry as
@@ -279,6 +634,18 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     (void)bus_insert_automation_selector(config.bus_id);
   }
   bus_sends_ = std::move(sends);
+  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+    if (staged_lane_owned[lane_index] == nullptr) continue;
+    mixing::ChannelStrip* raw = staged_lane_owned[lane_index].get();
+    owned_strips_.push_back(
+        OwnedStrip{lanes[lane_index].track_id, std::move(staged_lane_owned[lane_index]), {}});
+    record_track_strip_binding(lanes[lane_index].track_id, raw);
+  }
+  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+    if (lane_send_strips[lane_index] != nullptr && replace_lane_sends[lane_index]) {
+      lane_send_strips[lane_index]->commit_sends(prepared_lane_sends[lane_index]);
+    }
+  }
   for (size_t i = binding_count; i > 0; --i) {
     if (drop[i - 1]) remove_sidechain_binding(i - 1);
   }
@@ -298,23 +665,25 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       if (source[index] >= 0) {
         transfer_bus_state((*staging)[static_cast<size_t>(source[index])], state);
       }
-      // The delay line held another bus's history; recompute_lane_pdc re-derives its length.
-      bus_pdc_delays_[index].reset();
-      for (size_t edge = 0; edge < kBusEdgesPerBus; ++edge) {
-        bus_edge_delays_[index * kBusEdgesPerBus + edge].reset();
-      }
     }
     state.bus_id = bus_configs_[index].bus_id;
-    state.gain.prepare(sample_rate_, 5.0f);
-    state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
-    // Re-prepare the trim/width smoothers for the current rate without
-    // disturbing any value a prior set_bus_strip already applied.
-    state.input_trim_gain.prepare(sample_rate_, 5.0f);
-    if (max_block_size_ > 0) {
-      state.width.prepare(sample_rate_, max_block_size_);
+    if (source[index] >= 0) {
+      // A retained bus may have active gain/trim/width ramps. Keep their
+      // current and target values through a same-order republish or an
+      // identity reorder; only a changed TrackBusConfig gain is a new target.
+      if (previous_gain_db[static_cast<size_t>(source[index])] != bus_configs_[index].gain_db) {
+        state.gain.set_target(db_to_linear(bus_configs_[index].gain_db));
+      }
+    } else {
+      state.gain.prepare(sample_rate_, 5.0f);
+      state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
+      state.input_trim_gain.prepare(sample_rate_, 5.0f);
+      if (max_block_size_ > 0) {
+        state.width.prepare(sample_rate_, max_block_size_);
+      }
     }
     if (!state.bus) {
-      state.bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
+      state.bus = std::move(staged_buses[index]);
     }
     // Dedicated EQ state is per output plane. A retained bus can change width
     // under the same identity, so a plane skipped while the bus was narrower
@@ -325,23 +694,11 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       state.eq.reset();
     }
     state.bus->set_channel_layout(bus_configs_[index].layout);
-    if (max_block_size_ > 0) {
-      state.bus->prepare(sample_rate_, max_block_size_);
-    }
+    // Existing FxBus objects were prepared before this transaction. Newly
+    // declared slots were prepared into staged_buses[] above.
   }
   refresh_bus_graph();
-  // Control-side snapshot: this is a control-thread structural change, and
-  // current() is the audio thread's view (see set_track_channel_delay_samples).
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    try {
-      configure_lane_sends(*lanes);
-    } catch (...) {
-      return false;
-    }
-    // Declaring or retiring a bus changes which bus latencies feed the master
-    // sum, so the bus-stage alignment has to follow the bus list.
-    if (!recompute_lane_pdc(*lanes)) return false;
-  }
+  commit_pdc_updates(prepared_pdc);
   return true;
 }
 
@@ -349,17 +706,12 @@ void TrackMixerRuntime::transfer_bus_state(BusState& from, BusState& to) {
   to.bus_id = from.bus_id;
   to.gain = from.gain;
   to.input_trim_gain = from.input_trim_gain;
-  to.width.set_width(from.width.width());
-  to.width.reset();
+  to.width.copy_state_from(from.width);
   to.polarity_left.store(from.polarity_left.load(std::memory_order_relaxed),
                          std::memory_order_relaxed);
   to.polarity_right.store(from.polarity_right.load(std::memory_order_relaxed),
                           std::memory_order_relaxed);
-  to.panner.set_pan_mode(from.panner.pan_mode());
-  to.panner.set_pan_law(from.panner.pan_law());
-  to.panner.set_pan(from.panner.pan());
-  to.panner.set_dual_pan(from.panner.dual_pan_left(), from.panner.dual_pan_right());
-  to.panner.reset();
+  to.panner.copy_state_from(from.panner);
   // The state belongs to the bus identity, so a positional move must carry it
   // across with the rest of the retained bus state. set_buses() resets it after
   // this transfer only when the destination layout changes.
@@ -447,7 +799,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     }
     if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
       try {
-        configure_lane_sends(*lanes);
+        configure_lane_sends(*lanes, track_id);
       } catch (...) {
         return false;
       }
@@ -467,7 +819,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     }
     if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
       try {
-        configure_lane_sends(*lanes);
+        configure_lane_sends(*lanes, track_id);
       } catch (...) {
         return false;
       }
@@ -551,7 +903,8 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     return false;
   }
   std::unique_ptr<mixing::FxBus> fx;
-  const bool rebuild = !strip_inserts_equal(state->spec.inserts, bus.inserts);
+  const bool rebuild = !strip_inserts_equal(state->spec.inserts, bus.inserts,
+                                            /*canonical_track_order=*/false);
   if (rebuild) {
     fx = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
     fx->set_channel_layout(bus_configs_[bus_index].layout);
@@ -634,6 +987,8 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
     lane.gate.prepare(sample_rate_, 10.0f);
+    lane.clip_pdc_delay.set_prepared_channels(kMaxLaneChannels);
+    lane.clip_pdc_delay.prepare(sample_rate_, max_block_size_);
     // Same time constant as the stereo pan smoother, so a surround placement
     // glides over the same interval a stereo pan does.
     for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
@@ -730,6 +1085,83 @@ void TrackMixerRuntime::reset() {
     lane.mute = false;
   }
   flush_pdc_delays();
+  flush_clip_pdc_delays();
+}
+
+bool TrackMixerRuntime::set_clip_pdc_delay_q8(int delay_samples_q8) noexcept {
+  ClipPdcPlan prepared;
+  if (!prepare_clip_pdc_delay_q8(delay_samples_q8, prepared)) return false;
+  commit_clip_pdc_delay(prepared);
+  return true;
+}
+
+bool TrackMixerRuntime::prepare_clip_pdc_delay_q8(int delay_samples_q8,
+                                                  ClipPdcPlan& out) const noexcept {
+  constexpr int kMaxDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
+  if (delay_samples_q8 < 0) return false;
+  // With no lanes there is no clip bank, so a direct-only latency above the lane ceiling is valid.
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if ((lanes == nullptr || lanes->empty()) && delay_samples_q8 > kMaxDelayQ8) {
+    try {
+      for (size_t lane_index = 0; lane_index < lane_states_.size(); ++lane_index) {
+        out.banks[lane_index] = lane_states_[lane_index].clip_pdc_delay;
+      }
+      out.delay_samples_q8 = delay_samples_q8;
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+  // Never clamp only the lane side: lane clips would sit on a different timebase than direct clips.
+  if (delay_samples_q8 > kMaxDelayQ8) return false;
+  const int bounded = delay_samples_q8;
+  // Stage on copies of the live banks so a failure leaves lanes untouched and history survives.
+  try {
+    for (size_t lane_index = 0; lane_index < lane_states_.size(); ++lane_index) {
+      out.banks[lane_index] = lane_states_[lane_index].clip_pdc_delay;
+      // Keep the bank wide enough for the lane scratch buffers even when this
+      // plan is prepared before the first runtime prepare() call.
+      if (out.banks[lane_index].prepared_channels() < kMaxLaneChannels) {
+        out.banks[lane_index].set_prepared_channels(kMaxLaneChannels);
+      }
+      if (!out.banks[lane_index].try_set_delay_samples_q8(bounded)) return false;
+    }
+    out.delay_samples_q8 = bounded;
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+void TrackMixerRuntime::commit_clip_pdc_delay(ClipPdcPlan& prepared) noexcept {
+  for (size_t lane_index = 0; lane_index < lane_states_.size(); ++lane_index) {
+    using std::swap;
+    swap(lane_states_[lane_index].clip_pdc_delay, prepared.banks[lane_index]);
+  }
+  clip_pdc_delay_q8_ = prepared.delay_samples_q8;
+}
+
+void TrackMixerRuntime::flush_clip_pdc_delays() noexcept {
+  for (LaneState& lane : lane_states_) lane.clip_pdc_delay.reset();
+}
+
+void TrackMixerRuntime::drain_clip_pdc_delays(int num_channels, int num_samples) noexcept {
+  if (num_channels <= 0 || num_samples <= 0) return;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (lanes == nullptr || lanes->empty()) return;
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  if (render_channels <= 0) return;
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    // A stopped block still runs every lane so tails advance; raw clip delay drains here.
+    source_mix_lane_active_[lane_index] = true;
+    for (int ch = 0; ch < render_channels; ++ch) {
+      float* lane = lane_channel(lane_index, ch);
+      std::fill(lane, lane + num_samples, 0.0f);
+      lane_channel_ptrs_[static_cast<size_t>(ch)] = lane;
+    }
+    lane_states_[lane_index].clip_pdc_delay.process(lane_channel_ptrs_.data(), render_channels,
+                                                    num_samples);
+  }
 }
 
 void TrackMixerRuntime::settle_smoothers() noexcept {
@@ -784,6 +1216,29 @@ void TrackMixerRuntime::settle_insert_automations() noexcept {
       apply_lane_insert_parameter(slot.index, slot.insert_index, slot.param_id, target);
     }
     slot.active = false;
+  }
+}
+
+void TrackMixerRuntime::settle_insert_automations(const std::vector<TrackLaneConfig>& next_lanes,
+                                                  bool preserve_surviving_lanes) noexcept {
+  if (!preserve_surviving_lanes) {
+    settle_insert_automations();
+    return;
+  }
+  // Surviving lane ramps are identity-keyed and stay unsettled; bus slots are never settled here.
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (!slot.active || slot.is_bus) continue;
+    const uint32_t track_id =
+        slot.index < lane_states_.size() ? lane_states_[slot.index].track_id : 0;
+    const bool survives = track_id != 0 && std::any_of(next_lanes.begin(), next_lanes.end(),
+                                                       [track_id](const TrackLaneConfig& lane) {
+                                                         return lane.track_id == track_id;
+                                                       });
+    if (survives) continue;
+    // The strip is leaving the published graph. Do not apply its pending
+    // target to an object that no longer renders; retire only this slot.
+    slot.active = false;
+    slot.assigned = false;
   }
 }
 
@@ -1024,9 +1479,33 @@ TrackMixerRuntime::BusState* TrackMixerRuntime::pannable_bus_state_for(uint32_t 
 
 void TrackMixerRuntime::prepare_lanes_from_snapshot(
     const std::vector<TrackLaneConfig>& lanes) noexcept {
-  const std::array<LaneState, kMaxTrackLanes> previous = lane_states_;
-  std::array<LaneState, kMaxTrackLanes> next = lane_states_;
-  std::array<bool, kMaxTrackLanes> used_previous{};
+  prepare_lanes_from_snapshot(lanes, nullptr);
+}
+
+void TrackMixerRuntime::prepare_lanes_from_snapshot(
+    const std::vector<TrackLaneConfig>& lanes,
+    const std::array<mixing::ChannelStrip*, kMaxTrackLanes>* candidate_strips) noexcept {
+  // Audio thread, noexcept: LaneState holds AlignmentDelay vectors, so move banks, never copy.
+  // Slots are staged in a fixed array and moved by identity; new identities reset delay history.
+  std::array<LaneState, kMaxTrackLanes> previous = std::move(lane_states_);
+  std::array<LaneState, kMaxTrackLanes> next;
+  std::array<int, kMaxTrackLanes> matching_previous{};
+  std::array<bool, kMaxTrackLanes> reserved_previous{};
+  matching_previous.fill(-1);
+  std::array<bool, kMaxTrackLanes> moved_previous{};
+  const size_t previous_active_count =
+      std::min(applied_lane_count_, static_cast<size_t>(kMaxTrackLanes));
+
+  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+    const uint32_t track_id = lanes[lane_index].track_id;
+    for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
+      if (!reserved_previous[previous_index] && previous[previous_index].track_id == track_id) {
+        matching_previous[lane_index] = static_cast<int>(previous_index);
+        reserved_previous[previous_index] = true;
+        break;
+      }
+    }
+  }
 
   const auto reset_state = [this](LaneState& lane, uint32_t track_id) noexcept {
     lane.track_id = track_id;
@@ -1043,42 +1522,124 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.mute = false;
     lane.monitor_mode = TrackMonitorMode::kOff;
     lane.strip = nullptr;
+    // A new track identity must not inherit the previous occupant's clip delay audio.
+    lane.clip_pdc_delay.reset();
     for (rt::ParamSmoother& plane_gain : lane.surround_gain) plane_gain.reset(0.0f);
     lane.surround_primed_channels = -1;
   };
 
-  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
-    const uint32_t track_id = lanes[lane_index].track_id;
-    const auto previous_state =
-        std::find_if(previous.begin(), previous.end(),
-                     [track_id](const LaneState& state) { return state.track_id == track_id; });
-    if (previous_state != previous.end()) {
-      next[lane_index] = *previous_state;
-      used_previous[static_cast<size_t>(std::distance(previous.begin(), previous_state))] = true;
+  // Move all surviving identities first. Reserving their old slots before the
+  // fallback pass prevents a new lane at an earlier position from stealing a
+  // bank that a later lane still owns (old [A,B] -> new [C,A]).
+  for (size_t next_index = 0; next_index < lanes.size(); ++next_index) {
+    const int source_index = matching_previous[next_index];
+    if (source_index < 0) continue;
+    const size_t source = static_cast<size_t>(source_index);
+    next[next_index] = std::move(previous[source]);
+    moved_previous[source] = true;
+    // A matching id in the inactive tail is a re-add. Keep its control state
+    // (solo/mute/fader/strip) for compatibility, but never resurrect delayed
+    // audio that was in flight when the track was removed.
+    if (source >= previous_active_count) next[next_index].clip_pdc_delay.reset();
+  }
+
+  // Fill new configured slots from blank old banks first, preserving retired
+  // control metadata in the inactive tail whenever capacity permits. If all
+  // banks are occupied, a retired state is evicted for the genuinely new id.
+  for (size_t next_index = 0; next_index < lanes.size(); ++next_index) {
+    if (matching_previous[next_index] >= 0) continue;
+    int source_index = -1;
+    for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
+      if (!moved_previous[previous_index] && previous[previous_index].track_id == 0) {
+        source_index = static_cast<int>(previous_index);
+        break;
+      }
+    }
+    if (source_index < 0) {
+      for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
+        if (!moved_previous[previous_index]) {
+          source_index = static_cast<int>(previous_index);
+          break;
+        }
+      }
+    }
+    if (source_index >= 0) {
+      const size_t source = static_cast<size_t>(source_index);
+      next[next_index] = std::move(previous[source]);
+      moved_previous[source] = true;
+    }
+    reset_state(next[next_index], lanes[next_index].track_id);
+  }
+
+  // Retain retired identities in the inactive tail so their public mixer state
+  // follows a temporary removal. Their raw clip bank is explicitly flushed.
+  size_t next_index = lanes.size();
+  for (; next_index < next.size(); ++next_index) {
+    int source_index = -1;
+    for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
+      if (!moved_previous[previous_index] && previous[previous_index].track_id != 0) {
+        source_index = static_cast<int>(previous_index);
+        break;
+      }
+    }
+    if (source_index >= 0) {
+      const size_t source = static_cast<size_t>(source_index);
+      next[next_index] = std::move(previous[source]);
+      moved_previous[source] = true;
+      next[next_index].clip_pdc_delay.reset();
       continue;
     }
-
-    reset_state(next[lane_index], track_id);
+    for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
+      if (!moved_previous[previous_index]) {
+        source_index = static_cast<int>(previous_index);
+        break;
+      }
+    }
+    if (source_index >= 0) {
+      const size_t source = static_cast<size_t>(source_index);
+      next[next_index] = std::move(previous[source]);
+      moved_previous[source] = true;
+    }
+    reset_state(next[next_index], 0);
   }
 
-  size_t inactive_index = lanes.size();
-  for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
-    if (used_previous[previous_index] || previous[previous_index].track_id == 0) continue;
-    if (inactive_index >= next.size()) break;
-    next[inactive_index++] = previous[previous_index];
+  lane_states_ = std::move(next);
+  if (candidate_strips != nullptr) {
+    for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+      lane_states_[lane_index].strip = (*candidate_strips)[lane_index];
+    }
   }
-
-  for (; inactive_index < next.size(); ++inactive_index) {
-    reset_state(next[inactive_index], 0);
-  }
-
-  lane_states_ = next;
   applied_lane_snapshot_ = &lanes;
+  applied_lane_count_ = lanes.size();
 }
 
-void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>& lanes) {
+void TrackMixerRuntime::remap_lane_insert_automations(
+    const std::vector<TrackLaneConfig>& lanes) noexcept {
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (!slot.assigned || slot.is_bus) continue;
+    const uint32_t old_track_id =
+        slot.index < lane_states_.size() ? lane_states_[slot.index].track_id : 0;
+    size_t next_index = 0;
+    while (next_index < lanes.size() && lanes[next_index].track_id != old_track_id) {
+      ++next_index;
+    }
+    if (old_track_id == 0 || next_index == lanes.size()) {
+      slot.active = false;
+      slot.assigned = false;
+      continue;
+    }
+    slot.index = next_index;
+    // The current/target pair and active state belong to the track identity,
+    // so leave them intact across a lane reorder or republish. An explicit
+    // settle_smoothers() call is the opt-in path for snapping to target.
+  }
+}
+
+void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>& lanes,
+                                             uint32_t only_track_id) {
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
     const TrackLaneConfig& config = lanes[lane_index];
+    if (only_track_id != 0 && config.track_id != only_track_id) continue;
     mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
     if (!strip && !config.sends.empty()) {
       strip = ensure_owned_strip_for(config.track_id);
@@ -1091,14 +1652,23 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
     }
     if (!strip) continue;
 
-    strip->clear_sends();
-    for (const TrackLaneConfig::Send& send : config.sends) {
+    if (config.sends.size() > mixing::ChannelStrip::kMaxSends) {
+      throw std::invalid_argument("track send count exceeds the strip send cap");
+    }
+    std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> configs{};
+    for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
+      const TrackLaneConfig::Send& send = config.sends[send_index];
       if (bus_state_for(send.bus_id) == nullptr) {
         throw std::invalid_argument("track send references an unknown bus");
       }
-      strip->add_send(
-          mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f});
+      configs[send_index] =
+          mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
     }
+    mixing::ChannelStrip::PreparedSends prepared;
+    if (!strip->prepare_sends(configs.data(), config.sends.size(), prepared)) {
+      throw std::bad_alloc();
+    }
+    strip->commit_sends(prepared);
   }
 }
 

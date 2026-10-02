@@ -53,6 +53,13 @@ class PannerProcessor : public rt::ProcessorBase {
   float dual_pan_left() const noexcept { return dual_pan_left_.load(std::memory_order_relaxed); }
   float dual_pan_right() const noexcept { return dual_pan_right_.load(std::memory_order_relaxed); }
 
+  /// @brief Copies the in-flight DSP state from another panner.
+  /// @details The source and destination must be control-quiescent: neither may
+  ///          be processed or mutated concurrently. This is an allocation-free
+  ///          state handoff for a retained bus slot and deliberately excludes
+  ///          generic @c ProcessorBase metadata such as bypass and detector state.
+  void copy_state_from(const PannerProcessor& other) noexcept;
+
   /// @brief True when Balance mode, pan 0, and the gain smoothers already sit at
   ///        the centre gains -- a no-op the caller can skip.
   /// @details Skipping here is exact where running the panner is not: Const3dB's
