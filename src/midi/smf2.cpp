@@ -310,6 +310,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   bool saw_dctpq = false;
   uint64_t running_tick = 0;
   bool saw_end_of_clip = false;
+  bool saw_start_of_clip = false;
 
   MidiClip clip;
   std::string name;
@@ -394,7 +395,9 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
       if (status == kStreamEndOfClip) {
         saw_end_of_clip = true;
         end_clip_ppq = ppq;
-      } else if (status != kStreamStartOfClip) {
+      } else if (status == kStreamStartOfClip) {
+        saw_start_of_clip = true;
+      } else {
         ++result.skipped_events;
       }
       continue;
@@ -567,6 +570,11 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   }
 
   if (result.status != Smf2Status::kOk && result.status != Smf2Status::kMissingDctpq) {
+    return result;
+  }
+  if (saw_start_of_clip && !saw_end_of_clip) {
+    result.status = Smf2Status::kTruncated;
+    result.diagnostic = "clip ended without an End of Clip marker";
     return result;
   }
   if (!saw_dctpq && has_events) {
@@ -816,6 +824,13 @@ Smf2ExportResult export_clip_file(
     item.tick = tick;
     item.order = 2;
     const uint32_t mt = (ev.ump.words[0] >> 28) & 0x0Fu;
+    const int canonical_count = ump_word_count_for_message_type(static_cast<uint8_t>(mt));
+    if (ev.ump.word_count != 0 && ev.ump.word_count != canonical_count) {
+      result.status = Smf2Status::kInvalidArgument;
+      result.diagnostic = "UMP word count does not match its message type";
+      result.bytes.clear();
+      return result;
+    }
     item.word_count = ev.ump.word_count > 0
                           ? ev.ump.word_count
                           : ump_word_count_for_message_type(static_cast<uint8_t>(mt));

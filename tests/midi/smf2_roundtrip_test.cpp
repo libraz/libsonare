@@ -15,6 +15,34 @@
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
 
+TEST_CASE("SMF2 export rejects inconsistent UMP word counts", "[midi][smf2]") {
+  for (const uint8_t count : {uint8_t{1}, uint8_t{5}}) {
+    sonare::midi::MidiClip clip;
+    sonare::midi::MidiClipEvent event;
+    event.ump = sonare::midi::make_midi2_note_on(0, 0, 60, 50000);
+    event.ump.word_count = count;
+    clip.add_event(event);
+    const auto result = sonare::midi::export_clip_file(clip, {}, {}, {});
+    CHECK(result.status == sonare::midi::Smf2Status::kInvalidArgument);
+    CHECK(result.bytes.empty());
+  }
+}
+
+TEST_CASE("SMF2 started clips require an End of Clip marker", "[midi][smf2]") {
+  sonare::midi::MidiClip clip;
+  sonare::midi::MidiClipEvent event;
+  event.ump = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  clip.add_event(event);
+  auto complete = sonare::midi::export_clip_file(clip, {}, {}, {});
+  REQUIRE(complete.ok());
+  REQUIRE(complete.bytes.size() >= 24);
+  // The final stream message is the four-word End of Clip.
+  complete.bytes.resize(complete.bytes.size() - 16);
+  const auto result = sonare::midi::import_clip_file(complete.bytes.data(), complete.bytes.size());
+  CHECK(result.status == sonare::midi::Smf2Status::kTruncated);
+  CHECK(result.clips.empty());
+}
+
 namespace {
 
 using sonare::midi::export_clip_file;
