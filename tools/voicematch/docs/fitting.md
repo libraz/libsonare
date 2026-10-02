@@ -1,408 +1,97 @@
 # Fitting — `autofit.py`
 
-Closes the tuning loop mechanically: set a voice's calibration constants, re-render the model, and minimise the model-vs-oracle mismatch. Pure Python + numpy; no scipy.
+`autofit.py` renders a model candidate, measures it against the selected oracle, and searches the declared calibration space. It is the path that can write values back to the synth source; numerical quality and bank acceptance are separate decisions described in [Acceptance](acceptance.md).
+
+## Fit a voice
+
+Run from the repository root through the rye environment; use `--help` for the complete current option set.
 
 ```sh
-rye run --pyproject bindings/python/pyproject.toml \
-    python tools/voicematch/autofit.py \
-        --spec auto --program 40 --notes 55,67 \
-        --optimizer cmaes --max-evals 400 --workers 6 \
-        --screen --stages --w-env 1.0 --w-init 1.0 --w-slope 1.0 \
-        --validate-notes 48,60
+rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/autofit.py \
+    --spec auto --program 40 --pattern sustain --notes 48,60,72 \
+    --optimizer cmaes --max-evals 200 --workers 8 \
+    --validate-notes 55,67,79 --dry-run --out fit.json
 ```
 
-```
-screening: 39/49 knobs move the loss by at least 0.002 over their range
-== stage 'excitation': 6 knobs, 25 evaluations, weights {'init': 1.0, 'harm': 1.0} ==
-== stage 'decay': 29 knobs, 125 evaluations, weights {'slope': 1.0, 'env': 1.0, 'harm': 0.5} ==
-== stage 'all': 39 knobs, 153 evaluations, CLI weights ==
+`--spec auto` asks the tuning-enabled library for the program's own catalogue and clamp bounds. A JSON spec is required when the run needs a hand-selected subset or range. `--program` selects the GM program, `--bank` selects a GS variation patch, and `--drum-note` changes the probe to one percussion instrument on channel 10. A variation is its own patch, so its bank belongs in both the render and the catalogue query.
 
-  initial 1.0000  ->  best 0.6996  over 400 evaluations
-== held-out notes 48,60 ==
-  start 1.0000  ->  best 0.7636   generalises
-```
+Use `--corpus <capture directory>` and `--corpus-timbre <id>` when a captured grid exists. The corpus supplies the notes, velocities, gate, tails, room, rig, note map, and oracle audio, so fitting and profile comparison share one stimulus. Without a corpus, the probe is generated from `--pattern`, `--notes`, and `--velocities`; the oracle is fluidsynth unless `--oracle-wav`, `--au`, or another explicit source is selected.
 
-The objective is [loss.md](loss.md); the oracle is [oracles.md](oracles.md); the probe is [probes.md](probes.md). This page is everything else.
+The fit must compare the model at the same instrument boundary as the oracle. `rig: baked` and an unclassified rig on a rig-capable family are refused; see [Reference](reference.md#rig-and-room) for the direct, acceptance, and override routes. Room correction may be applied before scoring because a room is measured and convolved, while a rig is nonlinear.
 
-## Improvement, numerical target attainment and acceptance
+## Knobs and ranges
 
-A normalised loss of 0.70 means the objective improved by 30% from its initial value. It does not measure 70% similarity to the oracle. Terms use the fixed `TERM_UNITS` scales; only the total is divided by the initial total.
+The tuning catalogue is produced by the library under `SONARE_TUNING_DUMP`; it reports defaults, program-to-patch addresses, field types, and values surviving `clamp_synth_patch`. Use the source to understand a field and the catalogue to know the address the loaded library actually exposes.
 
-Read the final candidate's absolute residuals and measurement coverage alongside the improvement. A term that cannot be measured is unknown. A model that loses measurements the reference supplies is missing evidence, and must not receive a better score by averaging only its surviving measurements. Aggregate term target attainment counts terms within their configured residual unit; it is neither a per-cell agreement rate nor a listening score.
+| key shape | scope | fit behavior |
+|---|---|---|
+| `<file>.<constant>` | `SONARE_TUNABLE` engine calibration | runtime override; shared by every patch on that engine |
+| `<patch>.<field>` | named program patch | runtime override for every program sharing that patch |
+| `famN.<field>` | family fallback patch | reported by the fit; no per-patch source site exists for write-back |
+| `dNNN.<field>` | percussion note patch | runtime override for that drum note |
+| `gm_fallback_map.<field>` | shared ambience or program-group setting | affects the address group named by the catalogue |
 
-The recorded profile gate protects against regression from an earlier model. Its bounds are derived from that model's errors, so a pass can leave a large absolute error. It does not grant listening acceptance. `fitted` and `heard` remain separate states.
+`--program-only` keeps only the selected program or drum note's own patch fields and excludes shared engine constants. Use it for a voice-by-voice write-back pass; adopt a shared knob only when references from more than one voice on that engine hold it. The catalogue's clamp probe must cover shared fields too, but a liveness result from one inactive patch is not evidence that the engine constant is unreachable.
 
-The fit report carries what a numerical verdict needs without a listener: measurement gaps, the largest residuals and the selected values scored on independent conditions. It lists remaining gaps even when the objective improved.
+Runtime knobs are set through `SONARE_TUNING_OVERRIDES`, so one tuning library serves the whole runtime-only search. Source knobs use a regex to replace one numeric literal, require exactly one match, and rebuild for every candidate; source-knob searches therefore run with one worker. Both forms may appear in one spec.
 
-### Protect each register and velocity
+Ranges come from the clamp where the field has a meaningful bound. Small normalized intervals are searched linearly; positive time-like ranges are searched around the default in log space; a zero-default field with no useful bound is omitted from `--spec auto` until a hand spec declares how to enable it. Fields left open by the clamp use the documented fallback range or require a hand spec. Integer, selector, count, and boolean fields are exposed through the same override layer and rounded to their declared type.
 
-The default objective retains both the grid mean and the mean of the worst quarter of note residuals, using the larger value for each per-note term. This prevents many good notes from hiding a few poor ones. `--loss-tail-fraction` controls the fraction; `0` restores the historical mean. Grid relations (`dyn`, `hfdyn`, `kit`) and whole-render `mss` keep their own reducers. These reductions reuse measured rows without rendering or extracting features again.
+A best value on either range endpoint is a boundary result, including when the starting value is already there. Widen a hand range or inspect the model before calling it an optimum; a search cannot find a value outside the interval it was given.
 
-The report records each term's mean, upper-tail residual and worst note/velocity. A numerical target requires complete known coverage and both the aggregate and the reported worst note within one declared term unit. These units are engineering scales, not a calibrated percentage of perceived similarity.
+## Search
 
-Defaults also distinguish excitation from the playing interface:
+Coordinate descent (`--optimizer coord`) performs a serial line search per knob. CMA-ES (`--optimizer cmaes`) samples correlated candidates and can use `--workers` for concurrent renders; `--restarts` spends the budget on new starts. `--max-evals` counts candidate evaluations, while a warm cache can reduce the number of fresh renders. The cache is keyed by library bytes, harness source, probe, and oracle; `--no-cache` disables it.
 
-| source | additional checks |
+`--screen` probes each range endpoint and drops knobs whose weighted loss change is below `--screen-threshold`. It can miss an effect that exists only in the interior or behind a switch, so check the mechanism, range, and probe before treating a screened knob as inert. `--stages` fits excitation, decay, and then the full objective. `--grid` enumerates a small product of knob values and is useful for interactions; it evaluates the fit objective and is subject to the same reference-boundary rules, so it is not a rig-refusal exemption.
+
+The objective resolves class defaults and explicit `--w-*` overrides, then records each term in its fixed engineering unit. The grid mean and upper tail are both retained for per-note terms, while dynamics, kit relations, and whole-render terms keep their own reducers. Missing reference cells are unavailable; a candidate cell missing where the reference is finite is charged rather than silently removed. See [Measurements](measurements.md) for term definitions, coverage, eligibility, and the percussion measurements.
+
+For percussion, the normal terms include band profile, band decay, tilt, brightness, tonality, strike, ring, density, promptness, and the kit relations named by the capture. `evolve` and `diffuse` are consumed like other measured terms; their windows, shared hit-power reference, validity masks, worst-quarter aggregation, and controls are documented only in [Measurements](measurements.md#percussion-measurements). A pitched percussion reference may remain pitched. `--drum-note` narrows the grid to that note unless `--notes` supplies a family; an explicit kit weight requires a grid covering at least one declared family.
+
+The shape objective is a separate spectrogram path. `shape fit` and `shape prune` accept `--report` for fit, selection, and final-validation records and `--out` for the override set; use it to identify cell-level residuals, not to silently replace the `autofit.py` objective used for write-back.
+
+## Validation
+
+`--validate-notes` and `--validate-velocities` score the selected result on conditions outside the fit grid. Each requested validation value must be disjoint from the corresponding `--notes` or `--velocities`; otherwise the report is training evidence labelled as validation. An external `--oracle-wav` needs `--validate-oracle-wav` for the held-out reference because one WAV cannot supply unseen conditions.
+
+The report distinguishes `search_winner` from `selected`. Inspect `selected.loss`, `selected.quality`, absolute residuals, measurement coverage, target attainment, and the independent validation result before writing anything. A validation refusal may select the defaults even when the search winner improves the training probe. An unavailable validation set is reported as unavailable, not as a pass.
+
+Level balance needs at least two distinct note or velocity conditions with finite reference levels. A single usable condition cannot establish a relative level response; the default weight is dropped and an explicit level weight is refused or reported unknown as appropriate. Held-out quality retains the same coverage requirement.
+
+`--dry-run` restores the pristine source and skips write-back while still producing the report and diff. Use it with `--out` when reviewing selected values. Numerical target attainment is an engineering result; it does not grant listening acceptance or change bank status. Follow [Acceptance](acceptance.md#numerical-quality) for those decisions.
+
+## Diagnosis
+
+`--diagnose` reads the current source and reference instead of fitting or writing. It starts with individual knob endpoints and can add bounded interior, all-low, and all-high joint conditions when active residuals and evidence justify them; the sampled budget is finite and the report records it. A null can reflect an inactive mechanism, a missing or capped cell, a range, or an untested interaction.
+
+Diagnosis separates connectivity from improvement: connectivity is the largest valid measured movement a knob or joint condition produces, while improvement is the largest reduction in the active term. Read both after the fit has reached the source state being investigated.
+
+| verdict | interpretation |
 |---|---|
-| bowed strings, including physical string ensembles | held-level balance across the grid, alongside modulation and decay |
-| plucked strings, including harp and keyboard plucks | held-level balance and late decay |
-| hammered keyboards | held-level balance, late decay and existing attack-brightness dynamics |
-| struck modal sources and drums | held-level balance alongside their modal or percussion measurements |
-
-`fit_profile` records topology, excitation and keyboard interface separately in the JSON. A common gain offset is removed once for the whole grid; it does not erase the velocity or register response. A missing candidate skeleton, shortened attack array or missing held-level measurement is charged against the finite reference cells. An older reference that lacks a measurement remains unknown.
-
-### Retain the selected-value report
-
-Add `--dry-run --out fit.json` while reviewing a fit. The JSON separates `search_winner` from `selected`; use `selected.loss` and `selected.quality` to assess the values that will actually be written. A validation refusal can select the defaults even when the search winner improved on its training probe. `selected.quality` includes absolute aggregate residuals, measurement coverage and target attainment. An unavailable independent validation is reported explicitly.
-
-Normal drum fits include `density` and `prompt` alongside the existing spectral, envelope and tonality terms. `--w-density` and `--w-prompt` override their class defaults. Their targets come from the oracle: a pitched percussion reference is allowed to remain pitched. Re-extract old profiles to obtain the new measurements; missing texture fields are unknown.
-
-The shape fitter separates fit, pruning selection and final validation samples. `shape fit` and `shape prune` accept `--report report.json` separately from the overrides `--out` file. Inspect `partitions`, `final_validation` and `written_selected`. A small capture can leave final validation unavailable; a sample used to prune is not final validation evidence.
-
-### Check the fitting machinery with a known oracle
-
-```sh
-rye run --pyproject bindings/python/pyproject.toml \
-    python tools/voicematch/fitting_recovery.py \
-        --optimizer cmaes --max-evals 72 --out recovery.json
-```
-
-This deterministic benchmark renders a synthetic oracle with known parameters, measures real audio with the normal drum objective, and fits it with the existing optimiser. It reports training and withheld-velocity residuals, coverage, self-comparison and pitch, texture and sparse-resonance controls. It checks measurement and search behavior; it does not prove that a physical voice can reproduce a recorded instrument.
-
-Run `rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/family_recovery.py --family all --optimizer cmaes --max-evals 24 --out family-recovery.json` for bowed, plucked, hammered and percussion cases. It uses the production note/hit measurement path and robust objective, reports distance from known parameters, and checks withheld register/velocity conditions. Read unavailable terms beside the residual; a single percussion piece cannot establish kit relations. These generated signals test the fitting machinery, not the adequacy of the C++ physical models.
-
-## The reference has to be on the instrument's own side of the boundary
-
-A model whose boundary matches its reference can be fitted against it directly. One fitted against a reference recorded through an amplifier cannot: the string's brightness and the amplifier's treble reach the same measurement, so the search settles somewhere that transfers to neither, and the values are lost the moment the rig goes back to being a stage of its own ([voicing.md](../../../src/midi/synth/docs/voicing.md)).
-
-**`dry` does not answer this.** Dryness is looked for as a tail and a cabinet has none, so a close-mic'd amplified guitar reads dry with the whole rig inside it. The capture answers it separately, as `rig` ([capture.md](capture.md#fields)), and a corpus fit reads that answer:
-
-| the capture says | what a fit does |
-|---|---|
-| `none` — captured at the instrument's own boundary, a DI for an electric string | runs |
-| `baked` — recorded through an amplifier | **refused** whatever the program: it is an acceptance target and never a fit target |
-| nothing — the answer nobody has given | **refused** on a family that could carry a rig (the electric guitars and basses, the electric keyboards, the rotary organs); runs everywhere else, since a piano or a wind is not waiting on anyone |
-
-The refusal is right because **a rig has no inverse.** A room can be measured off the reference and convolved onto the model, which is why a wet reference is usable after correction; a rig is nonlinear, so there is nothing to correct with and no order of operations that recovers the instrument.
-
-`--allow-rigged-oracle` pushes past both refusals and says so on stderr. What it costs is not the run — every metric will improve — it is the result: the fitted values describe an instrument and an amplifier together, and none of them is the instrument's. Answer the capture's `rig` field instead wherever that is possible.
-
-`--diagnose` is exempt, along with `profile.py compare` and the auditions: they read the reference rather than moving the voice towards it, and checking the instrument-plus-rig against a reference that carries one is the acceptance measurement the rule asks for. `--grid` is **not** exempt — it evaluates the same objective a fit would search, and a minimum read off it and written into a spec is a fit done by hand.
-
-**The routes with no capture behind them carry no record at all, and they do not all mean the same thing by that** ([oracles.md](oracles.md)). On a rig-capable program:
-
-| route | why | what happens |
-|---|---|---|
-| `--oracle-wav`, `--au` | **unknown.** The reference was rendered elsewhere and nothing on the route can say what its chain was | warned, not stopped — unclassifiable and safe are different things, and only a capture can settle it |
-| the built-in GM oracle (default, `--sf2`) | **known.** General MIDI defines these programs by the sound of an amplified instrument, so a sample set's recording of one has the cabinet in it by construction | **refused**, on the same terms as a `baked` capture, because it is one |
-
-No capture field changes the second answer — it does not come from a missing record. The certainty is not uniform across the family (29 and 30 are definitional, 33–37 only usual), and it is deliberately one rule rather than two: a second table splitting the sure from the likely would drift, and erring strict costs one `--allow-rigged-oracle`.
-
-## Every instrument is already addressable
-
-Ask the library what it has, rather than reading the source for knob names:
-
-```sh
-autofit.py --spec auto --program 40 --dump-knobs --program-only   # this program's voicing
-autofit.py --spec auto --program 40 --dump-knobs                  # all ~11k knobs
-```
-
-A tuning build reports every key it consulted during a render, with its compiled-in default, so the list is produced by the code rather than by a parse that can go stale. Five kinds appear:
-
-| key shape | what it is | scope |
-|---|---|---|
-| `violin.bowed_string.bow_force` | one **patch field** of the patch that voices a program | that program (and any that shares the patch) |
-| `bowed_string_voice.kRosinDepth` | one **engine calibration constant** | every program on that engine |
-| `fam0.piano.brightness` | a **family patch** field, for programs with no override of their own | the eight programs of that GM family |
-| `d038.percussion.wire_buzz` | a **drum note's** patch field | that note |
-| `gm_fallback_map.kSendsChurchOrganRev` | the program's default **ambience weighting** | that program group |
-
-The patch prefix is the patch's own name, not the program number, because one patch often voices several programs — the dump's `# program NN is voiced by patch 'X'` header line resolves which is which.
-
-`--spec auto` builds the knob list for a program from that catalogue: its patch fields plus its engine's constants. Good enough to start a fit on any of the 128 programs without writing a spec first.
-
-`--bank N` selects a GS variation bank of `--program`. A variation is its own patch with its own knobs, so the flag selects both what is rendered and what `--spec auto` offers. Default 0, the capital tone.
-
-## Where a knob's search range comes from
-
-A patch field's range is **mostly not** a guess. `clamp_synth_patch()` bounds all but thirteen of them, and the dump reports those bounds (`--dump-knobs` prints them as the `min`/`max` columns), so `--spec auto` searches the interval the engine actually accepts:
-
-| clamp bound | what `--spec auto` searches | why |
-|---|---|---|
-| `0 .. 1` (and any span ≤ 4) | the whole interval, linear | 0 and 1 are both meaningful settings; a window around the default would hide them |
-| `1 .. 20000` ms | `default/8 .. default*8`, log, capped by the bound | four decades put the default in the first percent of a linear cube; the clamp still stops the window leaving the space |
-| wide, default `0` | *not fitted* | the field is switched off and there is no magnitude to anchor a window on — picking one is the guess the bounds replace |
-| none (an engine constant, or one of the thirteen fields the clamp leaves open) | `default/2 .. default*2`, or `0 .. 1` for a normalized-sounding name | the old heuristic, now the fallback rather than the rule |
-
-The thirteen unbounded fields are the eight Karplus-Strong extensions (`ks.body_coupling`, `pluck_style`, `nail`, `pickup_pos`, `dispersion`, `tension_mod`, `octave_mix`, `keyoff_noise`), `bowed_string.stribeck` / `sympathetic` / `polarization`, `pipe_organ.keytrack` — each clamped by its own voice at `start()` rather than in the patch clamp, so the audio is safe and only the reported range is missing — and `percussion.strike_theta`, an angle that reaches a cosine and so only has to be finite.
-
-Write a hand spec when a knob needs something else — a zero-default field you want switched on, or a range wider than eight times the default.
-
-**A count, a selector and a switch are knobs too, and the ones that turn a mechanism on are the ones worth reaching first.** A patch field is not always a float — a mode count, a registration, a bore shape, a vowel, a friction model — and a field of that kind is usually the switch deciding whether the fields *around* it do anything, so leaving one out of the override layer does not merely make it unfittable. Sweeping `shell_freq_hz` and `shell_mix` with `shell_num_modes` at 0 gives a clean structural negative — "the shell cannot reach this measurement" — when the finding is only that the shell was switched off. Two of the bank's inert knobs were exactly that, and both are now reachable: `church_organ.pipe_organ.brightness` is dead over its whole range, and so are `reed` and `radiation` beside it, because the flat voicing fields are read only when `rank_count` is 0 and the church organ draws six ranks — at `rank_count=0` all three move the render; `harpsichord.velocity_droop_db` is dead because the droop shapes the response only past `peak_velocity`, which ships at 127 with nothing past it, and at 64 it moves the render. Every non-float patch field is in the table now, booleans included. The override arrives as a float like every other and is rounded rather than truncated, so a search stepping across 2.5 lands on 3. Bounds come from `clamp_synth_patch` by probe exactly as a float's do; a field the clamp does not narrow states the range its own type defines, because a probe wide enough for an `int` would measure the wraparound instead.
-
-Two things follow for reading a probe. A switch left off makes every field it gates read inert, so before deleting an inert knob from a spec, ask what turns its mechanism on and whether the fit can turn it back on — a 2n+1 probe holds every other knob fixed and so cannot see the pair. And a switch is worth a `--grid` rather than a search: with two settings and a handful of neighbours, enumerating is cheaper than letting an optimizer discover a discontinuity.
-
-### A range that does not contain the answer is the most expensive failure this tool has
-
-Nothing about the result looks wrong: the search reports the best point it was allowed to visit, so the value pins to the bound, the loss goes down, the diff is small and the report is clean. `piano_voice.kTrebleDecayOct` was searched over `[0.5, 3.0]` while the value it wanted was 5.0, and 3.0 is what such a run reports.
-
-So every run ends by naming any knob sitting on an end of its range, **including one that started there** — a spec whose range no longer covers a constant's default has that default clamped in on load, and the knob then reads as unchanged for the rest of the run because by a start-to-best measure nothing happened. A pinned knob is not automatically wrong; a clamp bound is a real end of the space. What is never safe is reading it as an interior optimum.
-
-## Knobs: runtime or source
-
-A **runtime knob** names any catalogue key — a `SONARE_TUNABLE` constant (`src/util/tunable.h`) or a per-program patch field:
-
-```json
-[{ "tunable": "piano_voice.kHammerWidthHarmonics", "min": 2.5, "max": 9.0, "scale": "log" },
- { "tunable": "trumpet.brass.brassiness", "min": 0.0, "max": 1.0, "scale": "linear" }]
-```
-
-The default is read from the catalogue (or from the source, for a `SONARE_TUNABLE`), and the fit sets it through the `SONARE_TUNING_OVERRIDES` environment variable — so **the library is built once for the whole run** and an evaluation costs a render instead of a rebuild. That is the difference between a fit that affords tens of evaluations and one that affords hundreds, which in turn is the difference between fitting one knob and fitting fifty. Use this form.
-
-A bare constant name (`kHammerWidthHarmonics`) is accepted when it is unambiguous; the scoped form is required when several voices declare it, which they often do — `kBreathBase` exists in four.
-
-A **source knob** points a regex at a numeric literal, for a value that cannot be a named constant at all (an array element, say):
-
-```json
-[{ "file": "src/midi/synth/piano_resonance.cpp",
-   "pattern": "kDiffuserMs\\[2\\] = \\{([0-9.]+)f", "min": 2.0, "max": 8.0 }]
-```
-
-- `pattern` needs **exactly one capturing group** selecting the literal (the `f` suffix stays outside it), and must match the file exactly once — zero or multiple matches abort before anything is written.
-- `scale` is `linear` or `log` (log optimises in log-space; needs `min > 0`).
-- **Any source knob in the spec puts every evaluation back behind a rebuild**, and forces `--workers` back to 1, since a rebuild rewrites the tree every render reads.
-
-Both kinds can be mixed in one spec. `specs/example.json` shows all three forms.
-
-## Making a constant tunable
-
-Replace the declaration:
-
-```cpp
-constexpr float kStrikeNoiseInject = 0.298027f;   // before
-SONARE_TUNABLE(kStrikeNoiseInject, 0.298027f);    // after (+ #include "util/tunable.h")
-```
-
-In a normal build the macro expands to exactly the `constexpr float` it replaced — same storage, same codegen, no lookup. Only `-DBUILD_TUNING=ON` turns it into a runtime-overridable value, and `autofit.py` sets that flag itself when the spec needs it. A value written mid-expression (`ham_mu_ = 0.229431f;`) has to be lifted to a named constant first; that is a readability improvement anyway. Prefer file scope over function scope: a function-scope declaration is re-resolved on every call, which in a render loop means a table lookup per sample.
-
-Two rules:
-
-- **Never branch on `SONARE_TUNING`.** The two configurations must render identical audio for identical values, or a fitted value transfers nothing back to the shipped build. (Compiling a tuning-only override layer out of a normal build is not a branch on behaviour: with no override set the layer is the identity.)
-- **Keys are scoped by file, values are not namespaced within one.** The scope comes from `__FILE__`, so `brass_voice.kBreathBase` and `flute_voice.kBreathBase` are separate knobs, but two declarations of one name in the same file would collide — `autofit.py` refuses to run when it finds that.
-
-The knob machinery itself lives in the library, all of it behind the `BUILD_TUNING` CMake option: `src/util/tunable.h` (the `SONARE_TUNABLE` macro, the override table, and the `SONARE_TUNING_DUMP` catalogue) and `src/midi/synth/patch_tuning.h` (the per-program patch field layer).
-
-The clamp bounds in the catalogue are measured rather than mirrored: `patch_tuning.cpp` fills every field with a value far outside any interval, runs `clamp_synth_patch`, and reads back what survived. It walks the same field list the override layer already has, so a field added there is bounded for free and no table can drift out of step with `clamp_synth_patch` itself. A field the clamp leaves open comes back at the probe value and is reported as unbounded rather than as a range of ±1e30. An integer field is probed the same way with the magnitude an `int` can hold rather than 1e30; a field whose own type is its range, like the mute group or the noise filter's output tap, states that range instead, because a probe wide enough to overflow it would measure the wraparound.
-
-## Optimiser
-
-- `--optimizer coord` (default) — coordinate descent, golden-section per knob (`--per-knob-evals`, default 6). Readable, and fine when a knob has an obvious optimum, but it stalls on knobs that trade against each other: a level and the taper that undoes it send it back and forth without either step being wrong on its own. Inherently serial — each probe is chosen from the previous one's result — so `--workers` does not help it, and `--metric-threads` is the only concurrency it can spend.
-- `--optimizer cmaes` — covariance-matrix adaptation. It learns that correlation and steps along it. Tune with `--population`, `--sigma0`, `--seed`; samples are clipped into each knob's range rather than penalised, so an optimum pinned to a bound is reported as such (widen the range, or accept that the model cannot go further in that direction). `--restarts N` restarts from a fresh random point with a doubled population when a run stalls, sharing `--max-evals` rather than multiplying it.
-
-Use `cmaes` once the spec is runtime knobs only — that is the case where the evaluation budget is large enough for it to pay off.
-
-**`--workers N`** renders a CMA-ES generation's whole population concurrently. The candidates are independent subprocesses, so the only thing serialising them was the loop that launched them; scoring stays on the main thread in submission order, so the trajectory and the log are byte-identical to a serial run at the same `--seed`. Measured on this machine, a 120-evaluation organ fit: **71 s at `--workers 1`, 30 s at `--workers 8`**, with identical losses. The speedup is well under 8× because a fixed ~12 s of build, catalogue dump and oracle resolution is not parallelised and the render itself is not single-threaded.
-
-## What an evaluation costs, and the two things that make it cost less
-
-Measured on this machine, one evaluation of a fifteen-note sustain probe: **0.19 s of process start, 0.49 s of render, 0.35 s of measurement** — the last of which is around two thirds the partial refinement inside `skeleton_note`, which is the harness's hot spot and already about as fast as this family of methods gets (batching its zoomed DFT into one matmul was measured nine times slower than the stepped recurrence it replaced).
-
-**`--metric-threads N`** measures N of the probe's notes at once inside one render. The notes are independent and read a signal nothing writes to, so the rows come back the same rows in the same order — the flag changes the wall clock and nothing else. It is also the only concurrency `--optimizer coord` can use, since its line search picks each probe from the previous result. Measured over a fifteen-note render: **0.97 s at 1, 0.79 s at 3**, byte-identical rows; past three the interpreter lock is what is left and the curve flattens. It defaults to three, and to **one** whenever `--workers` is above one — the two levels of concurrency are alternatives rather than a product, since a batch already has whole candidates in flight and threads under it would compete for the same lock.
-
-**The store.** Raw loss terms are kept under the scratch root and read back by any later run whose signature matches, so a fit re-run after a listen costs the setup and nothing else. The signature is the library's own bytes, the whole harness source, the probe's layout and the oracle — deliberately over-broad, because a key that covers too much costs a cold start nobody notices and one that covers too little hands back a number from a scorer that no longer exists. A rebuilding spec keeps no store at all: its library is different for every candidate, so no key could ever repeat. `--no-cache` turns it off.
-
-Measured on a twenty-evaluation violin fit over fifteen notes: **28.2 s today, 26.1 s with the threads, 7.6 s re-run against the store**, each reaching the same 0.9358 and the same winner.
-
-**`--max-evals` budgets evaluations, not renders**, and the report says both (`over 19 evaluations, 0 rendered`). That distinction is load-bearing rather than cosmetic: both loops stop when a round turns up no candidate they had not already scored, so counting renders would read a warm run's first pass as convergence and hand back whatever that pass liked — a worse answer, reached faster, with nothing in the output saying so.
-
-## Cutting the problem down
-
-49 knobs for a violin, 21–114 across the 128 programs. CMA-ES learns a covariance whose cost grows with the square of the dimension, so a budget that would comfortably fit ten knobs does nothing at fifty. Three levers, all optional:
-
-- **`--screen`** probes each knob at both ends of its range and keeps those whose effect reaches `--screen-threshold` (default 0.002). When raw terms are cached, it sums the absolute changes in their weighted contributions, so opposing term changes cannot cancel. The initial probes cost `2n+1` evaluations, so screening pays for itself only when the budget is several times the knob count, and the tool says so when more than a third of the budget goes on the probe. Dropped knobs receive bounded conditional probes under an activation context when the budget permits; insufficient budget retains them conservatively. This checks common disabled-feature interactions, not every parameter combination. Review the reported effects and remaining search budget.
-
-  **Below that budget it does not merely waste evaluations, it changes the verdict.** Two program-0 runs differing only in this flag, both 114 knobs over a seven-note probe at 600 evaluations and the same seed: without it the fit reached 0.8050 on the probe and **0.8541 on held-out notes, generalising**; with it, 0.8767 on the probe and **1.0535 held out — worse than the defaults on notes it never saw**. Screening spent 229 of the 600 evaluations and dropped 26 of the 114 knobs. One pair of runs is not a law, but read `--validate-notes` before trusting any screened result, and prefer raising `--max-evals` to narrowing the knob set.
-- **`--stages`** fits the excitation knobs against the onset evidence (`--w-init`), then the decay knobs against the decay evidence (`--w-slope` / `--w-env`), then everything under the weights given on the command line. A brighter excitation with a faster decay and a duller one with a slower decay produce nearly the same average spectrum, so asking one search to set both at once sends it wandering along that ridge; `skeleton_note` already separates the evidence, and this is what uses the separation. Classification is by field name, and the final stage takes every knob, so a misclassification costs efficiency and never reach.
-
-  **An early stage can hand the final one a point worse than the defaults**, because it optimises under weights the answer is not judged by: the percussion decay stage scores `bdecay`, `env` and `band` and nothing about level, dynamics, crest or modes. Three of eleven drum notes entered the final stage between 1.50 and 2.22 times the defaults' loss, and the worst of them ended at 1.15 after spending its whole final budget climbing back. The final stage now scores both the staged point and the defaults under the CLI weights and starts from whichever wins — two cache hits, since both are already rendered — and says so when it refuses the staged one. Re-fitting that note reached 0.88 instead of 1.15, and the note that entered at 2.22 went from 0.77 fitted / 1.00 held out to 0.48 / 0.64.
-- **`--validate-notes 48,60`** scores the result on notes the fit never saw and reports both. It is the only thing in the run that can say whether the values generalise — the fit's own objective is the number it minimised. Three probe notes are enough to pin a physical voice into a configuration that is right at those three and wrong a fifth above. `--validate-velocities` is the drum equivalent, since a drum note has no register to hold notes out of. With `--oracle-wav`, `--validate-oracle-wav` is required: the held-out probe is a different score and needs its own reference, rendered the same way.
-
-## Looking at the surface before searching it (`--grid`)
-
-```sh
-autofit.py --spec hat.json --program 0 --drum-note 42 --grid 7 --validate-velocities 48,112
-```
-
-A hold-out scored on the winner alone says whether that point generalises and nothing about whether it is a **peak or a plateau**. On a closed hi-hat, the best point of a coarse grid read −10.3 % on the fit and −0.8 % held out — a feature of the fit set — while re-cutting the same interval finer found a −22 / −19 region sitting between that grid's teeth. Reading one number would have taken the first.
-
-`--grid POINTS` enumerates the product of every knob in the spec (at most three) and prints the fit and the hold-out loss at each point, sorted by fit. It replaces the fit rather than following it and writes nothing back. Run it before trusting a search over knobs that interact; a broad region good on both columns is worth more than a better isolated point.
-
-## What calibration cannot reach (`--diagnose`)
-
-A fit reports one number and that number cannot answer the question it raises. A loss of 0.62 says the values improved; it does not say whether the remaining 0.62 is constants still slightly off or a mechanism the voice does not have — and those call for opposite work.
-
-```sh
-autofit.py --spec auto --program 6 --diagnose --workers 8 --out diag.json
-```
-
-It runs the same `2n+1` probe `--screen` does and keeps the **per-term** mismatch instead of collapsing each render to one number. From that it reads two independent things per measurement, and the difference between them is the whole point:
-
-- **Connectivity** — the largest change any single knob makes to the term, *in either direction*. Near zero means nothing this program exposes is wired to that measurement, and no budget reaches it.
-- **Improvement** — the largest reduction any single knob makes. A term that moves but does not improve is a term the fit has already spent, or one whose improvement costs another term.
-
-Reading improvement alone is the way this measurement lies. Once a fit has written back, every knob sits at its own optimum and nothing improves anything, so a perfectly well-modelled voice reports every measurement as structurally missing.
-
-| verdict | what it means | what to do |
-|---|---|---|
-| `unreachable` | no knob moves it at all | the model is missing a mechanism — the finding this exists for |
-| `spent` | knobs move it, none reduces it | a trade-off to price, or a converged fit |
-| `partial` / `reachable` | one knob buys a tenth / half of the gap alone | keep fitting; the named knob is where to start |
-| `unscored` | the term carries no weight | no fit has ever tried; weight it before calling it anything |
-| `matched` | inside the smallest difference the term resolves | nothing |
-| `not computed` | `mss` without `--w-mss` | it is an absence, not a match |
-
-Three things it reports about itself, because each one turns a null result into a wrong conclusion:
-
-- **A knob is only as live as the probe's axes.** The `sustain` pattern holds velocity fixed, so every dynamics control reads dead against it — and on a harpsichord, whose identity is what happens across velocity, that is the axis worth probing. The report names what the probe varied next to the knobs it called inert. **The note is the same kind of axis and is the easier one to forget**, because a one-note liveness check looks like a probe rather than like a pattern. Swept at C4 alone, three knobs read dead and none of them is: `pipe_organ.keytrack` divides by an octave count that is zero at the reference pitch, `harpsichord.bass_foreshortening` is a bass property, and `pipe_organ.ranks0.brightness` reaches a filter coefficient that is pinned to its floor over the bottom of the compass. All three move the render over the eleven-note corpus. Two of the three are the probe's fault; the third is a finding, and telling them apart takes the arithmetic, not another render.
-
-**A five-note grid across the compass is the right next step and it is still not a proof.** `piano_voice.kTrebleDecayFloorOct` reads dead at MIDI 36, 48, 60, 72 and 84 and is live from 85 to 108: its clamp binds only above note 84, and note 84 lands exactly on the boundary, so both ends of the range clamp to the same value there. Anything that survives the grid earns a per-semitone scan over 21–108 before it is called dead, and a knob called dead earns its switch overridden to prove the revival. Two things that a grid alone gets wrong in the other direction as well: `electric_guitar.ks.brightness` is dead at 40, 52, 64, 76, 88 and 100 and live at 104, which is a real finding rather than a grid artefact because a guitar has no note up there, and `synth_bass_2.filter_env.decay_ms` is dead at every note because `filter_env.sustain` ships at 1.0 and the envelope leaves its decay stage on the first sample.
-
-**Reading a clamp names a candidate; only a render makes it a finding.** A whole-tree sweep of every pitch-derived `clamp`/`min`/`max` in the voices, ranked by how much compass each bound covers, produced ten candidates. Four were then checked by render bytes and three did not survive: a bound can be reachable on paper while the quantity still moves, because the field has a second consumer the line does not show, and unreachable on paper while the field is pinned by something else entirely. Neither a named constant nor a comment beside the bound settles it either way.
-- **A null is only as strong as the range it was searched over.** No effect across the whole interval `clamp_synth_patch` accepts is strong evidence; no effect across a heuristic window around the default is almost none. The two are reported separately rather than averaged.
-- **A one-at-a-time probe cannot see a knob that is inert alone and effective in combination.** `unreachable` is a hypothesis to test by adding the mechanism and watching the term move — and if it does not move, the mechanism was not the missing one either.
-
-Probes whose render had nothing to measure are excluded and counted, since one end of any gain is silence and a silent render matches nothing.
-
-## The liveness gate
-
-Every finding above was reached by hand, one knob at a time, and each of them had been sitting in a shipped spec for as long as the spec had existed. `make spec-liveness` is that sweep made mechanical: for each spec it derives the program, renders each knob at both ends of its stated range across seven notes from C2 to C8 at a soft and a loud velocity, and compares the raw float32 bytes. It needs no reference and no corpus, which is what lets it cover all seventeen specs rather than the handful with an oracle, and it took only the method that was right — two agents ran the by-hand version and the one that computed instead of rendering was wrong at three of four.
-
-**Both axes above are in the grid, because either one alone is how the by-hand version kept being wrong.** The note is the axis a single-note probe misses. The velocity is the one named first at the top of this section, and leaving it out would have built the same trap into the tool: a dynamics control holds a fixed-velocity probe still and reads exactly like a dead knob. A knob live at one of the two velocities is reported as that rather than folded into `partial`.
-
-It reads the program off the spec rather than being told, so the two cannot drift: a knob prefixed with a patch name resolves through the catalogue's program map, and a knob prefixed with an engine file stem resolves through the engine map to the first patch on that engine. A spec neither route reaches is skipped and named.
-
-Three verdicts, of which `partial` is not a defect:
-
-| verdict | what it means | what to do |
-|---|---|---|
-| `DEAD` | byte-identical at every note, and no reason given | find the switch, record it as the knob's `dead` string, or drop the knob |
-| `STALE` | carries a `dead` reason and has since come alive | delete the reason |
-| `partial` | live at some notes, not others | read it — the note a knob stops at is rarely the one a spec assumes |
-| `vel-only` | moves at one of the two velocities | read it — it is a dynamics control, or a probe artefact |
-| `excused` | dead, with a `dead` reason | nothing |
-
-**A `dead` reason is a sentence beside the knob, not a line in the tool**, so whoever is about to sweep the knob reads it. It is the same discipline as a capture's `dimensions_na` and the parity allowlist, and it expires the same way: an excuse whose knob has come alive fails, because a reason left behind keeps asserting a reviewed decision about a knob that no longer needs one. A blank reason does not excuse anything. Keeping an excused knob is a real choice rather than a free one — it stays in the fit's covariance and in its report, and dropping it is the other answer, which is what `electric_guitar.ks.brightness` got.
-
-**A note at which no knob in a spec moves anything is reported, and it is the positive control.** A note the voice does not sound renders silence at both ends of every range, which reads exactly like a spec full of dead knobs; `church_organ_keytrack.json` shows the shape, its single knob dividing by an octave count that is zero at C4.
-
-**`--diagnose` over a corpus cannot report any of this, and that is not a shortcoming of either tool.** A corpus spans the compass, so a knob live at one end of it moves the measurement and reads live; the fourteen-knob treble spec diagnoses with every knob live and every term reachable, while three of those knobs cannot move C8 and three others cannot move anything below C7. The diagnose asks whether a knob reaches a *measurement*; this asks whether it reaches a *note*. Neither answer implies the other.
-
-### The census
-
-`make spec-liveness-census` points the same probe at the bank instead of at the specs: per patch, which of its *own* fields cannot move the render it voices. It answers for the 117 voices that have no oracle as readily as for the five that do, which is what a reference-free probe buys — `--diagnose` can say "eleven knobs move no measurement" only where somebody has captured an instrument first.
-
-Three scoping decisions, each of which changes what the number means:
-
-- **Patches, not programs.** One patch commonly voices several programs, so probing per program asks the same question up to 128 times. A drum note's patch is addressed by note instead, sounds on the percussion channel, and has exactly one note in its grid.
-- **Every address a patch has, preferring bank 0.** Thirty of the bank's patches are reachable from no bank-0 program — `church_organ_full`, `harpsichord_octave`, `piano_wide`, `mandolin` and the rest of the GS variations — and a variation is exactly where a registration differs from the program it varies. Probing them at bank 0 does not merely give the wrong answer, it gives none: `auto_spec` resolves the capital tone's patch there, so a variation offers **zero** of its own knobs and the census skipped all thirty without a line. The bank rides through `auto_spec` *and* the render, since offering one patch's knobs against another's render fits a patch nothing played. A patch that also has a bank-0 address is probed there, which is the address a plain GM file uses. This is not a census scoping decision but a bank fact, so `patch_addresses` is the one map and the spec sweep reads it too — it had the same hole one function away, where a spec scoped to a variation is skipped by a run that still exits 0. The one place the two differ: a spec naming an engine constant rather than a patch picks a stand-in among that engine's patches, and prefers a capital tone, because the constant belongs to all of them equally and the choice should land where a plain GM file reaches.
-- **The patch's own fields only, not the engine constants** the auto spec offers beside them. An engine constant is shared by every patch on that engine, so a null against one program is not a statement about the constant.
-- **Three notes rather than seven.** A census screens; what it names earns the per-semitone ladder above. Widening the grid here would buy resolution nothing reads.
-
-**The probe's own gate is half a second, and a voice slower than that has rows the census cannot read.** Every subtractive pad and effect voice with an attack at or past the gate — `pad_bowed`, `pad_choir`, `pad_halo`, `pad_warm`, `fx_atmosphere`, `fx_soundtrack`, `sfx_seashore`, attacks 500 to 1200 ms — reports `amp_env.decay_ms` and `amp_env.sustain` inert, and both are live in ordinary playing: the note is released while the envelope is still in attack, so it never enters the stage those two describe. `lead_square` at a 5 ms attack has neither. This is not marked in the file, because the rule that produces it is not general: `reverse_cymbal` has a 1400 ms attack and a live `amp_env.decay_ms`, so the percussion path does not release the way the subtractive one does, and a flag that is right for one engine and wrong for another is worse than none. Read a null against the patch's own attack before reading it as a finding.
-
-**Mining it for a defect: the filter that works is the field's struct default, and almost everything it returns is still correct authoring.** A raw inert list is thousands of entries and most of them are a patch not using a layer its engine offers. What you want is a field an author set to a deliberate value that does nothing, which is *inert, non-zero, and different from the engine header's initializer* — a field left at the default was never voiced, and a field set to 0 is a deliberate disable whose dependants going inert is correct. That filter returns 186 rows against the current bank and **one** of them is a finding. The rest fall into classes worth knowing before triaging again, because each looks like a defect and is not:
-
-- **A one-shot voice's release.** 122 drum notes set `amp_env.release_ms` and `one_shot` makes note-off unreachable. The two non-drum rows are envelopes already at zero when the note ends.
-- **An envelope stage behind a sustain at an end stop.** `sustain` at 1.0 means decay never runs (`synth_bass_2.filter_env.decay_ms`); at 0.0 the release has nothing to release from (`fx_brightness`, `sfx_gunshot`).
-- **An attack past the probe's half-second gate**, which reaches the filter envelope as well as the amplitude one — `sfx_seashore` has a 500 ms filter attack.
-- **A superseded mechanism**, where a newer model replaced the branch the field fed: the reed's Bernoulli valve over the clamped table, the free reed's slot flow over the shaped saw.
-- **A field beyond the count that narrows it.** A variation is built by copying a patch and narrowing it, so `church_organ_flutes` at `rank_count` 3 keeps the base's ranks 3 to 5 populated and unused. The boundary is the check rather than the finding: across the three organ patches the inert edge lands exactly on 6, 8 and 3, and `church_organ_full`'s two extra ranks carry their own levels and are live, so the fuller registration really is fuller.
-- **A field whose effect needs a second voice**, which the probe never plays: `percussion.exclusive_class` on 13 notes.
-- **A field the rest of the patch has filtered away.** `ks.dispersion` is live on 10 of the 11 patches that set it and inert on `muted_guitar` alone, whose 617 Hz cutoff and 0.36 s decay remove the partials dispersion would have displaced. Check an engine-wide null before calling a knob dead; this one is not.
-
-The finding was `church_organ.pipe_organ.brightness`, a fitted six-decimal value on the *implicit single-rank* field, which the patch's own `rank_count` of 6 makes unreachable — written by the fit in the same change that drew the ranks. **That is the shape to look for: a machine-fitted number on a field the patch's own registration switched off.** A sweep offers every knob the catalogue reports, and a knob that reaches nothing is free to drift to any value the optimizer likes.
-
-**A field whose clamp collapses its own bound is not censused at all, and the file cannot say so.** The knob list drops any entry whose measured `min` equals its `max`, which is right — there is nothing to sweep — but the bound is read back through `clamp_synth_patch`, so a clamp that resets a field rather than narrowing it reports the same value at both probe ends and the field disappears. That is not a null the census records; the field is simply absent from the patch's count, and a patch missing a field looks exactly like a patch whose engine does not offer one. It has happened: the `body` clamp was bounded by a literal that outlived the enum, so for the whole first census not one of the 39 patches that name a resonator carried `body` as a field, and each of them read as fully covered. A clamp defect therefore costs twice — the voice, and the coverage claim that would have found it. When a patch's field count moves without its patch version moving, look at the clamp before the patch.
-
-**What the wall clock is made of is interpreter spawns, not renders.** The override table is read once at library load, so a render cannot share a process with a different override — but it can share one with the rest of its own grid, and that is the difference between one spawn per cell and one per knob-end. Batching it took the 17 specs from eight minutes to three and a half for byte-identical output. Before relying on that, it was checked the only way it can be: a batched grid and the same grid rendered one process at a time agree hash for hash and peak for peak, on four programs including a drum channel and two overrides. Nothing in the renderer carries state between notes — but that is a measurement, not an assumption, because if it did every batched result would be quietly wrong.
-
-**The result is committed as `field-coverage.json`, stamped with the bank generation it was taken against.** An hour-scale run cannot have a check target that regenerates it, so what keeps it honest is the stamp: a voice fitted or a family rebalanced moves `bank-versions.json`'s generation, and a census recorded against an older one is a claim about a bank nobody runs. `make spec-liveness-census-check` compares the two, needs no library, and takes no time. That is the same discipline `signoff.json`'s `provenance` carries and for the same reason — a measurement outlives its subject silently unless something says when it was taken.
-
-**It is informational and exits 0 whatever it finds.** That is the difference from the gate: a spec asserts that a knob is worth sweeping, so a dead one there is a false claim, while a patch field is a struct member and a patch is free not to use one its engine offers. Read the census for where a voice is thinner than it looks, not for a list of defects.
-
-**Read it per engine before reading it per patch, because a share is mostly a statement about the engine.** The percussion patch is a union of mechanisms — tone bank, noise layer, plate, shell, wire, contact — and a piece that uses three of them leaves the rest inert by construction, so the highest shares in the file belong to the simplest pieces rather than the thinnest ones. The same reading covers the shared members every patch carries whatever its engine: seven of them move no percussion render anywhere in the bank, which is one fact recorded 135 times rather than 135 findings. Group by `mode` from the knob catalogue and the file stops looking like a defect list, which it is not. What it is good for is the question a fit asks first — of the fields this voice has, which ones are worth a sweep — and that is exactly the question a drum spec will need answered, since no drum voice has a spec yet.
-
-What the gate cannot do is judge a `partial`. It does not know an instrument's compass, so it reports where a knob stops and leaves the reading to whoever knows whether the instrument plays there. That reading is where three of this bank's specs turned out to be fitting the top of a compass with knobs that stop below it.
-
-## Proving the probe reached the code
-
-Two guards, both unconditional, because a probe that never reached what it was aimed at produces a clean run with a plausible answer and nothing that reads as a failure.
-
-- **The override table.** A model render puts `SONARE_TUNING_OVERRIDES` in the child's environment and used to take it on faith from there. A library built without `BUILD_TUNING` ignores the variable entirely, and so does a run that loaded a different dylib than the one just built: every candidate then renders the compiled-in defaults, every evaluation returns the same loss, and the fit reports its start point as the winner of a search it never ran. Before anything is searched — and before `--diagnose`, where an unreached override turns every knob into a structural finding about the voice — the whole spec is pushed to the far end of every range at once and the render has to move. One knob can be genuinely inert, which is a finding about that knob; the entire spec moving nothing is a finding about the plumbing.
-- **`--screen` finding nothing.** Zero knobs moving the loss used to fall through to "keep them all", so a spec that moved nothing and a spec that moved everything continued into the fit with the same knob count and the same one-line message. Zero is now an error naming the three things that produce it: an engine switched off underneath the fields being swept, a range the clamp rejects, and a probe whose pattern does not exercise the axis the fields act on.
-
-**Build isolation** — a dedicated build dir (`--build-dir`, default `build-autofit`) is configured with `-DBUILD_SHARED=ON`, plus `-DBUILD_TUNING=ON` when the spec has runtime knobs (a cache left at the other setting is reconfigured, since a library that ignores every override would fit a perfectly flat loss for no visible reason). Each model render runs in a fresh subprocess with `SONARE_LIB_PATH` pointed at that dir's dylib, so a rebuilding run never reads a dylib already mapped into the process, and a runtime-knob run gets its overrides into the environment before the library's static initialisers read them. `build-python-shared` is refused as a build dir.
-
-**Safety** — the pristine text of every target file is snapshotted at startup and restored in a `finally` block, so an exception or Ctrl-C never leaves the tree perturbed. On a normal run the best values are then written back and a unified diff plus the loss trajectory are printed; `--dry-run` restores pristine, skips the write, and reports the diff it would have applied.
-
-## Proving a new mechanism is inert at its default (`identity.py`)
-
-A fit moves values. Between two fits the loop adds mechanisms, and a mechanism arrives as fields on a shared patch struct, a branch in a render loop, and rows in the clamp and override tables — all of it compiled into every voice in the bank rather than into the one it was added for. "The default is the identity" is therefore a claim about 128 programs and 47 drum notes, and it is a claim about raw bytes: a mechanism that leaks a fraction of a decibel into every other instrument has still changed them, and nothing downstream will attribute the change back here.
-
-```
-python tools/voicematch/identity.py \
-    --base /tmp/before/lib/libsonare.dylib --head build-tuning/lib/libsonare.dylib \
-    --programs 0,19,40,56,73 --drums 35,36,38,47 \
-    --reach 36:d036.percussion.plate_gain=1.0
-```
-
-`--base` is built from the commit before the mechanism landed, which in a tree with a live parallel session means a `git worktree`, not a second build directory. Each case renders in a subprocess with `SONARE_LIB_PATH` pointed at one of the two, and the sha256 of the render's float bytes is what comes back — the two libraries cannot be loaded into one process, since the override table is read once at load.
-
-**The `--reach` half is the load-bearing one.** A silent build, a library the loader did not pick, an override key that does not resolve and a branch that is never taken all produce a perfect identity table, so a run that reports only that half cannot tell any of them from success — what it confirms is that nothing happened, which is what it was written to rule out. An identity table with no override moving anything is reported as vacuous and exits non-zero.
-
-### Does a constant reach only the piece it is addressed to (`--isolate`)
-
-The same question sideways, and against one library rather than two: a kit is a bank of independent patches, so `d049.percussion.plate_gain` should be read while the crash is built and by nothing else.
-
-```
-python tools/voicematch/identity.py --head build-tuning/lib/libsonare.dylib \
-    --isolate d042.percussion.plate_gain=0.9,d044.percussion.wire_buzz=0.8,d046.percussion.strike_r=0.2
-```
-
-Each piece named in the string is rendered under the whole string and under only its own keys, and the raw bytes have to match. The vacuity trap is the same shape as `--reach`'s and is guarded the same way: a string nothing reads leaks into nothing, so each piece must also differ from its own default or the result is refused.
-
-This is what the shape search's per-note render cache is keyed on — a candidate touching one piece re-renders one piece only because no other piece can read it — so it is worth re-running after any change to how the drum table is built, not only after a new mechanism.
+| `unreachable` | no valid sampled individual or joint condition moved the term |
+| `measurement-limited` | caps, missing cells, or incomplete probe evidence prevent a conclusion |
+| `interaction` | a joint condition moved a term that individual samples did not |
+| `spent` | sampled knobs move the term but none reduces it |
+| `partial` / `reachable` | a sampled knob reduces part or most of the gap |
+| `unscored` | the term has no weight in this run |
+| `matched` | aggregate and reported worst note satisfy the declared numerical unit with known coverage |
+| `not computed` | this probe or retained audio cannot compute the term |
+
+`--diagnose` is exempt from the rigged-oracle fit refusal because it reports what the current model and reference contain. Existing unweighted terms can be reported as `unscored`; an unimplemented measurement axis is invisible to diagnosis. Check measurement coverage and weights before attributing a remaining deficiency to a model mechanism.
 
 ## Write-back
 
-Everything a fit moves is written back to the source, in the form that value takes there:
+Runtime tunables replace their declaration literal, source knobs replace the captured source literal, named patch fields receive or rewrite an explicit assignment in the program table, and `dNNN.` fields land in the drum table. `famN.` values are reported because the family is generated by a loop without a per-patch write site. Values that remain at their starting point are not rewritten.
 
-| knob | where it lands |
-|---|---|
-| `SONARE_TUNABLE` | its declaration's literal, so it becomes the new compiled-in default |
-| source knob | the literal the regex captured |
-| patch field of a named patch | a new `o.violin.bowed_string.bow_force = 0.646063f;` line in the program table |
-| `d038.` patch field | a new `t[38].percussion.wire_buzz = 0.646063f;` line in the drum table |
-| `fam3.` patch field | *reported, not written* — the family patches are built by a loop with no per-patch site |
+The fit snapshots target source files, restores them on failure or interruption, and writes only selected values after validation. Selection can retain defaults for measurement dropout, held-out regression, or an objective that went blind. A normalized candidate worse than the start also retains defaults; this ratio guard does not apply under `--raw-loss`. `--out` records search and selected values, losses, validation, quality, source provenance, and an override string for auditioning without a source edit.
 
-The patch-field case needs the extra line because the table builds most patches through helper lambdas taking positional arguments (`o.violin = bowed(0.12f, 0.55f, …)`), so no literal in it belongs to a named field. An explicit assignment after the call is the idiom that table already uses for its own exceptions, and a field that already has one is rewritten rather than duplicated.
+`--spec auto` includes the selected patch fields and the engine constants it exposes. A source write to a shared engine constant can move every program using that engine, while a patch override reaches only the patch name in its key. When fitting a bank grid, use `--program-only` for per-voice fields and inspect the catalogue's patch prefix before deciding that a key was inert.
 
-A knob the fit left where it started is not rewritten at all: the two spellings of a value are not always the same text (`0.10f` against a formatted `0.1`), and a fifty-knob spec would otherwise bury the handful of real changes in a diff of lines that change nothing.
+## Build and loader isolation
 
-**A fit that lost to its own start point writes nothing.** Every stage's loss is a ratio against the compiled-in defaults, so those score exactly 1.0 and a winner above it is a search that never found where it began — which a staged run could reach by walking somewhere its narrow early weights liked. The run keeps the defaults and says so. Nothing else about such a run reads as a failure: the trajectory descends, the diff is ordinary, and the closing line is the same `Best values written to source.` a good fit prints. `--raw-loss` has no reference point and is left alone.
+`autofit.py` configures an isolated `--build-dir` with `BUILD_SHARED=ON` and enables `BUILD_TUNING=ON` when runtime knobs need it. Each candidate render runs in a fresh subprocess with `SONARE_LIB_PATH` pointing at that build's dylib, so the override table is read before library initialization and a rebuild cannot reuse an already loaded artifact. `build-python-shared` is refused as the fit build directory because it is the normal shared-library tree.
 
-**Write-back is not adoption.** The search winner is checked before selecting the values to write. A held-out regression or an objective that became blind can keep the defaults. The report distinguishes the search candidate from the selected values. An improvement that survives these checks can still be far from the oracle; inspect its absolute residuals before adopting the diff.
+Before a runtime search or diagnosis, the harness checks that a whole-spec override changes a render; a single genuinely inert knob remains a diagnosis result, while a flat whole-spec result indicates an unavailable tuning build, an ignored key, a rejected range, or a loader path that did not select the build. The fit records the build and source state in its report.
 
-`--out result.json` records the whole thing — every knob's start and best, the losses, the held-out score, and a paste-ready `SONARE_TUNING_OVERRIDES` string for auditioning the result without rebuilding.
-
-**A write-back reaches further than the program the fit was aimed at.** `--spec auto --program N` offers that patch's fields *and* the engine's shared calibration constants, so a bowed fit rewrites `bowed_string_voice.cpp` alongside the patch and moves violin, viola, cello, fiddle and both string ensembles with it — programs that usually have no reference to notice. `--program-only` narrows a fit to the patch's own fields, which is what a run over a grid of voices in turn needs: without it every voice fitted moves the ground under the ones already done, and the values written before it are no longer the values that were measured. Take an engine constant only when more than one voice on that engine has a reference to hold it to, and where a run was left wide, split the result by key shape before adopting any of it — `<patch>.<field>` is the program, `<file stem>.<kName>` is the engine.
-
-**The override string reaches less far than the write-back, on exactly the patches a write-back is valued for reaching.** Where a patch is built by copying another as the fallback tables are built — `overdriven` and `distortion` from `electric_guitar` — the copy is taken from the compiled-in values before each patch is tuned under its own name. A source edit propagates to every copy; `<source patch>.<field>=` does not, and the copies render byte-identical to the unmodified build. **Nothing reports this**: the result is a render that scores exactly like the baseline, which reads as a knob with no effect on that program rather than as a key that arrived somewhere else. Before concluding a fit is inert on a program, check that the program's own patch name is the prefix — `#mode<TAB>patch<TAB>engine` in the tuning dump lists every patch the library has — and confirm the render moved at all.
-
-## Fitting a drum note
-
-`--spec auto --drum-note N` offers that note's own patch fields (`d038.percussion.wire_buzz`, `d038.amp_env.decay_ms`, …) with the same clamp-derived ranges as a program patch — a bound belongs to the field, so `percussion.wire_buzz 0..4` covers every drum note that has one. `--stages` splits them the same way, with the noise burst, the strike position and the pitch drop as excitation and the mode decay, the wire buzz and the shimmer as decay.
-
-**`--drum-note N` also narrows the grid to that one note** unless `--notes` says otherwise, which is what the `kit` term needs to be told. Scoring the tom series means `--notes 41,43,45,47,48,50` alongside the `--drum-note` whose knobs are being moved; without it the run has no family in the grid, the class default drops `kit` rather than scoring it 0.0, and an explicit `--w-kit` is refused with the reason.
-
-What is **not** covered: a drum fit moves one note's patch. Mute groups (the hi-hats share an exclusive class), the kit assignment, and anything structural stay where the table put them.
+For recovery, native component observability, identity, liveness, and the exact verification commands, see [Development](development.md).

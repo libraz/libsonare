@@ -246,7 +246,7 @@ def check_module_is_dry(cfg: dict, manifest: dict, out: Path) -> int:
     off, so a module corpus that measures a space is one of two things — a module
     left with its effects on, or a capture from something else labelled as one.
     Neither is importable, and neither is visible to the declared half of the
-    rule ([capture.md](docs/capture.md)), which can only catch a capture that
+    rule ([reference.md](docs/reference.md)), which can only catch a capture that
     admits to a room in the same file where it claims to be the module.
     """
     if cfg.get("source_class") != "module":

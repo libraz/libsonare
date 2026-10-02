@@ -362,7 +362,7 @@ def test_one_reference_timbre_is_a_target_and_carries_the_voice_past_voiced():
     """A reference is what the voice aims at, not a sample of a hidden truth.
 
     Demanding a second one costs a hand-authored plugin per instrument and buys
-    a denominator `docs/objective.md` retired; with one, everything above
+    a denominator `docs/acceptance.md` retired; with one, everything above
     `voiced` still has to be reachable or the ladder reports 123 fitted voices
     and 123 untouched ones as the same number.
     """
@@ -420,7 +420,7 @@ def test_coverage_is_all_or_nothing():
 
 
 def test_disagreeing_with_the_reference_spread_does_not_hold_a_voice_back():
-    """`agreement` is printed and decides nothing — `docs/objective.md`.
+    """`agreement` is printed and decides nothing — `docs/acceptance.md`.
 
     It was a promotion condition while the reference was read as one draw from
     the distribution of real instruments. Under the objective the reference is

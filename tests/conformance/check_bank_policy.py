@@ -15,7 +15,7 @@ plausible ranking rather than into an error.
 
 **Nothing here asserts that any voice has got anywhere.** A goal is where
 attention goes and never a condition on shipping — `policy.json`'s own
-`_goals_do_not_gate` says so and `tools/voicematch/docs/status.md` repeats it.
+`_goals_do_not_gate` says so and `tools/voicematch/docs/acceptance.md` repeats it.
 Every failure below is about the policy being well-formed and about the bank
 being able to answer it. A stage appears in one place only, as the check that a
 goal's declared step is a rung of the ladder rather than a number between two.
@@ -92,12 +92,12 @@ MACHINE_TIMBRE = "machine"
 #: check reads files under `--root` and must not need the tools tree to parse.
 ROOM_PRESENT = "present"
 
-#: The ladder's rungs, in fifths — `tools/voicematch/docs/status.md`. A goal's
+#: The ladder's rungs, in fifths — `tools/voicematch/docs/acceptance.md`. A goal's
 #: step has to be one of these: `status.py` indexes `STAGES` by it, so a number
 #: between two rungs names a step that does not exist.
 LADDER = tuple(n / 5.0 for n in range(6))
 
-#: A generated row may carry none of these. The rule is in `status.md`:
+#: A generated row may carry none of these. The rule is in voicematch `docs/acceptance.md`:
 #: `tools/voice-status.json` holds what the library and the references
 #: reported, and a tier, a rank or a goal is a decision. Baking one in makes
 #: the generated file stale whenever the policy moves with no voice changed.

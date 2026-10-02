@@ -41,7 +41,7 @@ const FILTER_PICKS = [
   ['page', 'bank.fRendered'],
 ];
 
-/// The six rungs, whose wording is argued in `tools/voicematch/docs/status.md`.
+/// The six rungs, whose wording is argued in `tools/voicematch/docs/acceptance.md`.
 const RUNGS = [0, 1, 2, 3, 4, 5];
 const rungAt = (i) => (i / 5).toFixed(1);
 

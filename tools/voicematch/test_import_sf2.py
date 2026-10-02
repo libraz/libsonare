@@ -194,7 +194,7 @@ def test_a_dry_module_corpus_passes_the_dryness_check(module_cfg_and_corpus):
 def test_a_module_corpus_that_measures_a_space_fails(module_cfg_and_corpus, capsys):
     """The positive control for the check above.
 
-    `capture.md` asserts `source_class: module` with `room: present` as a
+    `docs/reference.md` asserts `source_class: module` with `room: present` as a
     contradiction between two declarations. This is the measured half: the
     capture below declares `room: none` and its own audio says otherwise, which
     is the case a declaration cannot catch.

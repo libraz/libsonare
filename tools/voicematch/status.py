@@ -38,7 +38,7 @@ prose and are now data, which is the difference between an exclusion and an
 oversight.
 
 **One reference is enough, and the ear is what promotes a voice.** Both follow
-from `docs/objective.md`, which is the contract this ladder implements: the
+from `docs/acceptance.md`, which is the contract this ladder implements: the
 reference is the target rather than a sample of a hidden truth, so a second
 timbre is not required, and a green gate is not acceptance because voices have
 passed every recorded bound while sounding wrong. `agreement` — each gated
@@ -459,7 +459,7 @@ def stage_for(axes: dict) -> int:
     )
     if untouched:
         return 0
-    # One timbre is a target, not half a measurement: see `docs/objective.md`.
+    # One timbre is a target, not half a measurement: see `docs/acceptance.md`.
     if not (axes["timbres"] >= 1 and axes["profile_rows"] > 0):
         return 1
     if not (axes["gate_state"] == "current" and axes["coverage"]["complete"]):

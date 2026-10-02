@@ -1,6 +1,6 @@
 """Turn a `.vstpreset` into the saved state an audio unit will actually read.
 
-`docs/oracles.md` says `--au-preset` reaches a timbre only in a plugin whose
+`docs/reference.md` says `--au-preset` reaches a timbre only in a plugin whose
 audio-unit build keeps its state under `Processor State` and `Controller
 State`. Those two keys are one vendor's convention. A sampler that hosts
 third-party libraries usually keeps everything in one blob of its own instead,
