@@ -354,6 +354,8 @@ SonareError run_note_set_edit(const float* samples, size_t length, int sample_ra
                                                           notes[i].frame_end, extractor_config));
       core_notes.back().edit = std::move(edits[i]);
     }
+    editing::note_model::repair_rederived_note_set_bounds(audio, track, core_notes,
+                                                          extractor_config);
     return fill_note_objects_result(apply(audio, track, core_notes, extractor_config), out);
   });
 }

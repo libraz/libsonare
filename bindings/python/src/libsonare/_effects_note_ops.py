@@ -482,18 +482,24 @@ def split_note(
 
     Both halves are re-derived from the audio and the track the way
     :func:`extract_notes` derives its own, rather than by patching the fields of
-    the note they replace. Both inherit the source note's edit, and its
-    amplitude envelope is cut at the same proportion so each half keeps its own
-    part of it -- which means a note whose edit is the identity still renders
-    bit for bit after being split. A one-entry envelope is a constant over the
-    span, so both halves get that same entry.
+    the note they replace. Both inherit the source note's edit, and the tail's
+    ``time_offset_samples`` absorbs the duration change of the stretched head,
+    so the halves occupy the destination timeline the unsplit note did; a note
+    whose edit is the identity still renders bit for bit after being split. A
+    half with no sample span at that boundary is omitted and the other keeps
+    the edit unchanged, so the result then has as many notes as ``notes``. A
+    one-entry envelope is a constant over the span, so both halves get that
+    same entry; a longer one is resampled onto a grid that preserves the
+    rendered gain at every integer source sample.
 
     Every note in the set, not just the two halves, has its spans, curves,
     medians and stability re-derived from ``samples`` and the track, because a
     :class:`NoteObject` carries no curves for this call to copy through. The
     frame bounds are therefore what a note is identified by here, and the audio
     and track arguments must be the ones the set was extracted from, or the
-    whole set is re-measured against something else.
+    whole set is re-measured against something else. A set whose re-derived
+    notes would include one with no sample span is rejected rather than
+    shortened.
 
     Args:
         samples: Source audio (any sequence convertible to float32).

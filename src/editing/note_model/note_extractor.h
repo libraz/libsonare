@@ -51,4 +51,18 @@ std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0
 NoteObject make_note(const Audio& audio, const pitch_editor::F0Track& track, int frame_start,
                      int frame_end, const NoteExtractorConfig& config = {});
 
+/// @brief Repairs physical bounds after a note set was re-derived from frame spans.
+/// @details A terminal frame whose raw sample range lies beyond the audio is
+///        nudged one sample left by @ref make_note. When that frame follows a
+///        re-derived note ending at the same physical boundary, the predecessor
+///        is shortened to the nudge so the set remains disjoint. The note count
+///        is preserved; a re-derived set that cannot keep every note positive is
+///        rejected instead of dropping an entry.
+/// @throws SonareException(InvalidParameter) on invalid extractor inputs, a
+///         non-positive re-derived sample span, or a terminal repair that would
+///         make a predecessor non-positive.
+void repair_rederived_note_set_bounds(const Audio& audio, const pitch_editor::F0Track& track,
+                                      std::vector<NoteObject>& notes,
+                                      const NoteExtractorConfig& config = {});
+
 }  // namespace sonare::editing::note_model

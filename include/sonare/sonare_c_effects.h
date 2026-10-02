@@ -466,18 +466,25 @@ void sonare_free_pitch_decomposition(SonarePitchDecompositionResult* result);
 ///          @ref sonare_extract_notes derives its own, rather than by patching
 ///          the fields of the note they replace.
 ///
-///          Both inherit the source note's edit, and its amplitude envelope is
-///          cut at the same proportion so each half keeps its own part of it,
-///          which means a note whose edit is the identity still renders bit for
-///          bit after being split. A one-entry envelope is a constant over the
-///          span, so both halves get that same entry.
+///          Both inherit the source note's edit, and the tail's
+///          @c time_offset_samples absorbs the duration change of the stretched
+///          head, so the two halves occupy the destination timeline the unsplit
+///          note did; a note whose edit is the identity still renders bit for
+///          bit after being split. A half with no sample span at that boundary
+///          is omitted and the other keeps the edit unchanged, so the result
+///          then has as many notes as @p notes. A one-entry envelope is a
+///          constant over the span, so both halves get that same entry; a
+///          longer one is resampled onto a grid that preserves the rendered
+///          gain at every integer source sample.
 ///          Every note in the set -- not just the two halves -- has its spans,
 ///          curves, medians and stability re-derived from @p samples and the
 ///          track, because @ref SonareNoteObject carries no curves for this
 ///          call to copy through. The frame bounds are therefore what a note is
 ///          identified by here, and the audio and track arguments must be the
 ///          ones the set was extracted from or the whole set is re-measured
-///          against something else.
+///          against something else. A set whose re-derived notes would include
+///          one with no sample span is rejected with
+///          @c SONARE_ERROR_INVALID_PARAMETER rather than shortened.
 /// @param notes The current note set. Each note's @c [frame_start, frame_end)
 ///        must be non-empty and inside the track.
 /// @param envelopes The envelope array @p notes index into, or NULL.

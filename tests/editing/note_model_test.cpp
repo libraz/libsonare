@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -1607,6 +1608,355 @@ TEST_CASE("split_note cuts an amplitude envelope at the same proportion", "[note
   REQUIRE(first_mismatch(render_notes(audio, flat_split, config), flat_before) == kNoMismatch);
 }
 
+TEST_CASE("extract_notes keeps a trailing pitch change disjoint and identity-renderable",
+          "[note_model][audio_workflow]") {
+  // A centered analysis can produce one more F0 frame than there are complete
+  // hop-sized sample blocks. The final frame is still a real voiced pitch
+  // change, so retaining it must not make the two extracted sample spans
+  // overlap at the clamped end of the audio.
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  constexpr int kCenteredSamples = 5120;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kCenteredSamples, 0.25f), kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz.assign(11, 440.0f);
+  track.f0_hz.back() = 880.0f;
+  track.voiced.assign(track.f0_hz.size(), true);
+
+  const std::vector<NoteObject> notes = extract_notes(audio, track);
+  REQUIRE(notes.size() == 2);
+  REQUIRE(notes[0].offset_sample <= notes[1].onset_sample);
+  REQUIRE(notes[0].length_samples() > 0);
+  REQUIRE(notes[1].length_samples() > 0);
+
+  // The extracted notes carry identity edits. A one-sample overlap at the
+  // clamped boundary currently makes the renderer reject the set before it
+  // can prove the identity pass-through property.
+  REQUIRE(notes[0].edit.is_identity());
+  REQUIRE(notes[1].edit.is_identity());
+  const sonare::Audio rendered = render_notes(audio, notes);
+  REQUIRE(first_mismatch(rendered, audio) == kNoMismatch);
+}
+
+TEST_CASE("extract_notes keeps an unvoiced centered tail as an identity control",
+          "[note_model][audio_workflow]") {
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  constexpr int kCenteredSamples = 5120;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kCenteredSamples, 0.25f), kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz.assign(11, 440.0f);
+  track.f0_hz.back() = 0.0f;
+  track.voiced.assign(track.f0_hz.size(), true);
+  track.voiced.back() = false;
+
+  const std::vector<NoteObject> notes = extract_notes(audio, track);
+  REQUIRE(notes.size() == 1);
+  REQUIRE(notes[0].onset_sample == 0);
+  REQUIRE(notes[0].offset_sample == kCenteredSamples);
+  REQUIRE(notes[0].edit.is_identity());
+  REQUIRE(first_mismatch(render_notes(audio, notes), audio) == kNoMismatch);
+}
+
+TEST_CASE("extract_notes rechecks a terminal nudge after dropping an empty predecessor",
+          "[note_model][audio_workflow]") {
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>{0.25f}, kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz = {440.0f, 660.0f, 880.0f};
+  track.voiced.assign(track.f0_hz.size(), true);
+
+  // With one real sample, the middle frame maps to [1, 1) and the terminal
+  // frame is nudged to [0, 1). Removing the empty middle note must trigger a
+  // second boundary check against the first note before returning the list.
+  const std::vector<NoteObject> notes = extract_notes(audio, track);
+  REQUIRE_FALSE(notes.empty());
+  for (size_t i = 0; i < notes.size(); ++i) {
+    INFO("note " << i);
+    REQUIRE(notes[i].length_samples() > 0);
+    REQUIRE(notes[i].edit.is_identity());
+    if (i > 0) REQUIRE(notes[i - 1].offset_sample <= notes[i].onset_sample);
+  }
+  REQUIRE(first_mismatch(render_notes(audio, notes), audio) == kNoMismatch);
+}
+
+TEST_CASE("extract_notes drops an empty nonterminal span on undersampled audio",
+          "[note_model][audio_workflow]") {
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>{0.25f}, kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz = {440.0f, 660.0f, 0.0f};
+  track.voiced = {true, true, false};
+
+  // The final unvoiced frame ends a valid one-frame region, but the second
+  // region still maps to [1, 1) because the source has only one sample. Empty
+  // regions must be removed even when there is no terminal voiced nudge to
+  // trigger the usual repair pass.
+  const std::vector<NoteObject> notes = extract_notes(audio, track);
+  REQUIRE_FALSE(notes.empty());
+  for (size_t i = 0; i < notes.size(); ++i) {
+    INFO("note " << i);
+    REQUIRE(notes[i].length_samples() > 0);
+    REQUIRE(notes[i].edit.is_identity());
+    if (i > 0) REQUIRE(notes[i - 1].offset_sample <= notes[i].onset_sample);
+  }
+  REQUIRE(first_mismatch(render_notes(audio, notes), audio) == kNoMismatch);
+}
+
+TEST_CASE("split_note repairs a terminal centred child boundary before rendering",
+          "[note_model][audio_workflow]") {
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  constexpr int kCenteredSamples = 5120;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kCenteredSamples, 0.25f), kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz.assign(11, 440.0f);
+  track.f0_hz.back() = 880.0f;
+  track.voiced.assign(track.f0_hz.size(), true);
+
+  // make_note deliberately keeps the whole centred track as one source note;
+  // splitting it then calls make_note for the one-frame terminal child, which
+  // exercises the same nudge path as a segmented terminal ridge.
+  const std::vector<NoteObject> source = {make_note(audio, track, 0, 11)};
+  const std::vector<NoteObject> split = split_note(audio, track, source, 0, 10);
+  REQUIRE(split.size() == 2);
+  REQUIRE(split[0].length_samples() > 0);
+  REQUIRE(split[1].length_samples() > 0);
+  REQUIRE(split[0].offset_sample <= split[1].onset_sample);
+  REQUIRE(first_mismatch(render_notes(audio, split), audio) == kNoMismatch);
+}
+
+TEST_CASE("split_note keeps an extracted terminal repair inside its source note",
+          "[note_model][audio_workflow]") {
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  constexpr int kCenteredSamples = 5120;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kCenteredSamples, 0.25f), kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz.assign(11, 440.0f);
+  track.f0_hz.back() = 880.0f;
+  track.voiced.assign(track.f0_hz.size(), true);
+
+  std::vector<NoteObject> notes = extract_notes(audio, track);
+  REQUIRE(notes.size() == 2);
+  REQUIRE(notes[0].offset_sample == notes[1].onset_sample);
+  notes[0].edit.amplitude_envelope = {0.0f, 1.0f, 0.25f, 0.75f};
+
+  // The first note was shortened to make room for the terminal one-sample
+  // ridge. Splitting it must retain that repaired source end instead of
+  // reconstructing a child through frame 10 that reaches sample 5120 again.
+  const std::vector<NoteObject> split = split_note(audio, track, notes, 0, 5);
+  REQUIRE(split.size() == 3);
+  for (size_t i = 0; i < split.size(); ++i) {
+    INFO("note " << i);
+    REQUIRE(split[i].length_samples() > 0);
+    if (i > 0) REQUIRE(split[i - 1].offset_sample <= split[i].onset_sample);
+  }
+  REQUIRE_NOTHROW(render_notes(audio, split));
+}
+
+TEST_CASE("split_note drops an impossible zero-length child for an undersampled source",
+          "[note_model][audio_workflow]") {
+  constexpr int kSampleRate = 16000;
+  constexpr int kHop = 512;
+  const sonare::Audio audio = sonare::Audio::from_vector({0.25f}, kSampleRate);
+
+  F0Track track;
+  track.sample_rate = kSampleRate;
+  track.hop_length = kHop;
+  track.f0_hz.assign(3, 440.0f);
+  track.voiced.assign(track.f0_hz.size(), true);
+  const std::vector<NoteObject> source = {make_note(audio, track, 0, 3)};
+
+  // There is one real sample but two requested child frame spans. The result
+  // may keep either physical child, but it must never expose an empty or
+  // overlapping NoteObject to the renderer.
+  const std::vector<NoteObject> split = split_note(audio, track, source, 0, 1);
+  REQUIRE(split.size() >= 1);
+  REQUIRE(split.size() <= 2);
+  for (size_t i = 0; i < split.size(); ++i) {
+    INFO("note " << i);
+    REQUIRE(split[i].length_samples() > 0);
+    if (i > 0) REQUIRE(split[i - 1].offset_sample <= split[i].onset_sample);
+  }
+  const sonare::Audio rendered = render_notes(audio, split);
+  REQUIRE(first_mismatch(rendered, audio) == kNoMismatch);
+}
+
+TEST_CASE("split_note uses the renderer's projected length for stretch placement",
+          "[note_model][audio_workflow]") {
+  constexpr int kSampleRate = 10000;
+  constexpr int kHop = 5;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(100, 0.25f), kSampleRate);
+  F0Track track;
+  track.sample_rate = kSampleRate;
+  track.hop_length = kHop;
+  track.f0_hz.assign(20, 440.0f);
+  track.voiced.assign(track.f0_hz.size(), true);
+
+  const auto split_with = [&](float ratio, int64_t time_offset) {
+    NoteObject source = make_note(audio, track, 0, 10);
+    source.edit.time_stretch_ratio = ratio;
+    source.edit.time_offset_samples = time_offset;
+    return split_note(audio, track, {source}, 0, 1);
+  };
+
+  // 5 * 0.8f is just above 4 in float arithmetic, while the renderer's
+  // checked projection through rate = 1 / ratio is ceil(5 / 1.25) == 4.
+  // The tail must therefore move one sample earlier.
+  const std::vector<NoteObject> shortened = split_with(0.8f, 0);
+  REQUIRE(shortened[1].edit.time_offset_samples == -1);
+
+  // Existing placement edits remain part of the tail's inherited edit.
+  REQUIRE(split_with(0.8f, 7)[1].edit.time_offset_samples == 6);
+  REQUIRE(split_with(0.8f, -7)[1].edit.time_offset_samples == -8);
+
+  // A lengthening head moves the tail later by the same projected growth.
+  REQUIRE(split_with(2.0f, 0)[1].edit.time_offset_samples == 5);
+
+  // The additional placement is saturated at both signed timeline limits.
+  REQUIRE(split_with(2.0f, std::numeric_limits<int64_t>::max())[1].edit.time_offset_samples ==
+          std::numeric_limits<int64_t>::max());
+  REQUIRE(split_with(0.8f, std::numeric_limits<int64_t>::lowest())[1].edit.time_offset_samples ==
+          std::numeric_limits<int64_t>::lowest());
+}
+
+TEST_CASE("split_note preserves a sparse nonlinear envelope at its original samples",
+          "[note_model][audio_workflow]") {
+  constexpr int kEnvelopeSampleRate = 10000;
+  constexpr int kEnvelopeHop = 100;
+  constexpr int kEnvelopeSamples = 10000;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kEnvelopeSamples, 1.0f), kEnvelopeSampleRate);
+
+  F0Track track;
+  track.sample_rate = kEnvelopeSampleRate;
+  track.hop_length = kEnvelopeHop;
+  track.f0_hz.assign(100, 440.0f);
+  track.voiced.assign(track.f0_hz.size(), true);
+  std::vector<NoteObject> notes = {make_note(audio, track, 0, 100)};
+  notes[0].edit.amplitude_envelope = {0.0f, 1.0f, 0.0f, 1.0f};
+
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+  const sonare::Audio before = render_notes(audio, notes, config);
+  const std::vector<NoteObject> split = split_note(audio, track, notes, 0, 10);
+  REQUIRE(split.size() == 2);
+  const sonare::Audio after = render_notes(audio, split, config);
+
+  // These samples lie well inside the two halves. They are selected at a
+  // sparse envelope's extrema so a split that merely reconnects endpoints
+  // cannot hide behind a broad RMS tolerance.
+  REQUIRE_THAT(before[3333], WithinAbs(1.0f, 1.0e-4f));
+  REQUIRE_THAT(before[6666], WithinAbs(0.0f, 1.0e-4f));
+  REQUIRE_THAT(after[3333], WithinAbs(before[3333], 1.0e-4f));
+  REQUIRE_THAT(after[6666], WithinAbs(before[6666], 1.0e-4f));
+}
+
+TEST_CASE("split_note bounds a rational envelope grid by child samples",
+          "[note_model][audio_workflow]") {
+  constexpr int kSampleRate = 16000;
+  constexpr int kHop = 160;
+  constexpr int kSamples = 6400;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kSamples, 1.0f), kSampleRate);
+
+  F0Track track;
+  track.sample_rate = kSampleRate;
+  track.hop_length = kHop;
+  track.f0_hz.assign(40, 440.0f);
+  track.voiced.assign(track.f0_hz.size(), true);
+  std::vector<NoteObject> notes = {make_note(audio, track, 0, 40)};
+  notes[0].edit.amplitude_envelope.resize(200);
+  for (size_t i = 0; i < notes[0].edit.amplitude_envelope.size(); ++i) {
+    // Repeated extrema keep the curve nonlinear while remaining a valid gain.
+    notes[0].edit.amplitude_envelope[i] =
+        std::array<float, 5>{0.0f, 1.0f, 0.25f, 0.75f, 0.1f}[i % 5];
+  }
+
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+  const sonare::Audio before = render_notes(audio, notes, config);
+  const std::vector<NoteObject> split = split_note(audio, track, notes, 0, 20);
+  REQUIRE(split.size() == 2);
+
+  // The renderer only observes integer source samples. A rational grid may
+  // retain every original knot, but it must not expand beyond the child audio
+  // grid and turn an ordinary split into an unbounded allocation.
+  CHECK(split[0].edit.amplitude_envelope.size() <= static_cast<size_t>(split[0].length_samples()));
+  CHECK(split[1].edit.amplitude_envelope.size() <= static_cast<size_t>(split[1].length_samples()));
+
+  const sonare::Audio after = render_notes(audio, split, config);
+  REQUIRE(max_abs_difference(before, after) < 1.0e-4f);
+}
+
+TEST_CASE("split_note keeps the full destination of a stretched note",
+          "[note_model][audio_workflow]") {
+  constexpr int kStretchSampleRate = 10000;
+  constexpr int kStretchHop = 100;
+  constexpr int kAudioSamples = 12000;
+  constexpr int kNoteStart = 1000;
+  constexpr int kNoteEnd = 5000;
+  constexpr int kSplitFrame = 30;
+  std::vector<float> samples(static_cast<size_t>(kAudioSamples), 0.0f);
+  for (int i = kNoteStart; i < kNoteEnd; ++i) {
+    samples[static_cast<size_t>(i)] =
+        0.5f * std::sin(sonare::constants::kTwoPiD * 440.0 * static_cast<double>(i) /
+                        static_cast<double>(kStretchSampleRate));
+  }
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), kStretchSampleRate);
+
+  F0Track track;
+  track.sample_rate = kStretchSampleRate;
+  track.hop_length = kStretchHop;
+  track.f0_hz.assign(120, 440.0f);
+  track.voiced.assign(track.f0_hz.size(), true);
+  std::vector<NoteObject> notes = {make_note(audio, track, 10, 50)};
+  notes[0].edit.time_stretch_ratio = 2.0f;
+
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+  const sonare::Audio before = render_notes(audio, notes, config);
+  const std::vector<NoteObject> split = split_note(audio, track, notes, 0, kSplitFrame);
+  REQUIRE(split.size() == 2);
+  const sonare::Audio after = render_notes(audio, split, config);
+
+  // The unsplit note occupies [1000, 9000) after stretching. Splitting at
+  // source sample 3000 must preserve its late tail rather than independently
+  // stretching both halves into the overlapping [1000, 7000) range.
+  constexpr size_t kLateBegin = 7500;
+  constexpr size_t kLateEnd = 8500;
+  REQUIRE(rms(before, kLateBegin, kLateEnd) > 0.02);
+  REQUIRE_THAT(rms(after, kLateBegin, kLateEnd), WithinRel(rms(before, kLateBegin, kLateEnd), 0.1));
+}
+
 TEST_CASE("split_note rejects an out-of-range index and a frame outside the note", "[note_model]") {
   const sonare::Audio audio = tone(440.0f, 0.5f, 6400);
   const F0Track track = voiced_track(440.0f, 40);
@@ -1635,6 +1985,38 @@ TEST_CASE("split_note rejects an out-of-range index and a frame outside the note
 }
 
 // --- merge_notes ----------------------------------------------------------
+
+TEST_CASE("merge_notes keeps a repaired terminal neighbour disjoint and renderable",
+          "[note_model][audio_workflow]") {
+  constexpr int kCenteredSampleRate = 16000;
+  constexpr int kCenteredHop = 512;
+  constexpr int kCenteredSamples = 5120;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(std::vector<float>(kCenteredSamples, 0.25f), kCenteredSampleRate);
+
+  F0Track track;
+  track.sample_rate = kCenteredSampleRate;
+  track.hop_length = kCenteredHop;
+  track.f0_hz.assign(11, 440.0f);
+  for (size_t frame = 5; frame < 10; ++frame) track.f0_hz[frame] = 660.0f;
+  track.f0_hz.back() = 880.0f;
+  track.voiced.assign(track.f0_hz.size(), true);
+
+  const std::vector<NoteObject> extracted = extract_notes(audio, track);
+  REQUIRE(extracted.size() == 3);
+  REQUIRE(extracted[1].offset_sample == 5119);
+  REQUIRE(extracted[2].onset_sample == 5119);
+
+  // Merging the first two frame runs reconstructs frame [0, 10), whose
+  // centred endpoint would otherwise reach sample 5120 and overlap the
+  // repaired one-frame terminal note at [5119, 5120).
+  const std::vector<NoteObject> merged = merge_notes(audio, track, extracted, 0, 1);
+  REQUIRE(merged.size() == 2);
+  REQUIRE(merged[0].edit.is_identity());
+  REQUIRE(merged[0].offset_sample <= merged[1].onset_sample);
+  REQUIRE(merged[1].length_samples() > 0);
+  REQUIRE(first_mismatch(render_notes(audio, merged), audio) == kNoMismatch);
+}
 
 TEST_CASE("merge_notes spans the gap the segmenter cut at and re-measures it", "[note_model]") {
   const sonare::Audio audio = tone(440.0f, 0.5f, 6400);

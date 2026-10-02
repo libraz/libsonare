@@ -267,6 +267,7 @@ std::vector<editing::note_model::NoteObject> deriveNoteSet(
         editing::note_model::make_note(audio, track, entry.frame_start, entry.frame_end, config));
     out.back().edit = std::move(entry.edit);
   }
+  editing::note_model::repair_rederived_note_set_bounds(audio, track, out, config);
   return out;
 }
 

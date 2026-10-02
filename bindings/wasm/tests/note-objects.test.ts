@@ -774,6 +774,76 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       entries.length - 1,
     );
   });
+
+  const centeredSource = () => ({
+    samples: new Float32Array(5120).fill(0.25),
+    sampleRate: 16000,
+    f0Hz: Float32Array.from([440, 440, 440, 440, 440, 660, 660, 660, 660, 660, 880]),
+    voiced: new Int32Array(11).fill(1),
+    frameRate: 16000 / 512,
+  });
+
+  const centeredEntries = () => {
+    const source = centeredSource();
+    const extracted = extractNotes(source);
+    expect(extracted).toHaveLength(3);
+    expect(extracted[1].offsetSample).toBe(5119);
+    expect(extracted[2].onsetSample).toBe(5119);
+    const entries: NoteSetEntry[] = extracted.map((note) => ({
+      frameStart: note.frameStart,
+      frameEnd: note.frameEnd,
+    }));
+    expect(entries.every((entry) => !('onsetSample' in entry))).toBe(true);
+    return { source, entries };
+  };
+
+  it('[audio_workflow] preserves the repaired terminal boundary through mergeNotes', () => {
+    const { source, entries } = centeredEntries();
+    const merged = mergeNotes({ ...source, notes: entries, first: 0, last: 1 });
+    expect(merged).toHaveLength(2);
+    expect(merged[0].offsetSample).toBe(5119);
+    expect(
+      renderNotes({ samples: source.samples, sampleRate: source.sampleRate, notes: merged }),
+    ).toEqual(source.samples);
+    for (let i = 0; i < merged.length; i++) {
+      expect(merged[i].offsetSample).toBeGreaterThan(merged[i].onsetSample);
+      if (i > 0) {
+        expect(merged[i - 1].offsetSample).toBeLessThanOrEqual(merged[i].onsetSample);
+      }
+    }
+  });
+
+  it('[audio_workflow] preserves the repaired terminal boundary through splitNote', () => {
+    const { source, entries } = centeredEntries();
+    const split = splitNote({ ...source, notes: entries, index: 1, frame: 8 });
+    expect(split).toHaveLength(4);
+    expect(split[2].offsetSample).toBe(5119);
+    expect(
+      renderNotes({ samples: source.samples, sampleRate: source.sampleRate, notes: split }),
+    ).toEqual(source.samples);
+    for (let i = 0; i < split.length; i++) {
+      expect(split[i].offsetSample).toBeGreaterThan(split[i].onsetSample);
+      if (i > 0) {
+        expect(split[i - 1].offsetSample).toBeLessThanOrEqual(split[i].onsetSample);
+      }
+    }
+  });
+
+  it('[audio_workflow] refuses a re-derived empty sample span', () => {
+    const source = {
+      samples: new Float32Array([0.25]),
+      sampleRate: 16000,
+      f0Hz: Float32Array.from([440, 660, 880]),
+      voiced: new Int32Array(3).fill(1),
+      frameRate: 16000 / 512,
+    };
+    const entries: NoteSetEntry[] = [
+      { frameStart: 0, frameEnd: 1 },
+      { frameStart: 1, frameEnd: 2 },
+      { frameStart: 2, frameEnd: 3 },
+    ];
+    expectInvalidParameter(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
+  });
 });
 
 describe('renderNotes amplitude envelope', () => {

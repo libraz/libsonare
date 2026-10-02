@@ -430,15 +430,21 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  *
  * Both halves are re-derived from the audio and the track the way
  * {@link extractNotes} derives its own, rather than by patching the fields of
- * the note they replace. Both inherit the source note's edit, and its amplitude
- * envelope is cut at the same proportion so each half keeps its own part of it;
- * a one-entry envelope is a constant over the span, so both halves get that same
- * entry.
+ * the note they replace. Both inherit the source note's edit, and the tail's
+ * `timeOffsetSamples` absorbs the duration change of the stretched head, so the
+ * halves occupy the destination timeline the unsplit note did. A half with no
+ * sample span at that boundary is omitted and the other keeps the edit
+ * unchanged, so the result then has as many notes as `notes`. A one-entry
+ * envelope is a constant over the span, so both halves get that same entry; a
+ * longer one is resampled onto a grid that preserves the rendered gain at every
+ * integer source sample.
  *
  * Every note in the set — not just the two halves — has its spans, curves,
  * medians and stability re-derived, because a note carries no curves for this
  * call to copy through. A note is therefore identified by its frame bounds, and
- * the audio and track must be the ones the set was extracted from.
+ * the audio and track must be the ones the set was extracted from. A set whose
+ * re-derived notes would include one with no sample span is rejected rather than
+ * shortened.
  *
  * @param request - Audio, its sample rate, the F0 track, the current note set,
  *   the note to split and the frame to cut at.

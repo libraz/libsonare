@@ -478,20 +478,26 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  *
  * Both halves are re-derived from the audio and the track the way
  * {@link extractNotes} derives its own, rather than by patching the fields of
- * the note they replace. Both inherit the source note's edit, and its amplitude
- * envelope is cut at the same proportion so each half keeps its own part of it —
- * a note whose edit is the identity therefore still renders bit for bit after
- * being split.
+ * the note they replace. Both inherit the source note's edit, and the tail's
+ * `timeOffsetSamples` absorbs the duration change of the stretched head, so the
+ * halves occupy the destination timeline the unsplit note did; a note whose edit
+ * is the identity still renders bit for bit after being split. A half with no
+ * sample span at that boundary is omitted and the other keeps the edit
+ * unchanged. A one-entry envelope is a constant over the span, so both halves
+ * get that same entry; a longer one is resampled onto a grid that preserves the
+ * rendered gain at every integer source sample.
  *
  * Every note in the set, not just the two halves, has its spans, curves, medians
  * and stability re-derived from `samples` and the track, because a
  * {@link NoteSetEntry} carries no curves for this call to copy through. The
  * frame bounds are therefore what a note is identified by here, and the audio
  * and track must be the ones the set was extracted from or the whole set is
- * re-measured against something else.
+ * re-measured against something else. A set whose re-derived notes would
+ * include one with no sample span is rejected rather than shortened.
  *
  * @param request - The source, the current note set, and where to cut
- * @returns The whole new note set, one note longer than the one handed in
+ * @returns The whole new note set, one note longer than the one handed in, or
+ *   the same length when a half with no sample span is omitted
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
  *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
  *   samples/sample rate fail the shared input checks

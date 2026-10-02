@@ -192,6 +192,60 @@ NoteObject build_note(const Audio& audio, const pitch_editor::F0Track& resolved,
   return note;
 }
 
+/// Repair a centred terminal F0 frame that was nudged one sample left when its
+/// raw sample span is entirely beyond the audio. If that terminal frame follows
+/// a note ending at the same clamped boundary, shorten the preceding note to the
+/// nudged onset. Extraction drops a degenerate preceding span and checks the
+/// terminal frame against the next predecessor. Re-derived public note sets
+/// keep their cardinality, so the same situation is rejected instead.
+void repair_terminal_nudge_overlap(std::vector<NoteObject>& notes,
+                                   const pitch_editor::F0Track& resolved, int64_t sample_count,
+                                   bool preserve_cardinality) {
+  if (preserve_cardinality) {
+    for (const NoteObject& note : notes) {
+      SONARE_CHECK_MSG(note.length_samples() > 0, ErrorCode::InvalidParameter,
+                       "re-derived note has no positive sample span");
+    }
+  } else {
+    notes.erase(std::remove_if(notes.begin(), notes.end(),
+                               [](const NoteObject& note) { return note.length_samples() <= 0; }),
+                notes.end());
+  }
+  if (notes.size() < 2) return;
+  const double samples_per_frame = resolved.samples_per_frame();
+  const int n_frames = resolved.n_frames();
+  for (size_t i = 1; i < notes.size(); ++i) {
+    if (notes[i].frame_end != n_frames) continue;
+
+    const int64_t raw_start =
+        frame_to_sample(notes[i].frame_start, samples_per_frame, sample_count);
+    const int64_t raw_end = frame_to_sample(notes[i].frame_end, samples_per_frame, sample_count);
+    const int64_t current_onset = notes[i].onset_sample;
+    const bool was_nudged =
+        raw_start >= raw_end && current_onset == raw_end - 1 && notes[i].offset_sample == raw_end;
+    if (!was_nudged) continue;
+
+    while (i > 0 && notes[i - 1].offset_sample > current_onset) {
+      if (current_onset > notes[i - 1].onset_sample) {
+        notes[i - 1].offset_sample = current_onset;
+        break;
+      }
+
+      if (preserve_cardinality) {
+        SONARE_CHECK_MSG(false, ErrorCode::InvalidParameter,
+                         "terminal note repair would make a predecessor empty");
+      }
+
+      // With fewer real samples than adjacent voiced frame boundaries there
+      // is no positive span available for both notes. Keep the terminal frame
+      // that the nudge was introduced to preserve and discard the older span,
+      // then re-check it against the predecessor that shifted into its place.
+      notes.erase(notes.begin() + static_cast<std::ptrdiff_t>(i - 1));
+      --i;
+    }
+  }
+}
+
 }  // namespace
 
 std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0Track& track,
@@ -205,6 +259,7 @@ std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0
   for (const pitch_editor::NoteRegion& region : regions) {
     notes.push_back(build_note(audio, resolved, region.frame_start, region.frame_end, config));
   }
+  repair_terminal_nudge_overlap(notes, resolved, static_cast<int64_t>(audio.size()), false);
 
   return notes;
 }
@@ -215,6 +270,15 @@ NoteObject make_note(const Audio& audio, const pitch_editor::F0Track& track, int
   SONARE_CHECK(frame_start >= 0 && frame_start < frame_end && frame_end <= resolved.n_frames(),
                ErrorCode::InvalidParameter);
   return build_note(audio, resolved, frame_start, frame_end, config);
+}
+
+void repair_rederived_note_set_bounds(const Audio& audio, const pitch_editor::F0Track& track,
+                                      std::vector<NoteObject>& notes,
+                                      const NoteExtractorConfig& config) {
+  const pitch_editor::F0Track resolved = resolve_track(audio, track, config);
+  const size_t cardinality = notes.size();
+  repair_terminal_nudge_overlap(notes, resolved, static_cast<int64_t>(audio.size()), true);
+  SONARE_CHECK(notes.size() == cardinality, ErrorCode::InvalidParameter);
 }
 
 }  // namespace sonare::editing::note_model

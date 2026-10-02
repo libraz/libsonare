@@ -22,18 +22,23 @@
 namespace sonare::editing::note_model {
 
 /// @brief Splits @p notes[index] at @p frame.
-/// @details Both halves inherit the source note's edit, and its amplitude
-///          envelope is cut at the same proportion so each half keeps its own
-///          part of it. A note whose edit is the identity therefore still
+/// @details Positive-length halves inherit the source note's edit. The tail
+///          receives the duration growth (or shrinkage) of the stretched head
+///          as an added time offset, so two independently rendered halves
+///          occupy the same destination timeline as the unsplit note. At a
+///          sample boundary where one child would have no physical samples,
+///          that child is omitted and the surviving child keeps the source
+///          edit unchanged. A note whose edit is the identity therefore still
 ///          renders bit for bit after being split.
 ///
 ///          A one-entry envelope is a constant over the span, so both halves
-///          get that same one entry and the constant survives exactly. A longer
-///          one is read endpoint-anchored, the way the renderer resamples it,
-///          and both halves carry the value at the cut. That reproduces the
-///          shape rather than the samples: each half now anchors its own
-///          endpoints, so the rendered gain near the seam moves by about one
-///          envelope step.
+///          get that same one entry and the constant survives exactly. Longer
+///          envelopes are resampled on a bounded grid that preserves the
+///          renderer's gain at every integer source sample; when the knot grid
+///          would overflow it falls back to the integer sample grid, so a
+///          child envelope can hold up to its sample span plus one entries. The compact
+///          two-point form retains its established cut value for callers that
+///          inspect the edit envelope directly.
 /// @param frame Track frame to cut at, strictly inside the note's own span.
 /// @throws SonareException(InvalidParameter) on an out-of-range @p index, a
 ///         @p frame outside (frame_start, frame_end), or the inputs

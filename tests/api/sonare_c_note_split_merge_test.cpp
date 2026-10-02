@@ -113,6 +113,45 @@ SonareError merge_from(const Source& source, const SonareNoteObject* notes, size
                             first, last, out);
 }
 
+constexpr int kCenteredSampleRate = 16000;
+constexpr int kCenteredHop = 512;
+constexpr float kCenteredFrameRate =
+    static_cast<float>(kCenteredSampleRate) / static_cast<float>(kCenteredHop);
+
+Source centered_terminal_source() {
+  Source source;
+  source.samples.assign(5120, 0.25f);
+  source.f0.assign(11, 440.0f);
+  for (size_t frame = 5; frame < 10; ++frame) source.f0[frame] = 660.0f;
+  source.f0.back() = 880.0f;
+  source.voiced.assign(source.f0.size(), 1);
+  return source;
+}
+
+SonareError centered_extract_from(const Source& source, SonareNoteObjectsResult* out) {
+  return sonare_extract_notes(source.samples.data(), source.samples.size(), kCenteredSampleRate,
+                              source.f0.data(), nullptr, source.voiced.data(), source.f0.size(),
+                              kCenteredFrameRate, nullptr, out);
+}
+
+SonareError centered_split_from(const Source& source, const SonareNoteObject* notes,
+                                size_t note_count, size_t index, int32_t frame,
+                                SonareNoteObjectsResult* out) {
+  return sonare_split_note(source.samples.data(), source.samples.size(), kCenteredSampleRate,
+                           source.f0.data(), nullptr, source.voiced.data(), source.f0.size(),
+                           kCenteredFrameRate, nullptr, notes, note_count, nullptr, 0, index, frame,
+                           out);
+}
+
+SonareError centered_merge_from(const Source& source, const SonareNoteObject* notes,
+                                size_t note_count, size_t first, size_t last,
+                                SonareNoteObjectsResult* out) {
+  return sonare_merge_notes(source.samples.data(), source.samples.size(), kCenteredSampleRate,
+                            source.f0.data(), nullptr, source.voiced.data(), source.f0.size(),
+                            kCenteredFrameRate, nullptr, notes, note_count, nullptr, 0, first, last,
+                            out);
+}
+
 // --- Reading a result ------------------------------------------------------
 
 /// @brief Every note's amplitude slice is its own frame span, and the slices
@@ -220,6 +259,113 @@ float cents_above(float hz, float centre_hz) {
 }
 
 }  // namespace
+
+TEST_CASE("public note reshaping preserves repaired centered terminal bounds",
+          "[c_api][note_split_merge][audio_workflow]") {
+  const Source source = centered_terminal_source();
+
+  SonareNoteObjectsResult extracted{};
+  REQUIRE(centered_extract_from(source, &extracted) == SONARE_OK);
+  REQUIRE(extracted.count == 3);
+  REQUIRE(extracted.notes[1].offset_sample == 5119);
+  REQUIRE(extracted.notes[2].onset_sample == 5119);
+
+  std::vector<SonareNoteObject> frame_only_notes(extracted.notes,
+                                                 extracted.notes + extracted.count);
+  for (SonareNoteObject& note : frame_only_notes) {
+    // The public reshape calls identify entries by their frame spans. Physical
+    // measurements are intentionally re-derived, so hostile caller values must
+    // not hide the terminal repair or make a result unrenderable.
+    note.onset_sample = -123;
+    note.offset_sample = 456789;
+  }
+
+  const auto require_positive_disjoint = [](const SonareNoteObjectsResult& result) {
+    for (size_t i = 0; i < result.count; ++i) {
+      INFO("note " << i);
+      REQUIRE(result.notes[i].offset_sample > result.notes[i].onset_sample);
+      if (i > 0) {
+        REQUIRE(result.notes[i - 1].offset_sample <= result.notes[i].onset_sample);
+      }
+    }
+  };
+  const auto require_identity_render = [&](const SonareNoteObjectsResult& result) {
+    float* rendered = nullptr;
+    size_t rendered_length = 0;
+    REQUIRE(sonare_render_notes(source.samples.data(), source.samples.size(), kCenteredSampleRate,
+                                result.notes, result.count, nullptr, 0, nullptr, nullptr, 0, 0.0f,
+                                nullptr, &rendered, &rendered_length) == SONARE_OK);
+    REQUIRE(rendered_length == source.samples.size());
+    REQUIRE(rendered != nullptr);
+    for (size_t i = 0; i < rendered_length; ++i) {
+      INFO("sample " << i);
+      REQUIRE(rendered[i] == source.samples[i]);
+    }
+    sonare_free_floats(rendered);
+  };
+  require_positive_disjoint(extracted);
+
+  SECTION("merge preserves the repaired terminal boundary") {
+    SonareNoteObjectsResult merged{};
+    REQUIRE(centered_merge_from(source, frame_only_notes.data(), frame_only_notes.size(), 0, 1,
+                                &merged) == SONARE_OK);
+    REQUIRE(merged.count == 2);
+    REQUIRE(merged.notes[0].frame_start == 0);
+    REQUIRE(merged.notes[0].frame_end == 10);
+    REQUIRE(merged.notes[0].offset_sample == 5119);
+    require_positive_disjoint(merged);
+    require_identity_render(merged);
+    sonare_free_note_objects(&merged);
+  }
+
+  SECTION("split preserves the repaired terminal boundary") {
+    SonareNoteObjectsResult split{};
+    REQUIRE(centered_split_from(source, frame_only_notes.data(), frame_only_notes.size(), 1, 8,
+                                &split) == SONARE_OK);
+    REQUIRE(split.count == 4);
+    REQUIRE(split.notes[1].frame_start == 5);
+    REQUIRE(split.notes[1].frame_end == 8);
+    REQUIRE(split.notes[2].frame_start == 8);
+    REQUIRE(split.notes[2].frame_end == 10);
+    REQUIRE(split.notes[2].offset_sample == 5119);
+    require_positive_disjoint(split);
+    require_identity_render(split);
+    sonare_free_note_objects(&split);
+  }
+
+  sonare_free_note_objects(&extracted);
+}
+
+TEST_CASE("public note reshaping refuses a re-derived empty sample span",
+          "[c_api][note_split_merge][audio_workflow]") {
+  const std::vector<float> samples(1, 0.25f);
+  const std::vector<float> f0 = {440.0f, 660.0f, 880.0f};
+  const std::vector<int32_t> voiced(f0.size(), 1);
+  std::vector<SonareNoteObject> notes(f0.size());
+  for (size_t i = 0; i < notes.size(); ++i) {
+    notes[i].frame_start = static_cast<int32_t>(i);
+    notes[i].frame_end = static_cast<int32_t>(i + 1);
+  }
+
+  auto rejects = [&](auto&& call) {
+    SonareNoteObjectsResult out{};
+    out.notes = poisoned_notes();
+    out.count = 7;
+    REQUIRE(call(&out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out.notes == nullptr);
+    REQUIRE(out.count == 0);
+    REQUIRE(out.amplitude == nullptr);
+    REQUIRE(out.amplitude_count == 0);
+    REQUIRE(out.envelopes == nullptr);
+    REQUIRE(out.envelope_count == 0);
+  };
+
+  rejects([&](SonareNoteObjectsResult* out) {
+    return sonare_merge_notes(samples.data(), samples.size(), kCenteredSampleRate, f0.data(),
+                              nullptr, voiced.data(), f0.size(), kCenteredFrameRate, nullptr,
+                              notes.data(), notes.size(), nullptr, 0, 0, 1, out);
+  });
+}
 
 // --- sonare_decompose_note_pitch -------------------------------------------
 
