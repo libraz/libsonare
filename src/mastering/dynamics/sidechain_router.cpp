@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <utility>
 
@@ -10,6 +11,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -18,16 +20,21 @@ namespace sonare::mastering::dynamics {
 SidechainRouter::SidechainRouter(SidechainRouterConfig config) : ConfigBase(std::move(config)) {}
 
 void SidechainRouter::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (!std::isfinite(sample_rate) || !(sample_rate > 0.0)) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be finite and positive");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
+  const double lookahead =
+      std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate);
+  if (!std::isfinite(lookahead) || lookahead > std::numeric_limits<int>::max()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sidechain lookahead exceeds supported size");
+  }
   sample_rate_ = sample_rate;
-  lookahead_samples_ = static_cast<int>(
-      std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate_));
+  lookahead_samples_ = static_cast<int>(lookahead);
   prepared_ = true;
   // Preallocate per-channel main delay lines, the single shared gain delay line,
   // and the per-source-channel HPF state up front so the audio-thread process()
@@ -97,9 +104,12 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
     max_reduction = std::min(max_reduction, reduction_db);
   }
 
-  // One float, once per block: the follower is recursive, so a non-finite
-  // detector value that reached it would otherwise outlive every later block.
-  if (follower_.discard_if_non_finite()) note_non_finite_discard();
+  // Scrub the HPF too: key-listen bypasses the follower, and a NaN HPF stops ducking for good.
+  bool discarded = follower_.discard_if_non_finite();
+  for (size_t ch = 0; ch < hpf_x1_.size(); ++ch) {
+    discarded |= sonare::discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
+  }
+  if (discarded) note_non_finite_discard();
 
   last_gain_reduction_db_ = max_reduction;
 }
@@ -187,8 +197,12 @@ std::vector<rt::ParamDescriptor> SidechainRouter::parameter_descriptors() const 
 }
 
 void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
-  if (!(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
-      config.range_db < 0.0f || config.lookahead_ms < 0.0f ||
+  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
+      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
+      !std::isfinite(config.range_db) || !std::isfinite(config.lookahead_ms) ||
+      !std::isfinite(config.sidechain_hpf_hz) || !(config.ratio >= 1.0f) ||
+      config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db < 0.0f ||
+      config.lookahead_ms < 0.0f ||
       (config.sidechain_hpf_enabled && config.sidechain_hpf_hz <= 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid sidechain router configuration");
   }

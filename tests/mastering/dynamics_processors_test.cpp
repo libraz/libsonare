@@ -2,6 +2,7 @@
 /// @brief Transient, parallel, rider, sidechain, and linked behavior tests.
 
 #include <array>
+#include <catch2/generators/catch_generators.hpp>
 #include <memory>
 
 #include "dynamics_test_helpers.h"
@@ -300,6 +301,57 @@ TEST_CASE("SidechainRouter validates configuration and sidechain buffers",
 
   SidechainRouter router;
   REQUIRE_THROWS(router.set_sidechain(nullptr, 1, 128));
+}
+
+TEST_CASE("SidechainRouter rejects non-finite configuration without changing a live stream",
+          "[mastering][dynamics][sidechain-finite-config]") {
+  const float bad =
+      GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+               -std::numeric_limits<float>::infinity());
+  const auto field =
+      GENERATE(&SidechainRouterConfig::threshold_db, &SidechainRouterConfig::ratio,
+               &SidechainRouterConfig::attack_ms, &SidechainRouterConfig::release_ms,
+               &SidechainRouterConfig::range_db, &SidechainRouterConfig::lookahead_ms,
+               &SidechainRouterConfig::sidechain_hpf_hz);
+  SidechainRouterConfig config;
+  config.sidechain_hpf_enabled = true;
+  SidechainRouter router(config);
+  router.prepare(48000.0, 64);
+  auto invalid = config;
+  invalid.*field = bad;
+  CHECK_THROWS_AS(SidechainRouter(invalid), sonare::SonareException);
+  CHECK_THROWS_AS(router.set_config(invalid), sonare::SonareException);
+  CHECK(router.config().threshold_db == config.threshold_db);
+  CHECK(router.config().sidechain_hpf_hz == config.sidechain_hpf_hz);
+  std::array<float, 64> block{};
+  block.fill(0.2f);
+  float* channels[] = {block.data()};
+  CHECK_NOTHROW(router.process(channels, 1, 64));
+  CHECK(std::all_of(block.begin(), block.end(), [](float value) { return std::isfinite(value); }));
+}
+
+TEST_CASE("SidechainRouter rejects non-finite sample rates before re-preparing",
+          "[mastering][dynamics][sidechain-finite-rate]") {
+  SidechainRouter router;
+  router.prepare(48000.0, 64);
+  const double bad =
+      GENERATE(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+               -std::numeric_limits<double>::infinity());
+  REQUIRE_THROWS_AS(router.prepare(bad, 64), sonare::SonareException);
+  std::array<float, 64> block{};
+  float* channels[] = {block.data()};
+  CHECK_NOTHROW(router.process(channels, 1, 64));
+}
+
+TEST_CASE("SidechainRouter rejects unrepresentable lookahead before changing preparation",
+          "[mastering][dynamics][sidechain-finite-rate]") {
+  SidechainRouterConfig config;
+  config.lookahead_ms = 1.0f;
+  SidechainRouter router(config);
+  router.prepare(48000.0, 64);
+  REQUIRE(router.latency_samples() == 48);
+  REQUIRE_THROWS_AS(router.prepare(1.0e300, 64), sonare::SonareException);
+  CHECK(router.latency_samples() == 48);
 }
 
 TEST_CASE("SidechainRouter lookahead delays main while using current key",
@@ -727,6 +779,70 @@ TEST_CASE("SidechainRouter bounds a non-finite sample to the block that carried 
   };
 
   check_detector_recovery(make, kSidechainRecoveryBlocks);
+}
+
+TEST_CASE("SidechainRouter recovers poisoned HPF state in ducking and key listen",
+          "[mastering][dynamics][sidechain-hpf-recovery]") {
+  struct Scenario {
+    float poison;
+    bool mono_summing;
+    bool key_listen;
+  };
+  // Pairwise coverage of poison kind, detector folding, and output mode.
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const std::array<Scenario, 6> scenarios = {{{nan, false, false},
+                                              {nan, true, true},
+                                              {inf, false, true},
+                                              {inf, true, false},
+                                              {-inf, false, false},
+                                              {-inf, true, true}}};
+  for (const auto& scenario : scenarios) {
+    DYNAMIC_SECTION("poison " << scenario.poison << ", mono " << scenario.mono_summing
+                              << ", listen " << scenario.key_listen) {
+      CAPTURE(scenario.poison, scenario.mono_summing, scenario.key_listen);
+      SidechainRouterConfig config;
+      config.sidechain_hpf_enabled = true;
+      config.attack_ms = 0.0f;
+      config.release_ms = 0.0f;
+      config.threshold_db = -30.0f;
+      config.mono_summing = scenario.mono_summing;
+      config.key_listen = scenario.key_listen;
+      SidechainRouter control(config), poisoned(config);
+      control.prepare(48000.0, 256);
+      poisoned.prepare(48000.0, 256);
+      for (int block = 0; block < 60; ++block) {
+        std::array<float, 256> key{}, bad_key{}, clean{}, actual{};
+        for (size_t i = 0; i < key.size(); ++i) {
+          key[i] = 0.5f * std::sin(sonare::constants::kTwoPiD * 1000.0 *
+                                   (block * 256 + static_cast<int>(i)) / 48000.0);
+          bad_key[i] = key[i];
+          clean[i] = actual[i] = 0.25f;
+        }
+        if (block == 2) bad_key[3] = scenario.poison;
+        // Poison both HPF pairs: the public count still denotes one process call.
+        const float* good_sidechain[] = {key.data(), key.data()};
+        const float* bad_sidechain[] = {bad_key.data(), bad_key.data()};
+        control.set_sidechain(good_sidechain, 2, 256);
+        poisoned.set_sidechain(bad_sidechain, 2, 256);
+        float* good_output = clean.data();
+        float* bad_output = actual.data();
+        control.process(&good_output, 1, 256);
+        poisoned.process(&bad_output, 1, 256);
+        if (block == 59) {
+          if (!scenario.key_listen) REQUIRE(control.last_gain_reduction_db() < -1.0f);
+          REQUIRE(control.non_finite_discard_count() == 0);
+          REQUIRE(poisoned.non_finite_discard_count() == 1);
+          REQUIRE(std::abs(poisoned.last_gain_reduction_db() - control.last_gain_reduction_db()) <
+                  1.0e-5f);
+          for (size_t i = 0; i < actual.size(); ++i) {
+            REQUIRE(std::isfinite(actual[i]));
+            REQUIRE(std::abs(actual[i] - clean[i]) < 1.0e-6f);
+          }
+        }
+      }
+    }
+  }
 }
 
 TEST_CASE("Compressor bounds a non-finite sample to the block that carried it",

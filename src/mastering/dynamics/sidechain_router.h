@@ -40,9 +40,10 @@ class SidechainRouter : public rt::ProcessorBase,
   void reset() override;
   int latency_samples() const noexcept override { return lookahead_samples_; }
 
-  // Borrows channel pointers until the next set_sidechain(), clear_sidechain(),
-  // or process() call that consumes them. The caller owns the buffers and must
-  // keep them alive and unchanged for that interval.
+  // Borrows the channel array and sample buffers until the next set_sidechain()
+  // or clear_sidechain(). Every process() reads the configured key again; it
+  // does not release the borrow. Keep the buffers alive and do not modify them
+  // concurrently with process(). Reset also retains the configured key.
   void set_sidechain(const float* const* channels, int num_channels, int num_samples) override;
   void clear_sidechain() override;
 
