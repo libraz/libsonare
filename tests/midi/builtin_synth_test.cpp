@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -955,4 +956,56 @@ TEST_CASE("BuiltinSynth moves a zone's bend sensitivity by a relative RC 0/0",
   const double cents = mpe_cents(synth, 0, 1200.0);
   CAPTURE(cents);
   REQUIRE(std::fabs(cents - 1200.0) < 5.0);
+}
+
+TEST_CASE("BuiltinSynth channel-mode All Notes Off preserves sustain", "[midi][synth]") {
+  const auto run = [](int controller) {
+    BuiltinSynthConfig config;
+    config.release_ms = 5.0f;
+    BuiltinSynth synth(config);
+    synth.prepare(48000.0, 0);
+
+    synth.on_event(0, control_change(64, 127));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    REQUIRE(render_peak(&synth, 2048) > 0.0f);
+
+    synth.on_event(0, control_change(controller, 0));
+    render_peak(&synth, 2048);
+    const float held = render_peak(&synth, 512);
+
+    synth.on_event(0, control_change(64, 0));
+    render_peak(&synth, 2048);
+    const float released = render_peak(&synth, 512);
+    return std::pair{held, released};
+  };
+
+  for (const int controller : {123, 124, 125, 126, 127}) {
+    INFO("controller " << controller);
+    const auto [held, released] = run(controller);
+    REQUIRE(held > 1.0e-4f);
+    REQUIRE(released == 0.0f);
+  }
+}
+
+TEST_CASE("BuiltinSynth All Sound Off keeps sustain for a new note", "[midi][synth]") {
+  BuiltinSynthConfig config;
+  config.release_ms = 5.0f;
+  BuiltinSynth synth(config);
+  synth.prepare(48000.0, 0);
+
+  synth.on_event(0, control_change(64, 127));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(render_peak(&synth, 2048) > 0.0f);
+  synth.on_event(0, control_change(120, 0));
+  REQUIRE(render_peak(&synth, 512) == 0.0f);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(render_peak(&synth, 2048) > 0.0f);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  render_peak(&synth, 2048);
+  REQUIRE(render_peak(&synth, 512) > 1.0e-4f);
+
+  synth.on_event(0, control_change(64, 0));
+  render_peak(&synth, 2048);
+  REQUIRE(render_peak(&synth, 512) == 0.0f);
 }

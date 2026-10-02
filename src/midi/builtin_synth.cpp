@@ -282,20 +282,20 @@ void BuiltinSynth::poly_pressure(uint8_t channel, uint8_t note, Control32 pressu
 
 void BuiltinSynth::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
-  sustain_down_[channel & 0x0Fu] = false;
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   for (auto& v : voices_) {
-    if (v.active && v.channel == channel && v.stage != Stage::kRelease) {
+    if (v.active && v.channel == ch && v.stage != Stage::kRelease) {
       v.key_down = false;
-      v.stage = Stage::kRelease;
+      if (!sustain_down_[ch]) v.stage = Stage::kRelease;
     }
   }
 }
 
 void BuiltinSynth::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
-  sustain_down_[channel & 0x0Fu] = false;
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   for (auto& v : voices_) {
-    if (v.active && v.channel == channel) v = Voice{};
+    if (v.active && v.channel == ch) v = Voice{};
   }
 }
 
