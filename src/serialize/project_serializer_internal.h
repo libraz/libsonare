@@ -173,9 +173,9 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
     arrangement::Project* project, const arrangement::MidiContentStore* midi,
     BoundedDiagnostics* diagnostics);
 arrangement::ClipFade fade_from_json(const Value& v);
-arrangement::ClipTake take_from_json(const Value& v);
+arrangement::ClipTake take_from_json(const Value& v, uint32_t schema_version);
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v);
-arrangement::EditClip clip_from_json(const Value& v);
+arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version);
 arrangement::WarpMapRef warp_map_from_json(const Value& v);
 arrangement::ClipSource source_from_json(const Value& v);
 arrangement::ChordSymbol chord_from_json(const Value& v);

@@ -3,6 +3,8 @@
 /// and undo/redo stack behaviour for the arrangement subsystem.
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -16,6 +18,7 @@
 #include "arrangement/edit_history.h"
 #include "arrangement/edit_model.h"
 #include "arrangement/edit_source.h"
+#include "serialize/project_serializer.h"
 
 using namespace sonare::arrangement;
 
@@ -137,6 +140,7 @@ bool clip_equal(const EditClip& a, const EditClip& b) {
          a.source_offset_ppq == b.source_offset_ppq && a.gain == b.gain &&
          fade_equal(a.fade_in, b.fade_in) && fade_equal(a.fade_out, b.fade_out) &&
          a.loop_mode == b.loop_mode && a.loop_length_ppq == b.loop_length_ppq &&
+         a.source_offset_seconds == b.source_offset_seconds && a.loop_anchor == b.loop_anchor &&
          a.warp_ref_id == b.warp_ref_id && a.takes == b.takes &&
          a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments;
 }
@@ -779,13 +783,21 @@ TEST_CASE("SplitClip rebases takes and comp segments for both halves", "[arrange
   REQUIRE(left != nullptr);
   REQUIRE(right != nullptr);
   CHECK(left->length_ppq == 960.0);
-  CHECK(left->takes == std::vector<ClipTake>{{1, 0, 10.0, "one"}, {2, 0, 100.0, "two"}});
+  REQUIRE(left->takes.size() == 2);
+  CHECK(left->takes[0].source_offset_ppq == 10.0);
+  CHECK(left->takes[1].source_offset_ppq == 100.0);
+  CHECK(left->takes[0].source_offset_seconds.has_value());
+  CHECK(left->takes[1].source_offset_seconds.has_value());
   CHECK(left->active_take_id == 2);
   CHECK(left->comp_segments == std::vector<ClipCompSegment>{{240.0, 720.0, 1}, {720.0, 960.0, 2}});
   CHECK(right->start_ppq == 960.0);
   CHECK(right->length_ppq == 960.0);
   CHECK(right->source_offset_ppq == 960.0);
-  CHECK(right->takes == std::vector<ClipTake>{{1, 0, 970.0, "one"}, {2, 0, 1060.0, "two"}});
+  REQUIRE(right->takes.size() == 2);
+  CHECK(right->takes[0].source_offset_ppq == 970.0);
+  CHECK(right->takes[1].source_offset_ppq == 1060.0);
+  CHECK(right->takes[0].source_offset_seconds.has_value());
+  CHECK(right->takes[1].source_offset_seconds.has_value());
   CHECK(right->active_take_id == 2);
   CHECK(right->comp_segments == std::vector<ClipCompSegment>{{0.0, 480.0, 2}, {540.0, 840.0, 1}});
 
@@ -816,7 +828,11 @@ TEST_CASE("TrimClip shifts takes and keeps comp segments timeline-aligned", "[ar
   CHECK(trimmed->start_ppq == 240.0);
   CHECK(trimmed->source_offset_ppq == 240.0);
   CHECK(trimmed->length_ppq == 960.0);
-  CHECK(trimmed->takes == std::vector<ClipTake>{{1, 0, 1240.0, "one"}, {2, 0, 1440.0, "two"}});
+  REQUIRE(trimmed->takes.size() == 2);
+  CHECK(trimmed->takes[0].source_offset_ppq == 1240.0);
+  CHECK(trimmed->takes[1].source_offset_ppq == 1440.0);
+  CHECK(trimmed->takes[0].source_offset_seconds.has_value());
+  CHECK(trimmed->takes[1].source_offset_seconds.has_value());
   CHECK(trimmed->active_take_id == 1);
   CHECK(trimmed->comp_segments == std::vector<ClipCompSegment>{{0.0, 60.0, 1}, {260.0, 760.0, 2}});
   REQUIRE(
@@ -1678,4 +1694,530 @@ TEST_CASE("Full undo of a seeded sequence returns to the initial state", "[arran
     h2.apply(std::move(c));
   }
   CHECK(project_equal(after_undo_then_redo, h2.project()));
+}
+
+TEST_CASE("Audio edits preserve physical source positions across tempo changes",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0, 120, 0}, {1, 60, 0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 3;
+  const auto clip_id = project.add_clip(clip);
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  audio.sources[source_id].channels = {std::vector<float>(200000, 1.0f)};
+
+  SECTION("splitting at a tempo change retains the right source boundary") {
+    REQUIRE(SplitClip(clip_id, 1).apply(project, midi));
+    const auto compiled = compile(project, midi, audio);
+    REQUIRE(compiled.timeline.has_value());
+    REQUIRE(compiled.timeline->audio_clips.size() == 2);
+    CHECK(compiled.timeline->audio_clips[1].start_sample == 24000);
+    CHECK(compiled.timeline->audio_clips[1].clip_offset_samples == 24000);
+  }
+  SECTION("moving an offset clip preserves the source excerpt") {
+    project.find_clip_mutable(clip_id)->source_offset_ppq = 0.5;
+    const auto before = compile(project, midi, audio);
+    REQUIRE(before.timeline.has_value());
+    const auto original_offset = before.timeline->audio_clips[0].clip_offset_samples;
+    REQUIRE(MoveClip(clip_id, 2).apply(project, midi));
+    const auto after = compile(project, midi, audio);
+    REQUIRE(after.timeline.has_value());
+    CHECK(after.timeline->audio_clips[0].clip_offset_samples == original_offset);
+  }
+  SECTION("duplicating across a tempo change keeps the original physical offset") {
+    EditClip* source_clip = project.find_clip_mutable(clip_id);
+    REQUIRE(source_clip != nullptr);
+    source_clip->start_ppq = 1.0;
+    source_clip->source_offset_ppq = 0.5;
+    const auto before = compile(project, midi, audio);
+    REQUIRE(before.timeline.has_value());
+    REQUIRE(before.timeline->audio_clips.size() == 1);
+    auto duplicate = std::make_unique<DuplicateClip>(clip_id, 4.0);
+    DuplicateClip* raw = duplicate.get();
+    REQUIRE(duplicate->apply(project, midi));
+    const auto after = compile(project, midi, audio);
+    REQUIRE(after.timeline.has_value());
+    REQUIRE(raw->new_clip_id() != 0);
+    REQUIRE(after.timeline->audio_clips.size() == 2);
+    CHECK(after.timeline->audio_clips[1].clip_offset_samples ==
+          before.timeline->audio_clips[0].clip_offset_samples);
+  }
+}
+
+TEST_CASE("Trimming looped audio preserves the loop body and phase",
+          "[arrangement][audio_workflow]") {
+  const double trim_start = GENERATE(2.0, 2.5);
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0, 120, 0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 4;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.loop_length_ppq = 0;
+  const auto clip_id = project.add_clip(clip);
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  auto& pcm = audio.sources[source_id].channels.emplace_back(120000);
+  for (size_t i = 0; i < pcm.size(); ++i) pcm[i] = static_cast<float>(i) / 120000.0f;
+  const auto before = compile(project, midi, audio);
+  REQUIRE(before.timeline.has_value());
+  REQUIRE(TrimClip(clip_id, trim_start, 4 - trim_start).apply(project, midi));
+  const EditClip* trimmed_model = project.find_clip(clip_id);
+  REQUIRE(trimmed_model != nullptr);
+  REQUIRE(trimmed_model->loop_anchor.has_value());
+  CHECK(trimmed_model->loop_anchor->period_seconds == 2.0);
+  CHECK(trimmed_model->loop_anchor->phase_seconds == (trim_start == 2.0 ? 1.0 : 1.25));
+  const auto after = compile(project, midi, audio);
+  REQUIRE(after.timeline.has_value());
+  const auto read = [](const CompiledTimeline& timeline, int64_t frame) {
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000, 128);
+    player.set_clips(timeline.audio_clips);
+    std::vector<float> samples(128);
+    float* output[] = {samples.data()};
+    player.process_at(output, 1, 128, frame);
+    return samples;
+  };
+  for (int64_t delta : {int64_t{0}, int64_t{11999}, int64_t{23999}}) {
+    const int64_t frame = static_cast<int64_t>(trim_start * 24000) + delta;
+    const auto original = read(*before.timeline, frame);
+    const auto trimmed = read(*after.timeline, frame);
+    for (size_t i = 0; i < original.size(); ++i) {
+      CHECK_THAT(trimmed[i], Catch::Matchers::WithinAbs(original[i], 1.0e-6));
+    }
+  }
+}
+
+TEST_CASE("Loop trim metadata survives undo redo and project JSON",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0, 120, 0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 4.0;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.loop_length_ppq = 0.0;
+  const auto clip_id = project.add_clip(clip);
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  auto& pcm = audio.sources[source_id].channels.emplace_back(120000);
+  for (size_t i = 0; i < pcm.size(); ++i) pcm[i] = static_cast<float>(i) / 120000.0f;
+
+  EditHistory history{std::move(project)};
+  REQUIRE(history.apply(std::make_unique<TrimClip>(clip_id, 2.5, 1.5)));
+  const EditClip* trimmed = history.project().find_clip(clip_id);
+  REQUIRE(trimmed != nullptr);
+  REQUIRE(trimmed->loop_anchor.has_value());
+  const auto compiled = compile(history.project(), history.midi_content(), audio);
+  REQUIRE(compiled.timeline.has_value());
+  REQUIRE(compiled.timeline->audio_clips.size() == 1);
+  const auto& schedule = compiled.timeline->audio_clips.front();
+  CHECK(schedule.loop_length_samples == 96000);
+  CHECK(schedule.loop_phase_samples == 60000);
+  CHECK(schedule.preserve_loop_period);
+
+  const std::string json =
+      sonare::serialize::project_to_json(history.project(), history.midi_content());
+  const auto decoded = sonare::serialize::project_from_json(json);
+  REQUIRE(decoded.ok());
+  const EditClip* decoded_clip = decoded.project->find_clip(clip_id);
+  REQUIRE(decoded_clip != nullptr);
+  CHECK(decoded_clip->loop_anchor == trimmed->loop_anchor);
+  const auto decoded_compiled = compile(*decoded.project, decoded.midi, audio);
+  REQUIRE(decoded_compiled.timeline.has_value());
+  REQUIRE(decoded_compiled.timeline->audio_clips.size() == 1);
+  CHECK(decoded_compiled.timeline->audio_clips.front().loop_length_samples ==
+        schedule.loop_length_samples);
+  CHECK(decoded_compiled.timeline->audio_clips.front().loop_phase_samples ==
+        schedule.loop_phase_samples);
+
+  const auto render = [](const CompiledTimeline& timeline, int64_t frame) {
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000, 128);
+    player.set_clips(timeline.audio_clips);
+    std::vector<float> samples(128);
+    float* output[] = {samples.data()};
+    player.process_at(output, 1, 128, frame);
+    return samples;
+  };
+  const auto source_read = render(*compiled.timeline, 60000);
+  const auto decoded_read = render(*decoded_compiled.timeline, 60000);
+  REQUIRE(source_read.size() == decoded_read.size());
+  for (size_t i = 0; i < source_read.size(); ++i) {
+    CHECK(decoded_read[i] == source_read[i]);
+  }
+
+  REQUIRE(history.undo());
+  REQUIRE_FALSE(history.project().find_clip(clip_id)->loop_anchor.has_value());
+  REQUIRE(history.redo());
+  REQUIRE(history.project().find_clip(clip_id)->loop_anchor.has_value());
+}
+
+TEST_CASE("Audio physical anchors saturate and preserve a sub-sample phase",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 1.0;
+  clip.source_offset_seconds = 1.0e300;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.loop_length_ppq = 0.0;
+  clip.loop_anchor = LoopAnchor{1.0e300, 1.0e-300};
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  audio.sources[source_id].channels = {std::vector<float>(128, 0.25f)};
+  const auto compiled = compile(project, midi, audio);
+  REQUIRE(compiled.timeline.has_value());
+  REQUIRE(compiled.timeline->audio_clips.size() == 1);
+  const auto& schedule = compiled.timeline->audio_clips.front();
+  CHECK(schedule.clip_offset_samples == std::numeric_limits<int64_t>::max());
+  CHECK(schedule.loop_length_samples == std::numeric_limits<int64_t>::max());
+  CHECK(schedule.loop_phase_samples == 0);
+  CHECK(schedule.preserve_loop_period);
+}
+
+TEST_CASE("SplitClip allocation failure leaves unmaterialized audio metadata untouched",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 2.0;
+  clip.source_offset_ppq = 0.5;
+  clip.takes = {{1, 0, 0.25, "take"}};
+  clip.active_take_id = 1;
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+  const EditClip before = *project.find_clip(clip_id);
+  REQUIRE_FALSE(before.source_offset_seconds.has_value());
+  REQUIRE(before.takes.size() == 1);
+  REQUIRE_FALSE(before.takes.front().source_offset_seconds.has_value());
+
+  project.ensure_next_clip_id(std::numeric_limits<ClipId>::max());
+  MidiContentStore midi;
+  SplitClip split(clip_id, 1.0);
+  REQUIRE_FALSE(split.apply(project, midi));
+
+  const EditClip* after = project.find_clip(clip_id);
+  REQUIRE(after != nullptr);
+  CHECK(clip_equal(*after, before));
+  CHECK_FALSE(after->source_offset_seconds.has_value());
+  REQUIRE(after->takes.size() == 1);
+  CHECK_FALSE(after->takes.front().source_offset_seconds.has_value());
+  CHECK(project.clips().size() == 1);
+  CHECK(project.next_clip_id() == std::numeric_limits<ClipId>::max());
+}
+
+TEST_CASE("Loop trim preserves the effective phase when the source is shorter than the loop",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 4.0;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.loop_length_ppq = 1.0;
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  auto& pcm = audio.sources[source_id].channels.emplace_back(14400);
+  for (size_t i = 0; i < pcm.size(); ++i) pcm[i] = static_cast<float>(i) / pcm.size();
+  const auto before = compile(project, midi, audio);
+  REQUIRE(before.timeline.has_value());
+  REQUIRE(TrimClip(clip_id, 1.2, 2.8).apply(project, midi));
+  const EditClip* trimmed = project.find_clip(clip_id);
+  REQUIRE(trimmed != nullptr);
+  REQUIRE(trimmed->loop_anchor.has_value());
+  CHECK_THAT(trimmed->loop_anchor->phase_seconds, Catch::Matchers::WithinAbs(0.6, 1.0e-12));
+
+  const auto after = compile(project, midi, audio);
+  REQUIRE(after.timeline.has_value());
+  REQUIRE(after.timeline->audio_clips.size() == 1);
+  CHECK(after.timeline->audio_clips.front().loop_phase_samples == 28800);
+
+  const auto render = [](const CompiledTimeline& timeline, int64_t frame) {
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000, 128);
+    player.set_clips(timeline.audio_clips);
+    std::vector<float> samples(128);
+    float* output[] = {samples.data()};
+    player.process_at(output, 1, 128, frame);
+    return samples;
+  };
+  // At the trimmed start, the old clip is at 28,800 % 14,400 == 0. The new
+  // schedule must retain that effective source phase after the engine clamps
+  // the nominal 24,000-sample period to the shorter source.
+  const auto before_read = render(*before.timeline, 28800);
+  const auto after_read = render(*after.timeline, 28800);
+  REQUIRE(before_read.size() == after_read.size());
+  for (size_t i = 0; i < before_read.size(); ++i) {
+    CHECK_THAT(after_read[i], Catch::Matchers::WithinAbs(before_read[i], 1.0e-7));
+  }
+}
+
+TEST_CASE("Loop trims preserve PPQ source offsets and accumulate signed phase",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 4.0;
+  clip.source_offset_ppq = 0.25;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.loop_length_ppq = 1.0;
+  clip.takes = {{1, 0, 0.5, "take"}};
+  clip.active_take_id = 1;
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+  const EditClip before = *project.find_clip(clip_id);
+
+  MidiContentStore midi;
+  REQUIRE(TrimClip(clip_id, 1.0, 3.0).apply(project, midi));
+  const EditClip* first = project.find_clip(clip_id);
+  REQUIRE(first != nullptr);
+  CHECK(first->source_offset_ppq == before.source_offset_ppq);
+  REQUIRE(first->takes.size() == 1);
+  CHECK(first->takes.front().source_offset_ppq == before.takes.front().source_offset_ppq);
+  REQUIRE(first->loop_anchor.has_value());
+  CHECK_THAT(first->loop_anchor->phase_seconds, Catch::Matchers::WithinAbs(0.5, 1.0e-12));
+  REQUIRE(first->source_offset_seconds.has_value());
+  REQUIRE(first->takes.front().source_offset_seconds.has_value());
+
+  REQUIRE(TrimClip(clip_id, 2.0, 2.0).apply(project, midi));
+  const EditClip* second = project.find_clip(clip_id);
+  REQUIRE(second != nullptr);
+  CHECK(second->source_offset_ppq == before.source_offset_ppq);
+  REQUIRE(second->takes.size() == 1);
+  CHECK(second->takes.front().source_offset_ppq == before.takes.front().source_offset_ppq);
+  REQUIRE(second->loop_anchor.has_value());
+  CHECK_THAT(second->loop_anchor->phase_seconds, Catch::Matchers::WithinAbs(1.0, 1.0e-12));
+}
+
+TEST_CASE("Loop trim can extend left without shifting PPQ source offsets",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.start_ppq = 1.0;
+  clip.length_ppq = 3.0;
+  clip.loop_mode = LoopMode::kLoop;
+  clip.loop_length_ppq = 1.0;
+  clip.takes = {{1, 0, 0.0, "take"}};
+  clip.active_take_id = 1;
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  auto& pcm = audio.sources[source_id].channels.emplace_back(48000);
+  for (size_t i = 0; i < pcm.size(); ++i) pcm[i] = static_cast<float>(i) / pcm.size();
+  const auto before = compile(project, midi, audio);
+  REQUIRE(before.timeline.has_value());
+  REQUIRE(TrimClip(clip_id, 0.0, 4.0).apply(project, midi));
+  const EditClip* trimmed = project.find_clip(clip_id);
+  REQUIRE(trimmed != nullptr);
+  CHECK(trimmed->source_offset_ppq == 0.0);
+  REQUIRE(trimmed->takes.size() == 1);
+  CHECK(trimmed->takes.front().source_offset_ppq == 0.0);
+  REQUIRE(trimmed->loop_anchor.has_value());
+  CHECK_THAT(trimmed->loop_anchor->phase_seconds, Catch::Matchers::WithinAbs(-0.5, 1.0e-12));
+
+  const auto after = compile(project, midi, audio);
+  REQUIRE(after.timeline.has_value());
+  const auto render = [](const CompiledTimeline& timeline, int64_t frame) {
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000, 128);
+    player.set_clips(timeline.audio_clips);
+    std::vector<float> samples(128);
+    float* output[] = {samples.data()};
+    player.process_at(output, 1, 128, frame);
+    return samples;
+  };
+  const auto before_read = render(*before.timeline, 24000);
+  const auto after_read = render(*after.timeline, 24000);
+  REQUIRE(before_read.size() == after_read.size());
+  for (size_t i = 0; i < before_read.size(); ++i) {
+    CHECK_THAT(after_read[i], Catch::Matchers::WithinAbs(before_read[i], 1.0e-7));
+  }
+}
+
+TEST_CASE("Non-loop trim advances a physical source offset across a tempo boundary",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}, {1.0, 60.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 3.0;
+  clip.source_offset_ppq = 0.5;
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  audio.sources[source_id].channels = {std::vector<float>(200000, 1.0f)};
+  REQUIRE(TrimClip(clip_id, 1.5, 1.5).apply(project, midi));
+  const auto compiled = compile(project, midi, audio);
+  REQUIRE(compiled.timeline.has_value());
+  REQUIRE(compiled.timeline->audio_clips.size() == 1);
+  // T(0..0.5) = 12,000 samples and T(0..1.5) = 48,000 samples.
+  CHECK(compiled.timeline->audio_clips.front().clip_offset_samples == 60000);
+}
+
+TEST_CASE("Legacy comp parts compile the same before and after offset materialization",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}, {1.0, 60.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 3.0;
+  clip.takes = {{1, 0, 0.25, "active"}, {2, 0, 0.75, "comp"}};
+  clip.active_take_id = 1;
+  clip.comp_segments = {{1.5, 2.5, 2}};
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  audio.sources[source_id].channels = {std::vector<float>(200000, 1.0f)};
+  const auto offsets = [&]() {
+    const auto compiled = compile(project, midi, audio);
+    REQUIRE(compiled.timeline.has_value());
+    std::map<int64_t, int64_t> by_start;
+    for (const auto& schedule : compiled.timeline->audio_clips) {
+      by_start[schedule.start_sample] = schedule.clip_offset_samples;
+    }
+    return by_start;
+  };
+  const auto legacy = offsets();
+  // A no-op move materializes the take bases; the schedule must not move with it.
+  REQUIRE(MoveClip(clip_id, 0.0).apply(project, midi));
+  const auto materialized = offsets();
+  REQUIRE(legacy.size() == 3);
+  CHECK(legacy == materialized);
+}
+
+TEST_CASE("Comp parts use the selected take physical base plus timeline elapsed samples",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0.0, 120.0, 0.0}, {1.0, 60.0, 0.0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 3.0;
+  clip.takes = {{1, 0, 0.25, "active"}, {2, 0, 0.75, "comp"}};
+  clip.active_take_id = 1;
+  clip.comp_segments = {{1.5, 2.5, 2}};
+  const auto clip_id = project.add_clip(clip);
+  REQUIRE(clip_id != 0);
+
+  MidiContentStore midi;
+  AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  audio.sources[source_id].channels = {std::vector<float>(200000, 1.0f)};
+  // Materialize both take bases at the clip start before compiling the comp lane.
+  REQUIRE(MoveClip(clip_id, 0.0).apply(project, midi));
+  const auto compiled = compile(project, midi, audio);
+  REQUIRE(compiled.timeline.has_value());
+  REQUIRE(compiled.timeline->audio_clips.size() == 3);
+
+  const auto find_part = [&](double start_ppq) -> const sonare::engine::ClipSchedule* {
+    const int64_t start_sample = start_ppq == 1.5 ? 48000 : start_ppq == 2.5 ? 96000 : 0;
+    for (const auto& schedule : compiled.timeline->audio_clips) {
+      if (schedule.start_sample == start_sample) return &schedule;
+    }
+    return nullptr;
+  };
+  const auto* active_part = find_part(0.0);
+  const auto* comp_part = find_part(1.5);
+  const auto* active_tail_part = find_part(2.5);
+  REQUIRE(active_part != nullptr);
+  REQUIRE(comp_part != nullptr);
+  REQUIRE(active_tail_part != nullptr);
+  // The active take starts at 6,000 samples, the comp take at 18,000 samples,
+  // and both add their current part's timeline elapsed samples after the tempo
+  // boundary.
+  CHECK(active_part->clip_offset_samples == 6000);
+  CHECK(comp_part->clip_offset_samples == 66000);
+  CHECK(active_tail_part->clip_offset_samples == 102000);
 }

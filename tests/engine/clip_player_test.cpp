@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 
+#include "arrangement/edit_compiler.h"
 #include "engine/tempo_sync.h"
 #include "util/constants.h"
 
@@ -1354,4 +1355,203 @@ TEST_CASE("ClipPlayer loops a warped clip at its compiled timeline length",
     // 8-sample source would wrap to timeline 1 and read source 2 (20).
     REQUIRE_THAT(out_l[9], WithinAbs(0.0f, 1.0e-6f));
   }
+}
+
+TEST_CASE("TimeStretch replacement drops old audio and unchanged publication stays continuous",
+          "[engine][audio_workflow]") {
+  using namespace sonare::engine;
+  constexpr int block = 512;
+  constexpr int samples = 4096;
+  std::vector<float> tone(samples), silence(samples, 0.0f);
+  for (int i = 0; i < samples; ++i) {
+    tone[i] = 0.5f * std::sin(sonare::constants::kTwoPi * 440.0f * i / 48000.0f);
+  }
+  const float* tone_channels[] = {tone.data()};
+  const float* silent_channels[] = {silence.data()};
+  ClipSchedule original{7, {tone_channels, 1, samples}, 0, 0, 0, samples, false, 1, 0, 0};
+  original.warp_mode = WarpMode::kTimeStretch;
+  original.warp_anchors = std::make_shared<const std::vector<WarpAnchor>>(
+      std::vector<WarpAnchor>{{0, 0}, {samples, samples}});
+  const auto render = [](ClipPlayer& player, int64_t frame) {
+    std::vector<float> result(block);
+    float* output[] = {result.data()};
+    player.process_at(output, 1, block, frame);
+    return result;
+  };
+  ClipPlayer edited, reference;
+  edited.prepare(48000, block);
+  reference.prepare(48000, block);
+  edited.set_clips({original});
+  reference.set_clips({original});
+  render(edited, 0);
+  render(reference, 0);
+  SECTION("changing source audio invalidates buffered synthesis") {
+    auto replacement = original;
+    replacement.buffer = {silent_channels, 1, samples};
+    edited.set_clips({replacement});
+    const auto output = render(edited, block);
+    for (float value : output) CHECK_THAT(value, WithinAbs(0.0f, 1.0e-7f));
+  }
+  SECTION("unchanged source retains synthesis continuity") {
+    edited.set_clips({original});
+    const auto republished = render(edited, block);
+    const auto uninterrupted = render(reference, block);
+    for (int i = 0; i < block; ++i) {
+      CHECK_THAT(republished[i], WithinAbs(uninterrupted[i], 1.0e-7f));
+    }
+  }
+  SECTION("changing warp values invalidates buffered synthesis") {
+    auto replacement = original;
+    replacement.warp_anchors = std::make_shared<const std::vector<WarpAnchor>>(
+        std::vector<WarpAnchor>{{0, 0}, {samples, samples / 2}});
+    edited.set_clips({replacement});
+    ClipPlayer fresh;
+    fresh.prepare(48000, block);
+    fresh.set_clips({replacement});
+    const auto replaced = render(edited, block);
+    const auto clean = render(fresh, block);
+    const auto uninterrupted = render(reference, block);
+    double difference = 0;
+    for (int i = 0; i < block; ++i) {
+      CHECK_THAT(replaced[i], WithinAbs(clean[i], 1.0e-7f));
+      difference += std::abs(clean[i] - uninterrupted[i]);
+    }
+    CHECK(difference > 1);
+  }
+}
+
+TEST_CASE("Compiled comp fragments have independent TimeStretch synthesis state",
+          "[engine][arrangement][audio_workflow]") {
+  namespace arr = sonare::arrangement;
+  arr::Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0, 120, 0}});
+  arr::Track track;
+  track.kind = arr::Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  REQUIRE(project.set_warp_map({1, "stretch", {{0, 0}, {10000, 7000}}}));
+  arr::EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.length_ppq = 0.3;
+  clip.warp_mode = arr::WarpMode::kTimeStretch;
+  clip.warp_ref_id = 1;
+  clip.takes = {{1, source_id, 0, "first"}, {2, source_id, 0, "second"}};
+  clip.comp_segments = {{0, 0.17, 1, 0}, {0.17, 0.3, 2, 0.04}};
+  project.add_clip(clip);
+  arr::AudioContentStore audio;
+  audio.sources[source_id].sample_rate = 48000;
+  auto& pcm = audio.sources[source_id].channels.emplace_back(20000);
+  for (size_t i = 0; i < pcm.size(); ++i) pcm[i] = std::sin(static_cast<float>(i) * 0.08f);
+  const auto compiled = arr::compile(project, {}, audio);
+  REQUIRE(compiled.timeline.has_value());
+  const auto& schedules = compiled.timeline->audio_clips;
+  REQUIRE(schedules.size() == 2);
+  REQUIRE(schedules[0].id == schedules[1].id);
+  const auto render = [](std::vector<sonare::engine::ClipSchedule> clips) {
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000, 128);
+    player.set_clips(std::move(clips));
+    std::vector<float> result(7296);
+    for (int frame = 0; frame < 7296; frame += 128) {
+      float* output[] = {result.data() + frame};
+      player.process_at(output, 1, 128, frame);
+    }
+    return result;
+  };
+  const auto mixed = render(schedules);
+  const auto first = render({schedules[0]});
+  const auto second = render({schedules[1]});
+  double reference_energy = 0;
+  for (int frame = 3200; frame < 4000; ++frame) {
+    reference_energy +=
+        static_cast<double>(first[frame] + second[frame]) * (first[frame] + second[frame]);
+    CHECK_THAT(mixed[frame], WithinAbs(first[frame] + second[frame], 1.0e-5f));
+  }
+  CHECK(reference_energy > 1);
+}
+
+TEST_CASE("TimeStretch keeps continuity when equal owned content is recompiled",
+          "[engine][audio_workflow]") {
+  using namespace sonare::engine;
+  constexpr int block = 512;
+  constexpr int samples = 4096;
+  const auto make_clip = [=](bool silent = false) {
+    auto storage = std::make_shared<ClipAudioStorage>();
+    auto& pcm = storage->channels.emplace_back(samples);
+    for (int i = 0; i < samples; ++i) {
+      pcm[i] = silent ? 0.0f : 0.5f * std::sin(sonare::constants::kTwoPi * 440.0f * i / 48000.0f);
+    }
+    storage->channel_ptrs = {pcm.data()};
+    storage->refresh_content_signature();
+    ClipSchedule clip{7, {storage->channel_ptrs.data(), 1, samples}, 0, 0, 0, samples, false, 1, 0,
+                      0};
+    clip.storage = storage;
+    clip.warp_mode = WarpMode::kTimeStretch;
+    clip.warp_anchors = std::make_shared<const std::vector<WarpAnchor>>(
+        std::vector<WarpAnchor>{{0, 0}, {samples, samples}});
+    return clip;
+  };
+  ClipPlayer edited, reference;
+  edited.prepare(48000, block);
+  reference.prepare(48000, block);
+  const auto original = make_clip();
+  edited.set_clips({original});
+  reference.set_clips({original});
+  const auto render = [](ClipPlayer& player, int64_t frame) {
+    std::vector<float> result(block);
+    float* output[] = {result.data()};
+    player.process_at(output, 1, block, frame);
+    return result;
+  };
+  render(edited, 0);
+  render(reference, 0);
+  SECTION("fresh equal PCM and warp allocations retain state through a gain edit") {
+    auto recompiled = make_clip();
+    REQUIRE(recompiled.storage != original.storage);
+    REQUIRE(recompiled.warp_anchors != original.warp_anchors);
+    recompiled.gain = 0.5f;
+    edited.set_clips({recompiled});
+    const auto changed_gain = render(edited, block);
+    const auto uninterrupted = render(reference, block);
+    double energy = 0;
+    for (int i = 0; i < block; ++i) {
+      CHECK_THAT(changed_gain[i], WithinAbs(uninterrupted[i] * 0.5f, 1.0e-7f));
+      energy += uninterrupted[i] * uninterrupted[i];
+    }
+    CHECK(energy > 1);
+  }
+  SECTION("changed owned PCM invalidates buffered synthesis") {
+    edited.set_clips({make_clip(true)});
+    const auto replaced = render(edited, block);
+    for (float value : replaced) CHECK_THAT(value, WithinAbs(0, 1.0e-7f));
+  }
+}
+
+TEST_CASE("ClipPlayer retains an anchored loop longer than the trimmed clip",
+          "[engine][audio_workflow]") {
+  std::array<float, 8> pcm{0, 1, 2, 3, 4, 5, 6, 7};
+  const float* source[] = {pcm.data()};
+  sonare::engine::ClipSchedule clip{1, {source, 1, 8}, 0, 0, 0, 3, true, 1, 0, 0};
+  clip.loop_length_samples = 8;
+  clip.loop_phase_samples = 6;
+  std::array<float, 3> expected{0, 1, 2};
+  SECTION("physical loop anchor preserves the original period and phase") {
+    clip.preserve_loop_period = true;
+    expected = {6, 7, 0};
+  }
+  SECTION("a negative physical phase wraps against the effective period") {
+    clip.preserve_loop_period = true;
+    clip.loop_phase_samples = -2;
+    expected = {6, 7, 0};
+  }
+  SECTION("legacy schedules keep their existing clip length clamp") {}
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000, 3);
+  player.set_clips({clip});
+  std::array<float, 3> rendered{};
+  float* output[] = {rendered.data()};
+  player.process_at(output, 1, 3, 0);
+  REQUIRE(rendered == expected);
 }

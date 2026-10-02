@@ -30,11 +30,27 @@ inline bool clip_can_be_inserted(const Project& project, const EditClip& clip,
                                  ClipId ignore_clip_id = 0) {
   if (clip.id == 0 || project.has_clip(clip.id)) return false;
   if (!project.has_track(clip.track_id) || !project.has_source(clip.source_id)) return false;
-  if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
+  if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0 ||
+      (clip.source_offset_seconds.has_value() &&
+       !(std::isfinite(*clip.source_offset_seconds) && *clip.source_offset_seconds >= 0.0))) {
     return false;
   }
   // Under LOOP, 0 is valid and means "loop the entire clip"; reject negatives/NaN.
   if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq >= 0.0)) return false;
+  if (clip.loop_anchor.has_value()) {
+    const LoopAnchor& anchor = *clip.loop_anchor;
+    if (!(std::isfinite(anchor.period_seconds) && anchor.period_seconds > 0.0 &&
+          std::isfinite(anchor.phase_seconds))) {
+      return false;
+    }
+  }
+  for (const ClipTake& take : clip.takes) {
+    if (take.id == 0 || !std::isfinite(take.source_offset_ppq) || take.source_offset_ppq < 0.0 ||
+        (take.source_offset_seconds.has_value() &&
+         !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
+      return false;
+    }
+  }
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(clip.track_id, clip.start_ppq, clip.length_ppq, ignore_clip_id)) {
     return false;
@@ -77,7 +93,9 @@ inline bool valid_clip_takes(const Project& project, const EditClip& clip,
   std::vector<TakeId> ids;
   ids.reserve(takes.size());
   for (const ClipTake& take : takes) {
-    if (take.id == 0 || take.source_offset_ppq < 0.0 || !std::isfinite(take.source_offset_ppq)) {
+    if (take.id == 0 || take.source_offset_ppq < 0.0 || !std::isfinite(take.source_offset_ppq) ||
+        (take.source_offset_seconds.has_value() &&
+         !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
       return false;
     }
     if (std::find(ids.begin(), ids.end(), take.id) != ids.end()) {
@@ -90,6 +108,89 @@ inline bool valid_clip_takes(const Project& project, const EditClip& clip,
     }
   }
   return take_id_exists(takes, active_take_id);
+}
+
+/// Builds the control-thread tempo map used by source-offset materialization.
+/// The edit model stores plain tempo segments, so this keeps all PPQ->sample
+/// conversion in one place and mirrors the arrangement compiler's setup.
+inline bool make_edit_tempo_map(const Project& project, transport::TempoMap* out) {
+  if (out == nullptr || !(std::isfinite(project.sample_rate()) && project.sample_rate() > 0.0)) {
+    return false;
+  }
+  out->prepare(project.sample_rate());
+  out->set_segments(project.tempo_segments());
+  return true;
+}
+
+inline bool timeline_delta_seconds(const transport::TempoMap& tempo_map, double from_ppq,
+                                   double to_ppq, double sample_rate, double* out) {
+  if (out == nullptr || !std::isfinite(from_ppq) || !std::isfinite(to_ppq) ||
+      !(std::isfinite(sample_rate) && sample_rate > 0.0)) {
+    return false;
+  }
+  const int64_t from_sample = tempo_map.ppq_to_sample(from_ppq);
+  const int64_t to_sample = tempo_map.ppq_to_sample(to_ppq);
+  const long double delta =
+      static_cast<long double>(to_sample) - static_cast<long double>(from_sample);
+  const double seconds = static_cast<double>(delta / static_cast<long double>(sample_rate));
+  if (!std::isfinite(seconds)) return false;
+  *out = seconds;
+  return true;
+}
+
+/// Materializes legacy PPQ source offsets on an audio clip before a
+/// tempo-sensitive edit. The caller passes a private clip copy when the edit
+/// must remain atomic. Existing physical values are retained verbatim.
+inline bool materialize_audio_source_offsets(const Project& project, EditClip* clip,
+                                             transport::TempoMap* tempo_map = nullptr) {
+  if (clip == nullptr) return false;
+  const ClipSource* source = project.find_source(clip->source_id);
+  if (source == nullptr || source_kind(*source) != SourceKind::kAudio) return true;
+
+  transport::TempoMap local_map;
+  transport::TempoMap* map = tempo_map != nullptr ? tempo_map : &local_map;
+  if (tempo_map == nullptr && !make_edit_tempo_map(project, map)) return false;
+  const double sample_rate = project.sample_rate();
+  const auto materialize = [&](double offset_ppq, std::optional<double>* physical) {
+    if (physical == nullptr) return false;
+    if (physical->has_value()) {
+      return std::isfinite(**physical) && **physical >= 0.0;
+    }
+    if (!(std::isfinite(offset_ppq) && offset_ppq >= 0.0) || !std::isfinite(clip->start_ppq) ||
+        !std::isfinite(clip->start_ppq + offset_ppq)) {
+      return false;
+    }
+    double seconds = 0.0;
+    if (!timeline_delta_seconds(*map, clip->start_ppq, clip->start_ppq + offset_ppq, sample_rate,
+                                &seconds) ||
+        seconds < 0.0) {
+      return false;
+    }
+    *physical = seconds;
+    return true;
+  };
+
+  if (!materialize(clip->source_offset_ppq, &clip->source_offset_seconds)) return false;
+  for (ClipTake& take : clip->takes) {
+    if (!materialize(take.source_offset_ppq, &take.source_offset_seconds)) return false;
+  }
+  return true;
+}
+
+inline bool shift_physical_source_offsets(EditClip* clip, double delta_seconds) {
+  if (clip == nullptr || !std::isfinite(delta_seconds)) return false;
+  if (clip->source_offset_seconds.has_value()) {
+    const double shifted = *clip->source_offset_seconds + delta_seconds;
+    if (!(std::isfinite(shifted) && shifted >= 0.0)) return false;
+    clip->source_offset_seconds = shifted;
+  }
+  for (ClipTake& take : clip->takes) {
+    if (!take.source_offset_seconds.has_value()) continue;
+    const double shifted = *take.source_offset_seconds + delta_seconds;
+    if (!(std::isfinite(shifted) && shifted >= 0.0)) return false;
+    take.source_offset_seconds = shifted;
+  }
+  return true;
 }
 
 inline bool valid_comp_segments(const std::vector<ClipTake>& takes,

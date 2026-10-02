@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <memory>
 
 #include "rt/pan_law.h"
@@ -16,6 +17,50 @@ using sonare::rt::PanGains;
 using sonare::rt::PanNormalization;
 
 namespace {
+uint64_t stretch_signature(const ClipSchedule& clip) noexcept {
+  uint64_t hash = 14695981039346656037ULL;
+  const auto append = [&hash](uint64_t word) {
+    hash ^= word;
+    hash *= 1099511628211ULL;
+  };
+  append(static_cast<uint64_t>(clip.buffer.num_channels));
+  append(static_cast<uint64_t>(clip.buffer.num_samples));
+  if (clip.page_provider) {
+    append(reinterpret_cast<uintptr_t>(clip.page_provider.get()));
+    append(static_cast<uint64_t>(clip.page_provider->num_samples()));
+    append(static_cast<uint64_t>(clip.page_provider->num_channels()));
+  } else if (clip.storage && clip.storage->content_signature != 0) {
+    append(clip.storage->content_signature);
+  } else {
+    if (clip.buffer.channels) {
+      for (int channel = 0; channel < clip.buffer.num_channels; ++channel) {
+        append(reinterpret_cast<uintptr_t>(clip.buffer.channels[channel]));
+      }
+    }
+  }
+  append(static_cast<uint64_t>(clip.clip_offset_samples));
+  append(clip.loop);
+  if (clip.loop) {
+    append(static_cast<uint64_t>(clip.loop_length_samples));
+    append(static_cast<uint64_t>(clip.loop_phase_samples));
+    append(clip.preserve_loop_period);
+    if (clip.loop_length_samples == 0) append(static_cast<uint64_t>(clip.length_samples));
+  }
+  append(static_cast<uint64_t>(clip.warp_mode));
+  append(static_cast<uint64_t>(clip.warp_reference_offset_samples));
+  if (clip.warp_anchors) {
+    append(clip.warp_anchors->size());
+    for (const auto& anchor : *clip.warp_anchors) {
+      uint64_t bits = 0;
+      std::memcpy(&bits, &anchor.warp_sample, sizeof(bits));
+      append(bits);
+      std::memcpy(&bits, &anchor.source_sample, sizeof(bits));
+      append(bits);
+    }
+  }
+  return hash;
+}
+
 /// Balance gains for a clip, evaluated with the clip's own pan law. Any channel
 /// beyond the first stereo pair is left at unity, so the caller indexes this
 /// pair only for channels 0 and 1.
@@ -106,10 +151,15 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
       clip.start_sample = map->ppq_to_sample(clip.start_ppq);
     }
   }
-  std::sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
+  std::stable_sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
     if (a.start_sample != b.start_sample) return a.start_sample < b.start_sample;
     return a.id < b.id;
   });
+  std::map<uint32_t, uint32_t> fragment_counts;
+  for (auto& clip : clips) {
+    clip.stretch_fragment_ordinal = fragment_counts[clip.id]++;
+    clip.stretch_content_signature = stretch_signature(clip);
+  }
   const size_t count = clips.size();
   if (clips_.publish(std::make_shared<const std::vector<ClipSchedule>>(std::move(clips)))) {
     clip_count_.store(count, std::memory_order_relaxed);
@@ -371,9 +421,11 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
   // only the clip length bounds the period; the outer read guard (source_pos vs
   // source_sample_count) still bounds the actual reads.
   const int64_t source_len =
-      warp_active ? clip.length_samples
-                  : std::min<int64_t>(clip.length_samples,
-                                      source_sample_count(clip) - clip.clip_offset_samples);
+      warp_active ? (clip.preserve_loop_period ? clip.loop_length_samples : clip.length_samples)
+                  : (clip.preserve_loop_period
+                         ? source_sample_count(clip) - clip.clip_offset_samples
+                         : std::min<int64_t>(clip.length_samples,
+                                             source_sample_count(clip) - clip.clip_offset_samples));
   if (source_len <= 0) return read;
   const double warp_ref =
       static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples));
@@ -387,7 +439,10 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
     const int64_t loop_len = clip.loop_length_samples > 0
                                  ? std::min<int64_t>(clip.loop_length_samples, source_len)
                                  : source_len;
-    const int64_t local = position % loop_len;
+    const int64_t phase_remainder = clip.loop_phase_samples % loop_len;
+    const int64_t phase = phase_remainder < 0 ? phase_remainder + loop_len : phase_remainder;
+    const int64_t base = position % loop_len;
+    const int64_t local = base >= loop_len - phase ? base - (loop_len - phase) : base + phase;
     read.pos = resolve(static_cast<double>(local));
     // Optional loop-seam crossfade: blend the loop tail with the source material
     // immediately before the loop start (pre-roll), so a non-zero-aligned seam
@@ -457,7 +512,7 @@ double ClipPlayer::stretch_map_thunk(void* context, int64_t clip_local_output) n
   return read.pos >= 0.0 ? read.pos : 0.0;
 }
 
-WarpStretchVoice* ClipPlayer::acquire_stretch_voice(uint32_t clip_id) noexcept {
+WarpStretchVoice* ClipPlayer::acquire_stretch_voice(const ClipSchedule& clip) noexcept {
   const WarpVoicePool* pool = warp_voice_pool_.current();
   // Capacity 0 is a deliberate "stretch disabled" choice (every warped clip
   // resamples instead), and no pool adopted yet is the same absence from the
@@ -467,7 +522,9 @@ WarpStretchVoice* ClipPlayer::acquire_stretch_voice(uint32_t clip_id) noexcept {
   WarpStretchVoice* oldest = nullptr;
   for (uint32_t i = 0; i < pool->capacity; ++i) {
     WarpStretchVoice& voice = pool->voices[i];
-    if (voice.active() && voice.clip_id() == clip_id) return &voice;
+    if (voice.active() && voice.clip_id() == clip.id &&
+        voice.fragment_ordinal() == clip.stretch_fragment_ordinal)
+      return &voice;
     if (!voice.active()) {
       if (!free_slot) free_slot = &voice;
       continue;
@@ -492,7 +549,7 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
   // A source wider than the stretcher's state would have to be folded down,
   // which silently changes the mix; fall back instead.
   if (source_channels <= 0 || source_channels > WarpStretchVoice::kMaxChannels) return false;
-  WarpStretchVoice* voice = acquire_stretch_voice(clip.id);
+  WarpStretchVoice* voice = acquire_stretch_voice(clip);
   if (!voice) return false;
 
   StretchContext context{this, &clip};
@@ -503,7 +560,8 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
   const int64_t output_start =
       numeric::saturating_add(timeline_sample, static_cast<int64_t>(start)) - clip.start_sample;
   if (!voice->render(clip.id, output_start, count, scratch, source_channels,
-                     &ClipPlayer::stretch_read_thunk, &ClipPlayer::stretch_map_thunk, &context)) {
+                     &ClipPlayer::stretch_read_thunk, &ClipPlayer::stretch_map_thunk, &context,
+                     clip.stretch_fragment_ordinal, clip.stretch_content_signature)) {
     return false;
   }
 

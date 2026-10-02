@@ -144,12 +144,16 @@ arrangement::ClipFade fade_from_json(const Value& v) {
   return f;
 }
 
-arrangement::ClipTake take_from_json(const Value& v) {
+arrangement::ClipTake take_from_json(const Value& v, uint32_t schema_version) {
   arrangement::ClipTake take;
   take.id = uint_or(v, "id", 0);
   take.source_id = uint_or(v, "source_id", 0);
   take.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
   take.name = str_or(v, "name", "");
+  if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP &&
+      v.contains("source_offset_seconds")) {
+    take.source_offset_seconds = num_or(v, "source_offset_seconds", 0.0);
+  }
   return take;
 }
 
@@ -164,7 +168,9 @@ arrangement::ClipCompSegment comp_segment_from_json(const Value& v) {
   return segment;
 }
 
-arrangement::EditClip clip_from_json(const Value& v) {
+arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
+  // Physical fields are read from schema 3 on, as a schema-2 reader would ignore them.
+  const bool physical = schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
   arrangement::EditClip c;
   c.id = uint_or(v, "id", 0);
   c.track_id = uint_or(v, "track_id", 0);
@@ -172,17 +178,32 @@ arrangement::EditClip clip_from_json(const Value& v) {
   c.start_ppq = num_or(v, "start_ppq", 0.0);
   c.length_ppq = num_or(v, "length_ppq", 0.0);
   c.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
+  if (physical && v.contains("source_offset_seconds")) {
+    c.source_offset_seconds = num_or(v, "source_offset_seconds", 0.0);
+  }
   c.gain = float_or(v, "gain", 1.0f, "clips[].gain");
   if (const auto* fi = object_at(v, "fade_in")) c.fade_in = fade_from_json(Value(*fi));
   if (const auto* fo = object_at(v, "fade_out")) c.fade_out = fade_from_json(Value(*fo));
   c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff);
   c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
   c.loop_crossfade_ppq = num_or(v, "loop_crossfade_ppq", 0.0);
+  const bool has_loop_period = physical && v.contains("loop_period_seconds");
+  const bool has_loop_phase = physical && v.contains("loop_phase_seconds");
+  if (has_loop_period != has_loop_phase) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "loop_period_seconds and loop_phase_seconds must be supplied together");
+  }
+  if (has_loop_period) {
+    c.loop_anchor = arrangement::LoopAnchor{
+        num_or(v, "loop_period_seconds", 0.0),
+        num_or(v, "loop_phase_seconds", 0.0),
+    };
+  }
   c.warp_ref_id = uint_or(v, "warp_ref_id", 0);
   c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff);
   if (const auto* arr = array_at(v, "takes")) {
     for (const auto& tv : *arr) {
-      if (tv.is_object()) c.takes.push_back(take_from_json(tv));
+      if (tv.is_object()) c.takes.push_back(take_from_json(tv, schema_version));
     }
   }
   c.active_take_id = uint_or(v, "active_take_id", 0);
@@ -437,6 +458,11 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
                                     "must have a finite non-negative start_ppq and "
                                     "source_offset_ppq and a finite positive length_ppq"};
     }
+    if (c.source_offset_seconds.has_value() &&
+        !(std::isfinite(*c.source_offset_seconds) && *c.source_offset_seconds >= 0.0)) {
+      return InvariantViolation{"invalid_clip_source_offset_seconds",
+                                label + "source_offset_seconds must be finite and non-negative"};
+    }
     if (!valid_position_ppq(c.fade_in.length_ppq) || !valid_position_ppq(c.fade_out.length_ppq)) {
       return InvariantViolation{"invalid_clip_fade_ppq",
                                 label + "fade lengths must be finite and non-negative"};
@@ -448,6 +474,13 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
           "invalid_clip_loop_ppq",
           label + "loop_length_ppq and loop_crossfade_ppq must be finite and non-negative"};
     }
+    if (c.loop_anchor.has_value() &&
+        !(std::isfinite(c.loop_anchor->period_seconds) && c.loop_anchor->period_seconds > 0.0 &&
+          std::isfinite(c.loop_anchor->phase_seconds))) {
+      return InvariantViolation{
+          "invalid_clip_loop_anchor",
+          label + "loop_period_seconds must be positive and phase_seconds must be finite"};
+    }
     for (const arrangement::ClipTake& take : c.takes) {
       if (take.id == 0) {
         return InvariantViolation{"invalid_clip_take_id",
@@ -457,6 +490,12 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
         return InvariantViolation{"invalid_clip_take_ppq",
                                   label + "take " + std::to_string(take.id) +
                                       " source_offset_ppq must be finite and non-negative"};
+      }
+      if (take.source_offset_seconds.has_value() &&
+          !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0)) {
+        return InvariantViolation{"invalid_clip_take_source_offset_seconds",
+                                  label + "take " + std::to_string(take.id) +
+                                      " source_offset_seconds must be finite and non-negative"};
       }
     }
     for (const arrangement::ClipCompSegment& segment : c.comp_segments) {

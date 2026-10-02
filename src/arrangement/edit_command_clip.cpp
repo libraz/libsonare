@@ -86,32 +86,50 @@ EditCommandPtr RemoveClip::invert(const Project& before,
 }
 
 bool SplitClip::apply(Project& project, MidiContentStore& store) {
-  EditClip* c = project.find_clip_mutable(id_);
-  if (c == nullptr) {
+  EditClip* current = project.find_clip_mutable(id_);
+  if (current == nullptr) {
     return false;
   }
-  if (c->warp_ref_id != 0) {
+  if (current->warp_ref_id != 0) {
     return false;
   }
-  if (!(split_ppq_ > c->start_ppq) || !(split_ppq_ < c->end_ppq())) {
+  if (!(split_ppq_ > current->start_ppq) || !(split_ppq_ < current->end_ppq())) {
     return false;
   }
-  if (c->loop_mode == LoopMode::kLoop) {
+  if (current->loop_mode == LoopMode::kLoop) {
     return false;
   }
-  const double left_len = split_ppq_ - c->start_ppq;
-  const double right_len = c->end_ppq() - split_ppq_;
+  const double original_start = current->start_ppq;
+  const double left_len = split_ppq_ - original_start;
+  const double right_len = current->end_ppq() - split_ppq_;
+
+  // Materialize on private copies so a failed insert leaves the project untouched.
+  const EditClip before = *current;
+  EditClip original = before;
+  if (!detail::materialize_audio_source_offsets(project, &original)) return false;
+  EditClip left = original;
+  EditClip right = original;
 
   // Build the right-hand clip from the original before shortening.
-  EditClip right = *c;
   right.id = 0;
   right.start_ppq = split_ppq_;
   right.length_ppq = right_len;
-  right.source_offset_ppq = c->source_offset_ppq + left_len;
+  right.source_offset_ppq = original.source_offset_ppq + left_len;
   right.comp_segments =
-      detail::shifted_clamped_comp_segments(c->comp_segments, -left_len, right_len);
+      detail::shifted_clamped_comp_segments(original.comp_segments, -left_len, right_len);
   if (!detail::shift_take_offsets(&right.takes, left_len)) {
     return false;
+  }
+  const ClipSource* source = project.find_source(original.source_id);
+  if (source != nullptr && source_kind(*source) == SourceKind::kAudio) {
+    transport::TempoMap tempo_map;
+    if (!detail::make_edit_tempo_map(project, &tempo_map)) return false;
+    double split_delta_seconds = 0.0;
+    if (!detail::timeline_delta_seconds(tempo_map, original_start, split_ppq_,
+                                        project.sample_rate(), &split_delta_seconds) ||
+        !detail::shift_physical_source_offsets(&right, split_delta_seconds)) {
+      return false;
+    }
   }
   right.fade_in = ClipFade{};     // inner edge has no fade-in
   clamp_fades_to_length(&right);  // the outer fade-out now has a shorter clip
@@ -119,39 +137,36 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
       project.clip_overlaps(right.track_id, right.start_ppq, right.length_ppq, id_)) {
     return false;
   }
-  // Project::add_clip performs its own overlap check.  Shorten the left half
-  // before using that allocating path so its original extent does not overlap
-  // the right half.  Retain a complete snapshot to make an allocation failure
-  // atomic for direct callers too.
-  const EditClip original = *c;
+  // add_clip checks overlap, so the left half is shortened (on the copy) first.
   const auto shorten_left = [&] {
-    c->length_ppq = left_len;
-    c->comp_segments = detail::shifted_clamped_comp_segments(c->comp_segments, 0.0, left_len);
-    c->fade_out = ClipFade{};  // inner edge has no fade-out
-    clamp_fades_to_length(c);  // the outer fade-in now has a shorter clip
+    left.length_ppq = left_len;
+    left.comp_segments = detail::shifted_clamped_comp_segments(left.comp_segments, 0.0, left_len);
+    left.fade_out = ClipFade{};    // inner edge has no fade-out
+    clamp_fades_to_length(&left);  // the outer fade-in now has a shorter clip
   };
+  shorten_left();
   const bool allocate_new_id = new_clip_id_ == 0;
-  if (allocate_new_id) shorten_left();
-  if (new_clip_id_ != 0) {
+  if (!allocate_new_id) {
     right.id = new_clip_id_;
     if (!detail::clip_can_be_inserted(project, right, id_) || !project.insert_clip_raw(right)) {
       return false;
     }
     project.ensure_next_clip_id(new_clip_id_);
   } else {
+    // Install the shortened left only around add_clip; restore the original on failure.
+    *current = left;
     new_clip_id_ = project.add_clip(right);
     if (new_clip_id_ == 0) {
-      *c = original;
+      *current = before;
       return false;
     }
   }
-  // The only remaining fallible project operation was inserting the right
-  // clip.  Mutate the left half only after that has succeeded, so direct users
-  // of SplitClip (outside EditHistory's snapshot rollback) also get atomic
-  // failure semantics.
-  c = project.find_clip_mutable(id_);
-  if (c == nullptr) return false;  // Defensive: insertion must preserve it.
-  if (!allocate_new_id) shorten_left();
+  // The right clip is in; commit the prepared left snapshot.
+  current = project.find_clip_mutable(id_);
+  if (current == nullptr) return false;  // Defensive: insertion must preserve it.
+  if (!allocate_new_id) {
+    *current = std::move(left);
+  }
   // Split MIDI content by source PPQ so the two clips do not carry duplicate
   // event lists after editing / serialization. Note cutting at the boundary is a
   // later MIDI-editor concern; this preserves event ownership deterministically.
@@ -193,42 +208,81 @@ EditCommandPtr SplitClip::invert(const Project& before,
 }
 
 bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
-  EditClip* c = project.find_clip_mutable(id_);
-  if (c == nullptr) {
+  EditClip* current = project.find_clip_mutable(id_);
+  if (current == nullptr) {
     return false;
   }
-  if (c->warp_ref_id != 0) {
+  if (current->warp_ref_id != 0) {
     return false;
   }
   if (!(new_length_ppq_ > 0.0) || new_start_ppq_ < 0.0) {
     return false;
   }
-  const double delta = new_start_ppq_ - c->start_ppq;
-  const double new_offset = c->source_offset_ppq + delta;
-  if (new_offset < 0.0) {
-    return false;
-  }
-  std::vector<ClipTake> shifted_takes = c->takes;
-  if (!detail::shift_take_offsets(&shifted_takes, delta)) {
-    return false;
+  const double old_start = current->start_ppq;
+  const double delta = new_start_ppq_ - old_start;
+  EditClip next = *current;
+  if (!detail::materialize_audio_source_offsets(project, &next)) return false;
+  const ClipSource* source = project.find_source(next.source_id);
+  const bool audio_clip = source != nullptr && source_kind(*source) == SourceKind::kAudio;
+  const bool preserve_loop_source_offsets = audio_clip && next.loop_mode == LoopMode::kLoop;
+  double new_offset = next.source_offset_ppq;
+  if (!preserve_loop_source_offsets) {
+    new_offset += delta;
+    if (new_offset < 0.0) {
+      return false;
+    }
+    if (!detail::shift_take_offsets(&next.takes, delta)) {
+      return false;
+    }
   }
   std::vector<ClipCompSegment> shifted_segments =
-      detail::shifted_clamped_comp_segments(c->comp_segments, -delta, new_length_ppq_);
+      detail::shifted_clamped_comp_segments(next.comp_segments, -delta, new_length_ppq_);
   // The same loop/comp pair SetClipLoop and SetClipCompSegments refuse to write.
-  if (c->loop_mode == LoopMode::kLoop &&
+  if (next.loop_mode == LoopMode::kLoop &&
       detail::comp_segments_split_clip(shifted_segments, new_length_ppq_)) {
     return false;
   }
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
-      project.clip_overlaps(c->track_id, new_start_ppq_, new_length_ppq_, id_)) {
+      project.clip_overlaps(current->track_id, new_start_ppq_, new_length_ppq_, id_)) {
     return false;
   }
-  c->start_ppq = new_start_ppq_;
-  c->source_offset_ppq = new_offset;
-  c->length_ppq = new_length_ppq_;
-  c->takes = std::move(shifted_takes);
-  c->comp_segments = std::move(shifted_segments);
-  clamp_fades_to_length(c);
+  double delta_seconds = 0.0;
+  transport::TempoMap tempo_map;
+  if (audio_clip) {
+    if (!detail::make_edit_tempo_map(project, &tempo_map) ||
+        !detail::timeline_delta_seconds(tempo_map, old_start, new_start_ppq_, project.sample_rate(),
+                                        &delta_seconds)) {
+      return false;
+    }
+  }
+  if (preserve_loop_source_offsets) {
+    const double old_loop_ppq = next.loop_length_ppq > 0.0 ? next.loop_length_ppq : next.length_ppq;
+    double period_seconds = 0.0;
+    double old_phase_seconds = 0.0;
+    if (next.loop_anchor.has_value()) {
+      period_seconds = next.loop_anchor->period_seconds;
+      old_phase_seconds = next.loop_anchor->phase_seconds;
+    } else if (!detail::timeline_delta_seconds(tempo_map, old_start, old_start + old_loop_ppq,
+                                               project.sample_rate(), &period_seconds)) {
+      return false;
+    }
+    if (!(std::isfinite(period_seconds) && period_seconds > 0.0 &&
+          std::isfinite(old_phase_seconds))) {
+      return false;
+    }
+    // A loop trim keeps the source body fixed; only the playback phase moves.
+    const double phase_seconds = old_phase_seconds + delta_seconds;
+    if (!std::isfinite(phase_seconds)) return false;
+    next.loop_anchor = LoopAnchor{period_seconds, phase_seconds};
+  } else if (audio_clip && !detail::shift_physical_source_offsets(&next, delta_seconds)) {
+    return false;
+  }
+  next.start_ppq = new_start_ppq_;
+  if (!preserve_loop_source_offsets) next.source_offset_ppq = new_offset;
+  next.length_ppq = new_length_ppq_;
+  next.comp_segments = std::move(shifted_segments);
+  clamp_fades_to_length(&next);
+  *current = std::move(next);
   return true;
 }
 
@@ -242,8 +296,8 @@ EditCommandPtr TrimClip::invert(const Project& before,
 }
 
 bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
-  EditClip* c = project.find_clip_mutable(id_);
-  if (c == nullptr) {
+  EditClip* current = project.find_clip_mutable(id_);
+  if (current == nullptr) {
     return false;
   }
   if (new_start_ppq_ < 0.0) {
@@ -260,7 +314,7 @@ bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
   // unaffected. Mirrors edit_compiler.cpp::clip_matches_track_kind.
   if (new_track_id_ != 0) {
     const Track* dest = project.find_track(new_track_id_);
-    const ClipSource* src = project.find_source(c->source_id);
+    const ClipSource* src = project.find_source(current->source_id);
     if (dest == nullptr || src == nullptr) {
       return false;
     }
@@ -271,15 +325,18 @@ bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
       return false;
     }
   }
-  const TrackId target_track = new_track_id_ != 0 ? new_track_id_ : c->track_id;
+  const TrackId target_track = new_track_id_ != 0 ? new_track_id_ : current->track_id;
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
-      project.clip_overlaps(target_track, new_start_ppq_, c->length_ppq, id_)) {
+      project.clip_overlaps(target_track, new_start_ppq_, current->length_ppq, id_)) {
     return false;
   }
-  c->start_ppq = new_start_ppq_;
+  EditClip next = *current;
+  if (!detail::materialize_audio_source_offsets(project, &next)) return false;
+  next.start_ppq = new_start_ppq_;
   if (new_track_id_ != 0) {
-    c->track_id = new_track_id_;
+    next.track_id = new_track_id_;
   }
+  *current = std::move(next);
   return true;
 }
 
@@ -289,7 +346,7 @@ EditCommandPtr MoveClip::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<MoveClip>(id_, c->start_ppq, c->track_id);
+  return std::make_unique<detail::RestoreClip>(*c);
 }
 
 bool DuplicateClip::apply(Project& project, MidiContentStore& store) {
@@ -298,6 +355,7 @@ bool DuplicateClip::apply(Project& project, MidiContentStore& store) {
     return false;
   }
   EditClip copy = *src;
+  if (!detail::materialize_audio_source_offsets(project, &copy)) return false;
   copy.id = 0;
   copy.start_ppq = new_start_ppq_;
   if (copy.start_ppq < 0.0) {
@@ -386,6 +444,8 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
   c->loop_mode = mode_;
   c->loop_length_ppq = loop_length_ppq_;
   c->loop_crossfade_ppq = loop_crossfade_ppq_;
+  // A newly authored loop supersedes any period/phase kept by an earlier loop trim.
+  c->loop_anchor.reset();
   return true;
 }
 
@@ -395,8 +455,7 @@ EditCommandPtr SetClipLoop::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<SetClipLoop>(id_, c->loop_mode, c->loop_length_ppq,
-                                       c->loop_crossfade_ppq);
+  return std::make_unique<detail::RestoreClip>(*c);
 }
 
 bool SetClipWarpRef::apply(Project& project, MidiContentStore& /*store*/) {

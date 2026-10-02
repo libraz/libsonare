@@ -448,8 +448,7 @@ class RealtimeEngineWasm {
   sonare::host::ExternalMidiRecord external_midi_record_scratch_{};
   sonare::host::ExternalMidi1Lowered external_midi_lowered_scratch_{};
   uint8_t external_midi_lowered_index_ = 0;
-  std::vector<std::vector<std::vector<float>>> clip_storage_;
-  std::vector<std::vector<const float*>> clip_ptrs_;
+  std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> clip_storage_;
   std::vector<uint32_t> clip_ids_;
   std::vector<uint8_t> clip_tempo_baked_;
   // Sizes @p storage to @p num_channels zeroed planes of @p num_frames and points

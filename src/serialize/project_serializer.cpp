@@ -106,9 +106,21 @@ Value project_to_value(const arrangement::Project& project,
                              return lane.target_kind() != automation::AutomationTargetKind::kOpaque;
                            });
       });
-  root["version"] =
-      static_cast<double>(has_typed_automation_lane ? SONARE_PROJECT_SCHEMA_VERSION
-                                                    : SONARE_PROJECT_SCHEMA_VERSION_OPAQUE);
+  const bool has_physical_clip_field = std::any_of(
+      project.clips().begin(), project.clips().end(), [](const arrangement::EditClip& clip) {
+        return clip.source_offset_seconds.has_value() || clip.loop_anchor.has_value() ||
+               std::any_of(clip.takes.begin(), clip.takes.end(),
+                           [](const arrangement::ClipTake& take) {
+                             return take.source_offset_seconds.has_value();
+                           });
+      });
+  uint32_t schema_version = SONARE_PROJECT_SCHEMA_VERSION_OPAQUE;
+  if (has_physical_clip_field) {
+    schema_version = SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
+  } else if (has_typed_automation_lane) {
+    schema_version = SONARE_PROJECT_SCHEMA_VERSION_TYPED_AUTOMATION;
+  }
+  root["version"] = static_cast<double>(schema_version);
   root["sample_rate"] = project.sample_rate();
   root["overlap_policy"] = static_cast<int>(project.overlap_policy());
 
@@ -173,6 +185,23 @@ ProjectDocumentShape measure_document(const Value& document, const arrangement::
 
 constexpr const char* kOverBudgetMessage =
     "encoded project exceeds the persistence budget and could not be loaded back";
+
+/// Orders @p segments by start_ppq and keeps only the last segment of each tick.
+template <typename Segment>
+void sort_and_dedupe_by_start_ppq(std::vector<Segment>* segments) {
+  std::stable_sort(segments->begin(), segments->end(),
+                   [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
+  std::vector<Segment> deduped;
+  deduped.reserve(segments->size());
+  for (Segment& s : *segments) {
+    if (!deduped.empty() && deduped.back().start_ppq == s.start_ppq) {
+      deduped.back() = s;
+    } else {
+      deduped.push_back(s);
+    }
+  }
+  *segments = std::move(deduped);
+}
 
 }  // namespace
 
@@ -348,24 +377,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
         ++index;
       }
     }
-    // Stable sort by start_ppq, then drop earlier duplicates sharing a start_ppq
-    // (last segment for a tick wins) so the map has a single segment per tick.
-    std::stable_sort(tempo.begin(), tempo.end(),
-                     [](const transport::TempoSegment& a, const transport::TempoSegment& b) {
-                       return a.start_ppq < b.start_ppq;
-                     });
-    if (tempo.size() > 1) {
-      std::vector<transport::TempoSegment> deduped;
-      deduped.reserve(tempo.size());
-      for (auto& s : tempo) {
-        if (!deduped.empty() && deduped.back().start_ppq == s.start_ppq) {
-          deduped.back() = s;  // Same tick: keep the later (last-writer) segment.
-        } else {
-          deduped.push_back(s);
-        }
-      }
-      tempo = std::move(deduped);
-    }
+    // The last segment for a tick wins, so the map has a single segment per tick.
+    sort_and_dedupe_by_start_ppq(&tempo);
     project.set_tempo_segments(std::move(tempo));
 
     std::vector<transport::TimeSignatureSegment> sigs;
@@ -393,26 +406,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
         ++index;
       }
     }
-    // Stable sort by start_ppq, then drop earlier duplicates sharing a
-    // start_ppq (the last segment for a tick wins), matching tempo loading and
-    // the edit model's strictly increasing timeline invariant.
-    std::stable_sort(
-        sigs.begin(), sigs.end(),
-        [](const transport::TimeSignatureSegment& a, const transport::TimeSignatureSegment& b) {
-          return a.start_ppq < b.start_ppq;
-        });
-    if (sigs.size() > 1) {
-      std::vector<transport::TimeSignatureSegment> deduped;
-      deduped.reserve(sigs.size());
-      for (auto& s : sigs) {
-        if (!deduped.empty() && deduped.back().start_ppq == s.start_ppq) {
-          deduped.back() = s;  // Same tick: keep the later (last-writer) segment.
-        } else {
-          deduped.push_back(s);
-        }
-      }
-      sigs = std::move(deduped);
-    }
+    // Same rule as tempo loading and the edit model's strictly increasing timeline invariant.
+    sort_and_dedupe_by_start_ppq(&sigs);
     project.set_time_signatures(std::move(sigs));
 
     // Sources (insert verbatim, preserving ids, then bump the id counters so a
@@ -474,7 +469,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (const auto* arr = array_at(root, "clips")) {
       for (const auto& cv : *arr) {
         if (!cv.is_object()) continue;
-        arrangement::EditClip c = clip_from_json(cv);
+        arrangement::EditClip c = clip_from_json(cv, schema_version);
         if (invalid_entity_id(c.id)) {
           reject_entity_id("clip", c.id, false);
           return result;

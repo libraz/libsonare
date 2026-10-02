@@ -63,6 +63,7 @@ class WarpStretchVoice {
   void reset() noexcept;
 
   uint32_t clip_id() const noexcept { return clip_id_; }
+  uint32_t fragment_ordinal() const noexcept { return fragment_ordinal_; }
   bool active() const noexcept { return active_; }
   /// Blocks since this voice last produced output, used to pick an eviction
   /// candidate when every voice is taken.
@@ -71,17 +72,18 @@ class WarpStretchVoice {
 
   /// @brief Renders @p count output samples starting at clip-local position
   ///        @p output_start into @p out.
-  /// @details Restarts the stream when @p clip_id or @p output_start does not
-  ///          continue the previous call, which is what makes a seek, a loop
-  ///          wrap, or a re-used voice sound like a fresh start rather than a
-  ///          smear of the previous position.
+  /// @details Restarts when the clip, fragment, source content or warp mapping
+  ///          changes, or when @p output_start does not continue the previous
+  ///          call. Seeks, loop wraps and replacement audio then start with
+  ///          fresh synthesis state.
   /// @param out Per-channel destination pointers; entries may be null.
   /// @param channels Number of destination channels (<= @ref kMaxChannels used
   ///        for the internal state; extra channels repeat the last one).
   /// @return false when the voice has not been prepared, so the caller can fall
   ///         back to the resampling path instead of emitting silence.
   bool render(uint32_t clip_id, int64_t output_start, int count, float** out, int channels,
-              WarpSourceReader reader, WarpPositionMapper mapper, void* context) noexcept;
+              WarpSourceReader reader, WarpPositionMapper mapper, void* context,
+              uint32_t fragment_ordinal = 0, uint64_t content_signature = 0) noexcept;
 
  private:
   void synthesize_frame(int offset, WarpSourceReader reader, WarpPositionMapper mapper,
@@ -96,6 +98,8 @@ class WarpStretchVoice {
   int channels_ = 0;
   int search_channels_ = 1;  // source channels scored by the search, <= channels_
   uint32_t clip_id_ = 0;
+  uint32_t fragment_ordinal_ = 0;
+  uint64_t content_signature_ = 0;
   bool active_ = false;
   bool have_previous_ = false;
   uint32_t idle_blocks_ = 0;

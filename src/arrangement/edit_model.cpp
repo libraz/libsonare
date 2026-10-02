@@ -110,13 +110,29 @@ ClipId Project::add_clip(EditClip clip) {
     return 0;
   }
   // PPQ range validation.
-  if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
+  if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0 ||
+      (clip.source_offset_seconds.has_value() &&
+       !(std::isfinite(*clip.source_offset_seconds) && *clip.source_offset_seconds >= 0.0))) {
     return 0;
   }
   // Loop policy validation. Under LOOP, 0 is allowed and means "loop the entire
   // clip"; only negatives and NaN are rejected.
   if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq >= 0.0)) {
     return 0;
+  }
+  if (clip.loop_anchor.has_value()) {
+    const LoopAnchor& anchor = *clip.loop_anchor;
+    if (!(std::isfinite(anchor.period_seconds) && anchor.period_seconds > 0.0 &&
+          std::isfinite(anchor.phase_seconds))) {
+      return 0;
+    }
+  }
+  for (const ClipTake& take : clip.takes) {
+    if (take.id == 0 || !std::isfinite(take.source_offset_ppq) || take.source_offset_ppq < 0.0 ||
+        (take.source_offset_seconds.has_value() &&
+         !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
+      return 0;
+    }
   }
   // Overlap policy.
   if (overlap_policy_ == OverlapPolicy::kDisallow &&

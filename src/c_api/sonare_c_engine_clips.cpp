@@ -174,6 +174,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     for (const auto& channel : owned->channels) {
       owned->channel_ptrs.push_back(channel.data());
     }
+    owned->refresh_content_signature();
     engine::ClipSchedule schedule{};
     schedule.id = clip.id;
     schedule.track_id = clip.track_id;

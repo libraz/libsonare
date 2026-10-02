@@ -3,6 +3,7 @@
 ///        AssistSidecar lossless tests for the project serializer.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <limits>
@@ -43,7 +44,9 @@ namespace {
 template <typename Aggregate>
 struct AnyField {
   template <typename Field>
-  operator Field() const;  // NOLINT(google-explicit-constructor)
+  operator Field() const {  // NOLINT(google-explicit-constructor)
+    return Field{};
+  }
 };
 
 template <typename Aggregate, typename Indices, typename = void>
@@ -151,9 +154,13 @@ Fixture make_fixture() {
   aclip.loop_mode = LoopMode::kLoop;
   aclip.loop_length_ppq = 960.0;
   aclip.loop_crossfade_ppq = 48.0;
+  aclip.source_offset_seconds = 0.875;
+  aclip.loop_anchor = LoopAnchor{1.75, 0.375};
   aclip.warp_ref_id = 5;
   aclip.warp_mode = WarpMode::kTempoSync;
   aclip.takes = {{1, 0, 120.0, "take A"}, {2, audio_sid, 360.0, "take B"}};
+  aclip.takes[0].source_offset_seconds = 0.875;
+  aclip.takes[1].source_offset_seconds = 1.625;
   aclip.active_take_id = 1;
   // The second segment carries a non-zero crossfade so the seam field round-trips
   // as itself; the first cannot, having nothing in front of it to fade over.
@@ -393,15 +400,16 @@ static_assert(field_count<OnsetMarker>() == 2,
 bool eq(const EditClip& a, const EditClip& b) {
   return a.id == b.id && a.track_id == b.track_id && a.source_id == b.source_id &&
          a.start_ppq == b.start_ppq && a.length_ppq == b.length_ppq &&
-         a.source_offset_ppq == b.source_offset_ppq && a.gain == b.gain &&
+         a.source_offset_ppq == b.source_offset_ppq &&
+         a.source_offset_seconds == b.source_offset_seconds && a.gain == b.gain &&
          a.fade_in.length_ppq == b.fade_in.length_ppq && a.fade_in.curve == b.fade_in.curve &&
          a.fade_out.length_ppq == b.fade_out.length_ppq && a.fade_out.curve == b.fade_out.curve &&
          a.loop_mode == b.loop_mode && a.loop_length_ppq == b.loop_length_ppq &&
-         a.loop_crossfade_ppq == b.loop_crossfade_ppq && a.warp_ref_id == b.warp_ref_id &&
-         a.warp_mode == b.warp_mode && a.takes == b.takes && a.active_take_id == b.active_take_id &&
-         a.comp_segments == b.comp_segments;
+         a.loop_crossfade_ppq == b.loop_crossfade_ppq && a.loop_anchor == b.loop_anchor &&
+         a.warp_ref_id == b.warp_ref_id && a.warp_mode == b.warp_mode && a.takes == b.takes &&
+         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments;
 }
-static_assert(field_count<EditClip>() == 17,
+static_assert(field_count<EditClip>() == 19,
               "EditClip gained or lost a field: add it to eq(const EditClip&) above, then update "
               "this count and set it to a non-default value in make_fixture()");
 // Types the helper above reaches into: ClipFade field by field, ClipTake and
@@ -410,9 +418,12 @@ static_assert(field_count<EditClip>() == 17,
 static_assert(field_count<ClipFade>() == 2,
               "ClipFade gained or lost a field: compare it in eq(const EditClip&) above and update "
               "this count");
-static_assert(field_count<ClipTake>() == 4,
+static_assert(field_count<ClipTake>() == 5,
               "ClipTake gained or lost a field: add it to ClipTake::operator== and update this "
               "count");
+static_assert(field_count<LoopAnchor>() == 2,
+              "LoopAnchor gained or lost a field: compare it in eq(const EditClip&) above and "
+              "update this count");
 static_assert(field_count<ClipCompSegment>() == 4,
               "ClipCompSegment gained or lost a field: add it to ClipCompSegment::operator== and "
               "update this count");
@@ -645,8 +656,9 @@ TEST_CASE("project serialize is deterministic and stable across calls", "[serial
   const auto root = util::json::parse(a);
   REQUIRE(root.is_object());
   REQUIRE(root.contains("version"));
+  // The fixture carries physical clip offsets, which select the newest schema.
   CHECK(root["version"].as_int() ==
-        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_OPAQUE));
+        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP));
 }
 
 TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[serialize]") {
@@ -675,8 +687,14 @@ TEST_CASE("project loader uses the last duplicate sample_rate key", "[serialize]
 }
 
 TEST_CASE("opaque automation lanes retain the schema-v1 wire shape", "[serialize]") {
-  Fixture f = make_fixture();
-  const auto root = util::json::parse(project_to_json(f.project, f.midi));
+  Project project;
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  automation::AutomationLane lane_model(42);
+  lane_model.set_points({{0.0, 0.5f, automation::CurveType::Linear}});
+  track.automation_lanes.push_back(lane_model);
+  REQUIRE(project.add_track(track) != 0);
+  const auto root = util::json::parse(project_to_json(project, {}));
   REQUIRE(root["version"].as_int() == 1);
   const auto& lane = root["tracks"].as_array()[0]["automation_lanes"].as_array()[0];
   CHECK_FALSE(lane.contains("target_kind"));
@@ -722,6 +740,60 @@ TEST_CASE("schema-v2 rejects an unknown automation target kind", "[serialize]") 
   REQUIRE(result.has_error());
   CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
                     [](const auto& d) { return d.code == "invalid_format"; }));
+}
+
+TEST_CASE("physical clip and take fields select schema-v3 and round-trip", "[serialize]") {
+  const auto make_project = [](bool clip_offset, bool take_offset, bool anchor) {
+    Project project;
+    Track track;
+    track.kind = Track::Kind::kAudio;
+    const TrackId tid = project.add_track(track);
+    AudioSourceRef audio;
+    audio.channel_count = 1;
+    const SourceId sid = project.add_audio_source(audio);
+    EditClip clip;
+    clip.track_id = tid;
+    clip.source_id = sid;
+    clip.length_ppq = 960.0;
+    clip.loop_mode = anchor ? LoopMode::kLoop : LoopMode::kOff;
+    if (clip_offset) clip.source_offset_seconds = 0.5;
+    if (anchor) clip.loop_anchor = LoopAnchor{2.0, 0.25};
+    clip.takes = {{1, sid, 0.0, "take"}};
+    if (take_offset) clip.takes[0].source_offset_seconds = 0.75;
+    REQUIRE(project.add_clip(clip) != 0);
+    return project;
+  };
+
+  const auto plain_json = project_to_json(make_project(false, false, false), {});
+  CHECK(util::json::parse(plain_json)["version"].as_int() == 1);
+
+  for (const auto& flags :
+       {std::array<bool, 3>{true, false, false}, std::array<bool, 3>{false, true, false},
+        std::array<bool, 3>{false, false, true}}) {
+    const std::string json = project_to_json(make_project(flags[0], flags[1], flags[2]), {});
+    INFO(json);
+    // A reader whose newest schema is 2 rejects this document instead of
+    // silently dropping the physical anchor.
+    CHECK(util::json::parse(json)["version"].as_int() == 3);
+    const auto loaded = project_from_json(json);
+    REQUIRE(loaded.ok());
+    CHECK(project_to_json(*loaded.project, loaded.midi) == json);
+  }
+}
+
+TEST_CASE("schema below v3 ignores physical clip and take fields", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":2,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,)"
+      R"("track_id":1,"source_id":1,"length_ppq":1,"loop_mode":1,"source_offset_seconds":0.5,)"
+      R"("loop_period_seconds":2,"loop_phase_seconds":0.25,)"
+      R"("takes":[{"id":1,"source_id":1,"source_offset_seconds":0.75}]}]})");
+  REQUIRE(result.ok());
+  REQUIRE(result.project->clips().size() == 1);
+  const EditClip& clip = result.project->clips()[0];
+  CHECK_FALSE(clip.source_offset_seconds.has_value());
+  CHECK_FALSE(clip.loop_anchor.has_value());
+  REQUIRE(clip.takes.size() == 1);
+  CHECK_FALSE(clip.takes[0].source_offset_seconds.has_value());
 }
 
 TEST_CASE("project round-trip preserves all fields", "[serialize]") {
@@ -1321,7 +1393,7 @@ TEST_CASE("project deserialize rejects clip fields outside the edit contract", "
   // sequence of C ABI edit calls, and each would have suppressed the whole
   // compiled timeline at bounce time rather than at load time.
   const std::string prologue =
-      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,)";
+      R"({"version":3,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,)";
   const std::vector<std::pair<std::string, std::string>> fixtures = {
       {R"("start_ppq":-1,"length_ppq":0,"source_offset_ppq":-2)", "invalid_clip_ppq"},
       {R"("length_ppq":0)", "invalid_clip_ppq"},
@@ -1332,8 +1404,14 @@ TEST_CASE("project deserialize rejects clip fields outside the edit contract", "
       {R"("length_ppq":1,"fade_out":{"length_ppq":-1})", "invalid_clip_fade_ppq"},
       {R"("length_ppq":1,"loop_mode":1,"loop_length_ppq":-1)", "invalid_clip_loop_ppq"},
       {R"("length_ppq":1,"loop_crossfade_ppq":-1)", "invalid_clip_loop_ppq"},
+      {R"("length_ppq":1,"source_offset_seconds":-1)", "invalid_clip_source_offset_seconds"},
+      {R"("length_ppq":1,"loop_period_seconds":1)", "invalid_format"},
+      {R"("length_ppq":1,"loop_period_seconds":0,"loop_phase_seconds":0)",
+       "invalid_clip_loop_anchor"},
       {R"("length_ppq":1,"takes":[{"id":0,"source_id":1}])", "invalid_clip_take_id"},
       {R"("length_ppq":1,"takes":[{"id":1,"source_offset_ppq":-1}])", "invalid_clip_take_ppq"},
+      {R"("length_ppq":1,"takes":[{"id":1,"source_offset_seconds":-1}])",
+       "invalid_clip_take_source_offset_seconds"},
       {R"("length_ppq":1,"comp_segments":[{"start_ppq":-1,"end_ppq":1}])",
        "invalid_clip_comp_segment_ppq"},
       {R"("length_ppq":1,"comp_segments":[{"start_ppq":1,"end_ppq":1}])",
@@ -1357,16 +1435,41 @@ TEST_CASE("project deserialize accepts the clip fields the edit API admits", "[s
   // over a registered take is exactly what set_clip_takes / set_clip_comp_segments
   // produce.
   const auto result = project_from_json(
-      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,)"
+      R"({"version":3,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,)"
       R"("track_id":1,"source_id":1,"start_ppq":0,"length_ppq":8,"source_offset_ppq":0,)"
       R"("fade_in":{"length_ppq":0},"fade_out":{"length_ppq":0},"loop_mode":1,)"
       R"("loop_length_ppq":0,"loop_crossfade_ppq":0,"takes":[{"id":1,"source_id":1,)"
-      R"("source_offset_ppq":0}],"active_take_id":1,)"
+      R"("source_offset_ppq":0,"source_offset_seconds":0.5}],"active_take_id":1,)"
+      R"("loop_period_seconds":2,"loop_phase_seconds":0.25,)"
       R"("comp_segments":[{"start_ppq":0,"end_ppq":4,"take_id":1}]}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->clips().size() == 1);
   CHECK(result.project->clips()[0].takes.size() == 1);
   CHECK(result.project->clips()[0].comp_segments.size() == 1);
+}
+
+TEST_CASE("project deserialize round-trips signed and unwrapped loop phases", "[serialize]") {
+  const std::vector<std::pair<std::string, double>> documents = {
+      {R"({"version":3,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"loop_mode":1,"loop_period_seconds":2,"loop_phase_seconds":-0.5}]})",
+       -0.5},
+      {R"({"version":3,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"loop_mode":1,"loop_period_seconds":2,"loop_phase_seconds":3.5}]})",
+       3.5},
+  };
+  for (const auto& [document, expected_phase] : documents) {
+    INFO(document);
+    const auto loaded = project_from_json(document);
+    REQUIRE(loaded.ok());
+    REQUIRE(loaded.project->clips().size() == 1);
+    REQUIRE(loaded.project->clips()[0].loop_anchor.has_value());
+    CHECK(loaded.project->clips()[0].loop_anchor->period_seconds == 2.0);
+    CHECK(loaded.project->clips()[0].loop_anchor->phase_seconds == expected_phase);
+
+    const auto round_tripped = project_from_json(project_to_json(*loaded.project, loaded.midi));
+    REQUIRE(round_tripped.ok());
+    REQUIRE(round_tripped.project->clips().size() == 1);
+    REQUIRE(round_tripped.project->clips()[0].loop_anchor.has_value());
+    CHECK(round_tripped.project->clips()[0].loop_anchor->phase_seconds == expected_phase);
+  }
 }
 
 TEST_CASE("project deserialize bounds dangling-reference diagnostics", "[serialize]") {

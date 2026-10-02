@@ -143,10 +143,8 @@ std::shared_ptr<WasmClipPageProvider> liveProviderById(
 
 void RealtimeEngineWasm::setClips(val clips) {
   const int count = static_cast<int>(wasmArrayLikeLength(clips, "clips"));
-  std::vector<std::vector<std::vector<float>>> new_storage;
-  std::vector<std::vector<const float*>> new_ptrs;
+  std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
   new_storage.reserve(static_cast<size_t>(count));
-  new_ptrs.reserve(static_cast<size_t>(count));
   std::vector<sonare::engine::ClipSchedule> schedules;
   schedules.reserve(static_cast<size_t>(count));
   std::vector<uint32_t> new_clip_ids;
@@ -166,12 +164,11 @@ void RealtimeEngineWasm::setClips(val clips) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip channels must not be empty");
     }
-    new_storage.emplace_back();
-    new_ptrs.emplace_back();
-    auto& storage = new_storage.back();
-    auto& pointers = new_ptrs.back();
-    storage.reserve(static_cast<size_t>(channel_count));
-    pointers.reserve(static_cast<size_t>(channel_count));
+    std::shared_ptr<sonare::engine::ClipAudioStorage> owned;
+    if (!has_page_provider) {
+      owned = std::make_shared<sonare::engine::ClipAudioStorage>();
+      owned->channels.reserve(static_cast<size_t>(channel_count));
+    }
     int64_t num_samples = 0;
     for (int ch = 0; ch < channel_count; ++ch) {
       std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
@@ -185,8 +182,7 @@ void RealtimeEngineWasm::setClips(val clips) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "all clip channels must have the same length");
       }
-      storage.push_back(std::move(channel));
-      pointers.push_back(storage.back().data());
+      owned->channels.push_back(std::move(channel));
     }
 
     sonare::engine::ClipSchedule schedule{};
@@ -207,7 +203,7 @@ void RealtimeEngineWasm::setClips(val clips) {
       schedule.page_provider = provider;
       schedule.buffer = {};
     } else {
-      schedule.buffer = {pointers.data(), channel_count, num_samples};
+      schedule.buffer = {nullptr, channel_count, num_samples};
     }
     schedule.start_ppq = objectProperty(clip_val, "startPpq").as<double>();
     if (!std::isfinite(schedule.start_ppq) ||
@@ -372,17 +368,21 @@ void RealtimeEngineWasm::setClips(val clips) {
       sonare::engine::TempoSyncWarpBakeConfig bake_config;
       bake_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
       std::vector<const float*> source_channel_ptrs;
-      source_channel_ptrs.reserve(storage.size());
-      for (const auto& channel : storage) {
+      source_channel_ptrs.reserve(owned->channels.size());
+      for (const auto& channel : owned->channels) {
         source_channel_ptrs.push_back(channel.data());
       }
-      storage = sonare::engine::bake_tempo_sync_warp_channels(
-          source_channel_ptrs, storage[0].size(), segments, bake_config);
-      pointers.clear();
-      for (const auto& channel : storage) {
-        pointers.push_back(channel.data());
+      owned->channels = sonare::engine::bake_tempo_sync_warp_channels(
+          source_channel_ptrs, owned->channels[0].size(), segments, bake_config);
+      owned->channel_ptrs.clear();
+      owned->channel_ptrs.reserve(owned->channels.size());
+      for (const auto& channel : owned->channels) {
+        owned->channel_ptrs.push_back(channel.data());
       }
-      schedule.buffer = {pointers.data(), channel_count, static_cast<int64_t>(target_samples)};
+      owned->refresh_content_signature();
+      schedule.buffer = {owned->channel_ptrs.data(), channel_count,
+                         static_cast<int64_t>(target_samples)};
+      schedule.storage = owned;
       schedule.clip_offset_samples = 0;
       schedule.loop = false;
       schedule.warp_mode = sonare::engine::WarpMode::kOff;
@@ -393,15 +393,25 @@ void RealtimeEngineWasm::setClips(val clips) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "warped clips do not support loop=true yet");
     }
+    if (!has_page_provider && !tempo_sync_baked) {
+      owned->channel_ptrs.clear();
+      owned->channel_ptrs.reserve(owned->channels.size());
+      for (const auto& channel : owned->channels) {
+        owned->channel_ptrs.push_back(channel.data());
+      }
+      owned->refresh_content_signature();
+      schedule.buffer = {owned->channel_ptrs.data(), channel_count, num_samples};
+      schedule.storage = owned;
+    }
     schedules.push_back(schedule);
+    new_storage.push_back(std::move(owned));
     new_clip_ids.push_back(schedule.id);
     new_clip_tempo_baked.push_back(tempo_sync_baked ? 1u : 0u);
   }
+  engine_.set_clips(std::move(schedules));
   clip_storage_ = std::move(new_storage);
-  clip_ptrs_ = std::move(new_ptrs);
   clip_ids_ = std::move(new_clip_ids);
   clip_tempo_baked_ = std::move(new_clip_tempo_baked);
-  engine_.set_clips(std::move(schedules));
 }
 
 val RealtimeEngineWasm::prebakedClipChannels(const val& clip_id_val) const {
@@ -410,11 +420,11 @@ val RealtimeEngineWasm::prebakedClipChannels(const val& clip_id_val) const {
   if (it == clip_ids_.end()) return val::null();
   const size_t index = static_cast<size_t>(std::distance(clip_ids_.begin(), it));
   if (index >= clip_tempo_baked_.size() || clip_tempo_baked_[index] == 0 ||
-      index >= clip_storage_.size()) {
+      index >= clip_storage_.size() || !clip_storage_[index]) {
     return val::null();
   }
   val channels = val::array();
-  for (const auto& channel : clip_storage_[index]) {
+  for (const auto& channel : clip_storage_[index]->channels) {
     val copied = val::global("Float32Array").new_(channel.size());
     copied.call<void>("set", val(typed_memory_view(channel.size(), channel.data())));
     channels.call<void>("push", copied);

@@ -297,6 +297,7 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   for (const auto& channel : owned->channels) {
     owned->channel_ptrs.push_back(channel.data());
   }
+  owned->refresh_content_signature();
   engine::ClipSchedule schedule{};
   schedule.id = options->clip_id == 0 ? 1 : options->clip_id;
   schedule.buffer = {owned->channel_ptrs.data(), options->num_channels, options->total_frames};

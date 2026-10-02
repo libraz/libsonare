@@ -39,6 +39,8 @@ void WarpStretchVoice::reset() noexcept {
   active_ = false;
   have_previous_ = false;
   clip_id_ = 0;
+  fragment_ordinal_ = 0;
+  content_signature_ = 0;
   idle_blocks_ = 0;
   next_output_ = 0;
   next_frame_offset_ = 0;
@@ -130,14 +132,18 @@ void WarpStretchVoice::synthesize_frame(int offset, WarpSourceReader reader,
 
 bool WarpStretchVoice::render(uint32_t clip_id, int64_t output_start, int count, float** out,
                               int channels, WarpSourceReader reader, WarpPositionMapper mapper,
-                              void* context) noexcept {
+                              void* context, uint32_t fragment_ordinal,
+                              uint64_t content_signature) noexcept {
   if (capacity_ <= 0 || count <= 0 || !out || !reader || !mapper) return false;
   if (count + kSynthesisHop + kFrameSize > capacity_) return false;
 
-  if (!active_ || clip_id_ != clip_id || next_output_ != output_start) {
+  if (!active_ || clip_id_ != clip_id || fragment_ordinal_ != fragment_ordinal ||
+      content_signature_ != content_signature || next_output_ != output_start) {
     reset();
     active_ = true;
     clip_id_ = clip_id;
+    fragment_ordinal_ = fragment_ordinal;
+    content_signature_ = content_signature;
     next_output_ = output_start;
   }
   idle_blocks_ = 0;

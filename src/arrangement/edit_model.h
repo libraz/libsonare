@@ -12,12 +12,16 @@
 /// time). Sample/frame conversion happens only in the arrangement compiler via a runtime
 /// transport::TempoMap built from the plain tempo data stored here. Clip source
 /// offsets are therefore expressed in PPQ as well (see EditClip::source_offset_ppq).
+/// Audio edit commands may additionally materialize an offset in seconds when a
+/// clip has to survive a tempo change; the legacy PPQ value remains serialized
+/// for compatibility and is used when the optional physical value is absent.
 ///
 /// Ids are stable and allocated by a deterministic monotonic counter on the
 /// Project (no rand / no clock). Track, clip, and source ids share independent
 /// counters but each is monotonic and never reused within a Project instance.
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -109,9 +113,14 @@ struct ClipTake {
   double source_offset_ppq = 0.0;
   std::string name;
 
+  /// Optional physical source offset in seconds at the clip's timeline start.
+  /// This is an internal audio-edit anchor; an absent value keeps the legacy
+  /// PPQ interpretation above.
+  std::optional<double> source_offset_seconds = std::nullopt;
+
   bool operator==(const ClipTake& o) const noexcept {
     return id == o.id && source_id == o.source_id && source_offset_ppq == o.source_offset_ppq &&
-           name == o.name;
+           name == o.name && source_offset_seconds == o.source_offset_seconds;
   }
   bool operator!=(const ClipTake& o) const noexcept { return !(*this == o); }
 };
@@ -134,6 +143,22 @@ struct ClipCompSegment {
            crossfade_ppq == o.crossfade_ppq;
   }
   bool operator!=(const ClipCompSegment& o) const noexcept { return !(*this == o); }
+};
+
+/// Physical loop anchor retained when a looped clip is trimmed across a tempo
+/// map. The anchor is intentionally separate from the musical loop_length_ppq:
+/// the latter remains the authored edit value while this pair preserves the
+/// already-heard source period and the unwrapped signed phase offset. The phase
+/// may be negative or greater than the period; the playback engine folds it
+/// against the effective source period at render time.
+struct LoopAnchor {
+  double period_seconds = 0.0;
+  double phase_seconds = 0.0;
+
+  bool operator==(const LoopAnchor& o) const noexcept {
+    return period_seconds == o.period_seconds && phase_seconds == o.phase_seconds;
+  }
+  bool operator!=(const LoopAnchor& o) const noexcept { return !(*this == o); }
 };
 
 /// A placed clip on the timeline. The SAME struct/API is used for audio and
@@ -182,6 +207,17 @@ struct EditClip {
   TakeId active_take_id = 0;
   /// Clip-local comp lane. Regions are non-overlapping and sorted by callers.
   std::vector<ClipCompSegment> comp_segments;
+
+  /// Optional physical source offset in seconds at the clip's timeline start.
+  /// Set by audio edit commands when a legacy PPQ offset is materialized before
+  /// a tempo-sensitive mutation. The PPQ field above remains intact for legacy
+  /// persistence and for MIDI clips.
+  std::optional<double> source_offset_seconds = std::nullopt;
+
+  /// Optional physical loop period and phase, set by loop-aware trims. New
+  /// loop settings clear this anchor; old projects and untouched loops leave it
+  /// absent so their existing PPQ scheduling remains unchanged.
+  std::optional<LoopAnchor> loop_anchor = std::nullopt;
 
   /// End position on the timeline (PPQ).
   double end_ppq() const noexcept { return start_ppq + length_ppq; }

@@ -603,6 +603,111 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('[audio_workflow] keeps an edited time-stretch voice continuous across fresh PCM copies', () => {
+      const sampleRate = 48000;
+      const blockSize = 512;
+      const sourceLength = 4096;
+      const source = new Float32Array(sourceLength);
+      for (let i = 0; i < source.length; i += 1) {
+        source[i] =
+          0.45 * Math.sin((2 * Math.PI * 440 * i) / sampleRate) +
+          0.15 * Math.sin((2 * Math.PI * 733 * i) / sampleRate);
+      }
+      const anchors = [
+        { warpSample: 0, sourceSample: 0 },
+        { warpSample: sourceLength, sourceSample: sourceLength },
+      ];
+      const clip = (channels: Float32Array[], gain = 1) => ({
+        id: 306,
+        channels,
+        startPpq: 0,
+        lengthSamples: sourceLength,
+        gain,
+        warpMode: 'time-stretch' as const,
+        warpAnchors: anchors,
+      });
+
+      const referenceEngine = new RealtimeEngine(sampleRate, blockSize);
+      referenceEngine.setClips([clip([source])]);
+      referenceEngine.play();
+      const referenceFirst = referenceEngine.process([new Float32Array(blockSize)])[0];
+      const referenceSecond = referenceEngine.process([new Float32Array(blockSize)])[0];
+
+      const editedEngine = new RealtimeEngine(sampleRate, blockSize);
+      editedEngine.setClips([clip([source])]);
+      editedEngine.play();
+      const editedFirst = editedEngine.process([new Float32Array(blockSize)])[0];
+      let firstBlockError = 0;
+      for (let i = 0; i < blockSize; i += 1) {
+        firstBlockError = Math.max(firstBlockError, Math.abs(editedFirst[i] - referenceFirst[i]));
+      }
+      expect(firstBlockError).toBeLessThan(1e-6);
+
+      // A DAW edit commonly rebuilds the source Float32Array while retaining
+      // the clip id and warp map. The active WSOLA voice must continue from
+      // the first block, while the new gain applies to the next block.
+      editedEngine.setClips([clip([new Float32Array(source)], 0.5)]);
+      const editedSecond = editedEngine.process([new Float32Array(blockSize)])[0];
+      expect(rms(referenceSecond)).toBeGreaterThan(0.05);
+      expect(rms(editedSecond)).toBeGreaterThan(0.02);
+      let secondBlockError = 0;
+      for (let i = 0; i < blockSize; i += 1) {
+        secondBlockError = Math.max(
+          secondBlockError,
+          Math.abs(editedSecond[i] - referenceSecond[i] * 0.5),
+        );
+      }
+      expect(secondBlockError).toBeLessThan(1e-3);
+
+      // A genuinely changed source must invalidate the old voice content;
+      // retaining the old storage would leak the previous tone into output.
+      editedEngine.setClips([clip([new Float32Array(sourceLength)])]);
+      const changedPcm = editedEngine.process([new Float32Array(blockSize)])[0];
+      expect(rms(changedPcm)).toBe(0);
+
+      referenceEngine.destroy();
+      editedEngine.destroy();
+    });
+
+    it('[audio_workflow] clears prebaked metadata when freeze replaces a tempo-baked clip', () => {
+      const engine = new RealtimeEngine(48000, 512);
+      const source = new Float32Array(2048);
+      for (let i = 0; i < source.length; i += 1) {
+        source[i] = 0.25 * Math.sin((2 * Math.PI * 220 * i) / 48000);
+      }
+      engine.setClips([
+        {
+          id: 307,
+          channels: [source],
+          startPpq: 0,
+          lengthSamples: source.length,
+          warpMode: 'tempo-sync',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: source.length, sourceSample: source.length },
+          ],
+        },
+      ]);
+      const prebaked = engine.prebakedClipChannels(307);
+      expect(prebaked).not.toBeNull();
+      expect(prebaked?.length).toBe(1);
+      expect(prebaked?.[0].length).toBeGreaterThan(0);
+
+      engine.play();
+      const frozen = engine.freezeOffline({
+        totalFrames: 512,
+        blockSize: 512,
+        numChannels: 1,
+        clipId: 308,
+      });
+      expect(frozen.clipId).toBe(308);
+      // The frozen clip is ordinary PCM, so neither the replaced tempo-baked
+      // id nor the new frozen id may report stale tempo-bake metadata.
+      expect(engine.prebakedClipChannels(307)).toBeNull();
+      expect(engine.prebakedClipChannels(308)).toBeNull();
+      engine.destroy();
+    });
+
     it('treats an explicit numPorts of 0 as a fallback to numChannels like the C ABI', () => {
       const engine = new RealtimeEngine(48000, 128);
       // The C ABI resolves a non-positive num_ports to num_channels; a plain-JS

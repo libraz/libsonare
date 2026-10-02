@@ -89,6 +89,9 @@ Value take_to_json(const arrangement::ClipTake& take) {
   o["source_id"] = static_cast<double>(take.source_id);
   o["source_offset_ppq"] = take.source_offset_ppq;
   o["name"] = take.name;
+  if (take.source_offset_seconds.has_value()) {
+    o["source_offset_seconds"] = *take.source_offset_seconds;
+  }
   return o;
 }
 
@@ -109,11 +112,18 @@ Value clip_to_json(const arrangement::EditClip& c) {
   o["start_ppq"] = c.start_ppq;
   o["length_ppq"] = c.length_ppq;
   o["source_offset_ppq"] = c.source_offset_ppq;
+  if (c.source_offset_seconds.has_value()) {
+    o["source_offset_seconds"] = *c.source_offset_seconds;
+  }
   o["gain"] = c.gain;
   o["fade_in"] = fade_to_json(c.fade_in);
   o["fade_out"] = fade_to_json(c.fade_out);
   o["loop_mode"] = static_cast<int>(c.loop_mode);
   o["loop_length_ppq"] = c.loop_length_ppq;
+  if (c.loop_anchor.has_value()) {
+    o["loop_period_seconds"] = c.loop_anchor->period_seconds;
+    o["loop_phase_seconds"] = c.loop_anchor->phase_seconds;
+  }
   // Optional; only emitted when set so existing projects round-trip byte-for-byte.
   if (c.loop_crossfade_ppq != 0.0) o["loop_crossfade_ppq"] = c.loop_crossfade_ppq;
   o["warp_ref_id"] = static_cast<double>(c.warp_ref_id);

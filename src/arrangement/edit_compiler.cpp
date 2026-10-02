@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <memory>
 #include <set>
@@ -203,11 +204,37 @@ size_t rounded_nonnegative_sample(double sample) noexcept {
   return static_cast<size_t>(std::llround(sample));
 }
 
+int64_t saturating_round_sample_count(long double samples) noexcept {
+  if (std::isnan(samples)) return 0;
+  const long double min_sample = static_cast<long double>(std::numeric_limits<int64_t>::min());
+  const long double max_sample = static_cast<long double>(std::numeric_limits<int64_t>::max());
+  if (samples <= min_sample) return std::numeric_limits<int64_t>::min();
+  if (samples >= max_sample) return std::numeric_limits<int64_t>::max();
+  return static_cast<int64_t>(std::llround(samples));
+}
+
+int64_t rounded_physical_samples(double seconds, double sample_rate) noexcept {
+  if (!(std::isfinite(seconds) && std::isfinite(sample_rate) && sample_rate > 0.0)) return 0;
+  return saturating_round_sample_count(static_cast<long double>(seconds) *
+                                       static_cast<long double>(sample_rate));
+}
+
+int64_t rounded_nonnegative_physical_samples(double seconds, double sample_rate) noexcept {
+  if (!(std::isfinite(seconds) && seconds >= 0.0)) return 0;
+  return std::max<int64_t>(0, rounded_physical_samples(seconds, sample_rate));
+}
+
+int64_t rounded_positive_physical_samples(double seconds, double sample_rate) noexcept {
+  return std::max<int64_t>(1, rounded_nonnegative_physical_samples(seconds, sample_rate));
+}
+
 struct AudioClipPart {
   double start_ppq = 0.0;
   double end_ppq = 0.0;
   SourceId source_id = 0;
-  double source_offset_ppq = 0.0;
+  // The take's own offset; a part's onset is added at schedule time.
+  double source_base_ppq = 0.0;
+  std::optional<double> source_offset_seconds;
   // Comp-seam fades, measured from this part's own ends rather than the clip's.
   // A seam is shared, so the part after it carries the fade-in and the part
   // before it carries the matching fade-out.
@@ -239,7 +266,9 @@ bool resolve_take_part(const EditClip& clip, TakeId take_id, double start_ppq, d
   out->start_ppq = start_ppq;
   out->end_ppq = end_ppq;
   out->source_id = source_id;
-  out->source_offset_ppq = source_offset_ppq + start_ppq;
+  out->source_base_ppq = source_offset_ppq;
+  out->source_offset_seconds =
+      take != nullptr ? take->source_offset_seconds : clip.source_offset_seconds;
   return true;
 }
 
@@ -691,7 +720,21 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     }
 
     // PPQ validation per clip.
-    if (clip.length_ppq <= 0.0 || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
+    const bool invalid_physical_offset =
+        clip.source_offset_seconds.has_value() &&
+        !(std::isfinite(*clip.source_offset_seconds) && *clip.source_offset_seconds >= 0.0);
+    const bool invalid_loop_anchor =
+        clip.loop_anchor.has_value() &&
+        !(std::isfinite(clip.loop_anchor->period_seconds) &&
+          clip.loop_anchor->period_seconds > 0.0 && std::isfinite(clip.loop_anchor->phase_seconds));
+    const bool invalid_take_physical_offset =
+        std::any_of(clip.takes.begin(), clip.takes.end(), [](const ClipTake& take) {
+          return take.source_offset_seconds.has_value() &&
+                 !(std::isfinite(*take.source_offset_seconds) &&
+                   *take.source_offset_seconds >= 0.0);
+        });
+    if (clip.length_ppq <= 0.0 || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0 ||
+        invalid_physical_offset || invalid_loop_anchor || invalid_take_physical_offset) {
       add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kError, clip.id,
                "clip has non-positive length or negative start/offset PPQ");
       continue;
@@ -804,13 +847,27 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const int64_t start_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq);
       const int64_t end_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.end_ppq);
       const int64_t length_samples = std::max<int64_t>(0, end_sample - start_sample);
-      // Source offset measured as a sample count in the (resampled) source domain:
-      // the musical distance clip-start..clip-start+offset, in samples. Comp
-      // fragments add their clip-local start to the selected take offset.
-      const int64_t offset_end_sample =
-          tempo_map.ppq_to_sample(clip.start_ppq + part.source_offset_ppq);
-      const int64_t clip_offset_samples =
-          std::max<int64_t>(0, offset_end_sample - clip_start_sample);
+      // Take base at clip start plus elapsed part onset; a legacy base is converted from PPQ first.
+      int64_t clip_offset_samples = 0;
+      if (part.source_offset_seconds.has_value()) {
+        const int64_t part_start_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq);
+        const int64_t physical_base_samples =
+            rounded_nonnegative_physical_samples(*part.source_offset_seconds, project_sr);
+        const long double physical_samples = static_cast<long double>(physical_base_samples) +
+                                             static_cast<long double>(part_start_sample) -
+                                             static_cast<long double>(clip_start_sample);
+        if (!(physical_samples > 0.0L)) {
+          clip_offset_samples = 0;
+        } else {
+          clip_offset_samples = saturating_round_sample_count(physical_samples);
+          clip_offset_samples = std::max<int64_t>(0, clip_offset_samples);
+        }
+      } else {
+        const int64_t base_end_sample =
+            tempo_map.ppq_to_sample(clip.start_ppq + part.source_base_ppq);
+        clip_offset_samples = std::max<int64_t>(
+            0, (base_end_sample - clip_start_sample) + (start_sample - clip_start_sample));
+      }
 
       // Bake (resample to project SR) once per source; share across clips.
       std::shared_ptr<const engine::ClipAudioStorage> storage;
@@ -908,6 +965,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           }
           built->channels = std::move(stretched);
         }
+        built->refresh_content_signature();
         built->channel_ptrs.reserve(built->channels.size());
         for (const auto& ch : built->channels) {
           built->channel_ptrs.push_back(ch.data());
@@ -938,11 +996,19 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
       const bool is_whole_clip = part.start_ppq == 0.0 && part.end_ppq == clip.length_ppq;
       const bool loop = is_whole_clip && clip.loop_mode == LoopMode::kLoop;
-      const int64_t loop_length_samples =
+      int64_t loop_length_samples =
           loop ? std::max<int64_t>(
                      0, tempo_map.ppq_to_sample(clip.start_ppq + effective_loop_length_ppq(clip)) -
                             start_sample)
                : 0;
+      int64_t loop_phase_samples = 0;
+      bool preserve_loop_period = false;
+      if (loop && clip.loop_anchor.has_value()) {
+        loop_length_samples =
+            rounded_positive_physical_samples(clip.loop_anchor->period_seconds, project_sr);
+        loop_phase_samples = rounded_physical_samples(clip.loop_anchor->phase_seconds, project_sr);
+        preserve_loop_period = loop_length_samples > 0;
+      }
       // Loop-seam crossfade length, converted from PPQ the same way as the loop
       // length. The engine clamps it to the available pre-roll and half the loop.
       const int64_t loop_crossfade_samples =
@@ -974,6 +1040,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                                  fade_in_samples, fade_out_samples, fade_in_curve, fade_out_curve,
                                  /*clip_has_separate_fade_out_curve=*/true);
       sched.loop_length_samples = loop_length_samples;
+      sched.loop_phase_samples = loop_phase_samples;
+      sched.preserve_loop_period = preserve_loop_period;
       sched.loop_crossfade_samples = loop_crossfade_samples;
       sched.fade_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
       sched.fade_reference_length_samples = clip_length_samples;

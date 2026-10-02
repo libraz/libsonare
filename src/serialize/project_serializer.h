@@ -53,14 +53,17 @@
 
 namespace sonare::serialize {
 
-/// @brief Latest project schema version understood by this serializer. A
-///        document containing only opaque automation lanes is still emitted as
-///        schema version 1 for byte compatibility; version 2 is selected when
-///        a typed automation lane is present.
+/// @brief Latest project schema version understood by this serializer. Each
+///        document is emitted at the lowest version that carries its content, so
+///        older readers reject what they would misread: version 1 by default,
+///        version 2 when a typed automation lane is present, version 3 when a
+///        clip or take carries a physical source offset or loop anchor.
 ///        Distinct from the engine RT ABI (rt::kEngineAbiVersion) and from the
 ///        flat project struct ABI; this layer only owns the JSON schema.
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 2;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 3;
 inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_OPAQUE = 1;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_TYPED_AUTOMATION = 2;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP = 3;
 
 /// @brief Severity of a deserialize diagnostic.
 ///

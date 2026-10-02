@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -37,6 +38,26 @@ struct ClipAudioBuffer {
 struct ClipAudioStorage {
   std::vector<std::vector<float>> channels;
   std::vector<const float*> channel_ptrs;
+  uint64_t content_signature = 0;
+
+  /// Control thread: fingerprint immutable PCM after copying or resampling it.
+  void refresh_content_signature() noexcept {
+    uint64_t hash = 14695981039346656037ULL;
+    const auto append = [&hash](uint64_t word) {
+      hash ^= word;
+      hash *= 1099511628211ULL;
+    };
+    append(channels.size());
+    for (const auto& channel : channels) {
+      append(channel.size());
+      for (float value : channel) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &value, sizeof(bits));
+        append(bits);
+      }
+    }
+    content_signature = hash == 0 ? 1 : hash;
+  }
 };
 
 /// Realtime clip source backed by externally supplied pages. Implementations
@@ -129,6 +150,10 @@ struct ClipSchedule {
   int64_t length_samples = 0;
   bool loop = false;
   int64_t loop_length_samples = 0;
+  /// Signed, unwrapped displacement; wrap only after the source bounds the period.
+  int64_t loop_phase_samples = 0;
+  /// Retain the original period when an edit shortens the timeline clip span.
+  bool preserve_loop_period = false;
   /// Equal-power crossfade length, in samples, applied at the loop seam so a
   /// non-zero-aligned loop boundary does not click. 0 (default) keeps the hard
   /// integer-modulo wrap. The crossfade is period-preserving: it blends the loop
@@ -143,6 +168,9 @@ struct ClipSchedule {
   WarpMode warp_mode = WarpMode::kOff;
   int64_t warp_reference_offset_samples = 0;
   std::shared_ptr<const std::vector<WarpAnchor>> warp_anchors;
+  /// Control-thread stamps distinguish comp fragments and edited source content.
+  uint32_t stretch_fragment_ordinal = 0;
+  uint64_t stretch_content_signature = 0;
   /// Source-track id carried from the arrangement clip. 0 = unset.
   uint32_t track_id = 0;
   float gain = 1.0f;
@@ -294,10 +322,10 @@ class ClipPlayer final : public rt::ProcessorBase {
   };
   static float stretch_read_thunk(void* context, int channel, int64_t sample) noexcept;
   static double stretch_map_thunk(void* context, int64_t clip_local_output) noexcept;
-  /// Returns the voice already streaming @p clip_id, else a free one, else the
+  /// Returns the voice already streaming this clip fragment, else a free one, else the
   /// longest-idle one. Null when every voice is busy with a different clip this
   /// block, which is the caller's signal to fall back to resampling.
-  WarpStretchVoice* acquire_stretch_voice(uint32_t clip_id) noexcept;
+  WarpStretchVoice* acquire_stretch_voice(const ClipSchedule& clip) noexcept;
   /// Renders the block range [start, end) of a kTimeStretch clip. Returns false
   /// when the stretcher cannot take the clip, leaving the output untouched so
   /// the caller can run the ordinary resampling path instead.

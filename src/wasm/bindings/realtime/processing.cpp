@@ -502,19 +502,19 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   }
   engine_.render_offline(render_pointers.data(), num_channels, total_frames, block_size);
 
-  std::vector<std::vector<std::vector<float>>> new_storage;
-  std::vector<std::vector<const float*>> new_ptrs;
-  new_storage.push_back(std::move(frozen));
-  new_ptrs.emplace_back();
-  new_ptrs.back().reserve(new_storage.back().size());
-  for (const auto& channel : new_storage.back()) {
-    new_ptrs.back().push_back(channel.data());
+  auto owned = std::make_shared<sonare::engine::ClipAudioStorage>();
+  owned->channels = std::move(frozen);
+  owned->channel_ptrs.reserve(owned->channels.size());
+  for (const auto& channel : owned->channels) {
+    owned->channel_ptrs.push_back(channel.data());
   }
+  owned->refresh_content_signature();
 
   sonare::engine::ClipSchedule schedule{};
   schedule.id = static_cast<uint32_t>(intProperty(options_val, "clipId", 1));
   if (schedule.id == 0) schedule.id = 1;
-  schedule.buffer = {new_ptrs.back().data(), num_channels, total_frames};
+  schedule.buffer = {owned->channel_ptrs.data(), num_channels, total_frames};
+  schedule.storage = owned;
   // Read startPpq at full double precision to match setClips() and the
   // double-typed ClipSchedule.start_ppq field; a Float32 read would quantize a
   // frozen clip at a large PPQ position to a different sample than the same
@@ -536,9 +536,14 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid freeze startPpq or gain");
   }
-  clip_storage_ = std::move(new_storage);
-  clip_ptrs_ = std::move(new_ptrs);
+  std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
+  new_storage.push_back(owned);
+  std::vector<uint32_t> new_clip_ids{schedule.id};
+  std::vector<uint8_t> new_clip_tempo_baked{0};
   engine_.set_clips({schedule});
+  clip_storage_ = std::move(new_storage);
+  clip_ids_ = std::move(new_clip_ids);
+  clip_tempo_baked_ = std::move(new_clip_tempo_baked);
 
   val out = val::object();
   out.set("clipId", schedule.id);
