@@ -1119,6 +1119,7 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
                                                const float* reference_right,
                                                std::size_t reference_length, int sample_rate,
                                                const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
   // Only the crossfade is defined for planar pairs; reject the rest before copying.
   if (name != "match.abCrossfade") {
     throw SonareException(ErrorCode::InvalidParameter,

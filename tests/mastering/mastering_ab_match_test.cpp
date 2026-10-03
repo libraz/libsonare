@@ -355,6 +355,22 @@ TEST_CASE("Named stereo A/B crossfade is linear and uses the shorter pair",
   REQUIRE(at_b.left[0] == reference_left[0]);
 }
 
+TEST_CASE("Named stereo A/B crossfade validates every parameter like its mono sibling",
+          "[mastering][match][ab-match][stereo]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> samples(4800, 0.1f);
+  // An unread key still has to be finite: the mono pair entry point refuses it.
+  const std::vector<Param> params{Param{"mix", 0.5},
+                                  Param{"unread", std::numeric_limits<double>::quiet_NaN()}};
+  REQUIRE_THROWS_AS(apply_named_pair_processor("match.abCrossfade", samples.data(), samples.data(),
+                                               samples.size(), kSampleRate, params),
+                    SonareException);
+  REQUIRE_THROWS_AS(apply_named_pair_processor_stereo(
+                        "match.abCrossfade", samples.data(), samples.data(), samples.size(),
+                        samples.data(), samples.data(), samples.size(), kSampleRate, params),
+                    SonareException);
+}
+
 TEST_CASE("Named stereo A/B crossfade rejects other pairs and bad parameters",
           "[mastering][match][ab-match][stereo]") {
   constexpr int kSampleRate = 48000;
