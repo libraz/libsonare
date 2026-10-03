@@ -487,4 +487,53 @@ TEST_CASE("C engine master meter carries pre-trim input and compressor reduction
   REQUIRE(master.peak_db_l < master.input_peak_db_l - 10.0f);
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("C engine wide meter carries pre-trim input and compressor reduction",
+          "[c_api][engine][meter]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_master_strip_json(
+          engine,
+          R"({"version":1,"strips":[{"id":"master","inputTrimDb":-6,"inserts":[{"processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"buses":[]})") ==
+      SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  SonareMeterTelemetryRecordWideV2 scratch{};
+  size_t count = 99;
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(nullptr, &scratch, 1, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, &scratch, 1, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, nullptr, 1, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, nullptr, 0, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+
+  std::array<float, kRoutingBlock> samples{};
+  float* channels[] = {samples.data()};
+  SonareMeterTelemetryRecordWideV2 master{};
+  bool found = false;
+  for (int block = 0; block < 20; ++block) {
+    samples.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, channels, 1, kRoutingBlock) == SONARE_OK);
+    std::array<SonareMeterTelemetryRecordWideV2, 16> records{};
+    size_t written = 0;
+    REQUIRE(sonare_engine_drain_meter_telemetry_wide_v2(engine, records.data(), records.size(),
+                                                        &written) == SONARE_OK);
+    for (size_t index = 0; index < written; ++index) {
+      if (records[index].target_id == 0) {
+        master = records[index];
+        found = true;
+      }
+    }
+  }
+  REQUIRE(found);
+  REQUIRE(master.channel_count >= 1);
+  REQUIRE(master.input_peak_db[0] == Catch::Approx(0.0f).margin(0.001f));
+  REQUIRE(master.gain_reduction_db < -10.0f);
+  REQUIRE(master.peak_db[0] < master.input_peak_db[0] - 10.0f);
+  sonare_engine_destroy(engine);
+}
 #endif
