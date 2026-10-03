@@ -325,7 +325,6 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   }
 
   int sr = audio.sample_rate();
-  int n_samples = static_cast<int>(audio.size());
 
   // Get cached row-compressed VQT kernel.
   auto cached = get_cached_vqt_kernel(sr, resolved);
@@ -335,73 +334,10 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
 
-  // Center padding aligned with the CQT path.
-  int pad_length = fft_length / 2;
-  int padded_length = n_samples + 2 * pad_length;
-  std::vector<float> padded_signal(padded_length, 0.0f);
-  std::copy(audio.data(), audio.data() + n_samples, padded_signal.begin() + pad_length);
-
-  // Calculate number of frames from padded signal
-  int n_frames = 1 + (padded_length - fft_length) / resolved.hop_length;
-  if (n_frames <= 0) {
-    n_frames = 1;
-  }
-
-  // Allocate output (promote to size_t before multiplying to avoid int overflow)
-  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames);
-
-  // Create FFT processor
-  FFT fft(fft_length);
-
-  // Temporary buffers
-  std::vector<float> frame(fft_length, 0.0f);
-  std::vector<std::complex<float>> frame_fft(static_cast<size_t>(fft_length / 2 + 1));
-
-  const float* data = padded_signal.data();
-  // Per-bin 1/sqrt(L) factor for librosa's `scale=True` mode (the default).
-  // The kernel already absorbs the `lengths/n_fft` basis scaling (see
-  // VqtKernel::create), so no explicit `1/n_fft` is applied to the inner
-  // product here. The matching code path lives in cqt.cpp (`inv_sqrt_len`).
-  // Use the FRACTIONAL raw length so the normalization is identical to the CQT
-  // path (cqt.cpp uses `1 / sqrt(raw_lengths[k])`); the integer length would
-  // introduce a frequency-dependent gain error, worst in the low bands.
-  std::vector<float> inv_sqrt_lengths(n_bins, 1.0f);
-  const auto& raw_lengths = kernel->raw_lengths();
-  for (int k = 0; k < n_bins; ++k) {
-    if (raw_lengths[k] > 0.0f) {
-      inv_sqrt_lengths[k] = 1.0f / std::sqrt(raw_lengths[k]);
-    }
-  }
-
-  // Progress reporting interval
-  int progress_interval = std::max(1, n_frames / 20);
-
-  // Process each frame against the sparse kernel.
-  for (int t = 0; t < n_frames; ++t) {
-    int start = t * resolved.hop_length;
-
-    // Extract frame with zero-padding if needed at boundaries
-    std::fill(frame.begin(), frame.end(), 0.0f);
-    int copy_length = std::min(fft_length, padded_length - start);
-    if (copy_length > 0) {
-      std::copy(data + start, data + start + copy_length, frame.begin());
-    }
-
-    // Real FFT: the half spectrum carries every bin the kernel reads.
-    fft.forward(frame.data(), frame_fft.data());
-
-    // Copy to output (apply librosa-compatible /sqrt(length) scaling)
-    for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] =
-          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data(), fft_length) *
-          inv_sqrt_lengths[k];
-    }
-
-    // Report progress
-    if (progress_callback && (t % progress_interval == 0 || t == n_frames - 1)) {
-      progress_callback(static_cast<float>(t + 1) / n_frames);
-    }
-  }
+  int n_frames = 0;
+  std::vector<std::complex<float>> output = detail::apply_sparse_kernel_frames(
+      audio, kernel_matrix, fft_length, n_bins, kernel->raw_lengths(), resolved.hop_length,
+      progress_callback, n_frames);
 
   return CqtResult(std::move(output), n_bins, n_frames, kernel->frequencies(), resolved.hop_length,
                    sr);

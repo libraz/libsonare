@@ -58,4 +58,13 @@ inline std::complex<float> sparse_kernel_row_dot(const SparseComplexKernel& kern
   return result;
 }
 
+/// @brief Correlates every centre-padded frame of @p audio with a row-compressed kernel.
+/// @details Shared by the CQT and VQT front ends; each row is scaled by
+///          1/sqrt(raw_lengths[k]) (librosa `scale=True`). Returns the
+///          [n_bins x n_frames] row-major result and writes @p n_frames.
+std::vector<std::complex<float>> apply_sparse_kernel_frames(
+    const Audio& audio, const SparseComplexKernel& kernel, int fft_length, int n_bins,
+    const std::vector<float>& raw_lengths, int hop_length,
+    const std::function<void(float)>& progress_callback, int& n_frames);
+
 }  // namespace sonare::detail

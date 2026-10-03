@@ -264,25 +264,13 @@ std::vector<float> cqt_frequencies(float fmin, int n_bins, int bins_per_octave) 
   return freqs;
 }
 
-CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback progress_callback) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.fmin) && config.fmin > 0.0f &&
-                   std::isfinite(config.filter_scale) && config.filter_scale > 0.0f,
-               ErrorCode::InvalidParameter);
+namespace detail {
 
-  int sr = audio.sample_rate();
-  int n_samples = static_cast<int>(audio.size());
-
-  // Get cached row-compressed CQT kernel.
-  auto cached = get_cached_kernel(sr, config);
-  auto& kernel = cached.kernel;
-
-  int fft_length = kernel->fft_length();
-  int n_bins = kernel->n_bins();
-  const auto& kernel_matrix = kernel->kernel();
+std::vector<std::complex<float>> apply_sparse_kernel_frames(
+    const Audio& audio, const SparseComplexKernel& kernel_matrix, int fft_length, int n_bins,
+    const std::vector<float>& raw_lengths, int hop_length,
+    const std::function<void(float)>& progress_callback, int& n_frames) {
+  const int n_samples = static_cast<int>(audio.size());
 
   // Center padding: pad signal by fft_length/2 on each side.
   // This ensures the first frame is centered at t=0 and produces the expected number of
@@ -293,7 +281,7 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   std::copy(audio.data(), audio.data() + n_samples, padded_signal.begin() + pad_length);
 
   // Calculate number of frames from padded signal
-  int n_frames = 1 + (padded_length - fft_length) / config.hop_length;
+  n_frames = 1 + (padded_length - fft_length) / hop_length;
   if (n_frames <= 0) {
     n_frames = 1;
   }
@@ -316,7 +304,6 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   const float* data = padded_signal.data();
 
   // Per-bin /sqrt(L) factor for `scale=True` mode (the librosa default).
-  const auto& raw_lengths = kernel->raw_lengths();
   std::vector<float> inv_sqrt_len(n_bins, 1.0f);
   for (int k = 0; k < n_bins; ++k) {
     if (raw_lengths[k] > 0.0f) {
@@ -329,7 +316,7 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
 
   // Process each frame against the sparse kernel.
   for (int t = 0; t < n_frames; ++t) {
-    int start = t * config.hop_length;
+    int start = t * hop_length;
 
     // Extract frame with zero-padding if needed at boundaries
     std::fill(frame.begin(), frame.end(), 0.0f);
@@ -353,6 +340,35 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
       progress_callback(static_cast<float>(t + 1) / n_frames);
     }
   }
+
+  return output;
+}
+
+}  // namespace detail
+
+CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback progress_callback) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.fmin) && config.fmin > 0.0f &&
+                   std::isfinite(config.filter_scale) && config.filter_scale > 0.0f,
+               ErrorCode::InvalidParameter);
+
+  int sr = audio.sample_rate();
+
+  // Get cached row-compressed CQT kernel.
+  auto cached = get_cached_kernel(sr, config);
+  auto& kernel = cached.kernel;
+
+  int fft_length = kernel->fft_length();
+  int n_bins = kernel->n_bins();
+  const auto& kernel_matrix = kernel->kernel();
+
+  int n_frames = 0;
+  std::vector<std::complex<float>> output = detail::apply_sparse_kernel_frames(
+      audio, kernel_matrix, fft_length, n_bins, kernel->raw_lengths(), config.hop_length,
+      progress_callback, n_frames);
 
   return CqtResult(std::move(output), n_bins, n_frames, kernel->frequencies(), config.hop_length,
                    sr);
