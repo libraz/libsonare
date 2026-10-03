@@ -169,7 +169,9 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     const atTrackRate = splitNote({ ...track, frameRate: FRAME_RATE, notes, index: 0, frame: 10 });
     const atSlowRate = splitNote({ ...track, frameRate: 5, notes, index: 0, frame: 10 });
     expect(atTrackRate[0]?.offsetSample).toBe(expectedOffsetSample(10, FRAME_RATE));
-    expect(atSlowRate[0]?.offsetSample).toBe(expectedOffsetSample(10, 5));
+    // At the slow rate the cut lies past the audio, so the tail is nudged to the
+    // final sample and the head ends one sample short of the audio end.
+    expect(atSlowRate[0]?.offsetSample).toBe(expectedOffsetSample(10, 5) - 1);
     expect(atSlowRate[0]?.offsetSample).not.toBe(atTrackRate[0]?.offsetSample);
 
     for (const bad of NON_FINITE) {
