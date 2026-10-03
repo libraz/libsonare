@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "midi/tick_conversion.h"
+#include "midi/time_signature_encoding.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 #include "util/insertion_sort.h"
@@ -386,18 +387,18 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             seg.start_ppq = ppq;
             seg.time_sig.numerator = static_cast<int>(payload[0]);
             // SMF stores the denominator as a power of two (2 => 2^2 = 4). The
-            // exporter caps the exponent at 7 (128th-note denominator), so
-            // reject any exponent it could not reproduce: this keeps
-            // import -> export round-trips symmetric instead of silently
-            // re-quantizing an oversized denominator down to 128 on write.
+            // exporter caps the exponent, so reject any exponent it could not
+            // reproduce: this keeps import -> export round-trips symmetric
+            // instead of silently re-quantizing an oversized denominator on write.
             // The numerator is required to be positive; do not pass zero into
             // the transport time-signature map, whose public invariant rejects
             // non-positive numerators.
-            if (payload[0] == 0 || payload[1] > 7) {
+            const int denominator = decode_time_signature_denominator(payload[1], 0);
+            if (payload[0] == 0 || denominator == 0) {
               ++(*skipped);
               break;
             }
-            seg.time_sig.denominator = 1 << payload[1];
+            seg.time_sig.denominator = denominator;
             if (meta_len >= 4) {
               seg.clocks_per_metronome_click = payload[2];
               seg.thirty_seconds_per_quarter = payload[3];
@@ -975,10 +976,9 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         // Encode denominator as a power of two. SMF can only store the
         // denominator as an exponent (note value 1/2^dd), so a non-power-of-two
         // request is rounded up lossily; count it so callers can detect the loss.
-        uint8_t dd = 0;
-        int den = item.denominator > 0 ? item.denominator : 4;
-        while ((1 << dd) < den && dd < 7) ++dd;
-        if ((1 << dd) != den) {
+        bool exact = true;
+        const uint8_t dd = encode_time_signature_denominator(item.denominator, 0, &exact);
+        if (!exact) {
           ++result.skipped_events;
         }
         // The numerator occupies a single byte, so a request outside 1..255

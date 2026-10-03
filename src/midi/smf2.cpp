@@ -7,6 +7,7 @@
 #include <limits>
 #include <utility>
 
+#include "midi/time_signature_encoding.h"
 #include "util/constants.h"
 
 namespace sonare::midi {
@@ -38,6 +39,8 @@ constexpr uint8_t kFlexBankMetadataText = 0x01u;
 constexpr uint8_t kFlexStatusSetTempo = 0x00u;
 constexpr uint8_t kFlexStatusSetTimeSignature = 0x01u;
 constexpr uint8_t kFlexStatusSongName = 0x02u;  // Track / song name (metadata text).
+// Set Time Signature reserves denominator exponent 0 for a non-standard denominator.
+constexpr uint8_t kMinClipFileTimeSignatureExponent = 1;
 
 // SysEx7 (MT=0x3) packet status (high nibble of word[0] byte 1).
 constexpr uint8_t kSysex7Complete = 0x0u;
@@ -50,6 +53,21 @@ constexpr uint8_t kSysex7End = 0x3u;
 // Data domain constant, not a universal numeric constant.
 constexpr double kTenNanosPerQuarterToBpm = 6.0e9;
 constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
+
+/// Set Time Signature data word for @p seg; a denominator it cannot store exactly
+/// is rounded as SMF export rounds it and counted in @p skipped_events.
+uint32_t time_signature_word(const transport::TimeSignatureSegment& seg,
+                             uint32_t* skipped_events) noexcept {
+  const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
+  bool exact = true;
+  const uint8_t den = encode_time_signature_denominator(seg.time_sig.denominator,
+                                                        kMinClipFileTimeSignatureExponent, &exact);
+  if (!exact) ++(*skipped_events);
+  const uint8_t n32 =
+      static_cast<uint8_t>(std::clamp(static_cast<int>(seg.thirty_seconds_per_quarter), 0, 255));
+  return (static_cast<uint32_t>(num) << 24) | (static_cast<uint32_t>(den) << 16) |
+         (static_cast<uint32_t>(n32) << 8);
+}
 
 uint32_t tempo_10ns_from_bpm(double bpm) noexcept {
   const double safe_bpm = bpm > 0.0 ? bpm : kDefaultBpm;
@@ -484,14 +502,16 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
         }
       } else if (bank == kFlexBankSetupPerformance && status == kFlexStatusSetTimeSignature) {
         const uint8_t numerator = static_cast<uint8_t>((words[1] >> 24) & 0xFFu);
-        const uint8_t denominator = static_cast<uint8_t>((words[1] >> 16) & 0xFFu);
+        // The denominator is a power-of-two exponent; 0 marks a non-standard one.
+        const int denominator = decode_time_signature_denominator(
+            static_cast<uint8_t>((words[1] >> 16) & 0xFFu), kMinClipFileTimeSignatureExponent);
         const uint8_t n32 = static_cast<uint8_t>((words[1] >> 8) & 0xFFu);
         if (numerator > 0 && denominator > 0) {
           if (!consume_event()) break;
           transport::TimeSignatureSegment seg;
           seg.start_ppq = ppq;
           seg.time_sig.numerator = static_cast<int>(numerator);
-          seg.time_sig.denominator = static_cast<int>(denominator);
+          seg.time_sig.denominator = denominator;
           seg.thirty_seconds_per_quarter = n32;
           result.time_signatures.push_back(seg);
         } else {
@@ -824,15 +844,9 @@ Smf2ExportResult export_clip_file(
     put_word(&out, 0);
   }
   if (tsig_in_header) {
-    const auto& seg = time_signatures.front();
-    const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
-    const uint8_t den = static_cast<uint8_t>(std::clamp(seg.time_sig.denominator, 1, 255));
-    const uint8_t n32 =
-        static_cast<uint8_t>(std::clamp(static_cast<int>(seg.thirty_seconds_per_quarter), 0, 255));
     put_word(&out, delta_clockstamp_word(0));
     put_word(&out, flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTimeSignature));
-    put_word(&out, (static_cast<uint32_t>(num) << 24) | (static_cast<uint32_t>(den) << 16) |
-                       (static_cast<uint32_t>(n32) << 8));
+    put_word(&out, time_signature_word(time_signatures.front(), &result.skipped_events));
     put_word(&out, 0);
     put_word(&out, 0);
   }
@@ -860,16 +874,11 @@ Smf2ExportResult export_clip_file(
   }
   for (size_t i = tsig_in_header ? 1 : 0; i < time_signatures.size(); ++i) {
     const auto& seg = time_signatures[i];
-    const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
-    const uint8_t den = static_cast<uint8_t>(std::clamp(seg.time_sig.denominator, 1, 255));
-    const uint8_t n32 =
-        static_cast<uint8_t>(std::clamp(static_cast<int>(seg.thirty_seconds_per_quarter), 0, 255));
     SeqItem item;
     item.tick = ppq_to_tick(seg.start_ppq, dctpq);
     item.order = 1;
     item.words[0] = flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTimeSignature);
-    item.words[1] = (static_cast<uint32_t>(num) << 24) | (static_cast<uint32_t>(den) << 16) |
-                    (static_cast<uint32_t>(n32) << 8);
+    item.words[1] = time_signature_word(seg, &result.skipped_events);
     item.word_count = 4;
     items.push_back(item);
   }

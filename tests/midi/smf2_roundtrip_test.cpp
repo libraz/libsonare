@@ -11,6 +11,7 @@
 #include <initializer_list>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_clip.h"
@@ -270,6 +271,126 @@ TEST_CASE("SMF2 import skips a zero tempo word", "[midi][smf2]") {
   REQUIRE(imported.skipped_events == clean.skipped_events + 1);
   REQUIRE(imported.tempo_segments.size() == 1);
   REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(140.0).margin(0.01));
+}
+
+namespace {
+
+/// A hand-built clip file holding one Set Time Signature packet at tick 0.
+std::vector<uint8_t> clip_file_with_time_signature(uint8_t numerator, uint8_t exponent) {
+  std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+  push_word(&bytes, (0xDu << 28) | (0x1u << 20) | (0x00u << 8) | 0x01u);
+  push_word(&bytes, (static_cast<uint32_t>(numerator) << 24) |
+                        (static_cast<uint32_t>(exponent) << 16) | (8u << 8));
+  push_word(&bytes, 0);
+  push_word(&bytes, 0);
+  return bytes;
+}
+
+/// The denominator field of the first Set Time Signature packet in @p bytes.
+int exported_denominator_field(const std::vector<uint8_t>& bytes) {
+  for (size_t offset = 8; offset + 8 <= bytes.size(); offset += 4) {
+    const uint32_t word = read_word(bytes, offset);
+    if (((word >> 28) & 0x0Fu) == 0xDu && ((word >> 8) & 0xFFu) == 0x00u &&
+        (word & 0xFFu) == 0x01u) {
+      return static_cast<int>((read_word(bytes, offset + 4) >> 16) & 0xFFu);
+    }
+  }
+  return -1;
+}
+
+}  // namespace
+
+TEST_CASE("SMF2 decodes the time-signature denominator as a power-of-two exponent",
+          "[midi][smf2]") {
+  const std::pair<std::pair<uint8_t, uint8_t>, std::pair<int, int>> cases[] = {{{4, 2}, {4, 4}},
+                                                                               {{6, 3}, {6, 8}}};
+  for (const auto& [wire, meter] : cases) {
+    INFO("numerator " << int{wire.first} << " exponent " << int{wire.second});
+    const Smf2ImportResult imported =
+        import_clip_file(clip_file_with_time_signature(wire.first, wire.second));
+    REQUIRE(imported.ok());
+    CHECK(imported.skipped_events == 0);
+    REQUIRE(imported.time_signatures.size() == 1);
+    CHECK(imported.time_signatures.front().start_ppq == 0.0);
+    CHECK(imported.time_signatures.front().time_sig.numerator == meter.first);
+    CHECK(imported.time_signatures.front().time_sig.denominator == meter.second);
+    CHECK(imported.time_signatures.front().thirty_seconds_per_quarter == 8);
+  }
+}
+
+TEST_CASE("SMF2 import skips a non-standard or out-of-range denominator exponent", "[midi][smf2]") {
+  for (const uint8_t exponent : {uint8_t{0}, uint8_t{8}, uint8_t{0xFF}}) {
+    INFO("exponent " << int{exponent});
+    const Smf2ImportResult imported = import_clip_file(clip_file_with_time_signature(3, exponent));
+    REQUIRE(imported.ok());
+    CHECK(imported.skipped_events == 1);
+    // Only the 4/4 the importer supplies at tick 0 when none was read.
+    REQUIRE(imported.time_signatures.size() == 1);
+    CHECK(imported.time_signatures.front().time_sig.numerator == 4);
+    CHECK(imported.time_signatures.front().time_sig.denominator == 4);
+  }
+}
+
+TEST_CASE("SMF2 export writes the denominator exponent and counts a lossy one", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+  clip.add_event(ev(4.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  auto export_meter = [&clip](int numerator, int denominator) {
+    sonare::transport::TimeSignatureSegment seg;
+    seg.time_sig.numerator = numerator;
+    seg.time_sig.denominator = denominator;
+    return export_clip_file(clip, {}, {seg}, Smf2ExportOptions{});
+  };
+
+  const auto six_eight = export_meter(6, 8);
+  REQUIRE(six_eight.ok());
+  CHECK(six_eight.skipped_events == 0);
+  CHECK(exported_denominator_field(six_eight.bytes) == 3);
+
+  // A non-power-of-two denominator rounds up as SMF export rounds it, and counts.
+  const auto six_six = export_meter(6, 6);
+  REQUIRE(six_six.ok());
+  CHECK(six_six.skipped_events == 1);
+  CHECK(exported_denominator_field(six_six.bytes) == 3);
+
+  // Exponent 0 is reserved for a non-standard denominator, so a whole note is not exact.
+  const auto four_one = export_meter(4, 1);
+  REQUIRE(four_one.ok());
+  CHECK(four_one.skipped_events == 1);
+  CHECK(exported_denominator_field(four_one.bytes) == 1);
+
+  // Beyond the cap.
+  const auto four_256 = export_meter(4, 256);
+  REQUIRE(four_256.ok());
+  CHECK(four_256.skipped_events == 1);
+  CHECK(exported_denominator_field(four_256.bytes) == 7);
+}
+
+TEST_CASE("SMF2 round-trips every representable time-signature denominator", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+  clip.add_event(ev(8.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  std::vector<sonare::transport::TimeSignatureSegment> sigs;
+  for (int exponent = 1; exponent <= 7; ++exponent) {
+    sonare::transport::TimeSignatureSegment seg;
+    seg.start_ppq = static_cast<double>(exponent - 1);
+    seg.time_sig.numerator = exponent + 1;
+    seg.time_sig.denominator = 1 << exponent;
+    sigs.push_back(seg);
+  }
+  const auto exported = export_clip_file(clip, {}, sigs, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  CHECK(exported.skipped_events == 0);
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  CHECK(imported.skipped_events == 0);
+  REQUIRE(imported.time_signatures.size() == sigs.size());
+  for (size_t i = 0; i < sigs.size(); ++i) {
+    INFO("segment " << i);
+    CHECK(imported.time_signatures[i].start_ppq == Catch::Approx(sigs[i].start_ppq));
+    CHECK(imported.time_signatures[i].time_sig.numerator == sigs[i].time_sig.numerator);
+    CHECK(imported.time_signatures[i].time_sig.denominator == sigs[i].time_sig.denominator);
+  }
 }
 
 TEST_CASE("SMF2 preserves the position of a non-zero first tempo/time-sig", "[midi][smf2]") {
