@@ -120,6 +120,38 @@ float compute_median(float* values, size_t n) {
   return values[mid];
 }
 
+/// @brief Median-filters one contiguous line of @p n values into @p out.
+/// @details Partial windows at either end take an exact median; the full-width
+///          middle slides @p sm. @p window holds kernel_size floats of scratch.
+void median_filter_line(const float* in, float* out, int n, int kernel_size, SlidingMedian& sm,
+                        float* window) {
+  const int half = kernel_size / 2;
+  for (int i = 0; i < std::min(half, n); ++i) {
+    const int end = std::min(i + half + 1, n);
+    std::copy(in, in + end, window);
+    out[i] = compute_median(window, end);
+  }
+
+  if (n > 2 * half) {
+    sm.clear();
+    for (int i = 0; i < kernel_size; ++i) {
+      sm.insert(in[i]);
+    }
+    out[half] = sm.median();
+    for (int i = half + 1; i < n - half; ++i) {
+      sm.erase(in[i - half - 1]);
+      sm.insert(in[i + half]);
+      out[i] = sm.median();
+    }
+  }
+
+  for (int i = std::max(half, n - half); i < n; ++i) {
+    const int start = std::max(0, i - half);
+    std::copy(in + start, in + n, window);
+    out[i] = compute_median(window, n - start);
+  }
+}
+
 #ifndef __EMSCRIPTEN__
 /// @brief Executes fn(start, end) across n_workers threads over [0, total).
 template <typename F>
@@ -175,7 +207,6 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
                    "median_filter_horizontal: kernel_size " + std::to_string(kernel_size) +
                        " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
 
-  int half = kernel_size / 2;
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
   auto process_rows = [&](int row_start, int row_end) {
@@ -186,41 +217,7 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
       const float* row = magnitude + k * n_frames;
       float* out_row = result.data() + k * n_frames;
 
-      /// Left boundary region (partial window) - use nth_element
-      for (int t = 0; t < std::min(half, n_frames); ++t) {
-        int start = 0;
-        int end = std::min(t + half + 1, n_frames);
-        int count = end - start;
-        std::copy(row + start, row + end, window.data());
-        out_row[t] = compute_median(window.data(), count);
-      }
-
-      /// Middle region - use sliding window median
-      if (n_frames > 2 * half) {
-        sm.clear();
-
-        /// Initialize window with first kernel_size elements
-        for (int i = 0; i < kernel_size; ++i) {
-          sm.insert(row[i]);
-        }
-        out_row[half] = sm.median();
-
-        /// Slide window
-        for (int t = half + 1; t < n_frames - half; ++t) {
-          sm.erase(row[t - half - 1]);
-          sm.insert(row[t + half]);
-          out_row[t] = sm.median();
-        }
-      }
-
-      /// Right boundary region (partial window) - use nth_element
-      for (int t = std::max(half, n_frames - half); t < n_frames; ++t) {
-        int start = std::max(0, t - half);
-        int end = n_frames;
-        int count = end - start;
-        std::copy(row + start, row + end, window.data());
-        out_row[t] = compute_median(window.data(), count);
-      }
+      median_filter_line(row, out_row, n_frames, kernel_size, sm, window.data());
     }
   };
 
@@ -247,7 +244,6 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
                    "median_filter_vertical: kernel_size " + std::to_string(kernel_size) +
                        " exceeds the maximum " + std::to_string(kMaxHpssKernelSize));
 
-  int half = kernel_size / 2;
   std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
   auto process_cols = [&](int col_start, int col_end) {
@@ -265,44 +261,10 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
         col[k] = magnitude[k * n_frames + t];
       }
 
-      /// Top boundary region (partial window) - use nth_element
-      for (int k = 0; k < std::min(half, n_bins); ++k) {
-        int start = 0;
-        int end = std::min(k + half + 1, n_bins);
-        int count = end - start;
-        std::copy(col.begin() + start, col.begin() + end, window.data());
-        out_col[k] = compute_median(window.data(), count);
-      }
+      median_filter_line(col.data(), out_col.data(), n_bins, kernel_size, sm, window.data());
 
-      /// Middle region - use sliding window median
-      if (n_bins > 2 * half) {
-        sm.clear();
-
-        /// Initialize window with first kernel_size elements
-        for (int i = 0; i < kernel_size; ++i) {
-          sm.insert(col[i]);
-        }
-        out_col[half] = sm.median();
-
-        /// Slide window
-        for (int k = half + 1; k < n_bins - half; ++k) {
-          sm.erase(col[k - half - 1]);
-          sm.insert(col[k + half]);
-          out_col[k] = sm.median();
-        }
-      }
-
-      /// Bottom boundary region (partial window) - use nth_element
-      for (int k = std::max(half, n_bins - half); k < n_bins; ++k) {
-        int start = std::max(0, k - half);
-        int end = n_bins;
-        int count = end - start;
-        std::copy(col.begin() + start, col.begin() + end, window.data());
-        out_col[k] = compute_median(window.data(), count);
-      }
-
-      // The three regions above cover every bin for any n_bins / kernel pair, so
-      // out_col never carries a value over from the previous column.
+      // The line filter covers every bin for any n_bins / kernel pair, so out_col
+      // never carries a value over from the previous column.
       for (int k = 0; k < n_bins; ++k) {
         result[k * n_frames + t] = out_col[k];
       }
