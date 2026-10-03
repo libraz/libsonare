@@ -271,8 +271,7 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
     // voiced_prob is a frame's voiced observation mass, so it varies with F0
     // and frame length rather than with confidence, and a low-register note
     // barely moved. Voicing is decided by `voiced` alone (see
-    // valid_voiced_frame); voiced_prob only derives that flag when the caller
-    // supplies no explicit one.
+    // valid_voiced_frame); this layer never reads voiced_prob.
     raw[static_cast<size_t>(f)] = target_midi - current_midi;  // semitones
   }
 

@@ -66,7 +66,8 @@ pitch_editor::F0Track resolve_track(const Audio& audio, const pitch_editor::F0Tr
   SONARE_CHECK(std::isfinite(config.voiced_threshold) &&
                    std::isfinite(config.segmenter.segmentation_threshold_cents) &&
                    std::isfinite(config.segmenter.min_note_ms) &&
-                   std::isfinite(config.segmenter.reference_hz),
+                   std::isfinite(config.segmenter.reference_hz) &&
+                   config.segmenter.reference_hz > 0.0f,
                ErrorCode::InvalidParameter);
 
   // A short array would silently mark the tail unvoiced, which reads as a

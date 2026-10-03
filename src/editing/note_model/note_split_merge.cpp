@@ -226,6 +226,7 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
   tail.edit = source.edit;
   const bool head_present = head.length_samples() > 0;
   const bool tail_present = tail.length_samples() > 0;
+  SONARE_CHECK(head_present || tail_present, ErrorCode::InvalidParameter);
   if (head_present && tail_present) {
     tail.edit.time_offset_samples =
         saturating_add(tail.edit.time_offset_samples,
@@ -264,9 +265,11 @@ std::vector<NoteObject> merge_notes(const Audio& audio, const pitch_editor::F0Tr
       make_note(audio, track, notes[first].frame_start, notes[last].frame_end, config);
   const int64_t physical_onset = notes[first].onset_sample;
   const int64_t physical_offset = notes[last].offset_sample;
+  SONARE_CHECK(physical_onset < physical_offset, ErrorCode::InvalidParameter);
   merged.onset_sample = std::clamp(merged.onset_sample, physical_onset, physical_offset);
   merged.offset_sample = std::clamp(merged.offset_sample, physical_onset, physical_offset);
   if (merged.offset_sample < merged.onset_sample) merged.offset_sample = merged.onset_sample;
+  SONARE_CHECK(merged.length_samples() > 0, ErrorCode::InvalidParameter);
   merged.edit = notes[first].edit;
 
   std::vector<NoteObject> result;

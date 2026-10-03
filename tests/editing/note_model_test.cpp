@@ -2465,3 +2465,41 @@ TEST_CASE("assign_note_targets saturates the correction rather than refusing it"
   REQUIRE(assign_note_targets(down, kSampleRate, low, config) == 1);
   REQUIRE_THAT(down[0].edit.pitch_shift_semitones, WithinAbs(-12.0f, 1e-3f));
 }
+
+TEST_CASE("merge_notes rejects notes whose sample spans run out of order", "[note_model]") {
+  const auto audio = tone(440.0f, 0.5f, kSampleRate);
+  const auto track = voiced_track(440.0f, 100);
+  // Frame spans ascend while the sample spans do not: the merged physical span
+  // would end before it starts.
+  NoteObject first = synthetic_note(3200, 4800, 440.0f);
+  NoteObject second = synthetic_note(800, 1600, 440.0f);
+  second.frame_start = first.frame_end;
+  second.frame_end = first.frame_end + 10;
+  REQUIRE_THROWS_AS(merge_notes(audio, track, {first, second}, 0, 1), sonare::SonareException);
+}
+
+TEST_CASE("split_note rejects a note whose children both collapse", "[note_model]") {
+  const auto audio = tone(440.0f, 0.5f, kSampleRate);
+  const auto track = voiced_track(440.0f, 100);
+  // One physical sample far before the frames it claims: both children fall
+  // outside it and clamp to nothing.
+  NoteObject source = synthetic_note(1000, 1001, 440.0f);
+  source.frame_start = 20;
+  source.frame_end = 30;
+  REQUIRE_THROWS_AS(split_note(audio, track, {source}, 0, 25), sonare::SonareException);
+}
+
+TEST_CASE("make_note, split_note and merge_notes refuse a non-positive reference_hz",
+          "[note_model]") {
+  const auto audio = tone(440.0f, 0.5f, kSampleRate);
+  const auto track = voiced_track(440.0f, 100);
+  const std::vector<NoteObject> notes{synthetic_note(1600, 3200, 440.0f),
+                                      synthetic_note(3200, 4800, 440.0f)};
+  for (const float bad : {0.0f, -440.0f}) {
+    NoteExtractorConfig config;
+    config.segmenter.reference_hz = bad;
+    CHECK_THROWS_AS(make_note(audio, track, 10, 20, config), sonare::SonareException);
+    CHECK_THROWS_AS(split_note(audio, track, notes, 0, 15, config), sonare::SonareException);
+    CHECK_THROWS_AS(merge_notes(audio, track, notes, 0, 1, config), sonare::SonareException);
+  }
+}
