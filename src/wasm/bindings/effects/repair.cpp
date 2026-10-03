@@ -89,7 +89,7 @@ val channelSetToVal(const std::vector<Audio>& channels) {
   return out;
 }
 
-mastering::repair::DeclickConfig readDeclickOptions(const val& options, const char* entry) {
+mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options, const char* entry) {
   mastering::repair::DeclickConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
   cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
@@ -108,7 +108,7 @@ mastering::repair::DeclickConfig readDeclickOptions(const val& options, const ch
   return cfg;
 }
 
-mastering::repair::DeclipConfig readDeclipOptions(const val& options) {
+mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
   mastering::repair::DeclipConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
   cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
@@ -123,7 +123,7 @@ mastering::repair::DeclipConfig readDeclipOptions(const val& options) {
 val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DeclickConfig cfg =
-      readDeclickOptions(options, "masteringRepairDeclick");
+      readMasteringRepairDeclick(options, "masteringRepairDeclick");
   Audio result = mastering::repair::declick(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -167,7 +167,7 @@ val js_mastering_repair_declick_stereo(val left_samples, val right_samples,
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
   const mastering::repair::DeclickConfig cfg =
-      readDeclickOptions(options, "masteringRepairDeclickStereo");
+      readMasteringRepairDeclick(options, "masteringRepairDeclickStereo");
   mastering::repair::DeclickStereoResult result =
       mastering::repair::declick_stereo(left, right, cfg);
   val out = val::object();
@@ -220,7 +220,7 @@ mastering::repair::DehumMode parseDehumMode(const std::string& name) {
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown dehum mode: " + name);
 }
 
-mastering::repair::DehumConfig readDehumOptions(const val& options) {
+mastering::repair::DehumConfig readMasteringRepairDehum(const val& options) {
   mastering::repair::DehumConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
   cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
@@ -394,7 +394,7 @@ val js_mastering_repair_denoise_classical_linked(val channels, const val& sample
 
 val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DeclipConfig cfg = readDeclipOptions(options);
+  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
   Audio result = mastering::repair::declip(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -441,7 +441,7 @@ val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
                                "masteringRepairDeclipStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  const mastering::repair::DeclipConfig cfg = readDeclipOptions(options);
+  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
   mastering::repair::DeclipStereoResult result = mastering::repair::declip_stereo(left, right, cfg);
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
@@ -465,7 +465,7 @@ mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name) {
                                 "unknown decrackle mode: " + name);
 }
 
-mastering::repair::DecrackleConfig readDecrackleOptions(const val& options) {
+mastering::repair::DecrackleConfig readMasteringRepairDecrackle(const val& options) {
   mastering::repair::DecrackleConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
   cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
@@ -524,7 +524,7 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
 
 val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DecrackleConfig cfg = readDecrackleOptions(options);
+  const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   Audio result = mastering::repair::decrackle(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -565,7 +565,7 @@ val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
                                "masteringRepairDecrackleStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  const mastering::repair::DecrackleConfig cfg = readDecrackleOptions(options);
+  const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   mastering::repair::DecrackleStereoResult result =
       mastering::repair::decrackle_stereo(left, right, cfg);
   val out = val::object();
@@ -578,7 +578,7 @@ val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
 
 val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DehumConfig cfg = readDehumOptions(options);
+  const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
   Audio result = mastering::repair::dehum(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -624,7 +624,7 @@ val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
                                "masteringRepairDehumStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  const mastering::repair::DehumConfig cfg = readDehumOptions(options);
+  const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
   mastering::repair::DehumStereoResult result = mastering::repair::dehum_stereo(left, right, cfg);
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
@@ -831,7 +831,7 @@ val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
 val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DeclickConfig cfg =
-      readDeclickOptions(options, "masteringRepairDetectClicks");
+      readMasteringRepairDeclick(options, "masteringRepairDetectClicks");
   return declickDetectionToVal(
       mastering::repair::detect_clicks(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -870,7 +870,7 @@ val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_
 // the same config validation runs here as at the repair.
 val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DeclipConfig cfg = readDeclipOptions(options);
+  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
   return declipDetectionToVal(
       mastering::repair::detect_clipping(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -879,7 +879,7 @@ val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val
 // removes crackle without ever deciding a sample is crackle.
 val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DecrackleConfig cfg = readDecrackleOptions(options);
+  const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   return crackleDetectionToVal(
       mastering::repair::detect_crackle(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -888,7 +888,7 @@ val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val 
 // notches the configured frequency without ever looking for hum.
 val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DehumConfig cfg = readDehumOptions(options);
+  const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
   return humDetectionToVal(
       mastering::repair::detect_hum(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }

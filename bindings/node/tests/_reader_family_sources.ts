@@ -139,6 +139,7 @@ export const READER_FAMILIES: Readonly<
     requiredEnumProperty: 'out-of-scope',
     requireInt64Property: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
+    requireTypedProperty: 'out-of-scope',
   },
 };
 
