@@ -116,9 +116,10 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     # can disagree. The writers' guard is not against a non-finite the caller
     # supplied -- the decoder refuses that before any writer runs, so no fixture
     # can carry one -- but against a non-finite the library computed, which is
-    # why these cases reach it through an output gain past what a 32-bit float
-    # holds. The sibling gain that still fits is the control: without it a
-    # writer emitting silence for everything would satisfy the other two.
+    # why these cases reach it through a band boost on the fixture's tone plus the
+    # largest output gain a 32-bit float accepts. The sibling gain that still fits
+    # is the control: without it a writer emitting silence for everything would
+    # satisfy the other two.
     paths["eq_non_finite_output"] = str(directory / "eq-non-finite-output.wav")
     paths["eq_non_finite_output_24bit"] = str(directory / "eq-non-finite-output-24bit.wav")
     paths["eq_saturating_output"] = str(directory / "eq-saturating-output.wav")

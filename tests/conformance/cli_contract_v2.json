@@ -7691,7 +7691,11 @@
             "eq",
             "{audio}",
             "--output-gain-db",
-            "100000",
+            "770",
+            "--gain-db",
+            "24",
+            "--frequency-hz",
+            "220",
             "--output",
             "{eq_non_finite_output}",
             "--json"
@@ -7708,7 +7712,11 @@
             "eq",
             "{audio}",
             "--output-gain-db",
-            "100000",
+            "770",
+            "--gain-db",
+            "24",
+            "--frequency-hz",
+            "220",
             "--bits",
             "24",
             "--output",
@@ -7744,13 +7752,13 @@
           "placeholder": "eq_non_finite_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "b21a76aa4d0b9c147a2eb6a2093670c945ce68378568cfc14ab09e95b20d3305"
+          "sha256": "e80443b9fe3487b57d3e9f083daab151c9ef982bf82b39eb36770bd64377a19e"
         },
         "non_finite_wav_24bit": {
           "placeholder": "eq_non_finite_output_24bit",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "3941b1511e31e3fb46de1c06392e6c66b554603ce35f673c564d4c397b2496bd"
+          "sha256": "70555c1bdc9199430f657e5420c745b97836911f6d39bb0fe086d5a8287a43cc"
         },
         "saturating_wav": {
           "placeholder": "eq_saturating_output",
