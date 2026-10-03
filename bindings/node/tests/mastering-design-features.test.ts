@@ -4,7 +4,7 @@ import {
   masteringPairProcess,
   masteringPairProcessStereo,
   StreamingMasteringChain,
-} from '../dist/index.js';
+} from '../src/index.js';
 import type { StereoPairProcessor } from '../src/types.js';
 
 const SR = 44100;
