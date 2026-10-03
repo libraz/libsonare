@@ -68,6 +68,9 @@ export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
 // band0..band(bands-1), l0, r0, l1, r1, ... (maxPoints stereo pairs)].
 export const SONARE_SCOPE_RING_HEADER_INTS = 6;
 export const SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS = 5;
+/** Scope band and goniometer point counts used when a caller supplies none. */
+export const SONARE_SCOPE_DEFAULT_BANDS = 48;
+export const SONARE_SCOPE_DEFAULT_MAX_POINTS = 32;
 
 /** Base for splitting a frame index into two exactly-representable Float32 lanes. */
 const SONARE_FRAME_LANE_BASE = 0x1000000; // 2^24
@@ -466,8 +469,8 @@ export function sonareScopeRingRecordFloats(bands: number, maxPoints: number): n
 
 export function sonareScopeRingBufferByteLength(
   capacity: number,
-  bands = 48,
-  maxPoints = 32,
+  bands = SONARE_SCOPE_DEFAULT_BANDS,
+  maxPoints = SONARE_SCOPE_DEFAULT_MAX_POINTS,
 ): number {
   const clampedCapacity = Math.max(1, Math.floor(capacity));
   const clampedBands = Math.max(1, Math.floor(bands));
@@ -482,8 +485,8 @@ export function sonareScopeRingBufferByteLength(
 
 export function createSonareScopeRingBuffer(
   capacity = 64,
-  bands = 48,
-  maxPoints = 32,
+  bands = SONARE_SCOPE_DEFAULT_BANDS,
+  maxPoints = SONARE_SCOPE_DEFAULT_MAX_POINTS,
 ): SonareScopeRingBuffer {
   const clampedCapacity = Math.max(1, Math.floor(capacity));
   const clampedBands = Math.max(1, Math.floor(bands));
@@ -562,8 +565,14 @@ export function scopeRingFromSharedBuffer(
   const existingBands = Atomics.load(header, 3);
   const existingMaxPoints = Atomics.load(header, 4);
   const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
-  const bands = Math.max(1, Math.floor(existingBands || fallbackBands || 48));
-  const maxPoints = Math.max(0, Math.floor(existingMaxPoints || (fallbackMaxPoints ?? 32)));
+  const bands = Math.max(
+    1,
+    Math.floor(existingBands || fallbackBands || SONARE_SCOPE_DEFAULT_BANDS),
+  );
+  const maxPoints = Math.max(
+    0,
+    Math.floor(existingMaxPoints || (fallbackMaxPoints ?? SONARE_SCOPE_DEFAULT_MAX_POINTS)),
+  );
   const recordFloats = sonareScopeRingRecordFloats(bands, maxPoints);
   const minBytes = sonareScopeRingBufferByteLength(capacity, bands, maxPoints);
   if (sharedBuffer.byteLength < minBytes) {

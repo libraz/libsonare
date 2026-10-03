@@ -13,6 +13,7 @@ import type {
 } from './messages';
 import {
   isRecord,
+  SONARE_SCOPE_DEFAULT_BANDS,
   type SonareEngineCommandRecord,
   type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
@@ -403,7 +404,10 @@ export function requireIntegerOption(
 }
 
 /** Resolves scope bands and applies the native tap's fixed 64-band ceiling. */
-export function resolveScopeBandCount(value: number | undefined, fallback = 48): number {
+export function resolveScopeBandCount(
+  value: number | undefined,
+  fallback = SONARE_SCOPE_DEFAULT_BANDS,
+): number {
   return Math.min(requireIntegerOption(value, fallback, 'scopeBands', 1), SONARE_SCOPE_MAX_BANDS);
 }
 
