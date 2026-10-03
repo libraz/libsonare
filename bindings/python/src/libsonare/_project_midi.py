@@ -40,6 +40,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _narrow_int,
     _to_c_double,
     _to_c_float,
     _to_c_float_array,
@@ -909,6 +910,7 @@ class _ProjectMidiMixin:
     ) -> MidiCcBinding | None:
         """Run MIDI learn over ``events`` and return the learned binding.
 
+        ``min_movement`` is the activity threshold in 7-bit CC units (0-127).
         Returns ``None`` when no binding is learned (native
         ``SONARE_ERROR_INVALID_STATE``).
         """
@@ -930,7 +932,7 @@ class _ProjectMidiMixin:
             _to_c_uint32(param_id, "param_id"),
             _to_c_float(min_value, "min_value"),
             _to_c_float(max_value, "max_value"),
-            _to_c_uint8(min_movement, "min_movement"),
+            ctypes.c_uint8(_narrow_int(min_movement, "min_movement", 0, 127)),
             ctypes.byref(out_binding),
         )
         if rc == SONARE_ERROR_INVALID_STATE:

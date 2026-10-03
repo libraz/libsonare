@@ -363,6 +363,8 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
 /// @details Observes events in order using the native CcMap learn logic,
 ///          including 14-bit CC pair and RPN/NRPN selector assembly. Returns
 ///          SONARE_ERROR_INVALID_STATE if no binding is learned.
+/// @param min_movement Activity threshold in 7-bit CC units, 0-127; larger
+///        values return SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count, uint32_t param_id,
                                  float min_value, float max_value, uint8_t min_movement,
                                  SonareMidiCcBinding* out_binding);

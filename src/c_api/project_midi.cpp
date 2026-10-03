@@ -684,11 +684,14 @@ SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count,
                                  SonareMidiCcBinding* out_binding) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out_binding || param_id == 0 || (count > 0 && !events) || count > kMaxBufferSize / 16 ||
-      !std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value) {
+  if (!out_binding) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_binding = {};
+  // The core compares movement in 7-bit CC units, so a larger threshold could never be met.
+  if (param_id == 0 || (count > 0 && !events) || count > kMaxBufferSize / 16 ||
+      !std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value ||
+      min_movement > 127) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out_binding = {};
   SONARE_C_TRY
   sonare::midi::CcMap map;
   map.begin_learn(param_id, min_value, max_value, min_movement);

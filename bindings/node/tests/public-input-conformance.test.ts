@@ -203,6 +203,9 @@ describe('shared public-input conformance corpus', () => {
     expect(() => Project.midiBankProgram(0, 256, 0, 0, 0, 24)).toThrow(RangeError);
     expect(() => Project.midiBankProgram(0, 0, 271, 0, 0, 24)).toThrow(RangeError);
     expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 256 })).toThrow(RangeError);
+    // 128..255 fit the byte but not the 7-bit CC units the core compares in.
+    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 128 })).toThrow(RangeError);
+    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 255 })).toThrow(RangeError);
 
     const project = Project.create();
     try {
@@ -218,6 +221,7 @@ describe('shared public-input conformance corpus', () => {
     // In-range values on the pure helpers still succeed.
     expect(Project.midiBankProgram(0, 0, 3, 0x79, 1, 24).length).toBeGreaterThan(0);
     expect(Project.midiCcLearn(learnEvents, 3, { minMovement: 4 })).not.toBeNull();
+    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 127 })).not.toThrow();
   });
 });
 

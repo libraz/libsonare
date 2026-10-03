@@ -109,7 +109,8 @@ def test_a_wrapped_movement_threshold_is_refused_rather_than_read_as_a_smaller_o
     events = _cc_sweep()
     assert ls.Project.midi_cc_learn(events, 77, min_movement=10) is not None  # positive control
     assert ls.Project.midi_cc_learn(events, 77, min_movement=11) is None
-    for value in (2**8 + 7, 2**8, -1, 2**32):
+    assert ls.Project.midi_cc_learn(events, 77, min_movement=127) is None
+    for value in (128, 255, 2**8 + 7, 2**8, -1, 2**32):
         with pytest.raises(SonareValueError, match="min_movement"):
             ls.Project.midi_cc_learn(events, 77, min_movement=value)
 

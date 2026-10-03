@@ -305,7 +305,7 @@ export interface MidiCcLearnOptions {
   minValue?: number;
   /** Upper end of the mapped parameter range. Default `1`. */
   maxValue?: number;
-  /** Minimum raw CC value movement (integer 0-255) required to learn a binding. Default `0`. */
+  /** Activity threshold in 7-bit CC units (integer 0-127) a controller must move to be learned. Default `0`. */
   minMovement?: number;
 }
 

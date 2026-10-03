@@ -276,6 +276,12 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   if (!sonare_node::OptionalMidiByteArg(env, info, 4, "minMovement", 0, &min_movement)) {
     return env.Undefined();
   }
+  // The core compares movement in 7-bit CC units, so a larger threshold could never be met.
+  if (min_movement > 127) {
+    Napi::RangeError::New(env, "minMovement must be an integer in [0, 127]")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   float min_value = 0.0f;
   float max_value = 1.0f;
   if (!sonare_node::OptionalFloatArg(env, info, 2, "minValue", 0.0f, &min_value) ||

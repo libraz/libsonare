@@ -390,6 +390,10 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
   const float min_value = checkedFloatFromVal(min_value_val, "minValue");
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   const uint8_t min_movement = checkedByteFromVal(min_movement_val, "minMovement");
+  if (min_movement > 127) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "minMovement must be an integer within [0, 127]");
+  }
   const size_t count =
       events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
   std::vector<SonareMidiEventPod> pods(count);

@@ -75,9 +75,9 @@ describe('shared public-input conformance corpus (WASM)', () => {
     await init();
   });
 
-  it('rejects out-of-byte-range MIDI CC learn movement', () => {
+  it('rejects MIDI CC learn movement outside 0-127', () => {
     const events = [60, 70].map((value) => Project.midiCc(0, 0, 0, 74, value));
-    for (const minMovement of [-1, 256]) {
+    for (const minMovement of [-1, 128, 255, 256]) {
       let caught: unknown;
       try {
         Project.midiCcLearn(events, 3, { minMovement });
@@ -91,6 +91,7 @@ describe('shared public-input conformance corpus (WASM)', () => {
     }
     expect(Project.midiCcLearn(events, 3, { minMovement: 10 })).not.toBeNull();
     expect(Project.midiCcLearn(events, 3, { minMovement: 11 })).toBeNull();
+    expect(Project.midiCcLearn(events, 3, { minMovement: 127 })).toBeNull();
   });
 
   for (const testCase of corpus.marker_transaction.cases) {
