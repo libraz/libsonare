@@ -73,13 +73,7 @@ void MultibandExciter::process(float* const* channels, int num_channels, int num
         scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
   }
 
-  for (int ch = 0; ch < num_channels; ++ch) {
-    std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < num_bands; ++band) {
-      const auto& samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
-      for (int i = 0; i < num_samples; ++i) channels[ch][i] += samples[static_cast<size_t>(i)];
-    }
-  }
+  scratch_.sum_into(channels, num_channels, num_samples);
 
   if (member_discards() != member_discards_before) note_non_finite_discard();
 }

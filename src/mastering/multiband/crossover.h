@@ -62,6 +62,9 @@ struct CrossoverScratch {
   int capacity_samples() const {
     return bands.empty() || bands[0].empty() ? 0 : static_cast<int>(bands[0][0].size());
   }
+
+  /// @brief Overwrites @p channels with the band-ascending sum of every band.
+  void sum_into(float* const* channels, int num_channels, int num_samples) const;
 };
 
 class Crossover {

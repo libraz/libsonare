@@ -145,15 +145,7 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
     }
   }
 
-  for (int ch = 0; ch < num_channels; ++ch) {
-    std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
-    for (int band = 0; band < num_bands; ++band) {
-      const auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
-      for (int i = 0; i < num_samples; ++i) {
-        channels[ch][i] += band_samples[static_cast<size_t>(i)];
-      }
-    }
-  }
+  scratch_.sum_into(channels, num_channels, num_samples);
 
   // Two taps per allpass stage, once per block. The enclosed Crossover returns
   // its own sections; these stages sit after the split, and the bands are summed

@@ -151,6 +151,18 @@ CrossoverOutput Crossover::split(float* const* channels, int num_channels, int n
   return output;
 }
 
+void CrossoverScratch::sum_into(float* const* channels, int num_channels, int num_samples) const {
+  for (int ch = 0; ch < num_channels; ++ch) {
+    std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+    for (const auto& band : bands) {
+      const float* band_samples = band[static_cast<size_t>(ch)].data();
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] += band_samples[i];
+      }
+    }
+  }
+}
+
 void Crossover::prepare_scratch(CrossoverScratch& scratch, int num_channels,
                                 int max_samples) const {
   if (num_channels < 0) {
