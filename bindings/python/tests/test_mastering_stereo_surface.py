@@ -195,8 +195,14 @@ def test_streaming_set_parameter_is_prepared_only_and_rejects_nonfinite() -> Non
     from libsonare import StreamingMasteringChain
 
     chain = StreamingMasteringChain({"eq.tilt.tiltDb": 0.0})
-    with pytest.raises(RuntimeError, match="prepared"):
+    with pytest.raises(SonareError, match="prepare") as unprepared:
         chain.set_parameter("eq.tilt.tiltDb", 3.0)
+    assert not isinstance(unprepared.value, ValueError)
+    # An argument error outranks the unprepared state.
+    with pytest.raises(SonareValueError, match="value must be a finite number"):
+        chain.set_parameter("eq.tilt.tiltDb", math.inf)
+    with pytest.raises(SonareValueError, match="key must not be empty"):
+        chain.set_parameter("", 3.0)
     chain.prepare(sample_rate=48000, max_block_size=128, num_channels=1)
     with pytest.raises(SonareValueError, match="value must be a finite number"):
         chain.set_parameter("eq.tilt.tiltDb", math.inf)

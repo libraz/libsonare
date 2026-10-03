@@ -143,7 +143,6 @@ class StreamingMasteringChain:
             raise RuntimeError(message)
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
-        self._prepared_channels = 0
         self._max_block_size = 0
 
     def prepare(self, sample_rate: int, max_block_size: int, num_channels: int) -> None:
@@ -168,7 +167,6 @@ class StreamingMasteringChain:
             _to_c_int(channels_value, "num_channels"),
         )
         _check(rc)
-        self._prepared_channels = channels_value
         self._max_block_size = max_block_value
 
     def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
@@ -256,7 +254,8 @@ class StreamingMasteringChain:
     def set_parameter(self, key: str, value: float) -> None:
         """Update one realtime-safe full-chain parameter between processing calls.
 
-        The chain must be prepared first. ``key`` uses the same full dot
+        The chain must be prepared first; an argument error is reported before
+        the unprepared state, as on the other bindings. ``key`` uses the same full dot
         notation as the constructor, for example ``"eq.tilt.tiltDb"``. The
         native chain rejects unknown, disabled, and structural parameters
         before mutation; a failed call therefore leaves the existing chain
@@ -265,8 +264,6 @@ class StreamingMasteringChain:
         prepare. Parameter changes are not automatically smoothed.
         """
         self._ensure_open()
-        if self._prepared_channels <= 0:
-            raise RuntimeError("StreamingMasteringChain must be prepared before set_parameter")
         if not isinstance(key, str):
             raise SonareValueError("key must be a string")
         if not key:
