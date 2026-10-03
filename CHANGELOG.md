@@ -1,5 +1,125 @@
 # Changelog
 
+## v1.8.1 (2026-10-03)
+
+This release adds the GS insertion effect as a standalone mastering insert, a stereo A/B pair processor with loudness matching, live parameter edits on the streaming mastering chain, explicit voicing for note rendering and pitch decomposition, input peaks and a loudness reset in engine metering, and physical source offsets and loop anchors on arrangement clips. It tightens validation across mastering, MIDI and note editing, and retunes several physical-model voices.
+
+### Upgrade notes
+
+#### Rebuild
+
+- The feature ABI moved from 5 to 6: `sonare_render_notes` and `sonare_decompose_note_pitch` take a `voiced` argument after `f0_hz`, so C callers must pass it (`NULL` keeps the previous behaviour). The Python binding refuses a shared library built from a different tree; rebuild the library alongside the binding.
+- A project with a clip or take carrying a physical source offset or loop anchor is written as schema version 3, and one with comp render parts as version 4; v1.8.0 refuses both. Documents without those fields are written as before.
+- The AudioWorklet meter ring record grows from 14 to 16 floats to carry the input peaks; code reading the ring directly must size it with `SONARE_METER_RING_RECORD_FLOATS`.
+- `SonareEngineCommandType` gains `ResetMasterLoudnessMeter` (28), appended after the existing values.
+
+#### Removed and renamed
+
+- The worklet `syncMixer` message's `forceInsertResets` is now `insertBaseResets`, and it clears the strips' manual insert bases after the strip replay rather than resetting insert state.
+
+#### Now refused
+
+- A dB gain whose float linear multiplier overflows (above about 770 dB) on every gain-bearing processor, including utility gain, limiter post gain, compressor makeup, saturation drives and output gains, loudness targets and EQ band gains; the published parameter metadata carries the new maximum.
+- Non-finite timing, ceiling or release values and a lookahead too long for the sample rate on the limiters.
+- A bit depth of 1 on the bitcrusher, which has no quantization levels; the minimum is 2.
+- Non-finite configuration or sample rate on the sidechain router, and a lookahead too long for the sample rate; a null channel plane or non-finite sample rate on `StreamingMasteringChain`.
+- An empty track id in the mixing assistant, and an impossible channel count in linked stem decomposition and repair.
+- A note render span past the end of the audio, non-finite samples or a non-finite gain times envelope in note rendering, and a split or merge that leaves an empty span or carries an invalid edit on any note in the set; in C++, a merge over notes whose sample spans run out of order, a split that would drop the note, and a non-positive `reference_hz`.
+- On WASM, an `f0Hz` that is not a `Float32Array` in `renderNotes` and `decomposeNotePitch`, as on Node.
+- A clip SysEx the destination instrument cannot prepare (the whole schedule fails with `SONARE_ERROR_INVALID_PARAMETER`), binding an instrument that cannot prepare a SysEx already scheduled for it, a live SysEx the destination cannot prepare, and a single SysEx payload larger than the retention budget.
+- An SMF2 clip opened by Start of Clip without End of Clip, an SMF2 export whose UMP word counts disagree with their message types, and a GM reset whose body is not exactly four 7-bit bytes.
+- A pitch-correction frame marked voiced whose F0 is zero, negative or non-finite.
+- A CC-learn `minMovement` outside 0–127, the 7-bit CC units the threshold is compared in, on every surface.
+- An SMF2 tempo that is zero or outside the public tempo range, which is now skipped and counted like other invalid SMF2 entries.
+- A project document declaring schema version 0.
+- On WASM, a mastering repair option of the wrong type, which used to fall back to the default, as on Node.
+
+### New
+
+#### Mastering and repair
+
+- Run a GS insertion effect as a named insert (`effects.gsEfx`, with `typeMsb`, `typeLsb`, `realization` and `byte0`–`byte19`), available with `BUILD_FX=ON`.
+- Run the A/B crossfade pair processor on stereo pairs and match the pair's loudness (`masteringPairProcessStereo` with `match.abCrossfade`, `masteringAbMatchLoudnessStereo`, `mastering_pair_process_stereo`, `mastering_ab_match_loudness_stereo`, `sonare_mastering_apply_pair_processor_stereo[_ex]`, `sonare_mastering_ab_match_loudness_stereo`).
+- Change a parameter of a running `StreamingMasteringChain` without rebuilding it (`setParameter`, `set_parameter`, `sonare_streaming_mastering_chain_set_parameter`).
+- Automate the ceiling of `TruePeakLimiter`, `Maximizer`, `AdaptiveRelease` and `SoftKneeMax` as a realtime insert parameter.
+- Automate the GS-bound controls of the pitch shifter, rotary, Dattorro reverb and bitcrusher live, within the ranges the GS EFX tables reach.
+
+#### Editing and alignment
+
+- Pass per-frame voicing to note rendering and pitch decomposition (`voiced` on Node, WASM, Python and C).
+
+#### MIDI and synthesizer
+
+- GS system reverb CHARACTER 6 (Delay) and 7 (Panning Delay) render as delays with their own time and feedback, and Panning Delay alternates outputs.
+- The GS delay keeps a negative feedback setting, giving alternating-sign echoes.
+
+#### Realtime engine and project
+
+- Read the pre-trim input peaks from engine meter telemetry (`inputPeakDbL` / `inputPeakDbR` / `inputPeakDb`, `input_peak_db_l` / `input_peak_db_r` / `input_peak_db`, `sonare_engine_drain_meter_telemetry_v2` / `_wide_v2`); `gainReductionDb` now also reports strip and bus gain reduction.
+- Reset the master integrated-loudness meter at a render frame (`resetMasterLoudnessMeter`, `reset_master_loudness_meter`, `sonare_engine_reset_master_loudness_meter`).
+- Read the value an insert parameter was constructed with (`insertParameterConstructedValue`, `insert_parameter_constructed_value`, `sonare_engine_insert_parameter_constructed_value`).
+- Give an arrangement clip a physical source offset in seconds and a loop anchor, and keep comp render parts across a trim and re-extend.
+- Project bounce routes through the mixer when buses are authored, with automation latency compensated.
+
+#### Distribution and build
+
+- The GS protocol layer and the GS insertion effect build as their own library targets (`sonare_gs_protocol`, `sonare_gs_efx`).
+- The WASM AudioWorklet delivers scope telemetry through `postMessage` when no `SharedArrayBuffer` is available.
+- WASM `decomposeStems` defaults `sampleRate` to 22050, as on Node and Python.
+
+### Behaviour changes
+
+- Transcription with `fmin`/`fmax` left at 0 uses the selected path's own range (65–2093 Hz monophonic, 55–1760 Hz polyphonic), and the polyphonic path honours an explicit range.
+- Dither and the bitcrusher keep independent noise-shaping state per channel and feed back the clamped error, so dithered output differs.
+- SF2 playback aligns latent GS insertion stages with their dry path, so output through those stages differs.
+- 7.1 layouts pan Ls/Rs at ±135°.
+- The sidechain router honours a lookahead above 1000 ms instead of clamping it, which raises its reported latency.
+- Binaural panner, HRTF and amp-sim cabinet impulse responses keep their level across host sample rates.
+- The playback renderer's `limiter_gain_reduction_db` diagnostic reports the deeper of the main and LFE limiters.
+- An empty compiled timeline resets the engine to 120 BPM and 4/4, and time-signature segments are sorted and deduplicated on project load, the last one at a tick winning.
+- Switching a MIDI destination to or from external output takes effect at the next block, releasing its notes and resetting its controllers through the old route.
+- On WASM, a failed instrument bind throws `InvalidParameter` or `OutOfMemory` instead of `InvalidState`, and a failed clear throws and leaves the instrument bound.
+- Splitting a note shifts the tail's time offset by the head's stretch, omits a half with no sample span, and resamples the envelopes on the sample grid.
+- On the SF2 player, Reset All Controllers also clears the CC1, CC2, CC11, pedal and RPN/NRPN positions that drive controller-assigned modulation, and CC2 refreshes channel modulation immediately.
+- On WASM, a non-finite `frameRate` in `renderNotes` and `decomposeNotePitch` throws `RangeError` instead of `SonareError`.
+- The MIDI 1.0 to 2.0 translator keeps bank and RPN state per group as well as per channel.
+- MIDI Clip File time signatures read and write the denominator as a power-of-two exponent, as the specification defines, so files written by earlier versions read with a different denominator.
+- Physical-model voice output changes: the acoustic piano's half-pedal and sustain resonance, the plucked, bowed, reed, free-reed, brass and modal engines, and the electric guitars' pickup under pitch bend (GM 26–30); voices other than the piano are not yet calibrated and keep changing in patch releases.
+
+### Fixes
+
+- A muted channel strip keeps its insert state advancing, so unmuting does not replay a stale tail, and a seek publishes the automation value at the block start.
+- A lane reorder keeps queued commands, insert automation, sends and lane state with their track, and a failed topology update leaves the previous graph intact.
+- A bypassed insert resumes without a discontinuity, and a stopped strip's tail keeps decaying.
+- Track lane changes keep pending insert automation, and bus EQ history follows the bus across moves.
+- The WASM mixer keeps its JavaScript state when the native side refuses a routing edit, and reacquires its buffer views after topology or heap growth.
+- The hard clipper's antialiasing no longer spikes on low-frequency input.
+- A rejected streaming mastering block no longer cancels a flush in progress.
+- The sidechain router recovers from non-finite input once per block.
+- Pitch correction keeps exact 6-semitone passes, holds correction to the end of a voiced run, and passes through frames it cannot represent.
+- Note rendering clears every edited source span before writing destinations, so the later note wins.
+- An SMF declaring more tracks than it holds loads the tracks present and reports truncation.
+- MIDI clip envelope and sequencer timing no longer overflow at extreme positions.
+- Tempo and time-signature segments that share a start position keep the last one supplied, however many there are.
+- SMF export no longer writes a SysEx payload's leading F0 twice, and an F7-escaped message carrying its own F0 imports like an F0 event.
+- A project bounce fails instead of binding fader and pan automation to the wrong track when the engine refuses the lane layout.
+- Dither output stays below full scale at target widths of 26 bits and above.
+- A fader, trim and VCA offset that are each valid but sum past the float range keep the strip gain finite.
+- A refused graphic EQ band gain leaves the band unchanged.
+- A realtime parameter snapshot can no longer be replaced by an older one queued before it.
+- GS EFX, system and EQ SysEx written directly to the SF2 player no longer reverts scheduled state, and a routed part drops the default bank rig.
+- A tempo ramp whose endpoints both fall below the minimum tempo plays at a constant tempo.
+- Arrangement clip loops keep their take and source position through a left-edge trim.
+- The library builds with arrangement, mixing, effects and mastering switched off.
+- C entry points clear their out-parameters before returning an argument error, including in builds without the feature.
+- The controller reset sent on stop, seek, loop and route changes now reaches every channel played since the last reset, not only channels with a note still sounding.
+- All Notes Off and All Sound Off no longer lift the sustain or sostenuto pedal on the built-in synth, the physical-model synth and the SF2 player.
+
+### Performance
+
+- The MIDI sequencer finds each block's first event by binary search rather than scanning every clip event already played.
+- `sonare.wasm` is 125 KB smaller raw (38.8 KB gzipped), and `sonare-analysis.wasm` 16 KB smaller raw (5.5 KB gzipped).
+
 ## v1.8.0 (2026-09-30)
 
 This release adds a rule-based mixing assistant, bus-to-bus routing with sends and track- or bus-keyed sidechains, surround-width buses, MIDI 2.0 input at full resolution, GS SysEx reception, host-supplied sample playback and a harpsichord engine, two realisations of the GS insertion effects, polyphonic note editing and audio-to-MIDI transcription, stereo and linked repair with restoration presets, take alignment and tuning to a MIDI reference, stem decomposition, and a playback renderer for headphones and speakers. The C++ library now installs as a CMake package.
