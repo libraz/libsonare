@@ -20,7 +20,8 @@ struct DitherConfig {
   DitherType type = DitherType::Tpdf;
   /// @brief Word length the output is quantized to, in [2, 32].
   /// @details Interpreted identically by every non-@c None mode; the grid step
-  ///          is 2^-(target_bits - 1) and output stays within [-1, 1 - step].
+  ///          is 2^-(target_bits - 1) and output stays within [-1, 1 - step],
+  ///          capped at the largest float below 1 when the step is finer.
   ///
   ///          The grid is realized in the `float` samples this library carries,
   ///          so it stops getting finer once the step falls below the spacing

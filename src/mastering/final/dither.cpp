@@ -25,8 +25,8 @@ constexpr std::array<float, 9> kLvNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f
 // Round a dithered sample onto the target-bit code grid. Dither is the noise a
 // quantizer needs to decorrelate its error, so every mode quantizes here: a
 // target_bits of 16 has to leave a 16-bit signal whichever mode produced it.
-// The code clamp also bounds the result to [-1, 1 - lsb] regardless of how far
-// the added noise pushed the value.
+// The code clamp also bounds the result to [-1, 1 - lsb] (or the largest float
+// below 1 when lsb is finer) regardless of how far the added noise pushed the value.
 float quantize_to_grid(float value, float lsb, float min_code, float max_code) noexcept {
   return std::clamp(std::round(value / lsb), min_code, max_code) * lsb;
 }
@@ -57,7 +57,8 @@ Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherC
   const float lsb = 1.0f / static_cast<float>(int64_t{1} << (config.target_bits - 1));
   const float scale = 1.0f / lsb;
   const float min_code = -scale;
-  const float max_code = scale - 1.0f;
+  // Past 25 bits scale - 1 rounds back to scale; cap at the largest code below 1.0.
+  const float max_code = std::min(scale - 1.0f, std::nextafter(1.0f, 0.0f) * scale);
   std::vector<std::mt19937> rngs;
   std::vector<std::uniform_real_distribution<float>> distributions;
   rngs.reserve(channel_count);

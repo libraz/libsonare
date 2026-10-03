@@ -220,6 +220,28 @@ TEST_CASE("bit_depth grids finer than float32 collapse onto the achievable one",
   }
 }
 
+TEST_CASE("Dither output stays below full scale at every target width", "[mastering][final]") {
+  std::vector<float> hot;
+  for (int index = 0; index < 64; ++index) {
+    hot.push_back(2.0f);
+    hot.push_back(1.0f);
+    hot.push_back(std::nextafter(1.0f, 0.0f));
+  }
+  const auto audio = make_audio(hot);
+  for (const DitherType type : {DitherType::Rpdf, DitherType::Tpdf, DitherType::NoiseShaped}) {
+    for (const int bits : {16, 24, 25, 26, 28, 32}) {
+      CAPTURE(static_cast<int>(type), bits);
+      const auto out = dither(audio, {type, bits, 1234});
+      const float peak = *std::max_element(out.data(), out.data() + out.size());
+      REQUIRE(peak < 1.0f);
+      if (bits <= 24) {
+        // The top code of an exactly representable grid is unchanged.
+        REQUIRE(peak == 1.0f - std::pow(2.0f, -static_cast<float>(bits - 1)));
+      }
+    }
+  }
+}
+
 TEST_CASE("OutputChain applies dither then quantization", "[mastering][final]") {
   const auto result = output_chain(make_audio({0.1f, -0.1f}), {12, DitherType::None, true});
 
