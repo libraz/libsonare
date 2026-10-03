@@ -6,12 +6,15 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <new>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_clip.h"
+#include "midi/midi_clip_envelope.h"
 #include "midi/midi_event.h"
 #include "midi/prepared_sysex.h"
 #include "midi/sequencer.h"
@@ -2390,4 +2393,128 @@ TEST_CASE("MidiSequencer pending clip trim preserves an earlier overlapping note
   CHECK(sink.events[0].event.ump.is_note_off());
   CHECK(sink.events[0].event.render_frame == 196);
   CHECK(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer saturates a clip ending past INT64_MAX like the clip envelope", "[midi]") {
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 31;
+  clip.destination_id = 3;
+  clip.start_sample = kMax - 100;
+  clip.length_samples = 1000;
+  clip.gain = 0.5f;
+  clip.events = {{kMax - 90, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  const std::vector<MidiClipSchedule> clips{clip};
+  seq.set_midi_clips(clips);
+  seq.acquire_midi_clips();
+
+  // The envelope saturates the end at INT64_MAX: active just before it, ended at it.
+  REQUIRE(sonare::midi::find_midi_clip_envelope_winner(clips, 3, kMax - 1).active != nullptr);
+  REQUIRE(sonare::midi::find_midi_clip_envelope_winner(clips, 3, kMax).active == nullptr);
+
+  MidiSequencer::BoundaryOffsets boundaries;
+  seq.collect_boundaries(kMax - 200, 512, &boundaries);
+  REQUIRE_FALSE(boundaries.overflowed());
+  REQUIRE(boundaries.size() == 1);
+  REQUIRE(boundaries[0] == 110);
+
+  seq.process_block(kMax - 200, 512);
+  REQUIRE(sink.events.size() == 2);
+  CHECK(sink.events[0].event.render_frame == kMax - 90);
+  CHECK(sink.events[0].event.ump.is_note_on());
+  // Released at the same saturated end the envelope reports.
+  CHECK(sink.events[1].event.render_frame == kMax);
+  CHECK(sink.events[1].event.ump.is_note_off());
+  CHECK(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer loops a clip whose iterations run past INT64_MAX", "[midi]") {
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 32;
+  clip.destination_id = 3;
+  clip.start_sample = kMax - 100;
+  clip.loop_mode = sonare::midi::MidiLoopMode::kLoop;
+  clip.loop_length_samples = 30;
+  clip.events = {{kMax - 95, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {kMax - 80, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  MidiSequencer::BoundaryOffsets boundaries;
+  seq.collect_boundaries(kMax - 100, 512, &boundaries);
+  REQUIRE_FALSE(boundaries.overflowed());
+  const std::vector<int> expected_offsets{5, 20, 30, 35, 50, 60, 65, 80, 90, 95};
+  REQUIRE(boundaries.size() == expected_offsets.size());
+  for (size_t i = 0; i < expected_offsets.size(); ++i) CHECK(boundaries[i] == expected_offsets[i]);
+
+  seq.process_block(kMax - 100, 512);
+  const std::vector<int64_t> expected_frames{kMax - 95, kMax - 80, kMax - 65, kMax - 50,
+                                             kMax - 35, kMax - 20, kMax - 5};
+  REQUIRE(sink.events.size() == expected_frames.size());
+  for (size_t i = 0; i < expected_frames.size(); ++i) {
+    CHECK(sink.events[i].event.render_frame == expected_frames[i]);
+    CHECK(sink.events[i].event.ump.is_note_on() == (i % 2 == 0));
+  }
+  CHECK(seq.active_note_count() == 1);
+}
+
+TEST_CASE("MidiSequencer dispatches a late block of long clips in merged order", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  constexpr int kEvents = 10000;
+  MidiClipSchedule even;
+  even.id = 41;
+  even.destination_id = 5;
+  MidiClipSchedule odd;
+  odd.id = 42;
+  odd.destination_id = 5;
+  MidiClipSchedule looped;
+  looped.id = 43;
+  looped.destination_id = 6;
+  looped.loop_mode = sonare::midi::MidiLoopMode::kLoop;
+  looped.loop_length_samples = 1000;
+  for (int i = 0; i < kEvents; ++i) {
+    const bool on = i % 2 == 0;
+    even.events.push_back({int64_t{10} * i, on ? sonare::midi::make_midi1_note_on(0, 0, 60, 100)
+                                               : sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+    odd.events.push_back(
+        {int64_t{10} * i + 5, on ? sonare::midi::make_midi1_note_on(0, 1, 62, 100)
+                                 : sonare::midi::make_midi1_note_off(0, 1, 62, 0)});
+  }
+  for (int64_t local = 0; local < 1000; local += 7) {
+    looped.events.push_back({local, sonare::midi::make_midi1_control_change(0, 2, 1, 64)});
+  }
+  seq.set_midi_clips({even, odd, looped});
+  seq.acquire_midi_clips();
+
+  // Fifty loop iterations in, and midway through the one-shot clips.
+  const int64_t block_start = 50333;
+  const int block_frames = 256;
+  std::vector<std::pair<int64_t, uint32_t>> expected;
+  for (int64_t frame = block_start; frame < block_start + block_frames; ++frame) {
+    if (frame % 10 == 0) expected.emplace_back(frame, 5u);
+    if (frame % 10 == 5) expected.emplace_back(frame, 5u);
+    if ((frame % 1000) % 7 == 0) expected.emplace_back(frame, 6u);
+  }
+
+  seq.process_block(block_start, block_frames);
+  REQUIRE(sink.events.size() == expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    CHECK(sink.events[i].event.render_frame == expected[i].first);
+    CHECK(sink.events[i].destination == expected[i].second);
+  }
 }

@@ -7,6 +7,7 @@
 
 #include "midi/ump.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi {
 
@@ -35,6 +36,30 @@ int64_t saturating_clip_end(const MidiClipSchedule& clip) noexcept {
 
 bool clip_contains_frame(const MidiClipSchedule& clip, int64_t frame) noexcept {
   return frame >= clip.start_sample && frame < saturating_clip_end(clip);
+}
+
+/// Offset of @p frame into its loop iteration; exact for any frame >= clip.start_sample.
+int64_t loop_phase(const MidiClipSchedule& clip, int64_t frame) noexcept {
+  const uint64_t elapsed = static_cast<uint64_t>(frame) - static_cast<uint64_t>(clip.start_sample);
+  return static_cast<int64_t>(elapsed % static_cast<uint64_t>(clip.loop_length_samples));
+}
+
+/// First event of @p clip at or after @p frame; clip events are sorted by render_frame.
+std::vector<MidiEvent>::const_iterator first_event_at(const MidiClipSchedule& clip,
+                                                      int64_t frame) noexcept {
+  return std::lower_bound(
+      clip.events.begin(), clip.events.end(), frame,
+      [](const MidiEvent& event, int64_t value) noexcept { return event.render_frame < value; });
+}
+
+/// First event of a looping @p clip that lands at or after @p frame in the iteration
+/// starting at @p iter_start.
+std::vector<MidiEvent>::const_iterator first_loop_event_at(const MidiClipSchedule& clip,
+                                                           int64_t iter_start,
+                                                           int64_t frame) noexcept {
+  const int64_t local =
+      std::clamp<int64_t>(numeric::saturating_sub(frame, iter_start), 0, clip.loop_length_samples);
+  return first_event_at(clip, numeric::saturating_add(clip.start_sample, local));
 }
 
 }  // namespace
@@ -598,7 +623,7 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
 
 void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noexcept {
   if (num_frames <= 0) return;
-  const int64_t block_end_frame = block_start_frame + num_frames;
+  const int64_t block_end_frame = numeric::saturating_add<int64_t>(block_start_frame, num_frames);
   const std::vector<MidiClipSchedule>* clips = clips_.current();
   if (clips != last_clips_) {
     // The published clip set changed (a live mute, clip delete, or edit
@@ -610,31 +635,32 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
     release_notes_for_absent_clips(clips, block_start_frame);
     last_clips_ = clips;
   }
-  // Visit every clip event and synthetic clip/loop end in the block. The
-  // visitor is allocation-free; process_block uses it first to select the next
-  // render frame, then again to dispatch every item at that frame. This
-  // selection merge is O(events^2), but event counts are bounded by the
-  // compiled clips and fixed MIDI-FX pending table, and it keeps all dispatches
-  // monotonic without an audio-thread sort buffer.
-  auto visit_scheduled = [&](auto&& visitor) noexcept {
+  // Visit every clip event and synthetic clip/loop end in the block, skipping
+  // events before @p from_frame. The visitor is allocation-free; process_block
+  // uses it first to select the next render frame, then again to dispatch every
+  // item at that frame. Each clip's event scan starts at a binary search, and
+  // the merge keeps all dispatches monotonic without an audio-thread sort buffer.
+  auto visit_scheduled = [&](int64_t from_frame, auto&& visitor) noexcept {
     if (clips == nullptr) return;
     for (const MidiClipSchedule& clip : *clips) {
       if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
         const int64_t loop_len = clip.loop_length_samples;
         const int64_t clip_end_frame =
-            clip.length_samples > 0 ? clip.start_sample + clip.length_samples : block_end_frame;
+            clip.length_samples > 0 ? saturating_clip_end(clip) : block_end_frame;
         const int64_t scan_start = std::max(block_start_frame, clip.start_sample);
         const int64_t scan_end = std::min(block_end_frame, clip_end_frame);
         if (scan_start >= scan_end) continue;
-        int64_t iter = (scan_start - clip.start_sample) / loop_len;
-        for (int64_t iter_start = clip.start_sample + iter * loop_len; iter_start < scan_end;
-             ++iter, iter_start += loop_len) {
-          const int64_t iter_end = iter_start + loop_len;
-          for (const MidiEvent& event : clip.events) {
-            const int64_t local = event.render_frame - clip.start_sample;
+        for (int64_t iter_start = scan_start - loop_phase(clip, scan_start); iter_start < scan_end;
+             iter_start = numeric::saturating_add(iter_start, loop_len)) {
+          const int64_t iter_end = numeric::saturating_add(iter_start, loop_len);
+          const auto events_end = clip.events.end();
+          for (auto it = first_loop_event_at(clip, iter_start, from_frame); it != events_end;
+               ++it) {
+            const MidiEvent& event = *it;
+            const int64_t local = numeric::saturating_sub(event.render_frame, clip.start_sample);
             if (local < 0) continue;
             if (local >= loop_len) break;
-            const int64_t frame = iter_start + local;
+            const int64_t frame = numeric::saturating_add(iter_start, local);
             if (frame < block_start_frame) continue;
             if (frame >= block_end_frame || frame >= clip_end_frame) break;
             visitor(clip, &event, frame, false);
@@ -653,9 +679,11 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
 
       const bool finite_one_shot =
           clip.loop_mode == MidiLoopMode::kOneShot && clip.length_samples > 0;
-      const int64_t clip_end_frame = clip.start_sample + clip.length_samples;
+      const int64_t clip_end_frame = saturating_clip_end(clip);
       if (finite_one_shot && clip_end_frame <= block_start_frame) continue;
-      for (const MidiEvent& event : clip.events) {
+      const auto events_end = clip.events.end();
+      for (auto it = first_event_at(clip, from_frame); it != events_end; ++it) {
+        const MidiEvent& event = *it;
         if (event.render_frame < block_start_frame) continue;
         if (event.render_frame >= block_end_frame) break;
         if (finite_one_shot && event.render_frame >= clip_end_frame) break;
@@ -678,14 +706,15 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
         if (frame >= cursor && frame < next_frame) next_frame = frame;
       }
     }
-    visit_scheduled([&](const MidiClipSchedule&, const MidiEvent*, int64_t frame, bool) noexcept {
-      if (frame >= cursor && frame < next_frame) next_frame = frame;
-    });
+    visit_scheduled(cursor,
+                    [&](const MidiClipSchedule&, const MidiEvent*, int64_t frame, bool) noexcept {
+                      if (frame >= cursor && frame < next_frame) next_frame = frame;
+                    });
     if (next_frame >= block_end_frame) break;
 
     dispatch_pending_through(block_start_frame, block_end_frame, next_frame);
-    visit_scheduled([&](const MidiClipSchedule& clip, const MidiEvent* event, int64_t frame,
-                        bool clear_pending) noexcept {
+    visit_scheduled(next_frame, [&](const MidiClipSchedule& clip, const MidiEvent* event,
+                                    int64_t frame, bool clear_pending) noexcept {
       if (frame != next_frame) return;
       if (event != nullptr) {
         MidiEvent scheduled = *event;
@@ -705,11 +734,9 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
   if (clips != nullptr) {
     for (const MidiClipSchedule& clip : *clips) {
       if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
-        const int64_t loop_len = clip.loop_length_samples;
         const int64_t clip_end_frame =
-            clip.length_samples > 0 ? clip.start_sample + clip.length_samples : block_end_frame;
-        if (block_end_frame > clip.start_sample &&
-            (block_end_frame - clip.start_sample) % loop_len == 0 &&
+            clip.length_samples > 0 ? saturating_clip_end(clip) : block_end_frame;
+        if (block_end_frame > clip.start_sample && loop_phase(clip, block_end_frame) == 0 &&
             block_end_frame <= clip_end_frame) {
           release_notes_for_clip(clip.id, block_end_frame, /*clear_pending=*/false);
         }
@@ -717,7 +744,7 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
           release_notes_for_clip(clip.id, block_end_frame);
         }
       } else if (clip.loop_mode == MidiLoopMode::kOneShot && clip.length_samples > 0 &&
-                 clip.start_sample + clip.length_samples == block_end_frame) {
+                 saturating_clip_end(clip) == block_end_frame) {
         release_notes_for_clip(clip.id, block_end_frame);
       }
     }
@@ -897,7 +924,7 @@ void MidiSequencer::collect_boundaries(int64_t block_start_frame, int num_frames
   if (out == nullptr) return;
   out->clear();
   if (num_frames <= 0) return;
-  const int64_t block_end_frame = block_start_frame + num_frames;
+  const int64_t block_end_frame = numeric::saturating_add<int64_t>(block_start_frame, num_frames);
   const std::vector<MidiClipSchedule>* clips = clips_.current();
   if (clips == nullptr) return;
 
@@ -907,20 +934,22 @@ void MidiSequencer::collect_boundaries(int64_t block_start_frame, int num_frames
     if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
       const int64_t loop_len = clip.loop_length_samples;
       const int64_t clip_end_frame =
-          clip.length_samples > 0 ? clip.start_sample + clip.length_samples : block_end_frame;
+          clip.length_samples > 0 ? saturating_clip_end(clip) : block_end_frame;
       const int64_t scan_start = std::max(block_start_frame, clip.start_sample);
       const int64_t scan_end = std::min(block_end_frame, clip_end_frame);
       if (scan_start >= scan_end) continue;
 
-      int64_t iter = (scan_start - clip.start_sample) / loop_len;
-      for (int64_t iter_start = clip.start_sample + iter * loop_len; iter_start < scan_end;
-           ++iter, iter_start += loop_len) {
-        const int64_t iter_end = iter_start + loop_len;
-        for (const MidiEvent& ev : clip.events) {
-          const int64_t local = ev.render_frame - clip.start_sample;
+      for (int64_t iter_start = scan_start - loop_phase(clip, scan_start); iter_start < scan_end;
+           iter_start = numeric::saturating_add(iter_start, loop_len)) {
+        const int64_t iter_end = numeric::saturating_add(iter_start, loop_len);
+        const auto events_end = clip.events.end();
+        for (auto it = first_loop_event_at(clip, iter_start, block_start_frame); it != events_end;
+             ++it) {
+          const MidiEvent& ev = *it;
+          const int64_t local = numeric::saturating_sub(ev.render_frame, clip.start_sample);
           if (local < 0) continue;
           if (local >= loop_len) break;
-          const int64_t render_frame = iter_start + local;
+          const int64_t render_frame = numeric::saturating_add(iter_start, local);
           if (render_frame < block_start_frame) continue;
           if (render_frame >= block_end_frame) break;
           if (render_frame >= clip_end_frame) break;
@@ -940,8 +969,10 @@ void MidiSequencer::collect_boundaries(int64_t block_start_frame, int num_frames
 
     const bool finite_one_shot =
         clip.loop_mode == MidiLoopMode::kOneShot && clip.length_samples > 0;
-    const int64_t clip_end_frame = clip.start_sample + clip.length_samples;
-    for (const MidiEvent& ev : clip.events) {
+    const int64_t clip_end_frame = saturating_clip_end(clip);
+    const auto events_end = clip.events.end();
+    for (auto it = first_event_at(clip, block_start_frame); it != events_end; ++it) {
+      const MidiEvent& ev = *it;
       if (ev.render_frame < block_start_frame) continue;
       if (ev.render_frame >= block_end_frame) break;
       if (finite_one_shot && ev.render_frame >= clip_end_frame) break;
