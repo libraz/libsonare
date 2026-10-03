@@ -8,6 +8,7 @@
 #include "midi/tick_conversion.h"
 #include "midi/ump.h"
 #include "util/constants.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::midi {
 namespace {
@@ -941,8 +942,8 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
       items.push_back({smf_ppq_to_ticks(marker.ppq, ppqn), 2, 0.0, 0, 0, 24, 8, marker.text,
                        marker.kind, marker.key_fifths, marker.key_minor});
     }
-    std::stable_sort(items.begin(), items.end(),
-                     [](const MetaItem& a, const MetaItem& b) { return a.tick < b.tick; });
+    insertion_sort(items.begin(), items.end(),
+                   [](const MetaItem& a, const MetaItem& b) { return a.tick < b.tick; });
 
     std::vector<uint8_t> body;
     int64_t prev_tick = 0;

@@ -102,6 +102,7 @@
 #include "acoustic/rir_synthesizer.h"
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
+#include "util/insertion_sort.h"
 #include "util/number_format.h"
 #include "util/zero_is_default.h"
 #endif
@@ -1292,7 +1293,7 @@ std::vector<std::string> construction_keys(const ParamMap& params) {
   std::unordered_set<std::string> keys(params.probed_keys().begin(), params.probed_keys().end());
   for (const auto& [key, kind] : params.probed_kinds()) keys.insert(key);
   std::vector<std::string> names(keys.begin(), keys.end());
-  std::sort(names.begin(), names.end());
+  insertion_sort(names.begin(), names.end());
   return names;
 }
 

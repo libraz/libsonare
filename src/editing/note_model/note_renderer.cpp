@@ -16,6 +16,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::editing::note_model {
 namespace {
@@ -48,8 +49,9 @@ int64_t fade_samples(float fade_ms, int sample_rate, int64_t region_length) noex
 void check_disjoint_spans(const std::vector<NoteObject>& notes) {
   std::vector<size_t> order(notes.size());
   std::iota(order.begin(), order.end(), size_t{0});
-  std::sort(order.begin(), order.end(),
-            [&notes](size_t a, size_t b) { return notes[a].onset_sample < notes[b].onset_sample; });
+  insertion_sort(order.begin(), order.end(), [&notes](size_t a, size_t b) {
+    return notes[a].onset_sample < notes[b].onset_sample;
+  });
   for (size_t i = 1; i < order.size(); ++i) {
     SONARE_CHECK(notes[order[i]].onset_sample >= notes[order[i - 1]].offset_sample,
                  ErrorCode::InvalidParameter);

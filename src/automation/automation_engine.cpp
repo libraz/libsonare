@@ -4,6 +4,8 @@
 #include <cmath>
 #include <memory>
 
+#include "util/insertion_sort.h"
+
 namespace sonare::automation {
 
 namespace {
@@ -12,10 +14,9 @@ void normalize_lanes(std::vector<AutomationLane>& lanes) {
   // One lane owns a target parameter. Keeping the first caller-supplied lane
   // gives a deterministic result and prevents the audio thread from applying
   // multiple conflicting values with accidental last-wins behavior.
-  std::stable_sort(lanes.begin(), lanes.end(),
-                   [](const AutomationLane& a, const AutomationLane& b) {
-                     return a.target_param_id() < b.target_param_id();
-                   });
+  insertion_sort(lanes.begin(), lanes.end(), [](const AutomationLane& a, const AutomationLane& b) {
+    return a.target_param_id() < b.target_param_id();
+  });
   lanes.erase(std::unique(lanes.begin(), lanes.end(),
                           [](const AutomationLane& a, const AutomationLane& b) {
                             return a.target_param_id() == b.target_param_id();
@@ -60,7 +61,7 @@ void AutomationEngine::set_parameter_metadata(std::vector<ParameterInfo> paramet
     info.name = "";
     info.unit = "";
   }
-  std::sort(parameters.begin(), parameters.end(), parameter_info_id_before);
+  insertion_sort(parameters.begin(), parameters.end(), parameter_info_id_before);
   parameter_metadata_.publish(
       std::make_shared<const std::vector<ParameterInfo>>(std::move(parameters)));
 }

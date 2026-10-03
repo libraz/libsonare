@@ -14,6 +14,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::editing::event_model {
 namespace {
@@ -40,7 +41,7 @@ StftConfig stft_for(const PercussiveSeparationConfig& separation) {
 void check_disjoint_spans(const std::vector<PercussiveEvent>& events) {
   std::vector<size_t> order(events.size());
   std::iota(order.begin(), order.end(), size_t{0});
-  std::sort(order.begin(), order.end(), [&events](size_t a, size_t b) {
+  insertion_sort(order.begin(), order.end(), [&events](size_t a, size_t b) {
     return events[a].onset_sample < events[b].onset_sample;
   });
   for (size_t i = 1; i < order.size(); ++i) {

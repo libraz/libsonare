@@ -6,6 +6,7 @@
 
 #include "analysis/tempo_curve.h"
 #include "util/constants.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::mir {
 namespace {
@@ -334,8 +335,8 @@ std::vector<TempoEstimate> estimate_tempo(const BeatAnalysisInput& input,
   }
 
   // Stable sort by confidence descending; the primary stays first on ties
-  // (std::stable_sort preserves insertion order, keeping output deterministic).
-  std::stable_sort(
+  // (insertion_sort is stable, so insertion order keeps the output deterministic).
+  insertion_sort(
       candidates.begin(), candidates.end(),
       [](const TempoEstimate& a, const TempoEstimate& b) { return a.confidence > b.confidence; });
 

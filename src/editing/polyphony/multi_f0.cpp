@@ -10,6 +10,7 @@
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/math_utils.h"
 
 namespace sonare::editing::polyphony {
@@ -141,7 +142,7 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
     // Descending salience with ties to the lower F0, so the same input always
     // produces the same ridges.
     std::vector<F0Candidate> ordered = frames[frame];
-    std::sort(ordered.begin(), ordered.end(), [](const F0Candidate& a, const F0Candidate& b) {
+    insertion_sort(ordered.begin(), ordered.end(), [](const F0Candidate& a, const F0Candidate& b) {
       return a.salience != b.salience ? a.salience > b.salience : a.f0_hz < b.f0_hz;
     });
     std::vector<bool> claimed(ordered.size(), false);
@@ -205,7 +206,7 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
     ridge.median_hz = sonare::median(ridge.f0_hz.data(), ridge.f0_hz.size());
     ridges.push_back(std::move(ridge));
   }
-  std::stable_sort(ridges.begin(), ridges.end(), [](const F0Ridge& a, const F0Ridge& b) {
+  insertion_sort(ridges.begin(), ridges.end(), [](const F0Ridge& a, const F0Ridge& b) {
     return a.frame_start != b.frame_start ? a.frame_start < b.frame_start
                                           : a.median_hz < b.median_hz;
   });

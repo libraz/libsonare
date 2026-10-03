@@ -27,6 +27,7 @@ add_executable(sonare_tests
   util/lru_cache_test.cpp
   util/json_test.cpp
   util/number_format_test.cpp
+  util/insertion_sort_test.cpp
   util/frame_test.cpp
   util/padding_test.cpp
   util/peak_test.cpp

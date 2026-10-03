@@ -19,6 +19,7 @@
 #include "mixing/assistant/phase_alignment.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/json.h"
 #include "util/number_format.h"
 
@@ -292,7 +293,7 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
   std::vector<const SceneDelta*> ordered;
   ordered.reserve(deltas.size());
   for (const auto& delta : deltas) ordered.push_back(&delta);
-  std::stable_sort(ordered.begin(), ordered.end(), [](const SceneDelta* a, const SceneDelta* b) {
+  insertion_sort(ordered.begin(), ordered.end(), [](const SceneDelta* a, const SceneDelta* b) {
     return static_cast<int>(a->domain) < static_cast<int>(b->domain);
   });
   result.explanation.reserve(ordered.size() + notes.size());

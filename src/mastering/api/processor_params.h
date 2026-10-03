@@ -83,6 +83,7 @@
 #include "mastering/utility/gain.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::mastering::api::detail {
 
@@ -260,7 +261,7 @@ class ParamMap {
       (void)value;
       if (probed_.find(key) == probed_.end()) out.push_back(key);
     }
-    std::sort(out.begin(), out.end());
+    insertion_sort(out.begin(), out.end());
     return out;
   }
 
@@ -516,7 +517,7 @@ inline std::vector<std::string> band_fields_of(ReadBand read_band) {
   read_band(declaration);
   std::vector<std::string> fields(declaration.probed_keys().begin(),
                                   declaration.probed_keys().end());
-  std::sort(fields.begin(), fields.end());
+  insertion_sort(fields.begin(), fields.end());
   return fields;
 }
 

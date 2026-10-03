@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "util/insertion_sort.h"
+
 namespace sonare::automation {
 
 void ParameterRegistry::clear() { parameters_.clear(); }
@@ -19,7 +21,7 @@ bool ParameterRegistry::add(ParameterInfo info) {
     return false;
   }
   parameters_.push_back(info);
-  std::sort(parameters_.begin(), parameters_.end(), parameter_info_id_before);
+  insertion_sort(parameters_.begin(), parameters_.end(), parameter_info_id_before);
   return true;
 }
 

@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <memory>
 
+#include "util/insertion_sort.h"
+
 namespace sonare::transport {
 
 void MarkerMap::set_markers(std::vector<Marker> markers) {
-  std::sort(markers.begin(), markers.end(), [](const Marker& a, const Marker& b) {
+  insertion_sort(markers.begin(), markers.end(), [](const Marker& a, const Marker& b) {
     if (a.ppq != b.ppq) return a.ppq < b.ppq;
     return a.id < b.id;
   });

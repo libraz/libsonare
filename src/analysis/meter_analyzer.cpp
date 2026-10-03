@@ -7,6 +7,7 @@
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 
 namespace sonare {
@@ -475,7 +476,7 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
         {numerator, candidate_denominator, score_sum > kEpsilon ? score / score_sum : 0.0f});
   }
 
-  std::stable_sort(
+  insertion_sort(
       result_.candidates.begin(), result_.candidates.end(),
       [primary = result_.time_signature](const TimeSignature& lhs, const TimeSignature& rhs) {
         const bool lhs_primary =

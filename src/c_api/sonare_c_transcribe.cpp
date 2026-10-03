@@ -5,6 +5,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "analysis/bpm_analyzer.h"
 #include "editing/note_model/note_transcriber.h"
+#include "util/insertion_sort.h"
 #endif
 
 // ============================================================================
@@ -130,10 +131,11 @@ std::vector<SonareMidiEventPod> build_events(const std::vector<ntm::TranscribedN
         {off_ppq, 0,
          pod_from_ump(off_ppq, sonare::midi::make_midi1_note_off(group, channel, note.note, 0))});
   }
-  std::stable_sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) noexcept {
-    if (a.ppq != b.ppq) return a.ppq < b.ppq;
-    return a.order < b.order;
-  });
+  sonare::insertion_sort(entries.begin(), entries.end(),
+                         [](const Entry& a, const Entry& b) noexcept {
+                           if (a.ppq != b.ppq) return a.ppq < b.ppq;
+                           return a.order < b.order;
+                         });
 
   std::vector<SonareMidiEventPod> events;
   events.reserve(entries.size());

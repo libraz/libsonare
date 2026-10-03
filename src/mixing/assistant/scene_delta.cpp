@@ -8,6 +8,8 @@
 #include <string>
 #include <utility>
 
+#include "util/insertion_sort.h"
+
 namespace sonare::mixing::assistant {
 namespace {
 
@@ -94,7 +96,7 @@ api::Scene apply_deltas(const api::Scene& base, const std::vector<SceneDelta>& d
   std::vector<const SceneDelta*> ordered;
   ordered.reserve(deltas.size());
   for (const auto& delta : deltas) ordered.push_back(&delta);
-  std::stable_sort(ordered.begin(), ordered.end(), [](const SceneDelta* a, const SceneDelta* b) {
+  insertion_sort(ordered.begin(), ordered.end(), [](const SceneDelta* a, const SceneDelta* b) {
     return static_cast<int>(a->domain) < static_cast<int>(b->domain);
   });
 

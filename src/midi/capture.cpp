@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "util/insertion_sort.h"
+
 namespace sonare::midi {
 namespace {
 
@@ -224,13 +226,12 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
     events.push_back({event, rel_ppq, order++});
   }
 
-  std::stable_sort(events.begin(), events.end(),
-                   [](const CapturedEvent& a, const CapturedEvent& b) {
-                     if (a.event.render_frame != b.event.render_frame) {
-                       return a.event.render_frame < b.event.render_frame;
-                     }
-                     return a.order < b.order;
-                   });
+  insertion_sort(events.begin(), events.end(), [](const CapturedEvent& a, const CapturedEvent& b) {
+    if (a.event.render_frame != b.event.render_frame) {
+      return a.event.render_frame < b.event.render_frame;
+    }
+    return a.order < b.order;
+  });
 
   for (const CapturedEvent& captured : events) {
     double rel_ppq = captured.rel_ppq;

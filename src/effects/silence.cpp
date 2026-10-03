@@ -8,6 +8,7 @@
 
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare {
 
@@ -188,7 +189,7 @@ CommonSplitReport split_common_with_report(const float* const* signals, const st
     }
     collected.insert(collected.end(), one.intervals.begin(), one.intervals.end());
   }
-  std::sort(collected.begin(), collected.end());
+  insertion_sort(collected.begin(), collected.end());
   for (const auto& range : collected) {
     // Touching counts as overlapping: two takes whose intervals meet exactly
     // leave no silent sample between them, so a cut there would be mid-phrase.

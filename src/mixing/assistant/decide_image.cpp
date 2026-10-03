@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "util/insertion_sort.h"
 #include "util/json.h"
 #include "util/number_format.h"
 
@@ -288,7 +289,7 @@ std::vector<AlignmentChoice> collect_alignment(const std::vector<TrackProfile>& 
     edges.push_back(AlignmentEdge{reference, target, pair.lag_samples, pair.polarity_opposed,
                                   std::fabs(pair.correlation)});
   }
-  std::stable_sort(edges.begin(), edges.end(), [](const AlignmentEdge& a, const AlignmentEdge& b) {
+  insertion_sort(edges.begin(), edges.end(), [](const AlignmentEdge& a, const AlignmentEdge& b) {
     return a.evidence > b.evidence;
   });
 

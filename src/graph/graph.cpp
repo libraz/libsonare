@@ -8,6 +8,7 @@
 #include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::graph {
 
@@ -185,7 +186,7 @@ bool Graph::compile() {
   // the accumulated contribution). The first-edge overwrite also clears any
   // stale buffer contents from the previous block.
   for (std::vector<int>& edges : incoming_by_topo_) {
-    std::stable_sort(edges.begin(), edges.end(), [this](int lhs, int rhs) {
+    insertion_sort(edges.begin(), edges.end(), [this](int lhs, int rhs) {
       return connections_[static_cast<size_t>(lhs)].dest_port <
              connections_[static_cast<size_t>(rhs)].dest_port;
     });

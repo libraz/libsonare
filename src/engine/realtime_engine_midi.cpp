@@ -10,6 +10,7 @@
 
 #include "engine/realtime_engine.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace sonare::engine {
@@ -533,10 +534,10 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
       pending_updates.push_back({slot_index, generation, slot.accepted_order, std::move(prepared)});
     }
 
-    std::sort(pending_updates.begin(), pending_updates.end(),
-              [](const PendingTokenUpdate& left, const PendingTokenUpdate& right) {
-                return left.accepted_order < right.accepted_order;
-              });
+    insertion_sort(pending_updates.begin(), pending_updates.end(),
+                   [](const PendingTokenUpdate& left, const PendingTokenUpdate& right) {
+                     return left.accepted_order < right.accepted_order;
+                   });
 
     // Stage the latency banks too, so a failure leaves the old PDC and binding.
     if (!prepare_pdc_for(true, destination_id, instrument, next_pdc)) {

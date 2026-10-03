@@ -14,6 +14,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -727,11 +728,10 @@ std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
     candidates.push_back({i, std::abs(gain), extrema});
   }
 
-  std::stable_sort(candidates.begin(), candidates.end(),
-                   [](const Candidate& a, const Candidate& b) {
-                     if (a.extrema != b.extrema) return a.extrema > b.extrema;
-                     return a.strength > b.strength;
-                   });
+  insertion_sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+    if (a.extrema != b.extrema) return a.extrema > b.extrema;
+    return a.strength > b.strength;
+  });
 
   // Corrections below this are inaudible; placing a band there wastes a slot.
   constexpr float kMinCandidateStrengthDb = 0.05f;
@@ -800,8 +800,8 @@ std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
     return {};
   }
 
-  std::sort(selected.begin(), selected.end(),
-            [&](size_t a, size_t b) { return curve.frequencies[a] < curve.frequencies[b]; });
+  insertion_sort(selected.begin(), selected.end(),
+                 [&](size_t a, size_t b) { return curve.frequencies[a] < curve.frequencies[b]; });
 
   std::vector<float> centres;
   centres.reserve(selected.size());

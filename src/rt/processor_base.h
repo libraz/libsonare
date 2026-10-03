@@ -14,6 +14,7 @@
 
 #include "rt/overflow_counter.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::rt {
 
@@ -233,8 +234,8 @@ class ProcessorBase {
   /// claimed target starts at its first requested value.
   /// Publish before the processor is handed to an audio thread.
   void set_constructed_parameter_values(std::vector<std::pair<unsigned int, float>> values) {
-    std::sort(values.begin(), values.end(),
-              [](const auto& left, const auto& right) { return left.first < right.first; });
+    insertion_sort(values.begin(), values.end(),
+                   [](const auto& left, const auto& right) { return left.first < right.first; });
     std::vector<ParameterValue> captured;
     captured.reserve(values.size());
     for (const auto& value : values) {
