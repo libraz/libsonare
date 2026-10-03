@@ -73,9 +73,9 @@ def scan_tunables() -> dict[str, TunableDef]:
         )
         for _, key, m, value_group in sorted(matches):
             if key in found:
-                first = found[key].path.relative_to(REPO_ROOT)
+                first = found[key].file.relative_to(REPO_ROOT)
                 raise ValueError(
-                    f"{key} is declared in both {first} and {path.relative_to(REPO_ROOT)}; "
+                    f"{key} is declared twice, in {first} and {path.relative_to(REPO_ROOT)}; "
                     f"the override table is keyed by scope and name, so the two "
                     f"would move together"
                 )
