@@ -10,7 +10,29 @@ permissions:
   id-token: write
 
 jobs:
+  version-check:
+    # A tag that disagrees with a manifest would publish under two versions, or
+    # skip npm as "already published" while the release and assets go out.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches every published version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cmake_v="$(sed -nE 's/^project\(libsonare VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)"
+          wasm_v="$(node -p "require('./bindings/wasm/package.json').version")"
+          py_v="$(sed -nE 's/^version = "([^"]+)"/\1/p' bindings/python/pyproject.toml)"
+          status=0
+          for pair in "CMakeLists.txt=$cmake_v" "bindings/wasm/package.json=$wasm_v" "bindings/python/pyproject.toml=$py_v"; do
+            if [ "${pair#*=}" != "$tag" ]; then
+              echo "::error::${pair%%=*} is '${pair#*=}' but the tag is v$tag"
+              status=1
+            fi
+          done
+          exit $status
+
   publish-npm:
+    needs: version-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -177,6 +199,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   python-wheels:
+    needs: version-check
     strategy:
       fail-fast: false
       matrix:
