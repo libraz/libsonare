@@ -161,9 +161,10 @@ export function pitchCorrectToMidi(
  * flattened. When `voiced` is supplied (truthy = voiced), it takes precedence
  * over `voicedProb`; omitting it or passing `null` uses the probability array.
  * When both are omitted, every frame is treated as voiced. A false `voiced`
- * entry suppresses a positive F0 candidate, while a true entry cannot revive a
- * non-positive or non-finite F0. An `f0Hz` NaN is accepted only when the
- * corresponding `voiced` entry is falsy, matching pYIN output. The
+ * entry suppresses a positive F0 candidate, while a voiced frame whose F0 is
+ * non-positive or non-finite is rejected as an invalid parameter. An `f0Hz` NaN
+ * is accepted only when the corresponding `voiced` entry is falsy, matching
+ * pYIN output. The
  * `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be passed
  * through directly.
  *
@@ -254,9 +255,9 @@ export function pitchCorrectToMidiTimevarying(
  * When `voiced` is supplied (truthy = voiced), it takes precedence over
  * `voicedProb`; omitting it or passing `null` uses the probability array. When
  * both are omitted, every frame is treated as voiced. A false `voiced` entry
- * suppresses a positive F0 candidate, but a true entry cannot revive a
- * non-positive or non-finite F0. An `f0Hz` NaN is accepted only for a frame
- * marked unvoiced.
+ * suppresses a positive F0 candidate, while a voiced frame whose F0 is
+ * non-positive or non-finite is rejected as an invalid parameter. An `f0Hz` NaN
+ * is accepted only for a frame marked unvoiced.
  *
  * @param samples - Audio samples (mono, float32)
  * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
