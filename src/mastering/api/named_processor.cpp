@@ -91,6 +91,7 @@
 #include "mastering/utility/gain.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/json.h"
 
 namespace sonare::mastering::api {
@@ -823,6 +824,18 @@ bool mono_dispatch_handles(const std::string& name) {
   return try_configure_processor(name, defaults, ChannelSet(empty), kProbeSampleRate, outcome);
 }
 
+::sonare::mastering::match::MatchEqConfig read_match_eq_config(const ParamMap& map) {
+  ::sonare::mastering::match::MatchEqConfig config;
+  config.max_bands =
+      checked_nonnegative_size(i(map, "maxBands", static_cast<int>(config.max_bands)), "maxBands");
+  config.max_gain_db = f(map, "maxGainDb", config.max_gain_db);
+  config.min_frequency_hz = f(map, "minFrequencyHz", config.min_frequency_hz);
+  config.max_frequency_hz = f(map, "maxFrequencyHz", config.max_frequency_hz);
+  config.q = f(map, "q", config.q);
+  config.smoothing_bins = i(map, "smoothingBins", config.smoothing_bins);
+  return config;
+}
+
 }  // namespace
 
 std::vector<std::string> stereo_processor_names() {
@@ -839,7 +852,7 @@ std::vector<std::string> stereo_processor_names() {
     for (const std::string& name : processor_names()) {
       if (!mono_dispatch_handles(name)) out.push_back(name);
     }
-    std::sort(out.begin(), out.end());
+    insertion_sort(out.begin(), out.end());
     return out;
   }();
   return names;
@@ -1058,14 +1071,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
   auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
   Audio out;
   if (name == "match.applyMatchEq") {
-    ::sonare::mastering::match::MatchEqConfig match_config;
-    match_config.max_bands = checked_nonnegative_size(
-        i(map, "maxBands", static_cast<int>(match_config.max_bands)), "maxBands");
-    match_config.max_gain_db = f(map, "maxGainDb", match_config.max_gain_db);
-    match_config.min_frequency_hz = f(map, "minFrequencyHz", match_config.min_frequency_hz);
-    match_config.max_frequency_hz = f(map, "maxFrequencyHz", match_config.max_frequency_hz);
-    match_config.q = f(map, "q", match_config.q);
-    match_config.smoothing_bins = i(map, "smoothingBins", match_config.smoothing_bins);
+    const ::sonare::mastering::match::MatchEqConfig match_config = read_match_eq_config(map);
     ::sonare::mastering::match::MatchEqFirConfig fir_config;
     fir_config.fft_size = i(map, "fftSize", fir_config.fft_size);
     fir_config.kernel_size = i(map, "kernelSize", fir_config.kernel_size);
@@ -1201,14 +1207,7 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     }
     root.emplace("bands", json_ns::Value(std::move(band_values)));
   } else if (name == "match.matchEqCurve") {
-    ::sonare::mastering::match::MatchEqConfig config;
-    config.max_bands = checked_nonnegative_size(
-        i(map, "maxBands", static_cast<int>(config.max_bands)), "maxBands");
-    config.max_gain_db = f(map, "maxGainDb", config.max_gain_db);
-    config.min_frequency_hz = f(map, "minFrequencyHz", config.min_frequency_hz);
-    config.max_frequency_hz = f(map, "maxFrequencyHz", config.max_frequency_hz);
-    config.q = f(map, "q", config.q);
-    config.smoothing_bins = i(map, "smoothingBins", config.smoothing_bins);
+    const ::sonare::mastering::match::MatchEqConfig config = read_match_eq_config(map);
     ::sonare::mastering::match::validate_config(config);
     auto curve = ::sonare::mastering::match::match_eq_curve(
         ::sonare::mastering::match::reference_spectrum(source_audio),
