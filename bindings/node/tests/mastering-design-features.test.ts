@@ -104,6 +104,52 @@ describe('stereo mastering design APIs', () => {
     expect(request.sampleRate).toBe(22050);
   });
 
+  it('raises the same errors from request and positional forms', () => {
+    const source = channel(32, 0.2);
+    const reference = channel(32, 0.4);
+    const short = channel(31, 0.2);
+    const cases: Array<[StereoPairProcessor, Float32Array, Float32Array, Float32Array, RegExp]> = [
+      ['match.abCrossfade', short, reference, reference, /sourceLeft and sourceRight/],
+      ['match.abCrossfade', source, reference, short, /referenceLeft and referenceRight/],
+      ['match.abSwitch' as StereoPairProcessor, source, reference, reference, /abSwitch/],
+    ];
+    for (const [processorName, sourceRight, referenceLeft, referenceRight, message] of cases) {
+      const request = () =>
+        masteringPairProcessStereo({
+          processorName,
+          sourceLeft: source,
+          sourceRight,
+          referenceLeft,
+          referenceRight,
+          sampleRate: SR,
+        });
+      const positional = () =>
+        masteringPairProcessStereo(
+          processorName,
+          source,
+          sourceRight,
+          referenceLeft,
+          referenceRight,
+          SR,
+        );
+      expect(request).toThrow(message);
+      expect(positional).toThrow(message);
+      let requestError: unknown;
+      let positionalError: unknown;
+      try {
+        request();
+      } catch (error) {
+        requestError = error;
+      }
+      try {
+        positional();
+      } catch (error) {
+        positionalError = error;
+      }
+      expect((positionalError as Error).constructor).toBe((requestError as Error).constructor);
+    }
+  });
+
   it('rejects unsupported stereo pair processors and channel shape errors', () => {
     const source = channel(32, 0.2);
     const reference = channel(32, 0.4);

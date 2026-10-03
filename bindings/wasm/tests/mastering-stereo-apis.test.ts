@@ -5,6 +5,7 @@ import {
   masteringPairProcessStereo,
   StreamingMasteringChain,
 } from '../dist/index.js';
+import type { StereoPairProcessor } from '../src/index.js';
 
 const SAMPLE_RATE = 44_100;
 
@@ -22,7 +23,7 @@ describe('WASM stereo mastering design APIs', () => {
     const chain = new StreamingMasteringChain({ 'eq.tilt.enabled': true });
     chain.prepare(SAMPLE_RATE, 128, 1);
     chain.delete();
-    expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(/setParameter on deleted object/);
+    expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(/deleted object/);
   });
 
   it('applies one crossfade to both channels and supports request and positional forms', () => {
@@ -55,6 +56,80 @@ describe('WASM stereo mastering design APIs', () => {
     expect(request.right[32]).toBeCloseTo(0.75 * sourceRight[32] + 0.25 * referenceRight[32], 5);
   });
 
+  it('resolves the default sample rate identically in request and positional forms', () => {
+    const source = tone(128, 0.2);
+    const reference = tone(128, 0.4);
+    const request = masteringPairProcessStereo({
+      processorName: 'match.abCrossfade',
+      sourceLeft: source,
+      sourceRight: source,
+      referenceLeft: reference,
+      referenceRight: reference,
+    });
+    const positional = masteringPairProcessStereo(
+      'match.abCrossfade',
+      source,
+      source,
+      reference,
+      reference,
+    );
+    expect(request).toEqual(positional);
+    expect(request.sampleRate).toBe(22050);
+  });
+
+  it('raises the same errors from request and positional forms', () => {
+    const source = tone(32, 0.2);
+    const reference = tone(32, 0.4);
+    const short = tone(31, 0.2);
+    const cases: Array<[StereoPairProcessor, Float32Array, Float32Array, RegExp]> = [
+      ['match.abCrossfade', source, short, /Source left and right channel lengths must match/],
+      ['match.abCrossfade', short, source, /Source left and right channel lengths must match/],
+      ['match.abSwitch' as StereoPairProcessor, source, source, /abSwitch/],
+    ];
+    for (const [processorName, sourceLeft, sourceRight, message] of cases) {
+      expect(() =>
+        masteringPairProcessStereo({
+          processorName,
+          sourceLeft,
+          sourceRight,
+          referenceLeft: reference,
+          referenceRight: reference,
+          sampleRate: SAMPLE_RATE,
+        }),
+      ).toThrow(message);
+      expect(() =>
+        masteringPairProcessStereo(
+          processorName,
+          sourceLeft,
+          sourceRight,
+          reference,
+          reference,
+          SAMPLE_RATE,
+        ),
+      ).toThrow(message);
+    }
+    expect(() =>
+      masteringPairProcessStereo({
+        processorName: 'match.abCrossfade',
+        sourceLeft: source,
+        sourceRight: source,
+        referenceLeft: reference,
+        referenceRight: short,
+        sampleRate: SAMPLE_RATE,
+      }),
+    ).toThrow(/Reference left and right channel lengths must match/);
+    expect(() =>
+      masteringPairProcessStereo(
+        'match.abCrossfade',
+        source,
+        source,
+        reference,
+        short,
+        SAMPLE_RATE,
+      ),
+    ).toThrow(/Reference left and right channel lengths must match/);
+  });
+
   it('shares one gain across stereo loudness matching', () => {
     const sourceLeft = tone(512, 0.1);
     const sourceRight = tone(512, 0.4, 0.3);
@@ -73,6 +148,28 @@ describe('WASM stereo mastering design APIs', () => {
     expect(matched.left[200]).toBeCloseTo(sourceLeft[200] * gain, 5);
     expect(matched.right[200]).toBeCloseTo(sourceRight[200] * gain, 5);
     expect(matched.matchedTruePeakDbtp).toBeDefined();
+  });
+
+  it('applies a changed streaming parameter to the running stream', () => {
+    const config = {
+      'dynamics.compressor.enabled': true,
+      'dynamics.compressor.thresholdDb': -24,
+      'dynamics.compressor.ratio': 3,
+    };
+    const edited = new StreamingMasteringChain(config);
+    const control = new StreamingMasteringChain(config);
+    try {
+      edited.prepare(SAMPLE_RATE, 128, 1);
+      control.prepare(SAMPLE_RATE, 128, 1);
+      const first = tone(128, 0.7);
+      expect(edited.processMono(first)).toEqual(control.processMono(first));
+      edited.setParameter('dynamics.compressor.thresholdDb', -40);
+      const next = tone(128, 0.7, 0.1);
+      expect(edited.processMono(next)).not.toEqual(control.processMono(next));
+    } finally {
+      edited.delete();
+      control.delete();
+    }
   });
 
   it('exposes the streaming chain realtime-safe setter', () => {
