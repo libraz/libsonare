@@ -329,6 +329,12 @@ class RtPublisher {
             expected, kPendingReading, std::memory_order_acq_rel, std::memory_order_acquire)) {
       return false;
     }
+    // While the slot is non-empty publish() never pushes to the ring, so any
+    // entry still there is older than the slot and must be adopted first.
+    if (!publish_ring_.empty()) {
+      pending_state_.store(kPendingReady, std::memory_order_release);
+      return false;
+    }
     bool adopted = false;
     if (pending_slot_) {
       if (audio_current_) {
