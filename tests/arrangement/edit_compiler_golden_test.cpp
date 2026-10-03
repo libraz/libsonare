@@ -1567,6 +1567,33 @@ TEST_CASE("typed track automation resolves by project lane and target kind", "[a
 }
 #endif  // SONARE_WITH_MIXING
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("apply_to_engine reports a refused lane vector and installs no typed automation",
+          "[arrangement]") {
+  // Duplicate track ids are refused by the engine; the typed lane's id would encode an index into
+  // that refused vector.
+  arr::CompiledTimeline timeline;
+  timeline.track_lanes = {{5}, {5}};
+  sonare::automation::AutomationLane typed(900,
+                                           sonare::automation::AutomationTargetKind::kTrackFaderDb);
+  typed.set_points({{0.0, -6.0f, sonare::automation::CurveType::Hold}});
+  sonare::automation::AutomationLane opaque(77);
+  opaque.set_points({{0.0, 0.5f, sonare::automation::CurveType::Hold}});
+  timeline.mixer.automation_bindings = {{5, typed}, {5, opaque}};
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kProjectSr, kBlock);
+  REQUIRE_FALSE(arr::apply_to_engine(timeline, engine));
+  REQUIRE(engine.automation().lane_count() == 1);
+
+  timeline.track_lanes = {{5}};
+  sonare::engine::RealtimeEngine ok_engine;
+  ok_engine.prepare(kProjectSr, kBlock);
+  REQUIRE(arr::apply_to_engine(timeline, ok_engine));
+  REQUIRE(ok_engine.automation().lane_count() == 2);
+}
+#endif  // SONARE_WITH_MIXING
+
 TEST_CASE("compiler reports typed lane and reserved-route diagnostics", "[arrangement]") {
   SECTION("duplicate typed kind on one track") {
     Fixture f = make_fixture(128);

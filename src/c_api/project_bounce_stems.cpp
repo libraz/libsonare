@@ -23,7 +23,7 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
   midi_only.audio_clips.clear();
   sonare::engine::RealtimeEngine engine;
   engine.prepare(sample_rate, block_size);
-  arr::apply_to_engine(midi_only, engine);
+  if (!arr::apply_to_engine(midi_only, engine)) return false;
 
   // apply_to_engine already installed the compiled project-order lanes. Do not
   // replace them with a MIDI-only subset: typed automation ids encode those

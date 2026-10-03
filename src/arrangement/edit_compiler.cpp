@@ -1327,7 +1327,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   return result;
 }
 
-void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine) {
+bool apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine) {
+  bool lanes_installed = true;
   // Engine prescribed CONTROL-THREAD direct-setter order. All of these are
   // direct-setter / publisher installs, NOT push_command.
 
@@ -1358,7 +1359,7 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
   for (const CompiledTrackLane& lane : timeline.track_lanes) {
     track_lanes.emplace_back(lane.track_id);
   }
-  (void)engine.set_track_lanes(std::move(track_lanes));
+  lanes_installed = engine.set_track_lanes(std::move(track_lanes));
 #endif
 
   // 4) Resolve typed lanes to engine-reserved ids, then publish the compiled
@@ -1395,7 +1396,8 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
             break;
           }
         }
-        if (!found || lane_index > 0xFFu) continue;
+        // Without the compiled lanes in the engine a typed id would address another track's lane.
+        if (!lanes_installed || !found || lane_index > 0xFFu) continue;
         lane.set_target_param_id(engine::make_track_lane_param_id(
             lane_index, static_cast<uint32_t>(lane.target_kind())));
       }
@@ -1435,6 +1437,7 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
   //    diverges from the bounce whenever the strip holds a nonlinear insert (see
   //    the mixing_channel_strip_test case pinning sum!=process order). Any future
   //    live wiring of shared strips must preserve the summed-input grouping.
+  return lanes_installed;
 }
 
 }  // namespace sonare::arrangement

@@ -372,6 +372,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 /// value-only (the caller wires live ChannelStrips), so this helper does not
 /// call bind_mixing_strip — it leaves that to the caller, matching the
 /// "compiler cannot own RT objects" rule.
-void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine);
+///
+/// Returns false when the engine refuses the track-lane vector. Typed
+/// (fader/pan) automation is then not installed, because its ids encode lane
+/// indices of the refused vector; everything else is still installed.
+bool apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine);
 
 }  // namespace sonare::arrangement

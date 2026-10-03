@@ -209,7 +209,7 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(sample_rate, block_size);
-  arr::apply_to_engine(filtered, engine);
+  if (!arr::apply_to_engine(filtered, engine)) return false;
   for (const HostedInstrument& hosted : instruments) {
     hosted.instrument->reset();
     // A refused bind (e.g. a scheduled SysEx the instrument cannot prepare) fails the bounce.
