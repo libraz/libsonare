@@ -63,7 +63,8 @@ std::vector<float> resample_envelope_piece(const std::vector<float>& envelope,
                                            int64_t source_length, int64_t begin_sample,
                                            int64_t end_sample) {
   if (envelope.empty()) return {};
-  if (envelope.size() == 1) return envelope;
+  // Built from the element: GCC 13 -Warray-bounds misreads a one-element vector copy.
+  if (envelope.size() == 1) return std::vector<float>(1, envelope.front());
   SONARE_CHECK(source_length > 0 && begin_sample >= 0 && end_sample >= begin_sample &&
                    end_sample < source_length,
                ErrorCode::InvalidParameter);

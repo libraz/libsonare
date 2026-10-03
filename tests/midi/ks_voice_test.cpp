@@ -834,7 +834,7 @@ TEST_CASE("KS cascade keeps the fundamental T60 when stage B is transparent or a
   // (stage B is transparent); with a short target stage B must add the
   // remaining tilt. In both cases the cascade must preserve the same
   // fundamental traversal gain as the single-pole control.
-  for (const auto [label, decay, mid_decay, hf_decay] :
+  for (const auto& [label, decay, mid_decay, hf_decay] :
        {std::tuple<const char*, float, float, float>{"transparent B", 15.0f, 0.15f, 12.0f},
         std::tuple<const char*, float, float, float>{"active B", 30.0f, 30.0f, 0.03f}}) {
     KsPatchParams control;
