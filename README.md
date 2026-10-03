@@ -1,5 +1,14 @@
 # libsonare
 
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/libsonare/ci.yml?branch=main&label=CI)](https://github.com/libraz/libsonare/actions)
+[![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
+[![PyPI](https://img.shields.io/pypi/v/libsonare)](https://pypi.org/project/libsonare/)
+[![codecov](https://codecov.io/gh/libraz/libsonare/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libsonare)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
+[![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
+
 **libsonare turns audio into data and data back into audio.** Load a song and get its BPM, key, chords, and structure; master and mix it to broadcast loudness; turn MIDI into sound with built-in instruments; or build a whole DAW on top — the same engine in C++, Python, Node.js, and the browser. The C++ core has zero runtime dependencies; the Python package depends on NumPy, and there is no GPL/AGPL code and no model weights.
 
 📖 **[Documentation](https://libsonare.libraz.net)** &nbsp;·&nbsp; 🎧 **[Browser-local demos](https://libsonare.libraz.net/demos)** &nbsp;·&nbsp; **[Getting started](https://libsonare.libraz.net/docs/getting-started)**
