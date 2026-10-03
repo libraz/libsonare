@@ -672,6 +672,13 @@ bool GsEfxProcessor::set_parameter_impl(unsigned int param_id, float value) {
       const ParamDestination& destination = destinations_[param_id][i];
       rt::ProcessorBase* proc = unit_.stages[destination.stage_index].proc.get();
       if (!proc->set_parameter(destination.param_id, gs_efx_binding_value(destination.row, byte))) {
+        // Put the destinations already written back on the byte state_ still holds.
+        const uint8_t held = state_.params[param_id];
+        for (uint8_t j = 0; j < i; ++j) {
+          const ParamDestination& written = destinations_[param_id][j];
+          unit_.stages[written.stage_index].proc->set_parameter(
+              written.param_id, gs_efx_binding_value(written.row, held));
+        }
         return false;
       }
     }

@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -201,6 +202,49 @@ class NoAllocLatencyStage final : public ProcessorBase {
 
  private:
   int latency_q8_ = 0;
+};
+
+/// Records the value each stage parameter holds, and can refuse one numbered write.
+struct WriteLog {
+  using Key = std::pair<const void*, unsigned int>;
+  std::map<Key, float> current;
+  std::vector<std::pair<Key, float>> accepted;
+  int writes = 0;
+  int reject_write = -1;
+};
+
+class RecordingStage final : public ProcessorBase {
+ public:
+  explicit RecordingStage(std::shared_ptr<WriteLog> log) : log_(std::move(log)) {}
+
+  void prepare(double, int, int) override {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id < sonare::midi::synth::kGsEfxRowKeys.size();
+  }
+
+  std::vector<ParamDescriptor> parameter_descriptors() const override {
+    std::vector<ParamDescriptor> out;
+    for (unsigned int id = 0; id < sonare::midi::synth::kGsEfxRowKeys.size(); ++id) {
+      out.push_back({std::string(sonare::midi::synth::kGsEfxRowKeys[id]), id});
+    }
+    return out;
+  }
+
+ protected:
+  bool set_parameter_impl(unsigned int param_id, float value) override {
+    if (!parameter_is_realtime_safe(param_id)) return false;
+    if (log_->writes++ == log_->reject_write) return false;
+    log_->current[{this, param_id}] = value;
+    log_->accepted.push_back({{this, param_id}, value});
+    return true;
+  }
+
+ private:
+  std::shared_ptr<WriteLog> log_;
 };
 
 GsEfxStageFactory probe_factory(const std::shared_ptr<Probe>& probe) {
@@ -761,6 +805,57 @@ TEST_CASE("GS EFX enable-only bytes are realtime-safe and retain the fade ramp",
   float* enabled_again_channels[] = {enabled_again_left.data(), enabled_again_right.data()};
   processor.process(enabled_again_channels, 2, static_cast<int>(input.size()));
   REQUIRE(std::fabs(fade_in_left[0] - enabled_again_left.back()) > 1.0e-4f);
+}
+
+TEST_CASE("GS EFX restores earlier destinations when a later one refuses a byte",
+          "[midi][gs][efx][audio]") {
+  // Search the binding rows for a byte that reaches several stage controls, so the
+  // second write can be refused after the first was taken.
+  bool found = false;
+  for (const auto& row : sonare::midi::synth::kGsEfxBindingRows) {
+    if (found) break;
+    if (gs_efx_type_defaults(row.type) == nullptr) continue;
+    const auto log = std::make_shared<WriteLog>();
+    GsEfxProcessor processor(state_for(row.type), GsEfxRealization::kModern,
+                             [log](std::string_view, std::string_view) {
+                               return std::make_unique<RecordingStage>(log);
+                             });
+    processor.prepare(kSampleRate, 64, 2);
+    const unsigned int slot = row.slot;
+    if (!processor.parameter_is_realtime_safe(slot)) continue;
+
+    // byte_a: a byte written to two or more controls.
+    int byte_a = -1;
+    for (int byte = 0; byte < 128 && byte_a < 0; ++byte) {
+      const int writes_before = log->writes;
+      if (processor.set_parameter(slot, static_cast<float>(byte)) &&
+          log->writes - writes_before >= 2) {
+        byte_a = byte;
+      }
+    }
+    if (byte_a < 0) continue;
+
+    // byte_b: a byte that moves the first control byte_a reaches.
+    const auto held_a = log->current;
+    int byte_b = -1;
+    for (int byte = 0; byte < 128 && byte_b < 0; ++byte) {
+      const size_t first = log->accepted.size();
+      if (byte == byte_a || !processor.set_parameter(slot, static_cast<float>(byte))) continue;
+      const auto& [key, value] = log->accepted[first];
+      if (value != held_a.at(key)) byte_b = byte;
+      REQUIRE(processor.set_parameter(slot, static_cast<float>(byte_a)));
+    }
+    if (byte_b < 0) continue;
+    REQUIRE(log->current == held_a);
+
+    INFO("type " << row.type << " slot " << slot << " bytes " << byte_a << " -> " << byte_b);
+    log->reject_write = log->writes + 1;
+    REQUIRE_FALSE(processor.set_parameter(slot, static_cast<float>(byte_b)));
+    CHECK(processor.state().params[slot] == byte_a);
+    CHECK(log->current == held_a);
+    found = true;
+  }
+  REQUIRE(found);
 }
 
 #if SONARE_BUILD_FX
