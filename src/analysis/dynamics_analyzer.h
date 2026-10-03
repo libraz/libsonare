@@ -11,12 +11,12 @@ namespace sonare {
 
 /// @brief Dynamics analysis results.
 struct Dynamics {
-  float dynamic_range_db;   ///< Dynamic range in dB
-  float peak_db;            ///< Peak level in dB
-  float rms_db;             ///< RMS level in dB
-  float crest_factor;       ///< Peak to RMS ratio
-  float loudness_range_db;  ///< Loudness range (LRA) in dB
-  bool is_compressed;       ///< True if audio appears heavily compressed
+  float dynamic_range_db = 0.0f;   ///< Dynamic range in dB
+  float peak_db = 0.0f;            ///< Peak level in dB
+  float rms_db = 0.0f;             ///< RMS level in dB
+  float crest_factor = 0.0f;       ///< Peak to RMS ratio
+  float loudness_range_db = 0.0f;  ///< Loudness range (LRA) in dB
+  bool is_compressed = false;      ///< True if audio appears heavily compressed
 };
 
 /// @brief Loudness curve over time.
