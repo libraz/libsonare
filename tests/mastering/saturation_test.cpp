@@ -800,6 +800,23 @@ TEST_CASE("BitCrusher NoiseShaped dither does not leak clipped input across bloc
   REQUIRE(suffix_peak <= 16.0f * kStep);
 }
 
+TEST_CASE("BitCrusher refuses a one-bit word, which has no quantization levels",
+          "[mastering][saturation]") {
+  REQUIRE_THROWS_AS(BitCrusher({1, 1, 1.0f}), sonare::SonareException);
+  REQUIRE_NOTHROW(BitCrusher({2, 1, 1.0f}));
+
+  // Automation below the range lands on the two-bit grid and stays finite.
+  BitCrusher crusher({12, 1, 1.0f});
+  crusher.prepare(48000.0, 64);
+  REQUIRE(crusher.set_parameter(0, 1.0f));
+  REQUIRE(crusher.config().bit_depth == 2);
+  std::vector<float> samples = {0.0f, 0.3f, -0.7f, 0.9f};
+  process(crusher, samples);
+  for (const float sample : samples) {
+    REQUIRE(std::isfinite(sample));
+  }
+}
+
 TEST_CASE("BitCrusher NoiseShaped dither stays deterministic without clipping",
           "[mastering][saturation]") {
   BitCrusherConfig config{};

@@ -51,8 +51,8 @@ namespace sonare::mixing::assistant {
 ///          move with the gain.
 /// @param profiles Per-track profiles from @ref analyze_track_profiles.
 /// @param gain_db Gain applied to each track, index-parallel to @p profiles.
-///        Empty measures at the recorded levels. A wrong size or a non-finite
-///        entry yields an all-default matrix.
+///        Empty measures at the recorded levels. A wrong size, or an entry
+///        whose power scale is not finite, yields an all-default matrix.
 /// @return A flat matrix of `profiles.size() * profiles.size() * kBandCount`
 ///         entries, indexed `(masker * n + maskee) * kBandCount + band`, which
 ///         is exactly what @ref MixProfile::dominance_at reads. Empty for an

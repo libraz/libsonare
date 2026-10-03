@@ -32,6 +32,7 @@
 #include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/common/loudness_measure.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/final/bit_depth.h"
 #include "mastering/final/dither.h"
@@ -134,8 +135,10 @@ const float kLimiterBound = sonare::db_to_linear(-1.0f) * 1.05f;
 // A chain caller never holds the owners above, so the aggregate on the result is
 // the only thing that separates a degraded stream from a clean one. The chain
 // refuses a non-finite input outright, so these cases drive a stage into making
-// one: a makeup gain whose linear form overflows a float hands the limiter an
-// infinity that never came from the caller.
+// one: a hot but finite program through a makeup gain whose linear form is just
+// inside float range overflows in the multiply, handing the limiter an infinity
+// that never came from the caller. A makeup whose linear form itself overflows
+// is refused at validation.
 
 constexpr int kChainSampleRate = 48000;
 constexpr std::size_t kChainLength = 24000;  // 0.5 s
@@ -143,21 +146,32 @@ constexpr float kChainPeak = 0.5f;
 /// Ceiling the chain's limiter runs at. Well under the level the compressor
 /// leaves, so the limiter is not dormant on a clean run either.
 constexpr float kChainCeilingDb = -20.0f;
-/// db_to_linear of this is an infinity, so the compressor's output multiply
-/// overflows for every sample.
+/// db_to_linear of this is an infinity, so the compressor refuses it.
 constexpr float kOverflowingMakeupDb = 1.0e6f;
+/// db_to_linear of this is about 1e38: finite, so the compressor accepts it.
+constexpr float kHugeMakeupDb = 760.0f;
+/// Peak of the hot fixture. Finite, so the chain accepts it, and loud enough that
+/// what the compressor leaves of it times kHugeMakeupDb leaves float range.
+constexpr float kHotChainPeak = 1.0e4f;
 
-std::vector<float> chain_program() {
+/// The hot level held constant, so every sample the compressor emits overflows.
+/// Measured: a sine at this peak also hands the limiter huge finite samples near
+/// its zero crossings, which the 4x oversampler overflows on its own (107961
+/// substitutions at 4x against 22813 at 1x) and the limiter then discards.
+std::vector<float> hot_chain_program() { return std::vector<float>(kChainLength, kHotChainPeak); }
+
+std::vector<float> chain_program(float peak = kChainPeak) {
   std::vector<float> out(kChainLength);
   for (std::size_t i = 0; i < kChainLength; ++i) {
     const double t = static_cast<double>(i) / static_cast<double>(kChainSampleRate);
-    out[i] = static_cast<float>(kChainPeak * std::sin(2.0 * kPiD * 220.0 * t));
+    out[i] = static_cast<float>(peak * std::sin(2.0 * kPiD * 220.0 * t));
   }
   return out;
 }
 
-/// Compressor into true-peak limiter. @p makeup_db of kOverflowingMakeupDb is
-/// what makes the compressor emit the non-finite samples the limiter replaces.
+/// Compressor into true-peak limiter. @p makeup_db of kHugeMakeupDb over the hot
+/// fixture is what makes the compressor emit the non-finite samples the limiter
+/// replaces.
 sonare::mastering::api::MasteringChainConfig chain_config(float makeup_db, int oversample) {
   sonare::mastering::api::MasteringChainConfig config;
   config.dynamics.compressor.enabled = true;
@@ -169,8 +183,8 @@ sonare::mastering::api::MasteringChainConfig chain_config(float makeup_db, int o
 }
 
 /// A tilt shelf on its own. The compressor fixture above cannot show a discard:
-/// its overflowing makeup gain sits after the envelope, so the samples go
-/// non-finite while every cell stays finite.
+/// its makeup multiply sits after the envelope, so the samples go non-finite
+/// while every cell stays finite.
 sonare::mastering::api::MasteringChainConfig tilt_chain_config() {
   sonare::mastering::api::MasteringChainConfig config;
   config.eq.tilt.enabled = true;
@@ -212,14 +226,28 @@ float stage_gain_reduction_db(const sonare::mastering::api::MonoChainResult& res
 // the count on that result is its only observable. The dispatch refuses a
 // non-finite input just as the chain does, so the driver is again a parameter
 // that makes a stage produce one: SoftKneeMax applies input_gain_db as a linear
-// multiply and nothing bounds it, so a dB value whose linear form overflows a
-// float hands the knee an infinity that never came from the caller.
+// multiply, and a gain just inside float range over the hot fixture overflows
+// there, handing the knee an infinity that never came from the caller. A gain
+// whose linear form itself overflows is refused at validation.
 
 /// Ceiling the soft-knee cases run at. Under the fixture peak, so the knee is
 /// shaping on a clean run rather than passing the signal through.
 constexpr float kSoftKneeCeilingDb = -20.0f;
-/// db_to_linear of this is an infinity, so the knee's drive multiply overflows.
+/// db_to_linear of this is an infinity, so SoftKneeMax refuses it.
 constexpr float kOverflowingInputGainDb = 1.0e6f;
+/// db_to_linear of this is about 1e38: accepted, and it overflows on the hot fixture.
+constexpr float kHugeInputGainDb = 760.0f;
+/// Normalization gain the loudness cases ask for, relative to the measured input:
+/// finite in linear form, and enough to overflow the hot fixture's peaks.
+constexpr float kHugeLoudnessGainDb = 740.0f;
+/// A loudness ceiling far enough up that its headroom never bounds that gain.
+constexpr float kOpenCeilingDb = 1000.0f;
+
+/// Integrated loudness of @p program, so a target can sit a fixed gain above it.
+float program_lufs(const std::vector<float>& program) {
+  return sonare::mastering::common::measure_lufs(
+      sonare::Audio::from_buffer(program.data(), program.size(), kChainSampleRate));
+}
 
 std::vector<sonare::mastering::api::Param> soft_knee_params(float input_gain_db) {
   return {{"inputGainDb", input_gain_db}, {"ceilingDb", kSoftKneeCeilingDb}};
@@ -461,10 +489,18 @@ TEST_CASE("MasteringChain counts the non-finite samples a stage of its own produ
   using sonare::mastering::api::MasteringChain;
   using sonare::mastering::api::MonoChainResult;
 
-  // dynamics.compressor is the producer: its makeup multiply overflows, and
-  // maximizer.truePeakLimiter is the stage that replaces the result.
-  const std::vector<float> program = chain_program();
-  MasteringChain chain(chain_config(kOverflowingMakeupDb, 4));
+  // A makeup whose linear form overflows is refused before any audio runs.
+  const std::vector<float> program = hot_chain_program();
+  REQUIRE_THROWS_AS(
+      [&] {
+        MasteringChain refused(chain_config(kOverflowingMakeupDb, 4));
+        refused.process_mono(program.data(), program.size(), kChainSampleRate);
+      }(),
+      sonare::SonareException);
+
+  // dynamics.compressor is the producer: its makeup multiply overflows on the hot
+  // fixture, and maximizer.truePeakLimiter is the stage that replaces the result.
+  MasteringChain chain(chain_config(kHugeMakeupDb, 4));
   const MonoChainResult result =
       chain.process_mono(program.data(), program.size(), kChainSampleRate);
 
@@ -485,9 +521,9 @@ TEST_CASE("MasteringChain's substitution count does not depend on the oversampli
   // reconstruction filter spreads it, so the count is of samples the caller's
   // stream carried rather than of oversampled positions one of them reached. A
   // 1x and a 4x limiter therefore agree on the same provoked run.
-  const std::vector<float> program = chain_program();
-  MasteringChain oversampled(chain_config(kOverflowingMakeupDb, 4));
-  MasteringChain base_rate(chain_config(kOverflowingMakeupDb, 1));
+  const std::vector<float> program = hot_chain_program();
+  MasteringChain oversampled(chain_config(kHugeMakeupDb, 4));
+  MasteringChain base_rate(chain_config(kHugeMakeupDb, 1));
   const MonoChainResult oversampled_result =
       oversampled.process_mono(program.data(), program.size(), kChainSampleRate);
   const MonoChainResult base_rate_result =
@@ -518,18 +554,28 @@ TEST_CASE("StreamingMasteringChain accumulates its substitutions across blocks",
     REQUIRE(chain.non_finite_substitution_count() == 0u);
   }
 
+  SECTION("an overflowing makeup is refused before any block runs") {
+    REQUIRE_THROWS_AS(
+        [&] {
+          StreamingMasteringChain refused(chain_config(kOverflowingMakeupDb, 4));
+          refused.prepare(kChainSampleRate, kBlockSize, 1);
+        }(),
+        sonare::SonareException);
+  }
+
   SECTION("the count keeps rising while the stages keep replacing") {
-    StreamingMasteringChain chain(chain_config(kOverflowingMakeupDb, 4));
+    const std::vector<float> hot = hot_chain_program();
+    StreamingMasteringChain chain(chain_config(kHugeMakeupDb, 4));
     chain.prepare(kChainSampleRate, kBlockSize, 1);
     REQUIRE(chain.stage_names() == kExpectedStages);
 
-    std::vector<float> first(program.begin(), program.begin() + kBlockSize);
+    std::vector<float> first(hot.begin(), hot.begin() + kBlockSize);
     float* channels[1] = {first.data()};
     chain.process_block(channels, 1, kBlockSize);
     const std::uint32_t after_one_block = chain.non_finite_substitution_count();
     REQUIRE(after_one_block > 0u);
 
-    drive_streaming(chain, program);
+    drive_streaming(chain, hot);
     REQUIRE(chain.non_finite_substitution_count() > after_one_block);
   }
 }
@@ -553,12 +599,12 @@ TEST_CASE("StreamingMasteringChain counts a call in which a stage discarded its 
 
   SECTION("the overflowing compressor substitutes without any stage discarding") {
     // Measured, not assumed, and it is what separates the two counters: the
-    // makeup gain that overflows sits AFTER the compressor's envelope, so the
+    // makeup multiply that overflows sits AFTER the compressor's envelope, so the
     // samples it emits are non-finite while no cell behind them is. The limiter
     // replaces those samples and reports it; nothing discarded any state.
-    StreamingMasteringChain chain(chain_config(kOverflowingMakeupDb, 4));
+    StreamingMasteringChain chain(chain_config(kHugeMakeupDb, 4));
     chain.prepare(kChainSampleRate, kBlockSize, 1);
-    drive_streaming(chain, program);
+    drive_streaming(chain, hot_chain_program());
     REQUIRE(chain.non_finite_substitution_count() > 0u);
     REQUIRE(chain.non_finite_discard_count() == 0u);
   }
@@ -621,10 +667,17 @@ TEST_CASE("apply_named_processor reports the substitutions its processor made",
     REQUIRE(result.non_finite_substitution_count == 0u);
   }
 
-  SECTION("a stage producing non-finite samples moves the count") {
-    const auto result =
+  SECTION("an input gain whose linear form overflows is refused") {
+    REQUIRE_THROWS_AS(
         apply_named_processor("maximizer.softKneeMax", program.data(), program.size(),
-                              kChainSampleRate, soft_knee_params(kOverflowingInputGainDb));
+                              kChainSampleRate, soft_knee_params(kOverflowingInputGainDb)),
+        sonare::SonareException);
+  }
+
+  SECTION("a stage producing non-finite samples moves the count") {
+    const std::vector<float> hot = chain_program(kHotChainPeak);
+    const auto result = apply_named_processor("maximizer.softKneeMax", hot.data(), hot.size(),
+                                              kChainSampleRate, soft_knee_params(kHugeInputGainDb));
     REQUIRE(result.non_finite_substitution_count > 0u);
     // The buffer the caller gets back is finite either way, which is why the
     // count is the only signal there is.
@@ -649,10 +702,18 @@ TEST_CASE("apply_named_processor_stereo reports the substitutions its processor 
     REQUIRE(result.non_finite_substitution_count == 0u);
   }
 
+  SECTION("an input gain whose linear form overflows is refused") {
+    REQUIRE_THROWS_AS(apply_named_processor_stereo("maximizer.softKneeMax", program.data(),
+                                                   program.data(), program.size(), kChainSampleRate,
+                                                   soft_knee_params(kOverflowingInputGainDb)),
+                      sonare::SonareException);
+  }
+
   SECTION("a stage producing non-finite samples moves the count") {
-    const auto result = apply_named_processor_stereo(
-        "maximizer.softKneeMax", program.data(), program.data(), program.size(), kChainSampleRate,
-        soft_knee_params(kOverflowingInputGainDb));
+    const std::vector<float> hot = chain_program(kHotChainPeak);
+    const auto result =
+        apply_named_processor_stereo("maximizer.softKneeMax", hot.data(), hot.data(), hot.size(),
+                                     kChainSampleRate, soft_knee_params(kHugeInputGainDb));
     REQUIRE(result.non_finite_substitution_count > 0u);
     REQUIRE(non_finite_count(result.left) == 0u);
     REQUIRE(non_finite_count(result.right) == 0u);
@@ -681,15 +742,24 @@ TEST_CASE("loudness_optimize reports the substitutions its internal limiter made
     REQUIRE(result.non_finite_substitution_count == 0u);
   }
 
-  SECTION("a normalization gain that overflows moves the count") {
-    // Both fields are validated for finiteness only, so a target this far above
-    // the input survives and the ceiling headroom does not bound it back down:
-    // db_to_linear of the resulting gain overflows and the static multiply hands
-    // the limiter an infinity the caller never supplied.
+  SECTION("a normalization gain whose linear form overflows is refused") {
     LoudnessOptimizeConfig config;
     config.target_lufs = 1.0e6f;
     config.ceiling_db = 1.0e6f;
-    const auto result = loudness_optimize(audio, config);
+    REQUIRE_THROWS_AS(loudness_optimize(audio, config), sonare::SonareException);
+  }
+
+  SECTION("a normalization gain that overflows the program moves the count") {
+    // The gain itself is finite in linear form, so it is accepted, and the open
+    // ceiling does not bound it back down; on the hot fixture the static multiply
+    // overflows and hands the limiter an infinity the caller never supplied.
+    const std::vector<float> hot = chain_program(kHotChainPeak);
+    const sonare::Audio hot_audio =
+        sonare::Audio::from_buffer(hot.data(), hot.size(), kChainSampleRate);
+    LoudnessOptimizeConfig config;
+    config.target_lufs = program_lufs(hot) + kHugeLoudnessGainDb;
+    config.ceiling_db = kOpenCeilingDb;
+    const auto result = loudness_optimize(hot_audio, config);
     REQUIRE(result.non_finite_substitution_count > 0u);
   }
 }
@@ -703,9 +773,14 @@ TEST_CASE("maximizer.loudnessOptimize's mono branch reports the substitutions it
           "[mastering][named-processor][non-finite]") {
   using sonare::mastering::api::apply_named_processor;
 
-  const std::vector<float> program = chain_program();
-  const std::vector<sonare::mastering::api::Param> params{{"targetLufs", 1.0e6},
-                                                          {"ceilingDb", 1.0e6}};
+  const std::vector<float> program = chain_program(kHotChainPeak);
+  const std::vector<sonare::mastering::api::Param> refused{{"targetLufs", 1.0e6},
+                                                           {"ceilingDb", 1.0e6}};
+  REQUIRE_THROWS_AS(apply_named_processor("maximizer.loudnessOptimize", program.data(),
+                                          program.size(), kChainSampleRate, refused),
+                    sonare::SonareException);
+  const std::vector<sonare::mastering::api::Param> params{
+      {"targetLufs", program_lufs(program) + kHugeLoudnessGainDb}, {"ceilingDb", kOpenCeilingDb}};
   const auto result = apply_named_processor("maximizer.loudnessOptimize", program.data(),
                                             program.size(), kChainSampleRate, params);
   REQUIRE(result.non_finite_substitution_count > 0u);
@@ -722,9 +797,16 @@ TEST_CASE("maximizer.loudnessOptimize's stereo branch reports the substitutions 
   // dispatch the mono branch (and the cases above) use. A result assembled
   // there carries the count only if that branch threads the same outcome the
   // shared one does.
-  const std::vector<float> program = chain_program();
-  const std::vector<sonare::mastering::api::Param> params{{"targetLufs", 1.0e6},
-                                                          {"ceilingDb", 1.0e6}};
+  const std::vector<float> program = chain_program(kHotChainPeak);
+  const std::vector<sonare::mastering::api::Param> refused{{"targetLufs", 1.0e6},
+                                                           {"ceilingDb", 1.0e6}};
+  REQUIRE_THROWS_AS(
+      apply_named_processor_stereo("maximizer.loudnessOptimize", program.data(), program.data(),
+                                   program.size(), kChainSampleRate, refused),
+      sonare::SonareException);
+  // The pair measures about 3 LU above one channel; the gain stays in range either way.
+  const std::vector<sonare::mastering::api::Param> params{
+      {"targetLufs", program_lufs(program) + kHugeLoudnessGainDb}, {"ceilingDb", kOpenCeilingDb}};
   const auto result =
       apply_named_processor_stereo("maximizer.loudnessOptimize", program.data(), program.data(),
                                    program.size(), kChainSampleRate, params);

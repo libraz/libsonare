@@ -11,6 +11,7 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/zero_is_default.h"
 
 namespace sonare::mastering::maximizer {
@@ -54,8 +55,12 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
                                     std::max(config.max_limiter_gain_reduction_db, 0.0f));
   }
 
-  std::vector<float> samples(audio.data(), audio.data() + audio.size());
   const float gain = db_to_linear(gain_db);
+  if (!numeric::finite(gain)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "loudness target must produce a finite linear gain");
+  }
+  std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (auto& sample : samples) {
     sample *= gain;
   }

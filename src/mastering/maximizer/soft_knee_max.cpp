@@ -7,6 +7,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -75,6 +76,7 @@ bool SoftKneeMax::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Drive applied per sample in process(); no coefficients to recompute.
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.input_gain_db = value;
       return true;
     case 1:
@@ -111,6 +113,10 @@ bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexce
 void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
   if (config.knee_db < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft knee maximizer configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.input_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "soft knee maximizer input gain must produce a finite linear gain");
   }
 }
 

@@ -145,6 +145,73 @@ TEST_CASE("utility gain keeps finite extremes meaningful", "[mastering][insert_f
   for (const float sample : silence) REQUIRE(sample == 0.0f);
 }
 
+TEST_CASE("inserts reject dB gains whose linear multiplier overflows",
+          "[mastering][insert_factory][gain]") {
+  struct Row {
+    const char* name;
+    const char* key;
+    int param_id;  // -1 when the key is not automatable
+  };
+  const Row rows[] = {
+      {"dynamics.limiter", "postGainDb", 3},
+      {"dynamics.compressor", "makeupGainDb", 4},
+      {"dynamics.parallelComp", "makeupGainDb", 4},
+      {"dynamics.transientShaper", "maxGainDb", 7},
+      {"dynamics.upwardCompressor", "rangeDb", 4},
+      {"dynamics.upwardExpander", "rangeDb", 4},
+      {"dynamics.vocalRider", "maxBoostDb", 1},
+      {"dynamics.vocalRider", "outputGainDb", 5},
+      {"stereo.imager", "outputGainDb", 1},
+      {"maximizer.maximizer", "inputGainDb", 0},
+      {"maximizer.softKneeMax", "inputGainDb", 0},
+      {"saturation.softClipper", "driveDb", 0},
+      {"saturation.waveshaper", "driveDb", 0},
+      {"saturation.waveshaper", "outputGainDb", 2},
+      {"saturation.transformer", "driveDb", 0},
+      {"saturation.tape", "driveDb", 0},
+      {"saturation.tape", "outputGainDb", 3},
+      {"saturation.tape", "headBumpDb", 5},
+      {"saturation.tube", "driveDb", 0},
+      {"saturation.exciter", "driveDb", 1},
+      {"saturation.ampSim", "inputDb", 16},
+      {"saturation.ampSim", "levelDb", 5},
+      {"multiband.saturation", "band0.driveDb", 0},
+      {"multiband.saturation", "band0.outputGainDb", 2},
+      {"eq.equalizer", "outputGainDb", -1},
+  };
+  for (const Row& row : rows) {
+    CAPTURE(row.name, row.key);
+    const std::string overflowing = std::string(R"({")") + row.key + R"(":1000})";
+    const std::string ordinary = std::string(R"({")") + row.key + R"(":6})";
+    try {
+      make_insert(row.name, overflowing);
+      FAIL("insert accepted a dB value whose linear conversion overflows");
+    } catch (const sonare::SonareException& error) {
+      REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+    }
+    auto processor = make_insert(row.name, ordinary);
+    REQUIRE(processor != nullptr);
+    if (row.param_id < 0) continue;
+    processor->prepare(48000.0, 64);
+    const auto id = static_cast<unsigned int>(row.param_id);
+    REQUIRE_FALSE(processor->set_parameter(id, 1000.0f));
+    REQUIRE(processor->set_parameter(id, 6.0f));
+  }
+
+  // Couplings: the applied gain is a sum or a derived makeup, so each part alone is fine.
+  REQUIRE(make_insert("dynamics.vocalRider", R"({"maxBoostDb":500})") != nullptr);
+  REQUIRE_THROWS_AS(make_insert("dynamics.vocalRider", R"({"maxBoostDb":500,"outputGainDb":500})"),
+                    sonare::SonareException);
+  REQUIRE(make_insert("dynamics.compressor", R"({"thresholdDb":-5000})") != nullptr);
+  REQUIRE_THROWS_AS(
+      make_insert("dynamics.compressor", R"({"autoMakeup":true,"thresholdDb":-5000})"),
+      sonare::SonareException);
+  auto compressor = make_insert("dynamics.compressor", R"({"autoMakeup":true})");
+  compressor->prepare(48000.0, 64);
+  REQUIRE_FALSE(compressor->set_parameter(0, -5000.0f));
+  REQUIRE(compressor->set_parameter(0, -30.0f));
+}
+
 TEST_CASE("insert construction captures effective realtime parameter values",
           "[insert][automation]") {
   REQUIRE_THAT(

@@ -362,7 +362,8 @@ TEST_CASE("analyze_band_dominance accepts degenerate track counts", "[mixing][as
     set_band_energy(profiles[1], kMidBand, 0, kFrames - 1, 1.0f);
     REQUIRE(measure(profiles).dominance_at(0, 1, kMidBand).valid_frames == kFrames);
     for (const std::vector<float>& gain :
-         {std::vector<float>{0.0f}, std::vector<float>{0.0f, std::nanf("")}}) {
+         {std::vector<float>{0.0f}, std::vector<float>{0.0f, std::nanf("")},
+          std::vector<float>{0.0f, 400.0f}}) {
       for (const BandDominance& entry : analyze_band_dominance(profiles, gain)) {
         CHECK(entry.valid_frames == 0);
       }

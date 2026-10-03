@@ -12,6 +12,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -246,46 +247,50 @@ bool Compressor::set_parameter_impl(unsigned int param_id, float value) {
   // RT-safe in-place automation: mutate the audio thread's live working config
   // and re-derive its coefficients. No shared_ptr publish, no allocation; the
   // control-thread mirror (config_) and the published snapshot stay untouched.
+  CompressorConfig next = active_;
   switch (param_id) {
     case 0:
-      active_.threshold_db = value;
+      next.threshold_db = value;
       break;
     case 1:
-      active_.ratio = std::max(1.0f, value);
+      next.ratio = std::max(1.0f, value);
       break;
     case 2:
-      active_.attack_ms = std::max(0.0f, value);
+      next.attack_ms = std::max(0.0f, value);
       break;
     case 3:
-      active_.release_ms = std::max(0.0f, value);
+      next.release_ms = std::max(0.0f, value);
       break;
     case 4:
-      active_.makeup_gain_db = value;
+      next.makeup_gain_db = value;
       break;
     case 5:
-      active_.knee_db = std::max(0.0f, value);
+      next.knee_db = std::max(0.0f, value);
       break;
     case 6:
-      active_.auto_makeup = value != 0.0f;
+      next.auto_makeup = value != 0.0f;
       break;
     case 7:
-      active_.detector = detector_mode_from_param(value);
+      next.detector = detector_mode_from_param(value);
       break;
     case 8:
-      active_.sidechain_hpf_enabled = value != 0.0f;
+      next.sidechain_hpf_enabled = value != 0.0f;
       break;
     case 9:
-      active_.sidechain_hpf_hz = std::max(1.0f, value);
+      next.sidechain_hpf_hz = std::max(1.0f, value);
       break;
     case 10:
-      active_.pdr_time_ms = std::max(0.0f, value);
+      next.pdr_time_ms = std::max(0.0f, value);
       break;
     case 11:
-      active_.pdr_release_scale = std::max(1.0f, value);
+      next.pdr_release_scale = std::max(1.0f, value);
       break;
     default:
       return false;
   }
+  // Threshold, ratio and both makeup controls all move the makeup gain.
+  if (!numeric::finite(db_to_linear(compute_makeup_db(next)))) return false;
+  active_ = next;
   // Mirror the live value into the control-thread config so config() reads back
   // the automated state (matching the historical contract); this writes config_
   // only, never the published snapshot, so no allocation occurs. set_parameter
@@ -311,6 +316,10 @@ void Compressor::validate_config(const CompressorConfig& config) {
       config.pdr_release_scale < 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "compressor timing and knee values must be non-negative");
+  }
+  if (!numeric::finite(db_to_linear(compute_makeup_db(config)))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "compressor makeup gain must produce a finite linear gain");
   }
 }
 

@@ -13,6 +13,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -298,6 +299,11 @@ void AmpSim::validate_config(const AmpSimConfig& config) {
       !std::isfinite(config.cone) || !std::isfinite(config.doppler) ||
       !std::isfinite(config.crossover) || !std::isfinite(config.bias_shift)) {
     throw SonareException(ErrorCode::InvalidParameter, "amp-sim params must be finite");
+  }
+  if (!numeric::finite(sonare::db_to_linear(config.input_db)) ||
+      !numeric::finite(sonare::db_to_linear(config.level_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "amp-sim input and level must produce finite linear gains");
   }
 }
 
@@ -1013,6 +1019,7 @@ bool AmpSim::set_parameter_impl(unsigned int param_id, float value) {
       config_.presence_db = value;
       break;
     case 5:
+      if (!numeric::finite(sonare::db_to_linear(value))) return false;
       config_.level_db = value;
       break;
     case 6:
@@ -1048,6 +1055,7 @@ bool AmpSim::set_parameter_impl(unsigned int param_id, float value) {
       config_.bias_shift = std::clamp(value, 0.0f, 1.0f);
       break;
     case 16:
+      if (!numeric::finite(sonare::db_to_linear(value))) return false;
       config_.input_db = value;
       break;
     case 17:

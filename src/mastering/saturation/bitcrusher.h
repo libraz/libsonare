@@ -55,6 +55,10 @@ inline constexpr std::array<float, 9> kTypeLadderHoldHz = {16000.0f, 10666.66666
 inline constexpr std::array<float, 4> kDiscClickRateHz = {4.0f, 8.0f, 16.0f, 32.0f};
 inline constexpr int kBitCrusherDiscTypeCount = static_cast<int>(kDiscClickRateHz.size());
 
+/// Word-length bounds. One bit leaves 2^(b-1) - 1 = 0 levels, which quantizes to 0/0.
+inline constexpr int kBitCrusherMinBitDepth = 2;
+inline constexpr int kBitCrusherMaxBitDepth = 24;
+
 /// One-pole corner the radio generator is shaped by before its own low-pass.
 inline constexpr float kRadioNoiseCornerHz = 16000.0f;
 
@@ -110,7 +114,7 @@ class BitCrusher : public rt::ProcessorBase {
   const BitCrusherConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = bit_depth (rounded and clamped to [1, 24]; quantization resolution)
+  //   0 = bit_depth (rounded and clamped to [2, 24]; quantization resolution)
   //   1 = mix (clamped to [0, 1])
   //   2 = hold_hz (re-derives the phase increment in place; the phase runs on)
   //   3-6 = radio / wp / disc / hum noise level (clamped to [0, 1])

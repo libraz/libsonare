@@ -11,6 +11,7 @@
 #include "mastering/common/loudness_measure.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::api::detail {
 
@@ -95,6 +96,10 @@ inline float loudness_gain_db_with_ceiling(float current_lufs, float target_lufs
   if (std::isfinite(peak_db)) {
     const float headroom_db = ceiling_db - peak_db;
     gain_db = std::min(gain_db, headroom_db + std::max(max_limiter_gain_reduction_db, 0.0f));
+  }
+  if (!numeric::finite(db_to_linear(gain_db))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "loudness target must produce a finite linear gain");
   }
   return gain_db;
 }

@@ -10,6 +10,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -155,6 +156,10 @@ bool VocalRider::set_parameter_impl(unsigned int param_id, float value) {
       active_.target_db = value;
       break;
     case 1:
+      // The applied gain peaks at max boost plus output gain.
+      if (!numeric::finite(db_to_linear(std::max(0.0f, value) + active_.output_gain_db))) {
+        return false;
+      }
       active_.max_boost_db = std::max(0.0f, value);
       break;
     case 2:
@@ -167,6 +172,7 @@ bool VocalRider::set_parameter_impl(unsigned int param_id, float value) {
       active_.release_ms = std::max(0.0f, value);
       break;
     case 5:
+      if (!numeric::finite(db_to_linear(active_.max_boost_db + value))) return false;
       active_.output_gain_db = value;
       break;
     case 6:
@@ -194,6 +200,11 @@ void VocalRider::validate_config(const VocalRiderConfig& config) {
   if (config.max_boost_db < 0.0f || config.max_cut_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid vocal rider configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.max_boost_db + config.output_gain_db))) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "vocal rider max boost plus output gain must produce a finite linear gain");
   }
 }
 

@@ -10,6 +10,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::eq {
 
@@ -434,9 +435,9 @@ void EqualizerProcessor::set_gain_scale(float scale) {
 }
 
 void EqualizerProcessor::set_output_gain_db(float gain_db) {
-  if (!std::isfinite(gain_db)) {
+  if (!numeric::finite(gain_db) || !numeric::finite(db_to_linear(gain_db))) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "EqualizerProcessor output gain must be finite");
+                          "EqualizerProcessor output gain must produce a finite linear gain");
   }
   output_gain_db_ = gain_db;
 }

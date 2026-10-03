@@ -1,10 +1,27 @@
 #include "mixing/gain.h"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "util/db.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mixing {
+namespace {
+
+// Largest dB whose float linear gain is finite; fader, trim and VCA sums clamp here.
+const float kMaxFiniteGainDb = [] {
+  float db = linear_to_db(std::numeric_limits<float>::max());
+  while (!numeric::finite(db_to_linear(db))) db = std::nextafter(db, 0.0f);
+  return db;
+}();
+
+float summed_db_to_linear(float db) noexcept {
+  return db_to_linear(std::min(db, kMaxFiniteGainDb));
+}
+
+}  // namespace
 
 GainProcessor::GainProcessor(GainConfig config)
     : smoothing_ms_(std::isfinite(config.smoothing_ms) && config.smoothing_ms >= 0.0f
@@ -15,7 +32,7 @@ GainProcessor::GainProcessor(GainConfig config)
 void GainProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   smoother_.prepare(sample_rate_, smoothing_ms_);
-  smoother_.reset(db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+  smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
 }
 
 void GainProcessor::process(float* const* channels, int num_channels, int num_samples) {
@@ -23,7 +40,14 @@ void GainProcessor::process(float* const* channels, int num_channels, int num_sa
     return;
   }
 
-  smoother_.set_target(db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+  const float target =
+      summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db());
+  // Zero smoothing snaps: a full one-pole step away from a near-FLT_MAX gain cancels the target.
+  if (smoothing_ms_ > 0.0f) {
+    smoother_.set_target(target);
+  } else {
+    smoother_.reset(target);
+  }
   for (int i = 0; i < num_samples; ++i) {
     const float gain = smoother_.process();
     for (int ch = 0; ch < num_channels; ++ch) {
@@ -35,14 +59,14 @@ void GainProcessor::process(float* const* channels, int num_channels, int num_sa
 }
 
 void GainProcessor::reset() {
-  smoother_.reset(db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+  smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
 }
 
 void GainProcessor::settle() noexcept {
   // Snap straight to the current steady-state gain (the same target process()
   // would smooth toward) so the next render block opens at that gain with no
   // ramp-in, keeping an offline bounce deterministic.
-  smoother_.reset(db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+  smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
 }
 
 void GainProcessor::set_gain_db(float gain_db) noexcept {

@@ -6,6 +6,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -106,6 +107,7 @@ void SoftClipper::set_config(const SoftClipperConfig& config) {
 bool SoftClipper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!numeric::finite(Waveshaper::db_to_linear(value))) return false;
       config_.drive_db = value;
       return true;
     case 1:
@@ -123,6 +125,10 @@ std::vector<rt::ParamDescriptor> SoftClipper::parameter_descriptors() const {
 void SoftClipper::validate_config(const SoftClipperConfig& config) {
   if (!(config.ceiling > 0.0f) || config.mix < 0.0f || config.mix > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft clipper configuration");
+  }
+  if (!numeric::finite(Waveshaper::db_to_linear(config.drive_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "soft clipper drive must produce a finite linear gain");
   }
   // ADAA2 (second-order antiderivative antialiasing) has no closed-form
   // second antiderivative for tanh, so it is not implemented here. Reject the

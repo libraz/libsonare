@@ -10,6 +10,7 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -221,6 +222,7 @@ bool Limiter::set_parameter_impl(unsigned int param_id, float value) {
       set_ratio_in_place(value);
       return true;
     case 3:
+      if (!numeric::finite(db_to_linear(value))) return false;
       set_post_gain_db_in_place(value);
       return true;
     default:
@@ -243,8 +245,10 @@ void Limiter::validate_config(const LimiterConfig& config) {
     // poisons every gain in the block; reject it here (matches BrickwallLimiter).
     throw SonareException(ErrorCode::InvalidParameter, "limiter threshold must be finite");
   }
-  if (!std::isfinite(config.post_gain_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "limiter post gain must be finite");
+  if (!numeric::finite(config.post_gain_db) ||
+      !numeric::finite(db_to_linear(config.post_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "limiter post gain must produce a finite linear gain");
   }
   if (!std::isfinite(config.ratio) || (config.ratio != 0.0f && config.ratio < 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "limiter ratio must be 0 or at least 1");

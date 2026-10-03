@@ -6,6 +6,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -52,6 +53,7 @@ bool Maximizer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // Applied per block as a linear gain; no coefficients to recompute.
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.input_gain_db = value;
       return true;
     case 1:
@@ -86,6 +88,10 @@ void Maximizer::validate_config(const MaximizerConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "maximizer timing values must be non-negative");
+  }
+  if (!numeric::finite(db_to_linear(config.input_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "maximizer input gain must produce a finite linear gain");
   }
 }
 

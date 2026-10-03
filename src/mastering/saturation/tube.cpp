@@ -10,6 +10,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -176,6 +177,7 @@ float Tube::process_model(float sample, const TubeConfig& config) {
 bool Tube::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!numeric::finite(db_to_linear(value))) return false;
       tube_config_.drive_db = value;
       return true;
     case 1:
@@ -206,6 +208,10 @@ void Tube::validate_config(const TubeConfig& config) {
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8)) {
     throw SonareException(ErrorCode::InvalidParameter, "tube mix must be in [0, 1]");
+  }
+  if (!numeric::finite(db_to_linear(config.drive_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tube drive must produce a finite linear gain");
   }
 }
 

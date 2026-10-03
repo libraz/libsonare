@@ -1,6 +1,8 @@
 /// @file eq_specialized_test.cpp
 /// @brief Specialized EQ processor tests.
 
+#include <limits>
+
 #include "eq_test_helpers.h"
 #include "support/alloc_guard.h"
 
@@ -435,6 +437,29 @@ TEST_CASE("GraphicEq exposes 31 bands and nearest band lookup", "[mastering][eq]
                WithinAbs(GraphicEq::band_q_for_gain_db(-12.0f), 0.0001f));
   REQUIRE_THROWS(eq.center_frequency(31));
   REQUIRE_THROWS(eq.nearest_band(0.0f));
+}
+
+TEST_CASE("GraphicEq leaves a band unchanged when a gain is refused", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  GraphicEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_gain_db(17, 6.0f);
+  auto reference = sine(1000.0f, sample_rate, 8192);
+  process(eq, reference);
+
+  for (const float refused : {1000.0f, std::numeric_limits<float>::quiet_NaN()}) {
+    CAPTURE(refused);
+    REQUIRE_THROWS_AS(eq.set_gain_db(17, refused), sonare::SonareException);
+    REQUIRE(eq.gain_db(17) == 6.0f);
+  }
+  REQUIRE_FALSE(eq.set_parameter(17, 1000.0f));
+  REQUIRE(eq.gain_db(17) == 6.0f);
+
+  // The installed filter is still the 6 dB band.
+  eq.reset();
+  auto after = sine(1000.0f, sample_rate, 8192);
+  process(eq, after);
+  REQUIRE(max_abs_difference(reference, after) == 0.0f);
 }
 
 TEST_CASE("GraphicEq boosts selected band more than distant bands", "[mastering][eq]") {

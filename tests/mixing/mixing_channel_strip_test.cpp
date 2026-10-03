@@ -14,6 +14,7 @@
 #include "mixing/channel_strip_eq.h"
 #include "mixing_test_helpers.h"
 #include "rt/delay_line.h"
+#include "rt/gain_processor.h"
 #include "util/exception.h"
 
 namespace {
@@ -454,6 +455,47 @@ TEST_CASE("GainProcessor zero smoothing applies target without a second ramp", "
   for (float sample : samples) {
     REQUIRE_THAT(sample, WithinAbs(0.5f, 0.0001f));
   }
+}
+
+TEST_CASE("GainProcessor keeps an overflowing fader, trim and VCA sum finite", "[mixing]") {
+  std::array<float, 4> samples{1.0f, -1.0f, 0.5f, -0.5f};
+  float* channels[] = {samples.data()};
+
+  // Each part converts to a finite gain on its own; only their sum overflows.
+  sonare::mixing::GainProcessor gain({500.0f, 0.0f});
+  gain.set_vca_offset_db(200.0f);
+  gain.add_vca_group_offset_db(200.0f);
+  REQUIRE(gain.gain_db() == 500.0f);
+  REQUIRE(gain.vca_offset_db() == 400.0f);
+  gain.prepare(48000.0, 4);
+  gain.process(channels, 1, 4);
+  for (float sample : samples) {
+    REQUIRE(std::isfinite(sample));
+    REQUIRE(sample != 0.0f);
+  }
+
+  // The accumulation is untouched: removing the group restores the plain sum.
+  gain.add_vca_group_offset_db(-200.0f);
+  gain.set_vca_offset_db(0.0f);
+  gain.set_gain_db(-6.0206f);
+  std::array<float, 2> unit{1.0f, 1.0f};
+  float* unit_channels[] = {unit.data()};
+  gain.process(unit_channels, 1, 2);
+  REQUIRE_THAT(unit[0], WithinAbs(0.5f, 0.0001f));
+}
+
+TEST_CASE("graph gain node rejects a dB value whose linear gain overflows", "[mixing][graph]") {
+  REQUIRE_THROWS_AS(sonare::rt::GainProcessor(1000.0f), sonare::SonareException);
+  REQUIRE_THROWS_AS(sonare::rt::GainProcessor(std::numeric_limits<float>::quiet_NaN()),
+                    sonare::SonareException);
+
+  sonare::rt::GainProcessor gain(-6.0206f);
+  REQUIRE_FALSE(gain.set_parameter(0, 1000.0f));
+  std::array<float, 2> samples{1.0f, -1.0f};
+  float* channels[] = {samples.data()};
+  gain.process(channels, 1, 2);
+  REQUIRE_THAT(samples[0], WithinAbs(0.5f, 0.0001f));
+  REQUIRE(gain.set_parameter(0, 0.0f));
 }
 
 TEST_CASE("ChannelStrip applies fader then pan", "[mixing]") {

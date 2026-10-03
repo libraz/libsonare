@@ -449,14 +449,17 @@ TEST_CASE("published defaults come from the config struct's own initializers",
 
 TEST_CASE("measured bounds reproduce the validation they were measured through",
           "[mastering][catalog]") {
-  // Compressor::validate_config demands ratio >= 1 and non-negative timings, and
-  // leaves thresholdDb and makeupGainDb open.
+  // Compressor::validate_config demands ratio >= 1 and non-negative timings,
+  // leaves thresholdDb open, and bounds makeupGainDb where its float gain overflows.
   const json::Array compressor = param_info("dynamics.compressor");
   REQUIRE(find_param(compressor, "ratio")->find("min")->as_number() == 1.0);
   REQUIRE(find_param(compressor, "ratio")->find("max")->is_null());
   REQUIRE(find_param(compressor, "attackMs")->find("min")->as_number() == 0.0);
   REQUIRE(find_param(compressor, "thresholdDb")->find("min")->is_null());
-  REQUIRE(find_param(compressor, "makeupGainDb")->find("max")->is_null());
+  REQUIRE(find_param(compressor, "makeupGainDb")->find("min")->is_null());
+  const double makeup_max = find_param(compressor, "makeupGainDb")->find("max")->as_number();
+  REQUIRE(makeup_max > 770.0);
+  REQUIRE(makeup_max < 771.0);
   // sidechainHpfHz is validated as strictly positive, and an exclusive bound is
   // published as the limit it excludes.
   REQUIRE(find_param(compressor, "sidechainHpfHz")->find("min")->as_number() == 0.0);
@@ -474,7 +477,7 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
   REQUIRE(find_param(param_info("stereo.stereoBalance"), "balance")->find("min")->as_number() ==
           -1.0);
   const json::Array bitcrusher = param_info("saturation.bitcrusher");
-  REQUIRE(find_param(bitcrusher, "bitDepth")->find("min")->as_number() == 1.0);
+  REQUIRE(find_param(bitcrusher, "bitDepth")->find("min")->as_number() == 2.0);
   REQUIRE(find_param(bitcrusher, "bitDepth")->find("max")->as_number() == 24.0);
 }
 

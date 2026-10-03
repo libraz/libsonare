@@ -11,6 +11,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -190,6 +191,10 @@ void Exciter::validate_config(const ExciterConfig& config) {
       config.even_odd_mix < 0.0f || config.even_odd_mix > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid exciter configuration");
   }
+  if (!numeric::finite(db_to_linear(config.drive_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "exciter drive must produce a finite linear gain");
+  }
   // Only None and Oversample4x are implemented: the harmonic generator mixes
   // a squaring (even) and a tanh (odd) stage that has no ADAA antiderivative
   // wired up here. Reject Adaa1/Adaa2 instead of silently behaving like None.
@@ -235,6 +240,7 @@ bool Exciter::set_parameter_impl(unsigned int param_id, float value) {
       if (prepared_) update_coeff_preserving_state();
       return true;
     case 1:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.drive_db = value;
       return true;
     case 2:

@@ -8,6 +8,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -114,12 +115,14 @@ void Waveshaper::set_config(const WaveshaperConfig& config) {
 bool Waveshaper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.drive_db = value;
       return true;
     case 1:
       config_.mix = std::clamp(value, 0.0f, 1.0f);
       return true;
     case 2:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.output_gain_db = value;
       return true;
     default:
@@ -154,6 +157,11 @@ float Waveshaper::shape(float sample, const WaveshaperConfig& config) {
 void Waveshaper::validate_config(const WaveshaperConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "waveshaper mix must be in [0, 1]");
+  }
+  if (!numeric::finite(db_to_linear(config.drive_db)) ||
+      !numeric::finite(db_to_linear(config.output_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "waveshaper drive and output gain must produce finite linear gains");
   }
   // ADAA1 (first-order antiderivative anti-aliasing) is only implemented for the
   // odd Tanh/Arctan curves; the Asymmetric curve has no ADAA antiderivative

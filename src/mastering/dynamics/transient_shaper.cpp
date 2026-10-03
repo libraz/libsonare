@@ -10,6 +10,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::dynamics {
 namespace {
@@ -147,6 +148,7 @@ bool TransientShaper::set_parameter_impl(unsigned int param_id, float value) {
       active_.sensitivity = std::max(0.0f, value);
       break;
     case 7:
+      if (!numeric::finite(db_to_linear(value))) return false;
       active_.max_gain_db = std::max(0.0f, value);
       break;
     case 8:
@@ -173,6 +175,10 @@ void TransientShaper::validate_config(const TransientShaperConfig& config) {
       config.slow_attack_ms < 0.0f || config.slow_release_ms < 0.0f || config.sensitivity < 0.0f ||
       config.max_gain_db < 0.0f || config.gain_smoothing_ms < 0.0f || config.lookahead_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid transient shaper configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.max_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "transient shaper max gain must produce a finite linear gain");
   }
 }
 

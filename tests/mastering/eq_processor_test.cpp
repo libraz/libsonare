@@ -61,6 +61,22 @@ TEST_CASE("EqualizerProcessor realtime parameter updates preserve IIR history", 
   }
 }
 
+TEST_CASE("EqualizerProcessor rejects gains whose float linear conversion overflows",
+          "[mastering][eq]") {
+  // The matched shelf converts dB in float, so the bound sits near 770 dB.
+  EqualizerProcessor eq;
+  REQUIRE_THROWS_AS(
+      eq.set_band(0, EqBand{EqBandType::HighShelf, 4000.0f, 1500.0f, kButterworthQ, true}),
+      sonare::SonareException);
+  REQUIRE_THROWS_AS(
+      eq.set_band(0, EqBand{EqBandType::LowShelf, 200.0f, 800.0f, kButterworthQ, true}),
+      sonare::SonareException);
+  REQUIRE_NOTHROW(
+      eq.set_band(0, EqBand{EqBandType::HighShelf, 4000.0f, 24.0f, kButterworthQ, true}));
+  REQUIRE_THROWS_AS(eq.set_output_gain_db(1000.0f), sonare::SonareException);
+  REQUIRE_NOTHROW(eq.set_output_gain_db(-6.0f));
+}
+
 TEST_CASE("EqualizerProcessor rejects realtime-unsafe LinearPhase dynamic bands",
           "[mastering][eq]") {
   EqualizerProcessor eq;

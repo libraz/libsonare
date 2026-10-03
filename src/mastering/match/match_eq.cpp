@@ -15,6 +15,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::match {
 namespace {
@@ -527,6 +528,12 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
                                        const MatchEqFirConfig& config) {
   if (curve.frequencies.empty() || curve.frequencies.size() != curve.gain_db.size()) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ curve");
+  }
+  for (const float gain_db : curve.gain_db) {
+    if (!numeric::finite(db_to_linear(gain_db))) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "match EQ curve gains must produce finite linear gains");
+    }
   }
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");

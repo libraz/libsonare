@@ -8,6 +8,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -73,6 +74,7 @@ void Transformer::set_config(const TransformerConfig& config) {
 bool Transformer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!numeric::finite(db_to_linear(value))) return false;
       transformer_config_.drive_db = value;
       return true;
     case 1:
@@ -95,6 +97,10 @@ void Transformer::validate_config(const TransformerConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f || config.asymmetry < -1.0f ||
       config.asymmetry > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid transformer configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.drive_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "transformer drive must produce a finite linear gain");
   }
 }
 

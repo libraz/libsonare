@@ -28,6 +28,7 @@
 #include "rt/processor_base.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -287,6 +288,11 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
           gain_db, headroom_db + std::max(config_.loudness.max_limiter_gain_reduction_db, 0.0f));
     }
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
+    if (!numeric::finite(loudness_static_gain_linear_)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "StreamingMasteringChain: loudness_static_gain_db must produce a "
+                            "finite linear gain");
+    }
   }
 }
 

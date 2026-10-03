@@ -10,6 +10,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::stereo {
 
@@ -116,6 +117,7 @@ bool Imager::set_parameter_impl(unsigned int param_id, float value) {
       config_.width = std::max(0.0f, value);
       return true;
     case 1:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.output_gain_db = value;
       return true;
     case 2:
@@ -134,6 +136,10 @@ void Imager::validate_config(const ImagerConfig& config) {
   if (!std::isfinite(config.width) || config.width < 0.0f || config.decorrelation_amount < 0.0f ||
       config.decorrelation_amount > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
+  }
+  if (!numeric::finite(db_to_linear(config.output_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "imager output gain must produce a finite linear gain");
   }
 }
 

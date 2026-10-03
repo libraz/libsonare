@@ -8,6 +8,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -114,6 +115,7 @@ bool UpwardCompressor::set_parameter_impl(unsigned int param_id, float value) {
       active_.release_ms = std::max(0.0f, value);
       break;
     case 4:
+      if (!numeric::finite(db_to_linear(value))) return false;
       active_.range_db = std::max(0.0f, value);
       break;
     default:
@@ -132,6 +134,10 @@ void UpwardCompressor::validate_config(const UpwardCompressorConfig& config) {
   if (!(config.ratio >= 1.0f) || config.range_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid upward compressor configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.range_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "upward compressor range must produce a finite linear gain");
   }
 }
 

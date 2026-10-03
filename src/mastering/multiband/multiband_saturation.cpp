@@ -13,6 +13,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::multiband {
 
@@ -212,10 +213,13 @@ bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value)
   auto& processor = *processors_[band];
   switch (param_id % kBandStride) {
     case 0:
-      band_config.drive_db = value;
       // drive_db is parameter 0 on every algorithm except the exciter, whose
       // drive is parameter 1 (parameter 0 is its band-pass frequency).
-      return processor.set_parameter(band_config.type == SaturationType::Exciter ? 1u : 0u, value);
+      if (!processor.set_parameter(band_config.type == SaturationType::Exciter ? 1u : 0u, value)) {
+        return false;
+      }
+      band_config.drive_db = value;
+      return true;
     case 1: {
       band_config.mix = std::clamp(value, 0.0f, 1.0f);
       switch (band_config.type) {
@@ -234,6 +238,7 @@ bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value)
     }
     case 2:
       // output_gain_db is applied by the multiband loop, not the sub-processor.
+      if (!numeric::finite(db_to_linear(value))) return false;
       band_config.output_gain_db = value;
       return true;
     default:
@@ -258,6 +263,11 @@ void MultibandSaturation::validate_config(const MultibandSaturationConfig& confi
   for (const auto& band : config.bands) {
     if (band.mix < 0.0f || band.mix > 1.0f) {
       throw SonareException(ErrorCode::InvalidParameter, "saturation mix must be in [0, 1]");
+    }
+    if (!numeric::finite(db_to_linear(band.drive_db)) ||
+        !numeric::finite(db_to_linear(band.output_gain_db))) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "saturation drive and output gain must produce finite linear gains");
     }
   }
 }

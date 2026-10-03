@@ -6,7 +6,9 @@
 #include <cstdint>
 #include <string>
 
+#include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::eq {
 namespace {
@@ -49,9 +51,20 @@ void GraphicEq::reset() {
 
 void GraphicEq::set_gain_db(size_t index, float gain_db) {
   validate_index(index);
+  if (!numeric::finite(db_to_linear(gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "graphic EQ gain must produce a finite linear gain");
+  }
+  const float previous = gains_db_[index];
   gains_db_[index] = gain_db;
   // Recompute only the affected band so existing filter state is preserved.
-  rebuild_band(index);
+  try {
+    rebuild_band(index);
+  } catch (...) {
+    gains_db_[index] = previous;
+    rebuild_band(index);
+    throw;
+  }
 }
 
 bool GraphicEq::set_parameter_impl(unsigned int param_id, float value) {
@@ -63,6 +76,7 @@ bool GraphicEq::set_parameter_impl(unsigned int param_id, float value) {
     return false;
   }
   const size_t index = param_id;
+  if (!numeric::finite(db_to_linear(value))) return false;
   gains_db_[index] = value;
   rebuild_band(index);
   return true;

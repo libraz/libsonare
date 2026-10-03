@@ -1688,12 +1688,12 @@ TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",
   SonareEq* eq = sonare_eq_create(48000.0, 512);
   REQUIRE(eq != nullptr);
   REQUIRE(sonare_eq_set_band(eq, 0,
-                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":12300,\"q\":1,"
+                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":700,\"q\":1,"
                              "\"enabled\":true,\"dynamic\":true,\"thresholdDb\":-60,"
                              "\"ratio\":20,\"rangeDb\":300,\"attackMs\":1,\"releaseMs\":10}") ==
           SONARE_OK);
-  // 12300 dB is realizable on its own (10^307.5 is finite) so the per-field
-  // guard admits it; adding the 300 dB range crosses the overflow point.
+  // 700 dB is realizable on its own (its float linear gain is finite) so the
+  // per-field guard admits it; adding the 300 dB range crosses the overflow point.
 
   std::vector<float> left = generate_sine(1000.0f, 48000, 512.0f / 48000.0f);
   std::vector<float> right = left;

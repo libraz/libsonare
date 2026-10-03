@@ -1,7 +1,7 @@
-#include <cmath>
-
 #include "mastering/eq/equalizer.h"
+#include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::eq {
 
@@ -11,12 +11,11 @@ bool is_cut_band(EqBandType type) noexcept {
   return type == EqBandType::LowPass || type == EqBandType::HighPass;
 }
 
-// The peak and shelf designs raise 10^(dB/40); past roughly 12330 dB that
-// amplitude overflows and the numerator taps come out infinite. Bound on that
+// The shelf designs raise 10^(dB/20) in float; past roughly 770 dB that overflows
+// and the design no longer realizes the requested gain. Bound on that
 // realizability condition rather than on an invented dB ceiling.
 bool gain_db_is_realizable(float gain_db) noexcept {
-  return std::isfinite(gain_db) &&
-         std::isfinite(std::pow(10.0, static_cast<double>(gain_db) / 40.0));
+  return numeric::finite(gain_db) && numeric::finite(db_to_linear(gain_db));
 }
 
 int cut_order(int slope_db_oct) {

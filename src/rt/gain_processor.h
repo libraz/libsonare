@@ -7,6 +7,8 @@
 
 #include "rt/processor_base.h"
 #include "util/db.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::rt {
 
@@ -21,7 +23,12 @@ class PassProcessor final : public ProcessorBase {
 /// @brief Fixed-gain graph node. Parameter 0 is the gain in dB (realtime-safe).
 class GainProcessor final : public ProcessorBase {
  public:
-  explicit GainProcessor(float gain_db) : gain_(db_to_linear(gain_db)) {}
+  explicit GainProcessor(float gain_db) : gain_(db_to_linear(gain_db)) {
+    if (!numeric::finite(gain_db) || !numeric::finite(gain_)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "gainDb must produce a finite linear gain");
+    }
+  }
   void prepare(double, int) override {}
   void process(float* const* channels, int num_channels, int num_samples) override {
     if (!channels || num_channels <= 0 || num_samples <= 0) return;
@@ -37,7 +44,9 @@ class GainProcessor final : public ProcessorBase {
     // GainProcessor exposes a single gain parameter. The graph/automation layer
     // routes by node binding and forwards its own external param_id (which is not
     // a node-local index), so every id maps to this one gain control.
-    gain_ = db_to_linear(value);
+    const float gain = db_to_linear(value);
+    if (!numeric::finite(gain)) return false;
+    gain_ = gain;
     return true;
   }
   // Automatable parameters: 0=gainDb

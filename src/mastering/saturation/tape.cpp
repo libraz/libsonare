@@ -10,6 +10,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::saturation {
 
@@ -168,6 +169,7 @@ void Tape::set_config(const TapeConfig& config) {
 bool Tape::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.drive_db = value;
       return true;
     case 1:
@@ -179,6 +181,7 @@ bool Tape::set_parameter_impl(unsigned int param_id, float value) {
       hysteresis_.set_config(make_ja_config(config_));
       return true;
     case 3:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.output_gain_db = value;
       return true;
     case 4:
@@ -186,6 +189,7 @@ bool Tape::set_parameter_impl(unsigned int param_id, float value) {
       if (prepared_) update_filters(sample_rate_);
       return true;
     case 5:
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.head_bump_db = std::max(0.0f, value);
       if (prepared_) update_filters(sample_rate_);
       return true;
@@ -210,6 +214,12 @@ void Tape::validate_config(const TapeConfig& config) {
       config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||
       config.gap_loss < 0.0f || config.gap_loss > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid tape configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.drive_db)) ||
+      !numeric::finite(db_to_linear(config.output_gain_db)) ||
+      !numeric::finite(db_to_linear(config.head_bump_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tape drive, output gain and head bump must produce finite linear gains");
   }
   if (config.oversample_factor != 1 && config.oversample_factor != 2 &&
       config.oversample_factor != 4) {

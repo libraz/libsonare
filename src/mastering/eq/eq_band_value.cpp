@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "mastering/eq/band_strings.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
@@ -65,13 +66,12 @@ float json_float_any(const JsonValue& object, const char* first_key, const char*
   return converted;
 }
 
-// A dB field that ends up as a filter gain: rbj_peak raises 10^(dB/40), which
-// overflows to +inf past roughly 12330 dB and installs infinite numerator taps
-// that normalize() lets through because a0 stays finite.
+// A dB field that ends up as a filter gain: the shelf designs raise 10^(dB/20)
+// in float, which overflows past roughly 770 dB and no longer realizes the gain.
 float json_gain_db_any(const JsonValue& object, const char* first_key, const char* second_key,
                        float fallback, const char* context) {
   const float value = json_float_any(object, first_key, second_key, fallback, context);
-  if (!std::isfinite(std::pow(10.0, static_cast<double>(value) / 40.0))) {
+  if (!sonare::numeric::finite(db_to_linear(value))) {
     invalid_band(context,
                  std::string("dB JSON field is too large to realize as a filter: ") + first_key);
   }

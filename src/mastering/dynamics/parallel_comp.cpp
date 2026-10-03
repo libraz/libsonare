@@ -8,6 +8,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -141,6 +142,7 @@ bool ParallelComp::set_parameter_impl(unsigned int param_id, float value) {
       active_.release_ms = std::max(0.0f, value);
       break;
     case 4:
+      if (!numeric::finite(db_to_linear(value))) return false;
       active_.makeup_gain_db = value;
       break;
     case 5:
@@ -166,6 +168,10 @@ void ParallelComp::validate_config(const ParallelCompConfig& config) {
   if (!(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
       config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.output_ceiling_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid parallel compressor configuration");
+  }
+  if (!numeric::finite(db_to_linear(config.makeup_gain_db))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "parallel compressor makeup gain must produce a finite linear gain");
   }
 }
 

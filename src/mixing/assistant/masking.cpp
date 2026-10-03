@@ -80,7 +80,8 @@ std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile
                                        static_cast<std::size_t>(kBandCount));
   if (track_count < 2) return dominance;
   if (!gain_db.empty() && gain_db.size() != track_count) return dominance;
-  if (!std::all_of(gain_db.begin(), gain_db.end(), [](float g) { return std::isfinite(g); })) {
+  if (!std::all_of(gain_db.begin(), gain_db.end(),
+                   [](float g) { return std::isfinite(db_to_power_scalar(g)); })) {
     return dominance;
   }
   // Power scale per track; the floors below are relative, so only the shares see it.

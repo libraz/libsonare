@@ -199,8 +199,9 @@ void BitCrusher::set_config(const BitCrusherConfig& config) {
 bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // Match validate_config's [1, 24] integer range for bit_depth.
-      config_.bit_depth = std::clamp(static_cast<int>(std::lround(value)), 1, 24);
+      // Match validate_config's [2, 24] integer range for bit_depth.
+      config_.bit_depth = std::clamp(static_cast<int>(std::lround(value)), kBitCrusherMinBitDepth,
+                                     kBitCrusherMaxBitDepth);
       return true;
     case 1:
       config_.mix = std::clamp(value, 0.0f, 1.0f);
@@ -305,12 +306,12 @@ std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
-  if (config.bit_depth < 1 || config.bit_depth > 24 || config.downsample_factor < 1 ||
-      config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.hold_hz) ||
-      config.hold_hz < 0.0f || !valid_level(config.radio_noise_level) ||
-      !valid_level(config.wp_noise_level) || !valid_level(config.disc_noise_level) ||
-      !valid_level(config.hum_level) || !valid_level(config.noise_detune) ||
-      static_cast<int>(config.disc_type) < 0 ||
+  if (config.bit_depth < kBitCrusherMinBitDepth || config.bit_depth > kBitCrusherMaxBitDepth ||
+      config.downsample_factor < 1 || config.mix < 0.0f || config.mix > 1.0f ||
+      !std::isfinite(config.hold_hz) || config.hold_hz < 0.0f ||
+      !valid_level(config.radio_noise_level) || !valid_level(config.wp_noise_level) ||
+      !valid_level(config.disc_noise_level) || !valid_level(config.hum_level) ||
+      !valid_level(config.noise_detune) || static_cast<int>(config.disc_type) < 0 ||
       static_cast<int>(config.disc_type) >= kBitCrusherDiscTypeCount || !valid_hz(config.hum_hz) ||
       !valid_hz(config.noise_lpf_hz) || !valid_hz(config.wp_noise_lpf_hz) ||
       !valid_hz(config.disc_noise_lpf_hz) || !valid_hz(config.hum_lpf_hz) ||
