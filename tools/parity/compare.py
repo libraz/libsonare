@@ -205,7 +205,7 @@ def _is_lifecycle_key(key: str) -> bool:
     )
 
 
-# Explicit alias map for handle ops whose capability IS exposed on the facades
+# Explicit alias map for C ops whose capability IS exposed on the facades
 # under a DIFFERENT canonical name (an idiomatic rename, NOT an omission). Each
 # C key maps to the facade canonical key(s) delivering the same capability;
 # coverage is credited when ANY listed alias is present as a method / free
@@ -218,10 +218,17 @@ _ALIAS_COVERAGE = {
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
-    # Stereo pair facades derive both frame counts from the channel planes.
-    # One public operation covers the equal-length and independent-length C calls.
+    # Named mastering processors and analyses, under the facades' verb-last names.
+    # Each facade derives the frame counts, so one name covers the base and _ex calls.
+    "mastering_apply_processor": ("mastering_process",),
+    "mastering_apply_processor_stereo": ("mastering_process_stereo",),
+    "mastering_apply_pair_processor": ("mastering_pair_process",),
+    "mastering_apply_pair_processor_ex": ("mastering_pair_process",),
     "mastering_apply_pair_processor_stereo": ("mastering_pair_process_stereo",),
     "mastering_apply_pair_processor_stereo_ex": ("mastering_pair_process_stereo",),
+    "mastering_analyze_pair": ("mastering_pair_analyze",),
+    "mastering_analyze_pair_ex": ("mastering_pair_analyze",),
+    "mastering_analyze_stereo": ("mastering_stereo_analyze",),
     # Accessors exposed as bare properties or get-prefixed getters.
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),

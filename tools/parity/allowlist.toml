@@ -9,15 +9,12 @@
 # ---------------------------------------------------------------------------
 [surface_only]
 # Symbols that exist on multiple bindings but are deliberately binding-only.
-# The `mastering*` / `mix_stereo` / `onset_envelope` entries are ERGONOMIC
-# facade free-function names for C operations that exist under a different
-# (reordered) C name — see the matching [coverage] notes. Renaming the public
-# facade API to mirror C is out of scope, so these are intentional, not drift:
-#   mastering_pair_analyze   <- C mastering_analyze_pair
-#   mastering_stereo_analyze <- C mastering_analyze_stereo
-#   mastering_process_stereo <- C mastering_apply_processor_stereo
-#   mastering_pair_process   <- C mastering_apply_pair_processor
-#   mastering                <- high-level convenience wrapper (apply_processor)
+# The `mastering` / `mix_stereo` / `onset_envelope` entries are ERGONOMIC
+# facade free-function names with no C function of the same name. Renaming the
+# public facade API to mirror C is out of scope, so these are intentional, not
+# drift. (The named mastering processors and analyses are credited through
+# compare.py's _ALIAS_COVERAGE instead.)
+#   mastering                <- high-level convenience wrapper (C mastering_process)
 #   mix_stereo               <- stereo mix convenience
 #   onset_envelope           <- facade name for C onset_strength
 # The facade validation helpers (`assert_samples`, `assert_u7`, `midi1_event`
@@ -30,10 +27,6 @@
 any = [
   "init",                  # WASM async module init
   "mastering",
-  "mastering_pair_analyze",
-  "mastering_pair_process",
-  "mastering_process_stereo",
-  "mastering_stereo_analyze",
   "mix_stereo",
   "onset_envelope",
 ]
@@ -158,13 +151,6 @@ python = [
 #     on Python, under the same names the scene document spells them. Omitting it
 #     reproduces the base sonare_mixer_add_strip call exactly. The base entry
 #     point is NOT allowlisted: it is the facade method.
-# --- mastering ops exposed under ERGONOMIC facade names (see [surface_only]) ---
-#   mastering_analyze_pair / mastering_analyze_stereo / mastering_apply_processor
-#   / mastering_apply_pair_processor / mastering_apply_processor_stereo: these C
-#   operations are surfaced by the facade free functions mastering_pair_analyze /
-#   mastering_stereo_analyze / mastering_process / mastering_pair_process /
-#   mastering_process_stereo (listed in [surface_only] below). Same op, facade
-#   spelling.
 #   engine_set_synth_instrument_with_bank: folded into each facade's
 #     set_synth_instrument as an optional sample-bank argument, which is
 #     where the bank already lives for the bounce path. The plain C entry
@@ -211,19 +197,6 @@ node = [
   "mixer_add_strip_ex",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
-  "mastering_analyze_pair",
-  "mastering_analyze_stereo",
-  "mastering_apply_processor",
-  "mastering_apply_pair_processor",
-  "mastering_apply_processor_stereo",
-  # Independent source/reference-length pair variants. Node DOES expose a pair
-  # facade (masteringPairProcess / masteringPairAnalyze) and it accepts
-  # independent source/reference lengths, but it binds the C++ core api::
-  # apply_named_pair_processor / analyze_named_pair (two-length overload)
-  # directly, so the C-ABI _ex symbols themselves are not mirrored as named
-  # functions. Same capability, core-bound rather than C-ABI-bound.
-  "mastering_apply_pair_processor_ex",
-  "mastering_analyze_pair_ex",
   # Node folds these into a base free function via an extra parameter rather than
   # exposing a separately-named function (Python/WASM expose them by name):
   #   metering_vectorscope_decimated -> meteringVectorscope(left, right, sr, maxPoints)
@@ -337,17 +310,6 @@ wasm = [
   "project_tempo_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
-  "mastering_analyze_pair",
-  "mastering_analyze_stereo",
-  "mastering_apply_processor",
-  "mastering_apply_pair_processor",
-  "mastering_apply_processor_stereo",
-  # Independent source/reference-length pair variants. WASM DOES expose a pair
-  # facade (masteringPairProcess / masteringPairAnalyze) accepting independent
-  # source/reference lengths; it binds the C++ core api:: two-length overload
-  # directly, so the C-ABI _ex symbols are not mirrored as named functions.
-  "mastering_apply_pair_processor_ex",
-  "mastering_analyze_pair_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
@@ -439,15 +401,6 @@ python = [
   "mixer_add_strip_ex",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
-  "mastering_analyze_pair",
-  "mastering_analyze_stereo",
-  "mastering_apply_processor",
-  "mastering_apply_pair_processor",
-  "mastering_apply_processor_stereo",
-  # The _ex pair variants ARE what the mastering_pair_process / mastering_pair_analyze
-  # facade functions call (independent source/reference lengths); folded, not named.
-  "mastering_apply_pair_processor_ex",
-  "mastering_analyze_pair_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
   "mel_to_stft_checked",
   "mel_to_audio_checked",
