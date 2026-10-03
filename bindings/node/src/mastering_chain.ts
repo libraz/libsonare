@@ -2,6 +2,7 @@ import { flattenChainConfig } from './_chain_config.js';
 import { addon } from './native.js';
 import type {
   LoudnessMatchResult,
+  LoudnessMatchStereoResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainStereoResult,
@@ -14,6 +15,7 @@ import type {
   ProgressCallback,
   SoloProcessor,
   StereoAnalysis,
+  StereoPairProcessor,
 } from './types.js';
 import { assertSampleRate } from './validation.js';
 
@@ -67,12 +69,31 @@ export interface MasteringPairProcessRequest {
   params?: Record<string, number | boolean>;
 }
 
+export interface MasteringPairProcessStereoRequest {
+  processorName: StereoPairProcessor;
+  sourceLeft: Float32Array;
+  sourceRight: Float32Array;
+  referenceLeft: Float32Array;
+  referenceRight: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
 /** Canonical request form for {@link masteringAbMatchLoudness}. */
 export interface MasteringAbMatchLoudnessRequest {
   /** The take to gain-match. Returned in `samples` with the gain applied. */
   source: Float32Array;
   /** The take whose integrated loudness `source` is matched to. */
   reference: Float32Array;
+  sampleRate?: number;
+}
+
+/** Canonical request form for stereo AB loudness matching. */
+export interface MasteringAbMatchLoudnessStereoRequest {
+  sourceLeft: Float32Array;
+  sourceRight: Float32Array;
+  referenceLeft: Float32Array;
+  referenceRight: Float32Array;
   sampleRate?: number;
 }
 
@@ -524,6 +545,56 @@ export function masteringPairProcess(
 }
 
 /**
+ * Apply the stereo `match.abCrossfade` processor. Source and reference stereo
+ * pairs may have independent lengths, but each pair must have equal channels.
+ */
+export function masteringPairProcessStereo(
+  request: MasteringPairProcessStereoRequest,
+): MasteringStereoResult;
+export function masteringPairProcessStereo(
+  processorName: StereoPairProcessor,
+  sourceLeft: Float32Array,
+  sourceRight: Float32Array,
+  referenceLeft: Float32Array,
+  referenceRight: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): MasteringStereoResult;
+export function masteringPairProcessStereo(
+  processorName: StereoPairProcessor | MasteringPairProcessStereoRequest,
+  sourceLeft?: Float32Array,
+  sourceRight?: Float32Array,
+  referenceLeft?: Float32Array,
+  referenceRight?: Float32Array,
+  sampleRate = 22050,
+  params: Record<string, number | boolean> = {},
+): MasteringStereoResult {
+  const request =
+    typeof processorName === 'string'
+      ? {
+          processorName,
+          sourceLeft: sourceLeft as Float32Array,
+          sourceRight: sourceRight as Float32Array,
+          referenceLeft: referenceLeft as Float32Array,
+          referenceRight: referenceRight as Float32Array,
+          sampleRate,
+          params,
+        }
+      : processorName;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringPairProcessStereo', resolvedSampleRate);
+  return addon.masteringPairProcessStereo(
+    request.processorName,
+    request.sourceLeft,
+    request.sourceRight,
+    request.referenceLeft,
+    request.referenceRight,
+    resolvedSampleRate,
+    request.params ?? {},
+  );
+}
+
+/**
  * Gain-match `source` to `reference`'s BS.1770 integrated loudness, so an A/B
  * between the two is not decided by level. The buffers may have independent
  * lengths — each is measured at its own.
@@ -545,6 +616,25 @@ export function masteringAbMatchLoudness(
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringAbMatchLoudness', resolvedSampleRate);
   return addon.masteringAbMatchLoudness(request.source, request.reference, resolvedSampleRate);
+}
+
+/**
+ * Gain-match a stereo source to a stereo reference with one shared gain.
+ * Source and reference pairs may have independent lengths, but each pair must
+ * have equal channels.
+ */
+export function masteringAbMatchLoudnessStereo(
+  request: MasteringAbMatchLoudnessStereoRequest,
+): LoudnessMatchStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAbMatchLoudnessStereo', resolvedSampleRate);
+  return addon.masteringAbMatchLoudnessStereo(
+    request.sourceLeft,
+    request.sourceRight,
+    request.referenceLeft,
+    request.referenceRight,
+    resolvedSampleRate,
+  );
 }
 
 /**

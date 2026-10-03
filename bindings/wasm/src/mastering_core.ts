@@ -2,6 +2,7 @@ import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
   LoudnessMatchResult,
+  LoudnessMatchStereoResult,
   MasteringAssistantParams,
   MasteringInsertParamChoice,
   MasteringInsertSlot,
@@ -13,6 +14,7 @@ import type {
   PairProcessor,
   SoloProcessor,
   StereoAnalysis,
+  StereoPairProcessor,
   StreamingPlatform,
 } from './public_types';
 
@@ -52,12 +54,32 @@ export interface MasteringPairProcessRequest {
   params?: MasteringProcessorParams;
 }
 
+/** Canonical request form for a stereo two-input match processor. */
+export interface MasteringPairProcessStereoRequest {
+  processorName: StereoPairProcessor;
+  sourceLeft: Float32Array;
+  sourceRight: Float32Array;
+  referenceLeft: Float32Array;
+  referenceRight: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
 /** Canonical request form for {@link masteringAbMatchLoudness}. */
 export interface MasteringAbMatchLoudnessRequest {
   /** The take to gain-match. */
   source: Float32Array;
   /** The take whose loudness `source` is matched to; returned untouched. */
   reference: Float32Array;
+  sampleRate?: number;
+}
+
+/** Canonical request form for stereo AB loudness matching. */
+export interface MasteringAbMatchLoudnessStereoRequest {
+  sourceLeft: Float32Array;
+  sourceRight: Float32Array;
+  referenceLeft: Float32Array;
+  referenceRight: Float32Array;
   sampleRate?: number;
 }
 
@@ -549,6 +571,60 @@ export function masteringPairProcess(
 }
 
 /**
+ * Apply the stereo `match.abCrossfade` processor. Source and reference stereo
+ * pairs may have independent lengths, but each pair must have equal channels.
+ */
+export function masteringPairProcessStereo(
+  request: MasteringPairProcessStereoRequest,
+): MasteringStereoResult;
+export function masteringPairProcessStereo(
+  processorName: StereoPairProcessor,
+  sourceLeft: Float32Array,
+  sourceRight: Float32Array,
+  referenceLeft: Float32Array,
+  referenceRight: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): MasteringStereoResult;
+export function masteringPairProcessStereo(
+  processorName: StereoPairProcessor | MasteringPairProcessStereoRequest,
+  sourceLeft?: Float32Array,
+  sourceRight?: Float32Array,
+  referenceLeft?: Float32Array,
+  referenceRight?: Float32Array,
+  sampleRate = 22050,
+  params: MasteringProcessorParams = {},
+): MasteringStereoResult {
+  const request =
+    typeof processorName === 'string'
+      ? {
+          processorName,
+          sourceLeft: sourceLeft as Float32Array,
+          sourceRight: sourceRight as Float32Array,
+          referenceLeft: referenceLeft as Float32Array,
+          referenceRight: referenceRight as Float32Array,
+          sampleRate,
+          params,
+        }
+      : processorName;
+  if (request.sourceLeft.length !== request.sourceRight.length) {
+    throw new Error('Source left and right channel lengths must match.');
+  }
+  if (request.referenceLeft.length !== request.referenceRight.length) {
+    throw new Error('Reference left and right channel lengths must match.');
+  }
+  return requireModule().masteringPairProcessStereo(
+    request.processorName,
+    request.sourceLeft,
+    request.sourceRight,
+    request.referenceLeft,
+    request.referenceRight,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
+}
+
+/**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
  * buffers may have independent lengths.
  */
@@ -612,6 +688,25 @@ export function masteringAbMatchLoudness(
   return requireModule().masteringAbMatchLoudness(
     request.source,
     request.reference,
+    request.sampleRate ?? 22050,
+  );
+}
+
+/** Gain-match a stereo source to a stereo reference with one shared gain. */
+export function masteringAbMatchLoudnessStereo(
+  request: MasteringAbMatchLoudnessStereoRequest,
+): LoudnessMatchStereoResult {
+  if (request.sourceLeft.length !== request.sourceRight.length) {
+    throw new Error('Source left and right channel lengths must match.');
+  }
+  if (request.referenceLeft.length !== request.referenceRight.length) {
+    throw new Error('Reference left and right channel lengths must match.');
+  }
+  return requireModule().masteringAbMatchLoudnessStereo(
+    request.sourceLeft,
+    request.sourceRight,
+    request.referenceLeft,
+    request.referenceRight,
     request.sampleRate ?? 22050,
   );
 }

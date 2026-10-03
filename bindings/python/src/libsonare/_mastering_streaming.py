@@ -23,6 +23,7 @@ from ._runtime import (
     _guard_buffer,
     _narrow_float,
     _narrow_int,
+    _to_c_double,
     _to_c_float,
     _to_c_float_array,
     _to_c_float_array_owned,
@@ -250,6 +251,36 @@ class StreamingMasteringChain:
         """Reset all processor state without rebuilding."""
         self._ensure_open()
         rc = self._lib.sonare_streaming_mastering_chain_reset(self._handle)
+        _check(rc)
+
+    def set_parameter(self, key: str, value: float) -> None:
+        """Update one realtime-safe full-chain parameter between processing calls.
+
+        The chain must be prepared first. ``key`` uses the same full dot
+        notation as the constructor, for example ``"eq.tilt.tiltDb"``. The
+        native chain rejects unknown, disabled, and structural parameters
+        before mutation; a failed call therefore leaves the existing chain
+        state and audio history intact.
+        Serialize this control operation with processing, flush, reset and
+        prepare. Parameter changes are not automatically smoothed.
+        """
+        self._ensure_open()
+        if self._prepared_channels <= 0:
+            raise RuntimeError("StreamingMasteringChain must be prepared before set_parameter")
+        if not isinstance(key, str):
+            raise SonareValueError("key must be a string")
+        if not key:
+            raise SonareValueError("key must not be empty")
+        if "\x00" in key:
+            raise SonareValueError("key must not contain NUL")
+        if not hasattr(self._lib, "sonare_streaming_mastering_chain_set_parameter"):
+            raise RuntimeError("libsonare was built without streaming parameter support")
+        key_bytes = key.encode("utf-8")
+        rc = self._lib.sonare_streaming_mastering_chain_set_parameter(
+            self._handle,
+            key_bytes,
+            _to_c_double(value, "value"),
+        )
         _check(rc)
 
     @property

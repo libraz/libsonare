@@ -1,5 +1,6 @@
 #include "mastering/api/named_processor.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -1104,6 +1105,56 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                       const float* reference, std::size_t length, int sample_rate,
                                       const std::vector<Param>& params) {
   return apply_named_pair_processor(name, source, reference, length, length, sample_rate, params);
+}
+
+StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
+                                               const float* source_right, std::size_t source_length,
+                                               const float* reference_left,
+                                               const float* reference_right,
+                                               std::size_t reference_length, int sample_rate,
+                                               const std::vector<Param>& params) {
+  // Only the crossfade is defined for planar pairs; reject the rest before copying.
+  if (name != "match.abCrossfade") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unsupported stereo pair processor: " + name);
+  }
+  validate_offline_audio_input(source_left, source_length, sample_rate);
+  validate_offline_audio_input(source_right, source_length, sample_rate);
+  validate_offline_audio_input(reference_left, reference_length, sample_rate);
+  validate_offline_audio_input(reference_right, reference_length, sample_rate);
+  const auto map = make_map(params);
+  const float mix = f(map, "mix", 0.5f);
+
+  const ::sonare::mastering::match::StereoAudioPair source{
+      Audio::from_buffer(source_left, source_length, sample_rate),
+      Audio::from_buffer(source_right, source_length, sample_rate)};
+  const ::sonare::mastering::match::StereoAudioPair reference{
+      Audio::from_buffer(reference_left, reference_length, sample_rate),
+      Audio::from_buffer(reference_right, reference_length, sample_rate)};
+  const auto mixed = ::sonare::mastering::match::ab_crossfade_stereo(source, reference, mix);
+
+  StereoResult result;
+  result.left.assign(mixed.left.data(), mixed.left.data() + mixed.left.size());
+  result.right.assign(mixed.right.data(), mixed.right.data() + mixed.right.size());
+  result.sample_rate = mixed.left.sample_rate();
+  std::vector<float> source_interleaved(source_length * 2);
+  for (std::size_t index = 0; index < source_length; ++index) {
+    source_interleaved[index * 2] = source.left[index];
+    source_interleaved[index * 2 + 1] = source.right[index];
+  }
+  result.input_lufs =
+      common::measure_lufs_interleaved(source_interleaved.data(), source_length, 2, sample_rate);
+  result.output_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
+  return result;
+}
+
+StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
+                                               const float* source_right,
+                                               const float* reference_left,
+                                               const float* reference_right, std::size_t length,
+                                               int sample_rate, const std::vector<Param>& params) {
+  return apply_named_pair_processor_stereo(name, source_left, source_right, length, reference_left,
+                                           reference_right, length, sample_rate, params);
 }
 
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,

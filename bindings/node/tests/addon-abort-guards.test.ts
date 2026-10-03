@@ -92,6 +92,10 @@ const POSITIONAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
     'effects/mastering_pair.cpp:AssistantConfigFromParams',
     'Not a positional scalar reader: the index names an options OBJECT it flattens into mastering params. Matched only because the shape check is deliberately loose about what follows the index.',
   ],
+  [
+    'effects/mastering_pair.cpp:ReadStereoPairShape',
+    'Validates four Float32Array arguments and their paired channel lengths. It performs type predicates only; scalar conversion and pending-exception handling stay in the shared narrowing reader at each caller.',
+  ],
 ]);
 
 /**

@@ -2,6 +2,7 @@
 /// @brief Node bindings for the reference-pair, stereo-analysis and advisory entry points.
 
 #include <cstddef>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,93 @@
 using namespace sonare_node;
 
 namespace {
+
+std::vector<SonareMasteringParam> CParamsFromNode(
+    const std::vector<sonare::mastering::api::Param>& params) {
+  std::vector<SonareMasteringParam> out;
+  out.reserve(params.size());
+  for (const auto& param : params) {
+    out.push_back({param.key.c_str(), param.value});
+  }
+  return out;
+}
+
+struct StereoResultGuard {
+  SonareMasteringStereoResult* result;
+  ~StereoResultGuard() { sonare_free_mastering_stereo_result(result); }
+};
+
+Napi::Object MasteringStereoResultToObject(Napi::Env env,
+                                           const SonareMasteringStereoResult& result) {
+  Napi::Object out = Napi::Object::New(env);
+  Napi::Float32Array left = Napi::Float32Array::New(env, result.length);
+  Napi::Float32Array right = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0 && result.left != nullptr && result.right != nullptr) {
+    const size_t bytes = result.length * sizeof(float);
+    std::memcpy(left.Data(), result.left, bytes);
+    std::memcpy(right.Data(), result.right, bytes);
+  }
+  out.Set("left", left);
+  out.Set("right", right);
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited != 0));
+  out.Set("nonFiniteSubstitutionCount",
+          Napi::Number::New(env, result.non_finite_substitution_count));
+  return out;
+}
+
+Napi::Object LoudnessMatchStereoToObject(Napi::Env env, const SonareMasteringStereoResult& result,
+                                         const SonareLoudnessMatch& match) {
+  Napi::Object out = Napi::Object::New(env);
+  Napi::Float32Array left = Napi::Float32Array::New(env, result.length);
+  Napi::Float32Array right = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0 && result.left != nullptr && result.right != nullptr) {
+    const size_t bytes = result.length * sizeof(float);
+    std::memcpy(left.Data(), result.left, bytes);
+    std::memcpy(right.Data(), result.right, bytes);
+  }
+  out.Set("left", left);
+  out.Set("right", right);
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("referenceLufs", Napi::Number::New(env, match.reference_lufs));
+  out.Set("sourceLufs", Napi::Number::New(env, match.source_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, match.applied_gain_db));
+  out.Set("matchedTruePeakDbtp", Napi::Number::New(env, match.matched_true_peak_dbtp));
+  return out;
+}
+
+bool ReadStereoPairShape(const Napi::CallbackInfo& info, size_t left_index, size_t right_index,
+                         size_t reference_left_index, size_t reference_right_index,
+                         const char* usage, Napi::Float32Array* source_left,
+                         Napi::Float32Array* source_right, Napi::Float32Array* reference_left,
+                         Napi::Float32Array* reference_right) {
+  Napi::Env env = info.Env();
+  if (info.Length() <= reference_right_index || !IsFloat32Array(info[left_index]) ||
+      !IsFloat32Array(info[right_index]) || !IsFloat32Array(info[reference_left_index]) ||
+      !IsFloat32Array(info[reference_right_index])) {
+    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+    return false;
+  }
+  *source_left = info[left_index].As<Napi::Float32Array>();
+  *source_right = info[right_index].As<Napi::Float32Array>();
+  *reference_left = info[reference_left_index].As<Napi::Float32Array>();
+  *reference_right = info[reference_right_index].As<Napi::Float32Array>();
+  if (source_left->ElementLength() != source_right->ElementLength()) {
+    Napi::RangeError::New(env, "sourceLeft and sourceRight channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  if (reference_left->ElementLength() != reference_right->ElementLength()) {
+    Napi::RangeError::New(env, "referenceLeft and referenceRight channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
 
 // The analysis entry points take an interleaved buffer so BS.1770 channel
 // summing sees the program rather than a downmix; the JS surface keeps the
@@ -201,6 +289,119 @@ Napi::Value SonareWrap::MasteringAbMatchLoudness(const Napi::CallbackInfo& info)
   out.Set("appliedGainDb", Napi::Number::New(env, match.applied_gain_db));
   out.Set("matchedTruePeakDbtp", Napi::Number::New(env, match.matched_true_peak_dbtp));
   return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 6 || !info[0].IsString()) {
+    Napi::TypeError::New(
+        env,
+        "Expected (processorName, sourceLeft, sourceRight, referenceLeft, referenceRight, "
+        "sampleRate, params?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const std::string processor_name = info[0].As<Napi::String>().Utf8Value();
+  if (RejectEmbeddedNul(env, processor_name, "processorName")) return env.Undefined();
+  Napi::Float32Array source_left;
+  Napi::Float32Array source_right;
+  Napi::Float32Array reference_left;
+  Napi::Float32Array reference_right;
+  if (!ReadStereoPairShape(info, 1, 2, 3, 4,
+                           "Expected (processorName, Float32Array sourceLeft, "
+                           "Float32Array sourceRight, Float32Array referenceLeft, "
+                           "Float32Array referenceRight, sampleRate, params?)",
+                           &source_left, &source_right, &reference_left, &reference_right)) {
+    return env.Undefined();
+  }
+  if (!info[5].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sample_rate = node_narrow_int(env, info[5], "sampleRate");
+  sonare::validate_offline_audio_input(source_left.Data(), source_left.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(source_right.Data(), source_right.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(reference_left.Data(), reference_left.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(reference_right.Data(), reference_right.ElementLength(),
+                                       sample_rate);
+
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 7 && !info[6].IsUndefined() && !info[6].IsNull()) {
+    if (!info[6].IsObject()) {
+      Napi::TypeError::New(env, "params must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    params = ParamsFromObject(info[6].As<Napi::Object>());
+    if (env.IsExceptionPending()) return env.Undefined();
+  }
+  for (const auto& param : params) {
+    if (RejectEmbeddedNul(env, param.key, "parameter key")) return env.Undefined();
+  }
+  const auto c_params = CParamsFromNode(params);
+  SonareMasteringStereoResult result{};
+  StereoResultGuard result_guard{&result};
+  const SonareError err = sonare_mastering_apply_pair_processor_stereo_ex(
+      processor_name.c_str(), source_left.Data(), source_right.Data(), source_left.ElementLength(),
+      reference_left.Data(), reference_right.Data(), reference_left.ElementLength(), sample_rate,
+      c_params.empty() ? nullptr : c_params.data(), c_params.size(), &result);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return MasteringStereoResultToObject(env, result);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringAbMatchLoudnessStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 5) {
+    Napi::TypeError::New(
+        env, "Expected (sourceLeft, sourceRight, referenceLeft, referenceRight, sampleRate)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  Napi::Float32Array source_left;
+  Napi::Float32Array source_right;
+  Napi::Float32Array reference_left;
+  Napi::Float32Array reference_right;
+  if (!ReadStereoPairShape(info, 0, 1, 2, 3,
+                           "Expected (Float32Array sourceLeft, Float32Array sourceRight, "
+                           "Float32Array referenceLeft, Float32Array referenceRight, "
+                           "sampleRate)",
+                           &source_left, &source_right, &reference_left, &reference_right)) {
+    return env.Undefined();
+  }
+  if (!info[4].IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sample_rate = node_narrow_int(env, info[4], "sampleRate");
+  sonare::validate_offline_audio_input(source_left.Data(), source_left.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(source_right.Data(), source_right.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(reference_left.Data(), reference_left.ElementLength(),
+                                       sample_rate);
+  sonare::validate_offline_audio_input(reference_right.Data(), reference_right.ElementLength(),
+                                       sample_rate);
+
+  SonareMasteringStereoResult result{};
+  StereoResultGuard result_guard{&result};
+  SonareLoudnessMatch match{};
+  const SonareError err = sonare_mastering_ab_match_loudness_stereo(
+      source_left.Data(), source_right.Data(), source_left.ElementLength(), reference_left.Data(),
+      reference_right.Data(), reference_left.ElementLength(), sample_rate, &result, &match);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return LoudnessMatchStereoToObject(env, result, match);
   SONARE_NODE_CATCH(env)
 }
 

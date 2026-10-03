@@ -1510,6 +1510,732 @@ TEST_CASE("StreamingMasteringChain stage_names lists enabled stages",
   REQUIRE(names[1] == "dynamics.compressor");
 }
 
+TEST_CASE("StreamingMasteringChain preserves fractional-rate Nyquist validation",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 44100.5;
+  constexpr float kNearNyquist = 22050.1f;
+
+  SECTION("tilt pivot") {
+    MasteringChainConfig config;
+    config.eq.tilt.enabled = true;
+    config.eq.tilt.tilt_db = 1.0f;
+    config.eq.tilt.pivot_hz = kNearNyquist;
+    StreamingMasteringChain chain(config);
+    REQUIRE_NOTHROW(chain.prepare(kSampleRate, 128, 1));
+    // The pivot is valid below 44100.5 / 2, while truncating the prepared rate
+    // to 44100 would incorrectly reject this unrelated realtime-safe change.
+    REQUIRE_NOTHROW(chain.set_parameter("eq.tilt.tiltDb", 2.0));
+    REQUIRE(chain.config().eq.tilt.tilt_db == Catch::Approx(2.0f));
+  }
+
+  SECTION("multiband crossover") {
+    MasteringChainConfig config;
+    config.dynamics.multiband_comp.enabled = true;
+    config.dynamics.multiband_comp.config.crossover.cutoffs_hz = {120.0f, kNearNyquist};
+    StreamingMasteringChain chain(config);
+    REQUIRE_NOTHROW(chain.prepare(kSampleRate, 128, 1));
+    // The crossover is also valid only with the fractional Nyquist. Changing
+    // a band threshold must retain that prepared configuration and validate it
+    // against the exact rate.
+    REQUIRE_NOTHROW(chain.set_parameter("dynamics.multibandComp.lowThresholdDb", -24.0));
+    REQUIRE(chain.config().dynamics.multiband_comp.config.bands[0].threshold_db ==
+            Catch::Approx(-24.0f));
+  }
+}
+
+TEST_CASE("StreamingMasteringChain repeats an existing clamped processor value safely",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 64;
+  MasteringChainConfig config;
+  config.dynamics.deesser.enabled = true;
+  // DeEsser accepts this construction-time value and clamps only its
+  // effective filter cutoff at prepare/setter time. Repeating it must remain a
+  // no-op so the running filter state is not rebuilt or rejected by the live
+  // setter's stricter automation domain.
+  config.dynamics.deesser.config.frequency_hz = 5.0f;
+
+  StreamingMasteringChain repeated(config);
+  StreamingMasteringChain control(config);
+  repeated.prepare(kSampleRate, kBlockSize, 1);
+  control.prepare(kSampleRate, kBlockSize, 1);
+  std::vector<float> first(kBlockSize);
+  for (int i = 0; i < kBlockSize; ++i) {
+    first[static_cast<size_t>(i)] =
+        0.7f * std::sin(static_cast<float>(i) * sonare::constants::kTwoPi * 8000.0f /
+                        static_cast<float>(kSampleRate));
+  }
+  auto control_first = first;
+  float* first_channels[] = {first.data()};
+  float* control_first_channels[] = {control_first.data()};
+  repeated.process_block(first_channels, 1, kBlockSize);
+  control.process_block(control_first_channels, 1, kBlockSize);
+  REQUIRE_NOTHROW(repeated.set_parameter("dynamics.deesser.frequencyHz", 5.0));
+
+  std::vector<float> next(kBlockSize);
+  for (int i = 0; i < kBlockSize; ++i) {
+    next[static_cast<size_t>(i)] =
+        0.7f * std::sin(static_cast<float>(kBlockSize + i) * sonare::constants::kTwoPi * 8000.0f /
+                        static_cast<float>(kSampleRate));
+  }
+  auto control_next = next;
+  float* next_channels[] = {next.data()};
+  float* control_next_channels[] = {control_next.data()};
+  repeated.process_block(next_channels, 1, kBlockSize);
+  control.process_block(control_next_channels, 1, kBlockSize);
+  REQUIRE(max_abs_difference(next, control_next) == 0.0f);
+}
+
+TEST_CASE("StreamingMasteringChain repeats values in configs beyond JSON limits",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 64;
+  MasteringChainConfig config;
+  config.dynamics.multiband_comp.enabled = true;
+  // IIR crossover mode does not use the kernel size, so this remains a valid
+  // native chain configuration while intentionally exceeding JSON's bounded
+  // FIR field. A repeated automation value must not route through JSON.
+  config.dynamics.multiband_comp.config.crossover.fir_kernel_size = 65536;
+
+  StreamingMasteringChain repeated(config);
+  StreamingMasteringChain control(config);
+  repeated.prepare(kSampleRate, kBlockSize, 1);
+  control.prepare(kSampleRate, kBlockSize, 1);
+  std::vector<float> first(kBlockSize, 0.2f);
+  auto control_first = first;
+  float* first_channels[] = {first.data()};
+  float* control_first_channels[] = {control_first.data()};
+  repeated.process_block(first_channels, 1, kBlockSize);
+  control.process_block(control_first_channels, 1, kBlockSize);
+  REQUIRE_NOTHROW(repeated.set_parameter("dynamics.multibandComp.lowThresholdDb", -18.0));
+
+  std::vector<float> next(kBlockSize, -0.15f);
+  auto control_next = next;
+  float* next_channels[] = {next.data()};
+  float* control_next_channels[] = {control_next.data()};
+  repeated.process_block(next_channels, 1, kBlockSize);
+  control.process_block(control_next_channels, 1, kBlockSize);
+  REQUIRE(max_abs_difference(next, control_next) == 0.0f);
+}
+
+TEST_CASE("StreamingMasteringChain exposes aliases for a two-band multiband config",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 64;
+  MasteringChainConfig config;
+  config.dynamics.multiband_comp.enabled = true;
+  config.dynamics.multiband_comp.config.crossover.cutoffs_hz = {1200.0f};
+  config.dynamics.multiband_comp.config.bands.resize(2);
+
+  StreamingMasteringChain changed(config);
+  StreamingMasteringChain continuity(config);
+  StreamingMasteringChain control(config);
+  changed.prepare(kSampleRate, kBlockSize, 1);
+  continuity.prepare(kSampleRate, kBlockSize, 1);
+  control.prepare(kSampleRate, kBlockSize, 1);
+  std::vector<float> first(kBlockSize, 0.35f);
+  auto continuity_first = first;
+  auto control_first = first;
+  float* first_channels[] = {first.data()};
+  float* continuity_first_channels[] = {continuity_first.data()};
+  float* control_first_channels[] = {control_first.data()};
+  changed.process_block(first_channels, 1, kBlockSize);
+  continuity.process_block(continuity_first_channels, 1, kBlockSize);
+  control.process_block(control_first_channels, 1, kBlockSize);
+
+  REQUIRE_NOTHROW(changed.set_parameter("dynamics.multibandComp.lowThresholdDb", -30.0));
+  REQUIRE_NOTHROW(continuity.set_parameter("dynamics.multibandComp.lowThresholdDb", -18.0));
+  REQUIRE_NOTHROW(continuity.set_parameter("dynamics.multibandComp.midThresholdDb", -18.0));
+  REQUIRE(changed.config().dynamics.multiband_comp.config.bands[0].threshold_db ==
+          Catch::Approx(-30.0f));
+
+  std::vector<float> next(kBlockSize, -0.25f);
+  auto continuity_next = next;
+  auto control_next = next;
+  float* next_channels[] = {next.data()};
+  float* continuity_next_channels[] = {continuity_next.data()};
+  float* control_next_channels[] = {control_next.data()};
+  changed.process_block(next_channels, 1, kBlockSize);
+  continuity.process_block(continuity_next_channels, 1, kBlockSize);
+  control.process_block(control_next_channels, 1, kBlockSize);
+  REQUIRE(max_abs_difference(continuity_next, control_next) == 0.0f);
+  REQUIRE(max_abs_difference(next, control_next) > 1.0e-6f);
+}
+
+TEST_CASE("chain parameter lookup preserves non-default boolean fields",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.auto_makeup = true;
+  config.dynamics.compressor.config.sidechain_hpf_enabled = true;
+  REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.autoMakeup") ==
+          std::optional<double>{1.0});
+  REQUIRE(chain_config_parameter_value(config, "dynamics.compressor.sidechainHpfEnabled") ==
+          std::optional<double>{1.0});
+}
+
+TEST_CASE("StreamingMasteringChain preserves typed double parameter semantics",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.detector = dynamics::DetectorMode::Rms;
+  StreamingMasteringChain chain(config);
+  StreamingMasteringChain control(config);
+  chain.prepare(48000.0, 64, 1);
+  control.prepare(48000.0, 64, 1);
+
+  std::vector<float> warmup(64);
+  for (int i = 0; i < 64; ++i) {
+    warmup[static_cast<size_t>(i)] =
+        0.75f * std::sin(static_cast<float>(i) * sonare::constants::kTwoPi * 440.0f / 48000.0f);
+  }
+  auto control_warmup = warmup;
+  float* warmup_channels[] = {warmup.data()};
+  float* control_warmup_channels[] = {control_warmup.data()};
+  chain.process_block(warmup_channels, 1, 64);
+  control.process_block(control_warmup_channels, 1, 64);
+
+  // Enum validation must see the original double. Narrowing first would turn
+  // this fractional selector into the legal value 1 and silently accept it.
+  CHECK_THROWS_AS(chain.set_parameter("dynamics.compressor.detector", 1.00000001), SonareException);
+  REQUIRE(chain.config().dynamics.compressor.config.detector ==
+          config.dynamics.compressor.config.detector);
+
+  std::vector<float> continuation(64, 0.2f);
+  auto control_continuation = continuation;
+  float* continuation_channels[] = {continuation.data()};
+  float* control_continuation_channels[] = {control_continuation.data()};
+  chain.process_block(continuation_channels, 1, 64);
+  control.process_block(control_continuation_channels, 1, 64);
+  REQUIRE(max_abs_difference(continuation, control_continuation) == 0.0f);
+
+  // A non-zero double below float's range still means true for a boolean
+  // chain field. Passing the narrowed float zero would incorrectly no-op.
+  const double tiny_nonzero = std::ldexp(1.0, -150);
+  REQUIRE_NOTHROW(chain.set_parameter("dynamics.compressor.autoMakeup", tiny_nonzero));
+  REQUIRE(chain.config().dynamics.compressor.config.auto_makeup);
+}
+
+TEST_CASE("StreamingMasteringChain treats signed zero release as unchanged",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 127;
+  MasteringChainConfig config;
+  config.maximizer.true_peak_limiter.enabled = true;
+  config.maximizer.true_peak_limiter.config.ceiling_db = -6.0f;
+  config.maximizer.true_peak_limiter.config.release_ms = 0.0f;
+
+  StreamingMasteringChain repeated(config);
+  StreamingMasteringChain control(config);
+  repeated.prepare(kSampleRate, kBlockSize, 1);
+  control.prepare(kSampleRate, kBlockSize, 1);
+  auto make_block = [](int first_sample, float amplitude) {
+    std::vector<float> block(kBlockSize);
+    for (int i = 0; i < kBlockSize; ++i) {
+      const float phase = static_cast<float>(sonare::constants::kTwoPiD) * 440.0f *
+                          static_cast<float>(first_sample + i) / static_cast<float>(kSampleRate);
+      block[static_cast<size_t>(i)] = amplitude * std::sin(phase);
+    }
+    block[31] = 0.98f;
+    return block;
+  };
+  auto prime = make_block(0, 0.9f);
+  auto control_prime = prime;
+  float* prime_channels[] = {prime.data()};
+  float* control_prime_channels[] = {control_prime.data()};
+  repeated.process_block(prime_channels, 1, kBlockSize);
+  control.process_block(control_prime_channels, 1, kBlockSize);
+  REQUIRE_NOTHROW(repeated.set_parameter("maximizer.truePeakLimiter.releaseMs", -0.0));
+  REQUIRE_FALSE(std::signbit(repeated.config().maximizer.true_peak_limiter.config.release_ms));
+
+  std::vector<float> repeated_output;
+  std::vector<float> control_output;
+  for (int block_index = 1; block_index <= 3; ++block_index) {
+    auto next = make_block(block_index * kBlockSize, 0.35f);
+    auto control_next = next;
+    float* next_channels[] = {next.data()};
+    float* control_next_channels[] = {control_next.data()};
+    repeated.process_block(next_channels, 1, kBlockSize);
+    control.process_block(control_next_channels, 1, kBlockSize);
+    repeated_output.insert(repeated_output.end(), next.begin(), next.end());
+    control_output.insert(control_output.end(), control_next.begin(), control_next.end());
+  }
+  REQUIRE(max_abs_difference(repeated_output, control_output) == 0.0f);
+
+  const auto drain = [](StreamingMasteringChain& chain) {
+    std::vector<float> output;
+    for (int call = 0; call < 4096; ++call) {
+      std::vector<float> block(kBlockSize, -7.0f);
+      float* channels[] = {block.data()};
+      const int written = chain.flush(channels, 1, kBlockSize);
+      if (written == 0) return output;
+      output.insert(output.end(), block.begin(), block.begin() + written);
+    }
+    throw std::runtime_error("StreamingMasteringChain flush did not terminate");
+  };
+  const auto repeated_tail = drain(repeated);
+  const auto control_tail = drain(control);
+  REQUIRE(repeated_tail.size() == control_tail.size());
+  REQUIRE(max_abs_difference(repeated_tail, control_tail) == 0.0f);
+}
+
+TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuilding DSP",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 128;
+
+  auto sine_block = [](int first_sample, float frequency, float amplitude) {
+    std::vector<float> block(kBlockSize);
+    for (int i = 0; i < kBlockSize; ++i) {
+      block[static_cast<size_t>(i)] =
+          amplitude *
+          std::sin(static_cast<float>(sonare::constants::kTwoPiD) * frequency *
+                   static_cast<float>(first_sample + i) / static_cast<float>(kSampleRate));
+    }
+    return block;
+  };
+  const auto process_mono = [](StreamingMasteringChain& chain, std::vector<float>& block) {
+    float* channels[] = {block.data()};
+    chain.process_block(channels, 1, static_cast<int>(block.size()));
+  };
+  const auto process_stereo = [](StreamingMasteringChain& chain, std::vector<float>& left,
+                                 std::vector<float>& right) {
+    float* channels[] = {left.data(), right.data()};
+    chain.process_block(channels, 2, static_cast<int>(left.size()));
+  };
+  const auto drain_mono = [](StreamingMasteringChain& chain) {
+    std::vector<float> output;
+    for (int call = 0; call < 4096; ++call) {
+      std::vector<float> block(kBlockSize, -7.0f);
+      float* channels[] = {block.data()};
+      const int written = chain.flush(channels, 1, kBlockSize);
+      if (written == 0) return output;
+      output.insert(output.end(), block.begin(), block.begin() + written);
+    }
+    throw std::runtime_error("StreamingMasteringChain flush did not terminate");
+  };
+
+  SECTION("mono true-peak ceiling retains the running lookahead") {
+    MasteringChainConfig config;
+    config.maximizer.true_peak_limiter.enabled = true;
+    config.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+
+    StreamingMasteringChain changed(config);
+    StreamingMasteringChain continuity(config);
+    StreamingMasteringChain control(config);
+    changed.prepare(kSampleRate, kBlockSize, 1);
+    continuity.prepare(kSampleRate, kBlockSize, 1);
+    control.prepare(kSampleRate, kBlockSize, 1);
+
+    auto first = sine_block(0, 440.0f, 0.98f);
+    auto first_continuity = first;
+    auto first_control = first;
+    process_mono(changed, first);
+    process_mono(continuity, first_continuity);
+    process_mono(control, first_control);
+
+    REQUIRE_NOTHROW(changed.set_parameter("maximizer.truePeakLimiter.ceilingDb", -12.0));
+    // Setting the current value is the continuity probe: a setter that
+    // re-prepared or reset the limiter would diverge from the untouched chain.
+    REQUIRE_NOTHROW(continuity.set_parameter("maximizer.truePeakLimiter.ceilingDb", -1.0));
+    REQUIRE(changed.config().maximizer.true_peak_limiter.config.ceiling_db ==
+            Catch::Approx(-12.0f));
+    REQUIRE(changed.latency_samples() == control.latency_samples());
+
+    std::vector<float> changed_output;
+    std::vector<float> continuity_output;
+    std::vector<float> control_output;
+    for (int block_index = 1; block_index <= 3; ++block_index) {
+      auto next = sine_block(block_index * kBlockSize, 440.0f, 0.98f);
+      auto next_continuity = next;
+      auto next_control = next;
+      process_mono(changed, next);
+      process_mono(continuity, next_continuity);
+      process_mono(control, next_control);
+      changed_output.insert(changed_output.end(), next.begin(), next.end());
+      continuity_output.insert(continuity_output.end(), next_continuity.begin(),
+                               next_continuity.end());
+      control_output.insert(control_output.end(), next_control.begin(), next_control.end());
+    }
+    CHECK(max_abs_difference(changed_output, control_output) > 1.0e-4f);
+    REQUIRE(max_abs_difference(continuity_output, control_output) == 0.0f);
+
+    const auto continuity_tail = drain_mono(continuity);
+    const auto control_tail = drain_mono(control);
+    REQUIRE(continuity_tail.size() == control_tail.size());
+    REQUIRE_FALSE(continuity_tail.empty());
+    REQUIRE(max_abs_difference(continuity_tail, control_tail) < 1.0e-6f);
+  }
+
+  SECTION("repeating limiter release preserves adaptive history") {
+    constexpr int kReleaseBlockSize = 127;
+    MasteringChainConfig config;
+    config.maximizer.true_peak_limiter.enabled = true;
+    config.maximizer.true_peak_limiter.config.ceiling_db = -6.0f;
+    config.maximizer.true_peak_limiter.config.release_ms = 120.0f;
+
+    StreamingMasteringChain repeated(config);
+    StreamingMasteringChain control(config);
+    repeated.prepare(kSampleRate, kReleaseBlockSize, 1);
+    control.prepare(kSampleRate, kReleaseBlockSize, 1);
+
+    auto make_block = [](int first_sample, float amplitude) {
+      std::vector<float> block(kReleaseBlockSize);
+      for (int i = 0; i < kReleaseBlockSize; ++i) {
+        const float phase = static_cast<float>(sonare::constants::kTwoPiD) * 440.0f *
+                            static_cast<float>(first_sample + i) / static_cast<float>(kSampleRate);
+        block[static_cast<size_t>(i)] = amplitude * std::sin(phase);
+      }
+      // A sharp peak makes the adaptive release path observable after the
+      // intentionally off-phase (127 * 4 is not divisible by its interval).
+      block[31] = 0.98f;
+      return block;
+    };
+    auto prime = make_block(0, 0.9f);
+    auto control_prime = prime;
+    process_mono(repeated, prime);
+    process_mono(control, control_prime);
+    REQUIRE_NOTHROW(repeated.set_parameter("maximizer.truePeakLimiter.releaseMs", 120.0));
+
+    std::vector<float> repeated_output;
+    std::vector<float> control_output;
+    for (int block_index = 1; block_index <= 3; ++block_index) {
+      auto next = make_block(block_index * kReleaseBlockSize, 0.35f);
+      auto control_next = next;
+      process_mono(repeated, next);
+      process_mono(control, control_next);
+      repeated_output.insert(repeated_output.end(), next.begin(), next.end());
+      control_output.insert(control_output.end(), control_next.begin(), control_next.end());
+    }
+    REQUIRE(max_abs_difference(repeated_output, control_output) == 0.0f);
+
+    const auto drain = [&](StreamingMasteringChain& chain) {
+      std::vector<float> output;
+      for (int call = 0; call < 4096; ++call) {
+        std::vector<float> block(kReleaseBlockSize, -7.0f);
+        float* channels[] = {block.data()};
+        const int written = chain.flush(channels, 1, kReleaseBlockSize);
+        if (written == 0) return output;
+        output.insert(output.end(), block.begin(), block.begin() + written);
+      }
+      throw std::runtime_error("StreamingMasteringChain flush did not terminate");
+    };
+    const auto repeated_tail = drain(repeated);
+    const auto control_tail = drain(control);
+    REQUIRE(repeated_tail.size() == control_tail.size());
+    REQUIRE_FALSE(repeated_tail.empty());
+    REQUIRE(max_abs_difference(repeated_tail, control_tail) == 0.0f);
+  }
+
+  SECTION("stereo true-peak ceiling changes both channels") {
+    MasteringChainConfig config;
+    config.maximizer.true_peak_limiter.enabled = true;
+    config.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+
+    StreamingMasteringChain changed(config);
+    StreamingMasteringChain control(config);
+    changed.prepare(kSampleRate, kBlockSize, 2);
+    control.prepare(kSampleRate, kBlockSize, 2);
+
+    auto first_left = sine_block(0, 700.0f, 0.9f);
+    auto first_right = sine_block(0, 1100.0f, 0.85f);
+    auto first_control_left = first_left;
+    auto first_control_right = first_right;
+    process_stereo(changed, first_left, first_right);
+    process_stereo(control, first_control_left, first_control_right);
+    REQUIRE_NOTHROW(changed.set_parameter("maximizer.truePeakLimiter.ceilingDb", -12.0));
+
+    std::vector<float> changed_left;
+    std::vector<float> changed_right;
+    std::vector<float> control_left;
+    std::vector<float> control_right;
+    for (int block_index = 1; block_index <= 3; ++block_index) {
+      auto left = sine_block(block_index * kBlockSize, 700.0f, 0.9f);
+      auto right = sine_block(block_index * kBlockSize, 1100.0f, 0.85f);
+      auto control_block_left = left;
+      auto control_block_right = right;
+      process_stereo(changed, left, right);
+      process_stereo(control, control_block_left, control_block_right);
+      changed_left.insert(changed_left.end(), left.begin(), left.end());
+      changed_right.insert(changed_right.end(), right.begin(), right.end());
+      control_left.insert(control_left.end(), control_block_left.begin(), control_block_left.end());
+      control_right.insert(control_right.end(), control_block_right.begin(),
+                           control_block_right.end());
+    }
+    REQUIRE(max_abs_difference(changed_left, control_left) > 1.0e-4f);
+    REQUIRE(max_abs_difference(changed_right, control_right) > 1.0e-4f);
+  }
+
+  SECTION("stereo compressor threshold changes both channels") {
+    MasteringChainConfig config;
+    config.dynamics.compressor.enabled = true;
+    config.dynamics.compressor.config.threshold_db = -12.0f;
+    config.dynamics.compressor.config.ratio = 8.0f;
+    config.dynamics.compressor.config.release_ms = 300.0f;
+
+    StreamingMasteringChain changed(config);
+    StreamingMasteringChain continuity(config);
+    StreamingMasteringChain control(config);
+    changed.prepare(kSampleRate, kBlockSize, 2);
+    continuity.prepare(kSampleRate, kBlockSize, 2);
+    control.prepare(kSampleRate, kBlockSize, 2);
+    auto first_left = sine_block(0, 700.0f, 0.8f);
+    auto first_right = sine_block(0, 1100.0f, 0.75f);
+    auto first_continuity_left = first_left;
+    auto first_continuity_right = first_right;
+    auto first_control_left = first_left;
+    auto first_control_right = first_right;
+    process_stereo(changed, first_left, first_right);
+    process_stereo(continuity, first_continuity_left, first_continuity_right);
+    process_stereo(control, first_control_left, first_control_right);
+    REQUIRE_NOTHROW(changed.set_parameter("dynamics.compressor.thresholdDb", -36.0));
+    REQUIRE_NOTHROW(continuity.set_parameter("dynamics.compressor.thresholdDb", -12.0));
+
+    std::vector<float> changed_left;
+    std::vector<float> changed_right;
+    std::vector<float> continuity_left;
+    std::vector<float> continuity_right;
+    std::vector<float> control_left;
+    std::vector<float> control_right;
+    for (int block_index = 1; block_index <= 3; ++block_index) {
+      auto left = sine_block(block_index * kBlockSize, 700.0f, 0.8f);
+      auto right = sine_block(block_index * kBlockSize, 1100.0f, 0.75f);
+      auto continuity_block_left = left;
+      auto continuity_block_right = right;
+      auto control_block_left = left;
+      auto control_block_right = right;
+      process_stereo(changed, left, right);
+      process_stereo(continuity, continuity_block_left, continuity_block_right);
+      process_stereo(control, control_block_left, control_block_right);
+      changed_left.insert(changed_left.end(), left.begin(), left.end());
+      changed_right.insert(changed_right.end(), right.begin(), right.end());
+      continuity_left.insert(continuity_left.end(), continuity_block_left.begin(),
+                             continuity_block_left.end());
+      continuity_right.insert(continuity_right.end(), continuity_block_right.begin(),
+                              continuity_block_right.end());
+      control_left.insert(control_left.end(), control_block_left.begin(), control_block_left.end());
+      control_right.insert(control_right.end(), control_block_right.begin(),
+                           control_block_right.end());
+    }
+    REQUIRE(max_abs_difference(changed_left, control_left) > 1.0e-5f);
+    REQUIRE(max_abs_difference(changed_right, control_right) > 1.0e-5f);
+    REQUIRE(changed.config().dynamics.compressor.config.threshold_db == Catch::Approx(-36.0f));
+    REQUIRE(max_abs_difference(continuity_left, control_left) == 0.0f);
+    REQUIRE(max_abs_difference(continuity_right, control_right) == 0.0f);
+  }
+
+  SECTION("stereo tilt keeps both channel histories") {
+    MasteringChainConfig config;
+    config.eq.tilt.enabled = true;
+    config.eq.tilt.tilt_db = 1.0f;
+    config.eq.tilt.pivot_hz = 1000.0f;
+
+    StreamingMasteringChain changed(config);
+    StreamingMasteringChain continuity(config);
+    StreamingMasteringChain control(config);
+    changed.prepare(kSampleRate, kBlockSize, 2);
+    continuity.prepare(kSampleRate, kBlockSize, 2);
+    control.prepare(kSampleRate, kBlockSize, 2);
+
+    auto left = sine_block(0, 8000.0f, 0.4f);
+    auto right = sine_block(0, 500.0f, 0.4f);
+    auto continuity_left = left;
+    auto continuity_right = right;
+    auto control_left = left;
+    auto control_right = right;
+    process_stereo(changed, left, right);
+    process_stereo(continuity, continuity_left, continuity_right);
+    process_stereo(control, control_left, control_right);
+
+    REQUIRE_NOTHROW(changed.set_parameter("eq.tilt.tiltDb", 8.0));
+    REQUIRE_NOTHROW(continuity.set_parameter("eq.tilt.tiltDb", 1.0));
+
+    auto next_left = sine_block(kBlockSize, 8000.0f, 0.4f);
+    auto next_right = sine_block(kBlockSize, 500.0f, 0.4f);
+    auto next_continuity_left = next_left;
+    auto next_continuity_right = next_right;
+    auto next_control_left = next_left;
+    auto next_control_right = next_right;
+    process_stereo(changed, next_left, next_right);
+    process_stereo(continuity, next_continuity_left, next_continuity_right);
+    process_stereo(control, next_control_left, next_control_right);
+
+    REQUIRE(max_abs_difference(next_continuity_left, next_control_left) == 0.0f);
+    REQUIRE(max_abs_difference(next_continuity_right, next_control_right) == 0.0f);
+    REQUIRE(max_abs_difference(next_left, next_control_left) > 1.0e-4f);
+    REQUIRE(max_abs_difference(next_right, next_control_right) > 1.0e-4f);
+    CHECK(changed.config().eq.tilt.tilt_db == Catch::Approx(8.0f));
+  }
+
+  SECTION("reprepare uses the updated configuration") {
+    MasteringChainConfig config;
+    config.eq.tilt.enabled = true;
+    config.eq.tilt.tilt_db = 1.0f;
+    config.eq.tilt.pivot_hz = 1000.0f;
+    StreamingMasteringChain changed(config);
+    changed.prepare(kSampleRate, kBlockSize, 2);
+    REQUIRE_NOTHROW(changed.set_parameter("eq.tilt.tiltDb", 8.0));
+    config.eq.tilt.tilt_db = 8.0f;
+    StreamingMasteringChain expected(config);
+    expected.prepare(kSampleRate, kBlockSize, 2);
+    changed.prepare(kSampleRate, kBlockSize, 2);
+    auto actual_left = sine_block(0, 8000.0f, 0.4f);
+    auto actual_right = sine_block(0, 500.0f, 0.4f);
+    auto expected_left = actual_left;
+    auto expected_right = actual_right;
+    process_stereo(changed, actual_left, actual_right);
+    process_stereo(expected, expected_left, expected_right);
+    REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
+    REQUIRE(max_abs_difference(actual_right, expected_right) < 1.0e-6f);
+    REQUIRE(changed.config().eq.tilt.tilt_db == Catch::Approx(8.0f));
+  }
+
+  SECTION("multiband aliases target the realized band descriptor") {
+    MasteringChainConfig config;
+    config.dynamics.multiband_comp.enabled = true;
+    StreamingMasteringChain chain(config);
+    chain.prepare(kSampleRate, kBlockSize, 1);
+    const std::vector<std::pair<const char*, double>> values = {
+        {"dynamics.multibandComp.lowThresholdDb", -30.0},
+        {"dynamics.multibandComp.lowRatio", 3.0},
+        {"dynamics.multibandComp.lowAttackMs", 5.0},
+        {"dynamics.multibandComp.lowReleaseMs", 80.0},
+        {"dynamics.multibandComp.midThresholdDb", -27.0},
+        {"dynamics.multibandComp.midRatio", 4.0},
+        {"dynamics.multibandComp.midAttackMs", 7.0},
+        {"dynamics.multibandComp.midReleaseMs", 90.0},
+        {"dynamics.multibandComp.highThresholdDb", -24.0},
+        {"dynamics.multibandComp.highRatio", 5.0},
+        {"dynamics.multibandComp.highAttackMs", 9.0},
+        {"dynamics.multibandComp.highReleaseMs", 100.0},
+    };
+    for (const auto& [key, value] : values) {
+      REQUIRE_NOTHROW(chain.set_parameter(key, value));
+    }
+    const auto& bands = chain.config().dynamics.multiband_comp.config.bands;
+    REQUIRE(bands[0].threshold_db == Catch::Approx(-30.0f));
+    REQUIRE(bands[0].ratio == Catch::Approx(3.0f));
+    REQUIRE(bands[0].attack_ms == Catch::Approx(5.0f));
+    REQUIRE(bands[0].release_ms == Catch::Approx(80.0f));
+    REQUIRE(bands[1].threshold_db == Catch::Approx(-27.0f));
+    REQUIRE(bands[1].ratio == Catch::Approx(4.0f));
+    REQUIRE(bands[1].attack_ms == Catch::Approx(7.0f));
+    REQUIRE(bands[1].release_ms == Catch::Approx(90.0f));
+    REQUIRE(bands[2].threshold_db == Catch::Approx(-24.0f));
+    REQUIRE(bands[2].ratio == Catch::Approx(5.0f));
+    REQUIRE(bands[2].attack_ms == Catch::Approx(9.0f));
+    REQUIRE(bands[2].release_ms == Catch::Approx(100.0f));
+    REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.lowCutoffHz", 250.0),
+                      SonareException);
+    REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.lowMakeupGainDb", 2.0),
+                      SonareException);
+    REQUIRE_THROWS_AS(chain.set_parameter("dynamics.multibandComp.band3ThresholdDb", -20.0),
+                      SonareException);
+  }
+
+  SECTION("loudness aliases keep the static gain and resolve release sentinel") {
+    MasteringChainConfig config;
+    config.loudness.enabled = true;
+    StreamingMasteringChainOptions options;
+    options.loudness_static_gain_db = 0.0f;
+    StreamingMasteringChain chain(config, options);
+    chain.prepare(kSampleRate, kBlockSize, 1);
+    REQUIRE_NOTHROW(chain.set_parameter("loudness.ceilingDb", -2.0));
+    REQUIRE_NOTHROW(chain.set_parameter("loudness.releaseMs", 0.0));
+    REQUIRE(chain.config().loudness.ceiling_db == Catch::Approx(-2.0f));
+    REQUIRE(chain.config().loudness.release_ms == Catch::Approx(0.0f));
+  }
+}
+
+TEST_CASE("StreamingMasteringChain rejects unsafe parameters without touching history",
+          "[mastering][chain][streaming]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 64;
+  MasteringChainConfig config;
+  config.maximizer.true_peak_limiter.enabled = true;
+
+  StreamingMasteringChain chain(config);
+  StreamingMasteringChain control(config);
+  chain.prepare(kSampleRate, kBlockSize, 1);
+  control.prepare(kSampleRate, kBlockSize, 1);
+  std::vector<float> prime(kBlockSize, 0.75f);
+  auto control_prime = prime;
+  float* prime_channels[] = {prime.data()};
+  float* control_prime_channels[] = {control_prime.data()};
+  chain.process_block(prime_channels, 1, kBlockSize);
+  control.process_block(control_prime_channels, 1, kBlockSize);
+
+  std::vector<float> first_tail(8, -1.0f);
+  std::vector<float> control_first_tail(8, -1.0f);
+  float* first_tail_channels[] = {first_tail.data()};
+  float* control_first_tail_channels[] = {control_first_tail.data()};
+  const int first_written = chain.flush(first_tail_channels, 1, 8);
+  const int control_first_written = control.flush(control_first_tail_channels, 1, 8);
+  REQUIRE(first_written == control_first_written);
+  REQUIRE(first_written == 8);
+  for (int i = 0; i < first_written; ++i) {
+    CHECK(first_tail[static_cast<size_t>(i)] ==
+          Catch::Approx(control_first_tail[static_cast<size_t>(i)]).margin(1.0e-6f));
+  }
+
+  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.lookaheadMs", 4.0),
+                    SonareException);
+  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.ceilingDb",
+                                        std::numeric_limits<double>::quiet_NaN()),
+                    SonareException);
+  REQUIRE_THROWS_AS(chain.set_parameter("unknown.stage.parameter", -1.0), SonareException);
+  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.ceilingDb",
+                                        std::numeric_limits<double>::max()),
+                    SonareException);
+
+  MasteringChainConfig clamp_config;
+  clamp_config.saturation.tape.enabled = true;
+  clamp_config.saturation.exciter.enabled = true;
+  StreamingMasteringChain clamp_chain(clamp_config);
+  clamp_chain.prepare(kSampleRate, kBlockSize, 1);
+  const float denormal = std::numeric_limits<float>::denorm_min();
+  REQUIRE_THROWS_AS(clamp_chain.set_parameter("saturation.tape.speedIps", denormal),
+                    SonareException);
+  REQUIRE_THROWS_AS(clamp_chain.set_parameter("saturation.exciter.frequencyHz", denormal),
+                    SonareException);
+  REQUIRE_THROWS_AS(clamp_chain.set_parameter("saturation.exciter.q", denormal), SonareException);
+  REQUIRE(clamp_chain.config().saturation.tape.config.speed_ips ==
+          Catch::Approx(clamp_config.saturation.tape.config.speed_ips));
+  REQUIRE(clamp_chain.config().saturation.exciter.config.frequency_hz ==
+          Catch::Approx(clamp_config.saturation.exciter.config.frequency_hz));
+  REQUIRE(clamp_chain.config().saturation.exciter.config.q ==
+          Catch::Approx(clamp_config.saturation.exciter.config.q));
+
+  const auto drain = [](StreamingMasteringChain& current) {
+    std::vector<float> output;
+    for (int call = 0; call < 4096; ++call) {
+      std::vector<float> block(kBlockSize, -1.0f);
+      float* channels[] = {block.data()};
+      const int written = current.flush(channels, 1, kBlockSize);
+      if (written == 0) return output;
+      output.insert(output.end(), block.begin(), block.begin() + written);
+    }
+    throw std::runtime_error("StreamingMasteringChain flush did not terminate");
+  };
+  const auto tail = drain(chain);
+  const auto control_tail = drain(control);
+  REQUIRE(tail.size() == control_tail.size());
+  REQUIRE_FALSE(tail.empty());
+  REQUIRE(max_abs_difference(tail, control_tail) < 1.0e-6f);
+
+  MasteringChainConfig disabled_config;
+  StreamingMasteringChain disabled(disabled_config);
+  disabled.prepare(kSampleRate, kBlockSize, 1);
+  REQUIRE_THROWS_AS(disabled.set_parameter("dynamics.compressor.thresholdDb", -30.0),
+                    SonareException);
+
+  MasteringChainConfig stereo_config;
+  stereo_config.stereo.imager.enabled = true;
+  StreamingMasteringChain mono(stereo_config);
+  mono.prepare(kSampleRate, kBlockSize, 1);
+  REQUIRE_THROWS_AS(mono.set_parameter("stereo.imager.width", 1.5), SonareException);
+}
+
 TEST_CASE("StreamingMasteringChain skips stereo stages when mono",
           "[mastering][chain][streaming]") {
   MasteringChainConfig config;

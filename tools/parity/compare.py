@@ -218,6 +218,10 @@ _ALIAS_COVERAGE = {
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
+    # Stereo pair facades derive both frame counts from the channel planes.
+    # One public operation covers the equal-length and independent-length C calls.
+    "mastering_apply_pair_processor_stereo": ("mastering_pair_process_stereo",),
+    "mastering_apply_pair_processor_stereo_ex": ("mastering_pair_process_stereo",),
     # Accessors exposed as bare properties or get-prefixed getters.
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),

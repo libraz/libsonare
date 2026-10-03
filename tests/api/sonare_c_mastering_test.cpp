@@ -13,6 +13,7 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/saturation/amp_presets.h"
 #include "sonare_c_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "support/schema_paths.h"
 #include "util/db.h"
 #include "util/json.h"
@@ -1880,6 +1881,194 @@ TEST_CASE("sonare_mastering_ab_match_loudness", "[c_api][mastering]") {
                                              &match) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(match.applied_gain_db == 0.0f);
   }
+}
+
+TEST_CASE("sonare_mastering_ab_match_loudness_stereo preserves the pair",
+          "[c_api][mastering][stereo][ab-match]") {
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kSourceLength = 48000;
+  constexpr size_t kReferenceLength = 96000;
+  std::vector<float> source_left(kSourceLength);
+  std::vector<float> source_right(kSourceLength);
+  std::vector<float> reference_left(kReferenceLength);
+  std::vector<float> reference_right(kReferenceLength);
+  for (size_t index = 0; index < kReferenceLength; ++index) {
+    const float t = static_cast<float>(index) / static_cast<float>(kSampleRate);
+    reference_left[index] = 0.3f * std::sin(2.0f * sonare::constants::kPi * 440.0f * t);
+    reference_right[index] = 0.3f * std::sin(2.0f * sonare::constants::kPi * 660.0f * t);
+    if (index < kSourceLength) {
+      source_left[index] = 0.05f * std::sin(2.0f * sonare::constants::kPi * 220.0f * t);
+      source_right[index] = -source_left[index];
+    }
+  }
+
+  SonareMasteringStereoResult out{};
+  SonareLoudnessMatch match{};
+  REQUIRE(sonare_mastering_ab_match_loudness_stereo(source_left.data(), source_right.data(),
+                                                    source_left.size(), reference_left.data(),
+                                                    reference_right.data(), reference_left.size(),
+                                                    kSampleRate, &out, &match) == SONARE_OK);
+  REQUIRE(out.left != nullptr);
+  REQUIRE(out.right != nullptr);
+  REQUIRE(out.length == source_left.size());
+  REQUIRE(out.input_lufs == Catch::Approx(match.source_lufs).margin(0.001));
+  REQUIRE(out.output_lufs == Catch::Approx(match.reference_lufs).margin(0.2));
+  REQUIRE(match.applied_gain_db > 5.0f);
+
+  const size_t probe = 1234;
+  REQUIRE(out.left[probe] != 0.0f);
+  REQUIRE(out.right[probe] == Catch::Approx(-out.left[probe]).margin(1.0e-5));
+  const float measured_peak = sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
+      out.left, out.right, out.length);
+  std::vector<float> out_interleaved(out.length * 2);
+  for (size_t i = 0; i < out.length; ++i) {
+    out_interleaved[2 * i] = out.left[i];
+    out_interleaved[2 * i + 1] = out.right[i];
+  }
+  REQUIRE(out.output_lufs == Catch::Approx(sonare::mastering::common::measure_lufs_interleaved(
+                                               out_interleaved.data(), out.length, 2, kSampleRate))
+                                 .margin(1.0e-5));
+  REQUIRE(match.matched_true_peak_dbtp == Catch::Approx(measured_peak).margin(1.0e-5));
+  sonare_free_mastering_stereo_result(&out);
+}
+
+TEST_CASE("sonare_mastering_apply_pair_processor_stereo crossfades both planes",
+          "[c_api][mastering][stereo][ab-match]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> source_left(8, 1.0f);
+  const std::vector<float> source_right(8, -1.0f);
+  const std::vector<float> reference_left(5, 3.0f);
+  const std::vector<float> reference_right(5, -3.0f);
+  const SonareMasteringParam mix[] = {{"mix", 0.25}};
+  SonareMasteringStereoResult out{};
+  REQUIRE(sonare_mastering_apply_pair_processor_stereo_ex(
+              "match.abCrossfade", source_left.data(), source_right.data(), source_left.size(),
+              reference_left.data(), reference_right.data(), reference_left.size(), kSampleRate,
+              mix, 1, &out) == SONARE_OK);
+  REQUIRE(out.length == reference_left.size());
+  REQUIRE(out.left[0] == Catch::Approx(1.5f).margin(1.0e-6));
+  REQUIRE(out.right[0] == Catch::Approx(-1.5f).margin(1.0e-6));
+  sonare_free_mastering_stereo_result(&out);
+
+  SonareMasteringStereoResult rejected{};
+  REQUIRE(sonare_mastering_apply_pair_processor_stereo_ex(
+              "match.abSwitch", source_left.data(), source_right.data(), source_left.size(),
+              reference_left.data(), reference_right.data(), reference_left.size(), kSampleRate,
+              nullptr, 0, &rejected) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(rejected.left == nullptr);
+  REQUIRE(rejected.right == nullptr);
+  REQUIRE(rejected.length == 0);
+}
+
+TEST_CASE("stereo A/B C API clears results on invalid calls",
+          "[c_api][mastering][stereo][ab-match]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> samples(48000, 0.1f);
+  SonareMasteringStereoResult out{};
+  SonareLoudnessMatch match{};
+  match.applied_gain_db = 99.0f;
+
+  REQUIRE(sonare_mastering_ab_match_loudness_stereo(samples.data(), samples.data(), samples.size(),
+                                                    samples.data(), samples.data(), samples.size(),
+                                                    0, &out, &match) != SONARE_OK);
+  REQUIRE(out.left == nullptr);
+  REQUIRE(out.right == nullptr);
+  REQUIRE(out.length == 0);
+  REQUIRE(match.applied_gain_db == 0.0f);
+
+  match.applied_gain_db = 99.0f;
+  REQUIRE(sonare_mastering_ab_match_loudness_stereo(nullptr, samples.data(), samples.size(),
+                                                    samples.data(), samples.data(), samples.size(),
+                                                    kSampleRate, &out, &match) != SONARE_OK);
+  REQUIRE(match.applied_gain_db == 0.0f);
+
+  const SonareMasteringParam out_of_range[] = {{"mix", 1.5}};
+  REQUIRE(sonare_mastering_apply_pair_processor_stereo_ex(
+              "match.abCrossfade", samples.data(), samples.data(), samples.size(), samples.data(),
+              samples.data(), samples.size(), kSampleRate, out_of_range, 1, &out) != SONARE_OK);
+  REQUIRE(out.left == nullptr);
+  REQUIRE(out.right == nullptr);
+  REQUIRE(sonare_mastering_apply_pair_processor_stereo_ex(
+              "match.abCrossfade", samples.data(), samples.data(), samples.size(), samples.data(),
+              samples.data(), samples.size(), kSampleRate, nullptr, 1,
+              &out) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("stereo A/B C API keeps outputs empty when allocation fails",
+          "[c_api][mastering][stereo][ab-match][allocation]") {
+  constexpr int kSampleRate = 48000;
+  const std::vector<float> source(4096, 0.1f);
+  const std::vector<float> reference(4096, 0.2f);
+  constexpr std::size_t kMaxFailurePoint = 256;
+
+  std::size_t pair_failures = 0;
+  bool pair_succeeded = false;
+  for (std::size_t failure_point = 1; failure_point <= kMaxFailurePoint; ++failure_point) {
+    SonareMasteringStereoResult out{};
+    out.input_lufs = 99.0f;
+    out.output_lufs = 99.0f;
+    SonareError err;
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure_point);
+      err = sonare_mastering_apply_pair_processor_stereo_ex(
+          "match.abCrossfade", source.data(), source.data(), source.size(), reference.data(),
+          reference.data(), reference.size(), kSampleRate, nullptr, 0, &out);
+    }
+
+    if (err == SONARE_ERROR_OUT_OF_MEMORY) {
+      ++pair_failures;
+      REQUIRE(out.left == nullptr);
+      REQUIRE(out.right == nullptr);
+      REQUIRE(out.length == 0);
+      REQUIRE(out.input_lufs == 0.0f);
+      REQUIRE(out.output_lufs == 0.0f);
+      REQUIRE(out.applied_gain_db == 0.0f);
+    } else {
+      REQUIRE(err == SONARE_OK);
+      sonare_free_mastering_stereo_result(&out);
+      pair_succeeded = true;
+      break;
+    }
+  }
+  REQUIRE(pair_failures > 0);
+  REQUIRE(pair_succeeded);
+
+  std::size_t match_failures = 0;
+  bool match_succeeded = false;
+  for (std::size_t failure_point = 1; failure_point <= kMaxFailurePoint; ++failure_point) {
+    SonareMasteringStereoResult out{};
+    out.input_lufs = 99.0f;
+    out.output_lufs = 99.0f;
+    SonareLoudnessMatch match{99.0f, 99.0f, 99.0f, 99.0f};
+    SonareError err;
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure_point);
+      err = sonare_mastering_ab_match_loudness_stereo(source.data(), source.data(), source.size(),
+                                                      reference.data(), reference.data(),
+                                                      reference.size(), kSampleRate, &out, &match);
+    }
+
+    if (err == SONARE_ERROR_OUT_OF_MEMORY) {
+      ++match_failures;
+      REQUIRE(out.left == nullptr);
+      REQUIRE(out.right == nullptr);
+      REQUIRE(out.length == 0);
+      REQUIRE(out.input_lufs == 0.0f);
+      REQUIRE(out.output_lufs == 0.0f);
+      REQUIRE(out.applied_gain_db == 0.0f);
+      REQUIRE(match.reference_lufs == 0.0f);
+      REQUIRE(match.source_lufs == 0.0f);
+      REQUIRE(match.applied_gain_db == 0.0f);
+      REQUIRE(match.matched_true_peak_dbtp == 0.0f);
+    } else {
+      REQUIRE(err == SONARE_OK);
+      sonare_free_mastering_stereo_result(&out);
+      match_succeeded = true;
+      break;
+    }
+  }
+  REQUIRE(match_failures > 0);
+  REQUIRE(match_succeeded);
 }
 
 TEST_CASE("sonare_eq_non_finite_discard_count reports the state the EQ discarded",

@@ -145,6 +145,7 @@ add_executable(sonare_tests
   api/sonare_c_core_test.cpp
   api/sonare_c_music_test.cpp
   api/sonare_c_mastering_test.cpp
+  api/sonare_c_mastering_streaming_test.cpp
   api/sonare_c_mastering_repair_test.cpp
   api/sonare_c_mastering_repair_detect_test.cpp
   api/sonare_c_features_metering_test.cpp

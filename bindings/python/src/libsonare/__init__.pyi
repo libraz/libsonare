@@ -287,6 +287,9 @@ from .analyzer import (
     mastering_ab_match_loudness as mastering_ab_match_loudness,
 )
 from .analyzer import (
+    mastering_ab_match_loudness_stereo as mastering_ab_match_loudness_stereo,
+)
+from .analyzer import (
     mastering_amp_preset_catalog as mastering_amp_preset_catalog,
 )
 from .analyzer import (
@@ -336,6 +339,9 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_pair_process as mastering_pair_process,
+)
+from .analyzer import (
+    mastering_pair_process_stereo as mastering_pair_process_stereo,
 )
 from .analyzer import (
     mastering_pair_processor_names as mastering_pair_processor_names,

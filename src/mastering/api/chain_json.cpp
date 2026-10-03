@@ -189,18 +189,22 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
       add_field(params, "dynamics.multibandComp.highCutoffHz",
                 cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[1]);
     }
-    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
       const auto& low = cfg.dynamics.multiband_comp.config.bands[0];
-      const auto& mid = cfg.dynamics.multiband_comp.config.bands[1];
-      const auto& high = cfg.dynamics.multiband_comp.config.bands[2];
       add_field(params, "dynamics.multibandComp.lowThresholdDb", low.threshold_db);
       add_field(params, "dynamics.multibandComp.lowRatio", low.ratio);
       add_field(params, "dynamics.multibandComp.lowAttackMs", low.attack_ms);
       add_field(params, "dynamics.multibandComp.lowReleaseMs", low.release_ms);
+    }
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
+      const auto& mid = cfg.dynamics.multiband_comp.config.bands[1];
       add_field(params, "dynamics.multibandComp.midThresholdDb", mid.threshold_db);
       add_field(params, "dynamics.multibandComp.midRatio", mid.ratio);
       add_field(params, "dynamics.multibandComp.midAttackMs", mid.attack_ms);
       add_field(params, "dynamics.multibandComp.midReleaseMs", mid.release_ms);
+    }
+    if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
+      const auto& high = cfg.dynamics.multiband_comp.config.bands[2];
       add_field(params, "dynamics.multibandComp.highThresholdDb", high.threshold_db);
       add_field(params, "dynamics.multibandComp.highRatio", high.ratio);
       add_field(params, "dynamics.multibandComp.highAttackMs", high.attack_ms);
@@ -632,6 +636,17 @@ class JsonParamParser {
 };
 
 }  // namespace
+
+std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
+                                                   const std::string& key) {
+  // Shares the writer's flat table, but skips document validation so it works past JSON's limits.
+  const auto params = build_chain_params(config, true);
+  const auto it = params.find(key);
+  if (it == params.end()) return std::nullopt;
+  if (it->second.is_bool()) return it->second.as_bool() ? 1.0 : 0.0;
+  if (!it->second.is_number()) return std::nullopt;
+  return it->second.as_number();
+}
 
 std::string chain_config_to_json(const MasteringChainConfig& config) {
   // Validate the complete multiband shape before selecting v1 or v2. This is

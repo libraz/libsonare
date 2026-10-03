@@ -171,6 +171,14 @@ export class StreamingMasteringChain {
     this.chain.reset();
   }
 
+  /**
+   * Set one realtime-safe full-chain parameter at a serialized block boundary.
+   * Structural, disabled-stage and unknown parameters are rejected.
+   */
+  setParameter(key: string, value: number): void {
+    this.chain.setParameter(key, value);
+  }
+
   /** Total reported latency in samples across all active processors. */
   latencySamples(): number {
     return this.chain.latencySamples();

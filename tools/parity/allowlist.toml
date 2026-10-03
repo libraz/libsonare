@@ -671,6 +671,7 @@ python = [
   "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mastering_ab_match_loudness", # Python derives both C lengths from array length and folds the optional out_match into `with_match`
+  "mastering_ab_match_loudness_stereo", # Python derives both stereo lengths and folds optional out_match into with_match, as in the mono API
   "align_take_to_reference", # Python derives both C lengths from array length and folds the SonareTakeAlignConfig fields into keyword args
 ]
 

@@ -109,6 +109,13 @@ void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& 
   ThrowWithCode(env, err, message);
 }
 
+bool RejectEmbeddedNul(Napi::Env env, const std::string& value, const char* field) {
+  if (value.find('\0') == std::string::npos) return false;
+  Napi::RangeError::New(env, std::string(field) + " must not contain NUL")
+      .ThrowAsJavaScriptException();
+  return true;
+}
+
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
   SetSonareErrorProperties(env, error, err);
 }

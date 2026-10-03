@@ -338,6 +338,47 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
   return out;
 }
 
+val js_mastering_pair_process_stereo(std::string processor_name, val source_left_samples,
+                                     val source_right_samples, val reference_left_samples,
+                                     val reference_right_samples, const val& sample_rate_val,
+                                     val params) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
+                               "source right samples", "masteringPairProcessStereo source input",
+                               true);
+  validateWasmFloat32ArrayPair(reference_left_samples, "reference left samples",
+                               reference_right_samples, "reference right samples",
+                               "masteringPairProcessStereo reference input", true);
+  validateWasmFloat32ElementBudget(
+      {wasmFloat32ArrayLength(source_left_samples), wasmFloat32ArrayLength(source_right_samples),
+       wasmFloat32ArrayLength(reference_left_samples),
+       wasmFloat32ArrayLength(reference_right_samples)},
+      "masteringPairProcessStereo input");
+  std::vector<float> source_left = float32ArrayToVector(source_left_samples);
+  std::vector<float> source_right = float32ArrayToVector(source_right_samples);
+  std::vector<float> reference_left = float32ArrayToVector(reference_left_samples);
+  std::vector<float> reference_right = float32ArrayToVector(reference_right_samples);
+  validate_offline_audio_input(source_left.data(), source_left.size(), sample_rate);
+  validate_offline_audio_input(source_right.data(), source_right.size(), sample_rate);
+  validate_offline_audio_input(reference_left.data(), reference_left.size(), sample_rate);
+  validate_offline_audio_input(reference_right.data(), reference_right.size(), sample_rate);
+  auto result = mastering::api::apply_named_pair_processor_stereo(
+      processor_name, source_left.data(), source_right.data(), source_left.size(),
+      reference_left.data(), reference_right.data(), reference_left.size(), sample_rate,
+      masteringParamsFromObject(params));
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(result.left));
+  out.set("right", vectorToFloat32Array(result.right));
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  out.set("latencySamples", result.latency_samples);
+  out.set("loudnessTargetLimited", result.loudness_target_limited);
+  out.set("nonFiniteSubstitutionCount", static_cast<double>(result.non_finite_substitution_count));
+  return out;
+}
+
 std::string js_mastering_pair_analyze(std::string analysis_name, val source_samples,
                                       val reference_samples, const val& sample_rate_val,
                                       val params) {
@@ -370,6 +411,40 @@ val js_mastering_ab_match_loudness(val source_samples, val reference_samples,
   val out = val::object();
   out.set("samples", vectorToFloat32Array(matched.b.data(), matched.b.size()));
   out.set("sampleRate", matched.b.sample_rate());
+  out.set("referenceLufs", matched.reference_lufs);
+  out.set("sourceLufs", matched.source_lufs);
+  out.set("appliedGainDb", matched.applied_gain_db);
+  out.set("matchedTruePeakDbtp", matched.matched_true_peak_dbtp);
+  return out;
+}
+
+val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_right_samples,
+                                          val reference_left_samples, val reference_right_samples,
+                                          const val& sample_rate_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
+                               "source right samples",
+                               "masteringAbMatchLoudnessStereo source input", true);
+  validateWasmFloat32ArrayPair(reference_left_samples, "reference left samples",
+                               reference_right_samples, "reference right samples",
+                               "masteringAbMatchLoudnessStereo reference input", true);
+  validateWasmFloat32ElementBudget(
+      {wasmFloat32ArrayLength(source_left_samples), wasmFloat32ArrayLength(source_right_samples),
+       wasmFloat32ArrayLength(reference_left_samples),
+       wasmFloat32ArrayLength(reference_right_samples)},
+      "masteringAbMatchLoudnessStereo input");
+  const auto source_left = loadValidatedAudio(source_left_samples, sample_rate);
+  const auto source_right = loadValidatedAudio(source_right_samples, sample_rate);
+  const auto reference_left = loadValidatedAudio(reference_left_samples, sample_rate);
+  const auto reference_right = loadValidatedAudio(reference_right_samples, sample_rate);
+  const mastering::match::StereoAudioPair source{source_left, source_right};
+  const mastering::match::StereoAudioPair reference{reference_left, reference_right};
+  const auto matched = mastering::match::ab_match_loudness_stereo(reference, source);
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(matched.b.left.data(), matched.b.left.size()));
+  out.set("right", vectorToFloat32Array(matched.b.right.data(), matched.b.right.size()));
+  out.set("sampleRate", matched.b.left.sample_rate());
   out.set("referenceLufs", matched.reference_lufs);
   out.set("sourceLufs", matched.source_lufs);
   out.set("appliedGainDb", matched.applied_gain_db);
@@ -628,8 +703,10 @@ void registerMasteringApiBindings() {
   function("masteringProcess", &js_mastering_process);
   function("masteringProcessStereo", &js_mastering_process_stereo);
   function("masteringPairProcess", &js_mastering_pair_process);
+  function("masteringPairProcessStereo", &js_mastering_pair_process_stereo);
   function("masteringPairAnalyze", &js_mastering_pair_analyze);
   function("masteringAbMatchLoudness", &js_mastering_ab_match_loudness);
+  function("masteringAbMatchLoudnessStereo", &js_mastering_ab_match_loudness_stereo);
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);
   function("masteringAssistantSuggest", &js_mastering_assistant_suggest);
   function("masteringAssistantSuggestChain", &js_mastering_assistant_suggest_chain);

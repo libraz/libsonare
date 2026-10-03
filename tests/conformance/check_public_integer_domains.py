@@ -471,6 +471,9 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_pair_process": {
         "params": _BAG,
     },
+    "analyzer.mastering_pair_process_stereo": {
+        "params": _BAG,
+    },
     "analyzer.mastering_pair_analyze": {
         "params": _BAG,
     },

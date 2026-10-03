@@ -583,6 +583,25 @@ SonareError sonare_mastering_apply_pair_processor_ex(
     size_t reference_length, int sample_rate, const SonareMasteringParam* params,
     size_t param_count, SonareMasteringResult* out);
 
+/// @brief Stereo counterpart of the pair processor API.
+/// @details Supports match.abCrossfade. The same linear mix is applied to both
+/// channels; other pair processor names are rejected. Output length is the
+/// shorter input length. Free the result with sonare_free_mastering_stereo_result.
+SonareError sonare_mastering_apply_pair_processor_stereo(
+    const char* processor_name, const float* source_left, const float* source_right,
+    const float* reference_left, const float* reference_right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
+
+/// @brief Stereo pair processing with independent source and reference lengths.
+/// @details Each stereo input must have equally sized left and right planes.
+/// See sonare_mastering_apply_pair_processor_stereo for supported processors.
+/// Free the result with sonare_free_mastering_stereo_result.
+SonareError sonare_mastering_apply_pair_processor_stereo_ex(
+    const char* processor_name, const float* source_left, const float* source_right,
+    size_t source_length, const float* reference_left, const float* reference_right,
+    size_t reference_length, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, SonareMasteringStereoResult* out);
+
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
                                           const float* reference, size_t length, int sample_rate,
@@ -628,6 +647,17 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
                                                const float* reference, size_t reference_length,
                                                int sample_rate, float** out, size_t* out_length,
                                                SonareLoudnessMatch* out_match);
+
+/// @brief Match stereo source loudness using one gain shared by both channels.
+/// @details BS.1770 stereo channel summing preserves phase-cancelling material.
+/// The output keeps the source length and stereo image. Gain is not capped;
+/// out_match reports the maximum true peak across both matched channels.
+/// Silence follows the mono API's zero-gain fallback. Free the result with
+/// sonare_free_mastering_stereo_result. out_match may be NULL.
+SonareError sonare_mastering_ab_match_loudness_stereo(
+    const float* source_left, const float* source_right, size_t source_length,
+    const float* reference_left, const float* reference_right, size_t reference_length,
+    int sample_rate, SonareMasteringStereoResult* out, SonareLoudnessMatch* out_match);
 
 typedef struct {
   const char* name;
@@ -973,6 +1003,16 @@ SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteri
 
 /// @brief Reset processor state without rebuilding.
 SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle);
+
+/// @brief Change one realtime-safe parameter of an enabled, prepared stage.
+/// @details key uses the chain's full dot notation, for example
+/// "maximizer.truePeakLimiter.ceilingDb". Calls must be serialized with processing,
+/// flushing, reset and prepare, at a block boundary. Existing DSP instances and
+/// audio history are retained. Structural, disabled-stage and unknown parameters
+/// are rejected before mutation. Realtime-safe does not guarantee a click-free
+/// transition for every processor parameter.
+SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain* handle,
+                                                           const char* key, double value);
 
 /// @brief Returns total latency in samples (0 if not prepared).
 int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle);

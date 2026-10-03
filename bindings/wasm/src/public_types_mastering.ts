@@ -163,6 +163,9 @@ export type PairProcessor =
   | 'match.abSwitch'
   | 'match.abCrossfade';
 
+/** Pair processors with a stereo entry point. */
+export type StereoPairProcessor = 'match.abCrossfade';
+
 export type PairAnalysis =
   | 'match.referenceLoudness'
   | 'match.tonalBalance'
@@ -211,6 +214,23 @@ export interface LoudnessMatchResult {
    * the one thing a loudness match must not do. Limit downstream if the peak
    * matters more than the match.
    */
+  matchedTruePeakDbtp: number;
+}
+
+/** Stereo counterpart of {@link LoudnessMatchResult}. */
+export interface LoudnessMatchStereoResult {
+  /** The left source channel, gain-matched to the reference loudness. */
+  left: Float32Array;
+  /** The right source channel, gain-matched with the same gain as `left`. */
+  right: Float32Array;
+  sampleRate: number;
+  /** The reference program's BS.1770 integrated loudness. */
+  referenceLufs: number;
+  /** The stereo source program's loudness before the gain. */
+  sourceLufs: number;
+  /** One gain applied to both source channels, in dB. */
+  appliedGainDb: number;
+  /** Maximum true peak across the matched left and right channels, in dBTP. */
   matchedTruePeakDbtp: number;
 }
 

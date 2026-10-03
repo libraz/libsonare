@@ -12,6 +12,7 @@ import numpy as np
 from ._ffi import (
     SonareLoudnessMatch,
     SonareMasteringResult,
+    SonareMasteringStereoResult,
     SonareStreamingPlatform,
 )
 from ._mastering_offline import _assistant_params, _mastering_params
@@ -29,7 +30,21 @@ from ._runtime import (
 from .types import (
     LoudnessMatch,
     MasteringResult,
+    MasteringStereoResult,
 )
+
+
+def _reject_nul(value: str, argument: str) -> None:
+    """Reject an embedded NUL that the C string would silently truncate."""
+    if "\x00" in value:
+        raise SonareValueError(f"{argument} must not contain NUL")
+
+
+def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
+    """Marshal stereo pair params after checking their C-string keys."""
+    for key in params or {}:
+        _reject_nul(str(key), "parameter key")
+    return _mastering_params(params)
 
 
 @_guard_buffer("source", "reference")
@@ -75,6 +90,74 @@ def mastering_pair_process(
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
+
+
+@_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
+def mastering_pair_process_stereo(
+    processor_name: str,
+    source_left: Sequence[float] | list[float],
+    source_right: Sequence[float] | list[float],
+    reference_left: Sequence[float] | list[float],
+    reference_right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool] | None = None,
+) -> MasteringStereoResult:
+    """Apply the stereo ``match.abCrossfade`` pair processor.
+
+    Source and reference may have different lengths; the left/right planes in
+    each pair must have the same length. The native processor returns the
+    shorter pair length and applies one mix to both channels.
+    """
+    if not isinstance(processor_name, str):
+        raise SonareValueError("processor_name must be a string")
+    _reject_nul(processor_name, "processor_name")
+    param_array, param_count = _stereo_pair_params(params)
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_apply_pair_processor_stereo_ex"):
+        raise RuntimeError("libsonare was built without stereo pair mastering support")
+    source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
+    source_right_array, source_right_length = _to_c_float_array(
+        source_right, arg_name="source_right"
+    )
+    reference_left_array, reference_left_length = _to_c_float_array(
+        reference_left, arg_name="reference_left"
+    )
+    reference_right_array, reference_right_length = _to_c_float_array(
+        reference_right, arg_name="reference_right"
+    )
+    if source_left_length != source_right_length:
+        raise SonareValueError("source_left and source_right channel lengths must match")
+    if reference_left_length != reference_right_length:
+        raise SonareValueError("reference_left and reference_right channel lengths must match")
+    out = SonareMasteringStereoResult()
+    try:
+        rc = lib.sonare_mastering_apply_pair_processor_stereo_ex(
+            processor_name.encode("utf-8"),
+            source_left_array,
+            source_right_array,
+            _to_c_size_t(source_left_length, "source_length"),
+            reference_left_array,
+            reference_right_array,
+            _to_c_size_t(reference_left_length, "reference_length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            param_array,
+            _to_c_size_t(param_count, "param_count"),
+            ctypes.byref(out),
+        )
+        _check(rc)
+        return MasteringStereoResult(
+            left=[float(out.left[i]) for i in range(out.length)],
+            right=[float(out.right[i]) for i in range(out.length)],
+            sample_rate=int(out.sample_rate),
+            input_lufs=float(out.input_lufs),
+            output_lufs=float(out.output_lufs),
+            applied_gain_db=float(out.applied_gain_db),
+            latency_samples=int(out.latency_samples),
+            loudness_target_limited=bool(out.loudness_target_limited),
+            non_finite_substitution_count=int(out.non_finite_substitution_count),
+        )
+    finally:
+        lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
 
 
 @_guard_buffer("source", "reference")
@@ -171,6 +254,71 @@ def mastering_ab_match_loudness(
         )
         _check(rc)
         matched = _from_c_float_array(out, out_length.value)
+    if match is None:
+        return matched, None
+    return matched, LoudnessMatch(
+        reference_lufs=float(match.reference_lufs),
+        source_lufs=float(match.source_lufs),
+        applied_gain_db=float(match.applied_gain_db),
+        matched_true_peak_dbtp=float(match.matched_true_peak_dbtp),
+    )
+
+
+@_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
+def mastering_ab_match_loudness_stereo(
+    source_left: Sequence[float] | list[float] | np.ndarray,
+    source_right: Sequence[float] | list[float] | np.ndarray,
+    reference_left: Sequence[float] | list[float] | np.ndarray,
+    reference_right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    with_match: bool = True,
+) -> tuple[tuple[np.ndarray, np.ndarray], LoudnessMatch | None]:
+    """Gain-match a stereo source to a stereo reference with one shared gain.
+
+    Each source/reference pair must have equal left/right lengths, while the
+    source and reference may have different lengths. The returned tuple is
+    ``((matched_left, matched_right), match)``; both planes are ``float32``
+    arrays and ``match`` is ``None`` when ``with_match`` is false.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_ab_match_loudness_stereo"):
+        raise RuntimeError("libsonare was built without stereo A/B loudness-match support")
+    source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
+    source_right_array, source_right_length = _to_c_float_array(
+        source_right, arg_name="source_right"
+    )
+    reference_left_array, reference_left_length = _to_c_float_array(
+        reference_left, arg_name="reference_left"
+    )
+    reference_right_array, reference_right_length = _to_c_float_array(
+        reference_right, arg_name="reference_right"
+    )
+    if source_left_length != source_right_length:
+        raise SonareValueError("source_left and source_right channel lengths must match")
+    if reference_left_length != reference_right_length:
+        raise SonareValueError("reference_left and reference_right channel lengths must match")
+    out = SonareMasteringStereoResult()
+    match = SonareLoudnessMatch() if with_match else None
+    try:
+        rc = lib.sonare_mastering_ab_match_loudness_stereo(
+            source_left_array,
+            source_right_array,
+            _to_c_size_t(source_left_length, "source_length"),
+            reference_left_array,
+            reference_right_array,
+            _to_c_size_t(reference_left_length, "reference_length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(out),
+            ctypes.byref(match) if match is not None else None,
+        )
+        _check(rc)
+        matched = (
+            _from_c_float_array(out.left, out.length),
+            _from_c_float_array(out.right, out.length),
+        )
+    finally:
+        lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
     if match is None:
         return matched, None
     return matched, LoudnessMatch(

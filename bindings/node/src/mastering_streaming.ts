@@ -133,6 +133,15 @@ export class StreamingMasteringChain {
     this.native.reset();
   }
 
+  /**
+   * Set one realtime-safe full-chain parameter at a serialized block boundary.
+   * The native chain retains its DSP instances, history and latency. Structural,
+   * disabled-stage and unknown parameters are rejected.
+   */
+  setParameter(key: string, value: number): void {
+    this.native.setParameter(key, value);
+  }
+
   /** Total reported latency in samples across all active processors. */
   latencySamples(): number {
     return this.native.latencySamples();

@@ -104,6 +104,13 @@ class StreamingMasteringChainWrapper {
 
   void reset() { chain_.reset(); }
 
+  void setParameter(const std::string& key, const val& value) {
+    if (value.typeOf().as<std::string>() != "number") {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "value must be a number");
+    }
+    chain_.set_parameter(key, checkedDoubleFromVal(value, "value"));
+  }
+
   int latencySamples() const { return chain_.latency_samples(); }
 
   val stageNames() const {
@@ -160,6 +167,7 @@ void registerStreamingMasteringChainBindings() {
       .function("flushMono", &StreamingMasteringChainWrapper::flushMono)
       .function("flushStereo", &StreamingMasteringChainWrapper::flushStereo)
       .function("reset", &StreamingMasteringChainWrapper::reset)
+      .function("setParameter", &StreamingMasteringChainWrapper::setParameter)
       .function("latencySamples", &StreamingMasteringChainWrapper::latencySamples)
       .function("stageNames", &StreamingMasteringChainWrapper::stageNames)
       .function("nonFiniteSubstitutionCount",

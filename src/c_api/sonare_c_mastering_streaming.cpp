@@ -389,6 +389,21 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     SONARE_C_CATCH
   }
 
+  SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain * handle,
+                                                             const char* key, double value) {
+    SONARE_C_API_ENTRY;
+    if (!handle || !handle->chain || !key) return SONARE_ERROR_INVALID_PARAMETER;
+    // Argument errors win over the unprepared-state error the core would raise first.
+    if (*key == '\0' || !std::isfinite(value) ||
+        std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    SONARE_C_TRY
+    handle->chain->set_parameter(key, value);
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
+
   int sonare_streaming_mastering_chain_latency_samples(
       const SonareStreamingMasteringChain* handle) {
     if (!handle || !handle->chain) return 0;

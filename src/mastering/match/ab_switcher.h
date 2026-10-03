@@ -25,6 +25,31 @@ struct LoudnessMatchedPair {
   float matched_true_peak_dbtp = 0.0f;  ///< `b`'s true peak after the gain, in dBTP.
 };
 
+/// @brief One planar stereo pair used by the A/B helpers.
+struct StereoAudioPair {
+  Audio left;
+  Audio right;
+};
+
+/// @brief Crossfade two planar stereo pairs with one linear mix value.
+/// @details Each pair must have equal per-plane lengths and sample rates; the
+///          two pairs may have different lengths. The result follows the
+///          shorter pair and leaves both inputs untouched.
+StereoAudioPair ab_crossfade_stereo(const StereoAudioPair& a, const StereoAudioPair& b, float mix);
+
+/// @brief Stereo counterpart of @ref LoudnessMatchedPair.
+/// @details `a` is the loudness reference and `b` is the source after one
+///          gain shared by both channels. The gain is deliberately uncapped;
+///          the true peak reports the result a caller must inspect.
+struct StereoLoudnessMatchedPair {
+  StereoAudioPair a;
+  StereoAudioPair b;
+  float reference_lufs = 0.0f;
+  float source_lufs = 0.0f;
+  float applied_gain_db = 0.0f;
+  float matched_true_peak_dbtp = 0.0f;
+};
+
 /// @brief Gain-matches `b` to `a`'s BS.1770 integrated loudness, so feeding
 ///        the result into @ref ab_switch or @ref ab_crossfade compares the
 ///        two without a loudness bias.
@@ -36,5 +61,14 @@ struct LoudnessMatchedPair {
 ///          either integrated loudness is non-finite (silence, or below the
 ///          absolute gate).
 LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b);
+
+/// @brief Gain-match a stereo source pair to a stereo reference pair.
+/// @details The LUFS measurement uses BS.1770 channel summing, so antiphase or
+///          one-sided material remains measurable. One gain is applied to both
+///          planes, preserving their ratio and phase. The pair must have equal
+///          per-pair lengths and sample rates; each pair may have a different
+///          length from the other.
+StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
+                                                   const StereoAudioPair& b);
 
 }  // namespace sonare::mastering::match

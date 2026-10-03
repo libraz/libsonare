@@ -321,15 +321,21 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
 }
 
 void validate_chain_config_for_rate(const MasteringChainConfig& config, int sample_rate) {
+  validate_chain_config_for_rate(config, static_cast<double>(sample_rate));
+}
+
+void validate_chain_config_for_rate(const MasteringChainConfig& config, double sample_rate) {
   // Everything here needs the sample rate, so it cannot live in the
   // construction-time check. It still runs before stage 1, which is the part
   // that matters: the alternative is discovering it after the repair stages
   // have already processed the whole track.
+  SONARE_CHECK_MSG(std::isfinite(sample_rate) && sample_rate > 0.0, ErrorCode::InvalidParameter,
+                   "sample_rate must be finite and > 0");
   if (config.eq.tilt.enabled && config.eq.tilt.tilt_db != 0.0f) {
     // A zero tilt leaves both shelves disabled, and a disabled band never has
     // its coefficients designed, so mirror that condition exactly rather than
     // rejecting a configuration the stage would have run.
-    const float nyquist = 0.5f * static_cast<float>(sample_rate);
+    const double nyquist = 0.5 * sample_rate;
     SONARE_CHECK_MSG(config.eq.tilt.pivot_hz < nyquist, ErrorCode::InvalidParameter,
                      "eq.tilt.pivotHz must be below Nyquist for this sample rate");
   }
@@ -339,7 +345,7 @@ void validate_chain_config_for_rate(const MasteringChainConfig& config, int samp
     // checked at construction.
     check_stage("dynamics.multibandComp", [&] {
       multiband::Crossover::validate_config(config.dynamics.multiband_comp.config.crossover,
-                                            static_cast<double>(sample_rate));
+                                            sample_rate);
     });
   }
 }

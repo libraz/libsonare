@@ -211,6 +211,15 @@ void validate_mastering_chain_config(const MasteringChainConfig& config);
 /// @throws SonareException (InvalidParameter) naming the offending stage.
 void validate_chain_config_for_rate(const MasteringChainConfig& config, int sample_rate);
 
+/// @brief Rate-dependent validation for a prepared (possibly fractional) rate.
+/// @details The streaming chain accepts a double sample rate so hosts can keep
+///          the exact rate supplied by their device. Keep that value intact
+///          when validating Nyquist-dependent parameters; converting it to an
+///          integer can reject a configuration that the prepared stages accept.
+/// @throws SonareException (InvalidParameter) if @p sample_rate is not finite,
+///         not positive, or the configuration is outside its Nyquist bounds.
+void validate_chain_config_for_rate(const MasteringChainConfig& config, double sample_rate);
+
 // ---------------------------------------------------------------------------
 // Chain results
 // ---------------------------------------------------------------------------
@@ -392,6 +401,17 @@ class StreamingMasteringChain {
   /// @brief Reset all processor state without rebuilding.
   void reset();
 
+  /// @brief Change one realtime-safe parameter of an enabled, prepared stage.
+  /// @details @p full_key uses the chain's dot notation, for example
+  /// `maximizer.truePeakLimiter.ceilingDb`. Calls must be serialized with
+  /// processing, flushing, reset and prepare, at a block boundary. Existing
+  /// DSP instances and audio history are retained. Structural, disabled-stage,
+  /// unknown, non-realtime-safe, non-finite and non-representable parameters
+  /// are rejected before the live processor is changed.
+  /// @throws SonareException(InvalidState) when the chain has not been prepared.
+  /// @throws SonareException(InvalidParameter) for an unsupported key or value.
+  void set_parameter(const std::string& full_key, double value);
+
   /// @brief Total reported latency in samples across all active processors.
   int latency_samples() const noexcept;
 
@@ -511,6 +531,16 @@ void apply_chain_config_overrides(MasteringChainConfig& config, const Param* par
 /// v2, where params.dynamics.multibandComp is a structured object containing
 /// enabled, crossover, and full per-band CompressorConfig values.
 std::string chain_config_to_json(const MasteringChainConfig& config);
+
+/// @brief Read one numeric field from the canonical flat chain configuration.
+/// @details This control-side helper intentionally does not serialize JSON or
+///          apply document-size limits. Streaming automation uses it to detect
+///          a repeated value before asking a realtime-safe processor to refresh
+///          coefficients, including configurations larger than the JSON format.
+/// @return The field value, or @c std::nullopt when the key is not a numeric
+///         flat field.
+std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
+                                                   const std::string& key);
 
 /// @brief Parse a chain configuration serialized by chain_config_to_json.
 /// Throws SonareException(InvalidParameter) for malformed JSON, unsupported

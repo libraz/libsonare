@@ -151,6 +151,7 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
           InstanceMethod<&StreamingMasteringChainWrap::FlushMono>("flushMono"),
           InstanceMethod<&StreamingMasteringChainWrap::FlushStereo>("flushStereo"),
           InstanceMethod<&StreamingMasteringChainWrap::Reset>("reset"),
+          InstanceMethod<&StreamingMasteringChainWrap::SetParameter>("setParameter"),
           InstanceMethod<&StreamingMasteringChainWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&StreamingMasteringChainWrap::StageNames>("stageNames"),
           InstanceMethod<&StreamingMasteringChainWrap::NonFiniteSubstitutionCount>(
@@ -344,6 +345,30 @@ Napi::Value StreamingMasteringChainWrap::Reset(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   chain_->reset();
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingMasteringChainWrap::SetParameter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!chain_) {
+    Napi::Error::New(env, "StreamingMasteringChain is not initialized")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (key, value)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  std::string key;
+  double value = 0.0;
+  if (!RequiredStringValue(env, info[0], "key", &key) ||
+      !RequiredDoubleArg(env, info, 1, "value", &value)) {
+    return env.Undefined();
+  }
+  if (RejectEmbeddedNul(env, key, "key")) return env.Undefined();
+  chain_->set_parameter(key, value);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

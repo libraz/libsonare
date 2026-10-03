@@ -31,11 +31,25 @@ inline void note_allocation() noexcept {
 // return value under test. Zero means armed for nothing.
 inline std::atomic<std::size_t> g_fail_allocations_from_bytes{0};
 
+// One-shot failure injection for atomic-result tests. Unlike the threshold
+// hook above, this lets a test fail the Nth allocation while leaving all other
+// allocations available, so it can reach the output-copy allocation after
+// the core work has completed.
+inline std::atomic<std::size_t> g_fail_allocation_number{0};
+inline std::atomic<std::size_t> g_allocation_attempts{0};
+
 /// Whether an allocation of @p size must fail. Called from the global
 /// `operator new` overrides before any memory is taken.
+inline bool allocation_should_fail_once() noexcept {
+  const std::size_t target = g_fail_allocation_number.load(std::memory_order_relaxed);
+  if (target == 0) return false;
+  const std::size_t attempt = g_allocation_attempts.fetch_add(1, std::memory_order_relaxed) + 1;
+  return attempt == target;
+}
+
 inline bool allocation_should_fail(std::size_t size) noexcept {
   const std::size_t threshold = g_fail_allocations_from_bytes.load(std::memory_order_relaxed);
-  return threshold != 0 && size >= threshold;
+  return (threshold != 0 && size >= threshold) || allocation_should_fail_once();
 }
 
 /// Scoped guard: makes every allocation of @p from_bytes or larger throw
@@ -51,6 +65,25 @@ class AllocationFailureGuard {
 
   AllocationFailureGuard(const AllocationFailureGuard&) = delete;
   AllocationFailureGuard& operator=(const AllocationFailureGuard&) = delete;
+};
+
+/// Scoped guard: fails exactly the @p nth allocation observed by the global
+/// test allocator, then allows all later allocations. Keep the guard around
+/// only the API call under test; destroy it before assertions so Catch2's own
+/// allocations cannot consume or trigger the injected failure.
+class AllocationFailureAtGuard {
+ public:
+  explicit AllocationFailureAtGuard(std::size_t nth) {
+    g_allocation_attempts.store(0, std::memory_order_relaxed);
+    g_fail_allocation_number.store(nth, std::memory_order_relaxed);
+  }
+  ~AllocationFailureAtGuard() {
+    g_fail_allocation_number.store(0, std::memory_order_relaxed);
+    g_allocation_attempts.store(0, std::memory_order_relaxed);
+  }
+
+  AllocationFailureAtGuard(const AllocationFailureAtGuard&) = delete;
+  AllocationFailureAtGuard& operator=(const AllocationFailureAtGuard&) = delete;
 };
 
 /// Scoped guard: zeroes and arms the global allocation counter on construction,

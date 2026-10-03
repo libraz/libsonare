@@ -829,6 +829,11 @@ export interface WasmLoudnessMatchResult {
   matchedTruePeakDbtp: number;
 }
 
+export interface WasmLoudnessMatchStereoResult extends Omit<WasmLoudnessMatchResult, 'samples'> {
+  left: Float32Array;
+  right: Float32Array;
+}
+
 export interface WasmStageGainReduction {
   stage: string;
   gainReductionDb: number;
@@ -2507,11 +2512,27 @@ export interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
+  masteringPairProcessStereo: (
+    processorName: string,
+    sourceLeft: Float32Array,
+    sourceRight: Float32Array,
+    referenceLeft: Float32Array,
+    referenceRight: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => WasmMasteringStereoResult;
   masteringAbMatchLoudness: (
     source: Float32Array,
     reference: Float32Array,
     sampleRate: number,
   ) => WasmLoudnessMatchResult;
+  masteringAbMatchLoudnessStereo: (
+    sourceLeft: Float32Array,
+    sourceRight: Float32Array,
+    referenceLeft: Float32Array,
+    referenceRight: Float32Array,
+    sampleRate: number,
+  ) => WasmLoudnessMatchStereoResult;
   masteringStereoAnalyze: (
     analysisName: string,
     left: Float32Array,
@@ -3535,6 +3556,7 @@ export interface WasmPolyphonicAnalysis {
 
 export interface WasmStreamingMasteringChain {
   prepare: (sampleRate: number, maxBlockSize: number, numChannels: number) => void;
+  setParameter: (key: string, value: number) => void;
   processMono: (samples: Float32Array) => Float32Array;
   processStereo: (
     left: Float32Array,

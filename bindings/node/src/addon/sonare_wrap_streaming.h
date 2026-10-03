@@ -30,6 +30,7 @@ namespace sonare_node {
 ///   const { left, right } = chain.processStereo(l, r);   // stereo
 ///   const tail = chain.flushMono();                      // until empty
 ///   chain.reset();
+///   chain.setParameter('dynamics.compressor.thresholdDb', -24); // realtime-safe
 ///   chain.latencySamples();  // number
 ///   chain.stageNames();      // string[]
 class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringChainWrap> {
@@ -50,6 +51,7 @@ class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringCh
   Napi::Value FlushMono(const Napi::CallbackInfo& info);
   Napi::Value FlushStereo(const Napi::CallbackInfo& info);
   Napi::Value Reset(const Napi::CallbackInfo& info);
+  Napi::Value SetParameter(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value StageNames(const Napi::CallbackInfo& info);
   Napi::Value NonFiniteSubstitutionCount(const Napi::CallbackInfo& info);

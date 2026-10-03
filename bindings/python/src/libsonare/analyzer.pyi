@@ -248,6 +248,7 @@ PairProcessor: TypeAlias = Literal[
     "match.abSwitch",
     "match.abCrossfade",
 ]
+StereoPairProcessor: TypeAlias = Literal["match.abCrossfade"]
 PairAnalysis: TypeAlias = Literal[
     "match.referenceLoudness",
     "match.tonalBalance",
@@ -1327,6 +1328,7 @@ class StreamingMasteringChain:
     def process_stereo(
         self, left: FloatSamples, right: FloatSamples
     ) -> tuple[list[float], list[float]]: ...
+    def set_parameter(self, key: str, value: float) -> None: ...
     def flush_mono(self) -> list[float]: ...
     def flush_stereo(self) -> tuple[list[float], list[float]]: ...
     def reset(self) -> None: ...
@@ -1378,6 +1380,15 @@ def mastering_pair_process(
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
 ) -> MasteringResult: ...
+def mastering_pair_process_stereo(
+    processor_name: StereoPairProcessor,
+    source_left: FloatSamples,
+    source_right: FloatSamples,
+    reference_left: FloatSamples,
+    reference_right: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringParams | None = None,
+) -> MasteringStereoResult: ...
 def mastering_pair_analyze(
     analysis_name: PairAnalysis,
     source: FloatSamples,
@@ -1392,6 +1403,15 @@ def mastering_ab_match_loudness(
     *,
     with_match: bool = True,
 ) -> tuple[np.ndarray[Any, Any], LoudnessMatch | None]: ...
+def mastering_ab_match_loudness_stereo(
+    source_left: FloatSamples,
+    source_right: FloatSamples,
+    reference_left: FloatSamples,
+    reference_right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    with_match: bool = True,
+) -> tuple[tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]], LoudnessMatch | None]: ...
 def mastering_stereo_analyze(
     analysis_name: StereoAnalysis,
     left: FloatSamples,

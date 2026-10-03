@@ -4,7 +4,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
+#include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -28,6 +31,9 @@
 
 namespace sonare::mastering::api {
 namespace {
+
+static_assert(std::is_nothrow_move_assignable<MasteringChainConfig>::value,
+              "validated config commit must not throw");
 
 // Reject the chain stages that fundamentally require whole-signal buffering and
 // therefore cannot run block-by-block. Loudness is handled separately because
@@ -74,8 +80,17 @@ void reject_non_streaming_repair(const MasteringChainConfig& config) {
 // StreamingMasteringChain
 // ---------------------------------------------------------------------------
 
+struct StreamingParameterTarget {
+  std::string full_key;
+  std::string config_key;
+  rt::ProcessorBase* processor = nullptr;
+  unsigned int id = 0;
+};
+
 struct StreamingMasteringChain::Impl {
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
+  std::vector<StreamingParameterTarget> parameter_targets;
+  double prepared_sample_rate = 0.0;
   // Optional final loudness limiter (gain + true-peak limit), present only when
   // the loudness stage is enabled and a precomputed static gain was supplied.
   // The static gain is applied in process_block() immediately before this
@@ -110,6 +125,129 @@ struct StreamingMasteringChain::Impl {
     return total;
   }
 };
+
+void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
+                           const std::string& stage_name, rt::ProcessorBase* processor,
+                           bool loudness_stage = false) {
+  const auto descriptors = processor->parameter_descriptors();
+  for (const auto& descriptor : descriptors) {
+    std::string full_key;
+    std::string config_key;
+    if (loudness_stage) {
+      // The realized stage is loudness.optimize; its public keys are loudness.*.
+      full_key = "loudness." + descriptor.key;
+      config_key = full_key;
+    } else if (stage_name == "dynamics.multibandComp") {
+      // Only band0..2 alias to the chain's low/mid/high keys; the rest is structural.
+      const std::string prefix = "band";
+      if (descriptor.key.size() <= prefix.size() ||
+          descriptor.key.compare(0, prefix.size(), prefix) != 0) {
+        continue;
+      }
+      const char band = descriptor.key[prefix.size()];
+      const char* band_name = band == '0'   ? "low"
+                              : band == '1' ? "mid"
+                              : band == '2' ? "high"
+                                            : nullptr;
+      if (band_name == nullptr || descriptor.key.size() <= prefix.size() + 2 ||
+          descriptor.key[prefix.size() + 1] != '.') {
+        continue;
+      }
+      const std::string field = descriptor.key.substr(prefix.size() + 2);
+      const char* field_name = nullptr;
+      if (field == "thresholdDb") field_name = "ThresholdDb";
+      if (field == "ratio") field_name = "Ratio";
+      if (field == "attackMs") field_name = "AttackMs";
+      if (field == "releaseMs") field_name = "ReleaseMs";
+      if (field_name == nullptr) continue;
+      full_key = "dynamics.multibandComp." + std::string(band_name) + field_name;
+      config_key = full_key;
+    } else {
+      full_key = stage_name + "." + descriptor.key;
+      config_key = full_key;
+    }
+    targets.push_back({std::move(full_key), std::move(config_key), processor, descriptor.id});
+  }
+}
+
+bool same_stage_enablement(const MasteringChainConfig& left,
+                           const MasteringChainConfig& right) noexcept {
+  return left.repair.declick.enabled == right.repair.declick.enabled &&
+         left.repair.declip.enabled == right.repair.declip.enabled &&
+         left.repair.decrackle.enabled == right.repair.decrackle.enabled &&
+         left.repair.dehum.enabled == right.repair.dehum.enabled &&
+         left.repair.dereverb.enabled == right.repair.dereverb.enabled &&
+         left.repair.denoise.enabled == right.repair.denoise.enabled &&
+         left.eq.tilt.enabled == right.eq.tilt.enabled &&
+         left.dynamics.deesser.enabled == right.dynamics.deesser.enabled &&
+         left.dynamics.transient_shaper.enabled == right.dynamics.transient_shaper.enabled &&
+         left.dynamics.compressor.enabled == right.dynamics.compressor.enabled &&
+         left.dynamics.multiband_comp.enabled == right.dynamics.multiband_comp.enabled &&
+         left.saturation.tape.enabled == right.saturation.tape.enabled &&
+         left.saturation.exciter.enabled == right.saturation.exciter.enabled &&
+         left.spectral.air_band.enabled == right.spectral.air_band.enabled &&
+         left.stereo.imager.enabled == right.stereo.imager.enabled &&
+         left.stereo.mono_maker.enabled == right.stereo.mono_maker.enabled &&
+         left.maximizer.true_peak_limiter.enabled == right.maximizer.true_peak_limiter.enabled &&
+         left.loudness.enabled == right.loudness.enabled;
+}
+
+void validate_realtime_parameter_domain(const std::string& key, float value, double sample_rate) {
+  // Live setters clamp these instead of throwing; rejecting here keeps config()
+  // equal to what the DSP holds. Bounds mirror each processor's clamp.
+  if ((key == "maximizer.truePeakLimiter.ceilingDb" || key == "loudness.ceilingDb") &&
+      value > 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, key + " must be <= 0");
+  }
+  if (key == "dynamics.deesser.frequencyHz") {
+    const float maximum = static_cast<float>(sample_rate * 0.49);
+    if (value < 10.0f || value > maximum) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            key + " is outside the prepared processor frequency range");
+    }
+  }
+  if (key == "dynamics.deesser.bandpassQ" && value < 1.0e-3f) {
+    throw SonareException(ErrorCode::InvalidParameter, key + " must be >= 0.001");
+  }
+  if (key == "dynamics.compressor.sidechainHpfHz" && value < 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, key + " must be >= 1");
+  }
+  if (key == "spectral.airBand.shelfFrequencyHz") {
+    const float maximum = static_cast<float>(sample_rate * 0.49);
+    if (value < 20.0f || value > maximum) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            key + " is outside the prepared processor frequency range");
+    }
+  }
+  if (key == "saturation.exciter.frequencyHz") {
+    const float maximum = static_cast<float>(sample_rate * 0.49);
+    if (value < 10.0f || value > maximum) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            key + " is outside the prepared processor frequency range");
+    }
+  }
+  if ((key == "saturation.tape.speedIps" || key == "saturation.exciter.q") &&
+      value < std::numeric_limits<float>::min()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          key + " is below the processor's minimum positive value");
+  }
+  if (key == "dynamics.compressor.sidechainHpfHz" &&
+      value > static_cast<float>(sample_rate * 0.49)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          key + " is above the prepared processor frequency range");
+  }
+  if (key == "stereo.monoMaker.frequencyHz" && value > static_cast<float>(sample_rate * 0.49)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          key + " is above the prepared processor frequency range");
+  }
+  if (key == "eq.tilt.pivotHz") {
+    const float nyquist = 0.5f * static_cast<float>(sample_rate);
+    if (value < 1.0e-3f || value > nyquist - 1.0e-3f) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            key + " is outside the prepared sample-rate range");
+    }
+  }
+}
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
@@ -183,6 +321,8 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   prepared_channels_ = 0;
   max_block_size_ = 0;
   impl_->processors.clear();
+  impl_->parameter_targets.clear();
+  impl_->prepared_sample_rate = 0.0;
   impl_->loudness_limiter.reset();
   impl_->substitution_sources.clear();
   // Cleared with the stages it describes, so it shares an epoch with
@@ -192,6 +332,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   stage_names_.clear();
 
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
+  std::vector<StreamingParameterTarget> parameter_targets;
   std::vector<std::string> stage_names;
   std::vector<const mastering::maximizer::TruePeakLimiter*> substitution_sources;
   auto add_stage = [&](std::unique_ptr<rt::ProcessorBase> proc, const char* name) {
@@ -199,6 +340,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     // Preserve that bound so channel-aware stages do not allocate scratch for
     // every realtime-supported channel.
     proc->prepare(sample_rate, max_block_size, num_channels);
+    add_parameter_targets(parameter_targets, name, proc.get());
     processors.push_back(std::move(proc));
     stage_names.emplace_back(name);
   };
@@ -306,6 +448,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
             config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size, num_channels);
+    add_parameter_targets(parameter_targets, "loudness.optimize", limiter.get(), true);
     substitution_sources.push_back(limiter.get());
     loudness_limiter = std::move(limiter);
     stage_names.emplace_back("loudness.optimize");
@@ -314,6 +457,8 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   // Commit. Nothing below here can throw, so the object goes from "unprepared"
   // to "prepared for these arguments" in one step.
   impl_->processors = std::move(processors);
+  impl_->parameter_targets = std::move(parameter_targets);
+  impl_->prepared_sample_rate = sample_rate;
   impl_->loudness_limiter = std::move(loudness_limiter);
   impl_->substitution_sources = std::move(substitution_sources);
   stage_names_ = std::move(stage_names);
@@ -432,6 +577,93 @@ void StreamingMasteringChain::reset() {
   }
   flush_samples_remaining_ = 0;
   flush_started_ = false;
+}
+
+void StreamingMasteringChain::set_parameter(const std::string& full_key, double value) {
+  if (prepared_channels_ == 0) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "StreamingMasteringChain::set_parameter called before prepare()");
+  }
+  if (full_key.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain parameter key must not be empty");
+  }
+  if (!std::isfinite(value) ||
+      std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain parameter must be finite and representable");
+  }
+  const float float_value = static_cast<float>(value);
+  if (!std::isfinite(float_value)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain parameter must be finite and representable");
+  }
+
+  const auto target = std::find_if(impl_->parameter_targets.begin(), impl_->parameter_targets.end(),
+                                   [&full_key](const StreamingParameterTarget& candidate) {
+                                     return candidate.full_key == full_key;
+                                   });
+  if (target == impl_->parameter_targets.end()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown or unavailable streaming mastering parameter: " + full_key);
+  }
+  if (!target->processor->parameter_is_realtime_safe(target->id)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "streaming mastering parameter is not realtime-safe: " + full_key);
+  }
+
+  // Validate a full candidate first so a rejection leaves config() and the DSP untouched.
+  MasteringChainConfig candidate = config_;
+  // Pass the double through so enum and boolean fields keep their own validation.
+  const Param param{target->config_key, value};
+  apply_chain_config_overrides(candidate, &param, 1);
+  if (!same_stage_enablement(config_, candidate)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "streaming mastering parameter would change stage enablement: " + full_key);
+  }
+  validate_mastering_chain_config(candidate);
+
+  // A repeated value must not reach a setter that rebuilds coefficients; the
+  // no-op check precedes the domain check so an accepted value can be repeated.
+  const auto requested_value = chain_config_parameter_value(candidate, target->config_key);
+  const float canonical_value = static_cast<float>(
+      requested_value.has_value() ? *requested_value : static_cast<double>(float_value));
+  const auto current_value = chain_config_parameter_value(config_, target->config_key);
+  if (current_value.has_value() && requested_value.has_value() &&
+      *current_value == *requested_value) {
+    return;
+  }
+
+  validate_realtime_parameter_domain(full_key, canonical_value, impl_->prepared_sample_rate);
+  validate_chain_config_for_rate(candidate, impl_->prepared_sample_rate);
+
+  float live_value = canonical_value;
+  if (full_key == "loudness.releaseMs" && canonical_value == 0.0f) {
+    // Zero is the loudness sentinel: config() keeps 0, the limiter gets the default.
+    live_value = mastering::maximizer::validate_loudness_params(
+        candidate.loudness.target_lufs, candidate.loudness.ceiling_db,
+        candidate.loudness.release_ms, candidate.loudness.max_limiter_gain_reduction_db,
+        candidate.loudness.true_peak_oversample);
+  }
+  // The sentinel and an explicit default resolve alike: update config() only.
+  bool live_value_unchanged = false;
+  if (full_key == "loudness.releaseMs") {
+    const float current_live_value = mastering::maximizer::validate_loudness_params(
+        config_.loudness.target_lufs, config_.loudness.ceiling_db, config_.loudness.release_ms,
+        config_.loudness.max_limiter_gain_reduction_db, config_.loudness.true_peak_oversample);
+    live_value_unchanged = current_live_value == live_value;
+  }
+  if (live_value_unchanged) {
+    config_ = std::move(candidate);
+    return;
+  }
+  if (!target->processor->set_parameter(target->id, live_value)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "streaming mastering parameter was rejected by its processor: " + full_key);
+  }
+  config_ = std::move(candidate);
 }
 
 int StreamingMasteringChain::latency_samples() const noexcept {

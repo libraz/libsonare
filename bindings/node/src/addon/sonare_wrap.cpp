@@ -328,9 +328,15 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "masteringAmpPresetCatalog"));
   exports.Set("masteringPairProcess",
               Napi::Function::New(env, &SonareWrap::MasteringPairProcess, "masteringPairProcess"));
+  exports.Set("masteringPairProcessStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringPairProcessStereo,
+                                  "masteringPairProcessStereo"));
   exports.Set(
       "masteringAbMatchLoudness",
       Napi::Function::New(env, &SonareWrap::MasteringAbMatchLoudness, "masteringAbMatchLoudness"));
+  exports.Set("masteringAbMatchLoudnessStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringAbMatchLoudnessStereo,
+                                  "masteringAbMatchLoudnessStereo"));
   exports.Set("masteringPairAnalyze",
               Napi::Function::New(env, &SonareWrap::MasteringPairAnalyze, "masteringPairAnalyze"));
   exports.Set(
