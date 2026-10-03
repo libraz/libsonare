@@ -16,7 +16,7 @@
  *
  * WHAT A GREEN RUN DOES AND DOES NOT MEAN. Green says every cross-surface reader
  * disagreement in the scanned trees is one that was looked at and written down.
- * It does NOT say the surfaces agree -- 179 fields still diverge, in three
+ * It does NOT say the surfaces agree -- 135 fields still diverge, in the
  * classes recorded below -- and it says nothing about fields the scan cannot
  * pair, for the reasons `_reader_family_sources.ts` records.
  *
@@ -51,12 +51,9 @@ import {
  * reviewed decision about a name the next field would inherit.
  *
  * ASK THIS REGISTER BY READER PAIR, NEVER BY FIELD NAME. A subsystem's fields
- * are not all spelled with its name: the reader pairs ending `repairFloatOption`
- * / `repairIntOption` / `repairBoolOption` hold 33 fields, of which 25 are
- * `denoiseconfig:*` / `dereverbconfig:*` / `trimsilenceconfig:*` and carry no
- * trace of the subsystem in their id. Counting by name returns 8 and looks like
- * an answer. The pair is what a migration actually moves, so the pair is what
- * says whether it moved.
+ * are not all spelled with its name: a pair's members carry the id of the
+ * enclosing helper, so counting by a subsystem's name undercounts. The pair is
+ * what a migration actually moves, so the pair is what says whether it moved.
  *
  * AN ID IS THE HELPER'S NAME, SO A RENAME ON ONE SURFACE UNPAIRS THE FIELD. The
  * two denoise readers were `read_denoise_config_c` and `readDenoiseConfig`, one
@@ -262,77 +259,6 @@ const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
     ],
   ],
   ['IntProperty>setNumberOption', ['estimatemeter:denominator']],
-
-  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND ANSWERS WITH THE DEFAULT — 44 fields.
-  //
-  // The repair readers were written to match the addon's options readers when THOSE substituted a
-  // default for a wrong-typed value. The addon moved to refusing and these did not follow, so
-  // the substitution now mirrors nothing: a wrong-typed repair field silently keeps the config
-  // default on WASM and is refused by name on the addon.
-  [
-    'FloatProperty>repairFloatOption',
-    [
-      'denoiseconfig:ddAlpha',
-      'denoiseconfig:noiseEstimationQuantile',
-      'denoiseconfig:overSubtraction',
-      'denoiseconfig:reductionDb',
-      'denoiseconfig:spectralFloor',
-      'dereverbconfig:attenuation',
-      'dereverbconfig:lateDelayMs',
-      'dereverbconfig:overSubtraction',
-      'dereverbconfig:spectralFloor',
-      'dereverbconfig:t60Sec',
-      'dereverbconfig:threshold',
-      'dereverbconfig:wpeStrength',
-      'masteringrepairdeclick:neighborRatio',
-      'masteringrepairdeclick:residualRatio',
-      'masteringrepairdeclick:threshold',
-      'masteringrepairdeclip:clipThreshold',
-      'masteringrepairdeclip:lpcBlend',
-      'masteringrepairdecrackle:threshold',
-      'masteringrepairdehum:adaptation',
-      'masteringrepairdehum:fundamentalHz',
-      'masteringrepairdehum:pllBandwidth',
-      'masteringrepairdehum:q',
-      'masteringrepairdehum:searchRangeHz',
-      'trimsilenceconfig:gateLufs',
-      'trimsilenceconfig:threshold',
-      'trimsilenceconfig:windowMs',
-    ],
-  ],
-  [
-    'IntProperty>repairIntOption',
-    [
-      'denoiseconfig:hopLength',
-      'denoiseconfig:nFft',
-      'dereverbconfig:hopLength',
-      'dereverbconfig:nFft',
-      'dereverbconfig:wpeIterations',
-      'dereverbconfig:wpeTaps',
-      'masteringrepairdeclick:lpcOrder',
-      'masteringrepairdeclick:maxClickSamples',
-      'masteringrepairdeclip:iterations',
-      'masteringrepairdeclip:lpcOrder',
-      'masteringrepairdecrackle:levels',
-      'masteringrepairdehum:frameSize',
-      'masteringrepairdehum:harmonics',
-    ],
-  ],
-  [
-    'BoolProperty>repairBoolOption',
-    [
-      'denoiseconfig:gainSmoothing',
-      'denoiseconfig:speechPresenceGain',
-      'dereverbconfig:wpeEnabled',
-      'masteringrepairdehum:adaptive',
-    ],
-  ],
-  // Same class again, and the only field whose addon reader is size_t-wide. Both
-  // surfaces refuse a NEGATIVE count -- the core field is a size_t, so -1 lands
-  // past the validator's SIZE_MAX/2 bound rather than below zero -- and they
-  // part company on a wrong TYPE: the addon refuses `'256'` by name, embind's
-  // int reader substitutes the default for it.
-  ['NonNegativeSizeTProperty>repairIntOption', ['trimsilenceconfig:paddingSamples']],
 ]);
 
 /** Two surfaces reading one field two ways, the shape the register answers. */
@@ -371,7 +297,7 @@ describe('a cross-surface reader-family disagreement is fixed or recorded', () =
     const families = (surface: 'node' | 'wasm') =>
       [...new Set(readSites(surface).map((site) => site.family))].sort();
     expect(families('node')).toEqual(['refuse']);
-    expect(families('wasm')).toEqual(['coerce', 'refuse', 'substitute']);
+    expect(families('wasm')).toEqual(['coerce', 'refuse']);
   });
 
   it('demands a family for every name-shaped reader in use', () => {
@@ -494,7 +420,7 @@ describe('the scanner sees what it claims to', () => {
     // lists already catch both, but this states the number a reader of this file
     // is being asked to believe.
     const live = new Set(mismatchedFields().map((field) => field.readerPair));
-    expect(live.size).toBe(19);
+    expect(live.size).toBe(15);
     expect([...live].every((pair) => ACCOUNTED.has(pair))).toBe(true);
   });
 });

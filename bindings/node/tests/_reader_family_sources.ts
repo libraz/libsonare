@@ -127,10 +127,6 @@ export const READER_FAMILIES: Readonly<
     typedDoubleProperty: 'refuse',
     typedFloatProperty: 'refuse',
     typedIntProperty: 'refuse',
-    // Type-checked fallback: a present wrong-typed value reads as the default.
-    repairBoolOption: 'substitute',
-    repairFloatOption: 'substitute',
-    repairIntOption: 'substitute',
     // Out of scope, each for its own reason.
     hasProperty: 'out-of-scope',
     objectProperty: 'out-of-scope',
