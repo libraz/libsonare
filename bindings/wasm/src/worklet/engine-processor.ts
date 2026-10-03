@@ -1218,13 +1218,13 @@ export class SonareRealtimeEngineWorkletProcessor {
       if (ring) {
         this.writeScopeScratch(ring);
       } else {
-        this.postScopeScratch(transport?.postMessage);
+        this.postScopeScratch(transport);
       }
     }
   }
 
-  private postScopeScratch(postMessage: WorkletTransport['postMessage'] | undefined): void {
-    if (!postMessage) {
+  private postScopeScratch(transport: WorkletTransport | undefined): void {
+    if (!transport?.postMessage) {
       return;
     }
     const bandCount = Math.min(
@@ -1251,7 +1251,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       bands,
       points,
     };
-    postMessage(scope, [bands.buffer, points.buffer]);
+    transport.postMessage(scope, [bands.buffer, points.buffer]);
   }
 
   private writeScopeScratch(ring: SharedScopeRingWriter): void {

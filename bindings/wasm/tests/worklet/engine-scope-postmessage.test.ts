@@ -176,6 +176,40 @@ describe('realtime engine scope postMessage transport', () => {
     }
   });
 
+  it('publishes scope through a class-based transport whose postMessage reads this', () => {
+    class ClassTransport {
+      readonly posted: unknown[] = [];
+      postMessage(message: unknown): void {
+        this.posted.push(message);
+      }
+    }
+    const transport = new ClassTransport();
+    const blockSize = 256;
+    const processor = new SourceSonareRealtimeEngineWorkletProcessor(
+      { sampleRate: 48000, blockSize, channelCount: 2, scopeIntervalFrames: blockSize },
+      transport as unknown as ConstructorParameters<
+        typeof SourceSonareRealtimeEngineWorkletProcessor
+      >[1],
+    );
+    try {
+      processor.receiveCommand({
+        type: SourceSonareEngineCommandType.TransportPlay,
+        sampleTime: -1,
+      });
+      for (let block = 0; block < 12; block++) {
+        expect(
+          processor.process(
+            [[new Float32Array(blockSize).fill(0.25), new Float32Array(blockSize).fill(0.25)]],
+            [[new Float32Array(blockSize), new Float32Array(blockSize)]],
+          ),
+        ).toBe(true);
+      }
+      expect(transport.posted.some((message) => isScopeSnapshot(message))).toBe(true);
+    } finally {
+      processor.destroy();
+    }
+  });
+
   it('does not configure or publish scope when the interval is zero', () => {
     const posted: unknown[] = [];
     const configureScopeTelemetry = vi.spyOn(RealtimeEngine.prototype, 'configureScopeTelemetry');
