@@ -476,9 +476,12 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
         const uint32_t tempo10ns = words[1];
         transport::TempoSegment seg;
         seg.start_ppq = ppq;
-        seg.bpm =
-            tempo10ns > 0 ? kTenNanosPerQuarterToBpm / static_cast<double>(tempo10ns) : kDefaultBpm;
-        result.tempo_segments.push_back(seg);
+        seg.bpm = tempo10ns > 0 ? kTenNanosPerQuarterToBpm / static_cast<double>(tempo10ns) : 0.0;
+        if (transport::valid_public_tempo_segment(seg)) {
+          result.tempo_segments.push_back(seg);
+        } else {
+          ++result.skipped_events;
+        }
       } else if (bank == kFlexBankSetupPerformance && status == kFlexStatusSetTimeSignature) {
         const uint8_t numerator = static_cast<uint8_t>((words[1] >> 24) & 0xFFu);
         const uint8_t denominator = static_cast<uint8_t>((words[1] >> 16) & 0xFFu);

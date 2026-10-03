@@ -3,6 +3,7 @@
 ///        lossless MIDI 2.0 channel-voice preservation, Flex Data meta, and
 ///        malformed-input safety.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -214,6 +215,61 @@ TEST_CASE("SMF2 round-trips tempo and time signature via Flex Data", "[midi][smf
   REQUIRE(imported.time_signatures.front().time_sig.numerator == 6);
   REQUIRE(imported.time_signatures.front().time_sig.denominator == 8);
   REQUIRE(imported.time_signatures.front().thirty_seconds_per_quarter == 0);
+}
+
+TEST_CASE("SMF2 import skips a tempo outside the public range", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+  clip.add_event(ev(4.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const std::vector<sonare::transport::TempoSegment> tempos = {{0.0, 140.0, 0.0},
+                                                               {1.0, 150.0, 0.0}};
+  const auto exported = export_clip_file(clip, tempos, {}, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  const Smf2ImportResult clean = import_clip_file(exported.bytes);
+  REQUIRE(clean.ok());
+  REQUIRE(clean.tempo_segments.size() == 2);
+
+  // Rewrite the 150 BPM tempo word (6e9 / 150 ten-nanosecond units) to 1, i.e. 6e9 BPM.
+  std::vector<uint8_t> bytes = exported.bytes;
+  const std::vector<uint8_t> word150{0x02, 0x62, 0x5A, 0x00};
+  const auto at = std::search(bytes.begin(), bytes.end(), word150.begin(), word150.end());
+  REQUIRE(at != bytes.end());
+  const std::vector<uint8_t> word1{0x00, 0x00, 0x00, 0x01};
+  std::copy(word1.begin(), word1.end(), at);
+
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == clean.skipped_events + 1);
+  REQUIRE(imported.tempo_segments.size() == 1);
+  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(140.0).margin(0.01));
+  for (const auto& segment : imported.tempo_segments) {
+    REQUIRE(sonare::transport::valid_public_tempo_segment(segment));
+  }
+}
+
+TEST_CASE("SMF2 import skips a zero tempo word", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+  clip.add_event(ev(4.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const std::vector<sonare::transport::TempoSegment> tempos = {{0.0, 140.0, 0.0},
+                                                               {1.0, 150.0, 0.0}};
+  const auto exported = export_clip_file(clip, tempos, {}, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  const Smf2ImportResult clean = import_clip_file(exported.bytes);
+  REQUIRE(clean.ok());
+
+  // Rewrite the 150 BPM tempo word to 0, which names no tempo.
+  std::vector<uint8_t> bytes = exported.bytes;
+  const std::vector<uint8_t> word150{0x02, 0x62, 0x5A, 0x00};
+  const auto at = std::search(bytes.begin(), bytes.end(), word150.begin(), word150.end());
+  REQUIRE(at != bytes.end());
+  std::fill(at, at + 4, uint8_t{0});
+
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == clean.skipped_events + 1);
+  REQUIRE(imported.tempo_segments.size() == 1);
+  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(140.0).margin(0.01));
 }
 
 TEST_CASE("SMF2 preserves the position of a non-zero first tempo/time-sig", "[midi][smf2]") {

@@ -493,10 +493,12 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
       } else {
         // Independent F7 escape event: its payload bytes are the complete byte
-        // sequence to send. It need not be terminated by an F7 data byte.
-        pending_sysex.assign(payload, payload + sysex_len);
+        // sequence to send. It need not be terminated by an F7 data byte. An escape
+        // carrying a whole F0 message is stored as the F0 event's payload would be.
+        const size_t skip = sysex_len > 0 && payload[0] == kSysExStart ? 1u : 0u;
+        pending_sysex.assign(payload + skip, payload + sysex_len);
         pending_sysex_ppq = ppq;
-        complete = !pending_sysex.empty();
+        complete = sysex_len > 0;
       }
 
       if (!complete) {
@@ -866,10 +868,12 @@ void put_meta(std::vector<uint8_t>* body, uint32_t delta, uint8_t type, const ui
 void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const std::vector<uint8_t>& payload) {
   put_vlq(body, delta);
   put_u8(body, kSysExStart);
-  const bool has_terminal_f7 = !payload.empty() && payload.back() == 0xF7u;
-  const size_t encoded_size = payload.size() + (has_terminal_f7 ? 0u : 1u);
+  // The F0 written above is the framing, so a payload carrying its own is not doubled.
+  const size_t skip = !payload.empty() && payload.front() == kSysExStart ? 1u : 0u;
+  const bool has_terminal_f7 = payload.size() > skip && payload.back() == 0xF7u;
+  const size_t encoded_size = payload.size() - skip + (has_terminal_f7 ? 0u : 1u);
   put_vlq(body, static_cast<uint32_t>(encoded_size));
-  body->insert(body->end(), payload.begin(), payload.end());
+  body->insert(body->end(), payload.begin() + static_cast<std::ptrdiff_t>(skip), payload.end());
   if (!has_terminal_f7) {
     put_u8(body, 0xF7u);
   }

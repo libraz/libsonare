@@ -903,6 +903,81 @@ TEST_CASE("SMF normalizes an F7-escape SysEx to an F0 event on export", "[midi]"
   REQUIRE(*round_payload == payload);
 }
 
+TEST_CASE("SMF round-trips an F7 escape carrying its own F0 without doubling it", "[midi]") {
+  const std::vector<uint8_t> message = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  std::vector<uint8_t> body;
+  push_vlq(&body, 0);
+  body.push_back(0xF7);
+  push_vlq(&body, static_cast<uint32_t>(message.size()));
+  body.insert(body.end(), message.begin(), message.end());
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  const std::vector<uint8_t>* imported_payload =
+      imported.sysex_store.lookup(imported.clips[0].events()[0].ump.sysex_handle);
+  REQUIRE(imported_payload != nullptr);
+  // Stored as an F0 event's payload is: without the F0 the event status supplies.
+  REQUIRE(*imported_payload == std::vector<uint8_t>{0x7E, 0x7F, 0x09, 0x01, 0xF7});
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  opts.sysex_store = &imported.sysex_store;
+  const auto exported = export_smf(imported.clips, imported.tempo_segments,
+                                   imported.time_signatures, imported.clip_names, opts);
+  REQUIRE(exported.ok());
+  const std::vector<uint8_t> f0_event{0xF0, 0x05, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  const std::vector<uint8_t> doubled{0xF0, 0x06, 0xF0};
+  REQUIRE(std::search(exported.bytes.begin(), exported.bytes.end(), f0_event.begin(),
+                      f0_event.end()) != exported.bytes.end());
+  REQUIRE(std::search(exported.bytes.begin(), exported.bytes.end(), doubled.begin(),
+                      doubled.end()) == exported.bytes.end());
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  REQUIRE(round.clips[0].events().size() == 1);
+  const std::vector<uint8_t>* round_payload =
+      round.sysex_store.lookup(round.clips[0].events()[0].ump.sysex_handle);
+  REQUIRE(round_payload != nullptr);
+  REQUIRE(*round_payload == *imported_payload);
+}
+
+TEST_CASE("SMF export does not double the F0 of a payload that carries one", "[midi]") {
+  sonare::midi::SysExStore store;
+  const std::vector<uint8_t> payload{0xF0, 0x41, 0x10, 0x42, 0x12, 0xF7};
+  const auto handle = store.add(payload);
+  REQUIRE(handle != 0);
+  MidiClip clip;
+  MidiClipEvent event;
+  event.ppq = 0.0;
+  event.ump = sonare::midi::make_sysex_handle(0, handle);
+  clip.add_event(event);
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  opts.sysex_store = &store;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+  const std::vector<uint8_t> f0_event{0xF0, 0x05, 0x41, 0x10, 0x42, 0x12, 0xF7};
+  REQUIRE(std::search(exported.bytes.begin(), exported.bytes.end(), f0_event.begin(),
+                      f0_event.end()) != exported.bytes.end());
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  REQUIRE(round.clips[0].events().size() == 1);
+  const std::vector<uint8_t>* round_payload =
+      round.sysex_store.lookup(round.clips[0].events()[0].ump.sysex_handle);
+  REQUIRE(round_payload != nullptr);
+  REQUIRE(*round_payload == std::vector<uint8_t>{0x41, 0x10, 0x42, 0x12, 0xF7});
+}
+
 TEST_CASE("SMF import skips invalid time signature denominator exponents", "[midi]") {
   std::vector<uint8_t> body;
   body.push_back(0x00);
@@ -972,7 +1047,8 @@ TEST_CASE("SMF export terminates SysEx payloads with F7", "[midi]") {
   const std::vector<uint8_t>* payload =
       imported.sysex_store.lookup(imported.clips[0].events()[0].ump.sysex_handle);
   REQUIRE(payload != nullptr);
-  REQUIRE(*payload == std::vector<uint8_t>{0xF0, 0x7D, 0x01, 0xF7});
+  // The stored F0 is framing, so it is written once and read back without it.
+  REQUIRE(*payload == std::vector<uint8_t>{0x7D, 0x01, 0xF7});
 }
 
 TEST_CASE("SMF import joins multi-packet SysEx continuations", "[midi]") {
