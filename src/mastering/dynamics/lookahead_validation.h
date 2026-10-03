@@ -17,7 +17,7 @@ inline int checked_lookahead_samples(double sample_rate, float lookahead_ms,
   }
   const double samples = std::round(sample_rate * static_cast<double>(lookahead_ms) * 0.001);
   if (!std::isfinite(samples) || samples < 0.0 || samples > maximum) {
-    throw SonareException(ErrorCode::InvalidParameter, "limiter lookahead exceeds supported size");
+    throw SonareException(ErrorCode::InvalidParameter, "lookahead exceeds supported size");
   }
   return static_cast<int>(samples);
 }

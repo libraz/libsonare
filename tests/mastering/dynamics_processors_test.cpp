@@ -354,6 +354,20 @@ TEST_CASE("SidechainRouter rejects unrepresentable lookahead before changing pre
   CHECK(router.latency_samples() == 48);
 }
 
+TEST_CASE("SidechainRouter honours or refuses a long lookahead, never clamps it",
+          "[mastering][dynamics][sidechain-finite-rate]") {
+  SidechainRouterConfig config;
+  config.lookahead_ms = 2000.0f;
+  SidechainRouter router(config);
+  router.prepare(48000.0, 64);
+  REQUIRE(router.latency_samples() == 96000);
+
+  // Past the int sample count the limiters refuse; so does the router.
+  config.lookahead_ms = 1.0e9f;
+  SidechainRouter oversized(config);
+  REQUIRE_THROWS_AS(oversized.prepare(48000.0, 64), sonare::SonareException);
+}
+
 TEST_CASE("SidechainRouter lookahead delays main while using current key",
           "[mastering][dynamics]") {
   SidechainRouter router({-18.0f, 8.0f, 0.0f, 0.0f, 18.0f, false, 90.0f, false, false, 2.0f});

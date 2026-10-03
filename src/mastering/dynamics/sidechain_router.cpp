@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <memory>
 #include <utility>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -27,14 +27,9 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
-  const double lookahead =
-      std::round(std::clamp(config_.lookahead_ms, 0.0f, 1000.0f) * 0.001f * sample_rate);
-  if (!std::isfinite(lookahead) || lookahead > std::numeric_limits<int>::max()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "sidechain lookahead exceeds supported size");
-  }
+  const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
-  lookahead_samples_ = static_cast<int>(lookahead);
+  lookahead_samples_ = lookahead_samples;
   prepared_ = true;
   // Preallocate per-channel main delay lines, the single shared gain delay line,
   // and the per-source-channel HPF state up front so the audio-thread process()
