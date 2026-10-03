@@ -6,6 +6,7 @@ on:
       - 'v*.*.*'
 
 permissions:
+  actions: read
   contents: write
   id-token: write
 
@@ -30,6 +31,31 @@ jobs:
             fi
           done
           exit $status
+      - name: CI passed on the tagged commit
+        # The tag is cut only after CI on main is green on this commit, so the
+        # publish holds to that run instead of rebuilding and re-testing the
+        # C++ tree here.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=success&per_page=1" --jq '.total_count')"
+          if [ "$passed" = "0" ]; then
+            echo "::error::CI has no successful run on ${GITHUB_SHA}; tag a commit whose CI on main passed"
+            exit 1
+          fi
+
+  github-release:
+    needs: version-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-npm:
     needs: version-check
@@ -65,25 +91,15 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libeigen3-dev
 
-      - name: Build and test C++
-        # Capped at 2 jobs: unbounded parallelism OOM-kills cc1plus on the
-        # hosted runners when compiling the large Debug test TUs.
-        # SONARE_WITH_FFMPEG is pinned rather than left to AUTO: auto-detection
-        # would make a publish gate's decoder depend on what the runner image
-        # happens to ship. OFF matches every other job and the released
-        # artifacts. BUILD_CLI is deliberately left at its ON default, since
-        # that is what registers the CLI test cases.
-        run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build --parallel 2
-          make fixtures
-          ctest --test-dir build --output-on-failure --parallel
-
       - name: Install Node deps (WASM binding)
         working-directory: bindings/wasm
         run: yarn install --immutable
       - name: Build WASM binding
         working-directory: bindings/wasm
+        # The build script leaves cmake's parallelism to this variable, and
+        # unset it compiles one unit at a time.
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 4
         run: yarn build
       - name: Lint WASM binding
         working-directory: bindings/wasm
@@ -91,15 +107,6 @@ jobs:
       - name: Test WASM binding
         working-directory: bindings/wasm
         run: yarn test && yarn test:types
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: Release ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npm
         # Skipped when the version is already on npm, so a tag moved to finish
@@ -110,11 +117,14 @@ jobs:
           if npm view "$spec" version >/dev/null 2>&1; then
             echo "$spec is already on npm; skipping publish"
           else
-            npm publish --access public --provenance
+            # prepublishOnly would clean and rebuild the module the steps above
+            # just built and tested, so it is skipped and its licence copy done here.
+            cp ../../LICENSE ../../NOTICE .
+            npm publish --access public --provenance --ignore-scripts
           fi
 
   release-cli:
-    needs: publish-npm
+    needs: github-release
     strategy:
       fail-fast: false
       matrix:
@@ -151,7 +161,7 @@ jobs:
         run: |
           cmake -B build-cli -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
                              -DBUILD_SHARED=ON -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build-cli --target sonare sonare_shared --config Release --parallel
+          cmake --build build-cli --target sonare sonare_shared --config Release --parallel "$(getconf _NPROCESSORS_ONLN)"
 
       - name: Generate capability catalog release asset
         if: matrix.os == 'linux' && matrix.arch == 'x86_64'
@@ -242,17 +252,19 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
                          -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
                          -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build --target sonare_shared --config Release -j
+          cmake --build build --target sonare_shared --config Release -j "$(getconf _NPROCESSORS_ONLN)"
 
       - name: Build shared library (macOS)
         if: runner.os == 'macOS'
+        # A bare -j starts every unit at once, which swaps the macOS runner's
+        # memory and turns a ten-minute build into most of an hour.
         env:
           MACOSX_DEPLOYMENT_TARGET: '11.0'
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
                          -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
                          -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build --target sonare_shared --config Release -j
+          cmake --build build --target sonare_shared --config Release -j "$(getconf _NPROCESSORS_ONLN)"
 
       - name: Copy shared library
         run: cp build/lib/${{ matrix.lib_name }} bindings/python/src/libsonare/
