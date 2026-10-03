@@ -178,12 +178,11 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
                                 int hop_length, float** out, size_t* out_length, int* start_sample,
                                 int* end_sample) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  if (!start_sample || !end_sample) return SONARE_ERROR_INVALID_PARAMETER;
-  *start_sample = 0;
-  *end_sample = 0;
+  if (out) *out = nullptr;
+  if (out_length) *out_length = 0;
+  if (start_sample) *start_sample = 0;
+  if (end_sample) *end_sample = 0;
+  if (!out || !out_length || !start_sample || !end_sample) return SONARE_ERROR_INVALID_PARAMETER;
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TrimResult result = trim(samples, length, top_db, frame_length, hop_length);
@@ -279,11 +278,10 @@ SonareError sonare_frame_signal(const float* samples, size_t length, int frame_l
                                 int hop_length, float** out, size_t* out_length,
                                 int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_n_frames = 0;
+  if (out) *out = nullptr;
+  if (out_length) *out_length = 0;
+  if (out_n_frames) *out_n_frames = 0;
+  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   if (validate_buffer(samples, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   *out_n_frames = frame_count(length, frame_length, hop_length);
@@ -412,11 +410,10 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
                                        int mode, float** out, size_t* out_length,
                                        int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_n_frames = 0;
+  if (out) *out = nullptr;
+  if (out_length) *out_length = 0;
+  if (out_n_frames) *out_n_frames = 0;
+  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   if (mode != SONARE_TEMPOGRAM_AUTOCORRELATION && mode != SONARE_TEMPOGRAM_COSINE) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -451,11 +448,10 @@ SonareError sonare_cyclic_tempogram(const float* onset_envelope, size_t length, 
                                     int hop_length, int win_length, float bpm_min, int n_bins,
                                     float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_n_frames = 0;
+  if (out) *out = nullptr;
+  if (out_length) *out_length = 0;
+  if (out_n_frames) *out_n_frames = 0;
+  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TempogramConfig config;
@@ -494,11 +490,10 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
                                      int hop_length, int win_length, int center, int norm,
                                      float** out, size_t* out_length, int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  if (!out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_n_frames = 0;
+  if (out) *out = nullptr;
+  if (out_length) *out_length = 0;
+  if (out_n_frames) *out_n_frames = 0;
+  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   if (validate_buffer(onset_envelope, length) != SONARE_OK) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   TempogramConfig config;
