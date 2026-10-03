@@ -118,6 +118,24 @@ struct GsClassicPoints {
   uint16_t n;
 };
 
+/// The point-list pool and its length. Built from the generated array itself, so the
+/// length a node's `aux` is checked against cannot be missing from a generated set.
+struct GsClassicPointListTable {
+  const GsClassicPoints* data = nullptr;
+  std::size_t size = 0;
+
+  constexpr GsClassicPointListTable() noexcept = default;
+  /// The generator's spelling of a set with no point lists.
+  constexpr GsClassicPointListTable(std::nullptr_t) noexcept {}
+  constexpr GsClassicPointListTable(const GsClassicPoints* lists, std::size_t n) noexcept
+      : data(lists), size(n) {}
+  template <std::size_t N>
+  constexpr GsClassicPointListTable(const GsClassicPoints (&lists)[N]) noexcept
+      : data(lists), size(N) {}
+
+  const GsClassicPoints& operator[](std::size_t i) const noexcept { return data[i]; }
+};
+
 /// One audio input of a node, as a signal number.
 struct GsClassicInput {
   uint16_t signal;
@@ -269,7 +287,7 @@ struct GsClassicModelSet {
   const GsClassicValue* values;
   const GsClassicSection* sections;
   const GsClassicReachedBy* reached_by;
-  const GsClassicPoints* point_lists;
+  GsClassicPointListTable point_lists;
   const GsClassicPoint* points;
   const GsClassicPanLaw* pan_laws;
   const GsClassicCurve* curves;

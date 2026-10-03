@@ -426,8 +426,19 @@ bool reads_history(GsClassicNodeKind kind) {
 
 std::size_t port_count(GsClassicNodeKind kind) { return kind == GsClassicNodeKind::kPan ? 2 : 1; }
 
+/// Whether @p n draws through the point list its `aux` names.
+bool reads_points(const GsClassicNode& n) {
+  return (n.kind == GsClassicNodeKind::kLfo &&
+          n.flags == static_cast<uint8_t>(GsClassicLfoShape::kPoints)) ||
+         (n.kind == GsClassicNodeKind::kShaper &&
+          (n.flags & 0x0F) == static_cast<uint8_t>(GsClassicShaperCurve::kPoints));
+}
+
 /// Values and inputs a kind drawn here requires, or false for a malformed node.
-bool well_formed(const GsClassicNode& n) {
+bool well_formed(const GsClassicModelSet& m, const GsClassicNode& n) {
+  if (reads_points(n) && (n.aux >= m.point_lists.size || m.point_lists[n.aux].n == 0)) {
+    return false;
+  }
   switch (n.kind) {
     case GsClassicNodeKind::kGain:
     case GsClassicNodeKind::kPan:
@@ -576,7 +587,7 @@ bool GsClassicGraph::prepare(const GsClassicModelSet& models, const GsClassicTyp
     signals += port_count(node.kind);
     const GsClassicNodeKernel* ext = extension(node.kind);
     kernel_of_[j] = ext != nullptr ? *ext : kOwn[kind_index(node.kind)];
-    if (kernel_of_[j].render == nullptr || !well_formed(node)) return false;
+    if (kernel_of_[j].render == nullptr || !well_formed(models, node)) return false;
   }
   n_signals_ = signals;
   for (std::size_t j = 0; j < count; ++j) {

@@ -270,7 +270,7 @@ struct Model {
     s.components = components.data();
     s.inputs = inputs.data();
     s.values = values.data();
-    s.point_lists = point_lists.data();
+    s.point_lists = {point_lists.data(), point_lists.size()};
     s.points = points.data();
     s.pan_laws = laws.data();
     s.curves = curves.data();

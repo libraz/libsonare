@@ -322,7 +322,7 @@ struct Model {
     s.values = values.data();
     s.sections = sections.data();
     s.reached_by = reached.data();
-    s.point_lists = point_lists.data();
+    s.point_lists = {point_lists.data(), point_lists.size()};
     s.points = points.data();
     s.curves = curves.data();
     s.map_specs = specs.data();
@@ -619,6 +619,36 @@ TEST_CASE("the graph refuses shapers outside the implemented format", "[gs-class
   REQUIRE_FALSE(prepare_shaper(static_cast<uint8_t>(4u | (1u << 4)), {0}, {konst(0.0)}));
   REQUIRE_FALSE(prepare_shaper(valid, {}, {konst(0.0)}));
   REQUIRE_FALSE(prepare_shaper(valid, {0}, {}));
+}
+
+TEST_CASE("the graph refuses a points node whose point list is absent or empty",
+          "[gs-classic-nodes]") {
+  enum class Run { kPresent, kEmpty, kPastTable };
+  auto prepare_points = [](GsClassicNodeKind kind, Run run) {
+    Model m;
+    uint16_t aux = m.point_run({{0.0, 0.0}, {0.5, 1.0}});
+    if (run == Run::kEmpty) aux = m.point_run({});
+    if (run == Run::kPastTable) aux = static_cast<uint16_t>(m.point_lists.size());
+    uint16_t out = 0;
+    if (kind == GsClassicNodeKind::kShaper) {
+      const auto flags =
+          static_cast<uint8_t>(static_cast<uint8_t>(gc::GsClassicShaperCurve::kPoints) | 1u << 4);
+      out = m.add(kind, {0}, {konst(0.0)}, aux, flags);
+    } else {
+      out = m.add(kind, {}, {konst(1000.0), konst(0.0)}, aux,
+                  static_cast<uint8_t>(gc::GsClassicLfoShape::kPoints));
+    }
+    m.singles();
+    const auto set = m.set(out, out);
+    gc::GsClassicGraph graph;
+    return graph.prepare(set, m.type, kN, &gc::gs_classic_extension_kernels());
+  };
+  for (const GsClassicNodeKind kind : {GsClassicNodeKind::kShaper, GsClassicNodeKind::kLfo}) {
+    INFO("kind " << static_cast<int>(kind));
+    REQUIRE(prepare_points(kind, Run::kPresent));
+    REQUIRE_FALSE(prepare_points(kind, Run::kEmpty));
+    REQUIRE_FALSE(prepare_points(kind, Run::kPastTable));
+  }
 }
 
 TEST_CASE("the envelope follows each detector, topology and domain", "[gs-classic-nodes]") {
