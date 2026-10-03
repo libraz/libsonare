@@ -89,26 +89,41 @@ val channelSetToVal(const std::vector<Audio>& channels) {
   return out;
 }
 
+mastering::repair::DeclickConfig readDeclickOptions(const val& options, const char* entry) {
+  mastering::repair::DeclickConfig cfg;
+  if (options.isUndefined() || options.isNull()) return cfg;
+  cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+  cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
+  if (hasProperty(options, "maxClickSamples")) {
+    const int v =
+        repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
+    if (v <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    std::string(entry) + ": maxClickSamples must be positive");
+    }
+    cfg.max_click_samples = static_cast<size_t>(v);
+  }
+  cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+  cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
+  return cfg;
+}
+
+mastering::repair::DeclipConfig readDeclipOptions(const val& options) {
+  mastering::repair::DeclipConfig cfg;
+  if (options.isUndefined() || options.isNull()) return cfg;
+  cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
+  cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+  cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
+  cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
+  return cfg;
+}
+
 }  // namespace
 
 val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DeclickConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
-    if (hasProperty(options, "maxClickSamples")) {
-      const int v =
-          repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
-      if (v <= 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "masteringRepairDeclick: maxClickSamples must be positive");
-      }
-      cfg.max_click_samples = static_cast<size_t>(v);
-    }
-    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
-    cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
-  }
+  const mastering::repair::DeclickConfig cfg =
+      readDeclickOptions(options, "masteringRepairDeclick");
   Audio result = mastering::repair::declick(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -151,23 +166,8 @@ val js_mastering_repair_declick_stereo(val left_samples, val right_samples,
                                "masteringRepairDeclickStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  mastering::repair::DeclickConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
-    if (hasProperty(options, "maxClickSamples")) {
-      const int v =
-          repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
-      if (v <= 0) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
-            "masteringRepairDeclickStereo: maxClickSamples must be positive");
-      }
-      cfg.max_click_samples = static_cast<size_t>(v);
-    }
-    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
-    cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
-  }
+  const mastering::repair::DeclickConfig cfg =
+      readDeclickOptions(options, "masteringRepairDeclickStereo");
   mastering::repair::DeclickStereoResult result =
       mastering::repair::declick_stereo(left, right, cfg);
   val out = val::object();
@@ -220,6 +220,26 @@ mastering::repair::DehumMode parseDehumMode(const std::string& name) {
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown dehum mode: " + name);
 }
 
+mastering::repair::DehumConfig readDehumOptions(const val& options) {
+  mastering::repair::DehumConfig cfg;
+  if (options.isUndefined() || options.isNull()) return cfg;
+  cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
+  cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
+  cfg.q = repairFloatOption(options, "q", cfg.q);
+  cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
+  cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
+  cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
+  cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
+  cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
+  if (hasProperty(options, "mode")) {
+    val value = val::undefined();
+    if (repairOptionValue(options, "mode", &value)) {
+      cfg.mode = parseDehumMode(value.as<std::string>());
+    }
+  }
+  return cfg;
+}
+
 // Read a denoise options bag over `config`, leaving absent keys alone. The nFft
 // and hopLength checks stay with each entry point, whose name they quote.
 mastering::repair::DenoiseClassicalConfig readDenoiseConfig(
@@ -250,23 +270,48 @@ mastering::repair::DenoiseClassicalConfig readDenoiseConfig(
   return config;
 }
 
-}  // namespace
-
-val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+// Reads @p options over the defaults and rejects an STFT geometry the
+// algorithm cannot run, naming @p entry in the message.
+mastering::repair::DenoiseClassicalConfig validatedDenoiseConfig(const val& options,
+                                                                 const char* entry) {
   mastering::repair::DenoiseClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     cfg = readDenoiseConfig(options, cfg);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDenoiseClassical: nFft must be a positive power of two");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(entry) + ": nFft must be a positive power of two");
   }
   if (cfg.hop_length <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "masteringRepairDenoiseClassical: hopLength must be positive");
+                                  std::string(entry) + ": hopLength must be positive");
   }
+  return cfg;
+}
+
+mastering::repair::DereverbClassicalConfig validatedDereverbConfig(const val& options,
+                                                                   const char* entry) {
+  mastering::repair::DereverbClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDereverbConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(entry) + ": nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(entry) + ": hopLength must be in (0, nFft]");
+  }
+  return cfg;
+}
+
+}  // namespace
+
+val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DenoiseClassicalConfig cfg =
+      validatedDenoiseConfig(options, "masteringRepairDenoiseClassical");
   Audio result = mastering::repair::denoise_classical(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -309,20 +354,8 @@ val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_sam
                                "masteringRepairDenoiseClassicalStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  mastering::repair::DenoiseClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDenoiseConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDenoiseClassicalStereo: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDenoiseClassicalStereo: hopLength must be positive");
-  }
+  const mastering::repair::DenoiseClassicalConfig cfg =
+      validatedDenoiseConfig(options, "masteringRepairDenoiseClassicalStereo");
   mastering::repair::DenoiseStereoResult result =
       mastering::repair::denoise_classical_stereo(left, right, cfg);
   val out = val::object();
@@ -346,20 +379,8 @@ val js_mastering_repair_denoise_classical_linked(val channels, const val& sample
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<Audio> loaded =
       loadValidatedChannelSet(channels, sample_rate, "masteringRepairDenoiseClassicalLinked");
-  mastering::repair::DenoiseClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDenoiseConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDenoiseClassicalLinked: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDenoiseClassicalLinked: hopLength must be positive");
-  }
+  const mastering::repair::DenoiseClassicalConfig cfg =
+      validatedDenoiseConfig(options, "masteringRepairDenoiseClassicalLinked");
   const std::vector<const Audio*> pointers = channelSetPointers(loaded);
   std::vector<Audio> processed;
   const mastering::repair::DenoiseReport report = mastering::repair::denoise_classical_linked(
@@ -373,13 +394,7 @@ val js_mastering_repair_denoise_classical_linked(val channels, const val& sample
 
 val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DeclipConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
-    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
-    cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
-    cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
-  }
+  const mastering::repair::DeclipConfig cfg = readDeclipOptions(options);
   Audio result = mastering::repair::declip(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -426,13 +441,7 @@ val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
                                "masteringRepairDeclipStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  mastering::repair::DeclipConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
-    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
-    cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
-    cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
-  }
+  const mastering::repair::DeclipConfig cfg = readDeclipOptions(options);
   mastering::repair::DeclipStereoResult result = mastering::repair::declip_stereo(left, right, cfg);
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
@@ -454,6 +463,20 @@ mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name) {
   }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                 "unknown decrackle mode: " + name);
+}
+
+mastering::repair::DecrackleConfig readDecrackleOptions(const val& options) {
+  mastering::repair::DecrackleConfig cfg;
+  if (options.isUndefined() || options.isNull()) return cfg;
+  cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+  if (hasProperty(options, "mode")) {
+    val value = val::undefined();
+    if (repairOptionValue(options, "mode", &value)) {
+      cfg.mode = parseDecrackleMode(value.as<std::string>());
+    }
+  }
+  cfg.levels = repairIntOption(options, "levels", cfg.levels);
+  return cfg;
 }
 
 mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name) {
@@ -501,17 +524,7 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
 
 val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DecrackleConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDecrackleMode(value.as<std::string>());
-      }
-    }
-    cfg.levels = repairIntOption(options, "levels", cfg.levels);
-  }
+  const mastering::repair::DecrackleConfig cfg = readDecrackleOptions(options);
   Audio result = mastering::repair::decrackle(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -552,17 +565,7 @@ val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
                                "masteringRepairDecrackleStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  mastering::repair::DecrackleConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDecrackleMode(value.as<std::string>());
-      }
-    }
-    cfg.levels = repairIntOption(options, "levels", cfg.levels);
-  }
+  const mastering::repair::DecrackleConfig cfg = readDecrackleOptions(options);
   mastering::repair::DecrackleStereoResult result =
       mastering::repair::decrackle_stereo(left, right, cfg);
   val out = val::object();
@@ -575,23 +578,7 @@ val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
 
 val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DehumConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
-    cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
-    cfg.q = repairFloatOption(options, "q", cfg.q);
-    cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
-    cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
-    cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
-    cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
-    cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDehumMode(value.as<std::string>());
-      }
-    }
-  }
+  const mastering::repair::DehumConfig cfg = readDehumOptions(options);
   Audio result = mastering::repair::dehum(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -637,23 +624,7 @@ val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
                                "masteringRepairDehumStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  mastering::repair::DehumConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
-    cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
-    cfg.q = repairFloatOption(options, "q", cfg.q);
-    cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
-    cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
-    cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
-    cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
-    cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDehumMode(value.as<std::string>());
-      }
-    }
-  }
+  const mastering::repair::DehumConfig cfg = readDehumOptions(options);
   mastering::repair::DehumStereoResult result = mastering::repair::dehum_stereo(left, right, cfg);
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
@@ -665,20 +636,8 @@ val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
 
 val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DereverbClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDereverbConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbClassical: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbClassical: hopLength must be in (0, nFft]");
-  }
+  const mastering::repair::DereverbClassicalConfig cfg =
+      validatedDereverbConfig(options, "masteringRepairDereverbClassical");
   Audio result = mastering::repair::dereverb_classical(audio, cfg);
   return vectorToFloat32Array(result.data(), result.size());
 }
@@ -719,20 +678,8 @@ val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_sa
                                "masteringRepairDereverbClassicalStereo input", true);
   Audio left = loadValidatedAudio(left_samples, sample_rate);
   Audio right = loadValidatedAudio(right_samples, sample_rate);
-  mastering::repair::DereverbClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDereverbConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbClassicalStereo: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbClassicalStereo: hopLength must be in (0, nFft]");
-  }
+  const mastering::repair::DereverbClassicalConfig cfg =
+      validatedDereverbConfig(options, "masteringRepairDereverbClassicalStereo");
   mastering::repair::DereverbStereoResult result =
       mastering::repair::dereverb_classical_stereo(left, right, cfg);
   val out = val::object();
@@ -757,20 +704,8 @@ val js_mastering_repair_dereverb_classical_linked(val channels, const val& sampl
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<Audio> loaded =
       loadValidatedChannelSet(channels, sample_rate, "masteringRepairDereverbClassicalLinked");
-  mastering::repair::DereverbClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDereverbConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbClassicalLinked: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbClassicalLinked: hopLength must be in (0, nFft]");
-  }
+  const mastering::repair::DereverbClassicalConfig cfg =
+      validatedDereverbConfig(options, "masteringRepairDereverbClassicalLinked");
   const std::vector<const Audio*> pointers = channelSetPointers(loaded);
   std::vector<Audio> processed;
   const mastering::repair::DereverbReport report = mastering::repair::dereverb_classical_linked(
@@ -895,23 +830,8 @@ val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
 
 val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DeclickConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
-    if (hasProperty(options, "maxClickSamples")) {
-      const int v =
-          repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
-      if (v <= 0) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
-            "masteringRepairDetectClicks: maxClickSamples must be positive");
-      }
-      cfg.max_click_samples = static_cast<size_t>(v);
-    }
-    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
-    cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
-  }
+  const mastering::repair::DeclickConfig cfg =
+      readDeclickOptions(options, "masteringRepairDetectClicks");
   return declickDetectionToVal(
       mastering::repair::detect_clicks(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -920,19 +840,8 @@ val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val o
 // below pads one instead.
 val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DenoiseClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDenoiseConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDetectNoiseFloor: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "masteringRepairDetectNoiseFloor: hopLength must be positive");
-  }
+  const mastering::repair::DenoiseClassicalConfig cfg =
+      validatedDenoiseConfig(options, "masteringRepairDetectNoiseFloor");
   return noiseDetectionToVal(
       mastering::repair::detect_noise_floor(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -961,13 +870,7 @@ val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_
 // the same config validation runs here as at the repair.
 val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DeclipConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
-    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
-    cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
-    cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
-  }
+  const mastering::repair::DeclipConfig cfg = readDeclipOptions(options);
   return declipDetectionToVal(
       mastering::repair::detect_clipping(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -976,17 +879,7 @@ val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val
 // removes crackle without ever deciding a sample is crackle.
 val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DecrackleConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDecrackleMode(value.as<std::string>());
-      }
-    }
-    cfg.levels = repairIntOption(options, "levels", cfg.levels);
-  }
+  const mastering::repair::DecrackleConfig cfg = readDecrackleOptions(options);
   return crackleDetectionToVal(
       mastering::repair::detect_crackle(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -995,23 +888,7 @@ val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val 
 // notches the configured frequency without ever looking for hum.
 val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DehumConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
-    cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
-    cfg.q = repairFloatOption(options, "q", cfg.q);
-    cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
-    cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
-    cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
-    cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
-    cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDehumMode(value.as<std::string>());
-      }
-    }
-  }
+  const mastering::repair::DehumConfig cfg = readDehumOptions(options);
   return humDetectionToVal(
       mastering::repair::detect_hum(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
@@ -1020,19 +897,8 @@ val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val opti
 // noise-floor detector above.
 val js_mastering_repair_detect_reverb(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  mastering::repair::DereverbClassicalConfig cfg;
-  if (!options.isUndefined() && !options.isNull()) {
-    cfg = readDereverbConfig(options, cfg);
-  }
-  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDetectReverb: nFft must be a positive power of two");
-  }
-  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "masteringRepairDetectReverb: hopLength must be in (0, nFft]");
-  }
+  const mastering::repair::DereverbClassicalConfig cfg =
+      validatedDereverbConfig(options, "masteringRepairDetectReverb");
   return reverbDetectionToVal(
       mastering::repair::detect_reverb(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }

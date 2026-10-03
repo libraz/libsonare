@@ -346,6 +346,20 @@ bool hasProperty(val object, const char* key) {
   return !object[key].isUndefined() && !object[key].isNull();
 }
 
+val requireTypedProperty(const val& object, const char* key, const char* subject,
+                         const char* js_type, const char* article_type) {
+  if (!hasProperty(object, key)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " is required");
+  }
+  val value = object[key];
+  if (value.typeOf().as<std::string>() != js_type) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " must be " + article_type);
+  }
+  return value;
+}
+
 val objectProperty(val object, const char* key) {
   if (!hasProperty(object, key)) {
     return val::undefined();

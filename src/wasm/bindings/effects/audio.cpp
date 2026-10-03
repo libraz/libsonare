@@ -134,6 +134,33 @@ val js_pitch_correct_to_midi(val samples, const val& sample_rate, const val& cur
 // caller-supplied F0 contour. f0_hz is required; voiced / voiced_prob are
 // optional (undefined/null -> every frame voiced). Companion arrays are passed
 // as Float32Array (voiced uses 0.0/1.0) so a single conversion path suffices.
+namespace {
+
+// voiced / voicedProb are already checked against f0's length.
+editing::pitch_editor::F0Track buildF0Track(int sample_rate, int hop_length,
+                                            const std::vector<float>& f0, bool has_voiced,
+                                            const std::vector<float>& voiced_vec, bool has_prob,
+                                            const std::vector<float>& prob_vec) {
+  const size_t n_frames = f0.size();
+  editing::pitch_editor::F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = hop_length;
+  track.f0_hz = f0;
+  track.voiced.resize(n_frames);
+  track.voiced_prob.resize(n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    // Absent both voiced and voicedProb, every frame defaults to voiced,
+    // matching the C ABI's is_voiced_frame fallback chain.
+    const bool is_voiced =
+        has_voiced ? (voiced_vec[i] != 0.0f) : (has_prob ? (prob_vec[i] >= 0.5f) : true);
+    track.voiced[i] = is_voiced;
+    track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
+  }
+  return track;
+}
+
+}  // namespace
+
 val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val, val f0_hz,
                                          const val& target_midi_val, const val& hop_length_val,
                                          val voiced, val voiced_prob) {
@@ -167,20 +194,8 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
                           "voiced and voicedProb must match f0Hz length");
   }
 
-  editing::pitch_editor::F0Track track;
-  track.sample_rate = sample_rate;
-  track.hop_length = hop_length;
-  track.f0_hz = f0;
-  track.voiced.resize(n_frames);
-  track.voiced_prob.resize(n_frames);
-  for (size_t i = 0; i < n_frames; ++i) {
-    // Absent both voiced and voicedProb, every frame defaults to voiced,
-    // matching the C ABI's is_voiced_frame fallback chain.
-    const bool is_voiced =
-        has_voiced ? (voiced_vec[i] != 0.0f) : (has_prob ? (prob_vec[i] >= 0.5f) : true);
-    track.voiced[i] = is_voiced;
-    track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
-  }
+  const editing::pitch_editor::F0Track track =
+      buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
 
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
@@ -266,20 +281,8 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   if (!scale_mode && (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "targetMidi must be finite and in [0, 127]");
   }
-  editing::pitch_editor::F0Track track;
-  track.sample_rate = sample_rate;
-  track.hop_length = hop_length;
-  track.f0_hz = f0;
-  track.voiced.resize(n_frames);
-  track.voiced_prob.resize(n_frames);
-  for (size_t i = 0; i < n_frames; ++i) {
-    // Absent both voiced and voicedProb, every frame defaults to voiced,
-    // matching the C ABI's is_voiced_frame fallback chain.
-    const bool is_voiced =
-        has_voiced ? (voiced_vec[i] != 0.0f) : (has_prob ? (prob_vec[i] >= 0.5f) : true);
-    track.voiced[i] = is_voiced;
-    track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
-  }
+  const editing::pitch_editor::F0Track track =
+      buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
 
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);

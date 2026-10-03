@@ -472,16 +472,13 @@ void requireOrdinalInRange(int value, int min, int max, const char* subject);
 /// the past.
 /// @brief The numeric half of @ref requireProperty, shared by every arithmetic
 ///        instantiation so the validation is compiled once rather than per type.
+/// @brief Returns @p object[@p key], refusing it by name when absent or when its
+///        JS `typeof` is not @p js_type (@p article_type is the noun the message uses).
+val requireTypedProperty(const val& object, const char* key, const char* subject,
+                         const char* js_type, const char* article_type);
+
 inline double requireNumberProperty(const val& object, const char* key, const char* subject) {
-  if (!hasProperty(object, key)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " is required");
-  }
-  const val value = object[key];
-  if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " must be a number");
-  }
+  const val value = requireTypedProperty(object, key, subject, "number", "a number");
   const double number = value.as<double>();
   if (!std::isfinite(number)) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -496,29 +493,12 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
 ///        name again for a fraction or a value outside the 64-bit integer
 ///        range rather than truncated or cast into undefined behavior.
 inline int64_t requireInt64Property(const val& object, const char* key, const char* subject) {
-  if (!hasProperty(object, key)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " is required");
-  }
-  const val value = object[key];
-  if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " must be a number");
-  }
+  const val value = requireTypedProperty(object, key, subject, "number", "a number");
   return checkedInt64FromVal(value, (std::string(subject) + "." + key).c_str());
 }
 
 inline bool requireBoolProperty(const val& object, const char* key, const char* subject) {
-  if (!hasProperty(object, key)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " is required");
-  }
-  const val value = object[key];
-  if (value.typeOf().as<std::string>() != "boolean") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " must be a boolean");
-  }
-  return value.as<bool>();
+  return requireTypedProperty(object, key, subject, "boolean", "a boolean").as<bool>();
 }
 
 template <typename T>

@@ -238,6 +238,28 @@ void ensureStereoPair(const val& left, const val& right, int sample_rate, const 
   validate_offline_audio_input(out_right->data(), out_right->size(), sample_rate);
 }
 
+val phaseScopeToVal(const metering::PhaseScopeResult& result) {
+  std::vector<float> mid(result.points.size());
+  std::vector<float> side(result.points.size());
+  std::vector<float> radius(result.points.size());
+  std::vector<float> angle(result.points.size());
+  for (size_t i = 0; i < result.points.size(); ++i) {
+    mid[i] = result.points[i].mid;
+    side[i] = result.points[i].side;
+    radius[i] = result.points[i].radius;
+    angle[i] = result.points[i].angle_rad;
+  }
+  val out = val::object();
+  out.set("mid", vectorToFloat32Array(mid));
+  out.set("side", vectorToFloat32Array(side));
+  out.set("radius", vectorToFloat32Array(radius));
+  out.set("angleRad", vectorToFloat32Array(angle));
+  out.set("correlation", result.correlation);
+  out.set("averageAbsAngleRad", result.average_abs_angle_rad);
+  out.set("maxRadius", result.max_radius);
+  return out;
+}
+
 }  // namespace
 
 float js_metering_stereo_correlation(val left, val right, const val& sample_rate_val) {
@@ -306,25 +328,7 @@ val js_metering_phase_scope(val left, val right, const val& sample_rate_val) {
   std::vector<float> r;
   ensureStereoPair(left, right, sample_rate, "meteringPhaseScope", &l, &r);
   metering::PhaseScopeResult result = metering::phase_scope(l.data(), r.data(), l.size());
-  std::vector<float> mid(result.points.size());
-  std::vector<float> side(result.points.size());
-  std::vector<float> radius(result.points.size());
-  std::vector<float> angle(result.points.size());
-  for (size_t i = 0; i < result.points.size(); ++i) {
-    mid[i] = result.points[i].mid;
-    side[i] = result.points[i].side;
-    radius[i] = result.points[i].radius;
-    angle[i] = result.points[i].angle_rad;
-  }
-  val out = val::object();
-  out.set("mid", vectorToFloat32Array(mid));
-  out.set("side", vectorToFloat32Array(side));
-  out.set("radius", vectorToFloat32Array(radius));
-  out.set("angleRad", vectorToFloat32Array(angle));
-  out.set("correlation", result.correlation);
-  out.set("averageAbsAngleRad", result.average_abs_angle_rad);
-  out.set("maxRadius", result.max_radius);
-  return out;
+  return phaseScopeToVal(result);
 }
 
 // Display-sized phase scope. Mirrors js_metering_phase_scope but decimates the
@@ -341,25 +345,7 @@ val js_metering_phase_scope_decimated(val left, val right, const val& sample_rat
   ensureStereoPair(left, right, sample_rate, "meteringPhaseScopeDecimated", &l, &r);
   metering::PhaseScopeResult result =
       metering::phase_scope(l.data(), r.data(), l.size(), max_points);
-  std::vector<float> mid(result.points.size());
-  std::vector<float> side(result.points.size());
-  std::vector<float> radius(result.points.size());
-  std::vector<float> angle(result.points.size());
-  for (size_t i = 0; i < result.points.size(); ++i) {
-    mid[i] = result.points[i].mid;
-    side[i] = result.points[i].side;
-    radius[i] = result.points[i].radius;
-    angle[i] = result.points[i].angle_rad;
-  }
-  val out = val::object();
-  out.set("mid", vectorToFloat32Array(mid));
-  out.set("side", vectorToFloat32Array(side));
-  out.set("radius", vectorToFloat32Array(radius));
-  out.set("angleRad", vectorToFloat32Array(angle));
-  out.set("correlation", result.correlation);
-  out.set("averageAbsAngleRad", result.average_abs_angle_rad);
-  out.set("maxRadius", result.max_radius);
-  return out;
+  return phaseScopeToVal(result);
 }
 
 val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
