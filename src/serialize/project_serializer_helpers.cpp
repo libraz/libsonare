@@ -205,13 +205,17 @@ const Object* object_at(const Value& obj, const char* key) {
 }
 
 // ===========================================================================
-// Migration hook. A document at or below SONARE_PROJECT_SCHEMA_VERSION (the
-// serializer's current version) is accepted -- forward-compatible field
-// handling above absorbs earlier versions' documents; an unknown future
-// version is rejected with a diagnostic rather than misread.
+// Migration hook. A document from SONARE_PROJECT_SCHEMA_VERSION_OPAQUE (the
+// oldest version the encoder writes) up to SONARE_PROJECT_SCHEMA_VERSION is
+// accepted -- forward-compatible field handling above absorbs earlier versions'
+// documents; an unknown future version is rejected with a diagnostic rather
+// than misread.
 // ===========================================================================
 
-bool schema_version_supported(uint32_t version) { return version <= SONARE_PROJECT_SCHEMA_VERSION; }
+bool schema_version_supported(uint32_t version) {
+  return version >= SONARE_PROJECT_SCHEMA_VERSION_OPAQUE &&
+         version <= SONARE_PROJECT_SCHEMA_VERSION;
+}
 
 }  // namespace detail
 }  // namespace sonare::serialize

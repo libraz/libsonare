@@ -308,6 +308,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                     "schema version must be a non-negative uint32 integer"});
       return result;
     }
+    if (schema_version < SONARE_PROJECT_SCHEMA_VERSION_OPAQUE) {
+      result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_version",
+                                    "schema version must be at least " +
+                                        std::to_string(SONARE_PROJECT_SCHEMA_VERSION_OPAQUE)});
+      return result;
+    }
     if (!schema_version_supported(schema_version)) {
       result.diagnostics.push_back({DiagnosticSeverity::kError, "unsupported_schema_version",
                                     "schema version " + std::to_string(schema_version) +

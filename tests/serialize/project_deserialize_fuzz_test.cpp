@@ -152,6 +152,7 @@ TEST_CASE("project schema version rejects fractional and out-of-range numbers", 
       "{\"version\": 1.5}",
       "{\"version\": 4294967296}",
       "{\"version\": 1e100}",
+      "{\"version\": 0}",
   };
   for (const auto& input : inputs) {
     INFO("input: " << input);
