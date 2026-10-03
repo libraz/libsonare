@@ -1594,6 +1594,7 @@ if(BUILD_WASM)
       mastering/api/named_processor_registry.cpp
       mastering/assistant/audio_profile.cpp
       mastering/eq/equalizer.cpp
+      mastering/eq/graphic_eq.cpp
       TARGET_DIRECTORY sonare_mastering
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
