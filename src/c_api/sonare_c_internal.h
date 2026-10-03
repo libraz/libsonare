@@ -290,6 +290,8 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
   // early-return (which records no message) cannot leak an unrelated one.
   clear_last_error();
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
   try {

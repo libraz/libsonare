@@ -400,8 +400,11 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+#if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::PitchCorrector corrector;
@@ -421,8 +424,12 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      int hop_length, float target_midi, float** out,
                                                      size_t* out_length) {
   SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!out || !out_length || !f0_hz || n_frames == 0 || hop_length <= 0) {
+  if (!f0_hz || n_frames == 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f) {
@@ -491,8 +498,12 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length) {
   SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (!out || !out_length || !f0_hz || n_frames == 0 || hop_length <= 0) {
+  if (!f0_hz || n_frames == 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -570,8 +581,11 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+#if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::NoteRegion region;
@@ -975,6 +989,8 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   if (events == nullptr && count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   editing::event_model::PercussiveEventRenderConfig render_config;
@@ -1016,8 +1032,11 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
                              int offset_sample, int target_onset_sample, float** out,
                              size_t* out_length) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_PITCH_EDITOR)
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+#if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::NoteRegion region;

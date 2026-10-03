@@ -53,8 +53,9 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_len) *out_len = 0;
-  if (!project || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out_json) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   const std::string json = sonare::serialize::project_to_json(project->history.project(),
                                                               project->history.midi_content());
@@ -108,8 +109,9 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_diag) *out_diag = nullptr;
-  if (!json || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
+  if (!json) return SONARE_ERROR_INVALID_PARAMETER;
   if (len > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
     return SONARE_ERROR_INVALID_FORMAT;
   }
@@ -477,8 +479,9 @@ SonareError sonare_project_marker_name_by_index(const SonareProject* project, si
                                                 char** out_name) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !out_name) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out_name) return SONARE_ERROR_INVALID_PARAMETER;
   *out_name = nullptr;
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   const auto& markers = project->history.project().markers();
   if (index >= markers.size()) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY

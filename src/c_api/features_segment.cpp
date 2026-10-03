@@ -34,10 +34,11 @@ SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_co
                                             int y_rows, int y_cols, int k, const char* metric,
                                             const char* mode, SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(x, x_rows, x_cols) || !valid_matrix(y, y_rows, y_cols) ||
-      x_rows != y_rows || k < 0 || !metric || !mode)
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
+  if (!valid_matrix(x, x_rows, x_cols) || !valid_matrix(y, y_rows, y_cols) || x_rows != y_rows ||
+      k < 0 || !metric || !mode)
+    return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   const std::string metric_name(metric);
   const std::string mode_name(mode);
@@ -53,10 +54,11 @@ SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int co
                                              int width, int sym, const char* metric,
                                              const char* mode, SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(data, rows, cols) || k < 0 || width < 0 || (sym != 0 && sym != 1) ||
-      !metric || !mode)
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
+  if (!valid_matrix(data, rows, cols) || k < 0 || width < 0 || (sym != 0 && sym != 1) || !metric ||
+      !mode)
+    return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   return fill_matrix(recurrence_matrix(data, rows, cols, k, width, sym != 0, metric, mode), cols,
                      cols, out);
@@ -66,10 +68,11 @@ SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int co
 SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int pad,
                                              SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(recurrence, n, n) || (pad != 0 && pad != 1)) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
+  if (!valid_matrix(recurrence, n, n) || (pad != 0 && pad != 1)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out = {};
   SONARE_C_TRY
   return fill_matrix(recurrence_to_lag(recurrence, n, pad != 0), n, pad ? 2 * n - 1 : n, out);
   SONARE_C_CATCH
@@ -78,8 +81,9 @@ SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int
 SonareError sonare_segment_lag_to_recurrence(const float* lag, int n_rows, int n_lags,
                                              SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(lag, n_rows, n_lags)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
+  if (!valid_matrix(lag, n_rows, n_lags)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   return fill_matrix(lag_to_recurrence(lag, n_rows, n_lags), n_rows, n_rows, out);
   SONARE_C_CATCH
@@ -89,10 +93,10 @@ SonareError sonare_segment_subsegment(const float* data, int rows, int cols, con
                                       size_t boundary_count, int n_segments,
                                       SonareSegmentIndices* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(data, rows, cols) || (!boundaries && boundary_count > 0) ||
-      n_segments <= 0)
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
+  if (!valid_matrix(data, rows, cols) || (!boundaries && boundary_count > 0) || n_segments <= 0)
+    return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::vector<int> points;
   if (boundary_count) points.assign(boundaries, boundaries + boundary_count);
@@ -103,10 +107,11 @@ SonareError sonare_segment_subsegment(const float* data, int rows, int cols, con
 SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, int k,
                                          const char* linkage, SonareSegmentIndices* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(data, rows, cols) || k <= 0 || !linkage) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
+  if (!valid_matrix(data, rows, cols) || k <= 0 || !linkage) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out = {};
   SONARE_C_TRY
   return fill_indices(agglomerative(data, rows, cols, k, linkage), out);
   SONARE_C_CATCH
@@ -115,10 +120,11 @@ SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, 
 SonareError sonare_segment_path_enhance(const float* recurrence, int n, int win, int max_ratio,
                                         int min_ratio, int n_filters, SonareSegmentMatrix* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !valid_matrix(recurrence, n, n) || win <= 0 || max_ratio <= 0 || min_ratio < 0 ||
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
+  if (!valid_matrix(recurrence, n, n) || win <= 0 || max_ratio <= 0 || min_ratio < 0 ||
       n_filters <= 0)
     return SONARE_ERROR_INVALID_PARAMETER;
-  *out = {};
   SONARE_C_TRY
   return fill_matrix(path_enhance(recurrence, n, win, max_ratio, min_ratio, n_filters), n, n, out);
   SONARE_C_CATCH

@@ -22,9 +22,10 @@ SonareError sonare_tone(float frequency, int sample_rate, float duration, float 
 SonareError sonare_chirp(float fmin, float fmax, int sample_rate, float duration, int linear,
                          float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length || (linear != 0 && linear != 1)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
+  if (linear != 0 && linear != 1) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   return fill_audio_samples(chirp(fmin, fmax, sample_rate, duration, linear != 0), out, out_length);
   SONARE_C_CATCH
@@ -33,9 +34,10 @@ SonareError sonare_chirp(float fmin, float fmax, int sample_rate, float duration
 SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, int length,
                           float frequency, float click_duration, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length || (!times && time_count > 0)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
+  if (!times && time_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::vector<float> values;
   if (time_count) values.assign(times, times + time_count);
@@ -164,9 +166,10 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
 SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
                                  int hop_length, int lag, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count || lag < 1) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_count = 0;
+  if (lag < 1) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
     config.n_fft = n_fft;
@@ -302,11 +305,12 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
 SonareError sonare_onset_backtrack(const int* events, size_t event_count, const float* energy,
                                    size_t energy_count, int** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count || (!events && event_count > 0) || (!energy && energy_count > 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_count = 0;
+  if ((!events && event_count > 0) || (!energy && energy_count > 0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   // An empty envelope is legitimate here (onset_backtrack then has nothing to
   // walk back over), but a non-finite one is not: a NaN makes the descent
   // comparison false, so the walk stops on the spot and the event index is

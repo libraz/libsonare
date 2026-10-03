@@ -1582,3 +1582,34 @@ TEST_CASE("the note-object C API reports NOT_SUPPORTED without the pitch editor"
 }
 
 #endif
+
+TEST_CASE("the offline pitch-editor entry points define their outputs on every refusal",
+          "[c_api][note_objects]") {
+  const std::vector<float> samples(1600, 0.25f);
+  const std::vector<float> f0(10, 440.0f);
+  float poison = 0.0f;
+  float* out = &poison;
+  size_t out_length = 7;
+  const auto require_defined = [&](SonareError err) {
+    REQUIRE(err != SONARE_OK);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+    out = &poison;
+    out_length = 7;
+  };
+
+  // A NULL input is refused with the pitch editor built in and reported as
+  // unsupported without it; either way the caller's outputs are not left alone.
+  require_defined(sonare_pitch_correct_to_midi(nullptr, 0, 16000, 60.0f, 62.0f, &out, &out_length));
+  require_defined(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 16000,
+                                                           nullptr, nullptr, nullptr, 0, 160, 60.0f,
+                                                           &out, &out_length));
+  require_defined(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 16000, nullptr,
+                                                   nullptr, nullptr, 0, 160, nullptr, &out,
+                                                   &out_length));
+  require_defined(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 16000, f0.data(),
+                                                   nullptr, nullptr, f0.size(), 0, nullptr, &out,
+                                                   &out_length));
+  require_defined(sonare_note_stretch(nullptr, 0, 16000, 0, 100, 1.5f, &out, &out_length));
+  require_defined(sonare_note_move(nullptr, 0, 16000, 0, 100, 200, &out, &out_length));
+}

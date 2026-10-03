@@ -166,6 +166,8 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
                                 float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_times = nullptr;
+  *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), audio.sample_rate());
@@ -177,6 +179,8 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
                                     float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_times = nullptr;
+  *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> downbeats =
@@ -189,6 +193,8 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
                                  float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_times = nullptr;
+  *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> onsets =
@@ -201,9 +207,10 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
                                     const SonareOnsetDetectConfig* config, float** out_times,
                                     size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (config == nullptr || out_times == nullptr || out_count == nullptr) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_times = nullptr;
+  *out_count = 0;
+  if (config == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (config->n_fft <= 0 || config->hop_length <= 0 || config->pre_max < 0 ||
       config->post_max < 0 || config->pre_avg < 0 || config->post_avg < 0 || config->wait < 0 ||
       config->backtrack_range < 0 || config->backtrack > 1 || !std::isfinite(config->threshold) ||
@@ -346,10 +353,9 @@ SonareError sonare_analyze_json_ex_with_progress(
   // applies below; the exception maps back to SONARE_ERROR_INVALID_PARAMETER, so
   // this entry point only checks what the core cannot see (the out pointers and
   // the length of the flat candidate array, which the core never receives).
-  if (out_json == nullptr || options == nullptr) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
+  if (options == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (options->meter_candidate_numerator_count < 0 ||
       options->meter_candidate_numerator_count > SONARE_MAX_METER_CANDIDATE_NUMERATORS) {
     return SONARE_ERROR_INVALID_PARAMETER;

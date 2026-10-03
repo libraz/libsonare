@@ -80,8 +80,9 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
 SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
                                           SonareStreamAnalyzer** out) {
   SONARE_C_API_ENTRY;
-  if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
   if (config->sample_rate <= 0 || config->n_fft <= 0 || config->hop_length <= 0 ||
       config->hop_length > config->n_fft || config->n_mels <= 0 ||
       config->emit_every_n_frames <= 0 || config->magnitude_downsample <= 0 ||
@@ -186,9 +187,10 @@ SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyz
 SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, size_t max_frames,
                                                SonareStreamFrames* out) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
+  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   FrameBuffer buffer;
@@ -252,9 +254,10 @@ SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analy
                                                      const SonareStreamQuantizeConfig* config,
                                                      size_t max_frames, SonareStreamFramesU8* out) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
+  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   QuantizedFrameBufferU8 buffer;
@@ -286,9 +289,10 @@ SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* anal
                                                       size_t max_frames,
                                                       SonareStreamFramesI16* out) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
+  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   QuantizedFrameBufferI16 buffer;
@@ -321,9 +325,10 @@ SonareError sonare_stream_analyzer_reset(SonareStreamAnalyzer* analyzer,
 
 SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareStreamStats* out) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
+  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   AnalyzerStats s = analyzer->analyzer->stats();

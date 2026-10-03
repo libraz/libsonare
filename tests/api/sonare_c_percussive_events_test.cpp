@@ -915,6 +915,33 @@ TEST_CASE("the SonarePercussiveRenderConfig fields take their defaults at 0",
   require_edited(long_fade, samples);
 }
 
+TEST_CASE("sonare_render_percussive_events defines its outputs on every refusal",
+          "[c_api][percussive_events]") {
+  const std::vector<float> samples = three_hits();
+  SonarePercussiveEvent event{};
+  event.onset_sample = 4410;
+  event.offset_sample = 4410;  // An empty span is refused.
+  event.edit.gain_db = -3.0f;
+
+  float poison = 0.0f;
+  float* out = &poison;
+  size_t out_length = 7;
+  REQUIRE(render_at(samples, &event, 1, nullptr, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  // A refusal that precedes the render, on the config rather than the events.
+  SonarePercussiveRenderConfig config{};
+  config.struct_version = 2;
+  out = &poison;
+  out_length = 7;
+  REQUIRE(render_at(samples, nullptr, 0, &config, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+}
+
 TEST_CASE("sonare_render_percussive_events rejects malformed arguments",
           "[c_api][percussive_events]") {
   const std::vector<float> samples = three_hits();

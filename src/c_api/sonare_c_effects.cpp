@@ -98,6 +98,9 @@ SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
                             size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [](const Audio& a) { return harmonic(a); });
 }
@@ -105,6 +108,9 @@ SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [](const Audio& a) { return percussive(a); });
 }
@@ -112,6 +118,9 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   return sonare_time_stretch_ex(samples, length, sample_rate, rate, constants::kDefaultNFft,
                                 constants::kDefaultHopLength, out, out_length);
 }
@@ -135,6 +144,9 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   return sonare_pitch_shift_ex(samples, length, sample_rate, semitones, constants::kDefaultNFft,
                                constants::kDefaultHopLength, out, out_length);
 }
@@ -165,6 +177,9 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [target_db](const Audio& a) { return normalize(a, target_db); });
 }
@@ -172,6 +187,9 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   return sonare_trim_ex(samples, length, sample_rate, threshold_db, constants::kDefaultNFft,
                         constants::kDefaultHopLength, out, out_length);
 }

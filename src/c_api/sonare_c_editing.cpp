@@ -270,9 +270,9 @@ SonareError sonare_metering_vectorscope(const float* left, const float* right, s
                                         int sample_rate, SonareVectorscopeResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
   SonareError err = validate_stereo_pair(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  std::memset(out, 0, sizeof(*out));
   SONARE_C_TRY
   return fill_vectorscope_result(metering::vectorscope(left, right, length), out);
   SONARE_C_CATCH
@@ -283,9 +283,9 @@ SonareError sonare_metering_vectorscope_decimated(const float* left, const float
                                                   SonareVectorscopeResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
   SonareError err = validate_stereo_pair(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  std::memset(out, 0, sizeof(*out));
   SONARE_C_TRY
   return fill_vectorscope_result(metering::vectorscope(left, right, length, max_points), out);
   SONARE_C_CATCH
@@ -325,9 +325,9 @@ SonareError sonare_metering_phase_scope(const float* left, const float* right, s
                                         int sample_rate, SonarePhaseScopeResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
   SonareError err = validate_stereo_pair(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  std::memset(out, 0, sizeof(*out));
   SONARE_C_TRY
   return fill_phase_scope_result(metering::phase_scope(left, right, length), out);
   SONARE_C_CATCH
@@ -338,9 +338,9 @@ SonareError sonare_metering_phase_scope_decimated(const float* left, const float
                                                   SonarePhaseScopeResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
   SonareError err = validate_stereo_pair(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
-  std::memset(out, 0, sizeof(*out));
   SONARE_C_TRY
   return fill_phase_scope_result(metering::phase_scope(left, right, length, max_points), out);
   SONARE_C_CATCH

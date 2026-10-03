@@ -308,6 +308,9 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                               const SonareRoomMorphConfig* config, float** out,
                               size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_warning();
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;

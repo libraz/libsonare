@@ -310,7 +310,7 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
   // rejected input always leaves a NULL owned pointer; otherwise
@@ -318,6 +318,7 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   // pointer.
   out->chords = nullptr;
   out->chord_count = 0;
+  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
       !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
       !std::isfinite(options->threshold) || options->threshold < 0.0f ||
@@ -370,13 +371,14 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
                                              SonarePitchClass key_root, SonareMode key_mode,
                                              SonareStringArray* out) {
   SONARE_C_API_ENTRY;
-  if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the owned out-pointer BEFORE any validating early-return so a
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_string_array(&r) would delete[] an uninitialised pointer.
   out->items = nullptr;
   out->count = 0;
+  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
       !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
       !std::isfinite(options->threshold) || options->threshold < 0.0f ||

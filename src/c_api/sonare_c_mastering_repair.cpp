@@ -383,6 +383,8 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
                                             size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -440,6 +442,8 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -496,6 +500,7 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
   SONARE_C_API_ENTRY;
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
+  if (out_report) *out_report = {};
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -544,6 +549,8 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
                                            size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -600,6 +607,8 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
                                               size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -656,6 +665,8 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
                                           size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -712,6 +723,8 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -772,6 +785,7 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
   SONARE_C_API_ENTRY;
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
+  if (out_report) *out_report = {};
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -802,6 +816,8 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
                                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   clear_float_output(out, out_length);
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {

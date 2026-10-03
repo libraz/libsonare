@@ -1,7 +1,9 @@
 /// @file sonare_c_features_metering_test.cpp
 /// @brief Feature and metering C API tests.
 
+#include <cstring>
 #include <limits>
+#include <vector>
 
 #include "sonare_c_test_helpers.h"
 
@@ -1080,5 +1082,46 @@ TEST_CASE("sonare mel range is applied or refused rather than defaulted", "[c_ap
     REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f,
                            std::numeric_limits<float>::quiet_NaN(), 0, 0.0f,
                            &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("buffer and result entry points define their outputs on a refused input",
+          "[c_api][features][out_params]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const std::vector<float> bad_values = {0.5f, nan};
+  float poison = 0.0f;
+
+  SECTION("a float buffer transform") {
+    float* out = &poison;
+    size_t out_length = 7;
+    REQUIRE(sonare_power_to_db(bad_values.data(), bad_values.size(), 1.0f, 1e-10f, 80.0f, &out,
+                               &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+
+  SECTION("the interval list of split_silence") {
+    int* intervals = reinterpret_cast<int*>(&poison);
+    size_t interval_count = 7;
+    REQUIRE(sonare_split_silence(bad_values.data(), bad_values.size(), 60.0f, 2048, 512, &intervals,
+                                 &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(intervals == nullptr);
+    REQUIRE(interval_count == 0);
+  }
+
+  SECTION("a scope result refused on a null channel") {
+    SonareVectorscopeResult scope;
+    std::memset(&scope, 0x5a, sizeof(scope));
+    REQUIRE(sonare_metering_vectorscope(bad_values.data(), nullptr, bad_values.size(), 22050,
+                                        &scope) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(scope.point_count == 0);
+    REQUIRE(scope.points == nullptr);
+  }
+
+  SECTION("a loudness result refused on an empty buffer") {
+    SonareLufsResult lufs;
+    std::memset(&lufs, 0x5a, sizeof(lufs));
+    REQUIRE(sonare_lufs(nullptr, 0, 22050, &lufs) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(lufs.integrated_lufs == 0.0f);
   }
 }
