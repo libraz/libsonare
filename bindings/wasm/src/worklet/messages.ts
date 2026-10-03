@@ -21,6 +21,7 @@ import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
   SonareWorkletMeterSnapshot,
+  SonareWorkletScopeSnapshot,
   SonareWorkletSpectrumSnapshot,
 } from './protocol';
 
@@ -288,6 +289,7 @@ export interface SonareEngineSyncErrorMessage {
 
 export type SonareWorkletTransportMessage =
   | SonareWorkletMeterSnapshot
+  | SonareWorkletScopeSnapshot
   | SonareWorkletSpectrumSnapshot
   | SonareWorkletExternalMidiMessage
   | SonareEngineClipPageRequestMessage

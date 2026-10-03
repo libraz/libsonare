@@ -9,8 +9,10 @@ import {
   isEngineTransportResponseMessage,
   isExternalMidiBatchMessage,
   isMeterSnapshot,
+  isScopeSnapshot,
   requireChannelCount,
   requireIntegerOption,
+  resolveScopeBandCount,
 } from './guards';
 import type {
   SonareEngineCaptureRequestMessage,
@@ -207,6 +209,8 @@ export class SonareRealtimeEngineNode {
         this.emitTelemetry(event.data);
       } else if (isMeterSnapshot(event.data)) {
         this.emitMeter(event.data);
+      } else if (isScopeSnapshot(event.data)) {
+        this.emitScope(event.data);
       } else if (isExternalMidiBatchMessage(event.data)) {
         this.emitMidiOut(event.data.events);
       } else if (isClipPageRequestMessage(event.data)) {
@@ -310,7 +314,7 @@ export class SonareRealtimeEngineNode {
       'scopeRingCapacity',
       1,
     );
-    const scopeBands = requireIntegerOption(options.scopeBands, 48, 'scopeBands', 1);
+    const scopeBands = resolveScopeBandCount(options.scopeBands);
     const clipPageRequestRingCapacity = requireIntegerOption(
       options.clipPageRequestRingCapacity,
       128,
@@ -370,8 +374,8 @@ export class SonareRealtimeEngineNode {
       meterRingCapacity: meterRing?.capacity,
       scopeSharedBuffer: scopeRing?.sharedBuffer,
       scopeRingCapacity: scopeRing?.capacity,
-      scopeBands: scopeRing?.bands,
-      scopeIntervalFrames: scopeRing ? scopeIntervalFrames : undefined,
+      scopeBands: scopeIntervalFrames > 0 ? (scopeRing?.bands ?? scopeBands) : undefined,
+      scopeIntervalFrames: scopeIntervalFrames > 0 ? scopeIntervalFrames : undefined,
       clipPageRequestSharedBuffer: clipPageRequestRing?.sharedBuffer,
       clipPageRequestRingCapacity: clipPageRequestRing?.capacity,
       externalMidiSharedBuffer: externalMidiRing?.sharedBuffer,

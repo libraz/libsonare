@@ -16,6 +16,7 @@ import {
   type SonareEngineCommandRecord,
   type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
+  type SonareWorkletScopeSnapshot,
 } from './protocol';
 
 export function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
@@ -337,6 +338,49 @@ export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnap
   );
 }
 
+export const SONARE_SCOPE_MAX_BANDS = 64;
+export const SONARE_SCOPE_MAX_POINTS = 32;
+
+function isPlainFloat32Array(
+  value: unknown,
+  maxLength: number,
+  evenLength = false,
+): value is Float32Array {
+  if (
+    !(value instanceof Float32Array) ||
+    typeof ArrayBuffer === 'undefined' ||
+    !(value.buffer instanceof ArrayBuffer) ||
+    value.length > maxLength ||
+    (evenLength && value.length % 2 !== 0)
+  ) {
+    return false;
+  }
+  for (const sample of value) {
+    if (!Number.isFinite(sample)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Validates the bounded postMessage representation of a scope snapshot. */
+export function isScopeSnapshot(value: unknown): value is SonareWorkletScopeSnapshot {
+  return (
+    isRecord(value) &&
+    value.type === 'scope' &&
+    typeof value.targetId === 'number' &&
+    Number.isSafeInteger(value.targetId) &&
+    value.targetId >= 0 &&
+    value.targetId <= 0xffff_ffff &&
+    typeof value.frame === 'number' &&
+    Number.isSafeInteger(value.frame) &&
+    value.frame >= 0 &&
+    isPlainFloat32Array(value.bands, SONARE_SCOPE_MAX_BANDS) &&
+    value.bands.length > 0 &&
+    isPlainFloat32Array(value.points, SONARE_SCOPE_MAX_POINTS * 2, true)
+  );
+}
+
 /**
  * Resolves an integer option, refusing anything the field's own domain cannot
  * hold instead of rounding it into range.
@@ -356,6 +400,11 @@ export function requireIntegerOption(
     throw new RangeError(`${name} must be an integer of at least ${minimum}`);
   }
   return resolved;
+}
+
+/** Resolves scope bands and applies the native tap's fixed 64-band ceiling. */
+export function resolveScopeBandCount(value: number | undefined, fallback = 48): number {
+  return Math.min(requireIntegerOption(value, fallback, 'scopeBands', 1), SONARE_SCOPE_MAX_BANDS);
 }
 
 /** As {@link requireIntegerOption}, for a field whose domain admits either sign. */

@@ -1,7 +1,13 @@
 import type { EngineClip } from '../index';
 import { RealtimeEngine } from '../index';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
-import { requireChannelCount, requireIntegerOption } from './guards';
+import {
+  requireChannelCount,
+  requireIntegerOption,
+  resolveScopeBandCount,
+  SONARE_SCOPE_MAX_BANDS,
+  SONARE_SCOPE_MAX_POINTS,
+} from './guards';
 import {
   DEFAULT_METRONOME_CONFIG,
   type ResolvedMetronomeConfig,
@@ -40,6 +46,7 @@ import {
   type SonareEngineTelemetryRecord,
   type SonareEngineTelemetryRingBuffer,
   SonareEngineTelemetryType,
+  type SonareWorkletScopeSnapshot,
   scopeRingFromSharedBuffer,
   telemetryFromEngine,
   writeInt64Words,
@@ -83,6 +90,9 @@ export class SonareRealtimeEngineWorkletProcessor {
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
   private lastMeterFrame = Number.NEGATIVE_INFINITY;
+  private scopeIntervalFrames: number;
+  private scopeEnabled: boolean;
+  private scopeBands: number;
   // Latest metronome gains/click length pushed via 'syncMetronome'. The
   // SetMetronome command only toggles enabled state; the config arrives here.
   private metronomeConfig: ResolvedMetronomeConfig = { ...DEFAULT_METRONOME_CONFIG };
@@ -145,6 +155,16 @@ export class SonareRealtimeEngineWorkletProcessor {
           options.scopeBands,
         )
       : undefined;
+    this.scopeIntervalFrames = requireIntegerOption(
+      options.scopeIntervalFrames,
+      this.scopeRing ? this.blockSize : 0,
+      'scopeIntervalFrames',
+      0,
+    );
+    this.scopeBands = resolveScopeBandCount(options.scopeBands);
+    this.scopeEnabled =
+      this.scopeIntervalFrames > 0 &&
+      (this.scopeRing !== undefined || typeof this.transport?.postMessage === 'function');
     this.clipPageRequestRing = options.clipPageRequestSharedBuffer
       ? clipPageRequestRingFromSharedBuffer(
           options.clipPageRequestSharedBuffer,
@@ -182,18 +202,12 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.monitorBuffers[ch] = this.engine.getMonitorChannelBuffer(ch, this.blockSize);
       }
     }
-    // Arm the engine's scope producer only when a scope ring was provided. The
-    // band count follows the ring's record layout so writeScopeRing never
-    // overruns its slot.
-    if (this.scopeRing) {
-      // Zero is the engine's own off switch for the scope tap, so the floor is 0.
-      const interval = requireIntegerOption(
-        options.scopeIntervalFrames,
-        this.blockSize,
-        'scopeIntervalFrames',
-        0,
+    // Arm the native scope producer only when a SAB ring or postMessage sink exists.
+    if (this.scopeEnabled) {
+      this.engine.configureScopeTelemetry(
+        this.scopeIntervalFrames,
+        Math.min(this.scopeRing?.bands ?? this.scopeBands, SONARE_SCOPE_MAX_BANDS),
       );
-      this.engine.configureScopeTelemetry(interval, this.scopeRing.bands);
     }
   }
 
@@ -1191,16 +1205,53 @@ export class SonareRealtimeEngineWorkletProcessor {
   // so header slot 3 is left at its initial 0.
 
   // Drains the engine's scope producer (FFT spectrum + goniometer points) into
-  // the lock-free SAB scope ring. No allocation on the render path: records are
-  // written field-by-field into the ring.
+  // the lock-free SAB scope ring or the bounded postMessage fallback. The SAB
+  // path remains allocation-free; postMessage materialises only records that
+  // are ready to publish.
   private publishScope(): void {
-    const ring = this.scopeRing;
-    if (!ring) {
+    if (!this.scopeEnabled) {
       return;
     }
+    const ring = this.scopeRing;
+    const transport = this.transport;
     for (let count = 0; count < 64 && this.engine.popScopeTelemetryToScratch(); count++) {
-      this.writeScopeScratch(ring);
+      if (ring) {
+        this.writeScopeScratch(ring);
+      } else {
+        this.postScopeScratch(transport?.postMessage);
+      }
     }
+  }
+
+  private postScopeScratch(postMessage: WorkletTransport['postMessage'] | undefined): void {
+    if (!postMessage) {
+      return;
+    }
+    const bandCount = Math.min(
+      SONARE_SCOPE_MAX_BANDS,
+      Math.max(0, Math.trunc(Number(this.engine.scopeScratchBandCount()))),
+    );
+    const pointCount = Math.min(
+      SONARE_SCOPE_MAX_POINTS,
+      Math.max(0, Math.trunc(Number(this.engine.scopeScratchPointCount()))),
+    );
+    const bands = new Float32Array(bandCount);
+    for (let i = 0; i < bandCount; i++) {
+      bands[i] = this.engine.scopeScratchBand(i);
+    }
+    const points = new Float32Array(pointCount * 2);
+    for (let i = 0; i < pointCount; i++) {
+      points[2 * i] = this.engine.scopeScratchPointLeft(i);
+      points[2 * i + 1] = this.engine.scopeScratchPointRight(i);
+    }
+    const scope: SonareWorkletScopeSnapshot = {
+      type: 'scope',
+      targetId: this.engine.scopeScratchTargetId(),
+      frame: Number(this.engine.scopeScratchRenderFrame()),
+      bands,
+      points,
+    };
+    postMessage(scope, [bands.buffer, points.buffer]);
   }
 
   private writeScopeScratch(ring: SharedScopeRingWriter): void {
