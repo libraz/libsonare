@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 #include "transport/musical_time.h"
 #include "transport/tempo_map.h"
@@ -511,4 +512,32 @@ TEST_CASE("Transport surfaces a loop-boundary overflow counter", "[transport]") 
   // prepare() resets the diagnostic stamp.
   transport.prepare(48000.0, &map);
   REQUIRE(transport.loop_overflow_count() == 0u);
+}
+
+TEST_CASE("TempoMap keeps the last tempo segment supplied at a duplicate start",
+          "[transport][tempo]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  // Enough duplicates that an unstable sort would reorder them.
+  std::vector<sonare::transport::TempoSegment> segments = {{0.0, 120.0, 0.0}};
+  for (int i = 0; i < 63; ++i) segments.push_back({4.0, 200.0 + i, 0.0});
+  segments.push_back({4.0, 60.0, 0.0});
+  map.set_segments(std::move(segments));
+
+  // 4 quarters at 120 bpm (2 s) then 4 quarters at the last-supplied 60 bpm (4 s).
+  REQUIRE(map.ppq_to_sample(8.0) == 6 * 48000);
+}
+
+TEST_CASE("TempoMap keeps the last time signature supplied at a duplicate start",
+          "[transport][tempo]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  std::vector<sonare::transport::TimeSignatureSegment> signatures = {{0.0, {4, 4}}};
+  for (int i = 0; i < 63; ++i) signatures.push_back({4.0, {3 + i % 3, 4}});
+  signatures.push_back({4.0, {7, 8}});
+  map.set_time_signatures(std::move(signatures));
+
+  const sonare::transport::TimeSignature at = map.time_signature_at_ppq(5.0);
+  REQUIRE(at.numerator == 7);
+  REQUIRE(at.denominator == 8);
 }

@@ -104,6 +104,17 @@ int64_t saturating_to_int64(double value) noexcept {
   return static_cast<int64_t>(value);
 }
 
+// Orders by start and keeps the last-supplied entry at each start position.
+template <typename Segment>
+void keep_last_per_start(std::vector<Segment>* segments) {
+  std::stable_sort(segments->begin(), segments->end(),
+                   [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
+  auto last =
+      std::unique(segments->rbegin(), segments->rend(),
+                  [](const Segment& a, const Segment& b) { return a.start_ppq == b.start_ppq; });
+  segments->erase(segments->begin(), last.base());
+}
+
 std::vector<TempoSegment> normalize_segments(std::vector<TempoSegment> segments,
                                              double sample_rate) {
   segments.erase(std::remove_if(segments.begin(), segments.end(),
@@ -115,8 +126,7 @@ std::vector<TempoSegment> normalize_segments(std::vector<TempoSegment> segments,
   if (segments.empty()) {
     segments.push_back({0.0, constants::kDefaultBpm, 0.0});
   }
-  std::sort(segments.begin(), segments.end(),
-            [](const auto& a, const auto& b) { return a.start_ppq < b.start_ppq; });
+  keep_last_per_start(&segments);
   if (segments.front().start_ppq > 0.0) {
     segments.insert(segments.begin(), {0.0, segments.front().bpm, 0.0});
   }
@@ -148,8 +158,7 @@ std::vector<TimeSignatureSegment> normalize_time_signatures(
   if (time_signatures.empty()) {
     time_signatures.push_back({0.0, {4, 4}});
   }
-  std::sort(time_signatures.begin(), time_signatures.end(),
-            [](const auto& a, const auto& b) { return a.start_ppq < b.start_ppq; });
+  keep_last_per_start(&time_signatures);
   if (time_signatures.front().start_ppq > 0.0) {
     TimeSignatureSegment first = time_signatures.front();
     first.start_ppq = 0.0;
