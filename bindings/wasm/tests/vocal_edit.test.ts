@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init } from '../src/index';
+import type { VocalEditOperation } from '../src/public_types_vocal_edit';
 import { createVocalEditSession, restoreVocalEditSession } from '../src/vocal_edit';
 
 const SAMPLE_RATE = 16000;
@@ -186,6 +187,99 @@ describe('WASM vocal edit facade', () => {
       } finally {
         snapshot.dispose();
       }
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('honours restore limits and refuses a zero render-job limit', () => {
+    const source = tone(SAMPLE_RATE);
+    const session = createVocalEditSession({ samples: source, sampleRate: SAMPLE_RATE });
+    const state = session.exportState();
+    session.dispose();
+    expect(() =>
+      restoreVocalEditSession({
+        samples: source,
+        sampleRate: SAMPLE_RATE,
+        state,
+        limits: { maxRenderJobs: 0 },
+      }),
+    ).toThrow();
+    const restored = restoreVocalEditSession({
+      samples: source,
+      sampleRate: SAMPLE_RATE,
+      state,
+      limits: { maxRenderJobs: 1 },
+    });
+    const snapshot = restored.captureRenderSnapshot();
+    try {
+      const range = { startSample: 0, endSample: 256 };
+      const first = snapshot.beginRenderJob({ range });
+      expect(() => snapshot.beginRenderJob({ range })).toThrow();
+      first.dispose();
+    } finally {
+      snapshot.dispose();
+      restored.dispose();
+    }
+  });
+
+  it('refuses a sample rate outside the supported range on create and restore', () => {
+    for (const sampleRate of [7999, 384001]) {
+      expect(() => createVocalEditSession({ samples: tone(512), sampleRate })).toThrow(RangeError);
+      expect(() =>
+        restoreVocalEditSession({ samples: tone(512), sampleRate, state: new Uint8Array(8) }),
+      ).toThrow(RangeError);
+    }
+  });
+
+  it('disposes live drafts when their session is disposed', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    const draft = session.beginEdit();
+    session.dispose();
+    expect(() => draft.token()).toThrow(/disposed/);
+    expect(() => draft.apply({ expectedGeneration: '0', operations: [] })).toThrow(/disposed/);
+    expect(() => draft.cancel()).not.toThrow();
+  });
+
+  it('requires expectedGeneration on draft apply', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    try {
+      const draft = session.beginEdit();
+      expect(() =>
+        draft.apply({ operations: [] } as unknown as Parameters<typeof draft.apply>[0]),
+      ).toThrow(TypeError);
+      draft.cancel();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('requires every transition field and a smoothstep curve', () => {
+    const session = createVocalEditSession({ samples: tone(SAMPLE_RATE), sampleRate: SAMPLE_RATE });
+    try {
+      const draft = session.beginEdit();
+      const base = {
+        leftNoteId: 1,
+        rightNoteId: 2,
+        leftWindowSamples: 0,
+        rightWindowSamples: 0,
+        strength: 1,
+        curve: 'smoothstep',
+      };
+      const apply = (transition: Record<string, unknown>) =>
+        draft.apply({
+          expectedGeneration: draft.token().generation,
+          operations: [{ kind: 'setTransition', transition } as unknown as VocalEditOperation],
+        });
+      expect(() => apply({ ...base, curve: 'linear' })).toThrow(/curve must be smoothstep/);
+      const { curve: _curve, ...withoutCurve } = base;
+      expect(() => apply(withoutCurve)).toThrow(/curve must be smoothstep/);
+      const { strength: _strength, ...withoutStrength } = base;
+      expect(() => apply(withoutStrength)).toThrow(/strength/);
+      const { leftWindowSamples: _left, ...withoutWindow } = base;
+      expect(() => apply(withoutWindow)).toThrow(/leftWindowSamples/);
+      expect(() => apply({ ...base, strength: 2 })).toThrow(/strength/);
+      draft.cancel();
     } finally {
       session.dispose();
     }

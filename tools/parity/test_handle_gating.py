@@ -274,19 +274,13 @@ def test_vocal_availability_and_project_helpers_use_explicit_aliases() -> None:
     assert ("vocal_available", "python") in _active(factory_only), _active(factory_only)
 
 
-def test_vocal_api_version_alias_is_session_scoped_or_direct() -> None:
-    """API version comes from VocalEditSession capabilities or the direct WASM export."""
+def test_vocal_api_version_needs_the_direct_export() -> None:
+    """A session's capabilities no longer stand in for the module-level API version."""
     session = _report(
         _c("vocal_edit_api_version"),
         _py(methods={"capabilities": "VocalEditSession"}),
     )
-    assert ("vocal_edit_api_version", "python") not in _active(session), _active(session)
-
-    unrelated = _report(
-        _c("vocal_edit_api_version"),
-        _py(methods={"capabilities": "RealtimeEngine"}),
-    )
-    assert ("vocal_edit_api_version", "python") in _active(unrelated), _active(unrelated)
+    assert ("vocal_edit_api_version", "python") in _active(session), _active(session)
 
     direct = _report(_c("vocal_edit_api_version"), _py(frees=["vocal_edit_api_version"]))
     assert ("vocal_edit_api_version", "python") not in _active(direct), _active(direct)

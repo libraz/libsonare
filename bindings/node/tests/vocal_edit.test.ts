@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createVocalEditSession,
+  restoreVocalEditSession,
   type VocalCreateRequest,
   type VocalEditSession,
   type VocalNoteEdit,
@@ -350,5 +351,81 @@ describe('Node vocal edit facade', () => {
       voiced: new Uint8Array(1),
     };
     expect(() => createVocalEditSession(invalid)).toThrow();
+  });
+
+  it('honours restore limits and refuses a zero render-job limit', () => {
+    const source = sine();
+    const original = create();
+    const state = original.exportState();
+    original.dispose();
+    expect(() =>
+      restoreVocalEditSession({
+        samples: source,
+        sampleRate: SAMPLE_RATE,
+        state,
+        limits: { maxRenderJobs: 0 },
+      }),
+    ).toThrow();
+    const restored = restoreVocalEditSession({
+      samples: source,
+      sampleRate: SAMPLE_RATE,
+      state,
+      limits: { maxRenderJobs: 1 },
+    });
+    const snapshot = restored.captureRenderSnapshot();
+    try {
+      const range = { startSample: 0, endSample: 256 };
+      const first = snapshot.beginRenderJob({ range });
+      expect(() => snapshot.beginRenderJob({ range })).toThrow();
+      first.dispose();
+    } finally {
+      snapshot.dispose();
+      restored.dispose();
+    }
+  });
+
+  it('refuses a sample rate outside the supported range on create and restore', () => {
+    for (const sampleRate of [7999, 384001]) {
+      expect(() => createVocalEditSession({ ...request(), sampleRate })).toThrow(RangeError);
+      expect(() =>
+        restoreVocalEditSession({
+          samples: sine(),
+          sampleRate,
+          state: new Uint8Array(8),
+        }),
+      ).toThrow(RangeError);
+    }
+  });
+
+  it('disposes live drafts when their session is disposed', () => {
+    const session = create();
+    const note = session.notes().notes[0];
+    const draft = session.beginEdit();
+    session.dispose();
+    expect(() => draft.notes()).toThrow(/disposed/);
+    expect(() =>
+      draft.apply({
+        expectedGeneration: '1',
+        operations: [{ kind: 'reset', noteIds: [note.id] }],
+      }),
+    ).toThrow(/disposed/);
+    draft.cancel();
+    draft.dispose();
+  });
+
+  it('requires expectedGeneration on draft apply', () => {
+    const session = create();
+    try {
+      const note = session.notes().notes[0];
+      const draft = session.beginEdit();
+      expect(() =>
+        draft.apply({
+          operations: [{ kind: 'reset', noteIds: [note.id] }],
+        } as unknown as Parameters<typeof draft.apply>[0]),
+      ).toThrow(TypeError);
+      draft.cancel();
+    } finally {
+      session.dispose();
+    }
   });
 });

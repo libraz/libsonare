@@ -72,7 +72,8 @@ def _source_and_render() -> tuple[np.ndarray, int, bytes, np.ndarray, object]:
                             ),
                         ),
                     )
-                ]
+                ],
+                expected_generation=draft.token().generation,
             )
             draft.commit()
         rendered = session.render()
@@ -174,6 +175,13 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
                 cancel=lambda: True,
             )
         assert cancelled.value.code == 8
+        with pytest.raises(SonareError) as truthy_cancel:
+            rehydrate_project_vocal_edits(
+                restored,
+                original_sources,
+                cancel=lambda: 1,  # type: ignore[arg-type, return-value]
+            )
+        assert truthy_cancel.value.code == 8
         assert restored.get_vocal_edit_dependencies()[0].derived_pcm_available is False
 
         def fail_from_probe() -> bool:
@@ -406,3 +414,26 @@ def test_apply_digest_is_case_insensitive() -> None:
     from libsonare.vocal_project import _digest
 
     assert _digest("AB" * 32, "d") == bytes.fromhex("ab" * 32)
+
+
+@pytest.mark.parametrize("rate", [7999, 384001])
+def test_project_sample_rates_outside_supported_range_are_refused(rate: int) -> None:
+    with Project.create() as project:
+        with pytest.raises(SonareValueError):
+            project.apply_vocal_edit(
+                clip_id=1,
+                expected_source_id=1,
+                expected_source_sample_rate=rate,
+                expected_source_sample_count=1,
+                expected_source_sha256="00" * 32,
+                expected_clip_length_ppq=1.0,
+                expected_source_offset_ppq=0.0,
+                rendered_mono=[0.0],
+                rendered_sample_rate=rate,
+                render_token=VocalStateToken(0, 0, 0, 0),
+                sve1=b"x",
+            )
+        with pytest.raises(SonareValueError):
+            project.rehydrate_vocal_edits(
+                (ProjectVocalOriginalSource(source_id=1, mono=[0.0], sample_rate=rate),)
+            )

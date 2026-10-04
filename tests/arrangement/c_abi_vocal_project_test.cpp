@@ -653,6 +653,306 @@ TEST_CASE("vocal project validates SVE1 before reporting an already-ready entry"
   sonare_project_free_vocal_rehydrate_result(&result);
 }
 
+namespace {
+
+struct EditedState {
+  std::vector<float> rendered;
+  std::vector<uint8_t> state;
+  SonareVocalStateToken token{};
+};
+
+// Restores `prior` over `source` (or creates a fresh session) and commits one gain edit.
+EditedState edit_state(const std::vector<float>& source, const std::vector<uint8_t>* prior,
+                       double gain_db) {
+  std::array<float, 20> f0{};
+  std::array<uint8_t, 20> voiced{};
+  f0.fill(static_cast<float>(sonare::constants::kA4Hz));
+  voiced.fill(1);
+  SonareVocalAnalysis analysis;
+  sonare_vocal_analysis_init(&analysis);
+  analysis.samples_per_frame = 160.0;
+  analysis.frame_length_samples = 320;
+  analysis.f0_hz = f0.data();
+  analysis.voiced = voiced.data();
+  analysis.frame_count = f0.size();
+  SonareVocalCreateOptions options;
+  sonare_vocal_create_options_init(&options);
+  options.analysis = &analysis;
+  options.edge_fade_ms = 0.0;
+  SonareVocalEditSession* raw = nullptr;
+  if (prior != nullptr) {
+    REQUIRE(sonare_vocal_session_restore(source.data(), kSampleCount, 1, kSampleRate, prior->data(),
+                                         prior->size(), nullptr, &raw) == SONARE_OK);
+  } else {
+    REQUIRE(sonare_vocal_session_create(source.data(), kSampleCount, 1, kSampleRate, &options,
+                                        &raw) == SONARE_OK);
+  }
+  std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> session(
+      raw, sonare_vocal_session_destroy);
+  SonareVocalNotesResult notes;
+  sonare_vocal_notes_result_init(&notes);
+  REQUIRE(sonare_vocal_session_notes(session.get(), &notes) == SONARE_OK);
+  REQUIRE(notes.note_count > 0);
+  SonareVocalOperation operation;
+  sonare_vocal_operation_init(&operation);
+  operation.kind = SONARE_VOCAL_SET_EDIT;
+  operation.note_id = notes.notes[0].id;
+  operation.edit = notes.notes[0].edit;
+  operation.edit.gain_db = gain_db;
+  uint64_t revision = 0;
+  REQUIRE(sonare_vocal_session_revision(session.get(), &revision) == SONARE_OK);
+  SonareVocalEditDraft* draft = nullptr;
+  REQUIRE(sonare_vocal_session_begin_edit(session.get(), revision, &draft) == SONARE_OK);
+  SonareVocalStateToken draft_token{};
+  REQUIRE(sonare_vocal_draft_token(draft, &draft_token) == SONARE_OK);
+  SonareVocalEditResult result;
+  sonare_vocal_edit_result_init(&result);
+  REQUIRE(sonare_vocal_draft_apply(draft, draft_token.generation, &operation, 1, &result) ==
+          SONARE_OK);
+  sonare_vocal_free_edit_result(&result);
+  REQUIRE(sonare_vocal_draft_commit(draft, revision, &result) == SONARE_OK);
+  sonare_vocal_free_edit_result(&result);
+  sonare_vocal_draft_destroy(draft);
+  sonare_vocal_free_notes(&notes);
+
+  EditedState edited;
+  REQUIRE(sonare_vocal_session_token(session.get(), &edited.token) == SONARE_OK);
+  SonareVocalStateBytes bytes;
+  sonare_vocal_state_bytes_init(&bytes);
+  REQUIRE(sonare_vocal_session_export_state(session.get(), &bytes) == SONARE_OK);
+  edited.state.assign(bytes.data, bytes.data + bytes.size);
+  sonare_vocal_free_state_bytes(&bytes);
+  SonareVocalRenderSnapshot* snapshot = nullptr;
+  REQUIRE(sonare_vocal_session_capture_snapshot(session.get(), &snapshot) == SONARE_OK);
+  SonareVocalRenderResult render;
+  sonare_vocal_render_result_init(&render);
+  REQUIRE(sonare_vocal_snapshot_render(snapshot, {0, kSampleCount}, 1, nullptr, nullptr, &render) ==
+          SONARE_OK);
+  edited.rendered.assign(render.samples, render.samples + render.sample_count);
+  sonare_vocal_free_render_result(&render);
+  sonare_vocal_snapshot_destroy(snapshot);
+  return edited;
+}
+
+SonareProjectVocalEditApplyDesc apply_desc_for(const ProjectFixture& fixture,
+                                               const std::vector<float>& source, uint32_t source_id,
+                                               const EditedState& edited) {
+  SonareProjectVocalEditApplyDesc desc = fixture.apply_desc();
+  desc.expected_source_id = source_id;
+  const auto digest = float_digest(source);
+  std::memcpy(desc.expected_source_sha256, digest.data(), digest.size());
+  desc.rendered_mono = edited.rendered.data();
+  desc.render_token = edited.token;
+  desc.sve1 = edited.state.data();
+  desc.sve1_size = edited.state.size();
+  return desc;
+}
+
+SonareProjectVocalOriginalSource original_source(const ProjectFixture& fixture) {
+  SonareProjectVocalOriginalSource original;
+  sonare_project_vocal_original_source_init(&original);
+  original.source_id = fixture.source_id;
+  original.mono = fixture.vocal.source.data();
+  original.sample_count = kSampleCount;
+  original.sample_rate = kSampleRate;
+  return original;
+}
+
+}  // namespace
+
+TEST_CASE("vocal project re-edits a derived binding from its root original",
+          "[project][vocal][apply][vocal_reedit]") {
+  ProjectFixture fixture(true);
+  SonareProjectVocalEditApplyResult first;
+  sonare_project_vocal_edit_apply_result_init(&first);
+  const SonareProjectVocalEditApplyDesc first_desc = fixture.apply_desc();
+  REQUIRE(sonare_project_apply_vocal_edit(fixture.project, &first_desc, &first) == SONARE_OK);
+
+  SECTION("a state restored against the original replaces the envelope") {
+    const EditedState second = edit_state(fixture.vocal.source, &fixture.vocal.state, -12.0);
+    REQUIRE(second.rendered != fixture.vocal.rendered);
+    const auto desc = apply_desc_for(fixture, fixture.vocal.source, fixture.source_id, second);
+    SonareProjectVocalEditApplyResult applied;
+    sonare_project_vocal_edit_apply_result_init(&applied);
+    REQUIRE(sonare_project_apply_vocal_edit(fixture.project, &desc, &applied) == SONARE_OK);
+    CHECK(applied.original_source_id == fixture.source_id);
+    CHECK(applied.derived_source_id != first.derived_source_id);
+    const auto& sidecars = fixture.project->history.project().assist_sidecars();
+    REQUIRE(sidecars.size() == 1);
+    sonare::arrangement::vocal_sidecar::Envelope envelope;
+    REQUIRE(sonare::arrangement::vocal_sidecar::decode_envelope(sidecars[0], &envelope));
+    CHECK(envelope.original_source_id == fixture.source_id);
+    CHECK(envelope.derived_source_id == applied.derived_source_id);
+
+    char* json = nullptr;
+    size_t json_size = 0;
+    REQUIRE(sonare_project_serialize(fixture.project, &json, &json_size) == SONARE_OK);
+    SonareProject* loaded = nullptr;
+    char* diagnostics = nullptr;
+    REQUIRE(sonare_project_deserialize(json, json_size, &loaded, &diagnostics) == SONARE_OK);
+    sonare_free_string(json);
+    sonare_free_string(diagnostics);
+    REQUIRE(loaded != nullptr);
+    const auto original = original_source(fixture);
+    SonareProjectVocalRehydrateResult rehydrated;
+    sonare_project_vocal_rehydrate_result_init(&rehydrated);
+    REQUIRE(sonare_project_rehydrate_vocal_edits(loaded, &original, 1, nullptr, nullptr,
+                                                 &rehydrated) == SONARE_OK);
+    REQUIRE(rehydrated.item_count == 1);
+    CHECK(rehydrated.items[0].status == SONARE_VOCAL_REHYDRATE_REHYDRATED);
+    REQUIRE(loaded->audio.sources.find(applied.derived_source_id) != loaded->audio.sources.end());
+    CHECK(loaded->audio.sources.at(applied.derived_source_id).channels[0] == second.rendered);
+    sonare_project_free_vocal_rehydrate_result(&rehydrated);
+    sonare_project_destroy(loaded);
+  }
+
+  SECTION("a state authored against the derived source is refused") {
+    const EditedState derived_state = edit_state(fixture.vocal.rendered, nullptr, -3.0);
+    const size_t depth = fixture.project->history.undo_depth();
+    for (const uint32_t expected_id : {first.derived_source_id, fixture.source_id}) {
+      CAPTURE(expected_id);
+      const auto desc = apply_desc_for(
+          fixture, expected_id == fixture.source_id ? fixture.vocal.source : fixture.vocal.rendered,
+          expected_id, derived_state);
+      SonareProjectVocalEditApplyResult refused;
+      sonare_project_vocal_edit_apply_result_init(&refused);
+      CHECK(sonare_project_apply_vocal_edit(fixture.project, &desc, &refused) ==
+            SONARE_ERROR_INVALID_STATE);
+      CHECK(std::string(sonare_last_error_message()).find("original") != std::string::npos);
+      CHECK(fixture.project->history.undo_depth() == depth);
+    }
+  }
+}
+
+namespace {
+
+struct ReentryProbe {
+  SonareProject* project = nullptr;
+  int mode = 0;
+  int calls = 0;
+  uint32_t clip_id = 0;
+  SonareError nested = SONARE_OK;
+  const SonareProjectVocalEditApplyDesc* desc = nullptr;
+  const SonareProjectVocalOriginalSource* original = nullptr;
+};
+
+int reenter_project(void* user_data) {
+  auto* probe = static_cast<ReentryProbe*>(user_data);
+  if (++probe->calls != 1) return 0;
+  if (probe->mode == 0) {
+    // Removing the edited clip replaces the sidecar list the loop walks.
+    probe->nested = sonare_project_remove_clip(probe->project, probe->clip_id);
+  } else if (probe->mode == 1) {
+    SonareProjectVocalEditApplyResult result;
+    sonare_project_vocal_edit_apply_result_init(&result);
+    probe->nested = sonare_project_apply_vocal_edit(probe->project, probe->desc, &result);
+  } else {
+    SonareProjectVocalRehydrateResult result;
+    sonare_project_vocal_rehydrate_result_init(&result);
+    probe->nested = sonare_project_rehydrate_vocal_edits(probe->project, probe->original, 1,
+                                                         nullptr, nullptr, &result);
+    sonare_project_free_vocal_rehydrate_result(&result);
+  }
+  return 0;
+}
+
+}  // namespace
+
+TEST_CASE("vocal project rehydrate survives a cancel callback that mutates the project",
+          "[project][vocal][rehydrate][vocal_reentry]") {
+  ProjectFixture fixture(true);
+  SonareProjectVocalEditApplyResult applied;
+  sonare_project_vocal_edit_apply_result_init(&applied);
+  const SonareProjectVocalEditApplyDesc desc = fixture.apply_desc();
+  REQUIRE(sonare_project_apply_vocal_edit(fixture.project, &desc, &applied) == SONARE_OK);
+  REQUIRE(fixture.project->audio.sources.erase(applied.derived_source_id) == 1);
+
+  // A second clip gives the nested apply a target that would otherwise succeed.
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = fixture.track_id;
+  clip_desc.start_ppq = 4.0;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = fixture.vocal.source.data();
+  clip_desc.audio_frames = kSampleCount;
+  clip_desc.audio_channels = 1;
+  clip_desc.audio_sample_rate = kSampleRate;
+  uint32_t second_clip = 0;
+  REQUIRE(sonare_project_add_clip(fixture.project, &clip_desc, &second_clip) == SONARE_OK);
+  const uint32_t second_source =
+      fixture.project->history.project().find_clip(second_clip)->source_id;
+  const std::string hash = canonical_hash(fixture.vocal.source);
+  REQUIRE(sonare_project_set_audio_source_metadata(fixture.project, second_source, hash.c_str(),
+                                                   "") == SONARE_OK);
+  SonareProjectVocalEditApplyDesc nested_desc = fixture.apply_desc();
+  nested_desc.clip_id = second_clip;
+  nested_desc.expected_source_id = second_source;
+  const auto original = original_source(fixture);
+
+  ReentryProbe probe;
+  probe.project = fixture.project;
+  probe.desc = &nested_desc;
+  probe.original = &original;
+  SonareProjectVocalRehydrateResult result;
+  sonare_project_vocal_rehydrate_result_init(&result);
+
+  SECTION("a clip removal inside the callback discards the staged PCM") {
+    probe.mode = 0;
+    probe.clip_id = fixture.clip_id;
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                               &probe, &result) == SONARE_ERROR_INVALID_STATE);
+    CHECK(probe.nested == SONARE_OK);
+    CHECK(std::string(sonare_last_error_message()).find("rehydrate") != std::string::npos);
+    CHECK(result.items == nullptr);
+    CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
+          fixture.project->audio.sources.end());
+  }
+  SECTION("a vocal apply inside the callback is refused") {
+    probe.mode = 1;
+    const size_t sidecars = fixture.project->history.project().assist_sidecars().size();
+    REQUIRE(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                                 &probe, &result) == SONARE_OK);
+    CHECK(probe.nested == SONARE_ERROR_INVALID_STATE);
+    CHECK(fixture.project->history.project().assist_sidecars().size() == sidecars);
+    REQUIRE(result.item_count == 1);
+    CHECK(result.items[0].status == SONARE_VOCAL_REHYDRATE_REHYDRATED);
+    // The guard is scoped to the call: the same apply succeeds afterwards.
+    SonareProjectVocalEditApplyResult later;
+    sonare_project_vocal_edit_apply_result_init(&later);
+    CHECK(sonare_project_apply_vocal_edit(fixture.project, &nested_desc, &later) == SONARE_OK);
+  }
+  SECTION("a nested rehydrate inside the callback is refused") {
+    probe.mode = 2;
+    REQUIRE(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                                 &probe, &result) == SONARE_OK);
+    CHECK(probe.nested == SONARE_ERROR_INVALID_STATE);
+    REQUIRE(result.item_count == 1);
+    CHECK(result.items[0].status == SONARE_VOCAL_REHYDRATE_REHYDRATED);
+  }
+  sonare_project_free_vocal_rehydrate_result(&result);
+}
+
+TEST_CASE("vocal project apply and rehydrate enforce the supported sample-rate range",
+          "[project][vocal][vocal_sample_rate]") {
+  ProjectFixture fixture;
+  for (const uint32_t rate : {7999u, 384001u}) {
+    CAPTURE(rate);
+    SonareProjectVocalEditApplyDesc desc = fixture.apply_desc();
+    desc.expected_source_sample_rate = rate;
+    desc.rendered_sample_rate = rate;
+    SonareProjectVocalEditApplyResult applied;
+    sonare_project_vocal_edit_apply_result_init(&applied);
+    CHECK(sonare_project_apply_vocal_edit(fixture.project, &desc, &applied) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    SonareProjectVocalOriginalSource original = original_source(fixture);
+    original.sample_rate = rate;
+    SonareProjectVocalRehydrateResult result;
+    sonare_project_vocal_rehydrate_result_init(&result);
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, nullptr, nullptr,
+                                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 #endif
 
 TEST_CASE("vocal project dependency enumeration reports malformed vocal payloads",
@@ -697,3 +997,38 @@ TEST_CASE("vocal project preserves initialized feature-off outputs", "[project][
   sonare_project_destroy(project);
 }
 #endif
+
+TEST_CASE("vocal project entry points define an initialized result on a rejected call",
+          "[project][vocal]") {
+  SonareProjectVocalEditApplyDesc desc;
+  sonare_project_vocal_edit_apply_desc_init(&desc);
+  SonareProjectVocalEditApplyResult result;
+  std::memset(&result, 0, sizeof(result));
+  result.struct_size = sizeof(result);
+  result.schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  result.clip_id = 99;
+  REQUIRE(sonare_project_apply_vocal_edit(nullptr, &desc, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(result.clip_id == 0);
+  CHECK(result.struct_size == sizeof(result));
+  CHECK(result.schema_version == SONARE_VOCAL_PROJECT_API_VERSION);
+
+  SonareProjectVocalEditDependenciesResult dependencies;
+  std::memset(&dependencies, 0, sizeof(dependencies));
+  dependencies.struct_size = sizeof(dependencies);
+  dependencies.schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  dependencies.dependency_count = 5;
+  REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &dependencies) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(dependencies.dependency_count == 0);
+  CHECK(dependencies.dependencies == nullptr);
+
+  // A header that does not describe the current layout is rejected untouched.
+  SonareProjectVocalEditApplyResult stale;
+  std::memset(&stale, 0, sizeof(stale));
+  stale.clip_id = 99;
+  REQUIRE(sonare_project_apply_vocal_edit(nullptr, &desc, &stale) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(stale.clip_id == 99);
+  CHECK(stale.struct_size == 0);
+}

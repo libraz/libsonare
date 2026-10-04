@@ -26,7 +26,12 @@ export interface VocalWasmExports {
   vocalEditApiVersion: () => number;
   vocalEditAvailable: () => number;
   vocalEditSessionCreate: (samples: Float32Array, sampleRate: number, options: unknown) => number;
-  vocalEditSessionRestore: (samples: Float32Array, sampleRate: number, state: Uint8Array) => number;
+  vocalEditSessionRestore: (
+    samples: Float32Array,
+    sampleRate: number,
+    state: Uint8Array,
+    options: unknown,
+  ) => number;
   vocalEditSessionDestroy: (handle: number) => void;
   vocalEditSessionNotes: (handle: number) => VocalNotesResult;
   vocalEditDraftNotes: (handle: number) => VocalNotesResult;
@@ -433,10 +438,11 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
     throw new Error('vocal edit is unavailable in this WASM build');
   }
   return new VocalEditSession(
-    module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state),
+    module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, request),
   );
 }
 
+/** A vocal editing session. Disposing it also disposes every live draft it began. */
 export class VocalEditSession {
   private handle: number;
   private readonly drafts = new Set<VocalEditDraft>();
@@ -609,6 +615,9 @@ export class VocalEditDraft {
   }
 
   apply(request: VocalApplyRequest): VocalEditResult {
+    if (request.expectedGeneration === undefined) {
+      throw new TypeError('expectedGeneration is required');
+    }
     const generation = requireToken(request.expectedGeneration, 'expectedGeneration');
     if (!Array.isArray(request.operations)) {
       throw new TypeError('operations must be an array');

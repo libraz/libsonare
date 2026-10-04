@@ -720,6 +720,28 @@ bool ReadSampleRate(Napi::Env env, const Napi::Value& value, int* out) {
   return true;
 }
 
+bool ReadSessionLimits(Napi::Env env, const Napi::Object& object, uint64_t* max_history_bytes,
+                       uint64_t* max_cache_bytes, uint32_t* max_undo_depth,
+                       uint32_t* max_render_jobs) {
+  const Napi::Value limits_value = object.Get("limits");
+  if (limits_value.IsUndefined() || limits_value.IsNull()) return true;
+  Napi::Object limits;
+  if (!RequiredObjectValue(env, limits_value, "limits", &limits)) return false;
+  *max_history_bytes = Uint64Property(limits, "maxHistoryBytes", *max_history_bytes);
+  *max_cache_bytes = Uint64Property(limits, "maxCacheBytes", *max_cache_bytes);
+  const Napi::Value undo_depth = limits.Get("maxUndoDepth");
+  if (!undo_depth.IsUndefined() && !undo_depth.IsNull() &&
+      !RequiredUint32Value(env, undo_depth, "maxUndoDepth", max_undo_depth)) {
+    return false;
+  }
+  const Napi::Value render_jobs = limits.Get("maxRenderJobs");
+  if (!render_jobs.IsUndefined() && !render_jobs.IsNull() &&
+      !RequiredUint32Value(env, render_jobs, "maxRenderJobs", max_render_jobs)) {
+    return false;
+  }
+  return true;
+}
+
 bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreateOptions* options,
                        SonareVocalAnalysis* analysis_storage, std::vector<float>* f0_storage,
                        std::vector<uint8_t>* voiced_storage, std::string* algorithm_storage) {
@@ -770,23 +792,9 @@ bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreat
       !RequiredUint32Value(env, hop_length, "hopLengthSamples", &options->hop_length_samples)) {
     return false;
   }
-  Napi::Object limits;
-  const Napi::Value limits_value = object.Get("limits");
-  if (!limits_value.IsUndefined() && !limits_value.IsNull()) {
-    if (!RequiredObjectValue(env, limits_value, "limits", &limits)) return false;
-    options->max_history_bytes =
-        Uint64Property(limits, "maxHistoryBytes", options->max_history_bytes);
-    options->max_cache_bytes = Uint64Property(limits, "maxCacheBytes", options->max_cache_bytes);
-    const Napi::Value max_undo_depth = limits.Get("maxUndoDepth");
-    if (!max_undo_depth.IsUndefined() && !max_undo_depth.IsNull() &&
-        !RequiredUint32Value(env, max_undo_depth, "maxUndoDepth", &options->max_undo_depth)) {
-      return false;
-    }
-    const Napi::Value max_render_jobs = limits.Get("maxRenderJobs");
-    if (!max_render_jobs.IsUndefined() && !max_render_jobs.IsNull() &&
-        !RequiredUint32Value(env, max_render_jobs, "maxRenderJobs", &options->max_render_jobs)) {
-      return false;
-    }
+  if (!ReadSessionLimits(env, object, &options->max_history_bytes, &options->max_cache_bytes,
+                         &options->max_undo_depth, &options->max_render_jobs)) {
+    return false;
   }
   const Napi::Value analysis_value = object.Get("analysis");
   if (!analysis_value.IsUndefined() && !analysis_value.IsNull()) {
@@ -1104,6 +1112,8 @@ VocalEditSessionWrap::VocalEditSessionWrap(const Napi::CallbackInfo& info)
 }
 
 VocalEditSessionWrap::~VocalEditSessionWrap() {
+  // Env teardown finalizes in any order; a surviving draft must not reach back into this wrapper.
+  for (VocalEditDraftWrap* draft : drafts_) draft->DetachOwner();
   if (session_ != nullptr) sonare_vocal_session_destroy(session_);
   session_ = nullptr;
 }
@@ -1212,7 +1222,6 @@ Napi::Value VocalEditSessionWrap::BeginEdit(const Napi::CallbackInfo& info) {
   SonareVocalEditDraft* draft = nullptr;
   const SonareError error = sonare_vocal_session_begin_edit(session_, revision, &draft);
   if (!CheckVocalError(env, error)) return env.Undefined();
-  RetainDraft();
   return VocalEditDraftWrap::NewInstance(env, draft, this, info.This().As<Napi::Object>());
   SONARE_NODE_CATCH(env)
 }
@@ -1332,10 +1341,10 @@ void VocalEditSessionWrap::Destroy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (session_ == nullptr) return;
-  if (draft_count_ != 0) {
-    Napi::Error::New(env, "VocalEditSession has live drafts").ThrowAsJavaScriptException();
-    return;
-  }
+  // Drafts reference the session, so they are disposed first.
+  const std::vector<VocalEditDraftWrap*> drafts = drafts_;
+  for (VocalEditDraftWrap* draft : drafts) draft->DisposeForOwner();
+  drafts_.clear();
   sonare_vocal_session_destroy(session_);
   session_ = nullptr;
   destroyed_ = true;
@@ -1374,6 +1383,7 @@ Napi::Object VocalEditDraftWrap::NewInstance(Napi::Env env, SonareVocalEditDraft
   wrapper->draft_ = draft;
   wrapper->owner_ = owner;
   wrapper->owner_object_ = Napi::Persistent(owner_object);
+  owner->RetainDraft(wrapper);
   return object;
 }
 
@@ -1389,7 +1399,22 @@ VocalEditDraftWrap::~VocalEditDraftWrap() {
     sonare_vocal_draft_destroy(draft_);
     draft_ = nullptr;
   }
-  if (owner_ != nullptr && !released_owner_) owner_->ReleaseDraft();
+  if (owner_ != nullptr && !released_owner_) owner_->ReleaseDraft(this);
+  owner_ = nullptr;
+  owner_object_.Reset();
+}
+
+void VocalEditDraftWrap::DetachOwner() noexcept {
+  released_owner_ = true;
+  owner_ = nullptr;
+}
+
+void VocalEditDraftWrap::DisposeForOwner() noexcept {
+  if (draft_ != nullptr) {
+    sonare_vocal_draft_destroy(draft_);
+    draft_ = nullptr;
+  }
+  released_owner_ = true;
   owner_ = nullptr;
   owner_object_.Reset();
 }
@@ -1461,7 +1486,7 @@ Napi::Value VocalEditDraftWrap::Commit(const Napi::CallbackInfo& info) {
   sonare_vocal_draft_destroy(draft_);
   draft_ = nullptr;
   if (owner_ != nullptr && !released_owner_) {
-    owner_->ReleaseDraft();
+    owner_->ReleaseDraft(this);
     released_owner_ = true;
   }
   owner_object_.Reset();
@@ -1478,7 +1503,7 @@ Napi::Value VocalEditDraftWrap::Cancel(const Napi::CallbackInfo& info) {
   sonare_vocal_draft_destroy(draft_);
   draft_ = nullptr;
   if (owner_ != nullptr && !released_owner_) {
-    owner_->ReleaseDraft();
+    owner_->ReleaseDraft(this);
     released_owner_ = true;
   }
   owner_object_.Reset();
@@ -1552,7 +1577,7 @@ void VocalEditDraftWrap::Destroy(const Napi::CallbackInfo& info) {
     draft_ = nullptr;
   }
   if (owner_ != nullptr && !released_owner_) {
-    owner_->ReleaseDraft();
+    owner_->ReleaseDraft(this);
     released_owner_ = true;
   }
   owner_object_.Reset();
@@ -1842,21 +1867,33 @@ Napi::Value RestoreVocalEditSession(const Napi::CallbackInfo& info) {
     return env.Undefined();
   int sample_rate = 0;
   if (!ReadSampleRate(env, request.Get("sampleRate"), &sample_rate)) return env.Undefined();
+  SonareVocalRestoreOptions options{};
+  sonare_vocal_restore_options_init(&options);
+  if (!ReadSessionLimits(env, request, &options.max_history_bytes, &options.max_cache_bytes,
+                         &options.max_undo_depth, &options.max_render_jobs)) {
+    return env.Undefined();
+  }
   SonareVocalEditSession* session = nullptr;
-  const SonareError error =
-      sonare_vocal_session_restore(samples.Data(), static_cast<int64_t>(samples.ElementLength()), 1,
-                                   sample_rate, state.Data(), state.ElementLength(), &session);
+  const SonareError error = sonare_vocal_session_restore(
+      samples.Data(), static_cast<int64_t>(samples.ElementLength()), 1, sample_rate, state.Data(),
+      state.ElementLength(), &options, &session);
   if (!CheckVocalError(env, error)) return env.Undefined();
   return VocalEditSessionWrap::NewInstance(env, session);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value VocalEditAvailable(const Napi::CallbackInfo& info) {
-  return Napi::Boolean::New(info.Env(), sonare_vocal_available() != 0);
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return Napi::Boolean::New(env, sonare_vocal_available() != 0);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value VocalEditApiVersion(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(info.Env(), sonare_vocal_edit_api_version());
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return Napi::Number::New(env, sonare_vocal_edit_api_version());
+  SONARE_NODE_CATCH(env)
 }
 
 }  // namespace

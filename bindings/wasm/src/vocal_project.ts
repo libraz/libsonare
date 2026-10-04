@@ -275,7 +275,10 @@ export function projectGetVocalEditDependencies(
   return value.map(copyDependency);
 }
 
-/** Rehydrate unresolved vocal PCM without creating a Project history entry. */
+/**
+ * Rehydrate unresolved vocal PCM without creating a Project history entry.
+ * Any truthy return from `cancel` cancels the call.
+ */
 export function projectRehydrateVocalEdits(
   native: VocalProjectNative,
   originals: readonly ProjectVocalOriginalSource[],

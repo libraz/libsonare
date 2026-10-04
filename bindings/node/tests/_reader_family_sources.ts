@@ -128,14 +128,10 @@ export const READER_FAMILIES: Readonly<
     typedDoubleProperty: 'refuse',
     typedFloatProperty: 'refuse',
     typedIntProperty: 'refuse',
-    // Vocal edit's WASM adapter keeps the same absent/default and present/wrong
-    // type contract as the Node parser, but uses feature-local names because
-    // these helpers also enforce vocal-specific ranges and tagged IDs.
+    decimalUint64Property: 'refuse', // a decimal uint64 string; any other type is refused
+    // Vocal edit's WASM adapter keeps the Node parser's absent/default and
+    // present/wrong-type contract under a feature-local name.
     booleanProperty: 'refuse',
-    finiteProperty: 'refuse',
-    integerProperty: 'refuse',
-    noteIdProperty: 'refuse',
-    uint32Property: 'refuse',
     // Out of scope, each for its own reason.
     hasProperty: 'out-of-scope',
     objectProperty: 'out-of-scope',

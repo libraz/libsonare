@@ -165,6 +165,8 @@ export interface VocalRestoreRequest {
   samples: Float32Array;
   sampleRate: number;
   state: Uint8Array;
+  /** Runtime limits; omitted fields take the same defaults as session creation. */
+  limits?: VocalSessionLimits;
 }
 
 export interface VocalSetEditOperation {

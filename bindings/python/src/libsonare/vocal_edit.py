@@ -12,10 +12,11 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import math
+import weakref
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Self, SupportsFloat, SupportsIndex, TypeAlias, cast
+from typing import Any, Self, SupportsFloat, TypeAlias, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -23,6 +24,8 @@ from numpy.typing import NDArray
 from ._errors import SonareError, SonareValueError
 from ._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_API_VERSION,
+    VOCAL_MAX_SAMPLE_RATE,
+    VOCAL_MIN_SAMPLE_RATE,
     SonareVocalAnalysis,
     SonareVocalAnalysisResult,
     SonareVocalCancelCallback,
@@ -38,6 +41,7 @@ from ._ffi_types_vocal import (
     SonareVocalPitchResult,
     SonareVocalRange,
     SonareVocalRenderResult,
+    SonareVocalRestoreOptions,
     SonareVocalStateBytes,
     SonareVocalStateToken,
     SonareVocalTransition,
@@ -48,6 +52,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _narrow_int,
+    _to_c_int,
     _validate_samples,
 )
 
@@ -129,8 +134,8 @@ def _uint64(value: object, name: str, *, allow_zero: bool = True) -> int:
 
 def _enum(value: object, enum_type: type[IntEnum], name: str) -> int:
     try:
-        result: int = int(cast(SupportsIndex, value))
-    except (TypeError, ValueError, OverflowError) as exc:
+        result = _int64(value, name)
+    except SonareValueError as exc:
         raise SonareValueError(f"{name} must be one of {[e.value for e in enum_type]}") from exc
     try:
         enum_type(result)
@@ -232,11 +237,15 @@ def _native_output_length(lib: ctypes.CDLL, symbol: str, handle: ctypes.c_void_p
     return length
 
 
+_RANGE_BOUND_NAMES = ("range.start_sample", "range.end_sample")
+
+
 def _range(value: VocalRange | Sequence[int] | None, *, output_length: int) -> SonareVocalRange:
     if value is None:
         return SonareVocalRange(0, output_length)
     if isinstance(value, VocalRange):
-        start, end = value.start_sample, value.end_sample
+        start_i = _int64(value.start_sample, "range.start_sample")
+        end_i = _int64(value.end_sample, "range.end_sample")
     else:
         try:
             length = len(value)
@@ -246,14 +255,7 @@ def _range(value: VocalRange | Sequence[int] | None, *, output_length: int) -> S
             ) from exc
         if length != 2:
             raise SonareValueError("render range must be a (start_sample, end_sample) pair")
-        try:
-            start, end = value
-        except (TypeError, ValueError) as exc:
-            raise SonareValueError(
-                "render range must be a (start_sample, end_sample) pair"
-            ) from exc
-    start_i = _int64(start, "range.start_sample")
-    end_i = _int64(end, "range.end_sample")
+        start_i, end_i = (_int64(item, _RANGE_BOUND_NAMES[i]) for i, item in enumerate(value))
     if start_i < 0 or end_i < start_i:
         raise SonareValueError("render range must satisfy 0 <= start_sample <= end_sample")
     return SonareVocalRange(start_i, end_i)
@@ -536,6 +538,30 @@ def _analysis_to_c(
     return raw, [f0, voiced, name]
 
 
+def _vocal_sample_rate(sample_rate: int) -> int:
+    return _narrow_int(sample_rate, "sample_rate", VOCAL_MIN_SAMPLE_RATE, VOCAL_MAX_SAMPLE_RATE)
+
+
+def _restore_options_to_c(
+    lib: ctypes.CDLL,
+    max_history_bytes: int | None,
+    max_cache_bytes: int | None,
+    max_undo_depth: int | None,
+    max_render_jobs: int | None,
+) -> SonareVocalRestoreOptions:
+    raw = SonareVocalRestoreOptions()
+    lib.sonare_vocal_restore_options_init(ctypes.byref(raw))
+    if max_history_bytes is not None:
+        raw.max_history_bytes = _uint64(max_history_bytes, "max_history_bytes")
+    if max_cache_bytes is not None:
+        raw.max_cache_bytes = _uint64(max_cache_bytes, "max_cache_bytes")
+    if max_undo_depth is not None:
+        raw.max_undo_depth = _uint32(max_undo_depth, "max_undo_depth")
+    if max_render_jobs is not None:
+        raw.max_render_jobs = _uint32(max_render_jobs, "max_render_jobs")
+    return raw
+
+
 def _options_to_c(
     lib: ctypes.CDLL, options: VocalCreateOptions | None
 ) -> tuple[SonareVocalCreateOptions, list[Any]]:
@@ -628,9 +654,15 @@ def _transition_to_c(lib: ctypes.CDLL, transition: VocalTransition) -> SonareVoc
     raw.schema_version = SONARE_VOCAL_EDIT_API_VERSION
     raw.left_note_id = _uint32(transition.left_note_id, "left_note_id", allow_zero=False)
     raw.right_note_id = _uint32(transition.right_note_id, "right_note_id", allow_zero=False)
-    raw.left_window_samples = _int64(transition.left_window_samples, "left_window_samples")
-    raw.right_window_samples = _int64(transition.right_window_samples, "right_window_samples")
+    raw.left_window_samples = _narrow_int(
+        transition.left_window_samples, "left_window_samples", 0, _INT64_MAX
+    )
+    raw.right_window_samples = _narrow_int(
+        transition.right_window_samples, "right_window_samples", 0, _INT64_MAX
+    )
     raw.strength = _finite_float(transition.strength, "strength")
+    if not 0.0 <= raw.strength <= 1.0:
+        raise SonareValueError("strength must be in [0, 1]")
     return raw
 
 
@@ -932,6 +964,19 @@ class VocalEditSession(_HandleOwner):
 
     _destroy_symbol = "sonare_vocal_session_destroy"
 
+    def _destroy_handle(self) -> None:
+        # Drafts reference the session, so closing it disposes every live draft first.
+        for draft in tuple(self._live_drafts()):
+            draft.close()
+        super()._destroy_handle()
+
+    def _live_drafts(self) -> weakref.WeakSet[VocalEditDraft]:
+        drafts: weakref.WeakSet[VocalEditDraft] | None = getattr(self, "_drafts", None)
+        if drafts is None:
+            drafts = weakref.WeakSet()
+            self._drafts = drafts
+        return drafts
+
     def __init__(
         self,
         samples: Sequence[float] | np.ndarray[Any, Any],
@@ -946,9 +991,9 @@ class VocalEditSession(_HandleOwner):
         if not int(lib.sonare_vocal_available()):
             raise VocalEditError(6, "libsonare was built without vocal-edit support")
         source = _validate_samples("create_vocal_edit_session", samples)
-        rate = _narrow_int(sample_rate, "sample_rate", 1, _INT64_MAX)
-        if rate > 2**31 - 1:
-            raise SonareValueError("sample_rate must fit in a signed 32-bit integer")
+        rate = _vocal_sample_rate(sample_rate)
+        if output_length_samples is not None:
+            output_length_samples = _int64(output_length_samples, "output_length_samples")
         if options is not None and (
             analysis is not None or output_length_samples is not None or option_overrides
         ):
@@ -968,7 +1013,7 @@ class VocalEditSession(_HandleOwner):
                 source.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                 _int64(source.size, "frames"),
                 1,
-                int(rate),
+                _to_c_int(rate, "sample_rate"),
                 ctypes.byref(raw_options),
                 ctypes.byref(handle),
             )
@@ -990,11 +1035,20 @@ class VocalEditSession(_HandleOwner):
         samples: Sequence[float] | np.ndarray[Any, Any],
         sample_rate: int,
         state: bytes | bytearray | memoryview,
+        *,
+        max_history_bytes: int | None = None,
+        max_cache_bytes: int | None = None,
+        max_undo_depth: int | None = None,
+        max_render_jobs: int | None = None,
     ) -> VocalEditSession:
+        """Restore a session; the limits default to those of session creation."""
         obj = cls.__new__(cls)
         lib = _get_lib()
         source = _validate_samples("restore_vocal_edit_session", samples)
-        rate = _narrow_int(sample_rate, "sample_rate", 1, 2**31 - 1)
+        rate = _vocal_sample_rate(sample_rate)
+        restore_options = _restore_options_to_c(
+            lib, max_history_bytes, max_cache_bytes, max_undo_depth, max_render_jobs
+        )
         state_bytes = bytes(state)
         if not state_bytes:
             raise SonareValueError("state must not be empty")
@@ -1005,9 +1059,10 @@ class VocalEditSession(_HandleOwner):
                 source.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                 _int64(source.size, "frames"),
                 1,
-                int(rate),
+                _to_c_int(rate, "sample_rate"),
                 ctypes.cast(payload, ctypes.POINTER(ctypes.c_uint8)),
                 len(state_bytes),
+                ctypes.byref(restore_options),
                 ctypes.byref(handle),
             )
         )
@@ -1104,7 +1159,9 @@ class VocalEditSession(_HandleOwner):
                 self._require_handle(), int(revision), ctypes.byref(handle)
             )
         )
-        return VocalEditDraft(self, handle)
+        draft = VocalEditDraft(self, handle)
+        self._live_drafts().add(draft)
+        return draft
 
     def undo(self, expected_revision: int | None = None) -> VocalEditResult:
         return self._history_call("sonare_vocal_session_undo", expected_revision)
@@ -1177,6 +1234,8 @@ class VocalEditSession(_HandleOwner):
         request_id: int = 0,
         cancel: Callable[[], bool] | None = None,
     ) -> VocalRenderResult:
+        request_id = _uint64(request_id, "request_id")
+        _range(range, output_length=self.output_length_samples)
         with self._native_call(), self.capture_render_snapshot() as snapshot:
             return snapshot.render(range, request_id=request_id, cancel=cancel)
 
@@ -1207,15 +1266,11 @@ class VocalEditDraft(_HandleOwner):
     def apply(
         self,
         operations: Iterable[VocalOperation],
-        expected_generation: int | None = None,
+        expected_generation: int,
     ) -> VocalEditResult:
         lib = _get_lib()
         ops = tuple(operations)
-        generation = (
-            self.token().generation
-            if expected_generation is None
-            else _uint64(expected_generation, "expected_generation")
-        )
+        generation = _uint64(expected_generation, "expected_generation")
         raw_ops = (SonareVocalOperation * len(ops))()
         keepalive: list[Any] = []
         for i, operation in enumerate(ops):
@@ -1436,6 +1491,11 @@ def vocal_edit_available() -> bool:
     return bool(_get_lib().sonare_vocal_available())
 
 
+def vocal_edit_api_version() -> int:
+    """Return the vocal-edit C API version reported by the loaded native library."""
+    return int(_get_lib().sonare_vocal_edit_api_version())
+
+
 def create_vocal_edit_session(
     samples: Sequence[float] | np.ndarray[Any, Any],
     sample_rate: int,
@@ -1448,10 +1508,14 @@ def create_vocal_edit_session(
     """Create a copied-source vocal-edit session."""
     return VocalEditSession(
         samples,
-        sample_rate,
+        _vocal_sample_rate(sample_rate),
         options=options,
         analysis=analysis,
-        output_length_samples=output_length_samples,
+        output_length_samples=(
+            None
+            if output_length_samples is None
+            else _int64(output_length_samples, "output_length_samples")
+        ),
         **option_overrides,
     )
 
@@ -1460,9 +1524,30 @@ def restore_vocal_edit_session(
     samples: Sequence[float] | np.ndarray[Any, Any],
     sample_rate: int,
     state: bytes | bytearray | memoryview,
+    *,
+    max_history_bytes: int | None = None,
+    max_cache_bytes: int | None = None,
+    max_undo_depth: int | None = None,
+    max_render_jobs: int | None = None,
 ) -> VocalEditSession:
     """Restore an SVE1 state after strict source matching in the native core."""
-    return VocalEditSession.restore(samples, sample_rate, state)
+    return VocalEditSession.restore(
+        samples,
+        _vocal_sample_rate(sample_rate),
+        state,
+        max_history_bytes=(
+            None if max_history_bytes is None else _uint64(max_history_bytes, "max_history_bytes")
+        ),
+        max_cache_bytes=(
+            None if max_cache_bytes is None else _uint64(max_cache_bytes, "max_cache_bytes")
+        ),
+        max_undo_depth=(
+            None if max_undo_depth is None else _uint32(max_undo_depth, "max_undo_depth")
+        ),
+        max_render_jobs=(
+            None if max_render_jobs is None else _uint32(max_render_jobs, "max_render_jobs")
+        ),
+    )
 
 
 __all__ = [
@@ -1499,5 +1584,6 @@ __all__ = [
     "VocalRenderJob",
     "create_vocal_edit_session",
     "restore_vocal_edit_session",
+    "vocal_edit_api_version",
     "vocal_edit_available",
 ]

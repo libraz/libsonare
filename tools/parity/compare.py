@@ -175,7 +175,6 @@ _HANDLE_FULL_PREFIXES = (
 # same-named method on an unrelated class cannot satisfy a missing operation.
 _HANDLE_ALIAS_OWNERS = {
     "vocal_render_job_begin": "VocalRenderSnapshot",
-    "vocal_edit_api_version": "VocalEditSession",
 }
 
 
@@ -245,10 +244,6 @@ _ALIAS_COVERAGE = {
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
     # Every facade exposes the availability probe under the same name.
     "vocal_available": ("vocal_edit_available",),
-    # Python reports the ABI version through VocalEditSession.capabilities;
-    # Node and WASM also keep the direct module export. The class-scoped owner
-    # below prevents an unrelated handle's generic ``capabilities`` from matching.
-    "vocal_edit_api_version": ("vocal_edit_api_version", "capabilities"),
     # Project helpers are free-function ergonomic wrappers around the Project
     # methods. The aliases also keep the Python helper names out of
     # surface-only findings without weakening the Project handle check.

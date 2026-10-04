@@ -277,6 +277,27 @@ describe('Node Project vocal edit helpers', () => {
     ]);
   });
 
+  it('refuses sample rates outside the supported range', () => {
+    const native = {
+      applyVocalEdit: () => applyResult,
+      getVocalEditDependencies: () => [],
+      rehydrateVocalEdits: () => [],
+    } as Parameters<typeof projectApplyVocalEdit>[0];
+    for (const rate of [7999, 384001]) {
+      expect(() =>
+        projectApplyVocalEdit(
+          native,
+          request({ expectedSourceSampleRate: rate, renderedSampleRate: rate }),
+        ),
+      ).toThrow(RangeError);
+      expect(() =>
+        projectRehydrateVocalEdits(native, [
+          { sourceId: 11, mono: new Float32Array([0]), sampleRate: rate },
+        ]),
+      ).toThrow(RangeError);
+    }
+  });
+
   it('copies originals, rejects duplicate ids, and keeps cancel call-scoped', () => {
     let received: readonly ProjectVocalOriginalSource[] | undefined;
     let callbackSeen: (() => boolean) | undefined;
@@ -453,6 +474,19 @@ describe('Node Project vocal edit helpers', () => {
         },
       ]);
       expect(() => restored?.getVocalEditDependencies()).toThrow(/disposed/);
+
+      // Any truthy cancel return cancels, not only boolean true.
+      const cancelled = Project.fromJson(project.toJson());
+      try {
+        expect(() =>
+          cancelled.rehydrateVocalEdits(
+            [{ sourceId, mono: samples, sampleRate: REAL_SAMPLE_RATE }],
+            (() => 1) as unknown as () => boolean,
+          ),
+        ).toThrow(/Cancelled/);
+      } finally {
+        cancelled.destroy();
+      }
     } finally {
       draft?.cancel();
       snapshot?.dispose();

@@ -212,6 +212,7 @@ node = [
   "vocal_operation_init",
   "vocal_pitch_result_init",
   "vocal_render_result_init",
+  "vocal_restore_options_init",
   "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
@@ -347,6 +348,7 @@ wasm = [
   "vocal_operation_init",
   "vocal_pitch_result_init",
   "vocal_render_result_init",
+  "vocal_restore_options_init",
   "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
@@ -456,6 +458,7 @@ python = [
   "vocal_operation_init",
   "vocal_pitch_result_init",
   "vocal_render_result_init",
+  "vocal_restore_options_init",
   "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
@@ -857,15 +860,9 @@ fields = [
   "vocal_id_change.second_new_id",
   "vocal_id_change.new_ids",
 
-  # Node exposes the profile id alongside the result for convenience; the C
-  # source is the same token.profile_id nested in SonareVocalRenderResult.
-
   # WASM uses a monotonically changing thread-local sequence to ensure an
   # error detail belongs to the exception that just crossed the module proxy.
   "vocal_error_detail.sequence",
-
-  # The v1 C ABI accepts only smoothstep and therefore has no curve field;
-  # Node/WASM retain the explicit literal in their public transition shape.
 
   # --- category 2 + 1: parallel C arrays folded into one array-of-struct ---
   # C carries `stage_gain_reduction_stages` (char**) and

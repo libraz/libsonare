@@ -109,7 +109,14 @@ function cloneStateBytes(value: Uint8Array): Uint8Array {
   return new Uint8Array(value);
 }
 
-/** A native-backed monophonic vocal note editing session. */
+// Sessions whose handle has been closed; their drafts fail as disposed handles.
+const disposedSessions = new WeakSet<VocalEditSession>();
+
+/**
+ * A native-backed monophonic vocal note editing session.
+ *
+ * Disposing a session also disposes every live draft it began.
+ */
 export class VocalEditSession implements Disposable {
   private disposed = false;
 
@@ -152,7 +159,7 @@ export class VocalEditSession implements Disposable {
 
   beginEdit(options: { expectedRevision?: VocalUint64 } = {}): VocalEditDraft {
     this.requireAlive();
-    return wrapVocalEditDraft(this.native.beginEdit(options.expectedRevision));
+    return wrapVocalEditDraft(this.native.beginEdit(options.expectedRevision), this);
   }
 
   undo(options: { expectedRevision?: VocalUint64 } = {}): VocalEditResult {
@@ -196,6 +203,7 @@ export class VocalEditSession implements Disposable {
     }
     this.native.destroy();
     this.disposed = true;
+    disposedSessions.add(this);
   }
 
   destroy(): void {
@@ -217,7 +225,10 @@ export class VocalEditSession implements Disposable {
 export class VocalEditDraft implements Disposable {
   private disposed = false;
 
-  protected constructor(private readonly native: NativeDraft) {}
+  protected constructor(
+    private readonly native: NativeDraft,
+    private readonly owner: VocalEditSession,
+  ) {}
 
   notes(): { notes: VocalNote[]; transitions: VocalTransition[] } {
     this.requireAlive();
@@ -286,7 +297,7 @@ export class VocalEditDraft implements Disposable {
   }
 
   private requireAlive(): void {
-    if (this.disposed) {
+    if (this.disposed || disposedSessions.has(this.owner)) {
       throw new Error('VocalEditDraft has been disposed');
     }
   }
@@ -410,8 +421,8 @@ class VocalEditSessionHandle extends VocalEditSession {
 }
 
 class VocalEditDraftHandle extends VocalEditDraft {
-  constructor(native: NativeDraft) {
-    super(native);
+  constructor(native: NativeDraft, owner: VocalEditSession) {
+    super(native, owner);
   }
 }
 
@@ -431,8 +442,8 @@ function wrapVocalEditSession(native: NativeSession): VocalEditSession {
   return new VocalEditSessionHandle(native);
 }
 
-function wrapVocalEditDraft(native: NativeDraft): VocalEditDraft {
-  return new VocalEditDraftHandle(native);
+function wrapVocalEditDraft(native: NativeDraft, owner: VocalEditSession): VocalEditDraft {
+  return new VocalEditDraftHandle(native, owner);
 }
 
 function wrapVocalRenderSnapshot(native: NativeSnapshot): VocalRenderSnapshot {

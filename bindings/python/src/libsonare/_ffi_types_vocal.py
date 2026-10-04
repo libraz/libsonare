@@ -13,6 +13,10 @@ from ._cstruct import CStruct
 
 SONARE_VOCAL_EDIT_API_VERSION = 1
 
+# Supported source sample-rate range for vocal sessions and project vocal edits.
+VOCAL_MIN_SAMPLE_RATE = 8000
+VOCAL_MAX_SAMPLE_RATE = 384000
+
 
 class SonareVocalPitchPoint(CStruct):
     _fields_ = [
@@ -48,6 +52,17 @@ class SonareVocalAnalysis(CStruct):
         ("segmentation_threshold_cents", ctypes.c_double),
         ("min_note_ms", ctypes.c_double),
         ("reference_hz", ctypes.c_double),
+    ]
+
+
+class SonareVocalRestoreOptions(CStruct):
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("schema_version", ctypes.c_uint32),
+        ("max_history_bytes", ctypes.c_uint64),
+        ("max_cache_bytes", ctypes.c_uint64),
+        ("max_undo_depth", ctypes.c_uint32),
+        ("max_render_jobs", ctypes.c_uint32),
     ]
 
 

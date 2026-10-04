@@ -182,6 +182,19 @@ void sonare_vocal_create_options_init(SonareVocalCreateOptions* options) {
   options->max_render_jobs = 4;
 }
 
+void sonare_vocal_restore_options_init(SonareVocalRestoreOptions* options) {
+  if (!options) return;
+  SonareVocalCreateOptions create;
+  sonare_vocal_create_options_init(&create);
+  *options = {};
+  options->struct_size = sizeof(*options);
+  options->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  options->max_history_bytes = create.max_history_bytes;
+  options->max_cache_bytes = create.max_cache_bytes;
+  options->max_undo_depth = create.max_undo_depth;
+  options->max_render_jobs = create.max_render_jobs;
+}
+
 void sonare_vocal_note_edit_init(SonareVocalNoteEdit* edit) {
   if (!edit) return;
   *edit = {};
@@ -504,6 +517,12 @@ sonare::Audio import_source(const float* samples, int64_t frames, int channels, 
       static_cast<uint64_t>(frames) > sonare_c_detail::kMaxBufferSize)
     throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput,
                                     "positive mono source required", "source");
+  if (rate < sonare::kMinAudioSampleRate || rate > sonare::kMaxAudioSampleRate)
+    throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput,
+                                    "sample rate is outside the supported range", "sample_rate",
+                                    std::to_string(sonare::kMinAudioSampleRate) + ".." +
+                                        std::to_string(sonare::kMaxAudioSampleRate),
+                                    std::to_string(rate));
   require_pointer(samples, "samples");
   return sonare::Audio::from_buffer(samples, static_cast<size_t>(frames), rate);
 }
@@ -591,13 +610,19 @@ SonareError sonare_vocal_session_create(const float* samples, int64_t frames, in
 }
 SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, int channels,
                                          int sample_rate, const uint8_t* state, uint64_t size,
+                                         const SonareVocalRestoreOptions* input,
                                          SonareVocalEditSession** out_session) {
   if (out_session) *out_session = nullptr;
-  VOCAL_ACTION(require_pointer(out_session, "out_session");
-               auto bytes = copy_input(state, size, "state");
-               auto session = vocal::VocalEditSession::restore(
-                   import_source(samples, frames, channels, sample_rate), bytes);
-               *out_session = new SonareVocalEditSession{std::move(session)});
+  SonareVocalRestoreOptions defaults;
+  sonare_vocal_restore_options_init(&defaults);
+  const auto& v = input ? *input : defaults;
+  VOCAL_ACTION(
+      require_pointer(out_session, "out_session"); require_header(&v, "restore options header");
+      auto bytes = copy_input(state, size, "state"); const vocal::VocalSessionLimits limits{
+          v.max_history_bytes, v.max_cache_bytes, v.max_undo_depth, v.max_render_jobs};
+      auto session = vocal::VocalEditSession::restore(
+          import_source(samples, frames, channels, sample_rate), bytes, limits);
+      *out_session = new SonareVocalEditSession{std::move(session)});
 }
 SonareError sonare_vocal_session_notes(const SonareVocalEditSession* s,
                                        SonareVocalNotesResult* out) {

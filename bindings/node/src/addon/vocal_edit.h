@@ -4,8 +4,10 @@
 #include <napi.h>
 #include <sonare/sonare_c_vocal_edit.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace sonare_node {
 
@@ -27,9 +29,9 @@ class VocalEditSessionWrap final : public Napi::ObjectWrap<VocalEditSessionWrap>
   ~VocalEditSessionWrap() override;
 
   SonareVocalEditSession* native() const noexcept { return session_; }
-  void RetainDraft() noexcept { ++draft_count_; }
-  void ReleaseDraft() noexcept {
-    if (draft_count_ != 0) --draft_count_;
+  void RetainDraft(VocalEditDraftWrap* draft) { drafts_.push_back(draft); }
+  void ReleaseDraft(VocalEditDraftWrap* draft) noexcept {
+    drafts_.erase(std::remove(drafts_.begin(), drafts_.end(), draft), drafts_.end());
   }
 
  private:
@@ -51,7 +53,7 @@ class VocalEditSessionWrap final : public Napi::ObjectWrap<VocalEditSessionWrap>
   void Destroy(const Napi::CallbackInfo& info);
 
   SonareVocalEditSession* session_ = nullptr;
-  size_t draft_count_ = 0;
+  std::vector<VocalEditDraftWrap*> drafts_;
   bool destroyed_ = false;
   static Napi::FunctionReference constructor_;
 };
@@ -66,6 +68,11 @@ class VocalEditDraftWrap final : public Napi::ObjectWrap<VocalEditDraftWrap> {
   ~VocalEditDraftWrap() override;
 
   SonareVocalEditDraft* native() const noexcept { return draft_; }
+
+  /// Disposes the native draft when the owning session closes; later calls fail as disposed.
+  void DisposeForOwner() noexcept;
+  /// Forgets a session wrapper finalized first; the native draft stays valid.
+  void DetachOwner() noexcept;
 
  private:
   Napi::Value Notes(const Napi::CallbackInfo& info);

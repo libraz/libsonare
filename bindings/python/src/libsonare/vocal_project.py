@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
-from ._ffi_types_vocal import SonareVocalCancelCallback, SonareVocalStateToken
+from ._ffi_types_vocal import (
+    VOCAL_MAX_SAMPLE_RATE,
+    VOCAL_MIN_SAMPLE_RATE,
+    SonareVocalCancelCallback,
+    SonareVocalStateToken,
+)
 from ._ffi_types_vocal_project import (
     SONARE_VOCAL_PROJECT_API_VERSION,
     SONARE_VOCAL_REHYDRATE_ALREADY_READY,
@@ -255,9 +260,17 @@ def apply_project_vocal_edit(
             f"({source.size} != {expected_count})"
         )
     expected_rate = _narrow_int(
-        expected_source_sample_rate, "expected_source_sample_rate", 1, _UINT32_MAX
+        expected_source_sample_rate,
+        "expected_source_sample_rate",
+        VOCAL_MIN_SAMPLE_RATE,
+        VOCAL_MAX_SAMPLE_RATE,
     )
-    rendered_rate = _narrow_int(rendered_sample_rate, "rendered_sample_rate", 1, _UINT32_MAX)
+    rendered_rate = _narrow_int(
+        rendered_sample_rate,
+        "rendered_sample_rate",
+        VOCAL_MIN_SAMPLE_RATE,
+        VOCAL_MAX_SAMPLE_RATE,
+    )
     if rendered_rate != expected_rate:
         raise SonareValueError(
             "rendered_sample_rate must equal expected_source_sample_rate "
@@ -337,8 +350,8 @@ def _original_sources_to_c(
         sample_rate = _narrow_int(
             original.sample_rate,
             f"original_sources[{index}].sample_rate",
-            1,
-            _UINT32_MAX,
+            VOCAL_MIN_SAMPLE_RATE,
+            VOCAL_MAX_SAMPLE_RATE,
         )
         buffer = _validate_samples(
             "rehydrate_project_vocal_edits",
@@ -389,7 +402,10 @@ def rehydrate_project_vocal_edits(
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> tuple[ProjectVocalRehydrateItem, ...]:
-    """Restore unresolved vocal PCM without creating an edit-history entry."""
+    """Restore unresolved vocal PCM without creating an edit-history entry.
+
+    Any truthy return from ``cancel`` cancels the call.
+    """
 
     originals = tuple(original_sources)
     original_count = _narrow_int(

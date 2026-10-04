@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -26,7 +25,7 @@ EM_JS(EM_VAL, sonare_project_invoke_cancel, (EM_VAL callback), {
     const value = Emval.toValue(callback)();
     return Emval.toHandle({
       failed: false,
-      cancelled: typeof value === 'boolean' && value,
+      cancelled: Boolean(value),
     });
   } catch (error) {
     return Emval.toHandle({ failed: true, cancelled: true, error });
@@ -46,8 +45,7 @@ val property(const val& object, const char* key) { return object[key]; }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
 }
 
-uint32_t projectId(const val& value, const char* field, bool allow_zero = true) {
-  const uint32_t result = checkedUintFromVal(value, field);
+uint32_t projectId(uint32_t result, const char* field, bool allow_zero = true) {
   if (!allow_zero && result == 0) invalid(std::string(field) + " must be non-zero");
   if (result == std::numeric_limits<uint32_t>::max()) {
     invalid(std::string(field) + " must be less than UINT32_MAX");
@@ -55,29 +53,8 @@ uint32_t projectId(const val& value, const char* field, bool allow_zero = true) 
   return result;
 }
 
-uint32_t positiveUint32(const val& value, const char* field) {
-  const uint32_t result = checkedUintFromVal(value, field);
+uint32_t positiveUint32(uint32_t result, const char* field) {
   if (result == 0) invalid(std::string(field) + " must be non-zero");
-  return result;
-}
-
-uint32_t optionalProjectId(const val& object, const char* field, uint32_t fallback,
-                           bool allow_zero = true) {
-  const val value = property(object, field);
-  return absent(value) ? fallback : projectId(value, field, allow_zero);
-}
-
-uint64_t decimalUint64(const val& value, const char* field) {
-  if (value.typeOf().as<std::string>() != "string") {
-    invalid(std::string(field) + " must be a decimal uint64 string");
-  }
-  const std::string text = value.as<std::string>();
-  if (text.empty()) invalid(std::string(field) + " must be a decimal uint64 string");
-  uint64_t result = 0;
-  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result, 10);
-  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
-    invalid(std::string(field) + " must be a decimal uint64 string");
-  }
   return result;
 }
 
@@ -151,11 +128,15 @@ SonareVocalStateToken tokenFromVal(const val& value) {
     invalid("renderToken must be an object");
   }
   SonareVocalStateToken result{};
-  result.session_epoch = decimalUint64(property(value, "sessionEpoch"), "renderToken.sessionEpoch");
-  result.revision = decimalUint64(property(value, "revision"), "renderToken.revision");
-  result.draft_id = decimalUint64(property(value, "draftId"), "renderToken.draftId");
-  result.generation = decimalUint64(property(value, "generation"), "renderToken.generation");
-  result.request_id = decimalUint64(property(value, "requestId"), "renderToken.requestId");
+  result.session_epoch =
+      checkedDecimalUint64FromVal(property(value, "sessionEpoch"), "renderToken.sessionEpoch");
+  result.revision =
+      checkedDecimalUint64FromVal(property(value, "revision"), "renderToken.revision");
+  result.draft_id = checkedDecimalUint64FromVal(property(value, "draftId"), "renderToken.draftId");
+  result.generation =
+      checkedDecimalUint64FromVal(property(value, "generation"), "renderToken.generation");
+  result.request_id =
+      checkedDecimalUint64FromVal(property(value, "requestId"), "renderToken.requestId");
   result.profile_id = checkedUintFromVal(property(value, "profileId"), "renderToken.profileId");
   if (result.draft_id != 0 || result.generation != 0) {
     invalid("renderToken must be a committed session token");
@@ -175,12 +156,15 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
     invalid("request must be an object");
   }
   sonare_project_vocal_edit_apply_desc_init(&storage->desc);
-  storage->desc.clip_id = projectId(property(request, "clipId"), "clipId", false);
-  storage->desc.take_id = optionalProjectId(request, "takeId", 0);
+  storage->desc.clip_id =
+      projectId(checkedUintFromVal(property(request, "clipId"), "clipId"), "clipId", false);
+  storage->desc.take_id = projectId(uintProperty(request, "takeId", 0), "takeId");
   storage->desc.expected_source_id =
-      projectId(property(request, "expectedSourceId"), "expectedSourceId", false);
-  storage->desc.expected_source_sample_rate =
-      positiveUint32(property(request, "expectedSourceSampleRate"), "expectedSourceSampleRate");
+      projectId(checkedUintFromVal(property(request, "expectedSourceId"), "expectedSourceId"),
+                "expectedSourceId", false);
+  storage->desc.expected_source_sample_rate = positiveUint32(
+      checkedUintFromVal(property(request, "expectedSourceSampleRate"), "expectedSourceSampleRate"),
+      "expectedSourceSampleRate");
   storage->desc.expected_source_sample_count = checkedInt64FromVal(
       property(request, "expectedSourceSampleCount"), "expectedSourceSampleCount");
   if (storage->desc.expected_source_sample_count <= 0) {
@@ -204,8 +188,9 @@ SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorag
   }
   storage->desc.rendered_mono = storage->rendered.data();
   storage->desc.rendered_sample_count = static_cast<int64_t>(storage->rendered.size());
-  storage->desc.rendered_sample_rate =
-      positiveUint32(property(request, "renderedSampleRate"), "renderedSampleRate");
+  storage->desc.rendered_sample_rate = positiveUint32(
+      checkedUintFromVal(property(request, "renderedSampleRate"), "renderedSampleRate"),
+      "renderedSampleRate");
   const val rendered_start = property(request, "renderedStartSample");
   storage->desc.rendered_start_sample =
       absent(rendered_start) ? 0 : checkedInt64FromVal(rendered_start, "renderedStartSample");
@@ -324,12 +309,14 @@ OriginalStorage originalsFromVal(const val& originals) {
     }
     auto& row = storage.rows[index];
     sonare_project_vocal_original_source_init(&row);
-    row.source_id = projectId(property(source, "sourceId"), "sourceId", false);
+    row.source_id =
+        projectId(checkedUintFromVal(property(source, "sourceId"), "sourceId"), "sourceId", false);
     if (std::find(source_ids.begin(), source_ids.end(), row.source_id) != source_ids.end()) {
       invalid("originals contains duplicate sourceId");
     }
     source_ids.push_back(row.source_id);
-    row.sample_rate = positiveUint32(property(source, "sampleRate"), "sampleRate");
+    row.sample_rate = positiveUint32(
+        checkedUintFromVal(property(source, "sampleRate"), "sampleRate"), "sampleRate");
     storage.buffers.push_back(copyMono(property(source, "mono"), "original.mono"));
     row.mono = storage.buffers.back().data();
     row.sample_count = static_cast<int64_t>(storage.buffers.back().size());

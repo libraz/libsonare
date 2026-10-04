@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 
 from ._ffi_types_vocal import (
+    SONARE_VOCAL_EDIT_API_VERSION,
     SonareVocalAnalysis,
     SonareVocalAnalysisResult,
     SonareVocalCancelCallback,
@@ -18,6 +19,7 @@ from ._ffi_types_vocal import (
     SonareVocalPitchResult,
     SonareVocalRange,
     SonareVocalRenderResult,
+    SonareVocalRestoreOptions,
     SonareVocalStateBytes,
     SonareVocalStateToken,
 )
@@ -40,10 +42,18 @@ def configure_vocal_signatures(lib: ctypes.CDLL) -> None:
 
     lib.sonare_vocal_edit_api_version.restype = u32
     lib.sonare_vocal_edit_api_version.argtypes = []
+    version = int(lib.sonare_vocal_edit_api_version())
+    if version != SONARE_VOCAL_EDIT_API_VERSION:
+        raise RuntimeError(
+            f"libsonare ABI mismatch: native vocal-edit API reports {version}, "
+            f"expected {SONARE_VOCAL_EDIT_API_VERSION}. The installed shared library is "
+            "incompatible with this Python binding."
+        )
 
     for name, cls in (
         ("sonare_vocal_analysis_init", SonareVocalAnalysis),
         ("sonare_vocal_create_options_init", SonareVocalCreateOptions),
+        ("sonare_vocal_restore_options_init", SonareVocalRestoreOptions),
         ("sonare_vocal_note_edit_init", SonareVocalNoteEdit),
         ("sonare_vocal_operation_init", SonareVocalOperation),
         ("sonare_vocal_notes_result_init", SonareVocalNotesResult),
@@ -81,6 +91,7 @@ def configure_vocal_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_uint8),
         u64,
+        ctypes.POINTER(SonareVocalRestoreOptions),
         ctypes.POINTER(handle),
     ]
     lib.sonare_vocal_session_destroy.restype = None

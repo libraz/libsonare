@@ -512,6 +512,7 @@ from .vocal_edit import (
     VocalTransition,
     create_vocal_edit_session,
     restore_vocal_edit_session,
+    vocal_edit_api_version,
     vocal_edit_available,
 )
 
@@ -549,6 +550,7 @@ __all__ = [
     "VocalRenderJob",
     "create_vocal_edit_session",
     "restore_vocal_edit_session",
+    "vocal_edit_api_version",
     "vocal_edit_available",
     "AcousticResult",
     "AnalysisBeatObservations",

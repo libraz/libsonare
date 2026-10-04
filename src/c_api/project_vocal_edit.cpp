@@ -8,6 +8,8 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -15,6 +17,7 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "editing/vocal_edit/source_digest.h"
 #include "util/resource_limits.h"
 #include "util/sha256.h"
 
@@ -51,17 +54,10 @@ void copy_key(char (&out)[N], const std::string& key) noexcept {
   out[length] = '\0';
 }
 
-template <typename T>
-void clear_output(T* value) {
-  init_value(value);
-}
-
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 std::array<uint8_t, 32> digest_samples(const std::vector<float>& samples) {
-  sonare::util::Sha256 sha;
-  sha.update(reinterpret_cast<const uint8_t*>(samples.data()), samples.size() * sizeof(float));
-  return sha.finalize();
+  return sonare::editing::vocal_edit::digest_source_pcm(samples.data(), samples.size());
 }
 
 std::string canonical_hash(const std::array<uint8_t, 32>& digest) {
@@ -256,6 +252,58 @@ bool current_binding_matches(const Project& project, const Key& key,
 }
 #endif
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
+std::mutex g_rehydrating_mutex;
+std::set<const SonareProject*> g_rehydrating;
+
+bool rehydrate_in_progress(const SonareProject* project) {
+  std::lock_guard<std::mutex> lock(g_rehydrating_mutex);
+  return g_rehydrating.count(project) != 0;
+}
+
+/// Marks a project as mid-rehydrate so a cancel callback cannot mutate its vocal state.
+class RehydrateScope {
+ public:
+  explicit RehydrateScope(const SonareProject* project) : project_(project) {
+    std::lock_guard<std::mutex> lock(g_rehydrating_mutex);
+    g_rehydrating.insert(project_);
+  }
+  ~RehydrateScope() {
+    std::lock_guard<std::mutex> lock(g_rehydrating_mutex);
+    g_rehydrating.erase(project_);
+  }
+  RehydrateScope(const RehydrateScope&) = delete;
+  RehydrateScope& operator=(const RehydrateScope&) = delete;
+
+ private:
+  const SonareProject* project_;
+};
+
+SonareError refuse_during_rehydrate() {
+  sonare_c_detail::set_last_error(
+      "vocal edits cannot change a project while sonare_project_rehydrate_vocal_edits runs on it");
+  return SONARE_ERROR_INVALID_STATE;
+}
+
+/// The envelope of `key` whose derived source is the current binding, if any.
+std::optional<Envelope> bound_envelope(const Project& project, const Key& key,
+                                       SourceId bound_source_id) {
+  for (const arr::AssistSidecar& sidecar : project.assist_sidecars()) {
+    const auto parsed = arr::vocal_sidecar::parse_key(sidecar.module_id);
+    if (!parsed.has_value() || parsed->clip_id != key.clip_id || parsed->take_id != key.take_id) {
+      continue;
+    }
+    Envelope envelope;
+    if (arr::vocal_sidecar::decode_envelope(sidecar, &envelope) && valid_envelope_shape(envelope) &&
+        envelope.derived_source_id == bound_source_id) {
+      return envelope;
+    }
+    return std::nullopt;
+  }
+  return std::nullopt;
+}
+#endif
+
 struct SourceInput {
   uint32_t source_id = 0;
   const float* mono = nullptr;
@@ -317,8 +365,10 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
                                             const SonareProjectVocalEditApplyDesc* desc,
                                             SonareProjectVocalEditApplyResult* result) {
   SONARE_C_API_ENTRY;
-  if (!initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
-  clear_output(result);
+  if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
+  *result = {};
+  result->struct_size = sizeof(*result);
+  result->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (project == nullptr || desc == nullptr || !initialized(desc) || !valid_id(desc->clip_id) ||
       desc->take_id == std::numeric_limits<uint32_t>::max()) {
@@ -338,6 +388,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
+  if (rehydrate_in_progress(project)) return refuse_during_rehydrate();
   const Project& model = project->history.project();
   const EditClip* clip = resolve_clip(model, desc->clip_id);
   if (clip == nullptr || clip->source_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -346,10 +397,26 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   double target_offset = 0.0;
-  const SourceId original_source_id = resolved_source(*clip, desc->take_id, &target_offset);
-  if (!valid_id(original_source_id) || original_source_id != desc->expected_source_id ||
-      clip->length_ppq != desc->expected_clip_length_ppq ||
+  const SourceId bound_source_id = resolved_source(*clip, desc->take_id, &target_offset);
+  if (!valid_id(bound_source_id) || clip->length_ppq != desc->expected_clip_length_ppq ||
       target_offset != desc->expected_source_offset_ppq) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  const Key key{desc->clip_id, desc->take_id};
+  // A derived binding is re-edited from its root original, which its envelope names.
+  const std::optional<Envelope> derived_binding = bound_envelope(model, key, bound_source_id);
+  const SourceId original_source_id =
+      derived_binding.has_value() ? derived_binding->original_source_id : bound_source_id;
+  const auto refuse_derived_state = []() {
+    sonare_c_detail::set_last_error(
+        "vocal edit state was authored against a derived source; restore the session against "
+        "the original source and apply again");
+    return SONARE_ERROR_INVALID_STATE;
+  };
+  if (original_source_id != desc->expected_source_id) {
+    if (derived_binding.has_value() && desc->expected_source_id == bound_source_id) {
+      return refuse_derived_state();
+    }
     return SONARE_ERROR_INVALID_STATE;
   }
   if (clip->loop_mode != arr::LoopMode::kOff || clip->warp_ref_id != 0 ||
@@ -377,6 +444,9 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 
   const auto persisted = sonare::editing::vocal_edit::decode_vocal_state(
       desc->sve1, static_cast<size_t>(desc->sve1_size));
+  if (derived_binding.has_value() && persisted.source.digest == derived_binding->derived_digest) {
+    return refuse_derived_state();
+  }
   if (!state_matches_envelope(persisted,
                               Envelope{original_source_id,
                                        0,
@@ -426,7 +496,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
     bool materialized = false;
     for (ClipTake& take : takes) {
       if (take.source_id == 0) {
-        take.source_id = original_source_id;
+        take.source_id = bound_source_id;
         materialized = true;
       }
     }
@@ -459,7 +529,6 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   envelope.original_digest = original_digest;
   envelope.derived_digest = derived_digest;
   envelope.sve1.assign(desc->sve1, desc->sve1 + static_cast<size_t>(desc->sve1_size));
-  const Key key{desc->clip_id, desc->take_id};
   const std::string sidecar_key = arr::vocal_sidecar::make_key(key);
   SonareProjectVocalEditApplyResult prepared_result;
   init_value(&prepared_result);
@@ -489,8 +558,10 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
 SonareError sonare_project_get_vocal_edit_dependencies(
     const SonareProject* project, SonareProjectVocalEditDependenciesResult* result) {
   SONARE_C_API_ENTRY;
-  if (!initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
-  clear_output(result);
+  if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
+  *result = {};
+  result->struct_size = sizeof(*result);
+  result->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (project == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -579,14 +650,18 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
                                                  SonareVocalCancelCallback cancel, void* user_data,
                                                  SonareProjectVocalRehydrateResult* result) {
   SONARE_C_API_ENTRY;
-  if (!initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
-  clear_output(result);
+  if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
+  *result = {};
+  result->struct_size = sizeof(*result);
+  result->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (project == nullptr || (original_count != 0 && originals == nullptr) ||
       original_count > sonare::resource::kDefaultProjectImportResourceLimits.max_entities) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
+  if (rehydrate_in_progress(project)) return refuse_during_rehydrate();
+  const RehydrateScope rehydrating(project);
   std::vector<SourceInput> source_inputs;
   source_inputs.reserve(static_cast<size_t>(original_count));
   std::set<uint32_t> source_ids;
@@ -606,7 +681,9 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
 
   std::vector<SonareProjectVocalRehydrateItem> items;
   std::map<SourceId, AudioSourceSamples> staged;
-  for (const arr::AssistSidecar& sidecar : project->history.project().assist_sidecars()) {
+  // A cancel callback may mutate the project, so iterate a copy and verify it at the end.
+  const std::vector<arr::AssistSidecar> sidecars = project->history.project().assist_sidecars();
+  for (const arr::AssistSidecar& sidecar : sidecars) {
     const auto key = arr::vocal_sidecar::parse_key(sidecar.module_id);
     if (!key.has_value()) continue;
     if (cancel != nullptr && cancel(user_data) != 0) return SONARE_ERROR_CANCELLED;
@@ -753,6 +830,19 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
     if (cancel != nullptr && cancel(user_data) != 0) return SONARE_ERROR_CANCELLED;
   }
 
+  const auto& live_sidecars = project->history.project().assist_sidecars();
+  const bool unchanged =
+      live_sidecars.size() == sidecars.size() &&
+      std::equal(sidecars.begin(), sidecars.end(), live_sidecars.begin(),
+                 [](const arr::AssistSidecar& lhs, const arr::AssistSidecar& rhs) {
+                   return lhs.module_id == rhs.module_id &&
+                          lhs.schema_version == rhs.schema_version && lhs.payload == rhs.payload;
+                 });
+  if (!unchanged) {
+    sonare_c_detail::set_last_error(
+        "project vocal edits changed during rehydrate; staged results were discarded");
+    return SONARE_ERROR_INVALID_STATE;
+  }
   auto output = std::unique_ptr<SonareProjectVocalRehydrateItem[]>(
       new SonareProjectVocalRehydrateItem[items.size()]);
   for (size_t i = 0; i < items.size(); ++i) output[i] = items[i];

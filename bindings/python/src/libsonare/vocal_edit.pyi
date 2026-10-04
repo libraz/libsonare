@@ -10,26 +10,26 @@ from numpy.typing import NDArray
 from ._errors import SonareError
 
 class VocalTargetMode(IntEnum):
-    NONE: int
-    CENTER: int
-    CURVE: int
+    NONE = 0
+    CENTER = 1
+    CURVE = 2
 
 class VocalFormantMode(IntEnum):
-    PRESERVE: int
-    SHIFT: int
+    PRESERVE = 0
+    SHIFT = 1
 
 class VocalOperationKind(IntEnum):
-    SET_EDIT: int
-    SET_SOURCE_SPAN: int
-    SPLIT: int
-    MERGE: int
-    SET_TRANSITION: int
-    REMOVE_TRANSITION: int
-    RESET: int
+    SET_EDIT = 0
+    SET_SOURCE_SPAN = 1
+    SPLIT = 2
+    MERGE = 3
+    SET_TRANSITION = 4
+    REMOVE_TRANSITION = 5
+    RESET = 6
 
 class VocalMergePolicy(IntEnum):
-    PRESERVE: int
-    RESET: int
+    PRESERVE = 0
+    RESET = 1
 
 class VocalRange:
     start_sample: int
@@ -390,6 +390,11 @@ class VocalEditSession:
         samples: Sequence[float] | NDArray[Any],
         sample_rate: int,
         state: bytes | bytearray | memoryview,
+        *,
+        max_history_bytes: int | None = ...,
+        max_cache_bytes: int | None = ...,
+        max_undo_depth: int | None = ...,
+        max_render_jobs: int | None = ...,
     ) -> VocalEditSession: ...
     def __enter__(self) -> VocalEditSession: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
@@ -434,7 +439,7 @@ class VocalEditDraft:
     def apply(
         self,
         operations: Iterable[VocalOperation],
-        expected_generation: int | None = ...,
+        expected_generation: int,
     ) -> VocalEditResult: ...
     def commit(self, expected_revision: int | None = ...) -> VocalEditResult: ...
     def cancel(self) -> None: ...
@@ -473,6 +478,7 @@ class VocalRenderJob:
     def next(self, cancel: Callable[[], bool] | None = ...) -> bool: ...
     def finalize(self, cancel: Callable[[], bool] | None = ...) -> VocalRenderResult: ...
 
+def vocal_edit_api_version() -> int: ...
 def vocal_edit_available() -> bool: ...
 def create_vocal_edit_session(
     samples: Sequence[float] | NDArray[Any],
@@ -487,4 +493,9 @@ def restore_vocal_edit_session(
     samples: Sequence[float] | NDArray[Any],
     sample_rate: int,
     state: bytes | bytearray | memoryview,
+    *,
+    max_history_bytes: int | None = ...,
+    max_cache_bytes: int | None = ...,
+    max_undo_depth: int | None = ...,
+    max_render_jobs: int | None = ...,
 ) -> VocalEditSession: ...

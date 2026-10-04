@@ -358,6 +358,15 @@ uint8_t byteProperty(val object, const char* key, uint8_t default_value);
 /// @throws SonareException(InvalidParameter) naming @p key.
 int64_t checkedInt64FromVal(const val& value, const char* key);
 int64_t int64Property(val object, const char* key, int64_t default_value);
+/// @brief Reads a 64-bit unsigned value carried as a canonical-length decimal
+///        string, the only spelling a JS number cannot corrupt above 2^53.
+/// @details Refuses a non-string, an empty string, a sign, whitespace, trailing
+///          characters and a value past 2^64 - 1; nothing is coerced.
+/// @throws SonareException(InvalidParameter) naming @p key.
+uint64_t checkedDecimalUint64FromVal(const val& value, const char* key);
+/// @brief Presence-checked sibling of @ref checkedDecimalUint64FromVal: an absent
+///        field -- omitted, `undefined` or `null` -- takes @p default_value.
+uint64_t decimalUint64Property(val object, const char* key, uint64_t default_value);
 /// @brief Reads a trailing render-frame argument; undefined is -1 ("now").
 /// @throws SonareException(InvalidParameter) for anything checkedInt64FromVal refuses.
 int64_t renderFrameFromVal(const val& value);

@@ -268,7 +268,7 @@ int VocalProjectCancel(void* user_data) {
   }
   const Napi::Value value = context->callback->Call({});
   if (context->env.IsExceptionPending()) return 1;
-  return value.IsBoolean() && value.As<Napi::Boolean>().Value() ? 1 : 0;
+  return value.ToBoolean().Value() ? 1 : 0;
 }
 
 bool ResultCountValid(Napi::Env env, uint64_t count, const char* field) {

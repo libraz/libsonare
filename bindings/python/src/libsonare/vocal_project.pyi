@@ -10,19 +10,19 @@ from ._project import Project
 from .vocal_edit import VocalStateToken
 
 class ProjectVocalRehydrateStatus(IntEnum):
-    REHYDRATED: int
-    ALREADY_READY: int
-    UNRESOLVED: int
+    REHYDRATED = 0
+    ALREADY_READY = 1
+    UNRESOLVED = 2
 
 class ProjectVocalReason(IntEnum):
-    NONE: int
-    INVALID_INPUT: int
-    REVISION_CONFLICT: int
-    SOURCE_MISMATCH: int
-    UNSUPPORTED: int
-    CANCELLED: int
-    COUNTER_EXHAUSTED: int
-    INVALID_STATE: int
+    NONE = 0
+    INVALID_INPUT = 1
+    REVISION_CONFLICT = 2
+    SOURCE_MISMATCH = 3
+    UNSUPPORTED = 4
+    CANCELLED = 5
+    COUNTER_EXHAUSTED = 6
+    INVALID_STATE = 7
 
 class ProjectVocalOriginalSource:
     source_id: int

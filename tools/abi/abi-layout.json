@@ -11369,6 +11369,48 @@
     ],
     "size": 120
   },
+  "SonareVocalRestoreOptions": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_history_bytes",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_cache_bytes",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_undo_depth",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_render_jobs",
+        "offset": 28,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
   "SonareVocalStateBytes": {
     "align": 8,
     "fields": [

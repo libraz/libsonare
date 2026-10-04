@@ -8,6 +8,7 @@
 #include <sonare/sonare_c_project_instruments.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -524,6 +525,25 @@ int64_t checkedInt64FromVal(const val& value, const char* key) {
   }
   requireIntegral(number, key);
   return static_cast<int64_t>(number);
+}
+
+uint64_t checkedDecimalUint64FromVal(const val& value, const char* key) {
+  const std::string message = std::string(key) + " must be a decimal uint64 string";
+  if (value.typeOf().as<std::string>() != "string") {
+    throw SonareException(ErrorCode::InvalidParameter, message);
+  }
+  const std::string text = value.as<std::string>();
+  uint64_t result = 0;
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result, 10);
+  if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, message);
+  }
+  return result;
+}
+
+uint64_t decimalUint64Property(val object, const char* key, uint64_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : checkedDecimalUint64FromVal(value, key);
 }
 
 int64_t renderFrameFromVal(const val& value) {

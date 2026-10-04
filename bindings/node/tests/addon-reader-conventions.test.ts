@@ -1100,6 +1100,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'createVocalEditSession',
         'Vocal session creation combines required samples/sampleRate with nested optional create and analysis settings; functional defaults and rejection cases are covered by vocal_edit.test.ts.',
       ],
+      [
+        'restoreVocalEditSession',
+        'Vocal session restore combines required samples/sampleRate/state with optional limits; limit defaults and rejection cases are covered by vocal_edit.test.ts.',
+      ],
       ['editAutomationLane', 'Needs a project with an existing automation lane.'],
       ['estimateRoom', 'Needs a measured impulse response.'],
       ['freezeOffline', 'Needs a prepared engine graph.'],

@@ -14,7 +14,6 @@
 #include <sonare/sonare_c_vocal_edit.h>
 
 #include <algorithm>
-#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -97,39 +96,6 @@ std::string stringPropertyStrict(const val& object, const char* key, const char*
   return value.as<std::string>();
 }
 
-uint64_t decimalUint64(const val& value, const char* field, uint64_t fallback = 0) {
-  if (absent(value)) return fallback;
-  if (value.typeOf().as<std::string>() != "string") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(field) + " must be a decimal uint64 string");
-  }
-  const std::string text = value.as<std::string>();
-  if (text.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(field) + " must be a decimal uint64 string");
-  }
-  uint64_t result = 0;
-  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result, 10);
-  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(field) + " must be a decimal uint64 string");
-  }
-  return result;
-}
-
-double finiteProperty(const val& object, const char* key, double fallback) {
-  const val value = property(object, key);
-  if (absent(value)) return fallback;
-  if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
-  }
-  const double result = value.as<double>();
-  if (!std::isfinite(result)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be finite");
-  }
-  return result;
-}
-
 bool booleanProperty(const val& object, const char* key, bool fallback) {
   const val value = property(object, key);
   if (absent(value)) return fallback;
@@ -139,21 +105,7 @@ bool booleanProperty(const val& object, const char* key, bool fallback) {
   return value.as<bool>();
 }
 
-int64_t integerProperty(const val& object, const char* key, int64_t fallback) {
-  const val value = property(object, key);
-  if (absent(value)) return fallback;
-  return checkedInt64FromVal(value, key);
-}
-
-uint32_t uint32Property(const val& object, const char* key, uint32_t fallback) {
-  const val value = property(object, key);
-  if (absent(value)) return fallback;
-  return checkedUintFromVal(value, key);
-}
-
-uint32_t noteIdProperty(const val& object, const char* key) {
-  const val value = property(object, key);
-  const uint32_t id = checkedUintFromVal(value, key);
+uint32_t nonZeroId(uint32_t id, const char* key) {
   if (id == 0) {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be non-zero");
   }
@@ -247,7 +199,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     result.target_mode = SONARE_VOCAL_TARGET_NONE;
   } else if (targetMode == "center") {
     result.target_mode = SONARE_VOCAL_TARGET_CENTER;
-    result.target_midi = finiteProperty(target, "midi", 0.0);
+    result.target_midi = typedDoubleProperty(target, "midi", 0.0);
   } else if (targetMode == "curve") {
     result.target_mode = SONARE_VOCAL_TARGET_CURVE;
     const val points = property(target, "points");
@@ -259,8 +211,8 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     double previous = -std::numeric_limits<double>::infinity();
     for (std::size_t i = 0; i < count; ++i) {
       const val point = points[static_cast<unsigned>(i)];
-      const double source = finiteProperty(point, "sourceSample", 0.0);
-      const double midi = finiteProperty(point, "midi", 0.0);
+      const double source = typedDoubleProperty(point, "sourceSample", 0.0);
+      const double midi = typedDoubleProperty(point, "midi", 0.0);
       if (source <= previous) {
         throw SonareException(ErrorCode::InvalidParameter,
                               "target.points must be strictly increasing");
@@ -273,17 +225,17 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch target mode");
   }
-  result.amount = finiteProperty(pitch, "amount", result.amount);
-  result.speed_ms = finiteProperty(pitch, "speedMs", result.speed_ms);
+  result.amount = typedDoubleProperty(pitch, "amount", result.amount);
+  result.speed_ms = typedDoubleProperty(pitch, "speedMs", result.speed_ms);
   result.max_correction_semitones =
-      finiteProperty(pitch, "maxCorrectionSemitones", result.max_correction_semitones);
+      typedDoubleProperty(pitch, "maxCorrectionSemitones", result.max_correction_semitones);
   result.transpose_semitones =
-      finiteProperty(pitch, "transposeSemitones", result.transpose_semitones);
-  result.drift_scale = finiteProperty(pitch, "driftScale", result.drift_scale);
-  result.vibrato_scale = finiteProperty(pitch, "vibratoScale", result.vibrato_scale);
-  result.destination_start_sample = integerProperty(object, "destinationStartSample", 0);
-  result.destination_length_samples = integerProperty(object, "destinationLengthSamples", 0);
-  result.gain_db = finiteProperty(object, "gainDb", 0.0);
+      typedDoubleProperty(pitch, "transposeSemitones", result.transpose_semitones);
+  result.drift_scale = typedDoubleProperty(pitch, "driftScale", result.drift_scale);
+  result.vibrato_scale = typedDoubleProperty(pitch, "vibratoScale", result.vibrato_scale);
+  result.destination_start_sample = int64Property(object, "destinationStartSample", 0);
+  result.destination_length_samples = int64Property(object, "destinationLengthSamples", 0);
+  result.gain_db = typedDoubleProperty(object, "gainDb", 0.0);
   const val muted = property(object, "muted");
   if (!absent(muted)) {
     if (muted.typeOf().as<std::string>() != "boolean") {
@@ -300,7 +252,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
       result.formant_mode = SONARE_VOCAL_FORMANT_SHIFT;
     else
       throw SonareException(ErrorCode::InvalidParameter, "unsupported formant mode");
-    result.formant_shift_semitones = finiteProperty(formant, "shiftSemitones", 0.0);
+    result.formant_shift_semitones = typedDoubleProperty(formant, "shiftSemitones", 0.0);
   }
   const val envelope = property(object, "amplitudeEnvelope");
   if (!absent(envelope)) {
@@ -311,15 +263,38 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   return result;
 }
 
+int64_t nonNegativeWindow(int64_t value, const char* field) {
+  if (value < 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(field) + " must be a non-negative integer");
+  }
+  return value;
+}
+
 SonareVocalTransition transitionFromVal(const val& object) {
+  if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
+    throw SonareException(ErrorCode::InvalidParameter, "transition must be an object");
+  }
   SonareVocalTransition result{};
   result.struct_size = sizeof(result);
   result.schema_version = SONARE_VOCAL_EDIT_API_VERSION;
-  result.left_note_id = noteIdProperty(object, "leftNoteId");
-  result.right_note_id = noteIdProperty(object, "rightNoteId");
-  result.left_window_samples = integerProperty(object, "leftWindowSamples", 0);
-  result.right_window_samples = integerProperty(object, "rightWindowSamples", 0);
-  result.strength = finiteProperty(object, "strength", 0.0);
+  result.left_note_id =
+      nonZeroId(checkedUintFromVal(property(object, "leftNoteId"), "leftNoteId"), "leftNoteId");
+  result.right_note_id =
+      nonZeroId(checkedUintFromVal(property(object, "rightNoteId"), "rightNoteId"), "rightNoteId");
+  result.left_window_samples = nonNegativeWindow(int64Property(object, "leftWindowSamples", -1),
+                                                 "transition.leftWindowSamples");
+  result.right_window_samples = nonNegativeWindow(int64Property(object, "rightWindowSamples", -1),
+                                                  "transition.rightWindowSamples");
+  result.strength =
+      typedDoubleProperty(object, "strength", std::numeric_limits<double>::quiet_NaN());
+  if (!(result.strength >= 0.0 && result.strength <= 1.0)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "transition.strength must be a number in [0, 1]");
+  }
+  if (stringPropertyStrict(object, "curve", "") != "smoothstep") {
+    throw SonareException(ErrorCode::InvalidParameter, "transition.curve must be smoothstep");
+  }
   return result;
 }
 
@@ -334,19 +309,19 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
   const std::string kind = stringPropertyStrict(object, "kind", "");
   if (kind == "setEdit") {
     result.kind = SONARE_VOCAL_SET_EDIT;
-    result.note_id = noteIdProperty(object, "noteId");
+    result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");
     result.edit = editFromVal(property(object, "edit"), &storage->edit);
   } else if (kind == "setSourceSpan") {
     result.kind = SONARE_VOCAL_SET_SOURCE_SPAN;
-    result.note_id = noteIdProperty(object, "noteId");
-    result.source_start_sample = integerProperty(object, "sourceStartSample", 0);
-    result.source_end_sample = integerProperty(object, "sourceEndSample", 0);
-    result.destination_start_sample = integerProperty(object, "destinationStartSample", 0);
-    result.destination_length_samples = integerProperty(object, "destinationLengthSamples", 0);
+    result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");
+    result.source_start_sample = int64Property(object, "sourceStartSample", 0);
+    result.source_end_sample = int64Property(object, "sourceEndSample", 0);
+    result.destination_start_sample = int64Property(object, "destinationStartSample", 0);
+    result.destination_length_samples = int64Property(object, "destinationLengthSamples", 0);
   } else if (kind == "split") {
     result.kind = SONARE_VOCAL_SPLIT;
-    result.note_id = noteIdProperty(object, "noteId");
-    result.cut_source_sample = integerProperty(object, "sourceSample", 0);
+    result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");
+    result.cut_source_sample = int64Property(object, "sourceSample", 0);
   } else if (kind == "merge") {
     result.kind = SONARE_VOCAL_MERGE;
     storage->ids = idArray(property(object, "noteIds"), "noteIds");
@@ -364,8 +339,10 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
     result.transition = transitionFromVal(property(object, "transition"));
   } else if (kind == "removeTransition") {
     result.kind = SONARE_VOCAL_REMOVE_TRANSITION;
-    result.transition.left_note_id = noteIdProperty(object, "leftNoteId");
-    result.transition.right_note_id = noteIdProperty(object, "rightNoteId");
+    result.transition.left_note_id =
+        nonZeroId(checkedUintFromVal(property(object, "leftNoteId"), "leftNoteId"), "leftNoteId");
+    result.transition.right_note_id = nonZeroId(
+        checkedUintFromVal(property(object, "rightNoteId"), "rightNoteId"), "rightNoteId");
   } else if (kind == "reset") {
     result.kind = SONARE_VOCAL_RESET;
     storage->ids = idArray(property(object, "noteIds"), "noteIds");
@@ -375,6 +352,16 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
     throw SonareException(ErrorCode::InvalidParameter, "unsupported vocal edit operation");
   }
   return result;
+}
+
+void readSessionLimits(const val& object, uint64_t* max_history_bytes, uint64_t* max_cache_bytes,
+                       uint32_t* max_undo_depth, uint32_t* max_render_jobs) {
+  const val limits = property(object, "limits");
+  if (absent(limits)) return;
+  *max_history_bytes = decimalUint64Property(limits, "maxHistoryBytes", *max_history_bytes);
+  *max_cache_bytes = decimalUint64Property(limits, "maxCacheBytes", *max_cache_bytes);
+  *max_undo_depth = uintProperty(limits, "maxUndoDepth", *max_undo_depth);
+  *max_render_jobs = uintProperty(limits, "maxRenderJobs", *max_render_jobs);
 }
 
 struct CreateStorage {
@@ -388,69 +375,61 @@ struct CreateStorage {
 SonareVocalCreateOptions optionsFromVal(const val& object, CreateStorage* storage) {
   sonare_vocal_create_options_init(&storage->options);
   if (absent(object)) return storage->options;
-  storage->options.output_length_samples = integerProperty(object, "outputLengthSamples", 0);
+  storage->options.output_length_samples = int64Property(object, "outputLengthSamples", 0);
   storage->options.edge_fade_ms =
-      finiteProperty(object, "edgeFadeMs", storage->options.edge_fade_ms);
+      typedDoubleProperty(object, "edgeFadeMs", storage->options.edge_fade_ms);
   storage->options.vibrato_cutoff_hz =
-      finiteProperty(object, "vibratoCutoffHz", storage->options.vibrato_cutoff_hz);
-  storage->options.segmentation_threshold_cents = finiteProperty(
+      typedDoubleProperty(object, "vibratoCutoffHz", storage->options.vibrato_cutoff_hz);
+  storage->options.segmentation_threshold_cents = typedDoubleProperty(
       object, "segmentationThresholdCents", storage->options.segmentation_threshold_cents);
-  storage->options.min_note_ms = finiteProperty(object, "minNoteMs", storage->options.min_note_ms);
+  storage->options.min_note_ms =
+      typedDoubleProperty(object, "minNoteMs", storage->options.min_note_ms);
   storage->options.frame_length_samples =
-      uint32Property(object, "frameLengthSamples", storage->options.frame_length_samples);
+      uintProperty(object, "frameLengthSamples", storage->options.frame_length_samples);
   storage->options.hop_length_samples =
-      uint32Property(object, "hopLengthSamples", storage->options.hop_length_samples);
-  storage->options.fmin_hz = finiteProperty(object, "fminHz", storage->options.fmin_hz);
-  storage->options.fmax_hz = finiteProperty(object, "fmaxHz", storage->options.fmax_hz);
+      uintProperty(object, "hopLengthSamples", storage->options.hop_length_samples);
+  storage->options.fmin_hz = typedDoubleProperty(object, "fminHz", storage->options.fmin_hz);
+  storage->options.fmax_hz = typedDoubleProperty(object, "fmaxHz", storage->options.fmax_hz);
   storage->options.yin_threshold =
-      finiteProperty(object, "yinThreshold", storage->options.yin_threshold);
+      typedDoubleProperty(object, "yinThreshold", storage->options.yin_threshold);
   storage->options.voiced_threshold =
-      finiteProperty(object, "voicedThreshold", storage->options.voiced_threshold);
+      typedDoubleProperty(object, "voicedThreshold", storage->options.voiced_threshold);
   storage->options.centered =
       booleanProperty(object, "centered", storage->options.centered != 0) ? 1u : 0u;
   storage->options.reference_hz =
-      finiteProperty(object, "referenceHz", storage->options.reference_hz);
-  const val limits = property(object, "limits");
-  if (!absent(limits)) {
-    storage->options.max_history_bytes = decimalUint64(
-        property(limits, "maxHistoryBytes"), "maxHistoryBytes", storage->options.max_history_bytes);
-    storage->options.max_cache_bytes = decimalUint64(
-        property(limits, "maxCacheBytes"), "maxCacheBytes", storage->options.max_cache_bytes);
-    storage->options.max_undo_depth =
-        uint32Property(limits, "maxUndoDepth", storage->options.max_undo_depth);
-    storage->options.max_render_jobs =
-        uint32Property(limits, "maxRenderJobs", storage->options.max_render_jobs);
-  }
+      typedDoubleProperty(object, "referenceHz", storage->options.reference_hz);
+  readSessionLimits(object, &storage->options.max_history_bytes, &storage->options.max_cache_bytes,
+                    &storage->options.max_undo_depth, &storage->options.max_render_jobs);
   const val analysis = property(object, "analysis");
   if (!absent(analysis)) {
     sonare_vocal_analysis_init(&storage->analysis);
-    storage->analysis.frame_origin_sample = finiteProperty(analysis, "frameOriginSample", 0.0);
-    storage->analysis.samples_per_frame = finiteProperty(analysis, "samplesPerFrame", 0.0);
-    storage->analysis.frame_length_samples = uint32Property(analysis, "frameLengthSamples", 0);
+    storage->analysis.frame_origin_sample = typedDoubleProperty(analysis, "frameOriginSample", 0.0);
+    storage->analysis.samples_per_frame = typedDoubleProperty(analysis, "samplesPerFrame", 0.0);
+    storage->analysis.frame_length_samples = uintProperty(analysis, "frameLengthSamples", 0);
     // A supplied analysis is authoritative for fields it carries; omitted
     // optional settings inherit the create options, matching the other
     // language facades.
-    storage->analysis.fmin_hz = finiteProperty(analysis, "fminHz", storage->options.fmin_hz);
-    storage->analysis.fmax_hz = finiteProperty(analysis, "fmaxHz", storage->options.fmax_hz);
+    storage->analysis.fmin_hz = typedDoubleProperty(analysis, "fminHz", storage->options.fmin_hz);
+    storage->analysis.fmax_hz = typedDoubleProperty(analysis, "fmaxHz", storage->options.fmax_hz);
     storage->analysis.yin_threshold =
-        finiteProperty(analysis, "yinThreshold", storage->options.yin_threshold);
+        typedDoubleProperty(analysis, "yinThreshold", storage->options.yin_threshold);
     storage->analysis.voiced_threshold =
-        finiteProperty(analysis, "voicedThreshold", storage->options.voiced_threshold);
+        typedDoubleProperty(analysis, "voicedThreshold", storage->options.voiced_threshold);
     storage->analysis.centered =
         booleanProperty(analysis, "centered", storage->options.centered != 0) ? 1u : 0u;
-    storage->analysis.segmentation_threshold_cents = finiteProperty(
+    storage->analysis.segmentation_threshold_cents = typedDoubleProperty(
         analysis, "segmentationThresholdCents", storage->options.segmentation_threshold_cents);
     storage->analysis.min_note_ms =
-        finiteProperty(analysis, "minNoteMs", storage->options.min_note_ms);
+        typedDoubleProperty(analysis, "minNoteMs", storage->options.min_note_ms);
     storage->analysis.reference_hz =
-        finiteProperty(analysis, "referenceHz", storage->options.reference_hz);
+        typedDoubleProperty(analysis, "referenceHz", storage->options.reference_hz);
     storage->f0 = floatArray(property(analysis, "f0Hz"), "analysis.f0Hz");
     storage->voiced = byteArray(property(analysis, "voiced"), "analysis.voiced");
     if (storage->f0.size() != storage->voiced.size()) {
       throw SonareException(ErrorCode::InvalidParameter, "analysis arrays must have equal length");
     }
     storage->algorithm = stringPropertyStrict(analysis, "algorithmId", "host");
-    storage->analysis.algorithm_version = uint32Property(analysis, "algorithmVersion", 1);
+    storage->analysis.algorithm_version = uintProperty(analysis, "algorithmVersion", 1);
     storage->analysis.f0_hz = storage->f0.data();
     storage->analysis.voiced = storage->voiced.data();
     storage->analysis.frame_count = storage->f0.size();
@@ -693,16 +672,24 @@ val js_vocal_edit_session_create(val samples, const val& sample_rate_value, val 
   return val(handleValue(session));
 }
 
-double js_vocal_edit_session_restore(val samples, const val& sample_rate_value, val state) {
+double js_vocal_edit_session_restore(val samples, const val& sample_rate_value, val state,
+                                     val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_value, "sampleRate");
   std::vector<float> source = float32ArrayToVector(samples);
   validateSource(source);
   std::vector<uint8_t> bytes = byteArray(state, "state");
+  SonareVocalRestoreOptions parsed{};
+  sonare_vocal_restore_options_init(&parsed);
+  if (!absent(options)) {
+    readSessionLimits(options, &parsed.max_history_bytes, &parsed.max_cache_bytes,
+                      &parsed.max_undo_depth, &parsed.max_render_jobs);
+  }
   SonareVocalEditSession* session = nullptr;
   check(
       [&] {
         return sonare_vocal_session_restore(source.data(), static_cast<int64_t>(source.size()), 1,
-                                            sample_rate, bytes.data(), bytes.size(), &session);
+                                            sample_rate, bytes.data(), bytes.size(), &parsed,
+                                            &session);
       },
       "vocal session restore");
   return handleValue(session);
@@ -807,7 +794,7 @@ val js_vocal_edit_session_history(double handle) {
 }
 
 val js_vocal_edit_session_begin_edit(double handle, const val& revision_value) {
-  const uint64_t expected = decimalUint64(revision_value, "expectedRevision");
+  const uint64_t expected = checkedDecimalUint64FromVal(revision_value, "expectedRevision");
   SonareVocalEditDraft* draft = nullptr;
   check(
       [&] {
@@ -827,9 +814,10 @@ val js_vocal_edit_draft_apply(double handle, const val& generation_value, val op
   EditResultGuard result;
   check(
       [&] {
-        return sonare_vocal_draft_apply(handlePointer<SonareVocalEditDraft>(handle, "draft"),
-                                        decimalUint64(generation_value, "expectedGeneration"),
-                                        parsed.data(), parsed.size(), &result.value);
+        return sonare_vocal_draft_apply(
+            handlePointer<SonareVocalEditDraft>(handle, "draft"),
+            checkedDecimalUint64FromVal(generation_value, "expectedGeneration"), parsed.data(),
+            parsed.size(), &result.value);
       },
       "vocal draft apply");
   return editResultToVal(result.value);
@@ -839,9 +827,9 @@ val js_vocal_edit_draft_commit(double handle, const val& revision_value) {
   EditResultGuard result;
   check(
       [&] {
-        return sonare_vocal_draft_commit(handlePointer<SonareVocalEditDraft>(handle, "draft"),
-                                         decimalUint64(revision_value, "expectedRevision"),
-                                         &result.value);
+        return sonare_vocal_draft_commit(
+            handlePointer<SonareVocalEditDraft>(handle, "draft"),
+            checkedDecimalUint64FromVal(revision_value, "expectedRevision"), &result.value);
       },
       "vocal draft commit");
   return editResultToVal(result.value);
@@ -865,7 +853,7 @@ val js_vocal_edit_session_apply_history(double handle, const val& revision_value
   check(
       [&] {
         const auto session = handlePointer<SonareVocalEditSession>(handle, "session");
-        const uint64_t expected = decimalUint64(revision_value, "expectedRevision");
+        const uint64_t expected = checkedDecimalUint64FromVal(revision_value, "expectedRevision");
         return redo ? sonare_vocal_session_redo(session, expected, &result.value)
                     : sonare_vocal_session_undo(session, expected, &result.value);
       },
@@ -954,7 +942,8 @@ val js_vocal_edit_snapshot_render(double handle, const val& start_value, const v
       [&] {
         return sonare_vocal_snapshot_render(
             handlePointer<const SonareVocalRenderSnapshot>(handle, "snapshot"), range,
-            decimalUint64(request_id_value, "requestId"), nullptr, nullptr, &result.value);
+            checkedDecimalUint64FromVal(request_id_value, "requestId"), nullptr, nullptr,
+            &result.value);
       },
       "vocal snapshot render");
   return renderResultToVal(result.value);
@@ -969,7 +958,7 @@ double js_vocal_edit_render_job_begin(double handle, const val& start_value, con
       [&] {
         return sonare_vocal_render_job_begin(
             handlePointer<const SonareVocalRenderSnapshot>(handle, "snapshot"), {start, end},
-            decimalUint64(request_id_value, "requestId"), &job);
+            checkedDecimalUint64FromVal(request_id_value, "requestId"), &job);
       },
       "vocal render job begin");
   return handleValue(job);
@@ -1036,9 +1025,13 @@ val js_vocal_edit_last_error_detail() {
   return result;
 }
 
+uint32_t js_vocal_edit_api_version() { return sonare_vocal_edit_api_version(); }
+
+int js_vocal_edit_available() { return sonare_vocal_available(); }
+
 void registerVocalEditBindingsImpl() {
-  function("vocalEditApiVersion", &sonare_vocal_edit_api_version);
-  function("vocalEditAvailable", &sonare_vocal_available);
+  function("vocalEditApiVersion", &js_vocal_edit_api_version);
+  function("vocalEditAvailable", &js_vocal_edit_available);
   function("vocalEditSessionCreate", &js_vocal_edit_session_create);
   function("vocalEditSessionRestore", &js_vocal_edit_session_restore);
   function("vocalEditSessionDestroy", &js_vocal_edit_session_destroy);

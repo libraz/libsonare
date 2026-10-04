@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -198,7 +199,7 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   CHECK(std::memcmp(state.data, "SVE1", 4) == 0);
   SonareVocalEditSession* restored = nullptr;
   REQUIRE(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
-                                       &restored) == SONARE_OK);
+                                       nullptr, &restored) == SONARE_OK);
   SonareVocalStateToken original_token{}, restored_token{};
   REQUIRE(sonare_vocal_session_token(s.get(), &original_token) == SONARE_OK);
   REQUIRE(sonare_vocal_session_token(restored, &restored_token) == SONARE_OK);
@@ -207,7 +208,7 @@ TEST_CASE("vocal C state restores exact source and reports digest mismatch", "[v
   f.samples[0] = -0.0f;
   restored = reinterpret_cast<SonareVocalEditSession*>(static_cast<uintptr_t>(1));
   CHECK(sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
-                                     &restored) != SONARE_OK);
+                                     nullptr, &restored) != SONARE_OK);
   CHECK(restored == nullptr);
   SonareVocalErrorDetail detail;
   sonare_vocal_error_detail_init(&detail);
@@ -388,3 +389,108 @@ TEST_CASE("vocal error detail has a valid header on a fresh thread", "[vocal_c_a
   CHECK(result.schema_version == SONARE_VOCAL_EDIT_API_VERSION);
   CHECK(result.reason == SONARE_VOCAL_REASON_NONE);
 }
+
+#if defined(SONARE_WITH_PITCH_EDITOR)
+TEST_CASE("vocal C create and restore enforce the supported sample-rate range",
+          "[vocal_c_api][vocal_sample_rate]") {
+  VocalFixture f;
+  auto s = f.create();
+  SonareVocalStateBytes state;
+  sonare_vocal_state_bytes_init(&state);
+  REQUIRE(sonare_vocal_session_export_state(s.get(), &state) == SONARE_OK);
+  // Supplied analysis is rate independent, so only the rate gate decides acceptance.
+  for (const int rate : {7999, 8000, 384000, 384001}) {
+    CAPTURE(rate);
+    const bool supported = rate >= 8000 && rate <= 384000;
+    SonareVocalEditSession* created = nullptr;
+    const auto create_error = sonare_vocal_session_create(f.samples.data(), f.samples.size(), 1,
+                                                          rate, &f.options, &created);
+    CHECK((create_error == SONARE_OK) == supported);
+    if (!supported) {
+      CHECK(create_error == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(created == nullptr);
+      SonareVocalErrorDetail detail;
+      sonare_vocal_error_detail_init(&detail);
+      sonare_vocal_last_error_detail(&detail);
+      CHECK(std::string(detail.field) == "sample_rate");
+    }
+    sonare_vocal_session_destroy(created);
+    SonareVocalEditSession* restored = nullptr;
+    const auto restore_error = sonare_vocal_session_restore(
+        f.samples.data(), 3200, 1, rate, state.data, state.size, nullptr, &restored);
+    if (supported) {
+      // In range, the rate gate passes and the recorded source rate decides instead.
+      CHECK(restore_error == (rate == 16000 ? SONARE_OK : SONARE_ERROR_INVALID_STATE));
+    } else {
+      CHECK(restore_error == SONARE_ERROR_INVALID_PARAMETER);
+    }
+    CHECK(restored == nullptr);
+  }
+  sonare_vocal_free_state_bytes(&state);
+}
+
+TEST_CASE("vocal C restore options carry runtime limits and validate their header",
+          "[vocal_c_api][vocal_restore_options]") {
+  VocalFixture f;
+  auto s = f.create();
+  SonareVocalStateBytes state;
+  sonare_vocal_state_bytes_init(&state);
+  REQUIRE(sonare_vocal_session_export_state(s.get(), &state) == SONARE_OK);
+  const auto restore = [&](const SonareVocalRestoreOptions* options, SonareVocalEditSession** out) {
+    return sonare_vocal_session_restore(f.samples.data(), 3200, 1, 16000, state.data, state.size,
+                                        options, out);
+  };
+  const auto begin_jobs = [](SonareVocalEditSession* session, int* accepted) {
+    SonareVocalRenderSnapshot* snapshot = nullptr;
+    REQUIRE(sonare_vocal_session_capture_snapshot(session, &snapshot) == SONARE_OK);
+    std::vector<SonareVocalRenderJob*> jobs;
+    *accepted = 0;
+    for (int i = 0; i < 6; ++i) {
+      SonareVocalRenderJob* job = nullptr;
+      if (sonare_vocal_render_job_begin(snapshot, {0, 320}, 1, &job) != SONARE_OK) break;
+      jobs.push_back(job);
+      ++*accepted;
+    }
+    for (auto* job : jobs) sonare_vocal_render_job_destroy(job);
+    sonare_vocal_snapshot_destroy(snapshot);
+  };
+
+  SonareVocalRestoreOptions defaults;
+  sonare_vocal_restore_options_init(&defaults);
+  CHECK(defaults.struct_size == sizeof(defaults));
+  CHECK(defaults.max_render_jobs == 4);
+
+  SECTION("NULL options restore with the default job limit") {
+    SonareVocalEditSession* restored = nullptr;
+    REQUIRE(restore(nullptr, &restored) == SONARE_OK);
+    int accepted = 0;
+    begin_jobs(restored, &accepted);
+    CHECK(accepted == static_cast<int>(defaults.max_render_jobs));
+    sonare_vocal_session_destroy(restored);
+  }
+  SECTION("a custom job limit is honoured") {
+    SonareVocalRestoreOptions options = defaults;
+    options.max_render_jobs = 2;
+    SonareVocalEditSession* restored = nullptr;
+    REQUIRE(restore(&options, &restored) == SONARE_OK);
+    int accepted = 0;
+    begin_jobs(restored, &accepted);
+    CHECK(accepted == 2);
+    sonare_vocal_session_destroy(restored);
+  }
+  SECTION("malformed options are refused") {
+    SonareVocalRestoreOptions small = defaults;
+    small.struct_size = sizeof(small) - 1;
+    SonareVocalRestoreOptions schema = defaults;
+    schema.schema_version = SONARE_VOCAL_EDIT_API_VERSION + 1;
+    SonareVocalRestoreOptions zero_jobs = defaults;
+    zero_jobs.max_render_jobs = 0;
+    for (const auto* options : {&small, &schema, &zero_jobs}) {
+      auto* restored = reinterpret_cast<SonareVocalEditSession*>(static_cast<uintptr_t>(1));
+      CHECK(restore(options, &restored) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(restored == nullptr);
+    }
+  }
+  sonare_vocal_free_state_bytes(&state);
+}
+#endif

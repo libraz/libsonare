@@ -11,6 +11,8 @@ import type {
 const UINT32_MAX = 0xffffffff;
 const MAX_PROJECT_ID = UINT32_MAX - 1;
 const UINT64_MAX = 0xffffffffffffffffn;
+const MIN_SAMPLE_RATE = 8000;
+const MAX_SAMPLE_RATE = 384000;
 
 interface NativeProjectVocal {
   applyVocalEdit(request: ProjectVocalEditApplyRequest): unknown;
@@ -137,18 +139,20 @@ function normalizeApplyRequest(
       'request.renderedMono length must equal request.expectedSourceSampleCount',
     );
   }
-  const expectedSourceSampleRate = uint32(
+  const expectedSourceSampleRate = safeInteger(
     input.expectedSourceSampleRate,
     'request.expectedSourceSampleRate',
+    MIN_SAMPLE_RATE,
+    MAX_SAMPLE_RATE,
   );
-  if (expectedSourceSampleRate === 0) {
-    throw new RangeError('request.expectedSourceSampleRate must be positive');
-  }
-  const renderedSampleRate = uint32(input.renderedSampleRate, 'request.renderedSampleRate');
-  if (renderedSampleRate === 0 || renderedSampleRate !== expectedSourceSampleRate) {
-    throw new RangeError(
-      'request.renderedSampleRate must equal request.expectedSourceSampleRate and be positive',
-    );
+  const renderedSampleRate = safeInteger(
+    input.renderedSampleRate,
+    'request.renderedSampleRate',
+    MIN_SAMPLE_RATE,
+    MAX_SAMPLE_RATE,
+  );
+  if (renderedSampleRate !== expectedSourceSampleRate) {
+    throw new RangeError('request.renderedSampleRate must equal request.expectedSourceSampleRate');
   }
   const renderedStartSample = safeInteger(
     input.renderedStartSample ?? 0,
@@ -261,10 +265,12 @@ function booleanValue(value: unknown, field: string): boolean {
 function originalSource(value: unknown, index: number): ProjectVocalOriginalSource {
   const source = objectValue(value, `originals[${index}]`);
   const mono = float32Copy(source.mono, `originals[${index}].mono`);
-  const sampleRate = uint32(source.sampleRate, `originals[${index}].sampleRate`);
-  if (sampleRate === 0) {
-    throw new RangeError(`originals[${index}].sampleRate must be positive`);
-  }
+  const sampleRate = safeInteger(
+    source.sampleRate,
+    `originals[${index}].sampleRate`,
+    MIN_SAMPLE_RATE,
+    MAX_SAMPLE_RATE,
+  );
   return {
     sourceId: projectId(source.sourceId, `originals[${index}].sourceId`),
     mono,
@@ -304,7 +310,7 @@ export function projectGetVocalEditDependencies(
   return result;
 }
 
-/** Rehydrate unresolved vocal PCM with a call-scoped cancellation callback. */
+/** Rehydrate unresolved vocal PCM; any truthy return from `cancel` cancels the call. */
 export function projectRehydrateVocalEdits(
   native: NativeProjectVocal,
   originals: readonly ProjectVocalOriginalSource[],
