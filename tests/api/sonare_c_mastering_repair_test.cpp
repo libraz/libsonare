@@ -1723,6 +1723,33 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
                 good, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("hop_length above n_fft is refused by the shared pre-check on all three entries") {
+    SonareDereverbClassicalConfig bad = base;
+    bad.hop_length = bad.n_fft * 2;
+    // The core would refuse too, but with a message; the pre-check records none.
+    float* mono_out = nullptr;
+    size_t mono_length = 0;
+    REQUIRE(sonare_mastering_repair_dereverb_classical(reverberant.data(), length, sr, &bad,
+                                                       &mono_out, &mono_length) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).empty());
+
+    SonareDereverbStereoResult stereo{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(reverberant.data(), other.data(),
+                                                              length, sr, &bad, &stereo) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).empty());
+
+    std::vector<float> left(length);
+    std::vector<float> right(length);
+    const float* in[2] = {reverberant.data(), other.data()};
+    float* outs[2] = {left.data(), right.data()};
+    SonareDereverbReport report{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_linked(
+                in, 2, length, sr, &bad, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).empty());
+  }
 }
 
 TEST_CASE("sonare_mastering_repair_linked_rejects_impossible_channel_count", "[c_api][mastering]") {

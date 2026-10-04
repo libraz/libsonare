@@ -686,10 +686,7 @@ SonareError sonare_mastering_repair_dereverb_classical_linked(
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
   if (out_report) *out_report = {};
-  if (config) {
-    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!dereverb_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_linked(
       channels, channel_count, length, sample_rate, out_channels, out_report,

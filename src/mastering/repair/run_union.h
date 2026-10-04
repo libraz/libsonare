@@ -6,9 +6,10 @@
 
 namespace sonare::mastering::repair {
 
-/// Merges two ascending, non-overlapping run lists (any type with `start`/`end`)
-/// into one ascending list, unioning runs that overlap. Runs that merely touch
-/// stay separate. Equal starts resolve to the same result in either order.
+/// Merges two ascending, non-overlapping lists of non-empty runs (any type with
+/// `start`/`end`) into one ascending list, unioning runs that overlap. Runs that
+/// merely touch stay separate. Equal starts give the same result in either order
+/// only because runs are non-empty; an empty run would not absorb its partner.
 template <typename Run>
 std::vector<Run> union_sorted_runs(const std::vector<Run>& a, const std::vector<Run>& b) {
   std::vector<Run> result;
