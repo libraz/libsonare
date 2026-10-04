@@ -44,10 +44,7 @@ uint32_t ProjectWasm::addTrack(val desc) {
     }
   }
   uint32_t out = 0;
-  const SonareError err = sonare_project_add_track(project_.get(), &d, &out);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to add track");
-  }
+  checkCError(sonare_project_add_track(project_.get(), &d, &out), "failed to add track");
   return out;
 }
 
@@ -87,10 +84,7 @@ uint32_t ProjectWasm::addClip(val desc) {
     d.source_uri = source_uri.c_str();
   }
   uint32_t out = 0;
-  const SonareError err = sonare_project_add_clip(project_.get(), &d, &out);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to add clip");
-  }
+  checkCError(sonare_project_add_clip(project_.get(), &d, &out), "failed to add clip");
   return out;
 }
 
@@ -121,11 +115,8 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   }
   uint32_t clip_id = 0;
   size_t take_count = 0;
-  const SonareError err =
-      sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to add loop recording takes");
-  }
+  checkCError(sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count),
+              "failed to add loop recording takes");
   val out = val::object();
   out.set("clipId", clip_id);
   out.set("takeCount", static_cast<double>(take_count));
@@ -135,11 +126,8 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
 val ProjectWasm::addMidiClip(double start_ppq, double length_ppq) {
   uint32_t track = 0;
   uint32_t clip = 0;
-  const SonareError err =
-      sonare_project_add_midi_clip(project_.get(), start_ppq, length_ppq, &track, &clip);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to add MIDI clip");
-  }
+  checkCError(sonare_project_add_midi_clip(project_.get(), start_ppq, length_ppq, &track, &clip),
+              "failed to add MIDI clip");
   val out = val::object();
   out.set("trackId", track);
   out.set("clipId", clip);
@@ -149,19 +137,15 @@ val ProjectWasm::addMidiClip(double start_ppq, double length_ppq) {
 uint32_t ProjectWasm::splitClip(const val& clip_id_val, double split_ppq) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   uint32_t out = 0;
-  const SonareError err = sonare_project_split_clip(project_.get(), clip_id, split_ppq, &out);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to split clip");
-  }
+  checkCError(sonare_project_split_clip(project_.get(), clip_id, split_ppq, &out),
+              "failed to split clip");
   return out;
 }
 
 void ProjectWasm::trimClip(const val& clip_id_val, double start_ppq, double length_ppq) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const SonareError err = sonare_project_trim_clip(project_.get(), clip_id, start_ppq, length_ppq);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to trim clip");
-  }
+  checkCError(sonare_project_trim_clip(project_.get(), clip_id, start_ppq, length_ppq),
+              "failed to trim clip");
 }
 
 void ProjectWasm::moveClip(const val& clip_id_val, double start_ppq, const val& track_id_val) {
@@ -169,28 +153,22 @@ void ProjectWasm::moveClip(const val& clip_id_val, double start_ppq, const val& 
   // The facade spells the destination track "newTrackId"; the key names the
   // argument a caller wrote, not the C++ parameter.
   const uint32_t track_id = checkedUintFromVal(track_id_val, "newTrackId");
-  const SonareError err = sonare_project_move_clip(project_.get(), clip_id, start_ppq, track_id);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to move clip");
-  }
+  checkCError(sonare_project_move_clip(project_.get(), clip_id, start_ppq, track_id),
+              "failed to move clip");
 }
 
 void ProjectWasm::setTrackKind(const val& track_id_val, const val& kind_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t kind = checkedUintFromVal(kind_val, "kind");
-  const SonareError err = sonare_project_set_track_kind(project_.get(), track_id, kind);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set track kind");
-  }
+  checkCError(sonare_project_set_track_kind(project_.get(), track_id, kind),
+              "failed to set track kind");
 }
 
 void ProjectWasm::setClipWarpRef(const val& clip_id_val, const val& warp_ref_id_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const uint32_t warp_ref_id = checkedUintFromVal(warp_ref_id_val, "warpRefId");
-  const SonareError err = sonare_project_set_clip_warp_ref(project_.get(), clip_id, warp_ref_id);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set clip warp reference");
-  }
+  checkCError(sonare_project_set_clip_warp_ref(project_.get(), clip_id, warp_ref_id),
+              "failed to set clip warp reference");
 }
 
 void ProjectWasm::setClipWarpMode(const val& clip_id_val, val mode_val) {
@@ -217,10 +195,8 @@ void ProjectWasm::setClipWarpMode(const val& clip_id_val, val mode_val) {
     }
     mode = static_cast<SonareProjectWarpMode>(mode_int);
   }
-  const SonareError err = sonare_project_set_clip_warp_mode(project_.get(), clip_id, mode);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set clip warp mode");
-  }
+  checkCError(sonare_project_set_clip_warp_mode(project_.get(), clip_id, mode),
+              "failed to set clip warp mode");
 }
 
 void ProjectWasm::setWarpMap(val desc) {
@@ -242,18 +218,13 @@ void ProjectWasm::setWarpMap(val desc) {
   cdesc.name = name.empty() ? nullptr : name.c_str();
   cdesc.anchors = anchors.empty() ? nullptr : anchors.data();
   cdesc.anchor_count = anchors.size();
-  const SonareError err = sonare_project_set_warp_map(project_.get(), &cdesc);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set warp map");
-  }
+  checkCError(sonare_project_set_warp_map(project_.get(), &cdesc), "failed to set warp map");
 }
 
 void ProjectWasm::removeWarpMap(const val& warp_ref_id_val) {
   const uint32_t warp_ref_id = checkedUintFromVal(warp_ref_id_val, "warpRefId");
-  const SonareError err = sonare_project_remove_warp_map(project_.get(), warp_ref_id);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to remove warp map");
-  }
+  checkCError(sonare_project_remove_warp_map(project_.get(), warp_ref_id),
+              "failed to remove warp map");
 }
 
 namespace {
@@ -286,13 +257,11 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
   SonareProjectWarpAnchor* rows = nullptr;
   size_t count = 0;
   SonareTakeAlignment alignment{};
-  const SonareError err = sonare_align_take_to_reference(
-      reference_buffer.empty() ? nullptr : reference_buffer.data(), reference_buffer.size(),
-      take_buffer.empty() ? nullptr : take_buffer.data(), take_buffer.size(), sample_rate,
-      &resolved, &rows, &count, &alignment);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to align take to reference");
-  }
+  checkCError(sonare_align_take_to_reference(
+                  reference_buffer.empty() ? nullptr : reference_buffer.data(),
+                  reference_buffer.size(), take_buffer.empty() ? nullptr : take_buffer.data(),
+                  take_buffer.size(), sample_rate, &resolved, &rows, &count, &alignment),
+              "failed to align take to reference");
   // Copied out and released before anything JS-facing is built, so a throw while
   // marshalling cannot leak the heap block.
   std::vector<SonareProjectWarpAnchor> anchors;
@@ -318,45 +287,34 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
 void ProjectWasm::setTrackMidiDestination(const val& track_id_val, const val& destination_id_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  const SonareError err =
-      sonare_project_set_track_midi_destination(project_.get(), track_id, destination_id);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set track MIDI destination");
-  }
+  checkCError(sonare_project_set_track_midi_destination(project_.get(), track_id, destination_id),
+              "failed to set track MIDI destination");
 }
 
 void ProjectWasm::setTrackGain(const val& track_id_val, const val& gain_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const float gain = checkedFloatFromVal(gain_val, "gain");
-  const SonareError err = sonare_project_set_track_gain(project_.get(), track_id, gain);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set track gain");
-  }
+  checkCError(sonare_project_set_track_gain(project_.get(), track_id, gain),
+              "failed to set track gain");
 }
 
 void ProjectWasm::setTrackMute(const val& track_id_val, bool mute) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  const SonareError err = sonare_project_set_track_mute(project_.get(), track_id, mute ? 1 : 0);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set track mute");
-  }
+  checkCError(sonare_project_set_track_mute(project_.get(), track_id, mute ? 1 : 0),
+              "failed to set track mute");
 }
 
 void ProjectWasm::setTrackSolo(const val& track_id_val, bool solo) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  const SonareError err = sonare_project_set_track_solo(project_.get(), track_id, solo ? 1 : 0);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set track solo");
-  }
+  checkCError(sonare_project_set_track_solo(project_.get(), track_id, solo ? 1 : 0),
+              "failed to set track solo");
 }
 
 void ProjectWasm::setTrackPan(const val& track_id_val, const val& pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const float pan = checkedFloatFromVal(pan_val, "pan");
-  const SonareError err = sonare_project_set_track_pan(project_.get(), track_id, pan);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set track pan");
-  }
+  checkCError(sonare_project_set_track_pan(project_.get(), track_id, pan),
+              "failed to set track pan");
 }
 
 void ProjectWasm::undo() {
@@ -374,26 +332,19 @@ void ProjectWasm::redo() {
 }
 
 void ProjectWasm::clearHistory() {
-  const SonareError err = sonare_project_clear_history(project_.get());
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to clear history");
-  }
+  checkCError(sonare_project_clear_history(project_.get()), "failed to clear history");
 }
 
 void ProjectWasm::setMaxUndoDepth(const val& depth_val) {
   const std::size_t depth = static_cast<std::size_t>(checkedUintFromVal(depth_val, "depth"));
-  const SonareError err = sonare_project_set_max_undo_depth(project_.get(), depth);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set max undo depth");
-  }
+  checkCError(sonare_project_set_max_undo_depth(project_.get(), depth),
+              "failed to set max undo depth");
 }
 
 void ProjectWasm::setMaxHistoryBytes(const val& bytes_val) {
   const std::size_t bytes = static_cast<std::size_t>(checkedUintFromVal(bytes_val, "bytes"));
-  const SonareError err = sonare_project_set_max_history_bytes(project_.get(), bytes);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to set max history bytes");
-  }
+  checkCError(sonare_project_set_max_history_bytes(project_.get(), bytes),
+              "failed to set max history bytes");
 }
 
 void registerProjectArrange(class_<ProjectWasm>& cls) {

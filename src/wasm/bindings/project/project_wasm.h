@@ -75,6 +75,11 @@ inline sonare::ErrorCode codeFromCError(SonareError err) {
   throw sonare::SonareException(codeFromCError(err), message);
 }
 
+/// Throws via throwCError unless @p err is SONARE_OK.
+inline void checkCError(SonareError err, const char* context) {
+  if (err != SONARE_OK) throwCError(err, context);
+}
+
 struct ProjectWasm {
   ProjectWasm();
 

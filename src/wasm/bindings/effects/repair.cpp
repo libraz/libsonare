@@ -58,6 +58,31 @@ val channelSetToVal(const std::vector<Audio>& channels) {
   return out;
 }
 
+// Loads and validates a stereo pair; `entry` is the JS entry name used in budget errors.
+struct StereoInput {
+  Audio left;
+  Audio right;
+};
+
+StereoInput loadStereoInput(val left_samples, val right_samples, const val& sample_rate_val,
+                            const char* entry) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               (std::string(entry) + " input").c_str(), true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  return {std::move(left), std::move(right)};
+}
+
+// Result object carrying the processed pair; callers add their report fields. A trimmed channel
+// can be empty; the pointer overload never dereferences data() when size() is 0, so that is safe.
+val stereoResultToVal(const Audio& left, const Audio& right) {
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left.data(), left.size()));
+  out.set("right", vectorToFloat32Array(right.data(), right.size()));
+  return out;
+}
+
 mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options, const char* entry) {
   mastering::repair::DeclickConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
@@ -130,18 +155,13 @@ val declickReportToVal(const mastering::repair::DeclickReport& report) {
 // siblings.
 val js_mastering_repair_declick_stereo(val left_samples, val right_samples,
                                        const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDeclickStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in =
+      loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDeclickStereo");
   const mastering::repair::DeclickConfig cfg =
       readMasteringRepairDeclick(options, "masteringRepairDeclickStereo");
   mastering::repair::DeclickStereoResult result =
-      mastering::repair::declick_stereo(left, right, cfg);
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
-  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
+      mastering::repair::declick_stereo(in.left, in.right, cfg);
+  val out = stereoResultToVal(result.left, result.right);
   out.set("leftReport", declickReportToVal(result.left_report));
   out.set("rightReport", declickReportToVal(result.right_report));
   return out;
@@ -318,18 +338,13 @@ val denoiseReportToVal(const mastering::repair::DenoiseReport& report) {
 // binding sources.
 val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_samples,
                                                  const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDenoiseClassicalStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
+                                         "masteringRepairDenoiseClassicalStereo");
   const mastering::repair::DenoiseClassicalConfig cfg =
       validatedDenoiseConfig(options, "masteringRepairDenoiseClassicalStereo");
   mastering::repair::DenoiseStereoResult result =
-      mastering::repair::denoise_classical_stereo(left, right, cfg);
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
-  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
+      mastering::repair::denoise_classical_stereo(in.left, in.right, cfg);
+  val out = stereoResultToVal(result.left, result.right);
   out.set("report", denoiseReportToVal(result.report));
   return out;
 }
@@ -405,16 +420,12 @@ val declipReportToVal(const mastering::repair::DeclipReport& report) {
 // sources.
 val js_mastering_repair_declip_stereo(val left_samples, val right_samples,
                                       const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDeclipStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in =
+      loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDeclipStereo");
   const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
-  mastering::repair::DeclipStereoResult result = mastering::repair::declip_stereo(left, right, cfg);
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
-  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
+  mastering::repair::DeclipStereoResult result =
+      mastering::repair::declip_stereo(in.left, in.right, cfg);
+  val out = stereoResultToVal(result.left, result.right);
   out.set("leftReport", declipReportToVal(result.left_report));
   out.set("rightReport", declipReportToVal(result.right_report));
   return out;
@@ -529,17 +540,12 @@ val decrackleReportToVal(const mastering::repair::DecrackleReport& report) {
 // WASM binding sources.
 val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
                                          const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDecrackleStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
+                                         "masteringRepairDecrackleStereo");
   const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
   mastering::repair::DecrackleStereoResult result =
-      mastering::repair::decrackle_stereo(left, right, cfg);
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
-  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
+      mastering::repair::decrackle_stereo(in.left, in.right, cfg);
+  val out = stereoResultToVal(result.left, result.right);
   out.set("leftReport", decrackleReportToVal(result.left_report));
   out.set("rightReport", decrackleReportToVal(result.right_report));
   return out;
@@ -588,16 +594,12 @@ val dehumReportToVal(const mastering::repair::DehumReport& report) {
 // sonare_c_mastering_repair.cpp is not part of the WASM binding sources.
 val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
                                      const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDehumStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in =
+      loadStereoInput(left_samples, right_samples, sample_rate_val, "masteringRepairDehumStereo");
   const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
-  mastering::repair::DehumStereoResult result = mastering::repair::dehum_stereo(left, right, cfg);
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
-  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
+  mastering::repair::DehumStereoResult result =
+      mastering::repair::dehum_stereo(in.left, in.right, cfg);
+  val out = stereoResultToVal(result.left, result.right);
   out.set("leftReport", dehumReportToVal(result.left_report));
   out.set("rightReport", dehumReportToVal(result.right_report));
   return out;
@@ -642,18 +644,13 @@ val dereverbReportToVal(const mastering::repair::DereverbReport& report) {
 // sources.
 val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_samples,
                                                   const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDereverbClassicalStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
+                                         "masteringRepairDereverbClassicalStereo");
   const mastering::repair::DereverbClassicalConfig cfg =
       validatedDereverbConfig(options, "masteringRepairDereverbClassicalStereo");
   mastering::repair::DereverbStereoResult result =
-      mastering::repair::dereverb_classical_stereo(left, right, cfg);
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
-  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
+      mastering::repair::dereverb_classical_stereo(in.left, in.right, cfg);
+  val out = stereoResultToVal(result.left, result.right);
   out.set("report", dereverbReportToVal(result.report));
   return out;
 }
@@ -752,13 +749,6 @@ val trimReportToVal(const mastering::repair::TrimReport& report) {
   return out;
 }
 
-// A trimmed channel can be empty, which no other repair stereo entry produces;
-// the pointer overload never dereferences channel.data() when size() is 0, so
-// a possibly-null pointer on an empty channel is safe without a special case.
-val trimmedChannelToVal(const Audio& channel) {
-  return vectorToFloat32Array(channel.data(), channel.size());
-}
-
 }  // namespace
 
 // Unlike every other repair stereo entry this SHORTENS its input, and a pair in
@@ -767,19 +757,14 @@ val trimmedChannelToVal(const Audio& channel) {
 // this file does -- sonare_c_mastering_repair.cpp is not a WASM binding source.
 val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
                                             const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairTrimSilenceStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
+                                         "masteringRepairTrimSilenceStereo");
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilenceStereo");
   mastering::repair::TrimSilenceStereoResult result =
-      mastering::repair::trim_silence_stereo(left, right, cfg);
+      mastering::repair::trim_silence_stereo(in.left, in.right, cfg);
 
-  val out = val::object();
-  out.set("left", trimmedChannelToVal(result.left));
-  out.set("right", trimmedChannelToVal(result.right));
+  val out = stereoResultToVal(result.left, result.right);
   out.set("report", trimReportToVal(result.report));
   out.set("leftRange", trimRangeToVal(result.left_range));
   out.set("rightRange", trimRangeToVal(result.right_range));
@@ -887,15 +872,12 @@ val js_mastering_repair_detect_trim_range(val samples, const val& sample_rate, v
 // it is rather than widening it to the buffer end.
 val js_mastering_repair_detect_trim_range_stereo(val left_samples, val right_samples,
                                                  const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
-                               "masteringRepairDetectTrimRangeStereo input", true);
-  Audio left = loadValidatedAudio(left_samples, sample_rate);
-  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const StereoInput in = loadStereoInput(left_samples, right_samples, sample_rate_val,
+                                         "masteringRepairDetectTrimRangeStereo");
   const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
       options, mastering::repair::TrimSilenceConfig{}, "masteringRepairDetectTrimRangeStereo");
   return trimRangeToVal(mastering::repair::detect_trim_range_stereo(
-      left.data(), right.data(), left.size(), left.sample_rate(), cfg));
+      in.left.data(), in.right.data(), in.left.size(), in.left.sample_rate(), cfg));
 }
 
 void registerRepairBindings() {
