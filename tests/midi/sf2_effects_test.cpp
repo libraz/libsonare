@@ -30,8 +30,8 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::PartRigMode;
 using sonare::midi::synth::Sf2File;
-using sonare::midi::synth::Sf2InsertType;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::test::AllocationGuard;
@@ -320,12 +320,16 @@ TEST_CASE("tail_samples covers the effect ring-out", "[midi][sf2][gsfx]") {
   REQUIRE(peak(after.left, 0, after.left.size()) < 1e-3f);
 }
 
+#if defined(SONARE_WITH_MASTERING)
 TEST_CASE("per-part insert drive saturates only its part", "[midi][sf2][gsfx]") {
-  // Drive on part 0: a looped 1 kHz sine gains odd harmonics.
+  // A soft clipper on part 0: a looped 1 kHz sine gains odd harmonics.
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
-  cfg.part_inserts[0].type = Sf2InsertType::kDrive;
-  cfg.part_inserts[0].amount = 1.0f;
+  cfg.part_rigs[0].mode = PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"saturation.softClipper", R"({"driveDb":20})"}};
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
   Sf2Player driven = make_player(cfg);
   driven.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender drv = render(driven, 9600);
@@ -354,6 +358,7 @@ TEST_CASE("per-part insert drive saturates only its part", "[midi][sf2][gsfx]") 
   const StereoRender oth = render(other, 9600);
   REQUIRE(h3(oth.left) < 100.0 * h3(cln.left));
 }
+#endif  // SONARE_WITH_MASTERING
 
 // The kProcessor insert slot routes through mastering::api::make_insert, which
 // only exists on a build with the mastering library.
@@ -376,8 +381,8 @@ TEST_CASE("per-part processor insert runs an injected factory-built effect", "[m
   // factory and runs it on the part bus: the 1 kHz sine gains odd harmonics.
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
-  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-  cfg.part_inserts[0].stages = {{"saturation.tube", R"({"driveDb":30})"}};
+  cfg.part_rigs[0].mode = PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"saturation.tube", R"({"driveDb":30})"}};
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
@@ -417,8 +422,8 @@ TEST_CASE("a part carries its own insert and the file's EFX in series", "[midi][
     cfg.realize_efx_inline = true;
     cfg.insert_factory = factory;
     if (insert) {
-      cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-      cfg.part_inserts[0].stages = {{"saturation.tube", R"({"driveDb":30})"}};
+      cfg.part_rigs[0].mode = PartRigMode::kChain;
+      cfg.part_rigs[0].stages = {{"saturation.tube", R"({"driveDb":30})"}};
     }
     Sf2Player player = make_player(cfg);
     if (efx) {
@@ -572,8 +577,8 @@ TEST_CASE("a non-finite insert sample never reaches the mix-bus state", "[midi][
 
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
-  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-  cfg.part_inserts[0].stages = {{"test.nan", "{}"}};
+  cfg.part_rigs[0].mode = PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"test.nan", "{}"}};
   cfg.insert_factory = [](std::string_view, std::string_view) {
     return std::unique_ptr<sonare::rt::ProcessorBase>(new NanInsert());
   };
@@ -866,11 +871,15 @@ TEST_CASE("GS effects render bit-identically", "[midi][sf2][gsfx]") {
   REQUIRE(run() == run());
 }
 
+#if defined(SONARE_WITH_MASTERING)
 TEST_CASE("GS effect bus audio path performs no heap allocation", "[midi][sf2][gsfx][rt]") {
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
-  cfg.part_inserts[0].type = Sf2InsertType::kDrive;
-  cfg.part_inserts[0].amount = 0.5f;
+  cfg.part_rigs[0].mode = PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"saturation.softClipper", R"({"driveDb":12})"}};
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
   Sf2Player player = make_player(cfg);
   std::vector<float> left(512, 0.0f), right(512, 0.0f);
   float* chans[2] = {left.data(), right.data()};
@@ -887,8 +896,6 @@ TEST_CASE("GS effect bus audio path performs no heap allocation", "[midi][sf2][g
   player.process(chans, 2, 512);
   REQUIRE(guard.count() == 0);
 }
-
-#if defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("a live GS EFX swap keeps the audio path allocation-free", "[midi][sf2][gsfx][rt]") {
   // Enable EFX on part 1 (channel 0) and select Overdrive (01 10); Roland DT1

@@ -35,16 +35,19 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
   if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 48;
-  for (int part = 0; part < 16; ++part) {
-    Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
-    insert.amount = std::clamp(insert.amount, 0.0f, 1.0f);
-    any_insert_ = any_insert_ || insert.type != Sf2InsertType::kNone;
+  // The stage owns the factory, the realisation and the bank-rig switch from here
+  // on. A player with a factory is EFX-capable: its part buses exist so a GS EFX
+  // switch can install a unit on any part at run time, while parts it does not
+  // buss stay bit-identical to a render built without one.
+  PartFxStageConfig fx;
+  fx.insert_factory = std::move(config_.insert_factory);
+  fx.bank_rig_binding = config_.bank_rig_binding;
+  fx.realization = config_.gs_efx_realization;
+  part_fx_ = PartFxStage(std::move(fx));
+  for (uint8_t part = 0; part < 16; ++part) {
+    const PartRig& rig = config_.part_rigs[part];
+    if (rig.mode != PartRigMode::kBank) part_fx_.set_part_rig(part, rig);
   }
-  // A player with an insert factory is EFX-capable: allocate the per-part bus so
-  // a GS EFX switch can install an insert on any part at run time. Parts are not
-  // bussed until an EFX is actually realised (see part_bussed_), so a dry bounce
-  // stays bit-identical to one built without a factory.
-  if (config_.insert_factory) any_insert_ = true;
 #if defined(SONARE_MIDI_WITH_FX)
   effects_ = std::make_unique<GsEffectBus>(config_.effects);
 #endif
@@ -54,15 +57,12 @@ Sf2Player::~Sf2Player() = default;
 
 void Sf2Player::clear_control_owned_gs_state() {
   // prepare() and reset() are quiescent boundaries; no stale delta may cross one.
-  efx_ = {};
-  efx_part_assign_ = {};
+  part_fx_.clear_mirror();
   direct_legacy_efx_fallback_.fill(false);
-  gs_efx_dirty_ = false;
   sys_fx_ = {};
   master_eq_ = {};
   eq_part_bypassed_ = {};
   gs_system_dirty_ = false;
-  efx_param_queue_ = std::make_unique<EfxParamQueue>();
   clear_direct_gs_queue();
   direct_system_patch_control_ = {};
   direct_system_audio_fx_ = {};
@@ -89,14 +89,13 @@ void Sf2Player::clear_prepared_audio_state() noexcept {
   prepared_sys_fx_ = {};
   prepared_master_eq_ = {};
   prepared_eq_part_bypassed_ = {};
-  prepared_part_unit_.fill(Sf2RealizedEfx::kNoUnit);
+  prepared_part_unit_.fill(PartFxSnapshot::kNoUnit);
   prepared_part_bussed_.fill(false);
-  prepared_default_bank_rig_.fill(false);
-  prepared_default_bank_rig_mono_prefix_.fill(0);
+  prepared_mono_prefix_.fill(0);
   prepared_unit_fed_.fill(false);
   prepared_host_part_bussed_.fill(false);
   prepared_host_default_bank_rig_.fill(false);
-  prepared_host_default_bank_rig_mono_prefix_.fill(0);
+  prepared_host_mono_prefix_.fill(0);
   prepared_host_any_bussed_ = false;
   prepared_any_unit_ = false;
   prepared_any_bussed_ = false;
@@ -106,8 +105,8 @@ void Sf2Player::clear_prepared_audio_state() noexcept {
 }
 
 void Sf2Player::seed_prepared_from_control_state() noexcept {
-  prepared_efx_ = efx_;
-  prepared_assign_ = efx_part_assign_;
+  prepared_efx_ = part_fx_.efx();
+  prepared_assign_ = part_fx_.part_assign();
   prepared_sys_fx_ = sys_fx_;
   prepared_master_eq_ = master_eq_;
   prepared_eq_part_bypassed_ = eq_part_bypassed_;
@@ -126,22 +125,21 @@ void Sf2Player::release_prepared_nodes() noexcept {
 }
 
 void Sf2Player::rebuild_prepared_routing() noexcept {
-  prepared_part_unit_.fill(Sf2RealizedEfx::kNoUnit);
+  prepared_part_unit_.fill(PartFxSnapshot::kNoUnit);
   prepared_part_bussed_ = prepared_host_part_bussed_;
-  prepared_default_bank_rig_ = prepared_host_default_bank_rig_;
-  prepared_default_bank_rig_mono_prefix_ = prepared_host_default_bank_rig_mono_prefix_;
+  prepared_mono_prefix_ = prepared_host_mono_prefix_;
   prepared_unit_fed_.fill(false);
   prepared_any_unit_ = false;
   prepared_any_bussed_ = prepared_host_any_bussed_;
-  if (!config_.insert_factory) return;
+  if (!part_fx_.enabled()) return;
   for (size_t part = 0; part < prepared_assign_.size(); ++part) {
     const int unit = gs_efx_assign_unit(prepared_assign_[part]);
     if (unit < 0 || !prepared_efx_[static_cast<size_t>(unit)].assigned) continue;
     prepared_part_unit_[part] = static_cast<uint8_t>(unit);
     prepared_part_bussed_[part] = true;
-    // A routed part feeds its unit the DI; render_chunk() skips the rig chain.
-    prepared_default_bank_rig_[part] = false;
-    prepared_default_bank_rig_mono_prefix_[part] = 0;
+    // A routed part feeds its unit the DI; render_chunk() skips the bank rig. An
+    // explicit chain stays in series and keeps its mono prefix.
+    if (prepared_host_default_bank_rig_[part]) prepared_mono_prefix_[part] = 0;
     prepared_unit_fed_[static_cast<size_t>(unit)] = true;
     prepared_any_unit_ = true;
     prepared_any_bussed_ = true;
@@ -153,18 +151,14 @@ void Sf2Player::sync_prepared_base() noexcept {
   // Recomputed per boundary: a program change can publish a new default rig.
   prepared_host_part_bussed_.fill(false);
   prepared_host_default_bank_rig_.fill(false);
-  prepared_host_default_bank_rig_mono_prefix_.fill(0);
+  prepared_host_mono_prefix_.fill(0);
   prepared_host_any_bussed_ = false;
-  const Sf2RealizedEfx* snapshot = efx_pub_->current();
+  const PartFxSnapshot* snapshot = part_fx_.current();
   for (size_t part = 0; part < prepared_host_part_bussed_.size(); ++part) {
     // The snapshot's tags, never gm_rig_chain(), which allocates.
     const bool host_bussed = snapshot != nullptr && snapshot->host_part_bussed[part];
-    const bool bank_rig = snapshot != nullptr && snapshot->default_bank_rig[part];
-    prepared_host_default_bank_rig_[part] = bank_rig;
-    if (bank_rig) {
-      prepared_host_default_bank_rig_mono_prefix_[part] =
-          snapshot->default_bank_rig_mono_prefix[part];
-    }
+    prepared_host_default_bank_rig_[part] = snapshot != nullptr && snapshot->default_bank_rig[part];
+    if (snapshot != nullptr) prepared_host_mono_prefix_[part] = snapshot->mono_prefix[part];
     prepared_host_part_bussed_[part] = host_bussed;
     prepared_host_any_bussed_ = prepared_host_any_bussed_ || prepared_host_part_bussed_[part];
   }
@@ -326,12 +320,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
   dc_x1_ = {};
   dc_y1_ = {};
-  part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
+  // One bus per part and per insertion unit, so parts sharing a unit sum into
+  // it and it runs once (docs/gs.md).
+  part_fx_.prepare(sample_rate_);
   body_residual_.assign(16 * kFallbackBodyKinds * 2 * static_cast<size_t>(kChunkFrames), 0.0f);
-  // One bus per insertion unit, so parts sharing a unit sum into it and it runs
-  // once (docs/gs.md). Allocated with the part bus and on the same condition: a
-  // unit is realisable exactly where an insert factory is.
-  unit_bus_.assign(any_insert_ ? kGsEfxUnitCount * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
   eq_bypass_bus_.assign(2 * static_cast<size_t>(kChunkFrames), 0.0f);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->prepare(sample_rate_);
@@ -343,13 +335,12 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
   recompute_tail();
   prepared_ = true;
-  // Publish the initial realised-EFX snapshot (the config static inserts, the
-  // bank rigs the parts' current programs bind; no GS EFX assigned yet), so the
-  // audio thread routes bussed parts from the first block. build_realized_efx()
-  // builds the kProcessor inserts via the factory.
+  // Publish the initial snapshot (the part rig entries, the bank rigs the parts'
+  // current programs bind; no GS EFX assigned yet), so the audio thread routes
+  // bussed parts from the first block.
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
-  publish_realized_efx();
-  gs_efx_dirty_ = false;
+  part_fx_.publish();
+  part_fx_.clear_dirty();
 }
 
 void Sf2Player::reset() {
@@ -374,8 +365,8 @@ void Sf2Player::reset() {
   // clean DSP state (the discontinuity's equivalent of resetting them), and the
   // old snapshot is retired/freed by the control thread, never the audio thread.
   if (prepared_) {
-    publish_realized_efx();
-    gs_efx_dirty_ = false;
+    part_fx_.publish();
+    part_fx_.clear_dirty();
   }
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
@@ -397,9 +388,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
   // on_control_sysex, so the audio thread never writes the mirror the builder
   // reads. Live system state is similarly published by on_control_sysex.
   if (config_.realize_efx_inline) {
-    efx_ = {};
-    efx_part_assign_ = {};
-    gs_efx_dirty_ = true;
+    part_fx_.clear_efx();
     // The system-effect and master-EQ mirror splits the same way, and every one
     // of its fields defaults to its GS power-on value.
     sys_fx_ = {};

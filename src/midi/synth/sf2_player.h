@@ -52,11 +52,11 @@
 #include "midi/synth/gs_master_eq.h"
 #include "midi/synth/gs_system_effects.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/part_fx_stage.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 #include "rt/processor_base.h"
-#include "rt/rt_publisher.h"
 #include "rt/seqlock_cell.h"
 #include "util/constants.h"
 #if defined(SONARE_MIDI_WITH_FX)
@@ -64,89 +64,6 @@
 #endif
 
 namespace sonare::midi::synth {
-
-/// A realised per-part insert routing, handed to the audio thread as one
-/// immutable-lifetime snapshot. `chains[part]` is the series of inserts run on
-/// that part's stereo bus (a config kProcessor slot, or a GS-EFX-installed
-/// single/composite chain); `part_bussed[part]` selects whether the part sums
-/// through its bus (and thus its chain) or straight to the dry mix; `any_bussed`
-/// short-circuits the whole bus stage when no part is routed. Built entirely on
-/// the CONTROL thread and published through rt::RtPublisher, so the audio thread
-/// only reads it (running the processors — which is legal through the const
-/// snapshot, since a `const unique_ptr` still exposes a non-const pointee) and
-/// never allocates, frees, or races the builder.
-struct Sf2RealizedEfx {
-  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> chains{};
-  std::array<bool, 16> part_bussed{};
-  /// The file's insertion effects, one chain per unit rather than one per part:
-  /// parts assigned to a unit sum into it and it runs once, which is what an
-  /// effect is rather than a limit of the machine (docs/gs.md). Unit 0 is the
-  /// spec one; 1-15 are the extension's.
-  std::array<Sf2EfxUnitRt, kGsEfxUnitCount> units{};
-  /// EFX CONTROL 1 and 2, which only unit 0 has.
-  std::array<Sf2EfxControlRt, 2> controls{};
-  /// Which build this is. A queued update carries the generation it was
-  /// resolved against and is dropped by any other snapshot.
-  uint32_t generation = 0;
-  /// The unit each part merges into after its own insert, or kNoUnit. A part
-  /// with no unit goes straight from its own bus to the mix.
-  static constexpr uint8_t kNoUnit = 0xFF;
-  std::array<uint8_t, 16> part_unit{};
-  /// Whether a unit has any part feeding it. A unit nothing feeds is not run.
-  std::array<bool, kGsEfxUnitCount> unit_fed{};
-  bool any_unit = false;
-  bool any_bussed = false;
-  /// A part whose chain is the bank's model-floor default rig (rather than a
-  /// host insert or a routed GS unit). The renderer uses this tag to feed the
-  /// nonlinear guitar amplifier a calibrated mono pickup before applying the
-  /// part pan downstream.
-  std::array<bool, 16> default_bank_rig{};
-  /// Number of stages in that rig, including the amplifier, that receive the
-  /// calibrated mono pickup. Optional post-rack stages stay stereo after the
-  /// part pan is restored.
-  std::array<uint8_t, 16> default_bank_rig_mono_prefix{};
-  /// Host/static routing only. Unlike part_bussed, this excludes GS unit
-  /// assignments so prepared audio can refresh bank/program routing from the
-  /// immutable snapshot without reading CONTROL-owned config fields.
-  std::array<bool, 16> host_part_bussed{};
-  /// Absolute GS runtime state retained only for the legacy direct fallback
-  /// used when a custom processor has no prepared realtime descriptor plan.
-  /// Normal prepared rendering never reads these control-owned fields.
-  std::array<GsEfx, kGsEfxUnitCount> gs_efx_state{};
-  std::array<uint8_t, 16> gs_part_assign{};
-};
-
-/// Per-part insert slot (the GS insertion-effect realiser): either the built-in
-/// gain-compensated drive, or an arbitrary streaming ProcessorBase built by an
-/// injected factory (so the SF2 player realises any insert type without
-/// depending on the mastering/effects factory itself — the host wires it).
-enum class Sf2InsertType : int {
-  kNone = 0,
-  kDrive = 1,      ///< Built-in gain-compensated tanh drive (`amount`).
-  kProcessor = 2,  ///< An injected ProcessorBase chain built from `stages`.
-};
-
-/// One stage of a host-supplied insert chain. The field names are the mixing
-/// scene's own (`processor` / `params`), so a host that can describe a channel
-/// strip describes a guitar rig with the same words and needs no second format;
-/// the synth takes the decoded list rather than the JSON, which is what keeps it
-/// from linking the mixing module to read one.
-struct Sf2InsertStage {
-  /// Insert-factory processor name (e.g. "saturation.ampSim").
-  std::string processor;
-  /// JSON param object for the processor ("" / "{}" = defaults).
-  std::string params_json;
-};
-
-struct Sf2PartInsert {
-  Sf2InsertType type = Sf2InsertType::kNone;
-  /// kDrive: drive amount in [0, 1] (0 = clean, 1 = heavy saturation).
-  float amount = 0.0f;
-  /// kProcessor: the chain, in signal order. One stage is the common case and
-  /// stays a one-element list; a whole rig — pedal, amplifier, rack — is the
-  /// same list longer, which is what a bank rig already is.
-  std::vector<Sf2InsertStage> stages;
-};
 
 /// GS-style preset lookup on a parsed SoundFont: exact (bank, program) first,
 /// then the GS fallbacks (unknown variation bank -> capital tone bank 0; drum
@@ -170,13 +87,14 @@ struct Sf2PlayerConfig {
   /// default keeps the established SoundFont-first behavior; drums always
   /// keep their SoundFont kit routing.
   bool prefer_model_for_modeled_families = false;
-  /// Per-part (MIDI channel) insert slot.
-  std::array<Sf2PartInsert, 16> part_inserts{};
+  /// Per-part rig entries, as set_part_rig() would install them. kBank, the
+  /// default, installs no entry, so the part takes whatever ranks below.
+  std::array<PartRig, 16> part_rigs{};
   /// Injected insert-factory: builds a streaming ProcessorBase from a name +
-  /// JSON params, for kProcessor slots. Left null (the default) means the
-  /// player has no factory, so kProcessor slots stay silent no-ops — the SF2
-  /// player never depends on the mastering/effects factory itself; the host
-  /// (which does) wires this, typically to mastering::api::make_insert.
+  /// JSON params, for rig chains and GS insertion units. Left null (the
+  /// default) means the player has no part buses and every part renders dry —
+  /// the SF2 player never depends on the mastering/effects factory itself; the
+  /// host (which does) wires this, typically to mastering::api::make_insert.
   std::function<std::unique_ptr<rt::ProcessorBase>(std::string_view name,
                                                    std::string_view json_params)>
       insert_factory;
@@ -215,7 +133,7 @@ struct Sf2PlayerConfig {
 #endif
 };
 
-class Sf2Player final : public MidiInstrument {
+class Sf2Player final : public MidiInstrument, private PartFxHost {
  public:
   explicit Sf2Player(const Sf2PlayerConfig& config = {});
   ~Sf2Player() override;
@@ -234,7 +152,9 @@ class Sf2Player final : public MidiInstrument {
                              int num_channels, int num_samples) noexcept override;
   bool supports_source_track_rendering() const noexcept override { return true; }
   void reset() override;
-  int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
+  int tail_samples() const noexcept override {
+    return static_cast<int>(tail_samples_) + part_fx_.tail_samples();
+  }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   /// CONTROL thread: prepare an immutable SysEx operation for a scheduled
   /// event. The returned token carries only fixed plans; its DSP nodes stay
@@ -324,11 +244,11 @@ class Sf2Player final : public MidiInstrument {
   /// default is the spec unit at 40 03 xx; 1-15 are the extension's at 40 3u xx.
   /// Exposed for the adapter layer that realises it and for diagnostics.
   const GsEfx& gs_efx(size_t unit = 0) const noexcept {
-    return efx_[std::min(unit, kGsEfxUnitCount - 1)];
+    return part_fx_.efx()[std::min(unit, kGsEfxUnitCount - 1)];
   }
   /// GS 40 4x 22 PART EFX ASSIGN for @p channel, as the raw byte (test/diagnostic).
   uint8_t gs_efx_assign(uint8_t channel) const noexcept {
-    return efx_part_assign_[channel & 0x0Fu];
+    return part_fx_.part_assign()[channel & 0x0Fu];
   }
 
   /// Captured GS system-effect block (the raw 40 01 30-5A wire) and master EQ
@@ -348,13 +268,13 @@ class Sf2Player final : public MidiInstrument {
   /// since the last realise_gs_efx(). handle_sysex() (audio-thread safe) only
   /// stores the wire and raises this flag; the host polls it on the CONTROL
   /// thread and calls realise_gs_efx() to (re)build the inserts.
-  bool gs_efx_dirty() const noexcept { return gs_efx_dirty_; }
+  bool gs_efx_dirty() const noexcept { return part_fx_.dirty(); }
 
   /// CONTROL thread: (re)build the per-part inserts for the parts whose EFX
   /// switch is on, from the captured EFX type/params via the injected factory
   /// (an unmapped type or absent factory leaves the part dry). Allocates; never
   /// call from the audio thread. Clears gs_efx_dirty(). Builds a fresh
-  /// Sf2RealizedEfx and publishes it; the audio thread swaps it in wait-free at
+  /// PartFxSnapshot and publishes it; the audio thread swaps it in wait-free at
   /// the next block.
   void realize_gs_efx();
 
@@ -364,7 +284,7 @@ class Sf2Player final : public MidiInstrument {
   /// through the direct queue; scheduled GS state already applied survives,
   /// and tokens prepared before the switch are dropped.
   void set_gs_efx_realization(GsEfxRealization realization);
-  GsEfxRealization gs_efx_realization() const noexcept { return config_.gs_efx_realization; }
+  GsEfxRealization gs_efx_realization() const noexcept { return part_fx_.realization(); }
 
   /// CONTROL thread: realise and edit the units over @p rows instead of the
   /// generated binding tables, as gs_efx_insert_chain's own overload does;
@@ -375,7 +295,7 @@ class Sf2Player final : public MidiInstrument {
 
   /// How many times the insertion units have been built and published; an edit
   /// applied in place leaves it where it was (test/diagnostic).
-  uint32_t gs_efx_generation() const noexcept { return efx_generation_; }
+  uint32_t gs_efx_generation() const noexcept { return part_fx_.generation(); }
 
   /// The byte EFX CONTROL @p control (0 = CONTROL 1) last wrote into its slot
   /// in the adopted snapshot, or -1 where that control drives nothing. Written
@@ -408,6 +328,14 @@ class Sf2Player final : public MidiInstrument {
   uint8_t controller_position(uint8_t channel, uint8_t controller) const noexcept {
     return channels_[channel & 0x0Fu].cc_position[controller & 0x7Fu].u7();
   }
+
+  /// CONTROL thread: install @p rig for part slot @p part, or for every part no
+  /// entry names when @p part is kPartRigAllParts, and rebuild the chains when
+  /// prepared. A part keeps its rig whatever channel RX CHANNEL points it at.
+  bool set_part_rig(uint8_t part, const PartRig& rig) noexcept override;
+  /// CONTROL thread: the processor names of the chain last published for
+  /// @p part, in signal order (test/diagnostic).
+  std::vector<std::string> part_rig_stage_names(uint8_t part) const;
 
  private:
   /// gs_default_cc_positions() widened to the controller record's width.
@@ -656,11 +584,21 @@ class Sf2Player final : public MidiInstrument {
   void sync_prepared_base() noexcept;
   /// AUDIO thread: derive the effective routing from the host projection and
   /// the GS overlay. A part routed into a unit loses the bank's default rig,
-  /// as build_realized_efx() does, so its DI reaches the unit.
+  /// as the published snapshot does, so its DI reaches the unit.
   void rebuild_prepared_routing() noexcept;
   /// AUDIO thread: apply the two GS EFX CONTROL fan-outs to the selected
   /// prepared unit after its raw state has been adopted.
   void apply_prepared_efx_controls() noexcept;
+  /// AUDIO thread: the units the overlay runs in place of the snapshot's.
+  PartFxUnitOverrides prepared_unit_overrides() const noexcept;
+  /// The lowest part the overlay routes into @p unit, or -1.
+  int prepared_control_part(size_t unit) const noexcept;
+  /// PartFxHost: where an EFX CONTROL source sits on @p part.
+  float part_controller_position(int part, uint8_t source) const noexcept override;
+  /// PartFxHost: the part pan a mono rig prefix is restored to.
+  float part_pan_units(int part) const noexcept override {
+    return channel_mods_[static_cast<size_t>(part & 0x0F)].pan_units;
+  }
   /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
   void refresh_channel_mod(uint8_t channel) noexcept;
   /// Rebuilds rx_parts_ from the parts' rx_channel. Called after any write to
@@ -687,8 +625,6 @@ class Sf2Player final : public MidiInstrument {
   /// preset. Also called for every part from the control thread at prepare(),
   /// set_soundfont() and reset, where the audio thread is quiescent.
   void refresh_part_rig(uint8_t channel) noexcept;
-  /// The rig id published for @p part, 0 when the part binds none.
-  uint8_t part_rig(int part) const noexcept;
   /// Recompute tail_samples_ from the SoundFont release scan, the synth
   /// fallback bank and the effect units (requires prepared_).
   void recompute_tail() noexcept;
@@ -755,7 +691,7 @@ class Sf2Player final : public MidiInstrument {
   uint64_t member_discard_sum() const noexcept;
 
   /// Internal bus-graph chunk size (matches the effect bus block).
-  static constexpr int kChunkFrames = 256;
+  static constexpr int kChunkFrames = kPartFxChunkFrames;
 
   std::array<ChannelState, 16> channels_{};
   /// Which parts each incoming MIDI channel reaches, one bit per part
@@ -769,19 +705,6 @@ class Sf2Player final : public MidiInstrument {
   /// these are scalars the render loop reads directly, so they stay on the
   /// render thread in both modes, alongside the part parameters they resemble.
   GsMasterParams master_{};
-  /// GS insertion-effect (EFX) unit state, captured from the EFX SysEx blocks.
-  /// Unit 0 is the spec one at 40 03 xx; 1-15 are the libsonare extension's at
-  /// 40 3u xx (docs/gs.md). Parsed and stored raw here so an adapter layer can
-  /// realise them. Cleared on GS/GM reset.
-  std::array<GsEfx, kGsEfxUnitCount> efx_{};
-  /// Per-part EFX assignment (GS 40 4x 22), as the raw byte: 00 bypass, 01 unit
-  /// 0, 02-10 units 1-15. Kept as the byte rather than as a resolved unit so
-  /// that reading it back says what the file wrote.
-  std::array<uint8_t, 16> efx_part_assign_{};
-  /// Raised by handle_sysex() when efx_ / efx_part_assign_ change; cleared by
-  /// realise_gs_efx(). Lets the audio-safe SysEx path defer the allocating
-  /// insert rebuild to the control thread.
-  bool gs_efx_dirty_ = false;
   /// GS system-effect block (40 01 30-5A), master EQ (40 02 00-03) and per-part
   /// EQ switch (40 4x 20) as they arrived on the wire. Same thread ownership as
   /// the EFX mirror above: the render thread offline, the control thread live.
@@ -890,132 +813,15 @@ class Sf2Player final : public MidiInstrument {
   // Chunk scratch (prepared on the control thread).
   std::vector<float> mix_l_;
   std::vector<float> mix_r_;
-  /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
-  std::vector<float> part_bus_;
-  /// 16 insertion units x stereo x kChunkFrames. A part routed through a unit
-  /// runs its own insert on its part bus and then sums into the unit's, which
-  /// is where the unit's chain runs — once, however many parts share it.
-  std::vector<float> unit_bus_;
   /// Master-EQ bypass bus, stereo x kChunkFrames. A part switched out of the EQ
   /// (GS 40 4x 20) accumulates here as well as into the mix, so the EQ runs on
   /// the difference and that part's audio passes through untouched. Only used
   /// when the EQ is off flat and some part is switched out.
   std::vector<float> eq_bypass_bus_;
-  /// True once the player is EFX-capable (a config insert exists or a factory is
-  /// injected), so the per-part bus buffer is allocated. This only governs
-  /// allocation — the actual per-part routing is decided by `part_bussed_`, so
-  /// an EFX-capable player with no active insert still mixes bit-identically to
-  /// a plain one (the summation order is unchanged until an insert is live).
-  bool any_insert_ = false;
-  /// Realised per-part routing (part_bussed / any_bussed / insert chains), built
-  /// on the control thread and published to the audio thread through a wait-free
-  /// RtPublisher. A part is bussed through its insert chain only when it carries
-  /// a static config insert or a realised GS EFX chain; parts without one add
-  /// straight to the dry mix, so injecting a factory (for run-time EFX) does not
-  /// perturb an otherwise dry bounce. The audio thread acquire()s the newest
-  /// snapshot at block start and reads it for the whole block; the control thread
-  /// owns every snapshot's lifetime (build + free), so render allocates nothing.
-  /// Held by unique_ptr because RtPublisher is non-movable (its rings pin their
-  /// address) while Sf2Player stays movable — moving transfers the pointer, not
-  /// the publisher, so the audio thread's held snapshot is never disturbed.
-  std::unique_ptr<rt::RtPublisher<Sf2RealizedEfx>> efx_pub_ =
-      std::make_unique<rt::RtPublisher<Sf2RealizedEfx>>();
-
-  /// Which default rig each part currently binds, four bits per part: written by
-  /// the AUDIO thread when a program or bank moves, read by the CONTROL thread
-  /// when it builds a snapshot. This is the one piece of audio-side state the
-  /// builder reads, which is why it is an atomic and why all sixteen parts share
-  /// one word — the builder sees them as they stood at a single instant instead
-  /// of assembling a mixture of two programs. Held by unique_ptr so Sf2Player
-  /// stays movable, the same reason EfxParamQueue is.
-  std::unique_ptr<std::atomic<uint64_t>> part_rigs_ = std::make_unique<std::atomic<uint64_t>>(0);
-
-  /// CONTROL thread: build a fresh realised-EFX snapshot from the current EFX
-  /// mirror (efx_ / efx_part_assign_) and the config static inserts, via the
-  /// injected factory. Allocates.
-  std::shared_ptr<Sf2RealizedEfx> build_realized_efx() const;
-  /// CONTROL thread: apply the insertion-effect content of a GS SysEx to the EFX
-  /// mirror (efx_ / efx_part_assign_). Returns true when a full chain rebuild is
-  /// required (type change, reset, part switch, or a parameter that cannot be
-  /// applied in place), false when the message was handled without a rebuild
-  /// (parameter-only edit resolved into the EFX parameter queue, or not an EFX
-  /// message). Touches only the realise mirror and the parameter queue, never
-  /// audio-side channel state.
-  bool apply_efx_sysex(const uint8_t* data, size_t size);
-
-  /// What an EfxParamUpdate does to its stage.
-  enum class EfxUpdateKind : uint8_t {
-    kParam,        ///< set_parameter(param_id, value) on a modern stage.
-    kEnable,       ///< Turn the stage on (value != 0) or off, through its fade.
-    kClassicByte,  ///< Write byte `value` into slot `param_id` of a classic unit.
-    kControlBase,  ///< Byte `value` is the new base of EFX CONTROL `stage_index`.
-  };
-
-  /// A pending GS EFX update handed from the control thread to the audio
-  /// thread, addressed to stage @c stage_index of insertion unit @c unit in the
-  /// snapshot of generation @c generation.
-  struct EfxParamUpdate {
-    EfxUpdateKind kind = EfxUpdateKind::kParam;
-    uint8_t unit = 0;
-    uint8_t stage_index = 0;
-    uint32_t param_id = 0;
-    float value = 0.0f;
-    uint32_t generation = 0;
-  };
-
-  /// Wait-free single-producer (control thread) / single-consumer (audio thread)
-  /// ring of pending EFX updates. A parameter-only GS EFX edit is resolved to
-  /// updates on the control thread and applied on the audio thread (serialized
-  /// with process()), so a live insert processor is never mutated across threads
-  /// and its DSP state (reverb/delay tails) is never rebuilt away.
-  /// Held by unique_ptr so Sf2Player stays movable (std::atomic is not movable).
-  class EfxParamQueue {
-   public:
-    /// Capacity (power of two). When the ring is full a push fails. Any failed
-    /// enqueue turns the edit into a rebuild, which bakes the whole
-    /// EFX mirror in. This applies to kParam too: one translated edit can
-    /// produce several records, and applying only a prefix would leave a stage
-    /// partly on the old generation.
-    static constexpr size_t kCapacity = 128;
-    static_assert((kCapacity & (kCapacity - 1)) == 0, "kCapacity must be a power of two");
-
-    /// CONTROL thread. Returns false when the ring is full (the update is
-    /// dropped). A batch is committed with one release publication, so the
-    /// audio consumer can never observe a translated edit's prefix.
-    bool push(const EfxParamUpdate& update) noexcept { return push_batch(&update, 1); }
-
-    /// CONTROL thread. Reserve and publish all records atomically from the
-    /// consumer's point of view. The caller has already validated every record
-    /// and can fall back to a snapshot rebuild without leaving a partial edit
-    /// in the queue when this returns false.
-    bool push_batch(const EfxParamUpdate* updates, size_t count) noexcept {
-      if (updates == nullptr || count == 0 || count > kCapacity) return false;
-      const size_t head = head_.load(std::memory_order_relaxed);
-      const size_t tail = tail_.load(std::memory_order_acquire);
-      if (head - tail > kCapacity - count) return false;
-      for (size_t i = 0; i < count; ++i) {
-        slots_[(head + i) & (kCapacity - 1)] = updates[i];
-      }
-      head_.store(head + count, std::memory_order_release);
-      return true;
-    }
-
-    /// AUDIO thread. Returns false when the ring is empty.
-    bool pop(EfxParamUpdate& out) noexcept {
-      const size_t tail = tail_.load(std::memory_order_relaxed);
-      const size_t head = head_.load(std::memory_order_acquire);
-      if (head == tail) return false;
-      out = slots_[tail & (kCapacity - 1)];
-      tail_.store(tail + 1, std::memory_order_release);
-      return true;
-    }
-
-   private:
-    std::array<EfxParamUpdate, kCapacity> slots_{};
-    alignas(64) std::atomic<size_t> head_{0};  // control thread (producer)
-    alignas(64) std::atomic<size_t> tail_{0};  // audio thread (consumer)
-  };
-  std::unique_ptr<EfxParamQueue> efx_param_queue_ = std::make_unique<EfxParamQueue>();
+  /// Part buses, rig chains and GS insertion units. Built on the control thread
+  /// and published to the audio thread; parts it does not buss add straight to
+  /// the dry mix, so injecting a factory does not perturb an otherwise dry bounce.
+  PartFxStage part_fx_;
 
   /// Direct live GS/EFX writes are relative operations. CONTROL owns the
   /// accepted payload and its prepared lease; AUDIO drains nodes in publication
@@ -1134,45 +940,6 @@ class Sf2Player final : public MidiInstrument {
   /// AUDIO thread: adopt the latest fixed-field mailbox at a boundary.
   void drain_direct_system_patch() noexcept;
 
-  /// CONTROL thread: resolve a parameter-only GS EFX edit against the live
-  /// published unit (reading only the const parameter-descriptor bridge) and
-  /// enqueue the resulting updates for the audio thread: kParam and kEnable for
-  /// a modern unit, kClassicByte for each slot of a classic unit that differs
-  /// from @p previous_params, and kControlBase for each EFX CONTROL whose slot
-  /// moved. Returns true when a full rebuild is required
-  /// instead (no live unit, a realization or stage shape other than the
-  /// published one, nothing to enqueue, a parameter that is not realtime-safe,
-  /// or a failed atomic batch publication).
-  bool enqueue_efx_param_updates(size_t unit, const std::array<uint8_t, 20>& previous_params);
-  /// CONTROL thread: build and publish a fresh snapshot under the next
-  /// generation. Allocates.
-  void publish_realized_efx();
-  /// Generation of the last snapshot publish_realized_efx() handed over.
-  uint32_t efx_generation_ = 0;
-  /// Rows the units are realised over in place of the generated tables, or null.
-  const GsEfxRowView* efx_rows_ = nullptr;
-  /// The modern stage list of @p efx, over efx_rows_ when set.
-  std::vector<GsEfxStage> efx_stages(const GsEfx& efx) const {
-    return efx_rows_ != nullptr ? gs_efx_insert_chain(efx, *efx_rows_) : gs_efx_insert_chain(efx);
-  }
-  /// AUDIO thread: apply every pending EFX parameter update to the current
-  /// published chain, serialized with process(). RT-safe (no alloc, no lock).
-  void drain_efx_param_updates() noexcept;
-  /// CONTROL thread: resolve unit 0's EFX CONTROL 1/2 onto @p out's unit 0,
-  /// which must already be built.
-  void build_efx_controls(Sf2RealizedEfx& out) const;
-  /// CONTROL thread: retain the realtime-safe subset of a realised unit's GS
-  /// binding rows for candidate-less prepared deltas. Missing descriptors are
-  /// deliberately omitted so custom legacy graphs remain usable.
-  void build_legacy_efx_plan(Sf2EfxUnitRt& unit, size_t unit_index, const GsEfx& efx) const;
-  /// AUDIO thread: apply the published unit's partial plan without rebuilding
-  /// or replacing its processor graph.
-  void apply_legacy_efx_plan(size_t unit, const GsEfx& target) noexcept;
-  /// AUDIO thread, after drain_efx_param_updates(): move each EFX CONTROL's slot
-  /// to where its source now puts it, writing the destinations only when the
-  /// byte moved or an update rewrote them. RT-safe (no alloc, no lock).
-  void apply_efx_controls() noexcept;
-
   static constexpr size_t kMaxPreparedDestinations = 64;
   static constexpr size_t kMaxPreparedEnables = 32;
   static constexpr size_t kMaxPreparedCandidates = 7;
@@ -1268,12 +1035,11 @@ class Sf2Player final : public MidiInstrument {
   std::array<bool, 16> prepared_eq_part_bypassed_{};
   std::array<uint8_t, 16> prepared_part_unit_{};
   std::array<bool, 16> prepared_part_bussed_{};
-  std::array<bool, 16> prepared_default_bank_rig_{};
-  std::array<uint8_t, 16> prepared_default_bank_rig_mono_prefix_{};
+  std::array<uint8_t, 16> prepared_mono_prefix_{};
   std::array<bool, kGsEfxUnitCount> prepared_unit_fed_{};
   std::array<bool, 16> prepared_host_part_bussed_{};
   std::array<bool, 16> prepared_host_default_bank_rig_{};
-  std::array<uint8_t, 16> prepared_host_default_bank_rig_mono_prefix_{};
+  std::array<uint8_t, 16> prepared_host_mono_prefix_{};
   bool prepared_host_any_bussed_ = false;
   bool prepared_any_unit_ = false;
   bool prepared_any_bussed_ = false;

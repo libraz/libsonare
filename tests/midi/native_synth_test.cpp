@@ -19,9 +19,13 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/fft.h"
+#if defined(SONARE_WITH_MASTERING)
+#include "mastering/api/insert_factory.h"
+#endif
 #include "midi/controller_profile.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_data.h"
@@ -1687,6 +1691,7 @@ TEST_CASE("Sf2Player source-track residual: reverb leakage on a send-0 lane stay
   REQUIRE(leakage_db <= -40.0);
 }
 
+#if defined(SONARE_WITH_MASTERING)
 TEST_CASE(
     "Sf2Player source-track residual: a bussed insert part's lane attenuates its own "
     "contribution by 90 dB",
@@ -1703,8 +1708,11 @@ TEST_CASE(
 
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
-  cfg.part_inserts[0].type = sonare::midi::synth::Sf2InsertType::kDrive;
-  cfg.part_inserts[0].amount = 0.7f;
+  cfg.part_rigs[0].mode = sonare::midi::PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"saturation.softClipper", "{}"}};
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
   cfg.dc_block = false;
 
   Sf2Player two_source(cfg);
@@ -1774,8 +1782,11 @@ TEST_CASE("Sf2Player source-track lanes sum to the plain render at a non-unity o
   constexpr uint32_t kTrackB = 8;
   Sf2PlayerConfig cfg;
   cfg.gain = 0.5f;
-  cfg.part_inserts[0].type = sonare::midi::synth::Sf2InsertType::kDrive;
-  cfg.part_inserts[0].amount = 0.7f;
+  cfg.part_rigs[0].mode = sonare::midi::PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"saturation.softClipper", "{}"}};
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
 
   Sf2Player reference(cfg);
   reference.prepare(kOutRate, 256);
@@ -1814,6 +1825,7 @@ TEST_CASE("Sf2Player source-track lanes sum to the plain render at a non-unity o
   INFO("max_diff/block_peak: " << (max_diff / block_peak));
   REQUIRE(max_diff <= 1.0e-5f * block_peak);
 }
+#endif  // SONARE_WITH_MASTERING
 #endif
 
 TEST_CASE(

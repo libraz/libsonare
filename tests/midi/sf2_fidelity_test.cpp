@@ -25,8 +25,8 @@ namespace {
 
 using Catch::Approx;
 using sonare::midi::MidiEvent;
+using sonare::midi::PartRigMode;
 using sonare::midi::synth::Sf2File;
-using sonare::midi::synth::Sf2InsertType;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::test::Sf2Builder;
@@ -396,8 +396,8 @@ TEST_CASE(
   DiscardingInsert* insert = nullptr;
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
-  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
-  cfg.part_inserts[0].stages.push_back({"probe.discard", "{}"});
+  cfg.part_rigs[0].mode = PartRigMode::kChain;
+  cfg.part_rigs[0].stages.push_back({"probe.discard", "{}"});
   cfg.insert_factory = [&insert](std::string_view,
                                  std::string_view) -> std::unique_ptr<sonare::rt::ProcessorBase> {
     auto proc = std::make_unique<DiscardingInsert>();

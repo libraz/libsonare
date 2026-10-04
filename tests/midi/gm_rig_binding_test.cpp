@@ -30,12 +30,12 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::PartRigMode;
 using sonare::midi::synth::gm_fallback_rig;
 using sonare::midi::synth::gm_rig_binding;
 using sonare::midi::synth::gm_rig_preset_name;
 using sonare::midi::synth::GmFallbackRig;
 using sonare::midi::synth::Sf2File;
-using sonare::midi::synth::Sf2InsertType;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::test::Sf2Builder;
@@ -465,8 +465,8 @@ TEST_CASE("the bank rig is removable, and absent everywhere it was not bound", "
   }
   SECTION("a part the host gave an insert of its own keeps it") {
     Sf2PlayerConfig configured = with_factory();
-    configured.part_inserts[0].type = Sf2InsertType::kProcessor;
-    configured.part_inserts[0].stages = {{"saturation.ampSim", R"({"preset":"cleanCombo"})"}};
+    configured.part_rigs[0].mode = PartRigMode::kChain;
+    configured.part_rigs[0].stages = {{"saturation.ampSim", R"({"preset":"cleanCombo"})"}};
     Sf2PlayerConfig same = configured;
     same.bank_rig_binding = false;
     REQUIRE(render_program(configured, 30) == render_program(same, 30));
@@ -547,9 +547,9 @@ TEST_CASE("a host describes a rig in the mixing scene's own words", "[midi][sf2]
   REQUIRE(scene.strips.front().inserts.size() == 3);
 
   Sf2PlayerConfig cfg = with_factory();
-  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
+  cfg.part_rigs[0].mode = PartRigMode::kChain;
   for (const sonare::mixing::api::Insert& insert : scene.strips.front().inserts) {
-    cfg.part_inserts[0].stages.push_back({insert.processor_name, insert.params_json});
+    cfg.part_rigs[0].stages.push_back({insert.processor_name, insert.params_json});
   }
   // Three stages in, three stages out, and audibly not the bank's own rig: the
   // host's chain replaces the default the same way one stage always did.

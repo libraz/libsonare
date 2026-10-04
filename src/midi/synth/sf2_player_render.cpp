@@ -98,19 +98,18 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   // Read the realised-EFX routing for this block from the snapshot the control
   // thread published (adopted in process() via acquire()). A null snapshot (none
   // published yet) or an all-dry one routes everything straight to the dry mix.
-  const Sf2RealizedEfx* efx = efx_pub_->current();
+  const PartFxSnapshot* efx = part_fx_.current();
   static constexpr std::array<bool, 16> kNoBus{};
+  static constexpr std::array<uint8_t, 16> kNoPrefix{};
+  static constexpr std::array<bool, kGsEfxUnitCount> kNoUnitFed{};
   const bool prepared = prepared_runtime_active_;
   const std::array<bool, 16>& part_bussed =
       prepared ? prepared_part_bussed_ : (efx != nullptr ? efx->part_bussed : kNoBus);
-  const auto default_bank_rig_for = [&](int part) noexcept -> bool {
-    return prepared ? prepared_default_bank_rig_[static_cast<size_t>(part)]
-                    : (efx != nullptr && efx->default_bank_rig[static_cast<size_t>(part)]);
-  };
-  const auto default_bank_rig_mono_prefix_for = [&](int part) noexcept -> uint8_t {
-    return prepared ? prepared_default_bank_rig_mono_prefix_[static_cast<size_t>(part)]
-                    : (efx != nullptr ? efx->default_bank_rig_mono_prefix[static_cast<size_t>(part)]
-                                      : uint8_t{0});
+  // A rig with an amplifier takes the mono pickup up to its last amplifier.
+  const std::array<uint8_t, 16>& mono_prefix =
+      prepared ? prepared_mono_prefix_ : (efx != nullptr ? efx->mono_prefix : kNoPrefix);
+  const auto mono_rig = [&](int part) noexcept -> bool {
+    return mono_prefix[static_cast<size_t>(part)] != 0;
   };
   const bool any_bussed = prepared ? prepared_any_bussed_ : (efx != nullptr && efx->any_bussed);
   // The insertion unit a bussed part merges into, or -1 when its own
@@ -119,15 +118,13 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   const auto unit_for = [&](int part) noexcept -> int {
     if (prepared) {
       const uint8_t u = prepared_part_unit_[static_cast<size_t>(part)];
-      return u == Sf2RealizedEfx::kNoUnit ? -1 : static_cast<int>(u);
+      return u == PartFxSnapshot::kNoUnit ? -1 : static_cast<int>(u);
     }
     if (efx == nullptr) return -1;
     const uint8_t u = efx->part_unit[static_cast<size_t>(part)];
-    return u == Sf2RealizedEfx::kNoUnit ? -1 : static_cast<int>(u);
+    return u == PartFxSnapshot::kNoUnit ? -1 : static_cast<int>(u);
   };
-  if (any_bussed && !part_bus_.empty()) {
-    std::memset(part_bus_.data(), 0, sizeof(float) * part_bus_.size());
-  }
+  if (any_bussed) part_fx_.clear_part_buses();
   // Master EQ (GS 40 02 xx) is one stage on the output; a part switched out of
   // it (40 4x 20) accumulates into the bypass bus as well as into the mix, so
   // the EQ runs on the difference and that part passes through. Both are skipped
@@ -243,13 +240,11 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       const float l = s * v.gain_left;
       const float r = s * v.gain_right;
       if (part_bussed[part]) {
-        float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-        if (default_bank_rig_for(part)) {
+        if (mono_rig(part)) {
           // A mono pickup feeds the rig's amp, so CC10 cannot move its drive.
-          bus[i] += kInvSqrt2 * s;
+          part_fx_.add_mono(part, i, kInvSqrt2 * s);
         } else {
-          bus[i] += l;
-          bus[kChunkFrames + i] += r;
+          part_fx_.add_stereo(part, i, l, r);
         }
         if (source_render) {
           // The remainder follows every voice; the bus or unit output only the
@@ -354,7 +349,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       const bool has_body = v.patch != nullptr && fallback_body_kind(*v.patch, &body_kind);
       const size_t k = static_cast<size_t>(body_kind);
       if (has_body && body_active[part][k]) {
-        if (default_bank_rig_for(part)) {
+        if (mono_rig(part)) {
           // The halo is another mono pickup contribution.
           body_dry[part][k] += kInvSqrt2 * s;
         } else {
@@ -371,16 +366,14 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       if (has_body && body_kind == FallbackBodyKind::kPiano) {
         l *= kPianoDirectGain;
         r *= kPianoDirectGain;
-        if (default_bank_rig_for(part)) s *= kPianoDirectGain;
+        if (mono_rig(part)) s *= kPianoDirectGain;
       }
       if (part_bussed[part]) {
-        float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-        if (default_bank_rig_for(part)) {
+        if (mono_rig(part)) {
           // The same mono pickup as the sampled-voice path above.
-          bus[i] += kInvSqrt2 * s;
+          part_fx_.add_mono(part, i, kInvSqrt2 * s);
         } else {
-          bus[i] += l;
-          bus[kChunkFrames + i] += r;
+          part_fx_.add_stereo(part, i, l, r);
         }
         if (source_render) {
           residual_splitter_.accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
@@ -477,13 +470,11 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           }
           if (add == 0.0f && side == 0.0f) continue;
           if (part_bussed[part]) {
-            float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-            if (default_bank_rig_for(part)) {
+            if (mono_rig(part)) {
               // Only the common body component reaches the mono pickup bus.
-              bus[i] += add;
+              part_fx_.add_mono(part, i, add);
             } else {
-              bus[i] += add + side;
-              bus[kChunkFrames + i] += add - side;
+              part_fx_.add_stereo(part, i, add + side, add - side);
             }
           } else {
             mix_l_[static_cast<size_t>(i)] += add + side;
@@ -524,79 +515,35 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     }
   }
 
-  // Per-part insert processing, then either into the part's insertion unit or
+  // Per-part rig processing, then either into the part's insertion unit or
   // straight to the dry mix.
-  const bool any_unit =
-      (prepared ? prepared_any_unit_ : (efx != nullptr && efx->any_unit)) && !unit_bus_.empty();
-  if (any_unit) {
-    std::memset(unit_bus_.data(), 0, sizeof(float) * unit_bus_.size());
-  }
+  const bool any_unit = (prepared ? prepared_any_unit_ : (efx != nullptr && efx->any_unit)) &&
+                        part_fx_.has_unit_buses();
+  if (any_unit) part_fx_.clear_unit_buses();
   if (any_bussed) {
+    // A GS route outranks the bank rig (docs/voicing.md): the unit takes the DI.
+    std::array<bool, 16> bank_rig_retired{};
+    if (prepared) {
+      for (int part = 0; part < 16; ++part) {
+        bank_rig_retired[static_cast<size_t>(part)] =
+            prepared_host_default_bank_rig_[static_cast<size_t>(part)] && unit_for(part) >= 0;
+      }
+    }
+    part_fx_.run_part_chains(n, part_bussed, mono_prefix, prepared ? &bank_rig_retired : nullptr,
+                             *this);
     for (int part = 0; part < 16; ++part) {
       if (!part_bussed[static_cast<size_t>(part)]) continue;
-      float* bus_l = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
-      float* bus_r = bus_l + kChunkFrames;
-      const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
-      if (insert.type == Sf2InsertType::kDrive && insert.amount > 0.0f) {
-        // Gain-compensated tanh drive: normalise so a full-scale input keeps
-        // roughly unit level regardless of the drive amount.
-        const float drive = 1.0f + 9.0f * insert.amount;
-        const float makeup = 1.0f / std::tanh(drive);
-        for (int i = 0; i < n; ++i) {
-          bus_l[i] = std::tanh(drive * bus_l[i]) * makeup;
-          bus_r[i] = std::tanh(drive * bus_r[i]) * makeup;
-        }
-      }
-      // The part's own chain — a config kProcessor slot, the bank's default rig,
-      // or nothing — runs in place on its bus, after the built-in drive when the
-      // part carries one. The default model-floor guitar rig is mono through
-      // its nonlinear chain; host chains retain their stereo contract.
-      const uint8_t mono_prefix_count = default_bank_rig_mono_prefix_for(part);
-      const bool mono_bank_rig = mono_prefix_count != 0;
-      // A GS route outranks the default rig (docs/voicing.md): the unit takes the DI.
-      const bool bank_rig_bypassed = prepared &&
-                                     prepared_host_default_bank_rig_[static_cast<size_t>(part)] &&
-                                     unit_for(part) >= 0;
-      if (efx != nullptr && !bank_rig_bypassed) {
-        if (mono_bank_rig) {
-          float* mono_chans[1] = {bus_l};
-          const auto& chain = efx->chains[static_cast<size_t>(part)];
-          const size_t mono_prefix = std::min(static_cast<size_t>(mono_prefix_count), chain.size());
-          size_t stage = 0;
-          for (; stage < mono_prefix; ++stage) {
-            chain[stage]->process(mono_chans, 1, n);
-          }
-          // Restore the part's constant-power position after the nonlinear prefix.
-          const rt::PanGains pan = voice_pan_gains(mods[static_cast<size_t>(part)].pan_units);
-          const float pan_l = ::sonare::constants::kSqrt2 * pan.left;
-          const float pan_r = ::sonare::constants::kSqrt2 * pan.right;
-          for (int i = 0; i < n; ++i) {
-            const float mono = bus_l[i];
-            bus_l[i] = mono * pan_l;
-            bus_r[i] = mono * pan_r;
-          }
-          if (stage < chain.size()) {
-            float* chans[2] = {bus_l, bus_r};
-            for (; stage < chain.size(); ++stage) {
-              chain[stage]->process(chans, 2, n);
-            }
-          }
-        } else {
-          float* chans[2] = {bus_l, bus_r};
-          for (auto& proc : efx->chains[static_cast<size_t>(part)]) {
-            proc->process(chans, 2, n);
-          }
-        }
-      }
+      float* bus_l = part_fx_.bus_l(part);
+      float* bus_r = part_fx_.bus_r(part);
       // Routed parts merge into their unit's bus instead of reaching the mix
       // here: the unit runs once on the sum, which is what makes two parts
       // through one distortion intermodulate as they do on the hardware.
       const int routed_unit = unit_for(part);
       const uint8_t unit =
-          routed_unit < 0 ? Sf2RealizedEfx::kNoUnit : static_cast<uint8_t>(routed_unit);
-      if (unit != Sf2RealizedEfx::kNoUnit && any_unit) {
-        float* unit_l = unit_bus_.data() + static_cast<size_t>(unit) * 2 * kChunkFrames;
-        float* unit_r = unit_l + kChunkFrames;
+          routed_unit < 0 ? PartFxSnapshot::kNoUnit : static_cast<uint8_t>(routed_unit);
+      if (unit != PartFxSnapshot::kNoUnit && any_unit) {
+        float* unit_l = part_fx_.unit_bus_l(unit);
+        float* unit_r = part_fx_.unit_bus_r(unit);
         for (int i = 0; i < n; ++i) {
           unit_l[i] += bus_l[i];
           unit_r[i] += bus_r[i];
@@ -620,20 +567,15 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
 
   // The insertion units, one pass each over the sum of the parts feeding them.
   if (any_unit) {
+    const std::array<bool, kGsEfxUnitCount>& unit_fed =
+        prepared ? prepared_unit_fed_ : (efx != nullptr ? efx->unit_fed : kNoUnitFed);
+    const PartFxUnitOverrides overrides =
+        prepared ? prepared_unit_overrides() : PartFxUnitOverrides{};
+    part_fx_.run_units(n, unit_fed, prepared ? &overrides : nullptr);
     for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-      const bool unit_fed =
-          prepared ? prepared_unit_fed_[unit] : (efx != nullptr && efx->unit_fed[unit]);
-      if (!unit_fed) continue;
-      float* unit_l = unit_bus_.data() + unit * 2 * kChunkFrames;
-      float* unit_r = unit_l + kChunkFrames;
-      const Sf2EfxUnitRt* unit_rt = nullptr;
-      if (prepared && prepared_unit_overridden_[unit]) {
-        unit_rt = prepared_active_nodes_[unit] != nullptr ? &prepared_active_nodes_[unit]->unit_rt
-                                                          : &prepared_empty_unit_;
-      } else if (efx != nullptr) {
-        unit_rt = &efx->units[unit];
-      }
-      if (unit_rt != nullptr) sf2_run_efx_unit(*unit_rt, unit_l, unit_r, n);
+      if (!unit_fed[unit]) continue;
+      float* unit_l = part_fx_.unit_bus_l(unit);
+      float* unit_r = part_fx_.unit_bus_r(unit);
 #if defined(SONARE_MIDI_WITH_FX)
       // GS EFX -> system FX: the unit's POST-effect bus into reverb/chorus/delay
       // by its own send amounts (the pre-effect CC send was suppressed for every
@@ -804,7 +746,7 @@ void Sf2Player::process_impl(float* const* channels,
   // for this block installs its inserts before the block renders). This
   // allocates, so it is gated to single-threaded/offline use; the live engine
   // realises on the control thread via on_control_sysex instead.
-  if (config_.realize_efx_inline && gs_efx_dirty_) realize_gs_efx();
+  if (config_.realize_efx_inline && part_fx_.dirty()) realize_gs_efx();
   // GS system-effect / master-EQ state. Offline the render thread owns the
   // mirror and re-aims the units here; live direct writes arrive through the
   // stamped fixed-field mailbox. Both are coefficient-only, so an edit
@@ -816,18 +758,18 @@ void Sf2Player::process_impl(float* const* channels,
   // Adopt the newest realised-EFX snapshot for this block (wait-free, no alloc).
   // Offline this picks up the inline publish just above; live it picks up the
   // control thread's on_control_sysex publish.
-  efx_pub_->acquire();
+  part_fx_.acquire();
   drain_direct_system_patch();
   drain_direct_gs_nodes();
   sync_prepared_base();
   // Apply any pending GS EFX parameter automation to the adopted chain, on this
   // (audio) thread, before rendering — the sanctioned resolve-on-control /
   // apply-on-audio path. A no-op cost (two atomic loads) when the queue is empty.
-  drain_efx_param_updates();
+  part_fx_.drain_param_updates();
   // EFX CONTROL modulation after the drain, so a destination an update just
   // rewrote at its base takes its modulated value again before the block runs.
   // While the prepared overlay is active it is the only writer of these destinations.
-  if (!prepared_runtime_active_) apply_efx_controls();
+  if (!prepared_runtime_active_) part_fx_.apply_controls(*this);
   apply_prepared_efx_controls();
   if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
   float* left = source_render ? nullptr : channels[0];
@@ -871,27 +813,10 @@ void Sf2Player::process_impl(float* const* channels,
 }
 
 uint64_t Sf2Player::member_discard_sum() const noexcept {
-  uint64_t total = eq_.non_finite_discard_count();
-  const Sf2RealizedEfx* efx = efx_pub_->current();
-  if (efx != nullptr) {
-    for (const auto& chain : efx->chains) {
-      for (const auto& proc : chain) {
-        if (proc) total += proc->non_finite_discard_count();
-      }
-    }
-    for (size_t unit_index = 0; unit_index < kGsEfxUnitCount; ++unit_index) {
-      const Sf2EfxUnitRt* unit_ptr =
-          prepared_runtime_active_ && prepared_unit_overridden_[unit_index]
-              ? (prepared_active_nodes_[unit_index] != nullptr
-                     ? &prepared_active_nodes_[unit_index]->unit_rt
-                     : &prepared_empty_unit_)
-              : &efx->units[unit_index];
-      for (const Sf2EfxStageRt& stage : unit_ptr->stages) {
-        if (stage.proc) total += stage.proc->non_finite_discard_count();
-      }
-    }
-  }
-  return total;
+  const uint64_t eq_discards = eq_.non_finite_discard_count();
+  const PartFxUnitOverrides overrides =
+      prepared_runtime_active_ ? prepared_unit_overrides() : PartFxUnitOverrides{};
+  return eq_discards + part_fx_.discard_sum(prepared_runtime_active_ ? &overrides : nullptr);
 }
 
 }  // namespace sonare::midi::synth
