@@ -831,14 +831,31 @@ struct ReentryProbe {
   int mode = 0;
   int calls = 0;
   uint32_t clip_id = 0;
+  uint32_t metadata_source_id = 0;
   SonareError nested = SONARE_OK;
+  const char* metadata_hash = nullptr;
+  const float* replacement_audio = nullptr;
   const SonareProjectVocalEditApplyDesc* desc = nullptr;
   const SonareProjectVocalOriginalSource* original = nullptr;
 };
 
 int reenter_project(void* user_data) {
   auto* probe = static_cast<ReentryProbe*>(user_data);
-  if (++probe->calls != 1) return 0;
+  const int call = ++probe->calls;
+  if (call == 2) {
+    if (probe->mode == 3 || probe->mode == 4) {
+      probe->nested = sonare_project_set_audio_source_metadata(
+          probe->project, probe->metadata_source_id, probe->metadata_hash, "");
+    } else if (probe->mode == 5) {
+      probe->nested =
+          sonare_project_set_source_audio(probe->project, probe->metadata_source_id,
+                                          probe->replacement_audio, kSampleCount, 1, kSampleRate);
+    } else if (probe->mode == 6) {
+      probe->nested =
+          sonare_project_set_clip_source(probe->project, probe->clip_id, probe->metadata_source_id);
+    }
+  }
+  if (probe->mode >= 3 || call != 1) return 0;
   if (probe->mode == 0) {
     // Removing the edited clip replaces the sidecar list the loop walks.
     probe->nested = sonare_project_remove_clip(probe->project, probe->clip_id);
@@ -928,6 +945,83 @@ TEST_CASE("vocal project rehydrate survives a cancel callback that mutates the p
     CHECK(probe.nested == SONARE_ERROR_INVALID_STATE);
     REQUIRE(result.item_count == 1);
     CHECK(result.items[0].status == SONARE_VOCAL_REHYDRATE_REHYDRATED);
+  }
+  SECTION("a derived metadata mutation after rendering discards the staged PCM") {
+    probe.mode = 3;
+    probe.metadata_source_id = applied.derived_source_id;
+    const std::string wrong_hash = "host:callback-tampered-derived";
+    probe.metadata_hash = wrong_hash.c_str();
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                               &probe, &result) == SONARE_ERROR_INVALID_STATE);
+    CHECK(probe.calls == 2);
+    CHECK(probe.nested == SONARE_OK);
+    CHECK(std::string(sonare_last_error_message()).find("rehydrate") != std::string::npos);
+    CHECK(result.items == nullptr);
+    CHECK(result.item_count == 0);
+    CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
+          fixture.project->audio.sources.end());
+  }
+  SECTION("an original metadata mutation after rendering discards the staged PCM") {
+    probe.mode = 4;
+    probe.metadata_source_id = fixture.source_id;
+    const std::string wrong_hash = "host:callback-tampered-original";
+    probe.metadata_hash = wrong_hash.c_str();
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                               &probe, &result) == SONARE_ERROR_INVALID_STATE);
+    CHECK(probe.calls == 2);
+    CHECK(probe.nested == SONARE_OK);
+    CHECK(result.items == nullptr);
+    CHECK(result.item_count == 0);
+    CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
+          fixture.project->audio.sources.end());
+  }
+  SECTION("a derived PCM collision after rendering discards the staged PCM") {
+    probe.mode = 5;
+    probe.metadata_source_id = applied.derived_source_id;
+    const std::vector<float> replacement(kSampleCount, 0.25f);
+    probe.replacement_audio = replacement.data();
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                               &probe, &result) == SONARE_ERROR_INVALID_STATE);
+    CHECK(probe.calls == 2);
+    CHECK(probe.nested == SONARE_OK);
+    CHECK(result.items == nullptr);
+    CHECK(result.item_count == 0);
+    REQUIRE(fixture.project->audio.sources.find(applied.derived_source_id) !=
+            fixture.project->audio.sources.end());
+    CHECK(fixture.project->audio.sources.at(applied.derived_source_id).channels[0] == replacement);
+  }
+  SECTION("an original PCM collision after rendering discards the staged PCM") {
+    REQUIRE(fixture.project->audio.sources.erase(fixture.source_id) == 1);
+    probe.mode = 5;
+    probe.metadata_source_id = fixture.source_id;
+    const std::vector<float> replacement(kSampleCount, 0.25f);
+    probe.replacement_audio = replacement.data();
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                               &probe, &result) == SONARE_ERROR_INVALID_STATE);
+    CHECK(probe.calls == 2);
+    CHECK(probe.nested == SONARE_OK);
+    CHECK(result.items == nullptr);
+    CHECK(result.item_count == 0);
+    REQUIRE(fixture.project->audio.sources.find(fixture.source_id) !=
+            fixture.project->audio.sources.end());
+    CHECK(fixture.project->audio.sources.at(fixture.source_id).channels[0] == replacement);
+    CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
+          fixture.project->audio.sources.end());
+  }
+  SECTION("a binding mutation after rendering discards the staged PCM") {
+    probe.mode = 6;
+    probe.clip_id = fixture.clip_id;
+    probe.metadata_source_id = fixture.source_id;
+    CHECK(sonare_project_rehydrate_vocal_edits(fixture.project, &original, 1, reenter_project,
+                                               &probe, &result) == SONARE_ERROR_INVALID_STATE);
+    CHECK(probe.calls == 2);
+    CHECK(probe.nested == SONARE_OK);
+    CHECK(result.items == nullptr);
+    CHECK(result.item_count == 0);
+    CHECK(fixture.project->history.project().find_clip(fixture.clip_id)->source_id ==
+          fixture.source_id);
+    CHECK(fixture.project->audio.sources.find(applied.derived_source_id) ==
+          fixture.project->audio.sources.end());
   }
   sonare_project_free_vocal_rehydrate_result(&result);
 }

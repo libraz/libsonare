@@ -681,6 +681,14 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
 
   std::vector<SonareProjectVocalRehydrateItem> items;
   std::map<SourceId, AudioSourceSamples> staged;
+  struct ReadyItem {
+    Key key;
+    Envelope envelope;
+    AudioSourceRef original_ref;
+    AudioSourceRef derived_ref;
+    bool derived_pcm_existed = false;
+  };
+  std::vector<ReadyItem> ready_items;
   // A cancel callback may mutate the project, so iterate a copy and verify it at the end.
   const std::vector<arr::AssistSidecar> sidecars = project->history.project().assist_sidecars();
   for (const arr::AssistSidecar& sidecar : sidecars) {
@@ -782,6 +790,7 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
       };
       if (existing != project->audio.sources.end()) {
         stage_original();
+        ready_items.push_back({*key, envelope, *original_ref, *derived_ref, true});
         item.status = SONARE_VOCAL_REHYDRATE_ALREADY_READY;
         item.reason = SONARE_VOCAL_REASON_NONE;
         items.push_back(item);
@@ -812,6 +821,7 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
         continue;
       }
       stage_original();
+      ready_items.push_back({*key, envelope, *original_ref, *derived_ref, false});
       item.status = SONARE_VOCAL_REHYDRATE_REHYDRATED;
       item.reason = SONARE_VOCAL_REASON_NONE;
     } catch (const sonare::editing::vocal_edit::VocalEditException& error) {
@@ -841,6 +851,74 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   if (!unchanged) {
     sonare_c_detail::set_last_error(
         "project vocal edits changed during rehydrate; staged results were discarded");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  const auto source_ref_matches = [](const AudioSourceRef& lhs, const AudioSourceRef& rhs) {
+    return lhs.id == rhs.id && lhs.uri == rhs.uri && lhs.channel_count == rhs.channel_count &&
+           lhs.sample_rate_hint == rhs.sample_rate_hint &&
+           lhs.storage_handle_id == rhs.storage_handle_id && lhs.content_hash == rhs.content_hash &&
+           lhs.external_stem_role == rhs.external_stem_role;
+  };
+  const auto ready_state_unchanged = [&]() {
+    const Project& model = project->history.project();
+    for (const ReadyItem& ready : ready_items) {
+      const SourceInput* original = find_input(ready.envelope.original_source_id);
+      const AudioSourceRef* original_ref = audio_source(model, ready.envelope.original_source_id);
+      const AudioSourceRef* derived_ref = audio_source(model, ready.envelope.derived_source_id);
+      if (original == nullptr || original->sample_rate != ready.envelope.source_sample_rate ||
+          original->sample_count != ready.envelope.source_sample_count ||
+          original->digest != ready.envelope.original_digest ||
+          sonare::editing::vocal_edit::digest_source_pcm(
+              original->mono, static_cast<size_t>(original->sample_count)) !=
+              ready.envelope.original_digest ||
+          original_ref == nullptr || derived_ref == nullptr ||
+          !source_ref_matches(*original_ref, ready.original_ref) ||
+          !source_ref_matches(*derived_ref, ready.derived_ref) ||
+          !current_binding_matches(model, ready.key, ready.envelope.derived_source_id) ||
+          !metadata_hash_matches(*derived_ref, ready.envelope.derived_digest)) {
+        return false;
+      }
+
+      const auto staged_original = staged.find(ready.envelope.original_source_id);
+      const auto existing_original = project->audio.sources.find(ready.envelope.original_source_id);
+      if (staged_original != staged.end()) {
+        if (existing_original != project->audio.sources.end() ||
+            !audio_content_matches(staged_original->second, ready.envelope.source_sample_rate,
+                                   ready.envelope.source_sample_count,
+                                   ready.envelope.original_digest)) {
+          return false;
+        }
+      } else if (existing_original == project->audio.sources.end() ||
+                 !store_pcm_matches(
+                     *project, ready.envelope.original_source_id, ready.envelope.source_sample_rate,
+                     ready.envelope.source_sample_count, ready.envelope.original_digest)) {
+        return false;
+      }
+
+      const auto staged_derived = staged.find(ready.envelope.derived_source_id);
+      const auto existing_derived = project->audio.sources.find(ready.envelope.derived_source_id);
+      if (staged_derived != staged.end()) {
+        if (existing_derived != project->audio.sources.end() ||
+            !audio_content_matches(staged_derived->second, ready.envelope.source_sample_rate,
+                                   ready.envelope.source_sample_count,
+                                   ready.envelope.derived_digest)) {
+          return false;
+        }
+      } else if (!ready.derived_pcm_existed || existing_derived == project->audio.sources.end() ||
+                 !store_pcm_matches(
+                     *project, ready.envelope.derived_source_id, ready.envelope.source_sample_rate,
+                     ready.envelope.source_sample_count, ready.envelope.derived_digest)) {
+        return false;
+      }
+    }
+    for (const auto& entry : staged) {
+      if (project->audio.sources.find(entry.first) != project->audio.sources.end()) return false;
+    }
+    return true;
+  };
+  if (!ready_state_unchanged()) {
+    sonare_c_detail::set_last_error(
+        "project vocal sources changed during rehydrate; staged results were discarded");
     return SONARE_ERROR_INVALID_STATE;
   }
   auto output = std::unique_ptr<SonareProjectVocalRehydrateItem[]>(
