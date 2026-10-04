@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "midi/channel_voice_decode.h"
@@ -54,6 +55,7 @@
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/modal_voice.h"
 #include "midi/synth/oscillator.h"
+#include "midi/synth/part_fx_stage.h"
 #include "midi/synth/percussion_voice.h"
 #include "midi/synth/piano_voice.h"
 #include "midi/synth/pipe_organ_voice.h"
@@ -485,6 +487,18 @@ struct NativeSynthConfig {
   /// channel 10 through the GM drum-kit map. This is intended for generic MIDI
   /// file playback; false keeps a deliberately selected patch fixed.
   bool use_gm_programs = false;
+  /// Builds a streaming processor from a name and JSON params, for part rigs
+  /// and GS insertion units. Null (the default) leaves the synth with no part
+  /// buses, so every part renders dry; the host that links the effects wires it.
+  GsEfxStageFactory insert_factory;
+  /// Bind the bank's default rig to a part with no entry of its own, for the
+  /// program it plays (docs/voicing.md). Reached only under use_gm_programs.
+  bool bank_rig_binding = true;
+  /// Offline hosts only: realise a pending rig or GS EFX change at the top of
+  /// the block, and read GS EFX SysEx from the event stream. Realising
+  /// allocates, so a live host leaves this false and pushes EFX SysEx through
+  /// on_control_sysex instead.
+  bool realize_efx_inline = false;
 };
 
 /// Continuously automatable NativeSynth parameters, addressed through
@@ -553,7 +567,12 @@ ControllerProfile default_controller_profile() noexcept;
 /// patch with BuiltinSynth-compatible channel semantics plus the default-
 /// modulator CCs (CC1 vibrato, CC7/CC11 gain, CC10 pan, pitch bend, CC64
 /// sustain, CC120/121/123 channel modes).
-class NativeSynth final : public MidiInstrument {
+///
+/// With an insert factory, a part with a rig or a GS insertion-effect route
+/// renders through PartFxStage: its voices sum into the part's bus, which the
+/// rig runs on in place. The GS layer this synth reads is the EFX block and the
+/// resets alone, and only under use_gm_programs.
+class NativeSynth final : public MidiInstrument, private PartFxHost {
  public:
   explicit NativeSynth(const NativeSynthConfig& config = {});
 
@@ -563,8 +582,24 @@ class NativeSynth final : public MidiInstrument {
                              int num_channels, int num_samples) noexcept override;
   bool supports_source_track_rendering() const noexcept override { return true; }
   void reset() override;
-  int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
+  /// The rig chains are not latency-compensated, but their tails are counted.
+  int tail_samples() const noexcept override {
+    return static_cast<int>(tail_samples_) + part_fx_.tail_samples();
+  }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
+  /// CONTROL thread: a host-pushed GS EFX block write or reset, realised here
+  /// and handed to the audio thread wait-free. The live path's only EFX writer:
+  /// a SysEx scheduled inside a clip reaches on_event, which ignores it unless
+  /// realize_efx_inline is set.
+  void on_control_sysex(const uint8_t* data, size_t size) noexcept override;
+  /// CONTROL thread: install @p rig for part @p part, or for every part no entry
+  /// names when @p part is kPartRigAllParts, and rebuild the chains when
+  /// prepared. Applies whether or not use_gm_programs is set; kBank binds
+  /// nothing without it.
+  bool set_part_rig(uint8_t part, const PartRig& rig) noexcept override;
+  /// CONTROL thread: the processor names of the chain last published for
+  /// @p part, in signal order (test/diagnostic).
+  std::vector<std::string> part_rig_stage_names(uint8_t part) const;
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
   bool describe_parameter(unsigned int param_id,
@@ -632,6 +667,14 @@ class NativeSynth final : public MidiInstrument {
   uint64_t skipped_event_count() const noexcept { return skipped_events_; }
 
  private:
+  /// gs_default_cc_positions() widened to the controller record's width.
+  static std::array<Control32, 128> default_cc_positions() noexcept {
+    std::array<Control32, 128> out{};
+    const std::array<uint8_t, 128> seven = gs_default_cc_positions();
+    for (size_t i = 0; i < out.size(); ++i) out[i] = Control32::from7(seven[i]);
+    return out;
+  }
+
   struct ChannelState {
     bool sustain = false;                           // CC64 >= 64 (dampers lifted)
     Control32 sustain_level = Control32::from7(0);  // CC64 (half-pedal damper position)
@@ -666,6 +709,8 @@ class NativeSynth final : public MidiInstrument {
     uint8_t bank_msb = 0;
     uint8_t bank_lsb = 0;
     Bend32 pitch_bend = Bend32::center();
+    /// Every controller as last sent, which is what an EFX CONTROL SOURCE reads.
+    std::array<Control32, 128> cc_position = default_cc_positions();
     /// Expression axes as the channel's ControllerProfile has resolved them.
     /// Which controller reaches which axis is the profile's to say, and which
     /// axis an engine reads is engine_axis_capability()'s; nothing between them
@@ -720,6 +765,19 @@ class NativeSynth final : public MidiInstrument {
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;
+  /// PartFxHost: where an EFX CONTROL source sits on @p part.
+  float part_controller_position(int part, uint8_t source) const noexcept override;
+  /// PartFxHost: the part pan a mono rig prefix is restored to.
+  float part_pan_units(int part) const noexcept override {
+    return channel_mods_[static_cast<size_t>(part & 0x0F)].pan_units;
+  }
+  /// Publishes the bank rig @p channel's program binds; offline marks the stage
+  /// for a rebuild at the next block, live leaves it to the control thread.
+  void refresh_part_rig(uint8_t channel) noexcept;
+  /// Offline render thread: the EFX content of a GS SysEx, into the mirror.
+  void apply_efx_sysex(const uint8_t* data, size_t size) noexcept;
+  /// Offline render thread: rebuild and publish the stage. Allocates.
+  void realize_part_fx();
   void control_change(uint8_t channel, uint8_t controller, Control32 control) noexcept;
   void channel_pressure(uint8_t channel, Control32 pressure) noexcept;
   void poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept;
@@ -838,8 +896,7 @@ class NativeSynth final : public MidiInstrument {
   float bus_drive_gain_ = 0.0f;
   /// Shared-bus residual (mix minus dry), split per component so each lands on
   /// the sources that produced it. prepare() has no block-length argument, so
-  /// each is staged in a fixed chunk and flushed every kResidualChunk samples
-  /// and at block end (process_impl).
+  /// each is staged per bus chunk and flushed at its end (process_impl).
   SourceResidualSplitter residual_splitter_;         // remainder: swell, bus drive, DC block
   SourceResidualSplitter piano_residual_splitter_;   // piano body + sympathetic
   SourceResidualSplitter guitar_residual_splitter_;  // guitar/KS sound halo
@@ -849,7 +906,31 @@ class NativeSynth final : public MidiInstrument {
   std::array<float, kResidualChunk> piano_residual_r_{};
   std::array<float, kResidualChunk> guitar_residual_l_{};
   std::array<float, kResidualChunk> guitar_residual_r_{};
-  int residual_pos_ = 0;
+  /// A bussed part's chain output, and a unit's, follow only the voices that
+  /// fed that bus.
+  std::array<SourceResidualSplitter, 16> part_bus_splitters_;
+  std::array<SourceResidualSplitter, kGsEfxUnitCount> unit_splitters_;
+  static_assert(kResidualChunk == kPartFxChunkFrames,
+                "the residual staging is flushed once per bus chunk");
+  /// The voice sums of one chunk, taken before the bus outputs are folded in
+  /// and the post stages run. Pre-gain, like the per-sample sums they hold.
+  std::array<float, kPartFxChunkFrames> chunk_mix_l_{};
+  std::array<float, kPartFxChunkFrames> chunk_mix_r_{};
+  std::array<float, kPartFxChunkFrames> chunk_piano_l_{};
+  std::array<float, kPartFxChunkFrames> chunk_piano_r_{};
+  std::array<float, kPartFxChunkFrames> chunk_guitar_l_{};
+  std::array<float, kPartFxChunkFrames> chunk_guitar_r_{};
+  /// Piano voices on a bussed part: their direct share rides the part's bus,
+  /// and this drives the shared board on their behalf.
+  std::array<float, kPartFxChunkFrames> chunk_board_l_{};
+  std::array<float, kPartFxChunkFrames> chunk_board_r_{};
+  /// Part buses, rig chains and GS insertion units.
+  PartFxStage part_fx_;
+  /// Open-string halo per part, for a bussed part's sympathetic voices: its
+  /// return rides the part's bus and therefore the part's rig, as Sf2Player's
+  /// does. Armed at the first qualifying note-on on the part.
+  std::array<PianoResonanceBank, 16> part_halo_;
+  std::array<bool, 16> part_halo_armed_{};
   VoicePool<NativeSynthVoice> pool_;
   /// Host sample bank for the kSample engine. The raw pointer is what the audio
   /// thread reads; the share below is held only when the caller handed one over.

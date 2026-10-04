@@ -1,3 +1,6 @@
+#include <utility>
+
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 
 namespace sonare::midi::synth {
@@ -299,6 +302,92 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
   if (!channel_moved) return;
   refresh_channel_mod(ch);
   push_excitation_control(ch, channel_changed_mask);
+}
+
+float NativeSynth::part_controller_position(int part, uint8_t source) const noexcept {
+  // Read at full width, as refresh_channel_mod reads the same controllers.
+  const ChannelState& st = channels_[static_cast<size_t>(part & 0x0F)];
+  if (source == kEfxSourceBend) return (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
+  if (source == kEfxSourceAftertouch) return st.pressure.f7() / 127.0f;
+  return st.cc_position[source & 0x7Fu].f7() / 127.0f;
+}
+
+void NativeSynth::refresh_part_rig(uint8_t channel) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  uint8_t id = 0;
+  // Only GM playback resolves a program to a bank voice, so only it binds a rig.
+  if (config_.use_gm_programs) {
+    const ChannelState& st = channels_[ch];
+    id = gm_fallback_rig(gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums), st.program).id;
+  }
+  // Live, the rig the part had stays until the control thread next rebuilds.
+  if (part_fx_.publish_part_rig(ch, id) && config_.realize_efx_inline) part_fx_.mark_dirty();
+}
+
+void NativeSynth::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
+  const GsSysEx msg = parse_gs_sysex(data, size);
+  if (gs_sysex_resets(msg.kind)) {
+    part_fx_.clear_efx();
+    return;
+  }
+  if (msg.kind == GsSysExKind::kEfxPartSwitch) {
+    part_fx_.assign_part(msg.channel, msg.value);
+    return;
+  }
+  (void)part_fx_.apply_unit_sysex(data, size);
+}
+
+void NativeSynth::realize_part_fx() {
+  part_fx_.clear_dirty();
+  if (prepared_) part_fx_.publish();
+}
+
+void NativeSynth::on_control_sysex(const uint8_t* data, size_t size) noexcept {
+  // Offline the event stream is the EFX writer; there must be only one.
+  if (!prepared_ || data == nullptr || size == 0 || !config_.use_gm_programs ||
+      config_.realize_efx_inline || !part_fx_.enabled()) {
+    return;
+  }
+  const GsSysEx msg = parse_gs_sysex(data, size);
+  if (!gs_sysex_resets(msg.kind) && msg.kind != GsSysExKind::kEfxPartSwitch &&
+      gs_efx_addressed_unit(data, size) < 0) {
+    return;
+  }
+  const PartFxStage::Checkpoint before = part_fx_.checkpoint();
+  try {
+    if (part_fx_.apply_control_sysex(data, size)) {
+      part_fx_.clear_dirty();
+      part_fx_.publish();
+    }
+  } catch (...) {
+    // Translation allocates; keep the published generation and its mirror.
+    part_fx_.restore(before);
+  }
+}
+
+bool NativeSynth::set_part_rig(uint8_t part, const PartRig& rig) noexcept {
+  if (!validate_part_rig(part, rig)) return false;
+  try {
+    PartFxStage::RigTable previous = part_fx_.rig_table();
+    part_fx_.set_part_rig(part, rig);
+    if (prepared_) {
+      try {
+        part_fx_.publish();
+      } catch (...) {
+        part_fx_.restore_rig_table(std::move(previous));
+        throw;
+      }
+    }
+  } catch (...) {
+    return false;
+  }
+  return true;
+}
+
+std::vector<std::string> NativeSynth::part_rig_stage_names(uint8_t part) const {
+  const PartFxSnapshot* snapshot = part_fx_.control_current();
+  if (snapshot == nullptr || part >= 16) return {};
+  return snapshot->stage_names[part];
 }
 
 }  // namespace sonare::midi::synth
