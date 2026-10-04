@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "util/constants.h"
-#include "util/insertion_sort.h"
 
 namespace sonare::transport {
 namespace {
@@ -108,8 +107,8 @@ int64_t saturating_to_int64(double value) noexcept {
 // Orders by start and keeps the last-supplied entry at each start position.
 template <typename Segment>
 void keep_last_per_start(std::vector<Segment>* segments) {
-  insertion_sort(segments->begin(), segments->end(),
-                 [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
+  std::stable_sort(segments->begin(), segments->end(),
+                   [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
   auto last =
       std::unique(segments->rbegin(), segments->rend(),
                   [](const Segment& a, const Segment& b) { return a.start_ppq == b.start_ppq; });

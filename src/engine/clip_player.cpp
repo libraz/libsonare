@@ -7,7 +7,6 @@
 
 #include "rt/pan_law.h"
 #include "util/constants.h"
-#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::engine {
@@ -152,7 +151,7 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
       clip.start_sample = map->ppq_to_sample(clip.start_ppq);
     }
   }
-  insertion_sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
+  std::stable_sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
     if (a.start_sample != b.start_sample) return a.start_sample < b.start_sample;
     return a.id < b.id;
   });
