@@ -90,10 +90,8 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     if (lane_val.typeOf().as<std::string>() == "object") config.sends = readOptionalSends(lane_val);
     configs.push_back(std::move(config));
   }
-  if (!engine_.set_track_lanes(std::move(configs))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track lane configuration");
-  }
+  requireMixingTarget(engine_.set_track_lanes(std::move(configs)),
+                      "invalid track lane configuration");
 #else
   (void)lanes;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -146,10 +144,8 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
     config.sends = readOptionalSends(bus);
     configs.push_back(std::move(config));
   }
-  if (!engine_.set_track_buses(std::move(configs))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track bus configuration");
-  }
+  requireMixingTarget(engine_.set_track_buses(std::move(configs)),
+                      "invalid track bus configuration");
 #else
   (void)buses;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -189,10 +185,9 @@ void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const v
   const int source_kind = checkedIntFromVal(source_kind_val, "sourceKind");
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_master_sidechain(insert_index, sidechainSourceKind(source_kind), source_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid master sidechain binding");
-  }
+  requireMixingTarget(
+      engine_.set_master_sidechain(insert_index, sidechainSourceKind(source_kind), source_id),
+      "invalid master sidechain binding");
 #else
   (void)insert_index;
   (void)source_kind;
@@ -291,10 +286,9 @@ void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_track_insert_bypassed(track_id, insert_index, bypassed, reset_on_bypass)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip insert bypass target");
-  }
+  requireMixingTarget(
+      engine_.set_track_insert_bypassed(track_id, insert_index, bypassed, reset_on_bypass),
+      "invalid track strip insert bypass target");
 #else
   (void)track_id;
   (void)insert_index;
@@ -345,10 +339,8 @@ void RealtimeEngineWasm::setMasterStripInsertBypassed(const val& insert_index_va
                                                       bool reset_on_bypass) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_master_insert_bypassed(insert_index, bypassed, reset_on_bypass)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid master strip insert bypass target");
-  }
+  requireMixingTarget(engine_.set_master_insert_bypassed(insert_index, bypassed, reset_on_bypass),
+                      "invalid master strip insert bypass target");
 #else
   (void)insert_index;
   (void)bypassed;
@@ -364,10 +356,9 @@ void RealtimeEngineWasm::setBusStripInsertBypassed(const val& bus_id_val,
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_bus_insert_bypassed(bus_id, insert_index, bypassed, reset_on_bypass)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip insert bypass target");
-  }
+  requireMixingTarget(
+      engine_.set_bus_insert_bypassed(bus_id, insert_index, bypassed, reset_on_bypass),
+      "invalid bus strip insert bypass target");
 #else
   (void)bus_id;
   (void)insert_index;
@@ -428,10 +419,8 @@ bool RealtimeEngineWasm::applyTrackStripInsertParamByNameNow(const val& track_id
 void RealtimeEngineWasm::clearTrackStripInsertParameterBases(const val& track_id_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.clear_track_insert_parameter_bases(track_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip insert base target");
-  }
+  requireMixingTarget(engine_.clear_track_insert_parameter_bases(track_id),
+                      "invalid track strip insert base target");
 #else
   (void)track_id;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -515,10 +504,8 @@ void RealtimeEngineWasm::restoreMasterStripInsertParamByName(const val& insert_i
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.restore_master_insert_param_by_name(insert_index, param_name, value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid master strip insert parameter target");
-  }
+  requireMixingTarget(engine_.restore_master_insert_param_by_name(insert_index, param_name, value),
+                      "invalid master strip insert parameter target");
 #else
   (void)insert_index;
   (void)param_name;
@@ -578,10 +565,8 @@ bool RealtimeEngineWasm::applyBusStripInsertParamByNameNow(const val& bus_id_val
 void RealtimeEngineWasm::clearBusStripInsertParameterBases(const val& bus_id_val) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.clear_bus_insert_parameter_bases(bus_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip insert base target");
-  }
+  requireMixingTarget(engine_.clear_bus_insert_parameter_bases(bus_id),
+                      "invalid bus strip insert base target");
 #else
   (void)bus_id;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -663,10 +648,7 @@ void RealtimeEngineWasm::setTrackStripPan(const val& track_id_val, const val& pa
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const float pan = checkedFloatFromVal(pan_val, "pan");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_track_pan(track_id, pan)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip pan target");
-  }
+  requireMixingTarget(engine_.set_track_pan(track_id, pan), "invalid track strip pan target");
 #else
   (void)track_id;
   (void)pan;
@@ -682,10 +664,9 @@ void RealtimeEngineWasm::setTrackStripPanLaw(const val& track_id_val, const val&
   if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
   }
-  if (!engine_.set_track_pan_law(track_id, static_cast<sonare::mixing::PanLaw>(pan_law))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip pan-law target");
-  }
+  requireMixingTarget(
+      engine_.set_track_pan_law(track_id, static_cast<sonare::mixing::PanLaw>(pan_law)),
+      "invalid track strip pan-law target");
 #else
   (void)track_id;
   (void)pan_law;
@@ -701,10 +682,9 @@ void RealtimeEngineWasm::setTrackStripPanMode(const val& track_id_val, const val
   if (pan_mode < 0 || pan_mode > 2) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
   }
-  if (!engine_.set_track_pan_mode(track_id, static_cast<sonare::mixing::PanMode>(pan_mode))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip pan-mode target");
-  }
+  requireMixingTarget(
+      engine_.set_track_pan_mode(track_id, static_cast<sonare::mixing::PanMode>(pan_mode)),
+      "invalid track strip pan-mode target");
 #else
   (void)track_id;
   (void)pan_mode;
@@ -734,10 +714,7 @@ void RealtimeEngineWasm::setBusStripPan(const val& bus_id_val, const val& pan_va
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const float pan = checkedFloatFromVal(pan_val, "pan");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_bus_pan(bus_id, pan)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip pan target");
-  }
+  requireMixingTarget(engine_.set_bus_pan(bus_id, pan), "invalid bus strip pan target");
 #else
   (void)bus_id;
   (void)pan;
@@ -753,10 +730,8 @@ void RealtimeEngineWasm::setBusStripPanLaw(const val& bus_id_val, const val& pan
   if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
   }
-  if (!engine_.set_bus_pan_law(bus_id, static_cast<sonare::mixing::PanLaw>(pan_law))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip pan-law target");
-  }
+  requireMixingTarget(engine_.set_bus_pan_law(bus_id, static_cast<sonare::mixing::PanLaw>(pan_law)),
+                      "invalid bus strip pan-law target");
 #else
   (void)bus_id;
   (void)pan_law;
@@ -772,10 +747,9 @@ void RealtimeEngineWasm::setBusStripPanMode(const val& bus_id_val, const val& pa
   if (pan_mode < 0 || pan_mode > 2) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
   }
-  if (!engine_.set_bus_pan_mode(bus_id, static_cast<sonare::mixing::PanMode>(pan_mode))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip pan-mode target");
-  }
+  requireMixingTarget(
+      engine_.set_bus_pan_mode(bus_id, static_cast<sonare::mixing::PanMode>(pan_mode)),
+      "invalid bus strip pan-mode target");
 #else
   (void)bus_id;
   (void)pan_mode;
@@ -806,10 +780,8 @@ void RealtimeEngineWasm::setTrackStripChannelDelaySamples(const val& track_id_va
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const int delay_samples = checkedIntFromVal(delay_samples_val, "delaySamples");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_track_channel_delay_samples(track_id, delay_samples)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip channel-delay target");
-  }
+  requireMixingTarget(engine_.set_track_channel_delay_samples(track_id, delay_samples),
+                      "invalid track strip channel-delay target");
 #else
   (void)track_id;
   (void)delay_samples;
@@ -822,10 +794,8 @@ float RealtimeEngineWasm::insertParameterConstructedValue(const val& param_id_va
   const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
 #if defined(SONARE_WITH_MIXING)
   float value = 0.0f;
-  if (!engine_.insert_parameter_constructed_value(param_id, &value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown insert construction value");
-  }
+  requireMixingTarget(engine_.insert_parameter_constructed_value(param_id, &value),
+                      "unknown insert construction value");
   return value;
 #else
   (void)param_id;
