@@ -66,6 +66,9 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetWarpMap(const Napi::CallbackInfo& info);
   Napi::Value RemoveWarpMap(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMidiDestination(const Napi::CallbackInfo& info);
+  Napi::Value SetPartRig(const Napi::CallbackInfo& info);
+  Napi::Value GetPartRig(const Napi::CallbackInfo& info);
+  Napi::Value ClearPartRig(const Napi::CallbackInfo& info);
   Napi::Value SetTrackGain(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMute(const Napi::CallbackInfo& info);
   Napi::Value SetTrackSolo(const Napi::CallbackInfo& info);

@@ -49,6 +49,11 @@ static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
 static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
               "Node ControllerAxis table drifted from C");
 
+// Part-rig mode spellings, shared with the Python and WASM facades.
+constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
+static_assert(std::size(kPartRigModes) == 3 && SONARE_PART_RIG_CHAIN == 2,
+              "Node part-rig mode table drifted from C");
+
 // Articulation spellings, shared with the Python and WASM facades.
 constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
 static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
@@ -323,6 +328,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::ControllerNoteTracking>("controllerNoteTracking"),
           InstanceMethod<&RealtimeEngineWrap::SetArticulation>("setArticulation"),
           InstanceMethod<&RealtimeEngineWrap::Articulation>("articulation"),
+          InstanceMethod<&RealtimeEngineWrap::SetPartRig>("setPartRig"),
           InstanceMethod<&RealtimeEngineWrap::LegatoFallbackCount>("legatoFallbackCount"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiFx>("clearMidiFx"),
@@ -1404,6 +1410,27 @@ Napi::Value RealtimeEngineWrap::SetArticulation(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_articulation(engine_, destination_id, channel, articulation));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetPartRig(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t destination_id = 0;
+  uint8_t part = 0;
+  std::string inserts_json;
+  int mode = SONARE_PART_RIG_BANK;
+  // The mode and part are required: a defaulted mode would turn a misspelled
+  // 'chain' into the bank rig, which is a request that looks as if it took.
+  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
+      !RequiredMidiByteValue(env, info[1], "part", &part) ||
+      !sonare_node::SynthEnumValue(env, info[2], kPartRigModes, 3, "mode", &mode) ||
+      !OptionalStringArg(env, info, 3, "inserts", "", &inserts_json)) {
+    return env.Undefined();
+  }
+  const char* json = info[3].IsString() ? inserts_json.c_str() : nullptr;
+  ThrowIfError(env, sonare_engine_set_part_rig(engine_, destination_id, part, mode, json));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

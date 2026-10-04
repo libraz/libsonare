@@ -1243,6 +1243,24 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.setPartRig',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'destinationId',
+        call: (e) => e.setPartRig({ destinationId: 'x', part: 0, mode: 'none' } as never),
+      },
+      {
+        argument: 'part',
+        call: (e) => e.setPartRig({ destinationId: 0, part: 'x', mode: 'none' } as never),
+      },
+      {
+        argument: 'mode',
+        call: (e) => e.setPartRig({ destinationId: 0, part: 0, mode: {} } as never),
+      },
+    ],
+  },
+  {
     name: 'RealtimeEngine.articulation',
     missingRequired: [],
     badTransportArguments: [
@@ -1862,6 +1880,26 @@ export const CASES: AbortGuardCase[] = [
       {
         argument: 'destinationId',
         call: ({ project, midiTrackId }) => project.setTrackMidiDestination(midiTrackId, 'x'),
+      },
+    ],
+  },
+  {
+    name: 'Project.setPartRig',
+    missingRequired: [],
+    badProjectArguments: [
+      {
+        argument: 'destinationId',
+        call: ({ project }) =>
+          project.setPartRig({ destinationId: 'x', part: 0, mode: 'none' } as never),
+      },
+      {
+        argument: 'part',
+        call: ({ project }) =>
+          project.setPartRig({ destinationId: 0, part: 'x', mode: 'none' } as never),
+      },
+      {
+        argument: 'mode',
+        call: ({ project }) => project.setPartRig({ destinationId: 0, part: 0, mode: {} } as never),
       },
     ],
   },

@@ -7,6 +7,7 @@ import type {
   MeterTap,
   PanLawInput,
   PanMode,
+  PartRigRequest,
   ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
@@ -267,4 +268,35 @@ export function normalizeSynthInstrument(patch: SynthPatch | string): SynthPatch
   // TypeScript type of its own; only the native layer looks at it again.
   const handle = (patch.sampleBank as unknown as { native: SampleBank }).native;
   return { ...patch, sampleBank: handle };
+}
+
+/**
+ * Serialize a part-rig request's inserts to the C ABI JSON form, refusing a
+ * wrong shape by field name. Returns `undefined` when there are none.
+ */
+export function partRigInsertsJson(inserts: PartRigRequest['inserts']): string | undefined {
+  if (inserts === undefined || inserts === null) {
+    return undefined;
+  }
+  if (!Array.isArray(inserts)) {
+    throw new TypeError('inserts must be an array');
+  }
+  return JSON.stringify(
+    inserts.map((insert, index) => {
+      if (typeof insert !== 'object' || insert === null) {
+        throw new TypeError(`inserts[${index}] must be an object`);
+      }
+      if (typeof insert.processor !== 'string') {
+        throw new TypeError(`inserts[${index}].processor must be a string`);
+      }
+      const { params } = insert;
+      if (typeof params === 'string') {
+        return { processor: insert.processor, params };
+      }
+      if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+        throw new TypeError(`inserts[${index}].params must be an object or a JSON string`);
+      }
+      return { processor: insert.processor, params: JSON.stringify(params) };
+    }),
+  );
 }

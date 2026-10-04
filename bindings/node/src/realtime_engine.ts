@@ -35,6 +35,7 @@ import type {
   NoteTracking,
   PanLawInput,
   PanMode,
+  PartRigRequest,
   ProjectMidiCcBinding,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
@@ -50,6 +51,7 @@ import {
   normalizeSynthInstrument,
   panLawValue,
   panModeValue,
+  partRigInsertsJson,
   sendTimingValue,
   sidechainSourceKindValue,
   trackMonitorModeValue,
@@ -1311,6 +1313,21 @@ export class RealtimeEngine {
     articulation: Articulation | number,
   ): void {
     this.native.setArticulation(destinationId, channel, articulation);
+  }
+
+  /**
+   * Set one part rig of the destination's instrument (see
+   * {@link Project.setPartRig} for the request). A destination with no
+   * instrument bound throws `InvalidParameter`; an instrument without part rigs
+   * (builtin, host callback) throws `NotSupported`.
+   */
+  setPartRig(request: PartRigRequest): void {
+    this.native.setPartRig(
+      request.destinationId,
+      request.part,
+      request.mode,
+      partRigInsertsJson(request.inserts),
+    );
   }
 
   /**

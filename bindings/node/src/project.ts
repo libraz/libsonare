@@ -4,6 +4,9 @@ import type {
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
+  PartRigEntry,
+  PartRigKey,
+  PartRigRequest,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
   ProjectAutomationLaneDesc,
@@ -65,6 +68,7 @@ import {
 } from './validation.js';
 import {
   normalizeSynthInstrument,
+  partRigInsertsJson,
   projectAutomationLaneValue,
   projectClipFadeValue,
   projectLoopModeValue,
@@ -946,6 +950,45 @@ export class Project {
    */
   setTrackMidiDestination(trackId: number, destinationId: number): void {
     this.native.setTrackMidiDestination(trackId, destinationId);
+  }
+
+  /**
+   * Set a destination's part rig through an undoable edit. `part` is 0-15 or
+   * {@link PART_RIG_ALL_PARTS} for the destination default. `mode` is `'bank'`
+   * (the instrument's own rig), `'none'`, or `'chain'` with 1-8 `inserts`.
+   * Entries are stored whether or not a track routes to the destination and take
+   * effect when a bounce binds an instrument that carries part rigs.
+   */
+  setPartRig(request: PartRigRequest): void {
+    this.native.setPartRig(
+      request.destinationId,
+      request.part,
+      request.mode,
+      partRigInsertsJson(request.inserts),
+    );
+  }
+
+  /** Read one part rig entry, or `null` when none is set. */
+  getPartRig(key: PartRigKey): PartRigEntry | null {
+    const raw = this.native.getPartRig(key.destinationId, key.part);
+    if (raw === null) {
+      return null;
+    }
+    if (raw.inserts === undefined) {
+      return { mode: raw.mode };
+    }
+    const inserts = (JSON.parse(raw.inserts) as { processor: string; params: string }[]).map(
+      (insert) => ({
+        processor: insert.processor,
+        params: JSON.parse(insert.params) as Record<string, unknown>,
+      }),
+    );
+    return { mode: raw.mode, inserts };
+  }
+
+  /** Remove one part rig entry through an undoable edit. */
+  clearPartRig(key: PartRigKey): void {
+    this.native.clearPartRig(key.destinationId, key.part);
   }
 
   /**

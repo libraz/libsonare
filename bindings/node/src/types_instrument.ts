@@ -211,6 +211,12 @@ export const CONTROLLER_AXES = [
 
 export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
 
+/** How a part's rig is chosen: the instrument's own bank rig, no rig, or an explicit insert chain. */
+export const PART_RIG_MODES = ['bank', 'none', 'chain'] as const;
+
+/** The `part` value that addresses a destination's default rather than one part. */
+export const PART_RIG_ALL_PARTS = 0xff;
+
 /** The three dimensions MPE carries per note, for {@link RealtimeEngine.setControllerNoteTracking}. */
 export const MPE_DIMENSIONS = ['bend', 'pressure', 'timbre'] as const;
 
@@ -686,4 +692,34 @@ export interface Sf2ProgramStatus {
   backend: SourceBackend;
   /** Resolved SF2 preset name (GS fallback included); empty for `'synth'`. */
   presetName: string;
+}
+
+/** A part-rig mode ({@link PART_RIG_MODES}). */
+export type PartRigMode = (typeof PART_RIG_MODES)[number];
+
+/** One insert of a `'chain'` part rig. `params` is a JSON object or its JSON text. */
+export interface PartRigInsert {
+  /** Processor name, e.g. `'saturation.overdrive'`. */
+  processor: string;
+  /** Processor parameters; an object is serialized to JSON. */
+  params: Record<string, unknown> | string;
+}
+
+/** Selects one part rig entry of a destination; `part` is 0-15 or {@link PART_RIG_ALL_PARTS}. */
+export interface PartRigKey {
+  destinationId: number;
+  part: number;
+}
+
+/** Request for {@link Project.setPartRig} and {@link RealtimeEngine.setPartRig}. */
+export interface PartRigRequest extends PartRigKey {
+  mode: PartRigMode;
+  /** 1-8 inserts; required for `'chain'` and refused for the other modes. */
+  inserts?: PartRigInsert[];
+}
+
+/** A part rig entry read back by {@link Project.getPartRig}; `inserts` is set only for `'chain'`. */
+export interface PartRigEntry {
+  mode: PartRigMode;
+  inserts?: { processor: string; params: Record<string, unknown> }[];
 }

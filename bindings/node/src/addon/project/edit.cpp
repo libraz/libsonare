@@ -1,16 +1,23 @@
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <vector>
 
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
+#include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node::project;
 
 namespace {
+
+// Part-rig mode spellings, shared with the Python and WASM facades.
+constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
+static_assert(std::size(kPartRigModes) == 3 && SONARE_PART_RIG_CHAIN == 2,
+              "Node part-rig mode table drifted from C");
 
 bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectClipFade* out) {
   if (out == nullptr) return false;
@@ -516,6 +523,65 @@ Napi::Value ProjectWrap::SetTrackMidiDestination(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   ThrowIfError(env, sonare_project_set_track_midi_destination(project_, track_id, destination_id));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::SetPartRig(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t destination_id = 0;
+  uint8_t part = 0;
+  int mode = SONARE_PART_RIG_BANK;
+  std::string inserts_json;
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
+      !sonare_node::RequiredMidiByteValue(env, info[1], "part", &part) ||
+      !sonare_node::SynthEnumValue(env, info[2], kPartRigModes, 3, "mode", &mode) ||
+      !sonare_node::OptionalStringArg(env, info, 3, "inserts", "", &inserts_json)) {
+    return env.Undefined();
+  }
+  const char* json = info[3].IsString() ? inserts_json.c_str() : nullptr;
+  ThrowIfError(env, sonare_project_set_part_rig(project_, destination_id, part, mode, json));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::GetPartRig(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t destination_id = 0;
+  uint8_t part = 0;
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
+      !sonare_node::RequiredMidiByteValue(env, info[1], "part", &part)) {
+    return env.Undefined();
+  }
+  int mode = 0;
+  int present = 0;
+  char* inserts = nullptr;
+  ThrowIfError(
+      env, sonare_project_get_part_rig(project_, destination_id, part, &mode, &inserts, &present));
+  std::string inserts_json = inserts != nullptr ? inserts : "";
+  const bool has_inserts = inserts != nullptr;
+  sonare_free_string(inserts);
+  if (env.IsExceptionPending()) return env.Undefined();
+  if (!present) return env.Null();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("mode", sonare_node::SynthEnumName(env, mode, kPartRigModes, 3));
+  if (has_inserts) out.Set("inserts", Napi::String::New(env, inserts_json));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::ClearPartRig(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t destination_id = 0;
+  uint8_t part = 0;
+  if (!sonare_node::RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
+      !sonare_node::RequiredMidiByteValue(env, info[1], "part", &part)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_clear_part_rig(project_, destination_id, part));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
