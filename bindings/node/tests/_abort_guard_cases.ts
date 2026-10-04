@@ -1248,15 +1248,15 @@ export const CASES: AbortGuardCase[] = [
     badTransportArguments: [
       {
         argument: 'destinationId',
-        call: (e) => e.setPartRig({ destinationId: 'x', part: 0, mode: 'none' } as never),
+        call: (e) => e.setPartRig('x', 0, 'none'),
       },
       {
         argument: 'part',
-        call: (e) => e.setPartRig({ destinationId: 0, part: 'x', mode: 'none' } as never),
+        call: (e) => e.setPartRig(0, 'x', 'none'),
       },
       {
         argument: 'mode',
-        call: (e) => e.setPartRig({ destinationId: 0, part: 0, mode: {} } as never),
+        call: (e) => e.setPartRig(0, 0, {}),
       },
     ],
   },
@@ -1889,17 +1889,15 @@ export const CASES: AbortGuardCase[] = [
     badProjectArguments: [
       {
         argument: 'destinationId',
-        call: ({ project }) =>
-          project.setPartRig({ destinationId: 'x', part: 0, mode: 'none' } as never),
+        call: ({ project }) => project.setPartRig('x', 0, 'none'),
       },
       {
         argument: 'part',
-        call: ({ project }) =>
-          project.setPartRig({ destinationId: 0, part: 'x', mode: 'none' } as never),
+        call: ({ project }) => project.setPartRig(0, 'x', 'none'),
       },
       {
         argument: 'mode',
-        call: ({ project }) => project.setPartRig({ destinationId: 0, part: 0, mode: {} } as never),
+        call: ({ project }) => project.setPartRig(0, 0, {}),
       },
     ],
   },

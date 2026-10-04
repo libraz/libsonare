@@ -177,6 +177,7 @@ export interface NativeEngine {
     portTimeSamples?: unknown,
   ): void;
   setArticulation(destinationId: unknown, channel: unknown, articulation: unknown): void;
+  setPartRig(destinationId: unknown, part: unknown, mode: unknown, insertsJson?: unknown): void;
   articulation(destinationId: unknown, channel: unknown): unknown;
   pushMidiPanic(renderFrame?: unknown): void;
   pushMidiSysex(destinationId: unknown, bytes: unknown, renderFrame?: unknown): void;
@@ -324,6 +325,7 @@ export interface NativeProject {
   editAutomationLane(trackId: unknown, targetParamId?: unknown, desc?: unknown): void;
   removeAutomationLane(trackId: unknown, targetParamId?: unknown): void;
   setSampleRate(sampleRate: unknown): void;
+  setPartRig(destinationId: unknown, part: unknown, mode: unknown, insertsJson?: unknown): void;
   setOverlapPolicy(policy: unknown): void;
   setMarker(markerId: unknown, ppq?: unknown, name?: unknown): number;
   markerByIndex(index: unknown): unknown;
