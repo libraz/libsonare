@@ -233,8 +233,13 @@ TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo bu
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
 
+  float poison = 0.0f;
+  out = &poison;
+  out_length = 7;
   REQUIRE(sonare_voice_change_realtime(mono.data(), mono.size(), 48000, "neutral-monitor", 3, &out,
                                        &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
 }
 
 TEST_CASE("sonare_voice_change_realtime compensates chain latency (no silent pre-roll)",

@@ -2161,4 +2161,26 @@ TEST_CASE("sonare_streaming_mastering_chain_non_finite_discard_count reports a l
   sonare_streaming_mastering_chain_destroy(chain);
 }
 
+TEST_CASE("mastering chain entry points define the result on a rejected call",
+          "[c_api][mastering]") {
+  const std::vector<float> samples(2048, 0.1f);
+  SonareMasteringChainResult mono;
+  std::memset(&mono, 0xA5, sizeof(mono));
+  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), 0, nullptr, 0, &mono) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(mono.samples == nullptr);
+  CHECK(mono.length == 0);
+  CHECK(mono.stages == nullptr);
+  CHECK(mono.stages_count == 0);
+
+  SonareMasteringChainStereoResult stereo;
+  std::memset(&stereo, 0xA5, sizeof(stereo));
+  REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), 0, nullptr,
+                                        0, &stereo) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(stereo.left == nullptr);
+  CHECK(stereo.right == nullptr);
+  CHECK(stereo.length == 0);
+  CHECK(stereo.stages == nullptr);
+}
+
 #endif

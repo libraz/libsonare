@@ -1981,3 +1981,27 @@ TEST_CASE("project C surface MIDI 2.0 builders refuse out-of-range fields", "[pr
 
 #endif
 }
+
+TEST_CASE("project C surface MIDI builders define the event on a rejected call",
+          "[project][midi]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SonareMidiEventPod pod;
+  std::memset(&pod, 0xA5, sizeof(pod));
+  REQUIRE(sonare_midi_note_on(0.0, 16, 0, 60, 100, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(pod.ppq == 0.0);
+  CHECK(pod.data0 == 0u);
+  CHECK(pod.data1 == 0u);
+
+  std::memset(&pod, 0xA5, sizeof(pod));
+  REQUIRE(sonare_midi_pitch_bend(0.0, 0, 0, 16384, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(pod.ppq == 0.0);
+  CHECK(pod.data0 == 0u);
+
+  std::memset(&pod, 0xA5, sizeof(pod));
+  REQUIRE(sonare_midi2_note_on(0.0, 0, 0, 128, 0, 0, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(pod.ppq == 0.0);
+  CHECK(pod.data0 == 0u);
+
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+#endif
+}

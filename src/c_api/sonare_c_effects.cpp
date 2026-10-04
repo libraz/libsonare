@@ -536,7 +536,9 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
                                            const int* intervals, size_t interval_count,
                                            int align_zeros, int** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_count)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_count = 0;
   if (interval_count > 0 && !intervals) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {

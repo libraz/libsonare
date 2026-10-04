@@ -656,3 +656,44 @@ TEST_CASE("sonare_fix_frames rejects an empty frame list", "[c_api][features][ed
   REQUIRE(sonare_fix_frames(nullptr, 0, 0, -1, 1, &out, &count) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()).find("empty") != std::string::npos);
 }
+
+TEST_CASE("vector-output features define the output pair on a rejected call", "[c_api][features]") {
+  const std::vector<float> signal(2048, 0.25f);
+  alignas(float) static float poison_storage[1];
+  float* const poison = poison_storage;
+
+  float* out = poison;
+  size_t count = 7;
+  REQUIRE(sonare_spectral_flatness(nullptr, signal.size(), 22050, 512, 128, &out, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  CHECK(count == 0);
+
+  out = poison;
+  count = 7;
+  REQUIRE(sonare_spectral_flux(signal.data(), signal.size(), 22050, 512, 128, 0, &out, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  CHECK(count == 0);
+
+  out = poison;
+  count = 7;
+  REQUIRE(sonare_zero_crossing_rate(nullptr, signal.size(), 22050, 512, 128, &out, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  CHECK(count == 0);
+
+  int* ints = reinterpret_cast<int*>(poison);
+  count = 7;
+  REQUIRE(sonare_zero_crossings(nullptr, 4, 0.0f, 0, 1, 1, &ints, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(ints == nullptr);
+  CHECK(count == 0);
+
+  ints = reinterpret_cast<int*>(poison);
+  count = 7;
+  REQUIRE(sonare_onset_backtrack(nullptr, 2, nullptr, 0, &ints, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(ints == nullptr);
+  CHECK(count == 0);
+}

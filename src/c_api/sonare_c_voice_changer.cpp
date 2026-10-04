@@ -116,7 +116,9 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
   if (channels < 1 || channels > 2) return SONARE_ERROR_INVALID_PARAMETER;
   if (channels == 2 && length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
