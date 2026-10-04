@@ -1,3 +1,5 @@
+// SONARE_WASM_EXCEPTION_UNWIND: release staged tracks and sidecars when allocation propagates to
+// history.
 /// @file edit_command_track.cpp
 /// @brief Track edit-command apply/invert definitions.
 
@@ -6,6 +8,7 @@
 
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_command_internal.h"
+#include "arrangement/vocal_edit_sidecar.h"
 
 namespace sonare::arrangement {
 
@@ -47,6 +50,7 @@ bool RemoveTrack::apply(Project& project, MidiContentStore& store) {
     if (!project.remove_clip(clip_id).second) {
       return false;
     }
+    vocal_sidecar::remove_clip_sidecars(&project, clip_id);
     store.events.erase(clip_id);
   }
   detail::prune_unreferenced_sysex_payloads(&store);
@@ -60,10 +64,12 @@ EditCommandPtr RemoveTrack::invert(const Project& before,
     return nullptr;
   }
   std::vector<detail::RemovedTrackClipSnapshot> clips;
+  std::vector<ClipId> clip_ids;
   for (const EditClip& clip : before.clips()) {
     if (clip.track_id != id_) {
       continue;
     }
+    clip_ids.push_back(clip.id);
     detail::RemovedTrackClipSnapshot snapshot;
     snapshot.clip = clip;
     snapshot.index = before.clip_index(clip.id);
@@ -75,8 +81,9 @@ EditCommandPtr RemoveTrack::invert(const Project& before,
     }
     clips.push_back(std::move(snapshot));
   }
-  return std::make_unique<detail::RestoreTrackWithClips>(*t, before.track_index(id_),
-                                                         std::move(clips));
+  return vocal_sidecar::wrap_inverse(std::make_unique<detail::RestoreTrackWithClips>(
+                                         *t, before.track_index(id_), std::move(clips)),
+                                     before, std::move(clip_ids));
 }
 
 bool RenameTrack::apply(Project& project, MidiContentStore& /*store*/) {

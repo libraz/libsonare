@@ -316,7 +316,8 @@ namespace {
 // One bounded TD-PSOLA pass. Public resynthesize validates the complete curve
 // and splits requests larger than kPsolaMaxSemitones before calling this helper.
 Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
-                              const std::vector<float>& deltas_semitones) {
+                              const std::vector<float>& deltas_semitones,
+                              double frame_origin_sample, double samples_per_frame) {
   SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
                ErrorCode::InvalidParameter);
   const int n_samples = static_cast<int>(audio.size());
@@ -325,7 +326,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
   // Same cadence rule as every other frame<->sample conversion on this track.
   // double: this is the unit frame_at converts to/from, and frame_at feeds the
   // grain clock below, which must not lose precision past 2^24 samples.
-  const double hop = std::max(1.0, static_cast<double>(track.samples_per_frame()));
+  const double hop = samples_per_frame;
   const int n_frames = track.n_frames();
 
   const float* input = audio.data();
@@ -334,18 +335,27 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
   // sits directly under the grain clock (output_epoch/analysis_epoch), whose
   // own accumulation is why this function takes and returns double rather
   // than float -- see the comment above those two variables below.
-  auto frame_at = [hop](double sample_pos) -> double { return sample_pos / hop; };
+  auto frame_at = [hop, frame_origin_sample](double sample_pos) -> double {
+    return (sample_pos - frame_origin_sample) / hop;
+  };
 
   auto nearest_frame = [&](double sample_pos) -> int {
-    int frame = rounded_sample(frame_at(sample_pos), n_samples);
-    return std::clamp(frame, 0, n_frames - 1);
+    const double frame_position = frame_at(sample_pos);
+    if (!(frame_position > 0.0)) return 0;
+    if (frame_position >= static_cast<double>(n_frames - 1)) return n_frames - 1;
+    const double rounded = std::round(frame_position);
+    if (!(rounded > 0.0)) return 0;
+    if (rounded >= static_cast<double>(n_frames - 1)) return n_frames - 1;
+    // The range checks above keep this conversion within [0, n_frames - 1].
+    return static_cast<int>(rounded);
   };
 
   // Hold an active frame at a dry boundary instead of tapering its correction through dry audio.
   auto interp_frame = [&](const std::vector<float>& curve, double sample_pos) -> float {
-    const double ff = frame_at(sample_pos);
-    int f0 = static_cast<int>(std::floor(ff));
-    f0 = std::clamp(f0, 0, n_frames - 1);
+    const double frame_position = frame_at(sample_pos);
+    const double ff =
+        frame_position > 0.0 ? std::min(frame_position, static_cast<double>(n_frames - 1)) : 0.0;
+    const int f0 = static_cast<int>(std::floor(ff));
     const int f1 = std::clamp(f0 + 1, 0, n_frames - 1);
     const float frac = static_cast<float>(ff - static_cast<double>(f0));
     const bool first_active = valid_voiced_frame(track, f0);
@@ -532,12 +542,28 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
 
 Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
                                    const std::vector<float>& deltas_semitones) const {
+  return resynthesize(audio, track, deltas_semitones, 0.0);
+}
+
+Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
+                                   const std::vector<float>& deltas_semitones,
+                                   double frame_origin_sample) const {
+  return resynthesize(audio, track, deltas_semitones, frame_origin_sample,
+                      track.samples_per_frame());
+}
+
+Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
+                                   const std::vector<float>& deltas_semitones,
+                                   double frame_origin_sample, double samples_per_frame) const {
+  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
+               ErrorCode::InvalidParameter);
   SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
   // One delta per track frame prevents interpolation from reading past the correction curve.
   SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
                ErrorCode::InvalidParameter);
   SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
                ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(frame_origin_sample), ErrorCode::InvalidParameter);
   validate_f0_track(audio, track);
 
   const int n_samples = static_cast<int>(audio.size());
@@ -615,7 +641,8 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
           static_cast<float>(static_cast<double>(effective_deltas[index]) * pass_scale);
       pass_deltas[index] = std::clamp(pass_delta, -kPsolaMaxSemitones, kPsolaMaxSemitones);
     }
-    working = resynthesize_psola_pass(working, working_track, pass_deltas);
+    working = resynthesize_psola_pass(working, working_track, pass_deltas, frame_origin_sample,
+                                      samples_per_frame);
   }
   return working;
 }

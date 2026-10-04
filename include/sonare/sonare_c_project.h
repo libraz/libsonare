@@ -55,3 +55,4 @@
 #include "sonare_c_project_external_stems.h"
 #include "sonare_c_project_instruments.h"
 #include "sonare_c_project_midi.h"
+#include "sonare_c_vocal_project.h"

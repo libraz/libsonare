@@ -87,6 +87,7 @@ void registerProjectBindings() {
       .function("setSampleRate", &ProjectWasm::setSampleRate);
   registerProjectArrange(cls);
   registerProjectExternalStems(cls);
+  registerProjectVocalEdit(cls);
   registerProjectEdit(cls);
   registerProjectMidi(cls);
   registerProjectTranscribe(cls);

@@ -55,9 +55,7 @@ GATED_IN_ANALYSIS_BUILD = frozenset(
 
 class LexicalTest(unittest.TestCase):
     def test_prose_about_catching_is_not_a_catch(self) -> None:
-        source = (
-            "// relying on the caller to catch (as the render path does).\nint f();\n"
-        )
+        source = "// relying on the caller to catch (as the render path does).\nint f();\n"
         self.assertFalse(CHECKER.FileScan(source).direct_catch)
 
     def test_literal_mentioning_catch_is_not_a_catch(self) -> None:
@@ -79,9 +77,7 @@ class LexicalTest(unittest.TestCase):
 
 class MacroTest(unittest.TestCase):
     def test_definition_is_not_a_catch_but_its_name_is(self) -> None:
-        definition = CHECKER.FileScan(
-            "#define GUARD_CATCH   \\\n  } catch (...) { return 1; }\n"
-        )
+        definition = CHECKER.FileScan("#define GUARD_CATCH   \\\n  } catch (...) { return 1; }\n")
         # The definition alone emits no landing pad, so the defining header must
         # not be reported as catching.
         self.assertFalse(definition.direct_catch)
@@ -89,12 +85,9 @@ class MacroTest(unittest.TestCase):
 
     def test_macro_in_macro_use_is_followed(self) -> None:
         scan = CHECKER.FileScan(
-            "#define GUARD_CATCH } catch (...) { return 1; }\n"
-            "#define OUTER_GUARD GUARD_CATCH\n"
+            "#define GUARD_CATCH } catch (...) { return 1; }\n#define OUTER_GUARD GUARD_CATCH\n"
         )
-        self.assertEqual(
-            CHECKER.catching_macros([scan]), {"GUARD_CATCH", "OUTER_GUARD"}
-        )
+        self.assertEqual(CHECKER.catching_macros([scan]), {"GUARD_CATCH", "OUTER_GUARD"})
 
 
 def _write(path: Path, text: str) -> None:
@@ -125,14 +118,10 @@ class SyntheticBuildTest(unittest.TestCase):
         bindir = build / "sub"
         objdir = bindir / "CMakeFiles"
 
-        _write(
-            src / "guard.h", "#define GUARD_CATCH \\\n  } catch (...) { return 1; }\n"
-        )
+        _write(src / "guard.h", "#define GUARD_CATCH \\\n  } catch (...) { return 1; }\n")
         _write(
             src / "inline_catch.h",
-            "inline int f() noexcept {\n"
-            "  try { return g(); } catch (...) { return 0; }\n"
-            "}\n",
+            "inline int f() noexcept {\n  try { return g(); } catch (...) { return 0; }\n}\n",
         )
         _write(src / "plain.h", "int g();\n")
         _write(
@@ -157,9 +146,7 @@ class SyntheticBuildTest(unittest.TestCase):
             }
         else:
             _write(src / "lib_unit.cpp", '#include "guard.h"\nint h() { return 1; }\n')
-            _write(
-                src / "module_unit.cpp", '#include "plain.h"\nint k() { return g(); }\n'
-            )
+            _write(src / "module_unit.cpp", '#include "plain.h"\nint k() { return g(); }\n')
             closure = {
                 "lib_unit.cpp": ["guard.h"],
                 "module_unit.cpp": ["plain.h"],
@@ -194,8 +181,7 @@ class SyntheticBuildTest(unittest.TestCase):
         )
         _write(
             objdir / "lib.dir" / "link.txt",
-            "emar qc ../lib/liblib.a CMakeFiles/lib.dir/lib_unit.cpp.o\n"
-            "emranlib ../lib/liblib.a\n",
+            "emar qc ../lib/liblib.a CMakeFiles/lib.dir/lib_unit.cpp.o\nemranlib ../lib/liblib.a\n",
         )
         return build
 
@@ -220,6 +206,21 @@ class SyntheticBuildTest(unittest.TestCase):
         ):
             status = CHECKER.main()
         return status, out.getvalue(), err.getvalue()
+
+    def test_explicit_unwind_requirement_needs_a_flag_without_a_catch(self) -> None:
+        for flagged in ((), ("lib_unit.cpp",)):
+            with self.subTest(flagged=flagged), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                build = self._tree(root, with_catches=False, flagged=flagged)
+                source = root / "src" / "lib_unit.cpp"
+                source.write_text(
+                    "// SONARE_WASM_EXCEPTION_UNWIND: release local PCM buffers on propagated allocation failure.\n"
+                    + source.read_text()
+                )
+                result = self._audit(root, build)
+                self.assertEqual(len(result.covered), int(bool(flagged)))
+                self.assertEqual(len(result.uncovered), int(not flagged))
+                self.assertEqual(result.idle, [])
 
     def test_sibling_archive_and_header_reachable_catches_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -283,17 +284,13 @@ class SyntheticBuildTest(unittest.TestCase):
     def test_fexceptions_moves_a_unit_from_uncovered_to_covered(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            build = self._tree(
-                root, with_catches=True, flagged=("lib_unit.cpp", "module_unit.cpp")
-            )
+            build = self._tree(root, with_catches=True, flagged=("lib_unit.cpp", "module_unit.cpp"))
             result = self._audit(root, build)
             self.assertEqual(result.uncovered, [])
             self.assertEqual(len(result.covered), 2)
             self.assertEqual(result.idle, [])
 
-    def _two_configurations(
-        self, root: Path, *, catches_in_b: bool
-    ) -> tuple[Path, Path]:
+    def _two_configurations(self, root: Path, *, catches_in_b: bool) -> tuple[Path, Path]:
         """Two build trees over one source tree, differing only by gate.
 
         ``module_unit.cpp`` carries the flag in both.  Its catching header is in
@@ -302,17 +299,9 @@ class SyntheticBuildTest(unittest.TestCase):
         is flagged only when it catches, so the catch-without-flag direction
         stays silent and whatever is reported comes from this one.
         """
-        flagged = (
-            ("lib_unit.cpp", "module_unit.cpp")
-            if catches_in_b
-            else ("module_unit.cpp",)
-        )
-        build_a = self._tree(
-            root, with_catches=False, flagged=flagged, build_name="build-a"
-        )
-        build_b = self._tree(
-            root, with_catches=catches_in_b, flagged=flagged, build_name="build-b"
-        )
+        flagged = ("lib_unit.cpp", "module_unit.cpp") if catches_in_b else ("module_unit.cpp",)
+        build_a = self._tree(root, with_catches=False, flagged=flagged, build_name="build-a")
+        build_b = self._tree(root, with_catches=catches_in_b, flagged=flagged, build_name="build-b")
         return build_a, build_b
 
     def test_flag_idle_in_one_configuration_only_is_a_note_not_a_failure(self) -> None:
@@ -333,9 +322,7 @@ class SyntheticBuildTest(unittest.TestCase):
             root = Path(tmp)
             build_a, build_b = self._two_configurations(root, catches_in_b=False)
             for build in (build_a, build_b):
-                self.assertEqual(
-                    self._audit(root, build).idle, ["mod: module_unit.cpp"]
-                )
+                self.assertEqual(self._audit(root, build).idle, ["mod: module_unit.cpp"])
 
             status, out, err = self._main(root, build_a, build_b)
             self.assertEqual(status, 1)

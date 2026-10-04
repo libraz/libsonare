@@ -20,6 +20,7 @@ add_executable(sonare_tests
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_option_validation.cpp
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_registry.cpp
   util/math_utils_test.cpp
+  util/sha256_test.cpp
   util/non_finite_sample_test.cpp
   util/numeric_overflow_guard_test.cpp
   util/time_map_test.cpp
@@ -163,6 +164,7 @@ add_executable(sonare_tests
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
   api/sonare_c_note_objects_test.cpp
+  api/sonare_c_vocal_edit_test.cpp
   api/sonare_c_note_split_merge_test.cpp
   api/sonare_c_note_targets_test.cpp
   api/sonare_c_polyphony_test.cpp
@@ -462,6 +464,13 @@ endif()
 
 if(BUILD_PITCH_EDITOR)
   target_sources(sonare_tests PRIVATE editing/note_model_test.cpp
+                                      editing/vocal_origin_test.cpp
+                                      editing/vocal_pitch_plan_test.cpp
+                                      editing/vocal_state_test.cpp
+                                      editing/vocal_state_codec_test.cpp
+                                      editing/vocal_renderer_test.cpp
+                                      editing/vocal_render_range_test.cpp
+                                      editing/vocal_renderer_contract_test.cpp
                                       editing/note_transcriber_test.cpp
                                       editing/note_pitch_curve_test.cpp
                                       editing/pitch_editor_test.cpp
@@ -492,6 +501,11 @@ target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_eng
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_capture.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_render.cpp)
 
+# Keep the public retune ABI linked when the feature is disabled, so the
+# existing API test source can exercise its NOT_SUPPORTED stubs.
+target_sources(sonare_tests PRIVATE
+               ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_streaming_retune.cpp)
+
 if(BUILD_VOICE_CHANGER)
   target_sources(sonare_tests PRIVATE
     editing/voice_changer_retune_formant_test.cpp
@@ -501,8 +515,6 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer_limiter_json_test.cpp
   )
   target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
-  target_sources(sonare_tests PRIVATE
-                 ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_streaming_retune.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare_tests PRIVATE
     SONARE_WITH_PITCH_EDITOR=1
@@ -550,6 +562,7 @@ target_sources(sonare_tests PRIVATE
   ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_vocal_edit.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
@@ -564,6 +577,8 @@ if(BUILD_ARRANGEMENT)
     editing/polyphonic_f0_eval_test.cpp
     engine/offline_bounce_golden_test.cpp
     arrangement/edit_model_test.cpp
+    arrangement/vocal_sidecar_lifecycle_test.cpp
+    arrangement/c_abi_vocal_project_test.cpp
     arrangement/external_stems_test.cpp
     arrangement/edit_command_history_test.cpp
     arrangement/edit_compiler_golden_test.cpp

@@ -104,6 +104,9 @@ struct ProjectWasm {
   uint32_t addTrack(val desc);
   uint32_t addClip(val desc);
   val importExternalStems(val request);
+  val applyVocalEdit(val request);
+  val getVocalEditDependencies();
+  val rehydrateVocalEdits(val originals, val cancel);
   val addLoopRecordingTakes(val desc);
   val addMidiClip(double start_ppq, double length_ppq);
   uint32_t splitClip(const val& clip_id, double split_ppq);
@@ -402,6 +405,7 @@ val js_synth_patch_round_trip(val desc);
 // the standalone function(...) registrations.
 void registerProjectArrange(emscripten::class_<ProjectWasm>& cls);
 void registerProjectExternalStems(emscripten::class_<ProjectWasm>& cls);
+void registerProjectVocalEdit(emscripten::class_<ProjectWasm>& cls);
 void registerProjectEdit(emscripten::class_<ProjectWasm>& cls);
 void registerProjectMidi(emscripten::class_<ProjectWasm>& cls);
 void registerProjectTranscribe(emscripten::class_<ProjectWasm>& cls);

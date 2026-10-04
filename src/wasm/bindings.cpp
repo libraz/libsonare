@@ -182,6 +182,11 @@ val js_capabilities() {
   features.set("arrangement", capability_arrangement_enabled());
   features.set("acousticSim", capability_acoustic_sim_enabled());
   features.set("pitchEditor", capability_pitch_editor_enabled());
+#if defined(SONARE_WITH_PITCH_EDITOR) && !defined(SONARE_WASM_ANALYSIS_ONLY)
+  features.set("vocalEdit", true);
+#else
+  features.set("vocalEdit", false);
+#endif
   features.set("voiceChanger", capability_voice_changer_enabled());
   features.set("playback", capability_playback_enabled());
   result.set("features", features);
@@ -500,6 +505,9 @@ EMSCRIPTEN_BINDINGS(sonare) {
   registerEffectsDecompositionBindings();
   registerEffectsSpectralEditBindings();
   registerPolyphonyBindings();
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  registerVocalEditBindings();
+#endif
   registerMasteringChainBindings();
   registerMasteringApiBindings();
   registerMixingBindings();

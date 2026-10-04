@@ -25,6 +25,7 @@
 
 namespace {
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
 constexpr int kSampleRate = 48000;
 constexpr int64_t kHalfSecond = kSampleRate / 2;
 constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
@@ -47,6 +48,8 @@ SonareNoteTarget target_at(double start_sec, double end_sec, float target_midi) 
   target.target_midi = target_midi;
   return target;
 }
+
+#endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 

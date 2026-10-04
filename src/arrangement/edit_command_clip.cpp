@@ -1,3 +1,5 @@
+// SONARE_WASM_EXCEPTION_UNWIND: release staged clips and sidecars when allocation propagates to
+// history.
 /// @file edit_command_clip.cpp
 /// @brief Clip edit-command apply/invert definitions.
 
@@ -7,6 +9,7 @@
 
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_command_internal.h"
+#include "arrangement/vocal_edit_sidecar.h"
 
 namespace sonare::arrangement {
 namespace {
@@ -61,6 +64,7 @@ EditCommandPtr AddClip::invert(const Project& /*before*/,
 bool RemoveClip::apply(Project& project, MidiContentStore& store) {
   const bool ok = project.remove_clip(id_).second;
   if (ok) {
+    vocal_sidecar::remove_clip_sidecars(&project, id_);
     store.events.erase(id_);
     detail::prune_unreferenced_sysex_payloads(&store);
   }
@@ -82,7 +86,7 @@ EditCommandPtr RemoveClip::invert(const Project& before,
     add->set_restore_events(it->second);
     add->set_restore_sysex_payloads(detail::payloads_for_events(store_before, it->second));
   }
-  return add;
+  return vocal_sidecar::wrap_inverse(std::move(add), before, {id_});
 }
 
 bool SplitClip::apply(Project& project, MidiContentStore& store) {
@@ -201,6 +205,7 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
     it->second = std::move(left_events);
     store.events[new_clip_id_] = std::move(right_events);
   }
+  vocal_sidecar::clone_clip_sidecars(&project, id_, new_clip_id_);
   return true;
 }
 
@@ -220,7 +225,7 @@ EditCommandPtr SplitClip::invert(const Project& before,
   if (it != store_before.events.end()) {
     cmd->set_restore_events(it->second);
   }
-  return cmd;
+  return vocal_sidecar::wrap_inverse(std::move(cmd), before, {id_, new_clip_id_});
 }
 
 bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
@@ -410,12 +415,14 @@ bool DuplicateClip::apply(Project& project, MidiContentStore& store) {
   if (it != store.events.end()) {
     store.events[new_clip_id_] = it->second;
   }
+  vocal_sidecar::clone_clip_sidecars(&project, id_, new_clip_id_);
   return true;
 }
 
-EditCommandPtr DuplicateClip::invert(const Project& /*before*/,
+EditCommandPtr DuplicateClip::invert(const Project& before,
                                      const MidiContentStore& /*store_before*/) const {
-  return std::make_unique<RemoveClip>(new_clip_id_);
+  return vocal_sidecar::wrap_inverse(std::make_unique<RemoveClip>(new_clip_id_), before,
+                                     {id_, new_clip_id_});
 }
 
 bool SetClipGain::apply(Project& project, MidiContentStore& /*store*/) {
@@ -545,11 +552,13 @@ bool SetClipTakes::apply(Project& project, MidiContentStore& /*store*/) {
       !detail::valid_comp_segments(takes_, c->comp_segments, c->length_ppq)) {
     return false;
   }
+  const EditClip before = *c;
   c->takes = takes_;
   c->active_take_id = active_take_id_;
   // Changing the take table reauthors the render source of every fragment. The
   // old cache may refer to removed ids, so it must not survive this command.
   c->comp_render_parts.clear();
+  vocal_sidecar::prune_changed_bindings(&project, before, *c);
   return true;
 }
 
@@ -559,7 +568,7 @@ EditCommandPtr SetClipTakes::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<detail::RestoreClip>(*c);
+  return vocal_sidecar::wrap_inverse(std::make_unique<detail::RestoreClip>(*c), before, {id_});
 }
 
 bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
@@ -645,7 +654,9 @@ bool SetClipSource::apply(Project& project, MidiContentStore& /*store*/) {
   if (!detail::source_matches_track_kind(project, c->track_id, source_id_)) {
     return false;
   }
+  const EditClip before = *c;
   c->source_id = source_id_;
+  vocal_sidecar::prune_changed_bindings(&project, before, *c);
   return true;
 }
 
@@ -655,7 +666,8 @@ EditCommandPtr SetClipSource::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<SetClipSource>(id_, c->source_id);
+  return vocal_sidecar::wrap_inverse(std::make_unique<SetClipSource>(id_, c->source_id), before,
+                                     {id_});
 }
 
 }  // namespace sonare::arrangement

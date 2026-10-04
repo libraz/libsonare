@@ -75,6 +75,8 @@ struct SonareProject {
 // RemoveClip and RemoveTrack can use one undoable transaction.
 arr::EditCommandPtr sonare_project_make_remove_audio_content_command(
     arr::AudioContentStore* store, std::vector<arr::SourceId> source_ids);
+arr::EditCommandPtr sonare_project_make_store_audio_content_command(
+    arr::AudioContentStore* store, std::map<arr::SourceId, arr::AudioSourceSamples> contents);
 std::vector<arr::SourceId> sonare_project_collect_orphaned_sources_for_track(
     const arr::Project& project, arr::TrackId removed_track_id);
 

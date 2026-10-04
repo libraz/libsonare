@@ -9,6 +9,11 @@ has every one of its ``catch`` arms silently deleted, and a C-ABI unit loses
 error-code translation and reaches JS raw.  A ``noexcept`` function whose
 ``catch (...)`` was deleted calls ``std::terminate`` and aborts the module.
 
+Units that hold RAII state across propagated exceptions also need cleanup
+landing pads even when their caller owns the catch. Such units declare a
+``// SONARE_WASM_EXCEPTION_UNWIND: <reason>`` annotation in their source. The
+checker requires their flag and continues to reject unannotated unused flags.
+
 The failure is invisible.  It is not a compile error, not a link error, and not
 a test failure unless a test happens to assert the exact error code of a path
 that throws deep inside the C ABI.  The flag is applied per source file
@@ -133,12 +138,23 @@ def split_define_bodies(text: str) -> tuple[str, dict[str, str]]:
 
 
 class FileScan:
-    """Catch-relevant facts about one repo-owned source or header file."""
+    """Exception-handling facts about one repo-owned source or header file."""
 
     def __init__(self, text: str) -> None:
         code, self.macro_bodies = split_define_bodies(strip_comments_and_literals(text))
         self.text = code
         self.direct_catch = bool(_CATCH.search(code))
+        # A caller's catch also needs this unit's RAII cleanup landing pads.
+        # Require an explicit, reasoned source annotation instead of treating
+        # every flag without a catch as justified.
+        self.unwind_reason = ""
+        for match in _LEXICAL.finditer(text):
+            reason = re.fullmatch(
+                r"//\s*SONARE_WASM_EXCEPTION_UNWIND:\s*(\S[^\n]*)", match.group(0)
+            )
+            if reason is not None:
+                self.unwind_reason = reason.group(1).strip()
+                break
 
     @classmethod
     def from_path(cls, path: Path) -> FileScan:
@@ -180,9 +196,7 @@ class Scanner:
                     if scan is not None:
                         scans.append(scan)
         macros = catching_macros(scans)
-        self.macro_use = (
-            re.compile(r"\b(" + "|".join(sorted(macros)) + r")\b") if macros else None
-        )
+        self.macro_use = re.compile(r"\b(" + "|".join(sorted(macros)) + r")\b") if macros else None
 
     def scan(self, path: Path) -> FileScan | None:
         if path not in self._cache:
@@ -376,12 +390,10 @@ def audit(build_dir: Path) -> AuditResult:
             unanalysable.append(f"{_target_of(obj)}: {_display(source)} (unreadable)")
             continue
         if not dep_file.is_file():
-            unanalysable.append(
-                f"{_target_of(obj)}: {_display(source)} (no dependency file)"
-            )
+            unanalysable.append(f"{_target_of(obj)}: {_display(source)} (no dependency file)")
             continue
         sites: list[str] = []
-        if scanner.catches(source_scan):
+        if scanner.catches(source_scan) or source_scan.unwind_reason:
             sites.append("itself")
         for header in owned_headers(dep_file):
             header_scan = scanner.scan(header)
@@ -433,7 +445,9 @@ def main() -> int:
         # unit at all, so an empty set is a pass, not a broken database.
         print(f"{build_dir}:")
         print(f"  linked translation units: {result.linked}")
-        print(f"  of which catch: {len(result.covered) + len(result.uncovered)}")
+        print(
+            f"  requiring catch or annotated RAII unwinding: {len(result.covered) + len(result.uncovered)}"
+        )
         print(f"  compiled with -fexceptions: {len(result.covered)}")
         print(f"  carry -fexceptions but catch nowhere: {len(result.idle)}")
 
@@ -458,8 +472,8 @@ def main() -> int:
         )
     if uncovered:
         print(
-            "\nThese units catch but were compiled without -fexceptions, so every",
-            "catch arm in them was deleted:",
+            "\nThese units require exception handling but were compiled without -fexceptions;",
+            "catch arms or annotated RAII cleanup in them were deleted:",
             *(f"  {name}" for name in uncovered),
             "\nAdd each unit to the -fexceptions source list of the target that",
             "compiles it, in src/CMakeLists.txt. The lists are per target: a unit of",
@@ -503,7 +517,7 @@ def main() -> int:
                 "configuration, so the flag is dead in every shipped build:",
                 *(f"  {name}" for name in dead),
                 "\nDrop them from the -fexceptions source list of the target that",
-            "compiles them, in src/CMakeLists.txt.",
+                "compiles them, in src/CMakeLists.txt.",
                 sep="\n",
                 file=sys.stderr,
             )

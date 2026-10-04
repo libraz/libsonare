@@ -79,6 +79,23 @@ class PitchCorrector {
   Audio resynthesize(const Audio& audio, const F0Track& track,
                      const std::vector<float>& deltas_semitones) const;
 
+  /// @brief Repitches using an absolute sample coordinate for frame zero.
+  /// @details This overload has the same duration, validation, and dry-pass
+  ///          contract as the legacy overload. A frame at index @c i is
+  ///          centered at @p frame_origin_sample + i * samples_per_frame().
+  ///          Negative and out-of-range origins are clipped to the nearest
+  ///          available track frame during lookup. The origin is preserved
+  ///          across every bounded PSOLA pass.
+  /// @throws SonareException(InvalidParameter) when @p frame_origin_sample
+  ///         is non-finite, even when the edit is otherwise an identity.
+  Audio resynthesize(const Audio& audio, const F0Track& track,
+                     const std::vector<float>& deltas_semitones, double frame_origin_sample) const;
+
+  /// Exact analysis-grid cadence for offline vocal snapshots.
+  Audio resynthesize(const Audio& audio, const F0Track& track,
+                     const std::vector<float>& deltas_semitones, double frame_origin_sample,
+                     double samples_per_frame) const;
+
   float estimate_median_midi(const F0Track& track) const;
   float correction_to_midi(const F0Track& track, float target_midi) const;
   float correction_to_scale(const F0Track& track) const;

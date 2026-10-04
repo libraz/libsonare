@@ -1163,6 +1163,44 @@ TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite sample rate",
 }
 #endif
 
+#ifndef SONARE_WITH_VOICE_CHANGER
+TEST_CASE("sonare streaming retune exports deterministic feature-off stubs",
+          "[c_api][voice_changer][stub]") {
+  // The shared library still exports this API when the optional DSP is absent.
+  // Every call must report the capability boundary rather than accidentally
+  // validating arguments or reaching an unlinked StreamingRetune symbol.
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+  REQUIRE(retune == nullptr);
+  const char* detail = sonare_last_error_message();
+  REQUIRE(detail != nullptr);
+  REQUIRE(detail[0] != '\0');
+
+  sonare_streaming_retune_destroy(nullptr);
+  REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000.0, 128) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_streaming_retune_reset(nullptr) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_streaming_retune_set_config(nullptr, 0.0f, 1.0f, 0) == SONARE_ERROR_NOT_SUPPORTED);
+
+  float semitones = 11.0f;
+  float mix = 0.75f;
+  int grain = 123;
+  REQUIRE(sonare_streaming_retune_config(nullptr, &semitones, &mix, &grain) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(semitones == 0.0f);
+  CHECK(mix == 0.0f);
+  CHECK(grain == 0);
+
+  float sample = 0.25f;
+  REQUIRE(sonare_streaming_retune_process_mono(nullptr, &sample, 1) == SONARE_ERROR_NOT_SUPPORTED);
+
+  grain = 123;
+  REQUIRE(sonare_streaming_retune_grain_size(nullptr, &grain) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(grain == 0);
+  int latency = 456;
+  REQUIRE(sonare_streaming_retune_latency_samples(nullptr, &latency) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(latency == 0);
+}
+#endif
+
 TEST_CASE("sonare_normalize_stereo shares one gain between the channels", "[c_api][effects]") {
   constexpr int sample_rate = 22050;
   std::vector<float> left = generate_sine(440.0f, sample_rate, 0.25f);

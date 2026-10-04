@@ -69,6 +69,7 @@ endif()
 # Source files
 set(SONARE_SOURCES
   util/math_utils.cpp
+  util/sha256.cpp
   util/frame.cpp
   util/fractional_octave.cpp
   util/lpc.cpp
@@ -190,6 +191,7 @@ set(SONARE_SOURCES
   streaming/stream_resampler.cpp
   quick.cpp
   c_api/sonare_c.cpp
+  c_api/sonare_c_vocal_edit.cpp
   # Compiled here rather than with the mastering module: eq_band_json.cpp below
   # is always compiled (sonare_c_engine_mixing.cpp needs it in every shared
   # build) and calls these parsers, so leaving them behind a feature gate makes
@@ -243,6 +245,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_core.cpp
   c_api/project_edit_track.cpp
   c_api/project_edit_clip.cpp
+  c_api/project_vocal_edit.cpp
   c_api/project_external_stems.cpp
   c_api/project_midi.cpp
   c_api/project_mir.cpp
@@ -363,7 +366,7 @@ if(NOT BUILD_WASM)
   target_link_libraries(sonare_core PUBLIC Threads::Threads)
 endif()
 
-# Two C-ABI translation units in the core source list call the pitch editor
+# C-ABI translation units in the core source list call the pitch editor
 # (sonare_c_editing.cpp's scale entries and features_spectral_pitch.cpp's note
 # segmenter). Their gate has to be answered here rather than only on
 # sonare_shared: those files are compiled by this target, so without it they read
@@ -765,6 +768,14 @@ endif()
 
 if(BUILD_PITCH_EDITOR)
   add_library(sonare_pitch_editor STATIC
+    editing/vocal_edit/types.cpp
+    editing/vocal_edit/analysis.cpp
+    editing/vocal_edit/pitch_plan.cpp
+    editing/vocal_edit/session.cpp
+    editing/vocal_edit/render_snapshot.cpp
+    editing/vocal_edit/render_cache.cpp
+    editing/vocal_edit/renderer.cpp
+    editing/vocal_edit/state_codec.cpp
     editing/note_model/note_extractor.cpp
     editing/note_model/note_renderer.cpp
     editing/note_model/note_split_merge.cpp
@@ -984,6 +995,7 @@ if(BUILD_ARRANGEMENT)
 
   add_library(sonare_arrangement STATIC
     arrangement/edit_model.cpp
+    arrangement/vocal_edit_sidecar.cpp
     arrangement/external_stems.cpp
     arrangement/edit_command_track.cpp
     arrangement/edit_command_clip.cpp
@@ -1279,6 +1291,7 @@ if(BUILD_WASM)
       wasm/bindings.cpp
       wasm/bindings/common/common.cpp
       wasm/bindings/editing/polyphony.cpp
+      wasm/bindings/editing/vocal_edit.cpp
       wasm/bindings/effects/audio.cpp
       wasm/bindings/effects/decomposition.cpp
       wasm/bindings/effects/notes.cpp
@@ -1306,6 +1319,7 @@ if(BUILD_WASM)
       wasm/bindings/project/project.cpp
       wasm/bindings/project/project_arrange.cpp
       wasm/bindings/project/project_external_stems.cpp
+      wasm/bindings/project/project_vocal_edit.cpp
       wasm/bindings/project/project_edit.cpp
       wasm/bindings/project/project_midi.cpp
       wasm/bindings/project/project_transcribe.cpp
@@ -1462,6 +1476,7 @@ if(BUILD_WASM)
       c_api/project_bounce_stems.cpp
       c_api/project_core.cpp
       c_api/project_edit_clip.cpp
+      c_api/project_vocal_edit.cpp
       c_api/project_edit_track.cpp
       c_api/project_external_stems.cpp
       c_api/project_midi.cpp
@@ -1482,6 +1497,7 @@ if(BUILD_WASM)
       wasm/bindings/analysis/stream_analyzer.cpp
       wasm/bindings/common/common.cpp
       wasm/bindings/editing/polyphony.cpp
+      wasm/bindings/editing/vocal_edit.cpp
       wasm/bindings/effects/audio.cpp
       wasm/bindings/effects/decomposition.cpp
       wasm/bindings/effects/notes.cpp
@@ -1513,6 +1529,7 @@ if(BUILD_WASM)
       wasm/bindings/project/project_bounce.cpp
       wasm/bindings/project/project_edit.cpp
       wasm/bindings/project/project_external_stems.cpp
+      wasm/bindings/project/project_vocal_edit.cpp
       wasm/bindings/project/project_meta.cpp
       wasm/bindings/project/project_midi.cpp
       wasm/bindings/project/project_transcribe.cpp
@@ -1532,6 +1549,9 @@ if(BUILD_WASM)
   if(TARGET sonare_arrangement)
     set_source_files_properties(
       arrangement/edit_compiler.cpp
+      arrangement/vocal_edit_sidecar.cpp
+      arrangement/edit_command_clip.cpp
+      arrangement/edit_command_track.cpp
       arrangement/edit_history.cpp
       arrangement/external_stems.cpp
       arrangement/retained_bytes.cpp
@@ -1566,6 +1586,7 @@ if(BUILD_WASM)
       c_api/sonare_c_features.cpp
       c_api/sonare_c_internal.cpp
       c_api/sonare_c_memory.cpp
+      c_api/sonare_c_vocal_edit.cpp
       core/convert.cpp
       mixing/api/scene_json.cpp
       TARGET_DIRECTORY sonare_core_objects
@@ -1626,6 +1647,19 @@ if(BUILD_WASM)
       serialize/project_serializer.cpp
       serialize/project_serializer_decode.cpp
       TARGET_DIRECTORY sonare_serialize
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_pitch_editor)
+    set_source_files_properties(
+      editing/vocal_edit/types.cpp
+      editing/vocal_edit/analysis.cpp
+      editing/vocal_edit/pitch_plan.cpp
+      editing/vocal_edit/session.cpp
+      editing/vocal_edit/render_snapshot.cpp
+      editing/vocal_edit/render_cache.cpp
+      editing/vocal_edit/state_codec.cpp
+      editing/vocal_edit/renderer.cpp
+      TARGET_DIRECTORY sonare_pitch_editor
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
   if(TARGET sonare_voice_changer)

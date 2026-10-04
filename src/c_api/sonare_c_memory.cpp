@@ -250,6 +250,7 @@ const char* sonare_capabilities_json(void) {
                  ",\"acousticSim\":" + json_bool(capability_acoustic_sim_enabled()) +
                  ",\"playback\":" + json_bool(capability_playback_enabled()) +
                  ",\"pitchEditor\":" + json_bool(capability_pitch_editor_enabled()) +
+                 ",\"vocalEdit\":" + json_bool(sonare_vocal_available() != 0) +
                  ",\"voiceChanger\":" + json_bool(capability_voice_changer_enabled()) +
                  "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";
 #ifdef SONARE_WITH_FFMPEG

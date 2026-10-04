@@ -1,12 +1,15 @@
 #include <sonare/sonare_c.h>
 
+#if defined(SONARE_WITH_VOICE_CHANGER)
 #include <algorithm>
 #include <cmath>
 #include <memory>
 #include <vector>
 
 #include "editing/voice_changer/streaming_retune.h"
+#endif
 #include "sonare_c_internal.h"
+#if defined(SONARE_WITH_VOICE_CHANGER)
 #include "util/numeric_validation.h"
 
 using sonare::editing::voice_changer::StreamingRetune;
@@ -29,9 +32,11 @@ struct SonareStreamingRetune {
   // sonare_c_voice_changer.cpp.
   std::vector<float> scratch;
 };
+#endif
 
 namespace {
 
+#if defined(SONARE_WITH_VOICE_CHANGER)
 using sonare_c_detail::set_last_error;
 
 bool all_finite(const float* samples, size_t num_samples) noexcept {
@@ -64,12 +69,14 @@ SonareError check_block_bounds(const SonareStreamingRetune* handle, size_t num_s
   return SONARE_OK;
 }
 
+#endif
 }  // namespace
 
 extern "C" {
 
 SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix, int grain_size) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!finite_controls(semitones, mix)) {
     set_last_error("streaming retune: semitones and mix must be finite");
     return nullptr;
@@ -83,13 +90,27 @@ SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix
   handle->retune = std::make_unique<StreamingRetune>(config);
   return handle;
   SONARE_C_CATCH_RETURN(nullptr)
+#else
+  (void)semitones;
+  (void)mix;
+  (void)grain_size;
+  sonare_c_detail::set_last_error("streaming retune: voice changer support is not built");
+  return nullptr;
+#endif
 }
 
-void sonare_streaming_retune_destroy(SonareStreamingRetune* retune) { delete retune; }
+void sonare_streaming_retune_destroy(SonareStreamingRetune* retune) {
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  delete retune;
+#else
+  (void)retune;
+#endif
+}
 
 SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, double sample_rate,
                                             int max_block_size) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
   // The core admits an infinite sample_rate and derives the grain size from it through a cast.
   if (!sonare::numeric::finite_positive(sample_rate) || max_block_size < 0) {
@@ -107,20 +128,28 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
   retune->max_block_size = max_block_size;
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(retune, sample_rate, max_block_size);
+#endif
 }
 
 SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   retune->retune->reset();
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(retune);
+#endif
 }
 
 SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float semitones,
                                                float mix, int grain_size) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
   if (!finite_controls(semitones, mix)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -131,11 +160,15 @@ SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, fl
   retune->retune->set_config(config);
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(retune, semitones, mix, grain_size);
+#endif
 }
 
 SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float* out_semitones,
                                            float* out_mix, int* out_grain_size) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (out_semitones) *out_semitones = 0.0f;
   if (out_mix) *out_mix = 0.0f;
   if (out_grain_size) *out_grain_size = 0;
@@ -145,11 +178,18 @@ SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float*
   if (out_mix) *out_mix = config.mix;
   if (out_grain_size) *out_grain_size = config.grain_size;
   return SONARE_OK;
+#else
+  if (out_semitones) *out_semitones = 0.0f;
+  if (out_mix) *out_mix = 0.0f;
+  if (out_grain_size) *out_grain_size = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(retune, out_semitones, out_mix, out_grain_size);
+#endif
 }
 
 SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, float* samples,
                                                  size_t num_samples) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune || (!samples && num_samples > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -165,21 +205,34 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
   std::copy_n(samples, num_samples, retune->scratch.begin());
   retune->retune->process_block(retune->scratch.data(), samples, static_cast<int>(num_samples));
   return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(retune, samples, num_samples);
+#endif
 }
 
 SonareError sonare_streaming_retune_grain_size(SonareStreamingRetune* retune, int* out_grain_size) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune || !out_grain_size) return SONARE_ERROR_INVALID_PARAMETER;
   *out_grain_size = retune->retune->grain_size();
   return SONARE_OK;
+#else
+  if (out_grain_size) *out_grain_size = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(retune, out_grain_size);
+#endif
 }
 
 SonareError sonare_streaming_retune_latency_samples(SonareStreamingRetune* retune,
                                                     int* out_latency_samples) {
   SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune || !out_latency_samples) return SONARE_ERROR_INVALID_PARAMETER;
   *out_latency_samples = retune->retune->latency_samples();
   return SONARE_OK;
+#else
+  if (out_latency_samples) *out_latency_samples = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(retune, out_latency_samples);
+#endif
 }
 
 }  // extern "C"

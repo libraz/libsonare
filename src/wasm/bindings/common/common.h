@@ -541,6 +541,7 @@ void registerEffectsPercussiveEventBindings();
 void registerEffectsDecompositionBindings();
 void registerEffectsSpectralEditBindings();
 void registerPolyphonyBindings();
+void registerVocalEditBindings();
 void registerMasteringChainBindings();
 void registerMasteringApiBindings();
 void registerQuickAnalysisBindings();

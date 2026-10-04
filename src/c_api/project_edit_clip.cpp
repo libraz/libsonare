@@ -1,6 +1,7 @@
 #include <set>
 #include <string>
 
+#include "arrangement/vocal_edit_sidecar.h"
 #include "c_api/project_internal.h"
 #include "util/constants.h"
 
@@ -188,72 +189,24 @@ arr::EditCommandPtr make_remove_audio_content_command(arr::AudioContentStore* st
                                                 AudioContentTransferDirection::kHistory);
 }
 
-arr::SourceId resolved_take_source(const arr::EditClip& clip, const arr::ClipTake& take) {
-  return take.source_id != 0 ? take.source_id : clip.source_id;
-}
-
-bool clip_references_source(const arr::EditClip& clip, arr::SourceId source_id) {
-  if (clip.source_id == source_id) return true;
-  for (const arr::ClipTake& take : clip.takes) {
-    if (resolved_take_source(clip, take) == source_id) return true;
-  }
-  return false;
-}
-
 // Returns only source ids that become unreferenced when `removed_clip` goes
 // away. This deliberately includes take sources as well as the clip's base
 // source; a source shared by any other clip remains intact.
 std::vector<arr::SourceId> collect_orphaned_sources(const arr::Project& project,
                                                     const arr::EditClip& removed_clip) {
-  std::set<arr::SourceId> candidates;
-  if (removed_clip.source_id != 0) candidates.insert(removed_clip.source_id);
-  for (const arr::ClipTake& take : removed_clip.takes) {
-    const arr::SourceId source_id = resolved_take_source(removed_clip, take);
-    if (source_id != 0) candidates.insert(source_id);
-  }
-
-  std::vector<arr::SourceId> orphaned;
-  for (const arr::SourceId source_id : candidates) {
-    bool referenced_elsewhere = false;
-    for (const arr::EditClip& clip : project.clips()) {
-      if (clip.id != removed_clip.id && clip_references_source(clip, source_id)) {
-        referenced_elsewhere = true;
-        break;
-      }
-    }
-    if (!referenced_elsewhere && project.find_source(source_id) != nullptr) {
-      orphaned.push_back(source_id);
-    }
-  }
-  return orphaned;
+  return arr::vocal_sidecar::collect_orphaned_sources_after_removing_clips(project,
+                                                                           {removed_clip.id});
 }
 
 std::vector<arr::SourceId> collect_orphaned_sources_for_track(const arr::Project& project,
                                                               arr::TrackId removed_track_id) {
-  std::set<arr::SourceId> candidates;
+  std::vector<arr::ClipId> removed_clip_ids;
   for (const arr::EditClip& clip : project.clips()) {
     if (clip.track_id != removed_track_id) continue;
-    if (clip.source_id != 0) candidates.insert(clip.source_id);
-    for (const arr::ClipTake& take : clip.takes) {
-      const arr::SourceId source_id = resolved_take_source(clip, take);
-      if (source_id != 0) candidates.insert(source_id);
-    }
+    removed_clip_ids.push_back(clip.id);
   }
-
-  std::vector<arr::SourceId> orphaned;
-  for (const arr::SourceId source_id : candidates) {
-    bool referenced_elsewhere = false;
-    for (const arr::EditClip& clip : project.clips()) {
-      if (clip.track_id != removed_track_id && clip_references_source(clip, source_id)) {
-        referenced_elsewhere = true;
-        break;
-      }
-    }
-    if (!referenced_elsewhere && project.find_source(source_id) != nullptr) {
-      orphaned.push_back(source_id);
-    }
-  }
-  return orphaned;
+  return arr::vocal_sidecar::collect_orphaned_sources_after_removing_clips(project,
+                                                                           removed_clip_ids);
 }
 
 enum class AudioContentReplaceDirection { kSet, kRestore };
@@ -454,6 +407,11 @@ SonareError clip_comp_segments_from_desc(const SonareProjectClipCompSegment* seg
 arr::EditCommandPtr sonare_project_make_remove_audio_content_command(
     arr::AudioContentStore* store, std::vector<arr::SourceId> source_ids) {
   return make_remove_audio_content_command(store, std::move(source_ids));
+}
+
+arr::EditCommandPtr sonare_project_make_store_audio_content_command(
+    arr::AudioContentStore* store, std::map<arr::SourceId, arr::AudioSourceSamples> contents) {
+  return make_store_audio_content_command(store, std::move(contents));
 }
 
 std::vector<arr::SourceId> sonare_project_collect_orphaned_sources_for_track(
