@@ -385,6 +385,19 @@ std::vector<float> detail::fit_stretched_note_output(std::vector<float> output,
 }
 
 struct VocalRenderJob::Impl {
+  struct ActiveCallGuard final {
+    explicit ActiveCallGuard(Impl& impl) : impl_(impl) {
+      if (impl_.active_call) invalid_state("render", "render operation is already active");
+      impl_.active_call = true;
+    }
+    ActiveCallGuard(const ActiveCallGuard&) = delete;
+    ActiveCallGuard& operator=(const ActiveCallGuard&) = delete;
+    ~ActiveCallGuard() noexcept { impl_.active_call = false; }
+
+   private:
+    Impl& impl_;
+  };
+
   std::shared_ptr<const VocalRenderSnapshot> snapshot;
   VocalRenderRequest request{};
   std::shared_ptr<VocalRenderCache> cache;
@@ -398,6 +411,7 @@ struct VocalRenderJob::Impl {
   uint64_t total_units = 0;
   uint64_t cache_hits = 0;
   bool result_taken = false;
+  bool active_call = false;
   int64_t assembly_cursor = 0;
   std::shared_ptr<std::atomic<uint32_t>> job_count;
   void release_job() noexcept {
@@ -463,13 +477,16 @@ VocalRenderProgress VocalRenderJob::progress() const noexcept {
 }
 
 bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
-  if (!impl_ || impl_->state == VocalRenderJobState::kAborted ||
+  if (!impl_) return false;
+  Impl::ActiveCallGuard active_call(*impl_);
+  if (impl_->state == VocalRenderJobState::kAborted ||
       impl_->state == VocalRenderJobState::kComplete)
     return false;
   if (cancel && cancel()) {
     abort();
     return false;
   }
+  if (impl_->state == VocalRenderJobState::kAborted) return false;
   try {
     const auto& data = impl_->snapshot->data();
     const auto& state = *data.state;
@@ -506,6 +523,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
           abort();
           return false;
         }
+        if (impl_->state == VocalRenderJobState::kAborted) return false;
         if (impl_->completed_units == state.notes.size()) {
           impl_->state = VocalRenderJobState::kAssembling;
         }
@@ -519,6 +537,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
         abort();
         return false;
       }
+      if (impl_->state == VocalRenderJobState::kAborted) return false;
       const int64_t remaining = impl_->request.range.end - impl_->assembly_cursor;
       const SampleRange request{impl_->assembly_cursor,
                                 impl_->assembly_cursor + std::min<int64_t>(4096, remaining)};
@@ -561,6 +580,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
         abort();
         return false;
       }
+      if (impl_->state == VocalRenderJobState::kAborted) return false;
       impl_->result.samples.insert(impl_->result.samples.end(), tile.begin(), tile.end());
       impl_->assembly_cursor = request.end;
       ++impl_->completed_units;
@@ -586,13 +606,16 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
 }
 
 VocalRenderResult VocalRenderJob::finalize(const VocalCancelProbe& cancel) {
-  if (!impl_ || impl_->state != VocalRenderJobState::kComplete || impl_->result_taken) {
+  if (!impl_) invalid_state("render", "render job is not complete");
+  Impl::ActiveCallGuard active_call(*impl_);
+  if (impl_->state != VocalRenderJobState::kComplete || impl_->result_taken) {
     invalid_state("render", "render job is not complete");
   }
   if (cancel && cancel()) {
     abort();
     cancelled();
   }
+  if (impl_->state == VocalRenderJobState::kAborted) cancelled();
   impl_->result_taken = true;
   return std::move(impl_->result);
 }

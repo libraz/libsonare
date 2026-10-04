@@ -89,6 +89,110 @@ TEST_CASE("vocal render jobs require all units before finalization",
   CHECK_THROWS(job.finalize());
 }
 
+TEST_CASE("vocal render job rejects recursive next callbacks",
+          "[vocal_renderer_contract][vocal_reentry]") {
+  auto session = tone_session();
+  const auto snapshot = session.capture_render_snapshot();
+  const VocalRenderRequest request{{0, 16000}, 101};
+  const auto expected = render_snapshot(snapshot, request);
+  VocalRenderJob job(session.capture_render_snapshot(), request);
+  VocalRenderJob* active_job = &job;
+  size_t callback_count = 0;
+  size_t rejected_recursive_calls = 0;
+  auto cancel = [&] {
+    ++callback_count;
+    try {
+      (void)active_job->next();
+    } catch (const VocalEditException& error) {
+      if (error.reason() == VocalReason::kInvalidState) ++rejected_recursive_calls;
+    }
+    return false;
+  };
+
+  const std::vector<VocalRenderProgress> expected_progress = {
+      {VocalRenderJobState::kAssembling, 1, 5}, {VocalRenderJobState::kAssembling, 2, 5},
+      {VocalRenderJobState::kAssembling, 3, 5}, {VocalRenderJobState::kAssembling, 4, 5},
+      {VocalRenderJobState::kComplete, 5, 5},
+  };
+  for (const auto& expected_step : expected_progress) {
+    REQUIRE(job.next(cancel));
+    CHECK(job.progress().state == expected_step.state);
+    CHECK(job.progress().completed_units == expected_step.completed_units);
+    CHECK(job.progress().total_units == expected_step.total_units);
+  }
+  REQUIRE(job.progress().state == VocalRenderJobState::kComplete);
+  const auto actual = job.finalize();
+  CHECK(actual.samples == expected.samples);
+  CHECK(callback_count > 0);
+  CHECK(rejected_recursive_calls == callback_count);
+}
+
+TEST_CASE("vocal render job rejects recursive finalize callbacks",
+          "[vocal_renderer_contract][vocal_reentry]") {
+  auto session = tone_session();
+  const VocalRenderRequest request{{0, 16000}, 102};
+  VocalRenderJob job(session.capture_render_snapshot(), request);
+  while (job.progress().state != VocalRenderJobState::kComplete) REQUIRE(job.next());
+
+  VocalRenderJob* active_job = &job;
+  bool recursive_finalize_rejected = false;
+  auto cancel = [&] {
+    try {
+      (void)active_job->finalize();
+    } catch (const VocalEditException& error) {
+      recursive_finalize_rejected = error.reason() == VocalReason::kInvalidState;
+    }
+    return false;
+  };
+  const auto result = job.finalize(cancel);
+  CHECK(result.samples.size() == 16000);
+  CHECK(recursive_finalize_rejected);
+  CHECK_THROWS_AS(job.finalize(), VocalEditException);
+}
+
+TEST_CASE("vocal render finalize abort callback cancels without returning partial output",
+          "[vocal_renderer_contract][vocal_reentry]") {
+  auto session = tone_session();
+  VocalRenderJob job(session.capture_render_snapshot(), {{0, 16000}, 104});
+  while (job.progress().state != VocalRenderJobState::kComplete) REQUIRE(job.next());
+
+  VocalReason reason = VocalReason::kNone;
+  try {
+    (void)job.finalize([&] {
+      job.abort();
+      return false;
+    });
+  } catch (const VocalEditException& error) {
+    reason = error.reason();
+  }
+  CHECK(reason == VocalReason::kCancelled);
+  CHECK(job.progress().state == VocalRenderJobState::kAborted);
+  CHECK_THROWS_AS(job.finalize(), VocalEditException);
+}
+
+TEST_CASE("vocal render job abort from callback leaves no partial output",
+          "[vocal_renderer_contract][vocal_reentry]") {
+  auto session = tone_session();
+  const auto note = session.notes().front();
+  auto draft = session.begin_edit(0);
+  draft->apply(draft->token().draft_generation, {SplitNoteOp{note.id, 8000}});
+  draft->commit(0);
+
+  VocalRenderJob job(session.capture_render_snapshot(), {{0, 16000}, 103});
+  size_t probe_count = 0;
+  auto cancel = [&] {
+    ++probe_count;
+    if (probe_count == 16) job.abort();
+    return false;
+  };
+  for (size_t step = 0; step < 5; ++step) REQUIRE(job.next(cancel));
+  CHECK_FALSE(job.next(cancel));
+  CHECK(probe_count == 16);
+  CHECK(job.progress().state == VocalRenderJobState::kAborted);
+  CHECK(job.progress().completed_units == 5);
+  CHECK_THROWS_AS(job.finalize(), VocalEditException);
+}
+
 TEST_CASE("vocal render job limits are shared and released on abort", "[vocal_renderer_contract]") {
   auto session = tone_session(16000, 1);
   auto snapshot = session.capture_render_snapshot();
