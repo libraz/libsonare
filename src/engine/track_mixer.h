@@ -135,6 +135,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   const InsertGainReductionBoard& bus_insert_gain_reduction(size_t bus_index) const noexcept {
     return bus_insert_gr_boards_[bus_index];
   }
+  /// Brackets one host block so per-insert readings fold across its sub-blocks (audio thread).
+  void begin_insert_gain_reduction_block() noexcept {
+    for (InsertGainReductionBoard& board : lane_insert_gr_boards_) board.begin_block();
+    for (InsertGainReductionBoard& board : bus_insert_gr_boards_) board.begin_block();
+  }
+  void end_insert_gain_reduction_block() noexcept {
+    for (InsertGainReductionBoard& board : lane_insert_gr_boards_) board.end_block();
+    for (InsertGainReductionBoard& board : bus_insert_gr_boards_) board.end_block();
+  }
   // Widest master mix or group bus the lane scatter can drive (7.1). Lane source
   // buffers stay stereo (kMaxLaneChannels); the master mix and surround group
   // buses can be wider when a lane is surround-panned into them.

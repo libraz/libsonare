@@ -69,6 +69,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   clip_page_underrun_reported_this_block_ = false;
 #if defined(SONARE_WITH_MIXING)
   meter_tap_.begin_block();
+  master_insert_gr_board_.begin_block();
+  track_mixer_runtime_.begin_insert_gain_reduction_block();
   // Gate scope capture once for the host block. Automation may split this block
   // into many sub-blocks, but those splits must not accelerate the interval
   // counter or change whether the block is due.
@@ -300,6 +302,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   clip_player_.end_page_miss_block();
 #if defined(SONARE_WITH_MIXING)
   meter_tap_.end_block();
+  master_insert_gr_board_.end_block();
+  track_mixer_runtime_.end_insert_gain_reduction_block();
   scope_tap_.end_block();
 #endif
 

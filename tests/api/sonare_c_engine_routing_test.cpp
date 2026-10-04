@@ -641,6 +641,46 @@ TEST_CASE("per-insert gain reduction reports each dynamics stage of a lane",
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("per-insert gain reduction folds a split block like the meter record",
+          "[c_api][engine][meter][insert_gr]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, three_insert_track_json().c_str()) ==
+          SONARE_OK);
+  constexpr int kBlocks = 20;
+  const InsertGainReduction settled_gr = render_and_read_insert_gr(engine, 1, kBlocks);
+  REQUIRE(settled_gr.entries[2] < -10.0f);
+
+  // A stop half way through the next block splits it; the limiter releases in the silent half.
+  REQUIRE(sonare_engine_stop(engine, int64_t{kBlocks} * kRoutingBlock + kRoutingBlock / 2) ==
+          SONARE_OK);
+  std::array<float, kRoutingBlock> block{};
+  float* io[] = {block.data()};
+  REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+  std::array<SonareMeterTelemetryRecordV2, 16> records{};
+  size_t written = 0;
+  REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
+                                                 &written) == SONARE_OK);
+  float record_db = 1.0f;
+  for (size_t i = 0; i < written; ++i) {
+    if (records[i].target_id == 1) record_db = records[i].gain_reduction_db;
+  }
+  REQUIRE(record_db < -10.0f);
+  std::vector<float> split(SONARE_METER_MAX_INSERTS, 1.0f);
+  size_t count = 0;
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 1, split.data(), split.size(),
+                                                           &count) == SONARE_OK);
+  REQUIRE(count == 3);
+  split.resize(count);
+  REQUIRE(record_db == Catch::Approx(deepest(split)).margin(0.01f));
+
+  // The release is fast enough that the silent half alone reads visibly shallower.
+  const InsertGainReduction released = render_and_read_insert_gr(engine, 1, 1);
+  REQUIRE(released.entries[2] > split[2] + 0.1f);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("per-insert gain reduction reads 0 on a muted strip",
           "[c_api][engine][meter][insert_gr]") {
   SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});

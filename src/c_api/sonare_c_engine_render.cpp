@@ -506,6 +506,10 @@ SonareError sonare_engine_meter_target_insert_gain_reduction(SonareRealtimeEngin
   }
 
 #if defined(SONARE_WITH_MIXING)
+  static_assert(sonare::engine::InsertGainReductionBoard::kCapacity == SONARE_METER_MAX_INSERTS,
+                "the board holds exactly the documented insert bound");
+  static_assert(2 * sonare::mixing::ChannelStrip::kMaxInserts <= SONARE_METER_MAX_INSERTS,
+                "a strip's pre- plus post-fader inserts fit the documented bound");
   if (!engine->engine.read_meter_target_insert_gain_reduction(target_id, out_db, capacity,
                                                               out_count)) {
     *out_count = 0;
