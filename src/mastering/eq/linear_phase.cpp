@@ -6,6 +6,7 @@
 
 #include "core/fft.h"
 #include "core/window.h"
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -189,16 +190,7 @@ void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void LinearPhaseEq::prepare(double sample_rate, int max_block_size, int max_channels) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
-  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "max_channels exceeds LinearPhaseEq capacity");
-  }
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "LinearPhaseEq");
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

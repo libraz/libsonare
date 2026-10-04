@@ -174,18 +174,10 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
 
 void TruePeakLimiter::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "TruePeakLimiter");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
   if (num_samples > max_block_size_)
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared max_block_size");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-  }
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
 
   // Before the upsampler and the detector read the block, not after: a
   // non-finite sample left in place spreads across the reconstruction stencil,

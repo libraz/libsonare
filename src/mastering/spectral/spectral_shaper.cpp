@@ -44,20 +44,11 @@ void SpectralShaper::prepare(double sample_rate, int max_block_size) {
 void SpectralShaper::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SpectralShaper");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   if (static_cast<size_t>(num_channels) > low_state_.size()) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "SpectralShaper channel count exceeds prepared capacity");
   }
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-  }
-
   const float low_alpha = rt::one_pole_lowpass_alpha(config_.frequency_hz, sample_rate_);
   const float high_alpha = rt::one_pole_lowpass_alpha(config_.high_frequency_hz, sample_rate_);
   const float attack_coeff = time_to_attack_release_rate_f(sample_rate_, config_.attack_ms);

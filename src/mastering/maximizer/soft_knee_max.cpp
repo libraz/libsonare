@@ -29,11 +29,7 @@ void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
 void SoftKneeMax::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SoftKneeMax");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   const float drive = db_to_linear(config_.input_gain_db);
   const float knee = db_to_linear(config_.ceiling_db - config_.knee_db);
   // Apply the soft-knee shaping as a full pre-stage over the ENTIRE block first,

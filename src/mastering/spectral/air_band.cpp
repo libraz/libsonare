@@ -113,11 +113,7 @@ void AirBand::prepare(double sample_rate, int max_block_size, int max_channels) 
 void AirBand::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AirBand");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   if (num_samples > max_block_size_) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared AirBand oversampling scratch");

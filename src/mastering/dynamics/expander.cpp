@@ -5,6 +5,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/dynamics/linked_gain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -51,33 +52,13 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
   // changes its current() value inside acquire(), and we already called it.
   const ExpanderConfig& cfg = *adopt_snapshot_for_block();
 
-  // Linked detection: derive a single detector envelope from the loudest
-  // channel each sample and apply the same gain to every channel. Independent
-  // per-channel followers would let the L/R gain reduction diverge on
-  // asymmetric content and rotate the stereo image (mirrors Compressor).
+  // Linked detection (mirrors Compressor): one detector envelope drives every channel.
   auto& follower = followers_[0];
   const int excluded_channel = detector_excluded_channel(num_channels);
-  float min_reduction = 0.0f;
-  for (int i = 0; i < num_samples; ++i) {
-    float linked_level = 0.0f;
-    if (excluded_channel < 0) {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
-      }
-    } else {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (ch == excluded_channel) continue;
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
-      }
-    }
-    const float envelope = follower.process(linked_level);
-    const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
-    const float gain = db_to_linear(reduction_db);
-    for (int ch = 0; ch < num_channels; ++ch) {
-      channels[ch][i] *= gain;
-    }
-    min_reduction = std::min(min_reduction, reduction_db);
-  }
+  const float min_reduction = apply_linked_gain(
+      channels, num_channels, num_samples, excluded_channel, follower,
+      [&cfg](float level_db) { return gain_reduction_db(level_db, cfg); },
+      [](float acc, float applied_db) { return std::min(acc, applied_db); });
 
   // One float, once per block: the follower is recursive, so a non-finite level
   // that reached it would otherwise outlive every later block. Only followers_[0]

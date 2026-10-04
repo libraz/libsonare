@@ -5,6 +5,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/dynamics/linked_gain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -52,33 +53,13 @@ void UpwardExpander::process(float* const* channels, int num_channels, int num_s
 
   ensure_followers(num_channels);
 
-  // Linked detection: derive a single detector envelope from the loudest
-  // channel each sample and apply the same gain to every channel. Independent
-  // per-channel followers would let the L/R gain diverge on asymmetric content
-  // and rotate the stereo image (mirrors UpwardCompressor).
+  // Linked detection (mirrors UpwardCompressor): one detector envelope drives every channel.
   auto& follower = followers_[0];
   const int excluded_channel = detector_excluded_channel(num_channels);
-  float max_gain = 0.0f;
-  for (int i = 0; i < num_samples; ++i) {
-    float linked_level = 0.0f;
-    if (excluded_channel < 0) {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
-      }
-    } else {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (ch == excluded_channel) continue;
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
-      }
-    }
-    const float envelope = follower.process(linked_level);
-    const float applied_gain_db = gain_db(linear_to_db(envelope), cfg);
-    const float gain = db_to_linear(applied_gain_db);
-    for (int ch = 0; ch < num_channels; ++ch) {
-      channels[ch][i] *= gain;
-    }
-    max_gain = std::max(max_gain, applied_gain_db);
-  }
+  const float max_gain = apply_linked_gain(
+      channels, num_channels, num_samples, excluded_channel, follower,
+      [&cfg](float level_db) { return gain_db(level_db, cfg); },
+      [](float acc, float applied_db) { return std::max(acc, applied_db); });
 
   // One float, once per block: the follower is recursive, so a non-finite level
   // that reached it would otherwise outlive every later block. Only followers_[0]

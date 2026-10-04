@@ -85,11 +85,7 @@ void BitCrusher::prepare(double sample_rate, int max_block_size) {
 void BitCrusher::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "BitCrusher");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   ensure_state(num_channels);
   // One cadence or the other: a hold rate in hertz replaces the sample count.
   const bool held_by_rate = hold_increment_ > 0.0;

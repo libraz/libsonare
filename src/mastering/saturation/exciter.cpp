@@ -73,18 +73,9 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
 void Exciter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Exciter");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   ensure_state(num_channels);
   const float drive = db_to_linear(config_.drive_db);
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-  }
-
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
     bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {

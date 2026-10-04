@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/stereo/constant_power_width.h"
@@ -52,16 +53,7 @@ void MultibandImager::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandImager::prepare(double sample_rate, int max_block_size, int max_channels) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
-  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "max_channels exceeds MultibandImager capacity");
-  }
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "MultibandImager");
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

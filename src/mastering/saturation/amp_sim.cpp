@@ -701,13 +701,7 @@ float AmpSim::process_cab(float x, CabStage& stage, const CabDesign& design) noe
 void AmpSim::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AmpSim");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  }
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  }
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   if (chains_.size() < static_cast<size_t>(num_channels)) {
     // Control-thread growth only, mirroring Tube::ensure_state.
     chains_.assign(static_cast<size_t>(num_channels), ChannelChain{});

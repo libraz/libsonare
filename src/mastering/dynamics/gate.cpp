@@ -48,11 +48,7 @@ void Gate::prepare(double sample_rate, int max_block_size) {
 void Gate::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Gate");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
       static_cast<size_t>(num_channels) > hpf_y1_.size()) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Gate state");
