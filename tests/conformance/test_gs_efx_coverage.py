@@ -661,10 +661,10 @@ class BindingRowHeaderTest(unittest.TestCase):
         self.assertRegex(text, r"kGsEfxRowDesigned, 15, 0, kGsEfxLawNone")
         self.assertRegex(
             text,
-            r"kGsEfxEnableStages, \{\d+, \d+, 0, 0\}, \{0, 1, 0, 0\}, 2, "
+            r"kGsEfxEnableStages, \{\d+, \d+, 0, 0, 0, 0, 0, 0\}, \{0, 1, 0, 0, 0, 0, 0, 0\}, 2, "
             r"\{0x2u, 0x0u, 0x0u, 0x80000000u\}",
         )
-        self.assertRegex(text, r"kGsEfxEnableSelect, \{\d+, \d+, 0, 0\}, \{0, 0, 0, 0\}, 2, ")
+        self.assertRegex(text, r"kGsEfxEnableSelect, \{\d+, \d+, 0, 0, 0, 0, 0, 0\}, \{0, 0, 0, 0, 0, 0, 0, 0\}, 2, ")
 
     def test_the_out_selector_follows_the_key(self) -> None:
         self.assertEqual(bindings_header.out_of("drumUndershootHz"), "GsEfxOut::kUndershootHz")
