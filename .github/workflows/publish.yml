@@ -189,6 +189,20 @@ jobs:
             fi
           )
 
+      - name: Smoke-test packaged native CLI
+        # Every matrix entry builds on a runner of its own arch, so the packaged
+        # binary runs here; extracting the tarball tests exactly what ships.
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          asset="sonare-cli-${version}-${{ matrix.os }}-${{ matrix.arch }}"
+          smoke="$(mktemp -d)"
+          tar -xzf "release-assets/${asset}.tar.gz" -C "${smoke}"
+          cli="${smoke}/${asset}/sonare-cli"
+          "${cli}" version
+          "${cli}" tone --frequency 440 --duration 0.5 -o "${smoke}/tone.wav"
+          "${cli}" info "${smoke}/tone.wav"
+
       - name: Attach native CLI assets
         uses: softprops/action-gh-release@v3
         with:
