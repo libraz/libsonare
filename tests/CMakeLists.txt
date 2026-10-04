@@ -286,6 +286,7 @@ if(BUILD_MASTERING)
     mastering/repair_stereo_hum_test.cpp
     mastering/dereverb_room_test.cpp
     mastering/saturation_test.cpp
+    mastering/pedal_test.cpp
     mastering/saturation_state_non_finite_recovery_test.cpp
     mastering/set_parameter_test.cpp
     mastering/tape_oversample_test.cpp
@@ -566,6 +567,7 @@ target_sources(sonare_tests PRIVATE
   ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_part_rig.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
@@ -596,6 +598,9 @@ if(BUILD_ARRANGEMENT)
     midi/midi1_control_golden_test.cpp
     midi/builtin_synth_test.cpp
     midi/native_synth_test.cpp
+    midi/native_synth_rig_test.cpp
+    midi/native_synth_gsfx_test.cpp
+    midi/part_rig_test.cpp
     midi/retrigger_test.cpp
     midi/gm_program_golden_test.cpp
     midi/excitation_axis_test.cpp
@@ -660,6 +665,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_part_params_test.cpp
     midi/gs_part_edit_banks_test.cpp
     midi/gs_efx_types_test.cpp
+    midi/gs_efx_pedal_test.cpp
     midi/gs_efx_chain_fixture_test.cpp
     midi/gs_system_effects_test.cpp
     midi/gs_cc_rpn_test.cpp
@@ -686,6 +692,7 @@ if(BUILD_ARRANGEMENT)
     mir/mir_warp_test.cpp
     mir/mir_key_chord_onset_test.cpp
     serialize/project_serializer_roundtrip_test.cpp
+    serialize/project_part_rig_test.cpp
     serialize/project_serializer_enum_and_budget_test.cpp
     serialize/project_deserialize_fuzz_test.cpp
     serialize/project_default_sr_and_uri_test.cpp
@@ -702,6 +709,7 @@ if(BUILD_ARRANGEMENT)
     bindings/project_bounce_tail_channel_test.cpp
     bindings/binding_project_editing_test.cpp
     bindings/binding_project_midi_test.cpp
+    bindings/binding_project_part_rig_test.cpp
     bindings/binding_project_soundfont_test.cpp
     bindings/binding_synth_patch_test.cpp
     bindings/binding_sample_bank_test.cpp

@@ -148,6 +148,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_external_stems.cpp
   ${SONARE_ROOT}/src/c_api/project_midi.cpp
   ${SONARE_ROOT}/src/c_api/project_mir.cpp
+  ${SONARE_ROOT}/src/c_api/project_part_rig.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_transcribe.cpp
   ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_sample_bank.cpp

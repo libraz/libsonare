@@ -37,6 +37,7 @@
 #include "automation/parameter.h"
 #include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
+#include "midi/part_rig.h"
 #include "midi/prepared_sysex.h"
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
@@ -143,6 +144,16 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   virtual bool set_articulation(uint8_t channel, ArticulationMode mode) noexcept {
     (void)channel;
     (void)mode;
+    return false;
+  }
+
+  /// CONTROL thread: selects the rig of @p part (kPartRigAllParts addresses the
+  /// destination default). Returns false when the instrument has no part rig of
+  /// its own or @p rig fails validate_part_rig, on the same terms as
+  /// set_articulation. Default: refused.
+  virtual bool set_part_rig(uint8_t part, const PartRig& rig) noexcept {
+    (void)part;
+    (void)rig;
     return false;
   }
 

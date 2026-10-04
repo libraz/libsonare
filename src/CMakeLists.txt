@@ -249,6 +249,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_external_stems.cpp
   c_api/project_midi.cpp
   c_api/project_mir.cpp
+  c_api/project_part_rig.cpp
   c_api/sonare_c_transcribe.cpp
   c_api/sonare_c_assist.cpp
   c_api/project_soundfont.cpp
@@ -497,6 +498,7 @@ if(BUILD_MASTERING)
     mastering/saturation/bitcrusher.cpp
     mastering/saturation/exciter.cpp
     mastering/saturation/hard_clipper.cpp
+    mastering/saturation/pedal.cpp
     mastering/saturation/multiband_exciter.cpp
     mastering/saturation/soft_clipper.cpp
     mastering/saturation/tape.cpp
@@ -948,6 +950,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/synth_presets.cpp
     midi/synth/sf2_file.cpp
     midi/synth/sf2_voice.cpp
+    midi/synth/part_fx_stage.cpp
     midi/synth/sf2_player.cpp
     midi/synth/sf2_player_control.cpp
     midi/synth/sf2_player_midi.cpp
@@ -999,6 +1002,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/external_stems.cpp
     arrangement/edit_command_track.cpp
     arrangement/edit_command_clip.cpp
+    arrangement/edit_command_part_rig.cpp
     arrangement/edit_command_source_timeline.cpp
     arrangement/edit_command_midi_assist_internal.cpp
     arrangement/retained_bytes.cpp

@@ -85,6 +85,7 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_part_rig.cpp
     # Reads SONARE_WITH_ARRANGEMENT, which decides whether `transcribe` exists at
     # all, and SONARE_WITH_PITCH_EDITOR, an ON default rather than a forced value
     # -- only the Node addon forces it. `make build-feature-matrix` configures a
