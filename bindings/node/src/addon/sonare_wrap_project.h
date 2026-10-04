@@ -52,6 +52,9 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value AddTrack(const Napi::CallbackInfo& info);
   Napi::Value AddClip(const Napi::CallbackInfo& info);
   Napi::Value ImportExternalStems(const Napi::CallbackInfo& info);
+  Napi::Value ApplyVocalEdit(const Napi::CallbackInfo& info);
+  Napi::Value GetVocalEditDependencies(const Napi::CallbackInfo& info);
+  Napi::Value RehydrateVocalEdits(const Napi::CallbackInfo& info);
   Napi::Value AddLoopRecordingTakes(const Napi::CallbackInfo& info);
   Napi::Value AddMidiClip(const Napi::CallbackInfo& info);
   Napi::Value SplitClip(const Napi::CallbackInfo& info);
@@ -133,7 +136,37 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   void Destroy(const Napi::CallbackInfo& info);
 
+  void DestroyNative() noexcept;
+
+  class BusyCall final {
+   public:
+    explicit BusyCall(ProjectWrap* owner) noexcept : owner_(owner) {
+      if (owner_ != nullptr) ++owner_->busy_call_count_;
+    }
+
+    BusyCall(const BusyCall&) = delete;
+    BusyCall& operator=(const BusyCall&) = delete;
+
+    BusyCall(BusyCall&& other) noexcept : owner_(other.owner_) { other.owner_ = nullptr; }
+    BusyCall& operator=(BusyCall&&) = delete;
+
+    ~BusyCall() noexcept {
+      if (owner_ == nullptr || owner_->busy_call_count_ == 0) return;
+      --owner_->busy_call_count_;
+      if (owner_->busy_call_count_ == 0 && owner_->destroy_requested_) {
+        owner_->DestroyNative();
+      }
+    }
+
+   private:
+    ProjectWrap* owner_;
+  };
+
+  BusyCall BeginBusyCall() noexcept { return BusyCall(this); }
+
   SonareProject* project_ = nullptr;
+  size_t busy_call_count_ = 0;
+  bool destroy_requested_ = false;
 
   // Builds a ProjectWrap JS instance that adopts `handle` (used by fromJson()).
   static Napi::Object Wrap(const Napi::CallbackInfo& info, SonareProject* handle);

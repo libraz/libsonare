@@ -30,6 +30,9 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::AddTrack>("addTrack"),
           InstanceMethod<&ProjectWrap::AddClip>("addClip"),
           InstanceMethod<&ProjectWrap::ImportExternalStems>("importExternalStems"),
+          InstanceMethod<&ProjectWrap::ApplyVocalEdit>("applyVocalEdit"),
+          InstanceMethod<&ProjectWrap::GetVocalEditDependencies>("getVocalEditDependencies"),
+          InstanceMethod<&ProjectWrap::RehydrateVocalEdits>("rehydrateVocalEdits"),
           InstanceMethod<&ProjectWrap::AddLoopRecordingTakes>("addLoopRecordingTakes"),
           InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip"),
           InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),
@@ -161,11 +164,14 @@ ProjectWrap::ProjectWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Proj
   SONARE_NODE_CATCH_VOID(env)
 }
 
-ProjectWrap::~ProjectWrap() {
+ProjectWrap::~ProjectWrap() { DestroyNative(); }
+
+void ProjectWrap::DestroyNative() noexcept {
   if (project_ != nullptr) {
     sonare_project_destroy(project_);
     project_ = nullptr;
   }
+  destroy_requested_ = false;
 }
 
 Napi::Value ProjectWrap::ToJson(const Napi::CallbackInfo& info) {
@@ -657,9 +663,10 @@ Napi::Value ProjectWrap::MarkerCount(const Napi::CallbackInfo& info) {
 void ProjectWrap::Destroy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY(void) info;
-  if (project_ != nullptr) {
-    sonare_project_destroy(project_);
-    project_ = nullptr;
+  if (busy_call_count_ != 0) {
+    destroy_requested_ = true;
+  } else {
+    DestroyNative();
   }
   SONARE_NODE_CATCH_VOID(env)
 }

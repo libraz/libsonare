@@ -14,6 +14,7 @@
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_transcribe.h"
 #include "sonare_wrap_utils.h"
+#include "vocal_edit.h"
 
 namespace {
 
@@ -560,6 +561,7 @@ Napi::Value SynthPatchRoundTrip(const Napi::CallbackInfo& info) {
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  sonare_node::InitVocalEdit(env, exports);
   SonareWrap::Init(env, exports);
   RealtimeEngineWrap::Init(env, exports);
   ProjectWrap::Init(env, exports);

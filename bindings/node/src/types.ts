@@ -9,7 +9,10 @@ export * from './types_notes.js';
 export * from './types_playback.js';
 export * from './types_project.js';
 export * from './types_repair.js';
+export * from './types_vocal_edit.js';
 export * from './types_voice_changer.js';
 
 /** Synchronous progress callback for offline operations. Its return value is ignored. */
 export type ProgressCallback = (progress: number, stage: string) => void;
+
+export type * from './types_vocal_project.js';

@@ -1079,6 +1079,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['addClip', 'Needs a project with a registered audio source.'],
       ['addLoopRecordingTakes', 'Needs a capture session with recorded takes.'],
       [
+        'applyVocalEdit',
+        'Vocal project apply requests combine required source identity fields with rendered buffers; the full lifecycle and malformed-input cases are covered by vocal_project.test.ts.',
+      ],
+      [
         'analyzeAsync',
         'Shares its reader with analyze, which the table drives; the table compares synchronous return values.',
       ],
@@ -1092,6 +1096,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['detectKey', 'Instance method on Audio; needs a decoded Audio handle.'],
       ['detectKeyCandidates', 'Instance method on Audio; needs a decoded Audio handle.'],
       ['detectOnsets', 'Positional-only options; no object bag on the public facade.'],
+      [
+        'createVocalEditSession',
+        'Vocal session creation combines required samples/sampleRate with nested optional create and analysis settings; functional defaults and rejection cases are covered by vocal_edit.test.ts.',
+      ],
       ['editAutomationLane', 'Needs a project with an existing automation lane.'],
       ['estimateRoom', 'Needs a measured impulse response.'],
       ['freezeOffline', 'Needs a prepared engine graph.'],

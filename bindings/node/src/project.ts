@@ -43,6 +43,13 @@ import type {
   SynthWaveform,
   WarpMode,
 } from './types.js';
+import type {
+  ProjectVocalEditApplyRequest,
+  ProjectVocalEditApplyResult,
+  ProjectVocalEditDependency,
+  ProjectVocalOriginalSource,
+  ProjectVocalRehydrateItem,
+} from './types_vocal_project.js';
 import {
   assertBoundedInteger,
   assertFiniteScalar,
@@ -64,6 +71,11 @@ import {
   trackKindValue,
   warpModeValue,
 } from './value_coercion.js';
+import {
+  projectApplyVocalEdit,
+  projectGetVocalEditDependencies,
+  projectRehydrateVocalEdits,
+} from './vocal_project.js';
 
 export * from './synth_catalog.js';
 export * from './take_alignment.js';
@@ -196,6 +208,31 @@ function midi2Byte(fnName: string, value: number, argName: string): number {
  */
 export class Project {
   private native: InstanceType<typeof addon.Project>;
+
+  applyVocalEdit(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyResult {
+    this.assertAlive();
+    return projectApplyVocalEdit(this.native, request);
+  }
+
+  getVocalEditDependencies(): ProjectVocalEditDependency[] {
+    this.assertAlive();
+    return projectGetVocalEditDependencies(this.native);
+  }
+
+  rehydrateVocalEdits(
+    originals: readonly ProjectVocalOriginalSource[],
+    cancel?: () => boolean,
+  ): ProjectVocalRehydrateItem[] {
+    this.assertAlive();
+    return projectRehydrateVocalEdits(this.native, originals, cancel);
+  }
+
+  private assertAlive(): void {
+    if (this.disposed) {
+      throw new Error('Project has been disposed');
+    }
+  }
+
   private disposed = false;
 
   private constructor(native: InstanceType<typeof addon.Project>) {

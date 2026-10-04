@@ -59,6 +59,7 @@ add_subdirectory(${SONARE_ROOT} ${CMAKE_BINARY_DIR}/libsonare)
 
 set(ADDON_SOURCES
   src/addon/addon.cpp
+  src/addon/vocal_edit.cpp
   src/addon/sonare_wrap_engine.cpp
   src/addon/engine/clips_capture.cpp
   src/addon/engine/graph_offline.cpp
@@ -66,6 +67,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_project.cpp
   src/addon/project/edit.cpp
   src/addon/project/external_stems.cpp
+  src/addon/project/vocal_edit.cpp
   src/addon/project/midi_mir.cpp
   src/addon/project/render.cpp
   src/addon/sonare_wrap_sample_bank.cpp
@@ -141,6 +143,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/synth_catalog.cpp
   ${SONARE_ROOT}/src/c_api/project_core.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_track.cpp
+  ${SONARE_ROOT}/src/c_api/project_vocal_edit.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_clip.cpp
   ${SONARE_ROOT}/src/c_api/project_external_stems.cpp
   ${SONARE_ROOT}/src/c_api/project_midi.cpp

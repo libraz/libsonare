@@ -37,6 +37,7 @@ export interface Capabilities {
     /** True when the playback renderer (upmix, binaural, speaker output) is compiled in. */
     playback: boolean;
     pitchEditor: boolean;
+    vocalEdit: boolean;
     voiceChanger: boolean;
   };
   /** Audio decoding available without, and through, FFmpeg. */

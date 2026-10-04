@@ -114,6 +114,10 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     "0 falls back to the clip's active take, which is a take a caller can mean rather than a stand-in for absence.",
   ],
   [
+    'project/vocal_edit.cpp:takeId',
+    'The vocal project C ABI defines takeId 0 as the clip base binding, resolving clip.source_id and clip.source_offset_ppq; zero is therefore an explicit binding selector rather than omission.',
+  ],
+  [
     'project/edit.cpp:targetParamId',
     'The C ABI reserves 0 as the invalid/unset parameter id and refuses a lane carrying it.',
   ],
@@ -286,6 +290,10 @@ const UNTAGGED_SENTINEL_READS: ReadonlyMap<string, string> = new Map<string, str
  */
 const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['BoolProperty', 'Reads a boolean, so it has no integer zero to land on.'],
+  [
+    'Uint64Property',
+    'Takes a decimal string and refuses any number outright, so no fractional value can truncate onto its zero.',
+  ],
   ['DoubleProperty', 'Reads a double; truncation is not in play.'],
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],

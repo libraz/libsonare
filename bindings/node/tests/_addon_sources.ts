@@ -160,7 +160,7 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Word|Float|FiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|OptionAt)\s*\(/;
 
 /**
  * Matches a reader call and captures its literal key, for either arity.
@@ -172,7 +172,7 @@ const OPTION_READER =
  * set of the graph entry points.
  */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Word|Float|FiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
@@ -442,7 +442,8 @@ export function positionalArgEntryPoints(): string[] {
       }
       for (const callee of reads) {
         const bare = callee.includes('::') ? callee.split('::')[1] : callee;
-        if (new RegExp(`\\b${bare}\\s*\\(`).test(body)) {
+        // Skip member calls: `owner.Reset()` is not the free `Reset` entry point.
+        if (new RegExp(`(?<![.>])\\b${bare}\\s*\\(`).test(body)) {
           reads.add(name);
           grew = true;
           break;
@@ -474,7 +475,23 @@ function functionBodies(): Map<string, string> {
     ];
     for (let i = 0; i < matches.length; i++) {
       const start = matches[i].index ?? 0;
-      const end = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : text.length;
+      const open = text.indexOf('{', start + matches[i][0].length - 1);
+      if (open < 0) {
+        continue;
+      }
+      let depth = 0;
+      let end = text.length;
+      for (let at = open; at < text.length; at++) {
+        if (text[at] === '{') {
+          depth++;
+        } else if (text[at] === '}') {
+          depth--;
+          if (depth === 0) {
+            end = at + 1;
+            break;
+          }
+        }
+      }
       const name = matches[i][1];
       bodies.set(name, (bodies.get(name) ?? '') + text.slice(start, end));
     }
@@ -860,7 +877,7 @@ function addonEntryPointRegistrations(
 export interface RegistrationCensus {
   /** `InstanceMethod` / `StaticMethod`, in either the template or the argument form. */
   methods: number;
-  /** `Napi::Function::New`, in either form. */
+  /** Exported `Napi::Function::New` registrations, in either form. */
   functionNews: number;
   /** `exports.Set(` — each is a function registration or a class export. */
   exportSets: number;
@@ -869,7 +886,8 @@ export interface RegistrationCensus {
 }
 
 /**
- * Counts each registration spelling by its bare token.
+ * Counts each registration spelling by its bare token, excluding
+ * `Napi::Function::New` callbacks that are owned by another entry point.
  *
  * Deliberately NOT built on the matcher: this exists to DISAGREE with it, and a
  * census derived from it could only ever agree with itself. The patterns here
@@ -888,7 +906,10 @@ export function registrationCensus(sources: AddonSource[] = addonSources()): Reg
   for (const { text } of sources) {
     const code = withoutComments(text);
     census.methods += [...code.matchAll(/(?:Instance|Static)Method\s*[(<]/g)].length;
-    census.functionNews += [...code.matchAll(/Napi::Function::New\b/g)].length;
+    // Lambda callbacks (e.g. the AbortSignal listener) are not exported registrations.
+    const functionNews = [...code.matchAll(/Napi::Function::New\b/g)].length;
+    const callbackNews = [...code.matchAll(/Napi::Function::New\s*\(\s*env\s*,\s*\[/g)].length;
+    census.functionNews += functionNews - callbackNews;
     census.exportSets += [...code.matchAll(/exports\.Set\s*\(/g)].length;
     census.defineClasses += [...code.matchAll(/DefineClass\s*\(/g)].length;
   }

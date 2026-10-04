@@ -104,6 +104,7 @@ describe('standalone functions', () => {
       acousticSim: expect.any(Boolean),
       playback: expect.any(Boolean),
       pitchEditor: expect.any(Boolean),
+      vocalEdit: expect.any(Boolean),
       voiceChanger: expect.any(Boolean),
     });
     expect(report.decode.builtin).toEqual(['wav', 'mp3']);

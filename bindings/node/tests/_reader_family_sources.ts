@@ -93,6 +93,7 @@ export const READER_FAMILIES: Readonly<
     StringProperty: 'refuse',
     SynthEnumProperty: 'refuse',
     Uint32Property: 'refuse',
+    Uint64Property: 'refuse',
     WordProperty: 'refuse',
     // Out of scope, each for its own reason.
     FloatArrayProperty: 'out-of-scope',
@@ -127,6 +128,14 @@ export const READER_FAMILIES: Readonly<
     typedDoubleProperty: 'refuse',
     typedFloatProperty: 'refuse',
     typedIntProperty: 'refuse',
+    // Vocal edit's WASM adapter keeps the same absent/default and present/wrong
+    // type contract as the Node parser, but uses feature-local names because
+    // these helpers also enforce vocal-specific ranges and tagged IDs.
+    booleanProperty: 'refuse',
+    finiteProperty: 'refuse',
+    integerProperty: 'refuse',
+    noteIdProperty: 'refuse',
+    uint32Property: 'refuse',
     // Out of scope, each for its own reason.
     hasProperty: 'out-of-scope',
     objectProperty: 'out-of-scope',

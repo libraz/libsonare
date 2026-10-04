@@ -77,6 +77,11 @@ const CONSTANT_NAME = withInInit('  InstanceMethod<&FakeWrap::Fn>(kName),');
 /** An export that is a plain value, so it is neither function nor class. */
 const VALUE_EXPORT = withInInit('  exports.Set("version", Napi::Number::New(env, 1));');
 
+/** A callback created inside Init, which is not an export registration. */
+const CALLBACK_FUNCTION = withInInit(
+  '  Napi::Function::New(env, [](const Napi::CallbackInfo&) {});',
+);
+
 /** An ObjectWrap class with a constructor, one method, and both bodies present. */
 const WRAPPED_CLASS: AddonSource[] = [
   {
@@ -210,6 +215,15 @@ describe('each census failure class fires on its own', () => {
 describe('the census sees what it claims to', () => {
   it('counts each spelling in the tree it is given', () => {
     expect(registrationCensus(CLEAN)).toEqual({
+      methods: 0,
+      functionNews: 1,
+      exportSets: 1,
+      defineClasses: 0,
+    });
+  });
+
+  it('does not count an internal callback as an exported function registration', () => {
+    expect(registrationCensus(CALLBACK_FUNCTION)).toEqual({
       methods: 0,
       functionNews: 1,
       exportSets: 1,

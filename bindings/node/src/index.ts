@@ -373,4 +373,7 @@ export {
   SYNTH_OSC_WAVEFORMS,
   SYNTH_RETRIGGERS,
 } from './types.js';
+export type * from './types_vocal_edit.js';
+export type * from './types_vocal_project.js';
 export type { ValidateOptions } from './validation.js';
+export * from './vocal_edit.js';

@@ -8,12 +8,15 @@
 // rather than relying on a consumer that happens to include it first.
 #include <sonare/sonare_c_project_instruments.h>
 
+#include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace sonare_node {
@@ -111,6 +114,27 @@ inline int64_t node_narrow_int64(Napi::Env env, const Napi::Value& value, const 
   static constexpr double kBound = 9223372036854775808.0;  // 2^63
   static constexpr double kMax = 9223372036854774784.0;    // 2^63 - 1024
   return static_cast<int64_t>(node_narrow_number(env, value, name, -kBound, kMax));
+}
+
+/// @brief Reads a canonical decimal string as a uint64.
+/// @details A uint64 does not fit a JS number, so its one spelling is the decimal
+///   string: a number or bigint is refused rather than accepted as a second
+///   spelling, and so is any non-canonical string ("007", "+7", "7.0", "", or a
+///   value past 2^64 - 1), which keeps one value to one spelling.
+/// @throws Napi::TypeError for a non-string, Napi::RangeError for a bad string,
+///   both naming @p name.
+inline uint64_t node_narrow_uint64(Napi::Env env, const Napi::Value& value, const char* name) {
+  const std::string expected = std::string(name) + " must be a decimal uint64 string";
+  if (!value.IsString()) throw Napi::TypeError::New(env, expected);
+  const std::string text = value.As<Napi::String>().Utf8Value();
+  uint64_t number = 0;
+  const char* end = text.data() + text.size();
+  const auto parsed = std::from_chars(text.data(), end, number, 10);
+  if (text.empty() || (text.size() > 1 && text.front() == '0') || parsed.ec != std::errc{} ||
+      parsed.ptr != end) {
+    throw Napi::RangeError::New(env, expected);
+  }
+  return number;
 }
 
 /// @brief The C ABI's own float conversion, saturation included, for the total
@@ -326,6 +350,15 @@ inline int64_t Int64Property(const Napi::Object& obj, const char* key, ZeroIsSen
   return node_narrow_int64(obj.Env(), value, key);
 }
 
+/// @brief Read a uint64 property written as a decimal string: undefined/null
+///        returns the fallback, any other value is refused by name
+///        (@ref node_narrow_uint64).
+inline uint64_t Uint64Property(const Napi::Object& obj, const char* key, uint64_t fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_uint64(obj.Env(), value, key);
+}
+
 /// @brief Read a float property: undefined/null returns the fallback, any other
 ///        non-number is refused by name.
 /// @details Narrows through @ref node_narrow_float, so a finite value no 32-bit
@@ -521,6 +554,96 @@ inline bool RequiredStringValue(Napi::Env env, const Napi::Value& value, const s
   }
   *out = value.As<Napi::String>().Utf8Value();
   return !env.IsExceptionPending();
+}
+
+/// @brief Read a required uint64 value spelled as a decimal string
+///        (@ref node_narrow_uint64).
+inline bool RequiredUint64Value(Napi::Env env, const Napi::Value& value, const std::string& label,
+                                uint64_t* out) {
+  if (env.IsExceptionPending()) return false;
+  *out = node_narrow_uint64(env, value, label.c_str());
+  return true;
+}
+
+/// @brief Read a required finite double value within [@p minimum, @p maximum].
+/// @details Unlike @ref RequiredDoubleValue this refuses NaN, infinities and
+///   out-of-range values with a RangeError naming @p label.
+inline bool RequiredFiniteDoubleValue(Napi::Env env, const Napi::Value& value,
+                                      const std::string& label, double* out,
+                                      double minimum = -std::numeric_limits<double>::infinity(),
+                                      double maximum = std::numeric_limits<double>::infinity()) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || number < minimum || number > maximum) {
+    Napi::RangeError::New(env, label + " must be finite and within the supported range")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = number;
+  return true;
+}
+
+/// @brief Read a required whole number that a JS number holds exactly, within
+///        [@p minimum, @p maximum] (default: the whole safe-integer range).
+inline bool RequiredSafeIntegerValue(Napi::Env env, const Napi::Value& value,
+                                     const std::string& label, int64_t* out,
+                                     int64_t minimum = -9007199254740991LL,
+                                     int64_t maximum = 9007199254740991LL) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  *out = static_cast<int64_t>(
+      node_narrow_number(env, value, label.c_str(),
+                         static_cast<double>(std::max<int64_t>(minimum, -9007199254740991LL)),
+                         static_cast<double>(std::min<int64_t>(maximum, 9007199254740991LL))));
+  return true;
+}
+
+/// @brief Read a required plain object (not an array or function).
+inline bool RequiredObjectValue(Napi::Env env, const Napi::Value& value, const std::string& label,
+                                Napi::Object* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsObject() || value.IsArray() || value.IsFunction()) {
+    Napi::TypeError::New(env, label + " must be an object").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Object>();
+  return true;
+}
+
+/// @brief Read a required array.
+inline bool RequiredArrayValue(Napi::Env env, const Napi::Value& value, const std::string& label,
+                               Napi::Array* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, label + " must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Array>();
+  return true;
+}
+
+/// @brief Read a required Float32Array.
+inline bool RequiredFloat32ArrayValue(Napi::Env env, const Napi::Value& value,
+                                      const std::string& label, Napi::Float32Array* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsTypedArray() ||
+      value.As<Napi::TypedArray>().TypedArrayType() != napi_float32_array) {
+    Napi::TypeError::New(env, label + " must be a Float32Array").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Float32Array>();
+  return true;
+}
+
+/// @brief Read a required Uint8Array.
+inline bool RequiredUint8ArrayValue(Napi::Env env, const Napi::Value& value,
+                                    const std::string& label, Napi::Uint8Array* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsTypedArray() || value.As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+    Napi::TypeError::New(env, label + " must be a Uint8Array").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Uint8Array>();
+  return true;
 }
 
 /// @brief Value-level counterpart of MidiByteProperty: read a required value
