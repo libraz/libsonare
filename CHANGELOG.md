@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+#### Rebuild
+
+- A project with a part rig entry is written as schema version 5; v1.8.1 refuses it. Documents without part rigs are written as before.
+
+### New
+
+#### MIDI and synthesizer
+
+- Choose the rig of a part, or of a whole destination, per project and on the realtime engine: the instrument's default (`bank`), nothing (`none`, the direct signal) or an explicit chain of up to eight inserts (`chain`). C: `sonare_project_set_part_rig`, `sonare_project_get_part_rig`, `sonare_project_clear_part_rig`, `sonare_engine_set_part_rig`. Node and WASM: `setPartRig`, `getPartRig`, `clearPartRig` on the project and `setPartRig` on the engine, with `PART_RIG_ALL_PARTS` and `PART_RIG_MODES`. Python: `set_part_rig`, `get_part_rig`, `clear_part_rig` on the project and `set_part_rig` on the engine. Project bounces apply the entries to SoundFont and physical-model destinations; SMF export does not write them.
+- The physical-model synth plays the electric guitars through the default amplifier rig when the host supplies an insert factory, and reads GS insertion-effect messages while GM program selection is on. A live engine applies the messages the host pushes and does not interpret insertion-effect messages scheduled inside a clip.
+- Add the `saturation.overdrive` (`gainDb` 0–41, `toneHz` 500–8000, `levelDb`) and `saturation.distortion` (`gainDb` 0–60, `toneHz` 475–20000, `levelDb`) inserts, each reporting 48 samples of latency.
+- GS overdrive and distortion insertion effects run as a drive pedal into an amplifier: Drive sets the pedal gain, Amp Type selects the amplifier and Amp Sw switches the cabinet on every amplifier stage.
+
+### Behaviour changes
+
+- Programs 29 and 30 (Overdriven and Distortion Guitar) put a drive pedal ahead of the amplifier, with new amplifier presets and levels, on both the SoundFont player and the physical-model synth.
+- Electric guitars on the physical-model synth are no longer the direct signal in hosts that supply an insert factory; `set_part_rig` with part `0xFF` and mode `none` restores it.
+- A chain that contains an amplifier takes a mono input up to its last amplifier, as the default rig does.
+- GS overdrive and distortion insertion effects sound different: they gain the pedal stage, and Amp Type now selects the amplifier rather than the cabinet.
+
 ## v1.8.1 (2026-10-03)
 
 This release adds the GS insertion effect as a standalone mastering insert, a stereo A/B pair processor with loudness matching, live parameter edits on the streaming mastering chain, explicit voicing for note rendering and pitch decomposition, input peaks and a loudness reset in engine metering, and physical source offsets and loop anchors on arrangement clips. It tightens validation across mastering, MIDI and note editing, and retunes several physical-model voices.
