@@ -30,6 +30,8 @@ EXCLUDED = {
     "module_state.ts",
     "project_internal.ts",
     "analysis_helpers.ts",
+    # Published type-only (`export type *`); its functions are worker-internal helpers.
+    "vocal_edit_worker_protocol.ts",
 }
 # These are public exports, but deliberately outside the request-object policy:
 # scalar/unit conversion helpers, discovery/version metadata, and factories for
@@ -38,6 +40,7 @@ EXCLUDED = {
 # here with a reason.
 EXEMPT_FILES = {
     "project.ts",
+    "vocal_project.ts",
     "project_synth.ts",
     "realtime_engine.ts",
     "synth_catalog.ts",
@@ -47,6 +50,7 @@ EXEMPT_FILES = {
     "stream_analyzer.ts",
     "web_midi.ts",
     "worker.ts",
+    "vocal_edit_worker.ts",
 }
 SCALAR_HELPERS = {
     "hzToMel",
@@ -176,7 +180,7 @@ def exemption(path: Path, name: str, text: str) -> str | None:
 
 
 REQUEST = re.compile(r"\w+Request")
-STAR_REEXPORT = re.compile(r"export\s+\*\s+from\s+['\"]\./([\w/]+?)(?:\.js)?['\"]")
+STAR_REEXPORT = re.compile(r"export\s+(?:type\s+)?\*\s+from\s+['\"]\./([\w/]+?)(?:\.js)?['\"]")
 NAMED_REEXPORT = re.compile(
     r"export\s+(?:type\s+)?\{(.*?)\}\s*from\s*['\"]\./([\w/]+?)(?:\.js)?['\"]", re.DOTALL
 )
