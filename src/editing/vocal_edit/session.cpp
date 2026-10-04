@@ -13,6 +13,7 @@
 #include <string>
 #include <utility>
 
+#include "editing/vocal_edit/pitch_plan.h"
 #include "editing/vocal_edit/state_codec.h"
 #include "util/insertion_sort.h"
 #include "util/sha256.h"
@@ -103,24 +104,6 @@ bool same_pitch_except_target(const VocalPitchEdit& lhs, const VocalPitchEdit& r
 
 constexpr double kMinFormantShiftSemitones = -10.34995771500078;  // 12*log2(0.55)
 constexpr double kMaxFormantShiftSemitones = 8.669592293653093;   // 12*log2(1.65)
-
-double target_at(const VocalPitchTarget& target, double source_sample, double fallback) {
-  if (target.mode == PitchTargetMode::kNone) return fallback;
-  if (target.mode == PitchTargetMode::kCenter) return target.center_midi;
-  if (target.points.empty()) return fallback;
-  if (source_sample <= target.points.front().source_sample)
-    return target.points.front().target_midi;
-  if (source_sample >= target.points.back().source_sample) return target.points.back().target_midi;
-  const auto upper = std::upper_bound(
-      target.points.begin(), target.points.end(), source_sample,
-      [](double sample, const VocalPitchPoint& point) { return sample < point.source_sample; });
-  const auto& right = *upper;
-  const auto& left = *(upper - 1);
-  const double span = right.source_sample - left.source_sample;
-  if (!(span > 0.0)) return right.target_midi;
-  const double t = (source_sample - left.source_sample) / span;
-  return left.target_midi + t * (right.target_midi - left.target_midi);
-}
 
 void validate_pitch_edit(const VocalNoteEdit& edit, const SampleRange source_range,
                          int64_t output_length) {
@@ -425,7 +408,7 @@ void split_target(const VocalPitchTarget& target, double cut, VocalPitchTarget& 
   if (target.mode != PitchTargetMode::kCurve) return;
   left.points.clear();
   right.points.clear();
-  const auto value_at = [&](double sample) { return target_at(target, sample, 0.0); };
+  const auto value_at = [&](double sample) { return pitch_target_at(target, sample, 0.0); };
   for (const auto& point : target.points) {
     if (point.source_sample <= cut) left.points.push_back(point);
     if (point.source_sample >= cut) right.points.push_back(point);
@@ -444,7 +427,7 @@ VocalPitchTarget respan_target(const VocalPitchTarget& target, SampleRange range
   result.points.clear();
   const double start = static_cast<double>(range.start);
   const double end = static_cast<double>(range.end);
-  const auto value_at = [&](double sample) { return target_at(target, sample, 0.0); };
+  const auto value_at = [&](double sample) { return pitch_target_at(target, sample, 0.0); };
   result.points.push_back({start, value_at(start)});
   for (const auto& point : target.points) {
     if (point.source_sample > start && point.source_sample < end) result.points.push_back(point);

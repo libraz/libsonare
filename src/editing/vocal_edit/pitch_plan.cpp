@@ -26,23 +26,6 @@ namespace {
 
 double hz_to_midi(double hz) { return kMidiA4 + kSemitonesPerOctave * std::log2(hz / kA4Hz); }
 
-double lerp_target(const VocalPitchTarget& target, double source_sample, double fallback) {
-  if (target.mode == PitchTargetMode::kCenter) return target.center_midi;
-  if (target.mode != PitchTargetMode::kCurve || target.points.empty()) return fallback;
-  if (source_sample <= target.points.front().source_sample)
-    return target.points.front().target_midi;
-  if (source_sample >= target.points.back().source_sample) return target.points.back().target_midi;
-  const auto upper = std::upper_bound(
-      target.points.begin(), target.points.end(), source_sample,
-      [](double sample, const VocalPitchPoint& point) { return sample < point.source_sample; });
-  const auto& right = *upper;
-  const auto& left = *(upper - 1);
-  const double span = right.source_sample - left.source_sample;
-  if (!(span > 0.0)) return right.target_midi;
-  const double fraction = (source_sample - left.source_sample) / span;
-  return left.target_midi + fraction * (right.target_midi - left.target_midi);
-}
-
 void validate_pitch(const VocalPitchEdit& pitch, const VocalNote& note) {
   const auto finite = [](double value) { return std::isfinite(value); };
   if (!finite(pitch.amount) || pitch.amount < 0.0 || pitch.amount > 1.0) {
@@ -87,6 +70,14 @@ void validate_pitch(const VocalPitchEdit& pitch, const VocalNote& note) {
 }
 
 }  // namespace
+
+double pitch_target_at(const VocalPitchTarget& target, double source_sample, double fallback) {
+  if (target.mode == PitchTargetMode::kNone) return fallback;
+  if (target.mode == PitchTargetMode::kCenter) return target.center_midi;
+  if (target.points.empty()) return fallback;
+  return interpolate_sorted_points(target.points, source_sample,
+                                   [](const VocalPitchPoint& point) { return point.target_midi; });
+}
 
 namespace {
 
@@ -206,7 +197,7 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
     const double vibrato = vibrato_cents[offset] / kCentsPerSemitone;
     const double base = note.centre_midi + note.edit.pitch.drift_scale * drift +
                         note.edit.pitch.vibrato_scale * vibrato;
-    const double target = lerp_target(note.edit.pitch.target, source_sample, base);
+    const double target = pitch_target_at(note.edit.pitch.target, source_sample, base);
     point.measured_midi = measured;
     point.has_target = note.edit.pitch.target.mode != PitchTargetMode::kNone;
     point.target_midi = point.has_target ? target : 0.0;
@@ -345,24 +336,9 @@ std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& anal
                                            double destination) {
     if (plan.points.empty()) return 0.0;
     const double source = destination_sample_to_source_sample(note, destination);
-    if (source <= plan.points.front().source_sample) {
-      return static_cast<double>(plan.points.front().delta_semitones);
-    }
-    if (source >= plan.points.back().source_sample) {
-      return static_cast<double>(plan.points.back().delta_semitones);
-    }
-    const auto upper = std::upper_bound(plan.points.begin(), plan.points.end(), source,
-                                        [](double value, const PitchEvaluationPoint& point) {
-                                          return value < point.source_sample;
-                                        });
-    const auto& right = *upper;
-    const auto& left = *(upper - 1);
-    const double span = right.source_sample - left.source_sample;
-    if (!(span > 0.0)) return static_cast<double>(right.delta_semitones);
-    const double fraction = (source - left.source_sample) / span;
-    return static_cast<double>(left.delta_semitones) +
-           fraction * (static_cast<double>(right.delta_semitones) -
-                       static_cast<double>(left.delta_semitones));
+    return interpolate_sorted_points(plan.points, source, [](const PitchEvaluationPoint& point) {
+      return static_cast<double>(point.delta_semitones);
+    });
   };
   const auto narrow_delta = [](double value) {
     if (!std::isfinite(value) || value < -static_cast<double>(std::numeric_limits<float>::max()) ||
