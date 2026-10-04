@@ -71,6 +71,7 @@ SonareError sonare_project_get_part_rig(const SonareProject* project, uint32_t d
                                         int* out_present) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_mode) *out_mode = SONARE_PART_RIG_BANK;
   if (out_inserts_json) *out_inserts_json = nullptr;
   if (out_present) *out_present = 0;
   if (!project || !out_mode || !out_present) return SONARE_ERROR_INVALID_PARAMETER;
@@ -86,6 +87,7 @@ SonareError sonare_project_get_part_rig(const SonareProject* project, uint32_t d
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_mode) *out_mode = {};
   if (out_inserts_json) *out_inserts_json = {};
   if (out_present) *out_present = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, destination_id, part, out_mode, out_inserts_json,

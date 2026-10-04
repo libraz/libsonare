@@ -54,12 +54,12 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
 
 /// @brief Reads the rig entry of a part, or of the destination default.
 ///
-/// @param out_mode Receives a @ref SonarePartRigMode value when present.
+/// @param out_mode Receives the entry's @ref SonarePartRigMode value, or
+///        @c SONARE_PART_RIG_BANK when no entry exists.
 /// @param out_inserts_json Optional. Receives a heap C string in the
 ///        @ref sonare_project_set_part_rig inserts format for a chain entry and
 ///        NULL otherwise; release with @ref sonare_free_string.
-/// @param out_present Receives 1 when an entry exists and 0 when none does; the
-///        other outputs are then left unset.
+/// @param out_present Receives 1 when an entry exists and 0 when none does.
 SonareError sonare_project_get_part_rig(const SonareProject* project, uint32_t destination_id,
                                         uint8_t part, int* out_mode, char** out_inserts_json,
                                         int* out_present);
