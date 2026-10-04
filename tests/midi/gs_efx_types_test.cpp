@@ -596,16 +596,13 @@ TEST_CASE("EFX parameter translations move their insert control monotonically",
     return first;
   };
 
-  SECTION("Overdrive and Distortion drive rises with EFX PARAMETER 1, through inputDb alone") {
-    // PARAMETER 1 is a gain in front of a fixed curve (40 03 03); the byte beside
-    // it picks the curve. The amp's own drive stays at the insert default.
-    sweep_one_writer(0x0110, 0, "saturation.ampSim", "inputDb", "drive");
-    sweep_one_writer(0x0111, 0, "saturation.ampSim", "inputDb", "drive");
-    double od_model = 0.0;
-    double ds_model = 0.0;
-    REQUIRE(json_number(gs_efx_insert_params(make_efx(0x0110)), "ampModel", od_model));
-    REQUIRE(json_number(gs_efx_insert_params(make_efx(0x0111)), "ampModel", ds_model));
-    REQUIRE(od_model != ds_model);  // the two types keep their own voicings
+  SECTION("Overdrive and Distortion drive rises with EFX PARAMETER 1, through the pedal alone") {
+    // PARAMETER 1 is a gain in front of a fixed curve (40 03 03), here the
+    // pedal's clip gain from unity at byte 0. The amps after it keep their trim.
+    REQUIRE(sweep_one_writer(0x0110, 0, "saturation.overdrive", "gainDb", "gainDb") == 0.0);
+    REQUIRE(sweep_one_writer(0x0111, 0, "saturation.distortion", "gainDb", "gainDb") == 0.0);
+    // The two types keep their own circuits.
+    REQUIRE(gs_efx_insert_name(0x0110) != gs_efx_insert_name(0x0111));
   }
 
   SECTION("effect balance rises with EFX PARAMETER 16, and 0 is all direct") {

@@ -97,7 +97,7 @@ A switch or selector. The chain skeleton places every stage the byte can choose,
 - `stages` + `on_states`: the listed stages are on at the listed bytes (0–127, each one the slot prints) and off elsewhere.
 - `select`: state *i* of the printed list turns on the *i*-th stage and no other, so the list names exactly as many stages as the slot prints states.
 
-Each stage is `{"stage": name, "ordinal": n}`, at most four of them. `basis` is `"invented"` and `replaced_when` is required. An enables row carries no `stage`, `key` or `class` of its own.
+Each stage is `{"stage": name, "ordinal": n}`; a select names at most four of them and a switch at most eight. `basis` is `"invented"` and `replaced_when` is required. An enables row carries no `stage`, `key` or `class` of its own.
 
 ### `replaced_when` — how a carried or invented law is retired
 

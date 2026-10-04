@@ -496,10 +496,11 @@ TEST_CASE("GS EFX aligns unequal parallel branch latency without audio allocatio
 
 TEST_CASE("GS EFX keeps constructed disabled stages on the reported timeline",
           "[midi][gs][efx][audio][latency]") {
+  // Four amp stages, one of them enabled, three samples each.
   GsEfxProcessor processor(state_for(0x0400), GsEfxRealization::kModern,
                            fixed_latency_factory(0, 0, 3 * 256));
   processor.prepare(kSampleRate, 32, 2);
-  REQUIRE(processor.latency_samples() == 6);
+  REQUIRE(processor.latency_samples() == 12);
 
   std::array<float, 32> left{};
   std::array<float, 32> right{};
@@ -507,12 +508,12 @@ TEST_CASE("GS EFX keeps constructed disabled stages on the reported timeline",
   right[0] = 1.0f;
   float* channels[] = {left.data(), right.data()};
   processor.process(channels, 2, static_cast<int>(left.size()));
-  for (int i = 0; i < 6; ++i) {
+  for (int i = 0; i < 12; ++i) {
     REQUIRE(std::fabs(left[static_cast<std::size_t>(i)]) < 1.0e-6f);
     REQUIRE(std::fabs(right[static_cast<std::size_t>(i)]) < 1.0e-6f);
   }
-  REQUIRE(std::fabs(left[6] - 1.0f) < 1.0e-6f);
-  REQUIRE(std::fabs(right[6] - 1.0f) < 1.0e-6f);
+  REQUIRE(std::fabs(left[12] - 1.0f) < 1.0e-6f);
+  REQUIRE(std::fabs(right[12] - 1.0f) < 1.0e-6f);
 }
 
 TEST_CASE("GS EFX reports fractional bypass support in the offline tail",
@@ -520,8 +521,10 @@ TEST_CASE("GS EFX reports fractional bypass support in the offline tail",
   GsEfxProcessor processor(state_for(0x0400), GsEfxRealization::kModern,
                            fixed_latency_factory(0, 0, 128));
   processor.prepare(kSampleRate, 32, 2);
-  REQUIRE(processor.latency_samples() == 1);
-  REQUIRE(processor.tail_samples() == 5);
+  // Four half-sample amp stages: two whole samples of latency, and three samples
+  // of fractional-delay support each, ten of them past the floor.
+  REQUIRE(processor.latency_samples() == 2);
+  REQUIRE(processor.tail_samples() == 10);
 
   std::array<float, 1> left{{1.0f}};
   std::array<float, 1> right{{1.0f}};
@@ -529,7 +532,7 @@ TEST_CASE("GS EFX reports fractional bypass support in the offline tail",
   processor.process(channels, 2, 1);
 
   const int drain_samples = processor.latency_samples() + processor.tail_samples();
-  REQUIRE(drain_samples == 6);
+  REQUIRE(drain_samples == 12);
   std::vector<float> drained_left(static_cast<std::size_t>(drain_samples + 1), 0.0f);
   std::vector<float> drained_right(static_cast<std::size_t>(drain_samples + 1), 0.0f);
   for (int i = 0; i <= drain_samples; ++i) {
@@ -644,27 +647,64 @@ TEST_CASE("GS EFX real factory impulse reports its amp-sim latency",
   const auto factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
-  GsEfxProcessor processor(state_for(0x0200), GsEfxRealization::kModern, factory);
+  const GsEfx state = state_for(0x0200);
+  const auto stages = gs_efx_insert_chain(state);
+  // Every stage sits on the timeline, the disabled amps included.
+  int stage_latency = 0;
+  for (const auto& stage : stages) {
+    auto proc = factory(stage.name, stage.params_json);
+    REQUIRE(proc != nullptr);
+    proc->prepare(kSampleRate, 512);
+    stage_latency += proc->latency_samples();
+  }
+  const auto peak_of = [](const std::vector<float>& left, const std::vector<float>& right) {
+    int peak_index = 0;
+    float peak = 0.0f;
+    for (size_t sample = 0; sample < left.size(); ++sample) {
+      const float level = std::max(std::fabs(left[sample]), std::fabs(right[sample]));
+      if (level > peak) {
+        peak = level;
+        peak_index = static_cast<int>(sample);
+      }
+    }
+    REQUIRE(peak > 1.0e-5f);
+    return peak_index;
+  };
+  const std::size_t length = static_cast<std::size_t>(stage_latency) + 160;
+
+  GsEfxProcessor processor(state, GsEfxRealization::kModern, factory);
   processor.prepare(kSampleRate, 512, 2);
-  std::vector<float> left(160, 0.0f);
-  std::vector<float> right(160, 0.0f);
+  std::vector<float> left(length, 0.0f);
+  std::vector<float> right(length, 0.0f);
   left[0] = 1.0f;
   right[0] = 1.0f;
   float* channels[] = {left.data(), right.data()};
   processor.process(channels, 2, static_cast<int>(left.size()));
-  int peak_index = 0;
-  float peak = 0.0f;
-  for (int sample = 0; sample < static_cast<int>(left.size()); ++sample) {
-    const float level = std::max(std::fabs(left[static_cast<std::size_t>(sample)]),
-                                 std::fabs(right[static_cast<std::size_t>(sample)]));
-    if (level > peak) {
-      peak = level;
-      peak_index = sample;
+
+  // The enabled stages run directly and each disabled one as its own latency,
+  // in chain order: a modulated stage after a delay sees the impulse later.
+  std::vector<float> ref_left(length, 0.0f);
+  std::vector<float> ref_right(length, 0.0f);
+  ref_left[0] = 1.0f;
+  ref_right[0] = 1.0f;
+  float* ref_channels[] = {ref_left.data(), ref_right.data()};
+  for (const auto& stage : stages) {
+    auto proc = factory(stage.name, stage.params_json);
+    proc->prepare(kSampleRate, static_cast<int>(length), 2);
+    if (stage.enabled) {
+      proc->process(ref_channels, 2, static_cast<int>(length));
+      continue;
+    }
+    const auto delay = static_cast<std::ptrdiff_t>(proc->latency_samples());
+    for (auto* channel : {&ref_left, &ref_right}) {
+      std::rotate(channel->rbegin(), channel->rbegin() + delay, channel->rend());
+      std::fill(channel->begin(), channel->begin() + delay, 0.0f);
     }
   }
-  REQUIRE(peak > 1.0e-5f);
-  REQUIRE(processor.latency_samples() == 48);
-  REQUIRE(peak_index == processor.latency_samples());
+  CAPTURE(stage_latency);
+  REQUIRE(stage_latency > 0);
+  REQUIRE(processor.latency_samples() == stage_latency);
+  REQUIRE(peak_of(left, right) == peak_of(ref_left, ref_right));
 }
 #endif  // SONARE_BUILD_FX && SONARE_WITH_MASTERING
 

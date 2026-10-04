@@ -8,12 +8,14 @@
 ///        apply, since a default that cannot be cleared is the bake it replaces.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -120,9 +122,10 @@ constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0
 constexpr uint8_t kOdType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
 
-/// A factory whose GS unit amp is a no-op while the bank rig's amp is real. The
-/// unit's JSON has ampModel and the rig's has preset, which tells them apart.
-Sf2PlayerConfig with_identity_unit() {
+/// The real factory with the system effects off, so a render holds the part's
+/// rig and GS unit alone. The unit's amps carry presets just as the bank rig's
+/// do, so audio cannot tell the two apart; the realised part chain does.
+Sf2PlayerConfig with_system_effects_off() {
   Sf2PlayerConfig cfg = with_factory();
   cfg.gain = 1.0f;
 #if defined(SONARE_MIDI_WITH_FX)
@@ -130,12 +133,6 @@ Sf2PlayerConfig with_identity_unit() {
   cfg.effects.enable_chorus = false;
   cfg.effects.enable_delay = false;
 #endif
-  cfg.insert_factory = [](std::string_view name, std::string_view json) {
-    if (name == "saturation.ampSim" && json.find("\"preset\"") == std::string_view::npos) {
-      return std::unique_ptr<sonare::rt::ProcessorBase>{};
-    }
-    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
-  };
   return cfg;
 }
 
@@ -153,9 +150,9 @@ StereoRender render_through_unit(Sf2Player& player, uint8_t pan, int num_samples
   return rendered;
 }
 
-/// Program 30 routed into the identity unit by plain SysEx, realised inline.
+/// Program 30 routed into the GS unit by plain SysEx, realised inline.
 StereoRender render_program_stereo_through_direct_unit(uint8_t pan, int num_samples = 24000) {
-  Sf2PlayerConfig cfg = with_identity_unit();
+  Sf2PlayerConfig cfg = with_system_effects_off();
   cfg.realize_efx_inline = true;
   Sf2Player player(cfg);
   player.prepare(kOutRate, 256);
@@ -175,7 +172,7 @@ StereoRender render_program_stereo_through_direct_unit(uint8_t pan, int num_samp
 /// The same route as scheduled prepared SysEx over a live player whose
 /// published snapshot carries the bank rig for program 30.
 StereoRender render_program_stereo_through_prepared_unit(uint8_t pan, int num_samples = 24000) {
-  Sf2Player player(with_identity_unit());
+  Sf2Player player(with_system_effects_off());
   player.prepare(kOutRate, 256);
   std::shared_ptr<const sonare::midi::PreparedMidiSysEx> type_token;
   std::shared_ptr<const sonare::midi::PreparedMidiSysEx> assign_token;
@@ -384,10 +381,38 @@ TEST_CASE("a prepared GS route takes the DI in place of the default guitar amp",
       REQUIRE(relative_rms_difference(direct.right, prepared.right, 1.0f) < 1.0e-4);
     }
   }
-  // Positive control: the same program unrouted is amplified, the routed DI is not.
-  const StereoRender amped = render_program_stereo(with_factory(), 30, 64);
-  const StereoRender routed = render_program_stereo_through_prepared_unit(64);
-  REQUIRE(crest_db(routed.left) > crest_db(amped.left) + 3.0);
+  // Positive control on the realised part chain: unrouted, program 30 carries
+  // its bank rig; routed, the part carries none, so the unit's own block is the
+  // only one. The direct route stands for the prepared one, which it matches above.
+  std::vector<std::string> bank;
+  for (const auto& stage : sonare::midi::synth::gm_rig_chain(gm_fallback_rig(0, 30).id)) {
+    bank.push_back(stage.name);
+  }
+  REQUIRE_FALSE(bank.empty());
+  std::array<float, 256> left{};
+  std::array<float, 256> right{};
+  float* chans[2] = {left.data(), right.data()};
+  const auto realised = [&](bool route) {
+    Sf2PlayerConfig cfg = with_system_effects_off();
+    cfg.realize_efx_inline = true;
+    Sf2Player player(cfg);
+    player.prepare(kOutRate, 256);
+    if (route) {
+      for (const auto& [payload, size] :
+           {std::pair{kOdType, sizeof(kOdType)}, std::pair{kPartOn, sizeof(kPartOn)}}) {
+        MidiEvent plain;
+        plain.ump = sonare::midi::make_sysex_handle(0, 1);
+        plain.sysex_payload = payload;
+        plain.sysex_payload_size = size;
+        player.on_event(0, plain);
+      }
+    }
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 30)));
+    player.process(chans, 2, 256);
+    return player.part_rig_stage_names(0);
+  };
+  CHECK(realised(false) == bank);
+  CHECK(realised(true).empty());
 }
 
 TEST_CASE("each bound rig drives its amplifier where the bank's own level puts it",

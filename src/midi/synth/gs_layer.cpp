@@ -4,6 +4,8 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <initializer_list>
+#include <iterator>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -484,9 +486,10 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "spectral.presenceEnhancer";
     case 0x0103:  // Humanizer -> the vowel formant filter.
       return "effects.filter.vowel";
-    case 0x0110:  // Overdrive -> the full guitar amp model (crunch voicing).
-    case 0x0111:  // Distortion -> the amp model on its high-gain voicing.
-      return "saturation.ampSim";
+    case 0x0110:  // Overdrive -> the overdrive pedal; its amp stages follow it.
+      return "saturation.overdrive";
+    case 0x0111:  // Distortion -> the distortion pedal; its amp stages follow it.
+      return "saturation.distortion";
     case 0x0120:  // Phaser
       return "effects.modulation.phaser";
     case 0x0121:  // Auto Wah -> the envelope-following resonant bandpass.
@@ -546,6 +549,7 @@ class ParamsJson {
  public:
   void number(const char* key, float value) { append(key, std::to_string(value)); }
   void integer(const char* key, int value) { append(key, std::to_string(value)); }
+  void text(const char* key, const char* value) { append(key, '"' + std::string(value) + '"'); }
   std::string str() const { return out_.empty() ? "{}" : out_ + "}"; }
 
  private:
@@ -616,15 +620,6 @@ std::string gs_tremolo_json() {
   return out.str();
 }
 
-/// Amp-sim JSON for the two drive types: the voicing alone. The Drive byte is a
-/// gain in front of that fixed curve and its row writes it (inputDb); the amp's
-/// own drive stays at the insert's default.
-std::string gs_amp_json(int amp_model) {
-  ParamsJson out;
-  out.integer("ampModel", amp_model);
-  return out.str();
-}
-
 }  // namespace
 
 std::string gs_efx_insert_params(const GsEfx& efx) {
@@ -633,13 +628,6 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
   switch (efx.type) {
     case 0x0100:  // Stereo-EQ -> four bands of the parametric EQ.
       return gs_stereo_eq_json();
-    case 0x0110:
-      // Overdrive -> the amp model on its classic-crunch voicing (ampModel 0).
-      // The amp's cab EQ is left on so the tone is amp-shaped.
-      return gs_amp_json(0);
-    case 0x0111:
-      // Distortion -> the amp model on its high-gain voicing (ampModel 2).
-      return gs_amp_json(2);
     default:
       return "{}";
   }
@@ -832,6 +820,52 @@ std::vector<GsEfxStage> gs_efx_single_chain(uint16_t type) {
   return gs_efx_effect_chain(single);
 }
 
+constexpr std::string_view kGsOverdrive = "saturation.overdrive";
+constexpr std::string_view kGsDistortion = "saturation.distortion";
+
+/// saturation::CabModel values the amp stages sit on.
+constexpr int kGsCabGuitar4x12 = 0;
+constexpr int kGsCabGuitar1x12Combo = 2;
+constexpr int kGsCabGuitar2x12Open = 3;
+
+/// One amp stage of an OD/DS block: an amp preset and the cabinet under it.
+struct GsAmpVoicing {
+  const char* preset;
+  int cab_model;
+};
+
+/// The printed Amp Type states in order (Small, BltIn, 2-Stk, 3-Stk), one amp
+/// stage each. The assignment is the library's; nothing measured it.
+constexpr std::array<GsAmpVoicing, 4> kGsAmpTypes = {{
+    {"cleanCombo", kGsCabGuitar1x12Combo},
+    {"chimeEdge", kGsCabGuitar2x12Open},
+    {"britStack", kGsCabGuitar4x12},
+    {"rectifierChug", kGsCabGuitar4x12},
+}};
+
+/// Rotary Multi prints no Amp Type, and the manual names no amp for it.
+constexpr std::size_t kGsRotaryMultiAmp = 2;
+/// Bass Multi's OD Amp prints the first three states only.
+constexpr std::size_t kGsBassMultiAmpTypes = 3;
+
+GsEfxStage gs_amp_stage(const GsAmpVoicing& voicing) {
+  ParamsJson out;
+  out.text("preset", voicing.preset);
+  out.integer("cabModel", voicing.cab_model);
+  return {"saturation.ampSim", out.str()};
+}
+
+/// An OD/DS block: its pedal, or the pair an OD Sel picks between, then one amp
+/// stage per printed Amp Type state. The Drive byte reaches the pedal; Amp Type
+/// turns one amp on and Amp Sw takes the cabinet off every one of them.
+std::vector<GsEfxStage> gs_drive_block(std::initializer_list<std::string_view> pedals,
+                                       std::size_t amp_types) {
+  std::vector<GsEfxStage> block;
+  for (const std::string_view pedal : pedals) block.push_back({std::string(pedal), "{}"});
+  for (std::size_t i = 0; i < amp_types; ++i) block.push_back(gs_amp_stage(kGsAmpTypes[i]));
+  return block;
+}
+
 /// A parallel-2 type: which single types realise each half, in the order the
 /// half runs them. Two entries place an overdrive/distortion selector's pair.
 struct GsEfxParallelHalves {
@@ -857,12 +891,19 @@ constexpr std::array<GsEfxParallelHalves, 9> kGsEfxParallelHalves = {{
 /// Appends one half: its single types' stages, then its own level and pan.
 void append_half(std::vector<GsEfxStage>& chain, const std::array<uint16_t, 2>& types,
                  uint8_t branch) {
-  for (const uint16_t type : types) {
-    if (type == 0) continue;
-    for (GsEfxStage& stage : gs_efx_single_chain(type)) {
-      stage.branch = branch;
-      chain.push_back(std::move(stage));
+  // An OD Sel pair is one block: both pedals share the amp stages behind them.
+  std::vector<GsEfxStage> stages;
+  if (types[0] == 0x0110 && types[1] == 0x0111) {
+    stages = gs_drive_block({kGsOverdrive, kGsDistortion}, kGsAmpTypes.size());
+  } else {
+    for (const uint16_t type : types) {
+      if (type == 0) continue;
+      for (GsEfxStage& stage : gs_efx_single_chain(type)) stages.push_back(std::move(stage));
     }
+  }
+  for (GsEfxStage& stage : stages) {
+    stage.branch = branch;
+    chain.push_back(std::move(stage));
   }
   chain.push_back({"utility.gain", "{}", branch});
   // The raw constant-power law, so the half's pan byte moves its pair.
@@ -886,7 +927,6 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   // between (OD Sel, CF Sel, TP Sel) places both candidates side by side in the
   // series; the selector's enable row turns one of them off.
   const auto comp = [] { return GsEfxStage{"dynamics.compressor", "{}"}; };
-  const auto od = [] { return GsEfxStage{"saturation.ampSim", "{\"ampModel\":0,\"drive\":0.6}"}; };
   // Every combination type's equaliser: a low shelf, one peaking section, a
   // high shelf. It prints two gains and no corner, so the shelves sit on the
   // pair the archive measured on one such type; every byte the bands read is bound.
@@ -901,7 +941,6 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   const auto delay = [] { return GsEfxStage{"effects.delay.stereo", "{}"}; };
   const auto wah = [] { return GsEfxStage{"effects.modulation.wah", "{}"}; };
   const auto autowah = [] { return GsEfxStage{"effects.modulation.autoWah", "{}"}; };
-  const auto ds = [] { return GsEfxStage{"saturation.ampSim", "{\"ampModel\":2,\"drive\":0.7}"}; };
   const auto eh = [] { return GsEfxStage{"spectral.presenceEnhancer", "{}"}; };
   const auto fl = [] { return GsEfxStage{"effects.modulation.flanger", "{}"}; };
   const auto rot = [] { return GsEfxStage{"effects.modulation.rotary", "{}"}; };
@@ -913,7 +952,25 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     return GsEfxStage{"effects.modulation.ringModulator", gs_tremolo_json()};
   };
   const auto binaural = [] { return GsEfxStage{"stereo.binaural", "{}"}; };
+  const auto od = [] { return gs_drive_block({kGsOverdrive}, kGsAmpTypes.size()); };
+  const auto ds = [] { return gs_drive_block({kGsDistortion}, kGsAmpTypes.size()); };
+  const auto od_sel = [](std::size_t amp_types) {
+    return gs_drive_block({kGsOverdrive, kGsDistortion}, amp_types);
+  };
+  // A drive block between the stages before and after it.
+  const auto around = [](std::initializer_list<GsEfxStage> head, std::vector<GsEfxStage> block,
+                         std::initializer_list<GsEfxStage> tail) {
+    std::vector<GsEfxStage> chain(head);
+    chain.insert(chain.end(), std::make_move_iterator(block.begin()),
+                 std::make_move_iterator(block.end()));
+    chain.insert(chain.end(), tail.begin(), tail.end());
+    return chain;
+  };
   switch (efx.type) {
+    case 0x0110:  // Overdrive
+      return od();
+    case 0x0111:  // Distortion
+      return ds();
     case 0x0141:  // Tremolo Chorus: the chorus with its output amplitude-modulated.
       return {cf(), trem()};
     case 0x0144:  // 3D Chorus: the chorus placed by the binaural stage.
@@ -921,17 +978,17 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
       return {{std::string(gs_efx_insert_name(efx.type)), gs_efx_insert_params(efx)}, binaural()};
     // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
     case 0x0200:  // OD -> Chorus
-      return {od(), cf()};
+      return around({}, od(), {cf()});
     case 0x0201:  // OD -> Flanger
-      return {od(), fl()};
+      return around({}, od(), {fl()});
     case 0x0202:  // OD -> Delay
-      return {od(), delay()};
+      return around({}, od(), {delay()});
     case 0x0203:  // DS -> Chorus
-      return {ds(), cf()};
+      return around({}, ds(), {cf()});
     case 0x0204:  // DS -> Flanger
-      return {ds(), fl()};
+      return around({}, ds(), {fl()});
     case 0x0205:  // DS -> Delay
-      return {ds(), delay()};
+      return around({}, ds(), {delay()});
     case 0x0206:  // EH -> Chorus
       return {eh(), cf()};
     case 0x0207:  // EH -> Flanger
@@ -948,19 +1005,22 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     // for it (chapter-4 body 03 00 vs appendix table 02 0C); accept both.
     case 0x020C:
     case 0x0300:
-      return {od(), eq(), rot()};
+      return {{std::string(kGsOverdrive), "{}"},
+              gs_amp_stage(kGsAmpTypes[kGsRotaryMultiAmp]),
+              eq(),
+              rot()};
     case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
-      return {comp(), od(), ds(), cf(), fl(), delay()};
+      return around({comp()}, od_sel(kGsAmpTypes.size()), {cf(), fl(), delay()});
     case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
-      return {comp(), od(), ds(), eq(), cf(), fl()};
+      return around({comp()}, od_sel(kGsAmpTypes.size()), {eq(), cf(), fl()});
     case 0x0402:  // GTR Multi 3: Wah-OD-CF-Dly
-      return {wah(), od(), ds(), cf(), fl(), delay()};
+      return around({wah()}, od_sel(kGsAmpTypes.size()), {cf(), fl(), delay()});
     case 0x0403:  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD block)
       return {comp(), eq(), cf(), fl(), delay()};
     case 0x0404:  // Clean GTR Multi 2: AW-EQ-CF-Dly (Auto-Wah at the front)
       return {autowah(), eq(), cf(), fl(), delay()};
-    case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (its OD Amp byte picks the cab)
-      return {comp(), od(), ds(), eq(), cf(), fl()};
+    case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF
+      return around({comp()}, od_sel(kGsBassMultiAmpTypes), {eq(), cf(), fl()});
     case 0x0406:  // Rhodes Multi: Enhancer -> Phaser -> Chorus -> Tremolo/Pan
       return {eh(), ph(), cf(), fl(), rm(), pan()};
     case 0x0500:  // Keyboard Multi: Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.

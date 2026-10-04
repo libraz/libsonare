@@ -957,7 +957,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// 20-byte state is read and every term is ANDed in the original table order.
   struct PreparedEfxEnablePlan {
     GsEfxEnable rule{};
-    std::array<uint8_t, 4> stage_indices{};
+    GsEfxEnableStageIndices stage_indices{};
   };
 
   /// A processor graph prepared once on the control thread. The audio pin

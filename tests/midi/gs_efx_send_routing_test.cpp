@@ -224,16 +224,13 @@ class MixedSafetyInsert final : public sonare::rt::ProcessorBase {
   }
   bool parameter_is_realtime_safe(unsigned int id) const noexcept override { return id == 0; }
   std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
-    return {{"inputDb", 0}, {"cabModel", 1}};
+    return {{"gainDb", 0}, {"cab", 1}};
   }
 
  private:
   std::shared_ptr<int> set_count_;
   float gain_ = 1.0f;
 };
-
-/// The keys the Overdrive translation emits.
-const std::vector<std::string> kAmpSimKeys = {"drive", "ampModel", "levelDb"};
 
 /// The stereo delay's automatable keys, which the delay types' translations now
 /// write into.
@@ -919,7 +916,7 @@ TEST_CASE("failed EFX parameter translation publishes no partial prefix",
     cfg.bank_rig_binding = false;
     cfg.insert_factory = [throw_factory, set_count](std::string_view name, std::string_view) {
       if (*throw_factory) throw std::runtime_error("partial rebuild failure");
-      if (name == "saturation.ampSim") {
+      if (name == "saturation.overdrive" || name == "saturation.ampSim") {
         return std::unique_ptr<sonare::rt::ProcessorBase>(new MixedSafetyInsert(set_count));
       }
       return std::unique_ptr<sonare::rt::ProcessorBase>{};
@@ -945,9 +942,9 @@ TEST_CASE("failed EFX parameter translation publishes no partial prefix",
   subject->process(warm_subject, 2, 256);
   reference->process(warm_reference, 2, 256);
 
-  // The Overdrive translation has inputDb first and cabModel second. The
-  // first is realtime-safe, the second is deliberately not; the throwing
-  // rebuild must therefore happen before any queue record is published.
+  // The Overdrive translation has the pedal's gainDb first and the amps' cab
+  // after it. The first is realtime-safe, the second is deliberately not; the
+  // throwing rebuild must therefore happen before any queue record is published.
   *throw_factory = true;
   subject->on_control_sysex(kOdDrive, sizeof(kOdDrive));
   *throw_factory = false;
@@ -1050,12 +1047,12 @@ TEST_CASE("prepared source edits activate a legacy control fanout",
   cfg.gain = 1.0f;
   cfg.bank_rig_binding = false;
   cfg.insert_factory = [counters](std::string_view name, std::string_view) {
-    if (name == "saturation.ampSim") {
-      // Keep the CONTROL 1 inputDb destination while omitting the other
-      // amp-sim rows, forcing the strict prepared plan to reject this custom
-      // graph and exercise the snapshot-local partial plan instead.
+    if (name == "saturation.overdrive") {
+      // Keep the CONTROL 1 gainDb destination while omitting every other
+      // stage, forcing the strict prepared plan to reject this custom graph
+      // and exercise the snapshot-local partial plan instead.
       return std::unique_ptr<sonare::rt::ProcessorBase>(
-          std::make_unique<CountingInsert>(counters, std::vector<std::string>{"inputDb"}));
+          std::make_unique<CountingInsert>(counters, std::vector<std::string>{"gainDb"}));
     }
     return std::unique_ptr<sonare::rt::ProcessorBase>{};
   };

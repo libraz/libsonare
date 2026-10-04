@@ -205,7 +205,9 @@ TEST_CASE("a parallel-2 type is two halves side by side, each ending in its own 
     std::vector<std::string> b;
   };
   const std::string amp = "saturation.ampSim";
-  const std::vector<std::string> od{amp, amp};
+  // An OD Sel block: both pedals, then one amp per printed Amp Type state.
+  const std::vector<std::string> od{
+      "saturation.overdrive", "saturation.distortion", amp, amp, amp, amp};
   const std::vector<Expected> cases = {
       {0x1100, {"effects.modulation.chorus"}, {"effects.delay.stereo"}},
       {0x1101, {"effects.modulation.flanger"}, {"effects.delay.stereo"}},
@@ -250,40 +252,51 @@ TEST_CASE("a parallel-2 type is two halves side by side, each ending in its own 
     }
   }
 
-  SECTION("OD1/OD2 numbers its four amps across both halves, overdrive before distortion") {
+  SECTION("OD1/OD2 numbers its pedals and eight amps across both halves") {
     const Chain chain = gs_efx_insert_chain(efx_of(0x1103), kNoRows);
-    for (uint8_t ordinal = 0; ordinal < 4; ++ordinal) {
+    const std::array<const char*, 4> presets = {
+        "\"preset\":\"cleanCombo\"", "\"preset\":\"chimeEdge\"", "\"preset\":\"britStack\"",
+        "\"preset\":\"rectifierChug\""};
+    for (uint8_t ordinal = 0; ordinal < 8; ++ordinal) {
       INFO("ordinal " << static_cast<int>(ordinal));
       const GsEfxStage* stage = find_stage(chain, "saturation.ampSim", ordinal);
       REQUIRE(stage != nullptr);
       CHECK(static_cast<int>(stage->branch) ==
-            (ordinal < 2 ? kGsEfxBranchHalfA : kGsEfxBranchHalfB));
-      CHECK(carries(*stage, ordinal % 2 == 0 ? "\"ampModel\":0" : "\"ampModel\":2"));
+            (ordinal < 4 ? kGsEfxBranchHalfA : kGsEfxBranchHalfB));
+      CHECK(carries(*stage, presets[ordinal % 4]));
+    }
+    for (uint8_t ordinal = 0; ordinal < 2; ++ordinal) {
+      INFO("pedal ordinal " << static_cast<int>(ordinal));
+      for (const char* pedal : {"saturation.overdrive", "saturation.distortion"}) {
+        const GsEfxStage* stage = find_stage(chain, pedal, ordinal);
+        REQUIRE(stage != nullptr);
+        CHECK(static_cast<int>(stage->branch) ==
+              (ordinal == 0 ? kGsEfxBranchHalfA : kGsEfxBranchHalfB));
+      }
     }
   }
 }
 
 TEST_CASE("the skeleton places every stage a switch or selector can turn on",
           "[midi][gs-skeleton]") {
-  SECTION("OD Sel: an overdrive amp and a distortion amp, ordinals 0 and 1") {
+  SECTION("OD Sel: both pedals, then one amp per printed OD Amp state") {
     for (const uint16_t type :
          {uint16_t{0x0400}, uint16_t{0x0401}, uint16_t{0x0402}, uint16_t{0x0405}}) {
       INFO("type " << type);
       const Chain chain = gs_efx_insert_chain(efx_of(type), kNoRows);
-      const GsEfxStage* od = find_stage(chain, "saturation.ampSim", 0);
-      const GsEfxStage* ds = find_stage(chain, "saturation.ampSim", 1);
-      REQUIRE(od != nullptr);
-      REQUIRE(ds != nullptr);
-      CHECK(carries(*od, "\"ampModel\":0"));
-      CHECK(carries(*ds, "\"ampModel\":2"));
+      CHECK(find_stage(chain, "saturation.overdrive", 0) != nullptr);
+      CHECK(find_stage(chain, "saturation.distortion", 0) != nullptr);
+      const uint8_t amps = type == 0x0405 ? 3 : 4;
+      for (uint8_t ordinal = 0; ordinal < amps; ++ordinal) {
+        INFO("ordinal " << static_cast<int>(ordinal));
+        const GsEfxStage* amp = find_stage(chain, "saturation.ampSim", ordinal);
+        REQUIRE(amp != nullptr);
+        // Each amp sits on its own cabinet; Amp Sw only takes it off.
+        CHECK(carries(*amp, "\"preset\":"));
+        CHECK(carries(*amp, "\"cabModel\":"));
+      }
+      CHECK(find_stage(chain, "saturation.ampSim", amps) == nullptr);
     }
-    // Bass Multi's cabinet is its OD Amp byte's, one row for both amps; the
-    // skeleton leaves it alone.
-    const Chain bare = gs_efx_insert_chain(efx_of(0x0405), kNoRows);
-    CHECK_FALSE(carries(*find_stage(bare, "saturation.ampSim", 1), "\"cabModel\""));
-    const Chain bass = gs_efx_insert_chain(efx_of(0x0405));
-    CHECK(carries(*find_stage(bass, "saturation.ampSim", 0), "\"cabModel\""));
-    CHECK(carries(*find_stage(bass, "saturation.ampSim", 1), "\"cabModel\""));
   }
   SECTION("CF Sel: a chorus and a flanger") {
     for (uint16_t type = 0x0400; type <= 0x0406; ++type) {

@@ -91,7 +91,9 @@ RATIO_LAWS = ("ratio.percent", "ratio.semitone", "ratio.cent")
 ENABLES_LAW = "enables"
 ENUM_PLACEHOLDER = "<n>"
 # The most stages one enables row can name: the width of GsEfxEnable::stages.
-MAX_ENABLE_STAGES = 4
+MAX_ENABLE_STAGES = 8
+# The most stages a select chooses between; a switch may name up to MAX_ENABLE_STAGES.
+MAX_SELECT_STAGES = 4
 
 TYPE_RE = re.compile(r"^[0-9A-Fa-f]{2} [0-9A-Fa-f]{2}$")
 ADDRESS_RE = re.compile(r"^[0-9A-F]{2} [0-9A-F]{2} [0-9A-F]{2}$")
@@ -623,8 +625,9 @@ def check_enables(row: dict, values: str) -> str:
     if len(modes) != 1:
         sys.exit(f"{where}: enables carries exactly one of 'stages' and 'select', has {modes}")
     refs = enables[modes[0]]
-    if not isinstance(refs, list) or not 1 <= len(refs) <= MAX_ENABLE_STAGES:
-        sys.exit(f"{where}: enables.{modes[0]} names 1-{MAX_ENABLE_STAGES} stages")
+    limit = MAX_SELECT_STAGES if modes[0] == "select" else MAX_ENABLE_STAGES
+    if not isinstance(refs, list) or not 1 <= len(refs) <= limit:
+        sys.exit(f"{where}: enables.{modes[0]} names 1-{limit} stages")
     for ref in refs:
         ordinal = ref.get("ordinal", 0) if isinstance(ref, dict) else None
         if (

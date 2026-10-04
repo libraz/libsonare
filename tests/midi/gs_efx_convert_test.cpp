@@ -737,3 +737,26 @@ TEST_CASE("gs_efx_enum_index returns the first state past the printed list", "[g
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 8);
 }
+
+TEST_CASE("the pedal drive law is the drive curve with its origin at byte 0", "[gs-efx-convert]") {
+  namespace synth = sonare::midi::synth;
+  // Unity at the lowest byte, 20 log10(127 / 2) at the top, the same steps between.
+  CHECK(synth::gs_efx_drive_pedal_db(0) == 0.0f);
+  CHECK(synth::gs_efx_drive_pedal_db(2) == 0.0f);
+  CHECK(synth::gs_efx_drive_pedal_db(127) == Catch::Approx(20.0f * std::log10(127.0f / 2.0f)));
+  CHECK(synth::gs_efx_drive_pedal_db(127) == Catch::Approx(36.0556f).margin(1e-3));
+  synth::GsEfxBindingRow row{};
+  row.kind = synth::kGsEfxRowDesigned;
+  row.conv_class = synth::kGsEfxRowClassDrive;
+  row.table = 1;
+  float prev = -1.0f;
+  for (int b = 0; b <= 127; ++b) {
+    const auto byte = static_cast<uint8_t>(b);
+    CAPTURE(b);
+    const float v = synth::gs_efx_drive_pedal_db(byte);
+    CHECK(v == Catch::Approx(synth::gs_efx_drive_db(byte) - synth::gs_efx_drive_db(0)));
+    CHECK(synth::gs_efx_binding_value(row, byte) == v);
+    CHECK(v >= prev);
+    prev = v;
+  }
+}

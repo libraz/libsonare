@@ -77,7 +77,7 @@ class GsEfxProcessor final : public rt::ProcessorBase {
   };
   struct EnableDestination {
     GsEfxEnable rule{};
-    std::array<uint8_t, 4> stage_indices{{0xFF, 0xFF, 0xFF, 0xFF}};
+    GsEfxEnableStageIndices stage_indices = kGsEfxUnmappedStageIndices;
   };
 
   void build_parameter_plan();

@@ -227,6 +227,10 @@ float gs_efx_drive_db(uint8_t value) noexcept {
          std::log10(static_cast<float>(std::max<int>(value, kDriveFloorByte)) / kDriveUnityByte);
 }
 
+float gs_efx_drive_pedal_db(uint8_t value) noexcept {
+  return gs_efx_drive_db(value) - gs_efx_drive_db(0);
+}
+
 float gs_efx_designed_value(const GsEfxDesignedLaw& law, uint8_t byte, uint8_t byte_lo,
                             uint8_t byte_hi) noexcept {
   if (law.form == kGsEfxFormEnum) {
@@ -323,7 +327,8 @@ float gs_efx_binding_value(const GsEfxBindingRow& row, uint8_t byte) noexcept {
       return row.table == 0 ? units / 100.0f : units;
     }
     case kGsEfxRowClassDrive:
-      return gs_efx_drive_db(byte);
+      // Table 0 is the gain in front of the curve; table 1 is that gain as a pedal's.
+      return row.table == 1 ? gs_efx_drive_pedal_db(byte) : gs_efx_drive_db(byte);
     default:
       break;
   }

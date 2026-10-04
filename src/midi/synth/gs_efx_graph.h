@@ -97,7 +97,7 @@ struct Sf2EfxLegacyParamDest {
 /// processor, which keeps partial custom graphs valid.
 struct Sf2EfxLegacyEnablePlan {
   GsEfxEnable rule{};
-  std::array<uint8_t, 4> stage_indices{{0xFF, 0xFF, 0xFF, 0xFF}};
+  GsEfxEnableStageIndices stage_indices = kGsEfxUnmappedStageIndices;
 };
 
 /// One EFX CONTROL fanout resolved against published unit 0. Unlike

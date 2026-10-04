@@ -43,7 +43,8 @@
     "why_max_states": "The longest enumeration the page spells as a byte range is 00-08 and the shortest continuous one is 00-14, so a range of more than sixteen values reads as continuous."
   },
   "carried": {
-    "drive.gain": "a byte-to-dB gain in front of a fixed curve, read by gs_efx_drive_db"
+    "drive.gain": "a byte-to-dB gain in front of a fixed curve, read by gs_efx_drive_db",
+    "drive.pedal": "the drive.gain curve with its origin at byte 0, so the lowest byte is a pedal's unity clip gain; read by gs_efx_drive_pedal_db"
   },
   "name_rules_contract": "Every rule is matched in full against the printed parameter name (name) and the printed values spelling (printed); unless excludes names. A rule with a stage applies only to a row driving that stage, and where one applies the unqualified rules do not. A printed row that is not translated must match exactly one rule, and a designed row's law must be the rule's. d.enum<n> takes n from the printed state count; enables means the row is an enables row.",
   "name_rules": [
@@ -80,9 +81,10 @@
       "unless": "(.* )?(Amp|Drive) Sw",
       "law": "enables"
     },
+    {"name": "Amp Type|(OD[12]?|DS) Amp", "printed": "[0-9A-F]{2}(/[0-9A-F]{2})+", "law": "enables"},
     {
       "printed": "[0-9A-F]{2}(/[0-9A-F]{2})+",
-      "unless": "(?!W/P )(?!(.* )?(Amp|Drive) Sw$).*\\b(Sw|Sel)|(.* )?(Q|Width|Mod Wave|Mod WV)|Post Gain",
+      "unless": "(?!W/P )(?!(.* )?(Amp|Drive) Sw$).*\\b(Sw|Sel)|(.* )?(Q|Width|Mod Wave|Mod WV)|Post Gain|Amp Type|(OD[12]?|DS) Amp",
       "law": "d.enum<n>"
     },
     {"name": "M/S", "printed": "00–0[0-9A-F]", "law": "d.enum<n>"},
@@ -102,6 +104,8 @@
     {"name": "(.*[ .])?(Balance|Bal)", "printed": "00–7F", "law": "balance.effect"},
     {"name": "(.* )?Drive", "printed": "00–7F", "law": "drive.gain"},
     {"name": "(.* )?Drive", "printed": "00–7F", "stage": "effects.filter.vowel", "law": "d.unit"},
+    {"name": "(.* )?Drive", "printed": "00–7F", "stage": "saturation.overdrive", "law": "drive.pedal"},
+    {"name": "(.* )?Drive", "printed": "00–7F", "stage": "saturation.distortion", "law": "drive.pedal"},
     {"name": "(.* )?(Fb|Feedback)|(PH )?Reso", "printed": "00–7F", "law": "d.feedback"},
     {
       "name": "(.* )?(Depth|Dep|Sens|Amount|Mix|Sep|Sept|Separate)|(Hum|W/P|Disc Nz|R\\.Nz) (Level|Lev)|R\\.Detune",

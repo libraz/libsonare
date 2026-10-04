@@ -49,7 +49,7 @@ CONVERT_HEADER = ROOT / "src" / "midi" / "synth" / "gs_efx_convert.h"
 # reaches a control as the fraction, semitone and cent as printed.
 BINDING_LAWS = {"ratio": ("percent", "semitone", "cent")}
 # A carried law with a reader of its own, numbered after the binding laws.
-CARRIED_CLASSES = {"drive": ("gain",)}
+CARRIED_CLASSES = {"drive": ("gain", "pedal")}
 # Which gs_efx_convert.h constant names each extra class; the header's numbers
 # are checked against this numbering rather than restated.
 CLASS_CONSTANTS = {"ratio": "kGsEfxRowClassRatio", "drive": "kGsEfxRowClassDrive"}
@@ -162,13 +162,16 @@ def row_class_numbering(order: tuple[str, ...]) -> list[str]:
 
 
 def check_convert_constants(order: tuple[str, ...], header: Path) -> None:
-    """The extra class numbers here and in gs_efx_convert.h have to be the same."""
+    """The extra class numbers and the enable capacity here and in gs_efx_convert.h agree."""
     text = header.read_text(encoding="utf-8")
     numbering = row_class_numbering(order)
     for name, constant in CLASS_CONSTANTS.items():
         match = re.search(rf"\b{constant}\s*=\s*(\d+)\s*;", text)
         if match is None or int(match.group(1)) != numbering.index(name):
             sys.exit(f"{header}: {constant} is not {numbering.index(name)}, this class's number")
+    match = re.search(r"\bkGsEfxEnableMaxStages\s*=\s*(\d+)\s*;", text)
+    if match is None or int(match.group(1)) != coverage.MAX_ENABLE_STAGES:
+        sys.exit(f"{header}: kGsEfxEnableMaxStages is not {coverage.MAX_ENABLE_STAGES}")
 
 
 def collect_rows(
@@ -251,8 +254,9 @@ def enable_of(enables: dict, where: str) -> dict:
     """An enables row's stages and the bytes that turn them on."""
     mode = "select" if "select" in enables else "stages"
     refs = enables[mode]
-    if not isinstance(refs, list) or not 1 <= len(refs) <= coverage.MAX_ENABLE_STAGES:
-        sys.exit(f"{where}: enables.{mode} names 1-{coverage.MAX_ENABLE_STAGES} stages")
+    limit = coverage.MAX_SELECT_STAGES if mode == "select" else coverage.MAX_ENABLE_STAGES
+    if not isinstance(refs, list) or not 1 <= len(refs) <= limit:
+        sys.exit(f"{where}: enables.{mode} names 1-{limit} stages")
     mask = [0, 0, 0, 0]
     for byte in enables.get("on_states", []) if mode == "stages" else []:
         mask[byte >> 5] |= 1 << (byte & 31)
@@ -361,7 +365,7 @@ def render_rows(w, rows: list[dict], enables: list[dict]) -> None:
     else:
         w(f"inline constexpr std::array<GsEfxEnable, {len(enables)}> kGsEfxEnables = {{{{")
     for e in enables:
-        padding = 4 - len(e["stages"])
+        padding = coverage.MAX_ENABLE_STAGES - len(e["stages"])
         spelled_stages = ", ".join(str(stage_index[s]) for s in e["stages"]) + ", 0" * padding
         spelled_ordinals = ", ".join(str(o) for o in e["ordinals"]) + ", 0" * padding
         spelled_mask = ", ".join(f"0x{word:X}u" for word in e["mask"])

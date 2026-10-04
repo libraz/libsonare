@@ -13,6 +13,7 @@
 /// manual's printed curves — see gs_efx_tables.h for the generated data and
 /// docs/gs.md for what "measured" means for this address space.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -128,7 +129,8 @@ int gs_efx_enum_index(uint8_t value, int count) noexcept;
 inline constexpr uint8_t kGsEfxRowTranslated = 0;  ///< Row reads a measured table or ratio.
 inline constexpr uint8_t kGsEfxRowDesigned = 1;    ///< Row reads a carried class or a designed law.
 inline constexpr uint8_t kGsEfxRowClassRatio = 14;  ///< Printed endpoints, one unit step per byte.
-inline constexpr uint8_t kGsEfxRowClassDrive = 15;  ///< gs_efx_drive_db.
+inline constexpr uint8_t kGsEfxRowClassDrive =
+    15;  ///< gs_efx_drive_db (0), gs_efx_drive_pedal_db (1).
 
 inline constexpr uint8_t kGsEfxFormNone = 0;  ///< No designed law; the row reads a class.
 inline constexpr uint8_t kGsEfxFormLinear = 1;
@@ -139,6 +141,8 @@ inline constexpr uint8_t kGsEfxFormEnum = 5;
 
 inline constexpr uint8_t kGsEfxEnableStages = 0;  ///< Stages on at the bytes in on_mask.
 inline constexpr uint8_t kGsEfxEnableSelect = 1;  ///< The byte's state picks one stage.
+/// The most stages one enable row names; a select names at most four of them.
+inline constexpr std::size_t kGsEfxEnableMaxStages = 8;
 /// @}
 
 /// A designed law, held by value in the row that uses it. @p form is one of the
@@ -177,11 +181,21 @@ struct GsEfxEnable {
   uint16_t type;
   uint8_t slot;
   uint8_t mode;  ///< kGsEfxEnableStages / kGsEfxEnableSelect.
-  uint16_t stages[4];
-  uint8_t ordinals[4];
+  uint16_t stages[kGsEfxEnableMaxStages];
+  uint8_t ordinals[kGsEfxEnableMaxStages];
   uint8_t n_stages;
   uint32_t on_mask[4];  ///< Bit b of the 128-bit mask: byte b turns the stages on.
 };
+
+/// One stage index per stage an enable row names; 0xFF where none is mapped.
+using GsEfxEnableStageIndices = std::array<uint8_t, kGsEfxEnableMaxStages>;
+
+/// Every index unmapped.
+inline constexpr GsEfxEnableStageIndices kGsEfxUnmappedStageIndices = [] {
+  GsEfxEnableStageIndices out{};
+  for (std::size_t i = 0; i < out.size(); ++i) out[i] = 0xFF;
+  return out;
+}();
 
 /// The rows and enables one lookup runs over. No std::span in C++17.
 struct GsEfxRowView {
@@ -194,6 +208,10 @@ struct GsEfxRowView {
 /// DRIVE byte -> gain in dB in front of a fixed curve: 20 log10(v / 48), with
 /// bytes 0 and 2 measured as one state.
 float gs_efx_drive_db(uint8_t value) noexcept;
+
+/// DRIVE byte -> a pedal's clip-path gain in dB: the gs_efx_drive_db curve with
+/// its origin at byte 0, so the lowest byte is unity gain and 7F about +36 dB.
+float gs_efx_drive_pedal_db(uint8_t value) noexcept;
 
 /// A byte read through a designed law over the printed domain [byte_lo, byte_hi].
 /// Equals law.lo at byte_lo and law.hi at byte_hi and is monotone between; bytes
