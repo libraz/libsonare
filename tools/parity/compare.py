@@ -110,6 +110,7 @@ DEFAULT_HANDLE_PREFIXES = (
     "playback",
     # SonareHrtfSet handle: hrtf_set_* ops are methods on the HrtfSet class.
     "hrtf",
+    "vocal",
 )
 
 # Free-function keys that share a handle prefix but ARE plain DSP free functions
@@ -135,6 +136,10 @@ HANDLE_PREFIX_FREEFN_EXCEPTIONS = (
 # One class name serves every facade: Node, WASM and Python spell these classes
 # alike, and ``python_pyi`` flattens each mixin method onto the concrete class.
 _HANDLE_FULL_PREFIXES = (
+    ("vocal_snapshot_", "VocalRenderSnapshot"),
+    ("vocal_session_", "VocalEditSession"),
+    ("vocal_draft_", "VocalEditDraft"),
+    ("vocal_render_job_", "VocalRenderJob"),
     ("streaming_mastering_chain_", "StreamingMasteringChain"),
     ("streaming_retune_", "StreamingRetune"),
     ("stream_analyzer_", "StreamAnalyzer"),
@@ -164,6 +169,14 @@ _HANDLE_FULL_PREFIXES = (
     # credited via ``_ALIAS_COVERAGE`` / ``_is_lifecycle_key`` below.
     ("project_", "Project"),
 )
+
+# A small number of handle operations are factories on the neighbouring
+# handle that owns the returned object. Keep those aliases class-scoped so a
+# same-named method on an unrelated class cannot satisfy a missing operation.
+_HANDLE_ALIAS_OWNERS = {
+    "vocal_render_job_begin": "VocalRenderSnapshot",
+    "vocal_edit_api_version": "VocalEditSession",
+}
 
 
 def _is_lifecycle_key(key: str) -> bool:
@@ -215,6 +228,33 @@ def _is_lifecycle_key(key: str) -> bool:
 # so one alias serves Python (``data``), Node (``getData``->``get_data``) and
 # WASM (``setConfig``->``set_config``) alike.
 _ALIAS_COVERAGE = {
+    # Vocal handle methods use descriptive facade names for coordinate
+    # conversion and snapshot accessors. The render-job begin operation is a
+    # factory on VocalRenderSnapshot, while the remaining render-job methods
+    # belong to VocalRenderJob and are matched by the prefix above.
+    "vocal_session_output_length": ("output_length_samples",),
+    "vocal_session_source_to_destination": ("source_sample_to_destination_sample",),
+    "vocal_session_destination_to_source": ("destination_sample_to_source_sample",),
+    "vocal_session_capture_snapshot": ("capture_render_snapshot",),
+    "vocal_draft_source_to_destination": ("source_sample_to_destination_sample",),
+    "vocal_draft_destination_to_source": ("destination_sample_to_source_sample",),
+    "vocal_draft_capture_snapshot": ("capture_render_snapshot",),
+    "vocal_snapshot_output_length": ("output_length_samples",),
+    "vocal_render_job_begin": ("begin_render_job",),
+    "vocal_session_create": ("create_vocal_edit_session",),
+    "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
+    # Every facade exposes the availability probe under the same name.
+    "vocal_available": ("vocal_edit_available",),
+    # Python reports the ABI version through VocalEditSession.capabilities;
+    # Node and WASM also keep the direct module export. The class-scoped owner
+    # below prevents an unrelated handle's generic ``capabilities`` from matching.
+    "vocal_edit_api_version": ("vocal_edit_api_version", "capabilities"),
+    # Project helpers are free-function ergonomic wrappers around the Project
+    # methods. The aliases also keep the Python helper names out of
+    # surface-only findings without weakening the Project handle check.
+    "project_apply_vocal_edit": ("apply_project_vocal_edit",),
+    "project_get_vocal_edit_dependencies": ("get_project_vocal_edit_dependencies",),
+    "project_rehydrate_vocal_edits": ("rehydrate_project_vocal_edits",),
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
@@ -623,9 +663,6 @@ def build_report(
             candidate_methods = (
                 handle_class_keys[(prefix, s)] if prefix else method_keys.get(s, set())
             )
-            candidate_symbols = candidate_methods | (
-                free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
-            )
             present_free = key in indexed.get(s, {})
             present_method = key in candidate_methods
             covered = present_free or present_method
@@ -648,7 +685,20 @@ def build_report(
                 # reach free functions because each entry is a reviewed statement
                 # about one name, not a blanket rule.
                 aliases = _ALIAS_COVERAGE.get(key)
-                covered = bool(aliases) and any(a in candidate_symbols for a in aliases)
+                alias_methods = candidate_methods
+                alias_owner = _HANDLE_ALIAS_OWNERS.get(key)
+                if alias_owner is not None:
+                    alias_methods = _class_method_keys(extractions.get(s), alias_owner)
+                if alias_owner is not None:
+                    # A class-scoped alias may still have a direct free export
+                    # (WASM's vocalEditApiVersion is one), but must not fall
+                    # back to every class on a surface.
+                    alias_symbols = alias_methods | free_keys.get(s, set())
+                else:
+                    alias_symbols = alias_methods | (
+                        free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
+                    )
+                covered = bool(aliases) and any(a in alias_symbols for a in aliases)
             # Every surface reaches a verdict here: the key is either exposed on
             # this surface or it is not, so coverage never declines a comparison.
             if allow.coverage_ok(
@@ -821,7 +871,10 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
             # Canonicalize for the distinctness test (enum-member vs camelCase
             # string-union literals fold to a common form). The raw surface
             # spelling is still shown in the message.
-            canon = {s: canonical_default(v) for s, v in declared.items()}
+            canon = {
+                s: canonical_default("none" if pname in _CALLBACK_NAMES and v == "" else v)
+                for s, v in declared.items()
+            }
             # Collection-sentinel equivalence: when at least one facade spells
             # the default as an empty collection (``[]`` / ``{}``) and another
             # spells it ``None``, both mean "no value" -- fold ``none`` to the

@@ -25,5 +25,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | sample bank | 6 | 6/6 | 6/6 | 6/6 | 2/6 | 2/6 |
 | streaming | 34 | 32/34 | 32/34 | 32/34 | 8/34 | 8/34 |
 | transcription | 4 | 3/4 | 3/4 | 3/4 | 2/4 | 2/4 |
+| vocal edit | 57 | 44/57 | 44/57 | 44/57 | 11/57 | 11/57 |
+| vocal project | 10 | 5/10 | 5/10 | 5/10 | 2/10 | 2/10 |
 | voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 | 3/20 |
-| **all domains** | **900** | **841/900** | **838/900** | **838/900** | **129/900** | **148/900** |
+| **all domains** | **967** | **890/967** | **887/967** | **887/967** | **142/967** | **161/967** |

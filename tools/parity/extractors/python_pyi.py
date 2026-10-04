@@ -192,6 +192,10 @@ _SCANNED: tuple[str, ...] = (
     # documented defaults) win the index for shared keys; the matching .py
     # implementations are parsed AFTER to backfill methods the stubs lag on
     # (the stubs drift from the inline-typed implementations over time).
+    "vocal_edit.pyi",
+    "vocal_edit.py",
+    "vocal_project.pyi",
+    "vocal_project.py",
     "analyzer.pyi",
     "audio.pyi",
     "engine.pyi",
@@ -275,6 +279,10 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
             "_ffi_types_mastering_project.py",
             "_ffi_types_repair.py",
             "_ffi_types_streaming.py",
+            "_ffi_types_vocal.py",
+            "_ffi_types_vocal_project.py",
+            "_ffi_vocal.py",
+            "_ffi_vocal_project.py",
             "_ffi_signatures_core.py",
             "_ffi_signatures_effects.py",
             "_ffi_signatures_engine.py",

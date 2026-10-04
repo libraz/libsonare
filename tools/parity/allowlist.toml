@@ -120,6 +120,10 @@ python = [
 #   it: an omitted keyword or an absent request field already means "default"
 #   there. Each seeder below was checked against what the facades actually spell,
 #   and the values agree.
+#   Vocal-edit `*_init` seeders (vocal_*, project_vocal_*): each zero-fills one
+#     caller-owned result or request POD and sets its schema version. The facades
+#     build those values as plain objects, so none has a free-function
+#     counterpart.
 #   boundary_options_default: Node reads the seeder live, WASM starts from
 #     BoundaryConfig itself, and Python's detect_boundaries keyword defaults are
 #     held to it by test.
@@ -166,6 +170,9 @@ python = [
 #     which the name-matching extractor does not credit. WASM still constructs
 #     the NativeSynth directly, as above.
 node = [
+  # The C thread-local detail is consumed by the Node exception bridge; it is
+  # not a second public operation beside the VocalEdit methods.
+  "vocal_last_error_detail",
   "engine_set_synth_instrument_with_bank",
   "engine_set_synth_instrument_binding",
   "detect_chords_ex",
@@ -189,6 +196,23 @@ node = [
   "last_diagnostic_message",
   "last_diagnostic_severity",
   "boundary_options_default",
+  "project_vocal_edit_apply_desc_init",
+  "project_vocal_edit_apply_result_init",
+  "project_vocal_edit_dependencies_result_init",
+  "project_vocal_original_source_init",
+  "project_vocal_rehydrate_result_init",
+  "vocal_analysis_init",
+  "vocal_analysis_result_init",
+  "vocal_capabilities_init",
+  "vocal_create_options_init",
+  "vocal_edit_result_init",
+  "vocal_error_detail_init",
+  "vocal_note_edit_init",
+  "vocal_notes_result_init",
+  "vocal_operation_init",
+  "vocal_pitch_result_init",
+  "vocal_render_result_init",
+  "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
   "transcribe_config_default",
@@ -281,6 +305,9 @@ node = [
   "project_assist_apply_json",
 ]
 wasm = [
+  # The WASM module reads this thread-local detail to attach the matching
+  # structured payload to the thrown exception.
+  "vocal_last_error_detail",
   "engine_set_synth_instrument_with_bank",
   "engine_set_synth_instrument_binding",
   "detect_chords_ex",
@@ -304,6 +331,23 @@ wasm = [
   "last_diagnostic_message",
   "last_diagnostic_severity",
   "boundary_options_default",
+  "project_vocal_edit_apply_desc_init",
+  "project_vocal_edit_apply_result_init",
+  "project_vocal_edit_dependencies_result_init",
+  "project_vocal_original_source_init",
+  "project_vocal_rehydrate_result_init",
+  "vocal_analysis_init",
+  "vocal_analysis_result_init",
+  "vocal_capabilities_init",
+  "vocal_create_options_init",
+  "vocal_edit_result_init",
+  "vocal_error_detail_init",
+  "vocal_note_edit_init",
+  "vocal_notes_result_init",
+  "vocal_operation_init",
+  "vocal_pitch_result_init",
+  "vocal_render_result_init",
+  "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
   "transcribe_config_default",
@@ -370,6 +414,9 @@ wasm = [
   "project_assist_apply_json",
 ]
 python = [
+  # ctypes reads the thread-local detail after a failed call and folds it into
+  # VocalEditError; callers do not invoke the ABI helper directly.
+  "vocal_last_error_detail",
   "engine_set_synth_instrument_with_bank",
   "engine_set_synth_instrument_binding",
   "detect_chords_ex",
@@ -393,6 +440,23 @@ python = [
   "last_diagnostic_message",
   "last_diagnostic_severity",
   "boundary_options_default",
+  "project_vocal_edit_apply_desc_init",
+  "project_vocal_edit_apply_result_init",
+  "project_vocal_edit_dependencies_result_init",
+  "project_vocal_original_source_init",
+  "project_vocal_rehydrate_result_init",
+  "vocal_analysis_init",
+  "vocal_analysis_result_init",
+  "vocal_capabilities_init",
+  "vocal_create_options_init",
+  "vocal_edit_result_init",
+  "vocal_error_detail_init",
+  "vocal_note_edit_init",
+  "vocal_notes_result_init",
+  "vocal_operation_init",
+  "vocal_pitch_result_init",
+  "vocal_render_result_init",
+  "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
   "transcribe_config_default",
@@ -736,6 +800,73 @@ names = []
 # Category 1 (ergonomic rename or fold) and category 2 (array-length derivation).
 # Every entry below was read against both the C header and the facade source.
 fields = [
+  # --- ABI plumbing omitted by the TypeScript read models ---
+  # schema_version is used by the C/Python layout mirrors and struct seeders;
+  # Node/WASM expose the decoded values and do not surface this wire tag.
+  "project_vocal_edit_apply_result.schema_version",
+  "project_vocal_edit_dependency.schema_version",
+  "project_vocal_original_source.schema_version",
+  "project_vocal_rehydrate_item.schema_version",
+  "vocal_analysis.schema_version",
+  "vocal_capabilities.schema_version",
+  "vocal_create_options.schema_version",
+  "vocal_edit_result.schema_version",
+  "vocal_error_detail.schema_version",
+  "vocal_note.schema_version",
+  "vocal_note_edit.schema_version",
+  "vocal_notes_result.schema_version",
+  "vocal_render_result.schema_version",
+  "vocal_state_bytes.schema_version",
+  "vocal_transition.schema_version",
+
+  # --- Vocal read-model folds ---
+  # VocalAnalysis wraps the C analysis payload with source/hash provenance
+  # returned by the result envelope.
+  "vocal_analysis.source_length_samples",
+  "vocal_analysis.sample_rate",
+  "vocal_analysis.source_sha256",
+  "vocal_analysis.analysis_sha256",
+
+  # The JS create request groups the four history/cache limits into one
+  # optional `limits` object; the C ABI keeps those scalar fields flat.
+  "vocal_create_options.max_history_bytes",
+  "vocal_create_options.max_cache_bytes",
+  "vocal_create_options.max_undo_depth",
+  "vocal_create_options.max_render_jobs",
+  "vocal_create_options.limits",
+
+  # Pitch and formant are nested value objects in Node/WASM but are flat C ABI
+  # fields. Keep the fold field-scoped so unrelated metadata still gates.
+  "vocal_note_edit.target_mode",
+  "vocal_note_edit.target_midi",
+  "vocal_note_edit.target_points",
+  "vocal_note_edit.amount",
+  "vocal_note_edit.speed_ms",
+  "vocal_note_edit.max_correction_semitones",
+  "vocal_note_edit.transpose_semitones",
+  "vocal_note_edit.drift_scale",
+  "vocal_note_edit.vibrato_scale",
+  "vocal_note_edit.formant_mode",
+  "vocal_note_edit.formant_shift_semitones",
+  "vocal_note_edit.pitch",
+  "vocal_note_edit.formant",
+
+  # Split operations return the two new ids as a JS/Python sequence while C
+  # carries fixed first/second slots for the ABI result.
+  "vocal_id_change.first_new_id",
+  "vocal_id_change.second_new_id",
+  "vocal_id_change.new_ids",
+
+  # Node exposes the profile id alongside the result for convenience; the C
+  # source is the same token.profile_id nested in SonareVocalRenderResult.
+
+  # WASM uses a monotonically changing thread-local sequence to ensure an
+  # error detail belongs to the exception that just crossed the module proxy.
+  "vocal_error_detail.sequence",
+
+  # The v1 C ABI accepts only smoothstep and therefore has no curve field;
+  # Node/WASM retain the explicit literal in their public transition shape.
+
   # --- category 2 + 1: parallel C arrays folded into one array-of-struct ---
   # C carries `stage_gain_reduction_stages` (char**) and
   # `stage_gain_reduction_values` (float*) plus their shared count; both JS
@@ -800,6 +931,9 @@ fields = [
   # Human-readable text derived from the diagnostic `code`; the C POD carries
   # the ordinal only.
   "project_diagnostic.message",
+  # Literal discriminator for the one transition curve the v1 C ABI implements;
+  # the C struct has no field because there is nothing to select.
+  "vocal_transition.curve",
 
   # --- category 1: canonical name strings beside a C enum ordinal ---
   # Both JS facades add the core's canonical spelling next to the ordinal, and

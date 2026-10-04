@@ -28,7 +28,7 @@ if str(_HERE) not in sys.path:
 
 import allowlist as allowlist_mod
 import compare
-from model import Extraction, FunctionSig
+from model import Extraction, FunctionSig, Param
 
 
 def _c(*keys: str) -> Extraction:
@@ -184,6 +184,157 @@ def test_handle_op_covered_by_alias_is_silent() -> None:
     """An idiomatic rename in ``_ALIAS_COVERAGE`` (serialize -> to_json) is covered."""
     rep = _report(_c("project_serialize"), _py(methods={"to_json": "Project"}))
     assert ("project_serialize", "python") not in _active(rep), _active(rep)
+
+
+def test_vocal_render_job_uses_the_canonical_c_prefix() -> None:
+    """Render-job methods are owned by ``VocalRenderJob`` under the C prefix."""
+    rep = _report(
+        _c("vocal_render_job_next"),
+        _py(methods={"next": "VocalRenderJob"}),
+    )
+    assert ("vocal_render_job_next", "python") not in _active(rep), _active(rep)
+
+
+def test_vocal_handle_aliases_credit_the_actual_facade_methods() -> None:
+    """Vocal C handles retain coverage when facades use descriptive method names."""
+    cases = (
+        ("vocal_session_output_length", "output_length_samples", "VocalEditSession"),
+        (
+            "vocal_session_source_to_destination",
+            "source_sample_to_destination_sample",
+            "VocalEditSession",
+        ),
+        ("vocal_session_capture_snapshot", "capture_render_snapshot", "VocalEditSession"),
+        (
+            "vocal_draft_source_to_destination",
+            "source_sample_to_destination_sample",
+            "VocalEditDraft",
+        ),
+        ("vocal_draft_capture_snapshot", "capture_render_snapshot", "VocalEditDraft"),
+        ("vocal_snapshot_output_length", "output_length_samples", "VocalRenderSnapshot"),
+        ("vocal_render_job_begin", "begin_render_job", "VocalRenderSnapshot"),
+        ("vocal_session_restore", "restore_vocal_edit_session", ""),
+    )
+    for c_key, facade_key, owner in cases:
+        methods = {} if not owner else {facade_key: owner}
+        frees = [] if owner else [facade_key]
+        rep = _report(_c(c_key), _py(methods=methods, frees=frees))
+        assert (c_key, "python") not in _active(rep), (c_key, _active(rep))
+
+    unrelated = _report(
+        _c("vocal_render_job_begin"),
+        _py(methods={"begin_render_job": "UnrelatedHandle"}),
+    )
+    assert ("vocal_render_job_begin", "python") in _active(unrelated), _active(unrelated)
+
+
+def test_vocal_abi_initializers_are_credited_only_by_name() -> None:
+    """Each struct seeder is an explicit allowlist entry; an unlisted one still gates."""
+    allow = allowlist_mod.load(_HERE / "allowlist.toml")
+    listed = _report(_c("vocal_note_edit_init", "project_vocal_edit_apply_desc_init"), _py(), allow)
+    assert _active(listed) == set(), _active(listed)
+
+    unlisted = _report(_c("vocal_unlisted_init"), _py(), allow)
+    assert ("vocal_unlisted_init", "python") in _active(unlisted), _active(unlisted)
+
+    unnamed = _report(_c("vocal_note_edit_init"), _py())
+    assert ("vocal_note_edit_init", "python") in _active(unnamed), _active(unnamed)
+
+    genuine = _report(_c("decompose_with_init"), _py())
+    assert ("decompose_with_init", "python") in _active(genuine), _active(genuine)
+
+
+def test_vocal_availability_and_project_helpers_use_explicit_aliases() -> None:
+    """Availability and Project vocal helpers keep their public ergonomic names."""
+    cases = (
+        ("vocal_available", "vocal_edit_available", False),
+        ("project_apply_vocal_edit", "apply_project_vocal_edit", False),
+        (
+            "project_get_vocal_edit_dependencies",
+            "get_project_vocal_edit_dependencies",
+            False,
+        ),
+        ("project_rehydrate_vocal_edits", "rehydrate_project_vocal_edits", False),
+    )
+    for c_key, facade_key, is_method in cases:
+        methods = {facade_key: "UnrelatedHandle"} if is_method else {}
+        frees = [] if is_method else [facade_key]
+        rep = _report(_c(c_key), _py(methods=methods, frees=frees))
+        assert (c_key, "python") not in _active(rep), (c_key, _active(rep))
+
+    missing = _report(_c("vocal_available"), _py())
+    assert ("vocal_available", "python") in _active(missing), _active(missing)
+
+    factory = _report(_c("vocal_session_create"), _py(frees=["create_vocal_edit_session"]))
+    assert ("create_vocal_edit_session", "python") not in _active(factory), _active(factory)
+    other = _report(_c("vocal_session_create"), _py(frees=["create_other_session"]))
+    assert ("create_other_session", "python") in _active(other), _active(other)
+
+    factory_only = _report(_c("vocal_available"), _py(frees=["create_vocal_edit_session"]))
+    assert ("vocal_available", "python") in _active(factory_only), _active(factory_only)
+
+
+def test_vocal_api_version_alias_is_session_scoped_or_direct() -> None:
+    """API version comes from VocalEditSession capabilities or the direct WASM export."""
+    session = _report(
+        _c("vocal_edit_api_version"),
+        _py(methods={"capabilities": "VocalEditSession"}),
+    )
+    assert ("vocal_edit_api_version", "python") not in _active(session), _active(session)
+
+    unrelated = _report(
+        _c("vocal_edit_api_version"),
+        _py(methods={"capabilities": "RealtimeEngine"}),
+    )
+    assert ("vocal_edit_api_version", "python") in _active(unrelated), _active(unrelated)
+
+    direct = _report(_c("vocal_edit_api_version"), _py(frees=["vocal_edit_api_version"]))
+    assert ("vocal_edit_api_version", "python") not in _active(direct), _active(direct)
+
+
+def test_optional_callback_parser_sentinel_matches_none() -> None:
+    """TS arrow callbacks can parse as an empty default; omission equals Python ``None``."""
+    py = Extraction(surface="python")
+    py.functions = [
+        FunctionSig(
+            key="rehydrate_vocal_edits",
+            surface="python",
+            raw_name="Project.rehydrate_vocal_edits",
+            params=[Param(name="cancel", default="none")],
+        )
+    ]
+    node = Extraction(surface="node")
+    node.functions = [
+        FunctionSig(
+            key="rehydrate_vocal_edits",
+            surface="node",
+            raw_name="Project.rehydrateVocalEdits",
+            params=[Param(name="cancel", default="")],
+        )
+    ]
+    rep = compare.build_report(
+        {"python": py, "node": node}, allowlist_mod.Allowlist(), ["python", "node"]
+    )
+    defaults = [f for f in rep.active() if f.category == "default"]
+    assert defaults == [], defaults
+
+
+def test_vocal_threadlocal_error_helper_is_explicitly_allowlisted() -> None:
+    """Error detail is consumed by exceptions; only that exact helper is allowed."""
+    allow = allowlist_mod.load(_HERE / "allowlist.toml")
+    rep = compare.build_report(
+        {"c": _c("vocal_last_error_detail"), "python": _py()},
+        allow,
+        ["c", "python"],
+    )
+    assert ("vocal_last_error_detail", "python") not in _active(rep), _active(rep)
+
+    unrelated = compare.build_report(
+        {"c": _c("vocal_available"), "python": _py()},
+        allow,
+        ["c", "python"],
+    )
+    assert ("vocal_available", "python") in _active(unrelated), _active(unrelated)
 
 
 _ADDITIVE_DSP_ALIASES = (
