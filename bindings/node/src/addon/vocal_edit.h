@@ -2,11 +2,10 @@
 #define SONARE_NODE_VOCAL_EDIT_H_
 
 #include <napi.h>
+#include <sonare/sonare_c_vocal_edit.h>
 
 #include <cstddef>
 #include <cstdint>
-
-#include <sonare/sonare_c_vocal_edit.h>
 
 namespace sonare_node {
 
@@ -113,8 +112,7 @@ class VocalRenderJobWrap final : public Napi::ObjectWrap<VocalRenderJobWrap> {
  public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
   static Napi::Object NewInstance(Napi::Env env, SonareVocalRenderJob* job,
-                                  VocalRenderSnapshotWrap* owner,
-                                  const Napi::Object& owner_object);
+                                  VocalRenderSnapshotWrap* owner, const Napi::Object& owner_object);
 
   explicit VocalRenderJobWrap(const Napi::CallbackInfo& info);
   ~VocalRenderJobWrap() override;
