@@ -784,7 +784,7 @@ class _ProjectEditMixin:
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
                 _to_c_uint8(part, "part"),
-                mode_value,
+                _to_c_int(mode_value, "mode"),
                 json_arg,
             )
         )
