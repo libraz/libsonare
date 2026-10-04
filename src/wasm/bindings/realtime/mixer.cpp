@@ -8,6 +8,15 @@
 #include "mixing/pan_law.h"
 #include "realtime_engine_wasm.h"
 
+namespace {
+
+// Throws InvalidParameter with @p message unless the engine accepted the edit.
+[[maybe_unused]] void requireMixingTarget(bool accepted, const char* message) {
+  if (!accepted) throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+}
+
+}  // namespace
+
 #if defined(SONARE_WITH_MIXING)
 namespace {
 
@@ -101,10 +110,9 @@ void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& in
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "sourceTrackId");
 #if defined(SONARE_WITH_MIXING)
-  if (track_id == 0 || !engine_.set_lane_sidechain(track_id, insert_index, source_track_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid lane sidechain binding");
-  }
+  requireMixingTarget(
+      track_id != 0 && engine_.set_lane_sidechain(track_id, insert_index, source_track_id),
+      "invalid lane sidechain binding");
 #else
   (void)track_id;
   (void)insert_index;
@@ -439,10 +447,9 @@ void RealtimeEngineWasm::restoreTrackStripInsertParamByName(const val& track_id_
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.restore_track_insert_param_by_name(track_id, insert_index, param_name, value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip insert parameter target");
-  }
+  requireMixingTarget(
+      engine_.restore_track_insert_param_by_name(track_id, insert_index, param_name, value),
+      "invalid track strip insert parameter target");
 #else
   (void)track_id;
   (void)insert_index;
@@ -590,10 +597,9 @@ void RealtimeEngineWasm::restoreBusStripInsertParamByName(const val& bus_id_val,
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.restore_bus_insert_param_by_name(bus_id, insert_index, param_name, value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip insert parameter target");
-  }
+  requireMixingTarget(
+      engine_.restore_bus_insert_param_by_name(bus_id, insert_index, param_name, value),
+      "invalid bus strip insert parameter target");
 #else
   (void)bus_id;
   (void)insert_index;
@@ -713,10 +719,8 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
   const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
   const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_track_dual_pan(track_id, left_pan, right_pan)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip dual-pan target");
-  }
+  requireMixingTarget(engine_.set_track_dual_pan(track_id, left_pan, right_pan),
+                      "invalid track strip dual-pan target");
 #else
   (void)track_id;
   (void)left_pan;
@@ -786,10 +790,8 @@ void RealtimeEngineWasm::setBusStripDualPan(const val& bus_id_val, const val& le
   const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
   const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_bus_dual_pan(bus_id, left_pan, right_pan)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip dual-pan target");
-  }
+  requireMixingTarget(engine_.set_bus_dual_pan(bus_id, left_pan, right_pan),
+                      "invalid bus strip dual-pan target");
 #else
   (void)bus_id;
   (void)left_pan;

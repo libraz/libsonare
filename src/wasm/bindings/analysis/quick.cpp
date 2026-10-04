@@ -474,6 +474,33 @@ val js_detect_downbeats(val samples, const val& sample_rate_val) {
   return vectorToFloat32Array(downbeats);
 }
 
+// Builds the chord config both chord entry points share. Called after the
+// audio is loaded, so the tuning check keeps its place in the error order.
+static ChordConfig makeChordConfig(float min_duration, float smoothing_window, float threshold,
+                                   bool use_triads_only, int n_fft, int hop_length,
+                                   bool use_beat_sync, bool use_hmm, int hmm_beam_width,
+                                   bool use_key_context, int key_root, int key_mode,
+                                   bool detect_inversions, int chroma_method,
+                                   const val& tuning_val) {
+  ChordConfig config;
+  config.min_duration = min_duration;
+  config.smoothing_window = smoothing_window;
+  config.threshold = threshold;
+  config.use_triads_only = use_triads_only;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_beat_sync = use_beat_sync;
+  config.use_hmm = use_hmm;
+  config.hmm_beam_width = hmm_beam_width;
+  config.use_key_context = use_key_context;
+  config.key_root = static_cast<PitchClass>(key_root);
+  config.key_mode = static_cast<Mode>(key_mode);
+  config.detect_inversions = detect_inversions;
+  config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  config.tuning = checkedFloatFromVal(tuning_val, "tuning");
+  return config;
+}
+
 val js_detect_chords(val samples, const val& sample_rate_val, const val& min_duration_val,
                      const val& smoothing_window_val, const val& threshold_val,
                      bool use_triads_only, const val& n_fft_val, const val& hop_length_val,
@@ -502,22 +529,10 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
-  ChordConfig config;
-  config.min_duration = min_duration;
-  config.smoothing_window = smoothing_window;
-  config.threshold = threshold;
-  config.use_triads_only = use_triads_only;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.use_beat_sync = use_beat_sync;
-  config.use_hmm = use_hmm;
-  config.hmm_beam_width = hmm_beam_width;
-  config.use_key_context = use_key_context;
-  config.key_root = static_cast<PitchClass>(key_root);
-  config.key_mode = static_cast<Mode>(key_mode);
-  config.detect_inversions = detect_inversions;
-  config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
-  config.tuning = checkedFloatFromVal(tuning_val, "tuning");
+  const ChordConfig config =
+      makeChordConfig(min_duration, smoothing_window, threshold, use_triads_only, n_fft, hop_length,
+                      use_beat_sync, use_hmm, hmm_beam_width, use_key_context, key_root, key_mode,
+                      detect_inversions, chroma_method, tuning_val);
 
   val result = val::object();
   result.set("chords", chordsToVal(detect_chords(audio, config)));
@@ -553,22 +568,10 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
-  ChordConfig config;
-  config.min_duration = min_duration;
-  config.smoothing_window = smoothing_window;
-  config.threshold = threshold;
-  config.use_triads_only = use_triads_only;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.use_beat_sync = use_beat_sync;
-  config.use_hmm = use_hmm;
-  config.hmm_beam_width = hmm_beam_width;
-  config.use_key_context = use_key_context;
-  config.key_root = static_cast<PitchClass>(key_root);
-  config.key_mode = static_cast<Mode>(key_mode);
-  config.detect_inversions = detect_inversions;
-  config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
-  config.tuning = checkedFloatFromVal(tuning_val, "tuning");
+  const ChordConfig config =
+      makeChordConfig(min_duration, smoothing_window, threshold, use_triads_only, n_fft, hop_length,
+                      use_beat_sync, use_hmm, hmm_beam_width, use_key_context, key_root, key_mode,
+                      detect_inversions, chroma_method, tuning_val);
 
   ChordAnalyzer analyzer(audio, config);
   std::vector<std::string> labels =
