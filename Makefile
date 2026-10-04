@@ -871,6 +871,7 @@ conformance:
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
 	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
+	python3 -m unittest tests/conformance/test_c_api_feature_off_compile.py
 	python3 -m unittest tests/conformance/test_c_api_type_home.py
 	python3 tests/conformance/check_c_api_out_param_init.py --floor 250
 	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250

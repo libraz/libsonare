@@ -17,9 +17,10 @@
 
 #include "sonare_c_internal.h"
 
+using sonare_c_detail::begin_vector_output;
+
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 using sonare::Audio;
-using sonare_c_detail::begin_vector_output;
 using sonare_c_detail::run_mono_offline;
 using sonare_c_detail::run_offline;
 #endif
