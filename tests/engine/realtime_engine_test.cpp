@@ -3038,6 +3038,51 @@ TEST_CASE("RealtimeEngine routes reserved master mixer parameters", "[engine][re
   }
 }
 
+TEST_CASE("RealtimeEngine offline pre-roll settles the master fader ramp", "[engine][realtime]") {
+  // A master fader change made just before a bounce must not ramp into the
+  // bounce's first samples: the pre-roll renders nothing, so it has to snap the
+  // master strip's smoother the way it snaps the lane strips'.
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 2;
+  std::array<float, kFrames> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+
+  auto bounce = [&](float fader_db) {
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, kBlock);
+    engine.set_clips({sonare::engine::ClipSchedule{
+        1, {channels, 1, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0}});
+    sonare::mixing::api::Strip master_spec;
+    master_spec.pan_law = 3;
+    REQUIRE(engine.set_master_strip(master_spec));
+
+    sonare::rt::Command fader{};
+    fader.type = sonare::rt::CommandType::kSetParam;
+    fader.target_id = engine_master_param_target(sonare::engine::MixingRuntime::kFaderDb);
+    fader.sample_time = -1;
+    fader.arg.f = fader_db;
+    REQUIRE(engine.push_command(fader));
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+
+    std::array<float, kFrames> out{};
+    float* io[] = {out.data()};
+    engine.prime_offline_parameters(1, kBlock);
+    engine.render_offline(io, 1, kFrames, kBlock);
+    return out;
+  };
+
+  const auto unity = bounce(0.0f);
+  const auto attenuated = bounce(-6.0f);
+  const float expected = std::pow(10.0f, -6.0f / 20.0f);
+  REQUIRE(unity.front() > 0.5f);
+  CHECK(attenuated.front() / unity.front() == Catch::Approx(expected).epsilon(1e-4));
+  CHECK(attenuated.back() / unity.back() == Catch::Approx(expected).epsilon(1e-4));
+}
+
 TEST_CASE("RealtimeEngine toggles owned master strip insert bypass", "[engine][realtime]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;

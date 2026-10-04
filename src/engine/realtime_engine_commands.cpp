@@ -706,6 +706,8 @@ void RealtimeEngine::settle_parameters() noexcept {
 #if defined(SONARE_WITH_MIXING)
   track_mixer_runtime_.settle_smoothers();
   settle_master_insert_automations();
+  // The master strip's fader/pan/width ramps, as the lane strips' above.
+  if (mixing::ChannelStrip* master = mixing_runtime_.strip()) master->settle();
   // Quiesce the engine-side monitor (solo/mute) smoothers and their strips so a
   // bounce that starts muted/soloed opens at the steady-state gain.
   monitor_runtime_.settle();
