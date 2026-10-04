@@ -1249,3 +1249,119 @@ TEST_CASE("Prepared limiters reject unrepresentable lookahead without changing c
   sonare::mastering::dynamics::Limiter inner;
   check(inner);
 }
+
+namespace {
+
+struct ParameterWrite {
+  unsigned int id;
+  float value;
+};
+
+// Renders the adaptive-release program after applying @p writes, in order,
+// between construction with @p start and prepare().
+std::vector<float> render_adaptive_release_after(const AdaptiveReleaseConfig& start,
+                                                 const std::vector<ParameterWrite>& writes,
+                                                 float* final_release_ms = nullptr) {
+  constexpr int kRate = 48000;
+  constexpr int kBlock = 512;
+  AdaptiveRelease processor(start);
+  for (const auto& write : writes) REQUIRE(processor.set_parameter(write.id, write.value));
+  processor.prepare(kRate, kBlock);
+  auto output = adaptive_release_program(kRate / 2, kRate);
+  for (std::size_t offset = 0; offset < output.size(); offset += kBlock) {
+    const int count = static_cast<int>(std::min<std::size_t>(kBlock, output.size() - offset));
+    float* channels[] = {output.data() + offset};
+    processor.process(channels, 1, count);
+  }
+  if (final_release_ms != nullptr) *final_release_ms = processor.current_release_ms();
+  return output;
+}
+
+}  // namespace
+
+TEST_CASE("AdaptiveRelease bound pairs resolve independently of write order",
+          "[mastering][maximizer][adaptive_release]") {
+  // Float-rounding scale of the program's peak; identical arithmetic is expected.
+  constexpr float kTolerance = 1.0e-6f;
+  const bool release_pair = GENERATE(true, false);
+  const bool upward = GENERATE(true, false);
+  INFO((release_pair ? "release pair" : "crest pair") << (upward ? ", upward" : ", downward"));
+
+  AdaptiveReleaseConfig low_config;
+  AdaptiveReleaseConfig high_config;
+  low_config.min_release_ms = 10.0f;
+  low_config.max_release_ms = 100.0f;
+  high_config.min_release_ms = 200.0f;
+  high_config.max_release_ms = 400.0f;
+  low_config.crest_low = 2.0f;
+  low_config.crest_high = 10.0f;
+  high_config.crest_low = 20.0f;
+  high_config.crest_high = 30.0f;
+  const AdaptiveReleaseConfig& start = upward ? low_config : high_config;
+  const AdaptiveReleaseConfig& target = upward ? high_config : low_config;
+
+  const unsigned int low_id = release_pair ? 1u : 4u;
+  const unsigned int high_id = release_pair ? 2u : 5u;
+  const float low_value = release_pair ? target.min_release_ms : target.crest_low;
+  const float high_value = release_pair ? target.max_release_ms : target.crest_high;
+
+  float release_low_first = 0.0f;
+  float release_high_first = 0.0f;
+  const auto low_first = render_adaptive_release_after(
+      start, {{low_id, low_value}, {high_id, high_value}}, &release_low_first);
+  const auto high_first = render_adaptive_release_after(
+      start, {{high_id, high_value}, {low_id, low_value}}, &release_high_first);
+  AdaptiveReleaseConfig written = start;
+  if (release_pair) {
+    written.min_release_ms = target.min_release_ms;
+    written.max_release_ms = target.max_release_ms;
+  } else {
+    written.crest_low = target.crest_low;
+    written.crest_high = target.crest_high;
+  }
+  const auto expected = render_adaptive_release_after(written, {});
+
+  CHECK_THAT(release_low_first, WithinAbs(release_high_first, kTolerance));
+  CHECK(max_abs_difference(low_first, high_first) <= kTolerance);
+  CHECK(max_abs_difference(low_first, expected) <= kTolerance);
+  CHECK(max_abs_difference(high_first, expected) <= kTolerance);
+}
+
+TEST_CASE("AdaptiveRelease single bound change keeps the pair ordered",
+          "[mastering][maximizer][adaptive_release]") {
+  constexpr float kTolerance = 1.0e-6f;
+  AdaptiveReleaseConfig start;
+  start.min_release_ms = 10.0f;
+  start.max_release_ms = 100.0f;
+  start.crest_low = 2.0f;
+  start.crest_high = 10.0f;
+
+  SECTION("min release written above max") {
+    AdaptiveReleaseConfig ordered = start;
+    ordered.min_release_ms = 100.0f;
+    ordered.max_release_ms = 300.0f;
+    CHECK(max_abs_difference(render_adaptive_release_after(start, {{1u, 300.0f}}),
+                             render_adaptive_release_after(ordered, {})) <= kTolerance);
+  }
+  SECTION("max release written below min") {
+    AdaptiveReleaseConfig ordered = start;
+    ordered.min_release_ms = 5.0f;
+    ordered.max_release_ms = 10.0f;
+    CHECK(max_abs_difference(render_adaptive_release_after(start, {{2u, 5.0f}}),
+                             render_adaptive_release_after(ordered, {})) <= kTolerance);
+  }
+  SECTION("crest low written above crest high") {
+    AdaptiveReleaseConfig ordered = start;
+    ordered.crest_low = 10.0f;
+    ordered.crest_high = 15.0f;
+    CHECK(max_abs_difference(render_adaptive_release_after(start, {{4u, 15.0f}}),
+                             render_adaptive_release_after(ordered, {})) <= kTolerance);
+  }
+  SECTION("crest high written below crest low") {
+    AdaptiveReleaseConfig ordered = start;
+    ordered.crest_low = 1.0f;
+    ordered.crest_high = 2.0f;
+    CHECK(max_abs_difference(render_adaptive_release_after(start, {{5u, 1.0f}}),
+                             render_adaptive_release_after(ordered, {})) <= kTolerance);
+  }
+}

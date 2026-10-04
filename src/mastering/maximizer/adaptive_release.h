@@ -60,10 +60,12 @@ class AdaptiveRelease : public rt::ProcessorBase {
   // one-pole coefficient, which is plain arithmetic:
   //   0 = ceiling_db (clamped <= 0; forwarded in-place to the inner limiter)
   //   1 = min_release_ms (clamped to >= 0)
-  //   2 = max_release_ms (clamped to >= min_release_ms)
+  //   2 = max_release_ms (clamped to >= 0)
   //   3 = crest_window_ms (clamped to a small positive minimum)
   //   4 = crest_low (clamped to a small positive minimum)
-  //   5 = crest_high (clamped to > crest_low)
+  //   5 = crest_high (clamped to a small positive minimum)
+  // Each min/max and low/high pair is stored as written and ordered where it is
+  // read (the smaller value is the lower bound), so write order never matters.
   //   6 = release_smoothing_ms (clamped to >= 0)
   // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
   bool set_parameter_impl(unsigned int param_id, float value) override;
@@ -77,6 +79,8 @@ class AdaptiveRelease : public rt::ProcessorBase {
   static void validate_config(const AdaptiveReleaseConfig& config);
   void configure_limiter();
   void update_envelope_coefficients() noexcept;
+  /// @brief Lower of the two release bounds, whichever order they were written in.
+  float lowest_release_ms() const noexcept;
   /// @brief Advances the crest/RMS/release envelopes over @p count input samples
   ///        starting at @p offset. Must run before the limiter overwrites the
   ///        buffer in place.

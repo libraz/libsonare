@@ -19,6 +19,9 @@ namespace {
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 
+// Lowest corner either band edge may take, so the one-pole alpha stays positive.
+constexpr float kMinCornerHz = 1.0e-3f;
+
 }  // namespace
 
 SpectralShaper::SpectralShaper(SpectralShaperConfig config) : config_(config) {
@@ -49,8 +52,12 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
     throw SonareException(ErrorCode::InvalidParameter,
                           "SpectralShaper channel count exceeds prepared capacity");
   }
-  const float low_alpha = rt::one_pole_lowpass_alpha(config_.frequency_hz, sample_rate_);
-  const float high_alpha = rt::one_pole_lowpass_alpha(config_.high_frequency_hz, sample_rate_);
+  // The pair is ordered here, so the written order never matters.
+  const float low_hz = std::min(config_.frequency_hz, config_.high_frequency_hz);
+  const float high_hz = std::max(std::max(config_.frequency_hz, config_.high_frequency_hz),
+                                 std::nextafter(low_hz, low_hz + 1.0f));
+  const float low_alpha = rt::one_pole_lowpass_alpha(low_hz, sample_rate_);
+  const float high_alpha = rt::one_pole_lowpass_alpha(high_hz, sample_rate_);
   const float attack_coeff = time_to_attack_release_rate_f(sample_rate_, config_.attack_ms);
   const float release_coeff = time_to_attack_release_rate_f(sample_rate_, config_.release_ms);
   float min_gain = 1.0f;
@@ -121,13 +128,11 @@ bool SpectralShaper::set_parameter_impl(unsigned int param_id, float value) {
       config_.amount = std::clamp(value, 0.0f, 1.0f);
       return true;
     case 2:
-      // Keep the validate_config invariant high_frequency_hz > frequency_hz.
-      config_.frequency_hz =
-          std::clamp(value, 1.0e-3f, std::nextafter(config_.high_frequency_hz, 0.0f));
+      // Stored as written; process() orders the pair so write order never matters.
+      config_.frequency_hz = std::max(value, kMinCornerHz);
       return true;
     case 3:
-      config_.high_frequency_hz =
-          std::max(value, std::nextafter(config_.frequency_hz, config_.frequency_hz + 1.0f));
+      config_.high_frequency_hz = std::max(value, kMinCornerHz);
       return true;
     case 4:
       config_.attack_ms = std::max(0.0f, value);

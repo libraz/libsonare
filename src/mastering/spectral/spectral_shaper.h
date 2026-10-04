@@ -32,8 +32,8 @@ class SpectralShaper : public rt::ProcessorBase {
   // SpectralShaperConfig declaration order:
   //   0 = threshold (clamped to >= 0)
   //   1 = amount (clamped to [0, 1])
-  //   2 = frequency_hz (clamped to (0, high_frequency_hz))
-  //   3 = high_frequency_hz (clamped to > frequency_hz)
+  //   2 = frequency_hz (clamped to > 0; the pair is ordered at use)
+  //   3 = high_frequency_hz (clamped to > 0; the pair is ordered at use)
   //   4 = attack_ms (clamped to >= 0; re-prepares envelope followers)
   //   5 = release_ms (clamped to >= 0; re-prepares envelope followers)
   //   6 = range_db (clamped to >= 0)

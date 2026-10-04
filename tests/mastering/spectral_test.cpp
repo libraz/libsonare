@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <vector>
 
@@ -701,4 +702,64 @@ TEST_CASE("Spectral processors validate configuration and state", "[mastering][s
   std::vector<float> signal(4, 0.0f);
   float* channels[] = {signal.data()};
   REQUIRE_THROWS(unprepared.process(channels, 1, 4));
+}
+
+namespace {
+
+// Renders a tone through a SpectralShaper whose band edges are written in the
+// given order after prepare().
+std::vector<float> render_shaper_after(const SpectralShaperConfig& start,
+                                       const std::vector<std::pair<unsigned int, float>>& writes) {
+  SpectralShaper shaper(start);
+  shaper.prepare(48000.0, 512);
+  for (const auto& [id, value] : writes) REQUIRE(shaper.set_parameter(id, value));
+  auto signal = generate_sine_samples(4000.0f, 48000, 512, 0.5f);
+  process(shaper, signal);
+  return signal;
+}
+
+}  // namespace
+
+TEST_CASE("SpectralShaper band edges resolve independently of write order",
+          "[mastering][spectral]") {
+  // Same arithmetic on both paths, so only float rounding scale is allowed.
+  constexpr float kTolerance = 1.0e-6f;
+  const bool upward = GENERATE(true, false);
+  INFO((upward ? "upward" : "downward"));
+
+  const SpectralShaperConfig low{0.05f, 1.0f, 500.0f, 1000.0f, 0.0f, 0.0f, 24.0f};
+  const SpectralShaperConfig high{0.05f, 1.0f, 9000.0f, 12000.0f, 0.0f, 0.0f, 24.0f};
+  const SpectralShaperConfig& start = upward ? low : high;
+  const SpectralShaperConfig& target = upward ? high : low;
+
+  const auto frequency_first =
+      render_shaper_after(start, {{2u, target.frequency_hz}, {3u, target.high_frequency_hz}});
+  const auto high_first =
+      render_shaper_after(start, {{3u, target.high_frequency_hz}, {2u, target.frequency_hz}});
+  const auto expected = render_shaper_after(target, {});
+
+  CHECK(max_abs_difference(frequency_first, high_first) <= kTolerance);
+  CHECK(max_abs_difference(frequency_first, expected) <= kTolerance);
+  CHECK(max_abs_difference(high_first, expected) <= kTolerance);
+}
+
+TEST_CASE("SpectralShaper single band edge change keeps the pair ordered",
+          "[mastering][spectral]") {
+  constexpr float kTolerance = 1.0e-6f;
+  const SpectralShaperConfig start{0.05f, 1.0f, 500.0f, 8000.0f, 0.0f, 0.0f, 24.0f};
+
+  SECTION("frequency written above the high edge") {
+    SpectralShaperConfig ordered = start;
+    ordered.frequency_hz = 8000.0f;
+    ordered.high_frequency_hz = 12000.0f;
+    CHECK(max_abs_difference(render_shaper_after(start, {{2u, 12000.0f}}),
+                             render_shaper_after(ordered, {})) <= kTolerance);
+  }
+  SECTION("high edge written below the frequency") {
+    SpectralShaperConfig ordered = start;
+    ordered.frequency_hz = 200.0f;
+    ordered.high_frequency_hz = 500.0f;
+    CHECK(max_abs_difference(render_shaper_after(start, {{3u, 200.0f}}),
+                             render_shaper_after(ordered, {})) <= kTolerance);
+  }
 }

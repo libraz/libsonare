@@ -19,7 +19,7 @@ namespace {
 
 // Smallest strictly-positive crest window / crest factor accepted by
 // validate_config; reused to clamp the matching automation parameters and to
-// floor the crest_high - crest_low span, which set_parameter keeps at least
+// floor the crest_high - crest_low span, which the release mapping keeps at least
 // this wide.
 constexpr float kMinPositiveCrest = 1.0e-4f;
 
@@ -40,7 +40,7 @@ void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  current_release_ms_ = config_.min_release_ms;
+  current_release_ms_ = lowest_release_ms();
   current_crest_factor_ = 0.0f;
   peak_envelope_ = 0.0f;
   rms_square_envelope_ = 0.0f;
@@ -105,7 +105,7 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
 
 void AdaptiveRelease::reset() {
   limiter_.reset();
-  current_release_ms_ = config_.min_release_ms;
+  current_release_ms_ = lowest_release_ms();
   current_crest_factor_ = 0.0f;
   peak_envelope_ = 0.0f;
   rms_square_envelope_ = 0.0f;
@@ -129,11 +129,11 @@ bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 1:
       // Read directly by the per-sample release mapping; no recompute needed.
+      // Stored as written; the pair is ordered where it is read.
       config_.min_release_ms = std::max(0.0f, value);
-      config_.max_release_ms = std::max(config_.max_release_ms, config_.min_release_ms);
       return true;
     case 2:
-      config_.max_release_ms = std::max(config_.min_release_ms, value);
+      config_.max_release_ms = std::max(0.0f, value);
       return true;
     case 3:
       config_.crest_window_ms = std::max(kMinPositiveCrest, value);
@@ -141,10 +141,9 @@ bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 4:
       config_.crest_low = std::max(kMinPositiveCrest, value);
-      config_.crest_high = std::max(config_.crest_high, config_.crest_low + kMinPositiveCrest);
       return true;
     case 5:
-      config_.crest_high = std::max(config_.crest_low + kMinPositiveCrest, value);
+      config_.crest_high = std::max(kMinPositiveCrest, value);
       return true;
     case 6:
       config_.release_smoothing_ms = std::max(0.0f, value);
@@ -177,6 +176,10 @@ void AdaptiveRelease::configure_limiter() {
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, current_release_ms_, 4});
 }
 
+float AdaptiveRelease::lowest_release_ms() const noexcept {
+  return std::min(config_.min_release_ms, config_.max_release_ms);
+}
+
 void AdaptiveRelease::update_envelope_coefficients() noexcept {
   // Both envelopes advance once per input sample, so their coefficients are the
   // per-sample leaky-integrator rates for the configured milliseconds. Deriving
@@ -194,8 +197,12 @@ bool AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels
   const float inv_channels = 1.0f / static_cast<float>(num_channels);
   // Map crest factor onto [0, 1] then onto [max_release, min_release]:
   // high crest (transient) -> short release, low crest (sustained) -> long release.
-  const float crest_span = std::max(kMinPositiveCrest, config_.crest_high - config_.crest_low);
-  const float release_span = config_.max_release_ms - config_.min_release_ms;
+  const float crest_low = std::min(config_.crest_low, config_.crest_high);
+  const float crest_span =
+      std::max(kMinPositiveCrest, std::max(config_.crest_low, config_.crest_high) - crest_low);
+  const float min_release_ms = lowest_release_ms();
+  const float release_span =
+      std::max(config_.min_release_ms, config_.max_release_ms) - min_release_ms;
   for (int i = 0; i < count; ++i) {
     // Channel-linked detector: the peak is the widest channel at this sample,
     // the mean square is averaged across them, matching the linked gain the
@@ -215,9 +222,8 @@ bool AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels
     const float running_rms = std::sqrt(std::max(rms_square_envelope_, 0.0f));
     // Recomputed from the two envelopes, never from itself: not a cell to return.
     current_crest_factor_ = running_rms < kRmsFloor ? 0.0f : peak_envelope_ / running_rms;
-    const float norm =
-        std::clamp((current_crest_factor_ - config_.crest_low) / crest_span, 0.0f, 1.0f);
-    const float target_release_ms = config_.min_release_ms + release_span * (1.0f - norm);
+    const float norm = std::clamp((current_crest_factor_ - crest_low) / crest_span, 0.0f, 1.0f);
+    const float target_release_ms = min_release_ms + release_span * (1.0f - norm);
     current_release_ms_ += release_smoothing_coeff_ * (target_release_ms - current_release_ms_);
   }
 
@@ -227,7 +233,7 @@ bool AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels
   // envelope over |x| actually acquires; the two halves of the crest detector
   // rest together at silence, the release where prepare() seeds it.
   bool discarded = discard_group_if_non_finite(peak_envelope_, rms_square_envelope_);
-  discarded |= discard_if_non_finite(current_release_ms_, config_.min_release_ms);
+  discarded |= discard_if_non_finite(current_release_ms_, min_release_ms);
   return discarded;
 }
 
