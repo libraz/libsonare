@@ -1162,3 +1162,133 @@ from .types import (
 )
 
 __version__: str
+
+from .vocal_edit import (
+    VocalAnalysis as VocalAnalysis,
+)
+from .vocal_edit import (
+    VocalAnalysisResult as VocalAnalysisResult,
+)
+from .vocal_edit import (
+    VocalCapabilities as VocalCapabilities,
+)
+from .vocal_edit import (
+    VocalCreateOptions as VocalCreateOptions,
+)
+from .vocal_edit import (
+    VocalEditDraft as VocalEditDraft,
+)
+from .vocal_edit import (
+    VocalEditError as VocalEditError,
+)
+from .vocal_edit import (
+    VocalEditResult as VocalEditResult,
+)
+from .vocal_edit import (
+    VocalEditSession as VocalEditSession,
+)
+from .vocal_edit import (
+    VocalFormantMode as VocalFormantMode,
+)
+from .vocal_edit import (
+    VocalIdChange as VocalIdChange,
+)
+from .vocal_edit import (
+    VocalMergeNotes as VocalMergeNotes,
+)
+from .vocal_edit import (
+    VocalMergePolicy as VocalMergePolicy,
+)
+from .vocal_edit import (
+    VocalNote as VocalNote,
+)
+from .vocal_edit import (
+    VocalNoteEdit as VocalNoteEdit,
+)
+from .vocal_edit import (
+    VocalOperation as VocalOperation,
+)
+from .vocal_edit import (
+    VocalOperationKind as VocalOperationKind,
+)
+from .vocal_edit import (
+    VocalPitchPoint as VocalPitchPoint,
+)
+from .vocal_edit import (
+    VocalPitchResult as VocalPitchResult,
+)
+from .vocal_edit import (
+    VocalRange as VocalRange,
+)
+from .vocal_edit import (
+    VocalRemoveTransition as VocalRemoveTransition,
+)
+from .vocal_edit import (
+    VocalRenderJob as VocalRenderJob,
+)
+from .vocal_edit import (
+    VocalRenderResult as VocalRenderResult,
+)
+from .vocal_edit import (
+    VocalRenderSnapshot as VocalRenderSnapshot,
+)
+from .vocal_edit import (
+    VocalResetNotes as VocalResetNotes,
+)
+from .vocal_edit import (
+    VocalSetNoteEdit as VocalSetNoteEdit,
+)
+from .vocal_edit import (
+    VocalSetNoteSourceSpan as VocalSetNoteSourceSpan,
+)
+from .vocal_edit import (
+    VocalSetTransition as VocalSetTransition,
+)
+from .vocal_edit import (
+    VocalSplitNote as VocalSplitNote,
+)
+from .vocal_edit import (
+    VocalStateToken as VocalStateToken,
+)
+from .vocal_edit import (
+    VocalTargetMode as VocalTargetMode,
+)
+from .vocal_edit import (
+    VocalTransition as VocalTransition,
+)
+from .vocal_edit import (
+    create_vocal_edit_session as create_vocal_edit_session,
+)
+from .vocal_edit import (
+    restore_vocal_edit_session as restore_vocal_edit_session,
+)
+from .vocal_edit import (
+    vocal_edit_available as vocal_edit_available,
+)
+from .vocal_project import (
+    ProjectVocalEditApplyResult as ProjectVocalEditApplyResult,
+)
+from .vocal_project import (
+    ProjectVocalEditDependency as ProjectVocalEditDependency,
+)
+from .vocal_project import (
+    ProjectVocalOriginalSource as ProjectVocalOriginalSource,
+)
+from .vocal_project import (
+    ProjectVocalReason as ProjectVocalReason,
+)
+from .vocal_project import (
+    ProjectVocalRehydrateItem as ProjectVocalRehydrateItem,
+)
+from .vocal_project import (
+    ProjectVocalRehydrateStatus as ProjectVocalRehydrateStatus,
+)
+from .vocal_project import (
+    apply_project_vocal_edit as apply_project_vocal_edit,
+)
+from .vocal_project import (
+    get_project_vocal_edit_dependencies as get_project_vocal_edit_dependencies,
+)
+from .vocal_project import (
+    rehydrate_project_vocal_edits as rehydrate_project_vocal_edits,
+)

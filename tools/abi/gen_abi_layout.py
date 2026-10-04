@@ -65,6 +65,8 @@ FFI_MODULES = (
     "libsonare._ffi_types_mastering_project",
     "libsonare._ffi_types_repair",
     "libsonare._ffi_types_streaming",
+    "libsonare._ffi_types_vocal",
+    "libsonare._ffi_types_vocal_project",
 )
 
 # Headers the probe includes. sonare/sonare_c.h transitively pulls in the

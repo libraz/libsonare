@@ -47,6 +47,7 @@ class CapabilitiesFeatures(TypedDict):
     arrangement: bool
     acousticSim: bool
     pitchEditor: bool
+    vocalEdit: bool
     voiceChanger: bool
     playback: bool
 

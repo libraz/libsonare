@@ -28,13 +28,11 @@ LAYOUT_JSON = REPO_ROOT / "tools" / "abi" / "abi-layout.json"
 INCLUDE_DIR = REPO_ROOT / "include" / "sonare"
 SIGNATURE_GLOB = "bindings/python/src/libsonare/_ffi_signatures_*.py"
 
-# Pure-Python ctypes modules (no dlopen) that declare the mirror structs.
-FFI_MODULES = (
-    "libsonare._ffi_types_core",
-    "libsonare._ffi_types_analysis",
-    "libsonare._ffi_types_mastering_project",
-    "libsonare._ffi_types_repair",
-    "libsonare._ffi_types_streaming",
+# Pure-Python ctypes modules (no dlopen) that declare the mirror structs. Globbed
+# so a new ``_ffi_types_<domain>.py`` joins the guard without anyone remembering to.
+FFI_MODULES = tuple(
+    f"libsonare.{path.stem}"
+    for path in sorted((REPO_ROOT / "bindings/python/src/libsonare").glob("_ffi_types_*.py"))
 )
 
 

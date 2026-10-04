@@ -20,6 +20,8 @@ from ._ffi_signatures_playback import configure_playback_signatures
 from ._ffi_signatures_project import configure_project_signatures
 from ._ffi_signatures_repair_dynamics import configure_repair_dynamics_signatures
 from ._ffi_types import *  # noqa: F403
+from ._ffi_vocal import configure_vocal_signatures
+from ._ffi_vocal_project import configure_vocal_project_signatures
 
 _type_exports = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]
 
@@ -119,5 +121,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     configure_extra_signatures(lib)
     configure_project_signatures(lib)
     configure_playback_signatures(lib)
+    configure_vocal_signatures(lib)
+    configure_vocal_project_signatures(lib)
 
     return lib

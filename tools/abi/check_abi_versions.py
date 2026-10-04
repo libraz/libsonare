@@ -6,10 +6,13 @@ The C ABI carries several *independent* version counters, not one:
     SONARE_PROJECT_ABI_VERSION         (include/sonare/sonare_c_project.h)
     SONARE_VOICE_CHANGER_ABI_VERSION   (include/sonare/sonare_c_voice_changer.h)
     SONARE_ACOUSTIC_ABI_VERSION        (include/sonare/sonare_c_acoustic.h)
+    SONARE_VOCAL_EDIT_API_VERSION      (include/sonare/sonare_c_vocal_edit.h)
+    SONARE_VOCAL_PROJECT_API_VERSION   (include/sonare/sonare_c_vocal_project.h)
     kEngineAbiVersion                  (src/rt/command.h)
 
 ``SONARE_ABI_VERSION`` (include/sonare/sonare_c.h) packs feature/project/voice-changer/
-acoustic into one ``uint32_t`` (bytes 0..3). Each binding hard-codes mirror
+acoustic into one ``uint32_t`` (bytes 0..3); the vocal counters and the engine
+counter stand alone. Each binding hard-codes mirror
 constants that MUST equal the C source of truth; a stale literal means a binding
 silently accepts an incompatible native library. Bindings that *derive* their
 constant from the C macro (e.g. the Node addon's
@@ -70,6 +73,16 @@ def c_source_of_truth() -> dict[str, int]:
         r"#define\s+SONARE_ACOUSTIC_ABI_VERSION\s+(\w+)",
         "sonare_c_acoustic.h",
     )
+    vocal_edit = _find_int(
+        public_header("sonare_c_vocal_edit.h").read_text(),
+        r"#define\s+SONARE_VOCAL_EDIT_API_VERSION\s+(\w+)",
+        "sonare_c_vocal_edit.h",
+    )
+    vocal_project = _find_int(
+        public_header("sonare_c_vocal_project.h").read_text(),
+        r"#define\s+SONARE_VOCAL_PROJECT_API_VERSION\s+(\w+)",
+        "sonare_c_vocal_project.h",
+    )
     engine = _find_int(
         _read("src/rt/command.h"),
         r"kEngineAbiVersion\s*=\s*(\w+)",
@@ -88,6 +101,8 @@ def c_source_of_truth() -> dict[str, int]:
         "voice_changer": voice_changer,
         "acoustic": acoustic,
         "engine": engine,
+        "vocal_edit": vocal_edit,
+        "vocal_project": vocal_project,
         "aggregate": aggregate,
     }
 
@@ -105,6 +120,17 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
     ),
     ("bindings/node/src/types_project.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
     ("bindings/wasm/src/project_types.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
+    # Vocal edit / vocal project API (standalone counters).
+    (
+        "bindings/python/src/libsonare/_ffi_types_vocal.py",
+        r"SONARE_VOCAL_EDIT_API_VERSION\s*=\s*(\w+)",
+        "vocal_edit",
+    ),
+    (
+        "bindings/python/src/libsonare/_ffi_types_vocal_project.py",
+        r"SONARE_VOCAL_PROJECT_API_VERSION\s*=\s*(\w+)",
+        "vocal_project",
+    ),
     # Engine ABI.
     (
         "bindings/python/src/libsonare/engine.py",
@@ -139,6 +165,7 @@ def main() -> int:
         f"ABI-version mirrors consistent ({checked} mirrors checked): "
         f"feature={truth['feature']} project={truth['project']} "
         f"voice_changer={truth['voice_changer']} acoustic={truth['acoustic']} "
+        f"vocal_edit={truth['vocal_edit']} vocal_project={truth['vocal_project']} "
         f"engine={truth['engine']} aggregate=0x{truth['aggregate']:08X}"
     )
     return 0

@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
-from typing import Self
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._project_edit import TakeAlignment as TakeAlignment
@@ -66,6 +68,17 @@ from ._project_model import (
 from ._project_render import _ProjectRenderMixin
 from ._runtime import SonareValueError, _check, _get_lib
 
+if TYPE_CHECKING:
+    import numpy as np
+
+    from .vocal_edit import VocalStateToken
+    from .vocal_project import (
+        ProjectVocalEditApplyResult,
+        ProjectVocalEditDependency,
+        ProjectVocalOriginalSource,
+        ProjectVocalRehydrateItem,
+    )
+
 
 class Project(
     _ProjectEditMixin,
@@ -99,6 +112,14 @@ class Project(
     # -- lifecycle ----------------------------------------------------------
 
     def close(self) -> None:
+        """Destroy the native project; deferred to the end of an active native call."""
+        if getattr(self, "_active_native_calls", 0):
+            self._close_pending = True
+            return
+        self._destroy_handle()
+
+    def _destroy_handle(self) -> None:
+        self._close_pending = False
         if self._handle is not None:
             _get_lib().sonare_project_destroy(self._handle)
             self._handle = None
@@ -119,12 +140,25 @@ class Project(
         self.close()
 
     def __del__(self) -> None:
-        self.close()
+        with contextlib.suppress(Exception):
+            self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
+        if self._handle is None or getattr(self, "_close_pending", False):
             raise RuntimeError("Project is closed")
         return self._handle
+
+    def _enter_native_call(self) -> ctypes.c_void_p:
+        """Pin the Project handle while a callback-capable native call runs."""
+        handle = self._require_handle()
+        self._active_native_calls = getattr(self, "_active_native_calls", 0) + 1
+        return handle
+
+    def _exit_native_call(self) -> None:
+        active = getattr(self, "_active_native_calls", 0)
+        self._active_native_calls = max(0, active - 1)
+        if self._active_native_calls == 0 and getattr(self, "_close_pending", False):
+            self._destroy_handle()
 
     # -- serialization ------------------------------------------------------
 
@@ -201,6 +235,63 @@ class Project(
         obj = cls.__new__(cls)
         obj._handle = handle
         return ProjectDeserializeResult(project=obj, diagnostics=diagnostics)
+
+    def apply_vocal_edit(
+        self,
+        *,
+        clip_id: int,
+        expected_source_id: int,
+        expected_source_sample_rate: int,
+        expected_source_sample_count: int,
+        expected_source_sha256: str,
+        expected_clip_length_ppq: float,
+        expected_source_offset_ppq: float,
+        rendered_mono: Sequence[float] | np.ndarray[Any, Any],
+        rendered_sample_rate: int,
+        render_token: VocalStateToken,
+        sve1: bytes | bytearray | memoryview,
+        take_id: int = 0,
+        rendered_start_sample: int = 0,
+    ) -> ProjectVocalEditApplyResult:
+        from .vocal_project import apply_project_vocal_edit
+
+        return apply_project_vocal_edit(
+            self,
+            clip_id=clip_id,
+            expected_source_id=expected_source_id,
+            expected_source_sample_rate=expected_source_sample_rate,
+            expected_source_sample_count=expected_source_sample_count,
+            expected_source_sha256=expected_source_sha256,
+            expected_clip_length_ppq=expected_clip_length_ppq,
+            expected_source_offset_ppq=expected_source_offset_ppq,
+            rendered_mono=rendered_mono,
+            rendered_sample_rate=rendered_sample_rate,
+            render_token=render_token,
+            sve1=sve1,
+            take_id=take_id,
+            rendered_start_sample=rendered_start_sample,
+        )
+
+    def get_vocal_edit_dependencies(
+        self,
+    ) -> tuple[ProjectVocalEditDependency, ...]:
+        from .vocal_project import get_project_vocal_edit_dependencies
+
+        return get_project_vocal_edit_dependencies(self)
+
+    def rehydrate_vocal_edits(
+        self,
+        original_sources: Sequence[ProjectVocalOriginalSource],
+        *,
+        cancel: Callable[[], bool] | None = None,
+    ) -> tuple[ProjectVocalRehydrateItem, ...]:
+        from .vocal_project import rehydrate_project_vocal_edits
+
+        return rehydrate_project_vocal_edits(
+            self,
+            original_sources=original_sources,
+            cancel=cancel,
+        )
 
 
 _rebind_facade_exports(globals(), "libsonare._project_")

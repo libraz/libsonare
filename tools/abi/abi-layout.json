@@ -6881,6 +6881,432 @@
     ],
     "size": 16
   },
+  "SonareProjectVocalEditApplyDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "clip_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "take_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "expected_source_id",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "expected_source_sample_rate",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "expected_source_sample_count",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "expected_source_sha256",
+        "offset": 32,
+        "size": 32
+      },
+      {
+        "kind": "float",
+        "name": "expected_clip_length_ppq",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "expected_source_offset_ppq",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "rendered_mono",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "rendered_sample_count",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "rendered_sample_rate",
+        "offset": 96,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "rendered_start_sample",
+        "offset": 104,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "render_token",
+        "offset": 112,
+        "size": 48
+      },
+      {
+        "kind": "pointer",
+        "name": "sve1",
+        "offset": 160,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "sve1_size",
+        "offset": 168,
+        "size": 8
+      }
+    ],
+    "size": 176
+  },
+  "SonareProjectVocalEditApplyResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "clip_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "take_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "original_source_id",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "derived_source_id",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "committed_revision",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "profile_id",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "derived_source_sha256",
+        "offset": 36,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "sidecar_key",
+        "offset": 68,
+        "size": 96
+      }
+    ],
+    "size": 168
+  },
+  "SonareProjectVocalEditDependenciesResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "dependencies",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "dependency_count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareProjectVocalEditDependency": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "clip_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "take_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "original_source_id",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "derived_source_id",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "source_sample_rate",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "profile_id",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "source_sample_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "committed_revision",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "original_source_sha256",
+        "offset": 48,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "derived_source_sha256",
+        "offset": 80,
+        "size": 32
+      },
+      {
+        "kind": "unsigned",
+        "name": "original_pcm_available",
+        "offset": 112,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "derived_pcm_available",
+        "offset": 116,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "reason",
+        "offset": 120,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "sidecar_key",
+        "offset": 124,
+        "size": 96
+      }
+    ],
+    "size": 224
+  },
+  "SonareProjectVocalOriginalSource": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "source_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "mono",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "sample_count",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "sample_rate",
+        "offset": 32,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareProjectVocalRehydrateItem": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "clip_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "take_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "derived_source_id",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "status",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "reason",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 28
+  },
+  "SonareProjectVocalRehydrateResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "items",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "item_count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
   "SonareProjectWarpAnchor": {
     "align": 8,
     "fields": [
@@ -9952,6 +10378,1116 @@
       }
     ],
     "size": 16
+  },
+  "SonareVocalAnalysis": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "frame_origin_sample",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "samples_per_frame",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "frame_length_samples",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "f0_hz",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "voiced",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "frame_count",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "algorithm_id",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "algorithm_version",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmin_hz",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "fmax_hz",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "yin_threshold",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "voiced_threshold",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "centered",
+        "offset": 104,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 112,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 120,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 128,
+        "size": 8
+      }
+    ],
+    "size": 136
+  },
+  "SonareVocalAnalysisResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "analysis",
+        "offset": 8,
+        "size": 136
+      },
+      {
+        "kind": "aggregate",
+        "name": "source_sha256",
+        "offset": 144,
+        "size": 65
+      },
+      {
+        "kind": "aggregate",
+        "name": "analysis_sha256",
+        "offset": 209,
+        "size": 65
+      },
+      {
+        "kind": "signed",
+        "name": "source_length_samples",
+        "offset": 280,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "sample_rate",
+        "offset": 288,
+        "size": 4
+      }
+    ],
+    "size": 296
+  },
+  "SonareVocalCapabilities": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "api_version",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "profile_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "monophonic_only",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "analysis_cancellable",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "minimum_formant_shift_semitones",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "maximum_formant_shift_semitones",
+        "offset": 32,
+        "size": 8
+      }
+    ],
+    "size": 40
+  },
+  "SonareVocalCreateOptions": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "output_length_samples",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "edge_fade_ms",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "vibrato_cutoff_hz",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "frame_length_samples",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "hop_length_samples",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmin_hz",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "fmax_hz",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_history_bytes",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_cache_bytes",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_undo_depth",
+        "offset": 88,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_render_jobs",
+        "offset": 92,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "analysis",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "yin_threshold",
+        "offset": 104,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "voiced_threshold",
+        "offset": 112,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "centered",
+        "offset": 120,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 128,
+        "size": 8
+      }
+    ],
+    "size": 136
+  },
+  "SonareVocalEditResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "token",
+        "offset": 8,
+        "size": 48
+      },
+      {
+        "kind": "pointer",
+        "name": "dirty_ranges",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "dirty_range_count",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "id_changes",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "id_change_count",
+        "offset": 80,
+        "size": 8
+      }
+    ],
+    "size": 88
+  },
+  "SonareVocalErrorDetail": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "reason",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "field",
+        "offset": 12,
+        "size": 96
+      },
+      {
+        "kind": "unsigned",
+        "name": "expected",
+        "offset": 112,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "actual",
+        "offset": 120,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "expected_text",
+        "offset": 128,
+        "size": 96
+      },
+      {
+        "kind": "aggregate",
+        "name": "actual_text",
+        "offset": 224,
+        "size": 96
+      }
+    ],
+    "size": 320
+  },
+  "SonareVocalIdChange": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "operation_index",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "retired_id",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "first_new_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "second_new_id",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareVocalNote": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "source_start_sample",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "source_end_sample",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "analysis_frame_start",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "analysis_frame_end",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "has_pitch",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "median_hz",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "center_midi",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "f0_stability",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "amplitude",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "amplitude_count",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "edit",
+        "offset": 96,
+        "size": 144
+      }
+    ],
+    "size": 240
+  },
+  "SonareVocalNoteEdit": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "target_mode",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "target_midi",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "target_points",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "target_point_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "amount",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "speed_ms",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "max_correction_semitones",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "transpose_semitones",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "drift_scale",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "vibrato_scale",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "destination_start_sample",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "destination_length_samples",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "gain_db",
+        "offset": 104,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "muted",
+        "offset": 112,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "formant_mode",
+        "offset": 116,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "formant_shift_semitones",
+        "offset": 120,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "amplitude_envelope",
+        "offset": 128,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "amplitude_envelope_count",
+        "offset": 136,
+        "size": 8
+      }
+    ],
+    "size": 144
+  },
+  "SonareVocalNotesResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "notes",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "note_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "transitions",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "transition_count",
+        "offset": 32,
+        "size": 8
+      }
+    ],
+    "size": 40
+  },
+  "SonareVocalOperation": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "kind",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "note_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "edit",
+        "offset": 16,
+        "size": 144
+      },
+      {
+        "kind": "signed",
+        "name": "source_start_sample",
+        "offset": 160,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "source_end_sample",
+        "offset": 168,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "destination_start_sample",
+        "offset": 176,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "destination_length_samples",
+        "offset": 184,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "cut_source_sample",
+        "offset": 192,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "note_ids",
+        "offset": 200,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "note_id_count",
+        "offset": 208,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "merge_policy",
+        "offset": 216,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "transition",
+        "offset": 224,
+        "size": 40
+      }
+    ],
+    "size": 264
+  },
+  "SonareVocalPitchPoint": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "source_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "midi",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareVocalPitchResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "source_samples",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "measured_midi",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "target_midi",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "effective_midi",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "voiced",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "has_target",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "frame_count",
+        "offset": 56,
+        "size": 8
+      }
+    ],
+    "size": 64
+  },
+  "SonareVocalRange": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "start_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "end_sample",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareVocalRenderResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "sample_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "start_sample",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "token",
+        "offset": 32,
+        "size": 48
+      },
+      {
+        "kind": "pointer",
+        "name": "processed_ranges",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "processed_range_count",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "cache_hit_units",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "dry_passed_frames",
+        "offset": 104,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "limited_correction_frames",
+        "offset": 112,
+        "size": 8
+      }
+    ],
+    "size": 120
+  },
+  "SonareVocalStateBytes": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "data",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "size",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareVocalStateToken": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "session_epoch",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "revision",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "draft_id",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "generation",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "request_id",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "profile_id",
+        "offset": 40,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareVocalTransition": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "schema_version",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "left_note_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "right_note_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "left_window_samples",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "right_window_samples",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "strength",
+        "offset": 32,
+        "size": 8
+      }
+    ],
+    "size": 40
   },
   "SonareWaveformPeakPyramidResult": {
     "align": 8,
