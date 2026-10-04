@@ -198,10 +198,14 @@ class BridgeWorker implements VocalEditWorker {
   private clientListener: ((event: MessageEvent) => void) | undefined;
   private workerListener: ((event: MessageEvent) => void) | undefined;
   readonly posted: VocalWorkerRequestMessage[] = [];
+  createdSessions = 0;
   disposedSessions = 0;
   notesError: Error | undefined;
 
-  constructor() {
+  constructor(
+    private readonly initialize: () => Promise<void> = async () => {},
+    private readonly responseGate?: Promise<void>,
+  ) {
     let revision = 0;
     let generation = 0;
     let draftOpen = false;
@@ -297,15 +301,31 @@ class BridgeWorker implements VocalEditWorker {
       {
         postMessage: (message) => {
           const data = structuredClone(message);
-          setTimeout(() => this.clientListener?.({ data } as MessageEvent), 0);
+          const deliver = () => {
+            setTimeout(() => this.clientListener?.({ data } as MessageEvent), 0);
+          };
+          if (this.responseGate === undefined) {
+            deliver();
+          } else {
+            void this.responseGate.then(deliver);
+          }
         },
         addEventListener: (_type, listener) => {
           this.workerListener = listener as (event: MessageEvent) => void;
         },
       },
       {
-        factory: { create: () => session, restore: () => session },
-        initialize: async () => {},
+        factory: {
+          create: () => {
+            this.createdSessions += 1;
+            return session;
+          },
+          restore: () => {
+            this.createdSessions += 1;
+            return session;
+          },
+        },
+        initialize: this.initialize,
       },
     );
   }
@@ -328,6 +348,64 @@ class BridgeWorker implements VocalEditWorker {
 }
 
 describe('vocal edit Worker client pipelining and failure paths', () => {
+  it('disposes tracked native sessions when the client is disposed', async () => {
+    const worker = new BridgeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+
+    client.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(worker.disposedSessions).toBe(1);
+  });
+
+  it('disposes a create that finishes while the client is being disposed', async () => {
+    let releaseInitialization!: () => void;
+    const initialization = new Promise<void>((resolve) => {
+      releaseInitialization = resolve;
+    });
+    let releaseResponse!: () => void;
+    const responseGate = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    const worker = new BridgeWorker(() => initialization, responseGate);
+    const client = new VocalEditWorkerClient({ worker });
+    const task = client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+
+    // Let the endpoint enter initialize(), then release it while the response
+    // remains held, leaving the native session pending here.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseInitialization();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worker.createdSessions).toBe(1);
+    client.dispose();
+
+    await expect(task).rejects.toThrow(/disposed/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worker.disposedSessions).toBe(1);
+    releaseResponse();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('cancels a create still waiting for Worker initialization', async () => {
+    let releaseInitialization!: () => void;
+    const initialization = new Promise<void>((resolve) => {
+      releaseInitialization = resolve;
+    });
+    const worker = new BridgeWorker(() => initialization);
+    const client = new VocalEditWorkerClient({ worker });
+    const task = client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    client.dispose();
+    releaseInitialization();
+
+    await expect(task).rejects.toThrow(/disposed/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worker.createdSessions).toBe(0);
+    expect(worker.disposedSessions).toBe(0);
+  });
+
   it('keeps the session token in sync when calls are pipelined without awaiting', async () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {

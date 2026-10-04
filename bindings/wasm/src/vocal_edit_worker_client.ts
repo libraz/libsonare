@@ -274,11 +274,59 @@ export class VocalEditWorkerClient {
     return this.openSession({ kind: 'restore', request }, options);
   }
 
+  private postDisposeMessage(sessionId: string, clientIntentSequence: VocalUint64): void {
+    try {
+      this.worker.postMessage({
+        type: 'sonare:vocal-dispose',
+        id: this.nextId++,
+        sessionId,
+        clientIntentSequence,
+      });
+    } catch {
+      // Disposal is best effort when a host closes the Worker concurrently.
+    }
+  }
+
+  private postCancelMessage(id: number, pending: PendingCall): void {
+    if (pending.cancelFlag) {
+      Atomics.store(pending.cancelFlag, 0, 1);
+    }
+    try {
+      this.worker.postMessage({
+        type: 'sonare:vocal-cancel',
+        id,
+        sessionId: pending.sessionId,
+        clientIntentSequence: pending.intent,
+      });
+    } catch {
+      // Disposal still rejects the local task when the Worker is unavailable.
+    }
+  }
+
   dispose(): void {
     if (this.closed) {
       return;
     }
+    const pendingEntries = [...this.pending.entries()];
+    const sessionIntents = new Map<string, VocalUint64>();
+    for (const session of this.sessions) {
+      sessionIntents.set(session.sessionId, this.latestIntent.get(session.sessionId) ?? '0');
+    }
+    for (const [, pending] of pendingEntries) {
+      if (!sessionIntents.has(pending.sessionId)) {
+        sessionIntents.set(pending.sessionId, pending.intent);
+      }
+    }
     this.closed = true;
+    // A create can finish after this method returns. Cancel it first, then
+    // dispose every known session id to cover the race where native creation
+    // has already installed the session before the cancel is observed.
+    for (const [id, pending] of pendingEntries) {
+      this.postCancelMessage(id, pending);
+    }
+    for (const [sessionId, intent] of sessionIntents) {
+      this.postDisposeMessage(sessionId, intent);
+    }
     if (this.usesEventTarget) {
       this.worker.removeEventListener?.('message', this.onMessage as EventListener);
       this.worker.removeEventListener?.('error', this.onError as EventListener);
@@ -286,11 +334,13 @@ export class VocalEditWorkerClient {
       this.worker.off?.('message', this.onNodeMessage);
       this.worker.off?.('error', this.onNodeError);
     }
-    for (const pending of this.pending.values()) {
+    for (const [, pending] of pendingEntries) {
       pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
       pending.reject(new Error('VocalEditWorkerClient was disposed'));
     }
     this.pending.clear();
+    this.sessions.clear();
+    this.latestIntent.clear();
     if (this.ownsWorker) {
       this.worker.terminate();
     }
