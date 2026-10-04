@@ -5,6 +5,7 @@ import { SonareRealtimeEngineWorkletProcessor } from './engine-processor';
 import {
   isEngineCaptureRequestMessage,
   isEngineCommandRecord,
+  isEngineInsertGainReductionRequestMessage,
   isEngineSyncMessage,
   isEngineTransportRequestMessage,
 } from './guards';
@@ -82,6 +83,8 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         bridge.receiveCaptureRequest(data);
       } else if (isEngineTransportRequestMessage(data)) {
         bridge.receiveTransportRequest(data);
+      } else if (isEngineInsertGainReductionRequestMessage(data)) {
+        bridge.receiveInsertGainReductionRequest(data);
       } else if (isRecord(data) && typeof data.type === 'string' && data.type.startsWith('sync')) {
         // A sync the guard does not accept would otherwise vanish, leaving the
         // live engine out of step with the offline mirror and nothing to see.

@@ -24,6 +24,8 @@ export type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessage,
   SonareEngineClipPageRequestMessage,
+  SonareEngineInsertGainReductionRequestMessage,
+  SonareEngineInsertGainReductionResponseMessage,
   SonareEngineSyncAutomationMessage,
   SonareEngineSyncBuiltinInstrumentMessage,
   SonareEngineSyncBusStripEqBandMessage,

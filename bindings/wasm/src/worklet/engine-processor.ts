@@ -14,6 +14,8 @@ import {
   resolveMetronomeConfig,
   type SonareEngineCaptureRequestMessage,
   type SonareEngineCaptureResponseMessageInternal,
+  type SonareEngineInsertGainReductionRequestMessage,
+  type SonareEngineInsertGainReductionResponseMessage,
   type SonareEngineSyncMessage,
   type SonareEngineTransportRequestMessage,
   type SonareEngineTransportResponseMessage,
@@ -46,6 +48,7 @@ import {
   type SonareEngineTelemetryRecord,
   type SonareEngineTelemetryRingBuffer,
   SonareEngineTelemetryType,
+  type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
   scopeRingFromSharedBuffer,
   telemetryFromEngine,
@@ -931,6 +934,27 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  receiveInsertGainReductionRequest(message: SonareEngineInsertGainReductionRequestMessage): void {
+    if (this.closed) {
+      return;
+    }
+    try {
+      this.transport?.postMessage?.({
+        type: 'insertGainReductionResponse',
+        requestId: message.requestId,
+        ok: true,
+        values: this.engine.meterTargetInsertGainReduction(message.targetId),
+      } satisfies SonareEngineInsertGainReductionResponseMessage);
+    } catch (error) {
+      this.transport?.postMessage?.({
+        type: 'insertGainReductionResponse',
+        requestId: message.requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      } satisfies SonareEngineInsertGainReductionResponseMessage);
+    }
+  }
+
   destroy(): void {
     if (!this.closed) {
       this.clearPagedClipProviders();
@@ -1151,6 +1175,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       }
       return;
     }
+    const delivered: SonareWorkletMeterSnapshot[] = [];
+    const newestByTarget = new Map<number, SonareWorkletMeterSnapshot>();
     for (const item of this.engine.drainMeterTelemetry(64)) {
       const meter = meterFromEngine(item);
       if (
@@ -1162,8 +1188,15 @@ export class SonareRealtimeEngineWorkletProcessor {
       if (meter.frame !== this.lastMeterFrame) {
         this.lastMeterFrame = meter.frame;
       }
-      // Only the postMessage path carries per-insert values; the ring layout is fixed.
-      meter.insertGainReductionDb = this.engine.meterTargetInsertGainReduction(meter.targetId);
+      delivered.push(meter);
+      newestByTarget.set(meter.targetId, meter);
+    }
+    for (const meter of delivered) {
+      // The board holds only the latest block, so only the newest record per
+      // target in this drain can carry it; the ring layout is fixed and cannot.
+      if (newestByTarget.get(meter.targetId) === meter) {
+        meter.insertGainReductionDb = this.engine.meterTargetInsertGainReduction(meter.targetId);
+      }
       // The ring branch returned above, so this is the structured-clone
       // fallback. `onMeter` and `postMessage` are alternative channels for the
       // same record, not a broadcast pair: the AudioWorklet registration

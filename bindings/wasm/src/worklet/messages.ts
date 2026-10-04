@@ -301,6 +301,7 @@ export interface WorkletTransport {
       | SonareWorkletTransportMessage
       | SonareEngineCaptureResponseMessageInternal
       | SonareEngineTransportResponseMessage
+      | SonareEngineInsertGainReductionResponseMessage
       | SonareEngineSyncErrorMessage,
     transfer?: Transferable[],
   ) => void;
@@ -935,5 +936,21 @@ export interface SonareEngineTransportResponseMessage {
   requestId: number;
   ok: boolean;
   state?: EngineTransportState;
+  error?: string;
+}
+
+/** Asks the worklet for one target's per-insert gain reduction (any meter delivery mode). */
+export interface SonareEngineInsertGainReductionRequestMessage {
+  type: 'insertGainReductionRequest';
+  requestId: number;
+  targetId: number;
+}
+
+/** Reply to {@link SonareEngineInsertGainReductionRequestMessage}; `values` is present when `ok`. */
+export interface SonareEngineInsertGainReductionResponseMessage {
+  type: 'insertGainReductionResponse';
+  requestId: number;
+  ok: boolean;
+  values?: number[];
   error?: string;
 }

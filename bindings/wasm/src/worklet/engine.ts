@@ -1288,6 +1288,11 @@ export class SonareEngine {
     return this.realtimeNode.pollScope();
   }
 
+  /** Per-insert gain reduction for a meter target; see {@link SonareRealtimeEngineNode.pollInsertGainReduction}. */
+  pollInsertGainReduction(targetId: number): Promise<number[]> {
+    return this.realtimeNode.pollInsertGainReduction(targetId);
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;

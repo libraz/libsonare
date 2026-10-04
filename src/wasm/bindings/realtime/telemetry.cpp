@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <sonare/sonare_c_engine.h>
+
 #include "realtime_engine_wasm.h"
 
 val RealtimeEngineWasm::drainTelemetry(const val& max_records_val) {
@@ -95,17 +97,20 @@ val RealtimeEngineWasm::meterTargetInsertGainReduction(const val& target_id_val)
   const uint32_t target_id = checkedUintFromVal(target_id_val, "targetId");
   val out = val::array();
 #if defined(SONARE_WITH_MIXING)
-  // Matches SONARE_METER_MAX_INSERTS.
-  float values[128];
+  float values[SONARE_METER_MAX_INSERTS];
   size_t count = 0;
-  if (!engine_.read_meter_target_insert_gain_reduction(target_id, values, 128, &count)) {
+  if (!engine_.read_meter_target_insert_gain_reduction(target_id, values, SONARE_METER_MAX_INSERTS,
+                                                       &count)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "targetId is outside the meter target range");
   }
-  if (count > 128) count = 128;
+  if (count > SONARE_METER_MAX_INSERTS) count = SONARE_METER_MAX_INSERTS;
   for (size_t i = 0; i < count; ++i) out.set(static_cast<unsigned>(i), values[i]);
 #else
+  // Same answer as the C ABI (NOT_SUPPORTED), even for an invalid target.
   (void)target_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
   return out;
 }

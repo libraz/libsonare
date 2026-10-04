@@ -5,6 +5,7 @@ import {
   isClipPageRequestMessage,
   isEngineCaptureResponseForOperation,
   isEngineCaptureResponseMessage,
+  isEngineInsertGainReductionResponseMessage,
   isEngineTelemetryRecord,
   isEngineTransportResponseMessage,
   isExternalMidiBatchMessage,
@@ -144,6 +145,14 @@ export class SonareRealtimeEngineNode {
       reject: (reason?: unknown) => void;
     }
   >();
+  private insertGainReductionRequestId = 1;
+  private readonly insertGainReductionRequests = new Map<
+    number,
+    {
+      resolve: (values: number[]) => void;
+      reject: (reason?: unknown) => void;
+    }
+  >();
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
   private destroyed = false;
@@ -203,6 +212,16 @@ export class SonareRealtimeEngineNode {
             pending.resolve(event.data);
           } else {
             pending.reject(new Error(event.data.error ?? 'Transport request failed'));
+          }
+        }
+      } else if (isEngineInsertGainReductionResponseMessage(event.data)) {
+        const pending = this.insertGainReductionRequests.get(event.data.requestId);
+        if (pending) {
+          this.insertGainReductionRequests.delete(event.data.requestId);
+          if (event.data.ok && Array.isArray(event.data.values)) {
+            pending.resolve(event.data.values);
+          } else {
+            pending.reject(new Error(event.data.error ?? 'Insert gain reduction request failed'));
           }
         }
       } else if (isEngineTelemetryRecord(event.data)) {
@@ -659,6 +678,10 @@ export class SonareRealtimeEngineNode {
       pending.reject(new Error('Realtime engine node is destroyed.'));
     }
     this.transportRequests.clear();
+    for (const pending of this.insertGainReductionRequests.values()) {
+      pending.reject(new Error('Realtime engine node is destroyed.'));
+    }
+    this.insertGainReductionRequests.clear();
     this.telemetryListeners.clear();
     this.meterListeners.clear();
     this.scopeListeners.clear();
@@ -726,6 +749,30 @@ export class SonareRealtimeEngineNode {
     for (const listener of this.clipPageRequestListeners) {
       listener(message);
     }
+  }
+
+  /**
+   * Reads one target's per-insert gain reduction (dB, each <= 0, pre-to-post insert order)
+   * from the worklet. Works in both ring and postMessage meter modes; rejects when the
+   * target is invalid or mixing is not compiled in.
+   */
+  pollInsertGainReduction(targetId: number): Promise<number[]> {
+    if (this.destroyed) {
+      return Promise.reject(new Error('Realtime engine node is destroyed.'));
+    }
+    const requestId = this.insertGainReductionRequestId++;
+    let rejectRequest!: (reason?: unknown) => void;
+    const promise = new Promise<number[]>((resolve, reject) => {
+      rejectRequest = reject;
+      this.insertGainReductionRequests.set(requestId, { resolve, reject });
+    });
+    try {
+      this.node.port.postMessage({ type: 'insertGainReductionRequest', requestId, targetId });
+    } catch (error) {
+      this.insertGainReductionRequests.delete(requestId);
+      rejectRequest(error);
+    }
+    return promise;
   }
 
   private emitScope(scope: SonareWorkletScopeSnapshot): void {

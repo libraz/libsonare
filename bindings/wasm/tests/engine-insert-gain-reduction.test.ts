@@ -1,6 +1,7 @@
 import { RealtimeEngine } from '../dist/index.js';
 import type { SonareWorkletMeterSnapshot } from '../src/worklet/protocol';
 import {
+  createSonareMeterRingBuffer,
   describe,
   expect,
   it,
@@ -58,19 +59,22 @@ describe('insert gain reduction query', () => {
     const engine = new RealtimeEngine(48000, BLOCK);
     try {
       seedCompressorLimiterLane(engine);
-      let record: ReturnType<RealtimeEngine['drainMeterTelemetry']>[number] | undefined;
       for (let block = 0; block < 20; ++block) {
         engine.process([new Float32Array(BLOCK)]);
-        record = engine.drainMeterTelemetry().find((r) => r.targetId === LANE_TARGET) ?? record;
+        // Query beside the drain so the values and the record describe the same block.
+        const record = engine.drainMeterTelemetry().find((r) => r.targetId === LANE_TARGET);
+        const entries = engine.meterTargetInsertGainReduction(LANE_TARGET);
+        if (!record || block < 19) {
+          continue;
+        }
+        expect(entries).toHaveLength(2);
+        for (const entry of entries) {
+          expect(entry).toBeLessThanOrEqual(0);
+        }
+        expect(Math.min(...entries)).toBeLessThan(-1);
+        const scale = Math.max(1, Math.abs(record.gainReductionDb));
+        expect(Math.abs(Math.min(...entries) - record.gainReductionDb)).toBeLessThan(1e-3 * scale);
       }
-      const entries = engine.meterTargetInsertGainReduction(LANE_TARGET);
-      expect(entries).toHaveLength(2);
-      for (const entry of entries) {
-        expect(entry).toBeLessThanOrEqual(0);
-      }
-      expect(record).toBeDefined();
-      expect(Math.min(...entries)).toBeLessThan(-1);
-      expect(Math.min(...entries)).toBeCloseTo(record?.gainReductionDb ?? 0, 0);
     } finally {
       engine.destroy();
     }
@@ -101,12 +105,86 @@ describe('insert gain reduction query', () => {
       const lane = meters.filter((m) => m.targetId === LANE_TARGET).at(-1);
       expect(lane).toBeDefined();
       expect(lane?.insertGainReductionDb).toHaveLength(2);
-      expect(lane?.insertGainReductionDb).toEqual(
-        engine.meterTargetInsertGainReduction(LANE_TARGET),
+      const entries = lane?.insertGainReductionDb ?? [];
+      const scale = Math.max(1, Math.abs(lane?.gainReductionDb ?? 0));
+      expect(Math.abs(Math.min(...entries) - (lane?.gainReductionDb ?? 0))).toBeLessThan(
+        1e-3 * scale,
       );
-      for (const meter of meters) {
-        expect(Array.isArray(meter.insertGainReductionDb)).toBe(true);
+    } finally {
+      processor.destroy();
+    }
+  });
+
+  it('attaches the field only to the newest record per target in one drain', () => {
+    const meters: SonareWorkletMeterSnapshot[] = [];
+    const processor = new SonareRealtimeEngineWorkletProcessor(
+      { sampleRate: 48000, blockSize: BLOCK, channelCount: 2, meterIntervalFrames: 1 },
+      { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+    );
+    try {
+      const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
+      seedCompressorLimiterLane(engine);
+      // Back up several records, then drain them in one publish.
+      for (let block = 0; block < 4; ++block) {
+        engine.process([new Float32Array(BLOCK), new Float32Array(BLOCK)]);
       }
+      (processor as unknown as { publishMeters(): void }).publishMeters();
+      const lane = meters.filter((m) => m.targetId === LANE_TARGET);
+      expect(lane.length).toBeGreaterThan(1);
+      expect(lane.at(-1)?.insertGainReductionDb).toHaveLength(2);
+      for (const older of lane.slice(0, -1)) {
+        expect(older.insertGainReductionDb).toBeUndefined();
+      }
+    } finally {
+      processor.destroy();
+    }
+  });
+
+  it('answers insertGainReductionRequest in shared-ring meter mode', () => {
+    const ring = createSonareMeterRingBuffer(64);
+    const posted: unknown[] = [];
+    const processor = new SonareRealtimeEngineWorkletProcessor(
+      {
+        sampleRate: 48000,
+        blockSize: BLOCK,
+        channelCount: 2,
+        meterIntervalFrames: BLOCK,
+        meterSharedBuffer: ring.sharedBuffer,
+      },
+      { postMessage: (message) => posted.push(message) },
+    );
+    try {
+      const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
+      seedCompressorLimiterLane(engine);
+      for (let block = 0; block < 20; ++block) {
+        processor.process([[]], [[new Float32Array(BLOCK), new Float32Array(BLOCK)]]);
+      }
+      processor.receiveInsertGainReductionRequest({
+        type: 'insertGainReductionRequest',
+        requestId: 5,
+        targetId: LANE_TARGET,
+      });
+      const ok = posted.at(-1) as {
+        type: string;
+        requestId: number;
+        ok: boolean;
+        values: number[];
+      };
+      expect(ok).toMatchObject({ type: 'insertGainReductionResponse', requestId: 5, ok: true });
+      expect(ok.values).toHaveLength(2);
+      expect(Math.min(...ok.values)).toBeLessThan(-1);
+
+      processor.receiveInsertGainReductionRequest({
+        type: 'insertGainReductionRequest',
+        requestId: 6,
+        targetId: 41,
+      });
+      expect(posted.at(-1)).toMatchObject({
+        type: 'insertGainReductionResponse',
+        requestId: 6,
+        ok: false,
+      });
+      expect((posted.at(-1) as { error?: string }).error).toEqual(expect.any(String));
     } finally {
       processor.destroy();
     }

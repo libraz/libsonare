@@ -3,6 +3,8 @@ import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
   SonareEngineClipPageRequestMessage,
+  SonareEngineInsertGainReductionRequestMessage,
+  SonareEngineInsertGainReductionResponseMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
@@ -249,6 +251,28 @@ export function isEngineTransportResponseMessage(
   return (
     isRecord(value) &&
     value.type === 'transportResponse' &&
+    typeof value.requestId === 'number' &&
+    typeof value.ok === 'boolean'
+  );
+}
+
+export function isEngineInsertGainReductionRequestMessage(
+  value: unknown,
+): value is SonareEngineInsertGainReductionRequestMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'insertGainReductionRequest' &&
+    typeof value.requestId === 'number' &&
+    typeof value.targetId === 'number'
+  );
+}
+
+export function isEngineInsertGainReductionResponseMessage(
+  value: unknown,
+): value is SonareEngineInsertGainReductionResponseMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'insertGainReductionResponse' &&
     typeof value.requestId === 'number' &&
     typeof value.ok === 'boolean'
   );
