@@ -8,6 +8,7 @@
 
 #include "mixing/tail_utils.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::mixing {
 
@@ -105,12 +106,12 @@ size_t consume_events(Lane& lane, int64_t block_start, int num_samples,
 
 template <size_t Capacity>
 void sort_events_by_offset(std::array<AutomationBlockEvent, Capacity>& events, size_t count) {
-  std::sort(events.begin(), events.begin() + static_cast<std::ptrdiff_t>(count),
-            [](const AutomationBlockEvent& lhs, const AutomationBlockEvent& rhs) {
-              if (lhs.offset != rhs.offset) return lhs.offset < rhs.offset;
-              return static_cast<int>(lhs.event.target.kind) <
-                     static_cast<int>(rhs.event.target.kind);
-            });
+  insertion_sort(events.begin(), events.begin() + static_cast<std::ptrdiff_t>(count),
+                 [](const AutomationBlockEvent& lhs, const AutomationBlockEvent& rhs) {
+                   if (lhs.offset != rhs.offset) return lhs.offset < rhs.offset;
+                   return static_cast<int>(lhs.event.target.kind) <
+                          static_cast<int>(rhs.event.target.kind);
+                 });
 }
 
 template <size_t Capacity>

@@ -2,13 +2,49 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "mastering/utility/gain.h"
 #include "mixing/channel_strip.h"
 #include "no_alloc_test_helpers.h"
+#include "rt/processor_base.h"
 
 using Catch::Matchers::WithinAbs;
+
+namespace {
+
+// Records the order in which distinct parameter ids are first set.
+class OrderProbeProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  static constexpr unsigned int kParams = 40;
+
+  OrderProbeProcessor() { order.reserve(kParams); }
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  bool set_parameter_impl(unsigned int param_id, float) override {
+    if (param_id >= kParams) return false;
+    if (!seen[param_id]) {
+      seen[param_id] = true;
+      order.push_back(param_id);
+    }
+    return true;
+  }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id < kParams;
+  }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    std::vector<sonare::rt::ParamDescriptor> out;
+    for (unsigned int id = 0; id < kParams; ++id) out.push_back({"p" + std::to_string(id), id});
+    return out;
+  }
+
+  std::array<bool, kParams> seen{};
+  std::vector<unsigned int> order;
+};
+
+}  // namespace
 
 TEST_CASE("Concurrent insert ramps retain every target's final value",
           "[mixing][rt][workflow_followup]") {
@@ -131,4 +167,32 @@ TEST_CASE("Same-sample insert updates keep the last authored value under overflo
     strip.process_at(channels, 2, kBlock, kBlock);
     for (auto* observed : gains) CHECK_THAT(observed->config().level_db, WithinAbs(1.49f, 1e-6f));
   }
+}
+
+TEST_CASE("Same-sample insert parameters apply in the order their lanes were scheduled",
+          "[mixing][rt][automation]") {
+  // Enough same-offset events that an unstable sort would reorder the ties.
+  constexpr int kBlock = 128;
+  sonare::mixing::ChannelStrip strip;
+  auto probe = std::make_unique<OrderProbeProcessor>();
+  OrderProbeProcessor* observed = probe.get();
+  strip.add_pre_insert(std::move(probe));
+  strip.prepare(48000.0, kBlock);
+  strip.settle();
+  std::vector<unsigned int> scheduled;
+  for (unsigned int i = 0; i < OrderProbeProcessor::kParams; ++i) {
+    const unsigned int param = (i * 7u) % OrderProbeProcessor::kParams;
+    REQUIRE(strip.schedule_insert_automation(0, param, 32, 1.0f,
+                                             sonare::mixing::AutomationCurveType::Hold));
+    // A later event per lane, descending across lanes, so the block really needs sorting.
+    REQUIRE(strip.schedule_insert_automation(
+        0, param, 33 + static_cast<int64_t>(OrderProbeProcessor::kParams - 1 - i), 2.0f,
+        sonare::mixing::AutomationCurveType::Hold));
+    scheduled.push_back(param);
+  }
+  std::vector<float> left(kBlock, 0.0f);
+  std::vector<float> right = left;
+  float* channels[] = {left.data(), right.data()};
+  strip.process_at(channels, 2, kBlock, 0);
+  CHECK(observed->order == scheduled);
 }
