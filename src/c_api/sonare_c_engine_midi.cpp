@@ -16,6 +16,7 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
+#include "c_api/part_rig_json.h"
 #include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
@@ -24,6 +25,7 @@
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
 #include "midi/midi_fx.h"
+#include "midi/part_rig.h"
 #include "midi/synth/sf2_player.h"
 #endif
 
@@ -231,6 +233,11 @@ SonareError bind_native_synth(SonareRealtimeEngine* engine, uint32_t destination
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   cfg.use_gm_programs = use_gm_programs;
+#if defined(SONARE_WITH_MASTERING)
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+#endif
   auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
   if (bank != nullptr) {
     synth->set_sample_bank(std::shared_ptr<const sonare::midi::synth::SampleBank>(bank->bank));
@@ -469,6 +476,40 @@ SonareError sonare_engine_legato_fallback_count(SonareRealtimeEngine* engine,
   if (!instrument->legato_fallback_count(&counted)) return SONARE_ERROR_NOT_SUPPORTED;
   *out_count = counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
   return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                       uint8_t part, int mode, const char* inserts_json) {
+  SONARE_C_API_ENTRY;
+  // Shape is checked against the C surface alone, so garbage is refused in every
+  // build rather than being told the feature is absent. 2 is the chain mode.
+  constexpr int kChainMode = 2;
+  if (!engine || mode < 0 || mode > kChainMode || (part >= 16 && part != 0xFF) ||
+      (mode == kChainMode) != (inserts_json != nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::PartRig rig;
+  rig.mode = static_cast<sonare::midi::PartRigMode>(mode);
+  if (inserts_json != nullptr) {
+    const SonareError parsed = parse_part_rig_inserts(inserts_json, &rig.stages);
+    if (parsed != SONARE_OK) return parsed;
+  }
+  if (!sonare::midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_PARAMETER;
+#if defined(SONARE_WITH_MASTERING)
+  if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
+#else
+  if (rig.mode == sonare::midi::PartRigMode::kChain) return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+  sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
+  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return instrument->set_part_rig(part, rig) ? SONARE_OK : SONARE_ERROR_NOT_SUPPORTED;
   SONARE_C_CATCH
 #endif
 }

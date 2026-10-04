@@ -3,6 +3,8 @@
 ///        the stopped-transport gate (a stopped playhead dispatches nothing and
 ///        renders no instrument audio).
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
@@ -2987,4 +2989,44 @@ TEST_CASE("a UMP slot command whose generation does not match is ignored", "[eng
   forge(0, 3);
   process_block(engine);
   REQUIRE(target.count_ == 1);
+}
+
+TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][midi][part_rig]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  SonareSynthInstrumentBinding synth{};
+  synth.destination_id = 1;
+  synth.use_gm_programs = 1;
+  REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &synth) == SONARE_OK);
+  constexpr const char* kChain = R"([{"processor":"saturation.softClipper","params":"{}"}])";
+
+  // Control: the same destination takes a valid rig.
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, kChain) == SONARE_OK);
+
+  REQUIRE(sonare_engine_set_part_rig(nullptr, 1, 0, SONARE_PART_RIG_NONE, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 16, SONARE_PART_RIG_NONE, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, 3, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, -1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  // Inserts must be present for a chain and absent otherwise.
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_NONE, kChain) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // Malformed JSON and a wrong shape are a format error with a message.
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "[{") ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(std::string(sonare_last_error_message()) != "");
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "{}") ==
+          SONARE_ERROR_INVALID_FORMAT);
+  // Valid shape, unknown processor, an empty chain, and an unbound destination.
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN,
+                                     R"([{"processor":"no.such.insert"}])") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "[]") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_part_rig(engine, 99, 0, SONARE_PART_RIG_NONE, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_engine_destroy(engine);
 }

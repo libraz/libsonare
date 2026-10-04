@@ -1379,6 +1379,30 @@ SonareError sonare_engine_articulation(SonareRealtimeEngine* engine, uint32_t de
 SonareError sonare_engine_legato_fallback_count(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id, uint32_t* out_count);
 
+/// @brief Sets the rig of one part, or of the destination default, on a
+///        destination's instrument.
+/// @details Control-thread API. The rig is what sits between the part's voices
+///          and the mix: the instrument's default for the part's program
+///          (mode 0), nothing (mode 1, the voice's direct output), or an
+///          explicit chain of inserts (mode 2) that replaces the default.
+///          Takes the same arguments as @ref sonare_project_set_part_rig, so a
+///          project entry can be pushed to a live engine unchanged. The
+///          instrument rebuilds its chains at once; a note already sounding
+///          keeps its tail.
+/// @param destination_id MIDI destination id of the bound instrument.
+/// @param part GS part slot 0-15, or 0xFF for the destination default.
+/// @param mode 0 bank, 1 none, 2 chain (the project's SonarePartRigMode).
+/// @param inserts_json Required for mode 2, NULL otherwise; the format and
+///        limits of @ref sonare_project_set_part_rig.
+/// @return SONARE_ERROR_INVALID_FORMAT for malformed @p inserts_json;
+///         SONARE_ERROR_INVALID_PARAMETER for an out-of-range part or mode,
+///         inserts that do not match the mode, an invalid chain, or a
+///         destination with no instrument; SONARE_ERROR_NOT_SUPPORTED for an
+///         instrument without part rigs (the built-in synth, a callback
+///         instrument) or a chain in a build without mastering.
+SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                       uint8_t part, int mode, const char* inserts_json);
+
 /// @brief Binds a live MIDI CC to an engine automation parameter.
 /// @details Control-thread API. After binding, @ref sonare_engine_push_midi_cc
 ///          still routes the MIDI event to the destination instrument, and also

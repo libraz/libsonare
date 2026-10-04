@@ -262,6 +262,10 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
   // its strict boolean contract here, where realtime and offline synth
   // bindings meet, and leave the NativeSynth default disabled when omitted.
   cfg.use_gm_programs = typedBoolProperty(patch, "useGmPrograms", false);
+  // Same injection as setSf2Instrument: the rig stages need the mastering inserts.
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
   SonareSampleBank* bank = SampleBankWasm::fromDescriptor(patch);
   auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
   if (bank != nullptr) {

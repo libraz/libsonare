@@ -22,6 +22,7 @@
 #include "engine/track_mixer.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
+#include "midi/part_rig.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
 #include "mixing/api/scene.h"
@@ -383,6 +384,22 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(const SonareSf2Instrument
   return cfg;
 }
 
+// Applies the project's rig entries for @p destination_id to its instrument: the
+// destination default first, then each part, so a part overrides the default.
+// False when the instrument refuses an entry.
+bool apply_project_part_rigs(const SonareProject* project, uint32_t destination_id,
+                             sonare::midi::MidiInstrument* instrument) {
+  const auto& entries = project->history.project().part_rigs();
+  for (const bool defaults : {true, false}) {
+    for (const arr::ProjectPartRig& entry : entries) {
+      if (entry.destination_id != destination_id) continue;
+      if ((entry.part == sonare::midi::kPartRigAllParts) != defaults) continue;
+      if (!instrument->set_part_rig(entry.part, entry.rig)) return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 #endif
 
@@ -500,12 +517,23 @@ SonareError sonare_project_bounce_with_synth_instruments(
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     cfg.use_gm_programs = instruments[i].use_gm_programs != 0;
+#if defined(SONARE_WITH_MASTERING)
+    cfg.insert_factory = [](std::string_view name,
+                            std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+#endif
+    // The bounce is single-threaded and offline: pending EFX changes realise inline.
+    cfg.realize_efx_inline = true;
     owned.push_back(std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
     // The synth takes a share, so a caller that destroys its own handle
     // mid-bounce cannot pull the pool out from under a sounding voice.
     if (instruments[i].sample_bank != nullptr) {
       owned.back()->set_sample_bank(
           std::shared_ptr<const sonare::midi::synth::SampleBank>(instruments[i].sample_bank->bank));
+    }
+    if (!apply_project_part_rigs(project, instruments[i].destination_id, owned.back().get())) {
+      return SONARE_ERROR_NOT_SUPPORTED;
     }
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
@@ -548,6 +576,9 @@ SonareError sonare_project_bounce_with_sf2_instruments(
         std::make_unique<sonare::midi::synth::Sf2Player>(sf2_config_from_c(instruments[i].config));
     player->set_soundfont(project->soundfont);
     owned.push_back(std::move(player));
+    if (!apply_project_part_rigs(project, instruments[i].destination_id, owned.back().get())) {
+      return SONARE_ERROR_NOT_SUPPORTED;
+    }
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);

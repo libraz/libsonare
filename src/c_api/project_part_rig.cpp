@@ -2,9 +2,7 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
-#if defined(SONARE_WITH_MASTERING)
-#include "mastering/api/insert_factory.h"
-#endif
+#include "c_api/part_rig_json.h"
 #include "midi/part_rig.h"
 #include "util/json_budget.h"
 
@@ -20,59 +18,6 @@ static_assert(midi::kPartRigAllParts == SONARE_PART_RIG_ALL_PARTS,
               "SONARE_PART_RIG_ALL_PARTS drift");
 
 namespace {
-
-// Parses the inserts array into chain stages. Shape only; names are resolved by
-// validate_chain_stages. A document that does not parse or has the wrong shape
-// is INVALID_FORMAT, as at every other C-ABI JSON entry point.
-SonareError parse_inserts(const char* inserts_json, std::vector<midi::PartRigStage>* stages) {
-  json::Value root;
-  try {
-    root = json::admit_strict(inserts_json);
-  } catch (const json::JsonError& ex) {
-    set_last_error(ex.what());
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
-  const auto bad_shape = [] {
-    set_last_error("inserts_json must be an array of {\"processor\": string, \"params\": string}");
-    return SONARE_ERROR_INVALID_FORMAT;
-  };
-  if (!root.is_array()) return bad_shape();
-  for (const json::Value& item : root.as_array()) {
-    if (!item.is_object()) return bad_shape();
-    const json::Value* processor = item.find("processor");
-    if (processor == nullptr || !processor->is_string()) return bad_shape();
-    midi::PartRigStage stage;
-    stage.processor = processor->as_string();
-    if (const json::Value* params = item.find("params")) {
-      if (!params->is_string()) return bad_shape();
-      stage.params_json = params->as_string();
-    } else {
-      stage.params_json = "{}";
-    }
-    stages->push_back(std::move(stage));
-  }
-  return SONARE_OK;
-}
-
-#if defined(SONARE_WITH_MASTERING)
-// Every stage must build, accept its params, and stay within the latency bound
-// at the reference rate.
-bool validate_chain_stages(const std::vector<midi::PartRigStage>& stages) {
-  constexpr double kValidationSampleRate = 48000.0;
-  constexpr int kValidationBlockSize = 512;
-  for (const midi::PartRigStage& stage : stages) {
-    try {
-      auto insert = sonare::mastering::api::make_insert(stage.processor, stage.params_json);
-      if (!insert) return false;
-      insert->prepare(kValidationSampleRate, kValidationBlockSize);
-      if (insert->latency_samples() > midi::kMaxPartRigLatencySamples) return false;
-    } catch (const sonare::SonareException&) {
-      return false;
-    }
-  }
-  return true;
-}
-#endif
 
 std::string inserts_to_json(const std::vector<midi::PartRigStage>& stages) {
   json::Array inserts;
@@ -103,12 +48,12 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
   }
   SONARE_C_TRY
   if (inserts_json != nullptr) {
-    const SonareError parsed = parse_inserts(inserts_json, &rig.stages);
+    const SonareError parsed = sonare_c_detail::parse_part_rig_inserts(inserts_json, &rig.stages);
     if (parsed != SONARE_OK) return parsed;
   }
   if (!midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_MASTERING)
-  if (!validate_chain_stages(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
 #else
   if (rig.mode == midi::PartRigMode::kChain) return SONARE_ERROR_NOT_SUPPORTED;
 #endif
