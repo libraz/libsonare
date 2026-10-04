@@ -790,10 +790,12 @@ export class RealtimeEngine {
   }
 
   /**
-   * Sets a track lane strip's inter-channel alignment delay in samples.
-   * `delaySamples` is a non-negative whole-sample delay. This changes strip
-   * latency, so PDC and the reported graph latency are rebuilt — treat it as a
-   * structural change: do NOT call it concurrently with {@link process}. Stop
+   * Sets a track lane strip's alignment delay in samples.
+   * `delaySamples` is a non-negative whole-sample delay that moves this lane later
+   * relative to every other lane. It is not latency: PDC does not compensate it
+   * and the reported graph latency is unchanged. It reallocates the strip's delay
+   * line, so treat it as a structural change: do NOT call it concurrently with
+   * {@link process}. Stop
    * playback (or otherwise quiesce the audio callback) before calling.
    *
    * @param trackId Lane the strip belongs to.
@@ -1010,6 +1012,19 @@ export class RealtimeEngine {
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords);
+  }
+
+  /**
+   * Per-insert gain reduction (dB, <= 0) of a meter target's strip from the last
+   * rendered block, in combined insert order (pre-fader inserts, then post-fader).
+   * Bypassed and non-dynamics inserts read 0; the meter record's `gainReductionDb`
+   * is the minimum of these entries.
+   *
+   * @param targetId - Meter record target id (0 master, 1..32 lanes, 33..40 buses); the input monitor target yields `[]`
+   * @throws If `targetId` is outside the encoded range
+   */
+  meterTargetInsertGainReduction(targetId: number): number[] {
+    return this.native.meterTargetInsertGainReduction(targetId);
   }
 
   /** Queue a reset of the master integrated-loudness meter. */

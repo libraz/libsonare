@@ -45,6 +45,7 @@ export interface NativeEngine {
   setTempo(bpm: unknown): void;
   setTimeSignature(numerator: unknown, denominator: unknown): void;
   resetMasterLoudnessMeter(renderFrame?: unknown): void;
+  meterTargetInsertGainReduction(targetId: unknown): number[];
   getTransportState(): NativeTransportState;
   setMarkers(markers: unknown): void;
   markerByIndex(index: unknown): unknown;

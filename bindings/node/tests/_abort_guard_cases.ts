@@ -948,6 +948,14 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.meterTargetInsertGainReduction',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'targetId', call: (e) => e.meterTargetInsertGainReduction('0') },
+      { argument: 'omitted targetId', call: (e) => e.meterTargetInsertGainReduction(undefined) },
+    ],
+  },
+  {
     name: 'RealtimeEngine.sampleAtPpq',
     missingRequired: [],
     badTransportArguments: [{ argument: 'ppq', call: (e) => e.sampleAtPpq('0') }],

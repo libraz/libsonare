@@ -93,3 +93,71 @@ describe('engine meter input peaks and constructed insert values', () => {
     }
   });
 });
+
+describe('per-insert gain reduction query', () => {
+  const insert = (slot: string, processor: string, params: Record<string, number>) => ({
+    slot,
+    processor,
+    params: JSON.stringify(params),
+  });
+  const sceneJson = JSON.stringify({
+    version: 1,
+    strips: [
+      {
+        id: 'track-10',
+        inserts: [
+          insert('pre', 'dynamics.compressor', {
+            thresholdDb: -30,
+            ratio: 10,
+            attackMs: 0.1,
+            releaseMs: 100,
+          }),
+          insert('post', 'dynamics.limiter', { thresholdDb: -20, lookaheadMs: 0, releaseMs: 50 }),
+        ],
+      },
+    ],
+    buses: [],
+    connections: [],
+  });
+
+  it('reports each insert in order and agrees with the meter record', () => {
+    const block = 512;
+    const engine = new RealtimeEngine(48000, block);
+    try {
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [new Float32Array(block * 64).fill(0.9)],
+          startPpq: 0,
+          lengthSamples: block * 64,
+        },
+      ]);
+      engine.setTrackLanes([10]);
+      engine.setTrackStripJson(10, sceneJson);
+      engine.play();
+      for (let i = 0; i < 32; i += 1) {
+        engine.process([new Float32Array(block), new Float32Array(block)]);
+      }
+      const records = engine.drainMeterTelemetry();
+      const lane = records.filter((r) => r.gainReductionDb < 0).at(-1);
+      expect(lane).toBeDefined();
+      const entries = engine.meterTargetInsertGainReduction(lane?.targetId ?? -1);
+      expect(entries).toHaveLength(2);
+      for (const db of entries) {
+        expect(db).toBeLessThanOrEqual(0);
+      }
+      expect(Math.min(...entries)).toBeCloseTo(lane?.gainReductionDb ?? 0, 3);
+      expect(entries[0]).toBeLessThan(0);
+      expect(entries[1]).toBeLessThan(0);
+
+      expect(engine.meterTargetInsertGainReduction(0xffff)).toEqual([]);
+      expect(() => engine.meterTargetInsertGainReduction(41)).toThrow();
+      expect(() => engine.meterTargetInsertGainReduction('1' as unknown as number)).toThrow(
+        TypeError,
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+});

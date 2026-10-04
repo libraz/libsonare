@@ -410,7 +410,7 @@ export class Mixer {
     this.native.setPanLaw(strip, panLawValue(panLaw));
   }
 
-  /** Set a per-strip channel delay in samples (recompiled at the next {@link compile}). */
+  /** Set a per-strip channel delay in samples, moving the strip later relative to the others. */
   setChannelDelaySamples(strip: StripRef, delaySamples: number): void {
     this.native.setChannelDelaySamples(strip, delaySamples);
   }

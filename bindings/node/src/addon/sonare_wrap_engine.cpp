@@ -289,6 +289,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::DrainTelemetry>("drainTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetry>("drainMeterTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetryWide>("drainMeterTelemetryWide"),
+          InstanceMethod<&RealtimeEngineWrap::MeterTargetInsertGainReduction>(
+              "meterTargetInsertGainReduction"),
           InstanceMethod<&RealtimeEngineWrap::ConfigureScopeTelemetry>("configureScopeTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::DrainScopeTelemetry>("drainScopeTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),

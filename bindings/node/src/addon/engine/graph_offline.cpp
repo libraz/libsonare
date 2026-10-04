@@ -358,6 +358,25 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::MeterTargetInsertGainReduction(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t target_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "targetId", &target_id)) return env.Undefined();
+  float db[SONARE_METER_MAX_INSERTS];
+  size_t count = 0;
+  ThrowIfError(env, sonare_engine_meter_target_insert_gain_reduction(
+                        engine_, target_id, db, SONARE_METER_MAX_INSERTS, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  count = std::min<size_t>(count, SONARE_METER_MAX_INSERTS);
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    out.Set(static_cast<uint32_t>(i), Napi::Number::New(env, db[i]));
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
