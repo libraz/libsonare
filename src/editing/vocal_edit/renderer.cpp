@@ -18,6 +18,7 @@
 #include "effects/time_stretch.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::editing::vocal_edit {
@@ -328,7 +329,7 @@ void add_range(std::vector<SampleRange>& ranges, SampleRange range) {
 }
 
 void normalize_ranges(std::vector<SampleRange>& ranges) {
-  std::sort(ranges.begin(), ranges.end(), [](SampleRange lhs, SampleRange rhs) {
+  insertion_sort(ranges.begin(), ranges.end(), [](SampleRange lhs, SampleRange rhs) {
     return lhs.start < rhs.start || (lhs.start == rhs.start && lhs.end < rhs.end);
   });
   std::vector<SampleRange> merged;
@@ -542,7 +543,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
       }
       std::vector<std::size_t> order(state.notes.size());
       for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
-      std::sort(order.begin(), order.end(), [&](std::size_t lhs, std::size_t rhs) {
+      insertion_sort(order.begin(), order.end(), [&](std::size_t lhs, std::size_t rhs) {
         return state.notes[lhs].source_range.start < state.notes[rhs].source_range.start;
       });
       for (const std::size_t index : order) {

@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "editing/vocal_edit/state_codec.h"
+#include "util/insertion_sort.h"
 #include "util/sha256.h"
 
 namespace sonare::editing::vocal_edit {
@@ -284,7 +285,7 @@ void validate_state(const VocalEditState& state, const VocalAnalysisData& analys
                               checked_end(note.edit.destination_start_sample,
                                           note.edit.destination_length_samples, "destination"));
   }
-  std::sort(destinations.begin(), destinations.end());
+  insertion_sort(destinations.begin(), destinations.end());
   for (size_t i = 1; i < destinations.size(); ++i) {
     if (destinations[i - 1].second > destinations[i].first) {
       invalid("notes.destination", "destination note ranges must not overlap");
@@ -490,7 +491,7 @@ void normalize_ranges(std::vector<SampleRange>& ranges) {
   ranges.erase(std::remove_if(ranges.begin(), ranges.end(),
                               [](const SampleRange& range) { return range.start >= range.end; }),
                ranges.end());
-  std::sort(ranges.begin(), ranges.end(), [](const SampleRange& lhs, const SampleRange& rhs) {
+  insertion_sort(ranges.begin(), ranges.end(), [](const SampleRange& lhs, const SampleRange& rhs) {
     return lhs.start < rhs.start || (lhs.start == rhs.start && lhs.end < rhs.end);
   });
   std::vector<SampleRange> merged;
@@ -505,11 +506,12 @@ void normalize_ranges(std::vector<SampleRange>& ranges) {
 }
 
 void sort_transitions(VocalEditState& state) {
-  std::sort(state.transitions.begin(), state.transitions.end(),
-            [](const PitchTransition& lhs, const PitchTransition& rhs) {
-              if (lhs.left_note_id != rhs.left_note_id) return lhs.left_note_id < rhs.left_note_id;
-              return lhs.right_note_id < rhs.right_note_id;
-            });
+  insertion_sort(state.transitions.begin(), state.transitions.end(),
+                 [](const PitchTransition& lhs, const PitchTransition& rhs) {
+                   if (lhs.left_note_id != rhs.left_note_id)
+                     return lhs.left_note_id < rhs.left_note_id;
+                   return lhs.right_note_id < rhs.right_note_id;
+                 });
 }
 
 bool same_edit_content(const VocalNoteEdit& lhs, const VocalNoteEdit& rhs) {
@@ -1076,7 +1078,7 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
   std::vector<size_t> indices;
   indices.reserve(operation.note_ids.size());
   for (const auto id : operation.note_ids) indices.push_back(find_note_or_throw(state, id));
-  std::sort(indices.begin(), indices.end());
+  insertion_sort(indices.begin(), indices.end());
   for (size_t i = 1; i < indices.size(); ++i) {
     if (indices[i] != indices[i - 1] + 1) invalid("note_ids", "merge notes must be adjacent");
   }
