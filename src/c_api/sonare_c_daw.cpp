@@ -111,6 +111,40 @@ bool is_voiced_frame(const int32_t* voiced, const float* voiced_prob, size_t i) 
   return true;
 }
 
+/// Pitch-track contract shared by the time-varying correction entry points: pYIN
+/// NaN unvoiced F0 only where the voiced flag is false; no infinities, negative
+/// frequencies or pitches above Nyquist; voiced_prob in [0, 1] when it is read.
+bool valid_pitch_track(const float* f0_hz, const float* voiced_prob, const int32_t* voiced,
+                       size_t n_frames, int sample_rate) {
+  for (size_t i = 0; i < n_frames; ++i) {
+    const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
+    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) return false;
+    if (!voiced && voiced_prob &&
+        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Builds the F0Track the time-varying correctors consume from the C arrays.
+editing::pitch_editor::F0Track build_pitch_track(const float* f0_hz, const float* voiced_prob,
+                                                 const int32_t* voiced, size_t n_frames,
+                                                 int hop_length, int sample_rate) {
+  editing::pitch_editor::F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = hop_length;
+  track.f0_hz.assign(f0_hz, f0_hz + n_frames);
+  track.voiced.resize(n_frames);
+  track.voiced_prob.resize(n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
+    track.voiced[i] = is_voiced;
+    track.voiced_prob[i] = !voiced && voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
+  }
+  return track;
+}
+
 /// Resolves a versioned note-extractor config onto the core defaults. Every
 /// float takes its default at 0, matching sonare_note_segments.
 SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
@@ -401,9 +435,7 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -425,9 +457,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!f0_hz || n_frames == 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -438,30 +468,14 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
   // pYIN represents unvoiced F0 as NaN. Accept that canonical representation
   // only when the matching voiced flag is false; reject infinities, negative
   // frequencies, and pitches above Nyquist.
-  for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
-    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!voiced && voiced_prob &&
-        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+  if (!valid_pitch_track(f0_hz, voiced_prob, voiced, n_frames, sample_rate)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::PitchCorrector corrector;
-    editing::pitch_editor::F0Track track;
-    track.sample_rate = sample_rate;
-    track.hop_length = hop_length;
-    track.f0_hz.assign(f0_hz, f0_hz + n_frames);
-    track.voiced.resize(n_frames);
-    track.voiced_prob.resize(n_frames);
-    for (size_t i = 0; i < n_frames; ++i) {
-      const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
-      track.voiced[i] = is_voiced;
-      track.voiced_prob[i] = !voiced && voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
-    }
+    const editing::pitch_editor::F0Track track =
+        build_pitch_track(f0_hz, voiced_prob, voiced, n_frames, hop_length, sample_rate);
     Audio result = corrector.correct_to_midi_timevarying(audio, track, target_midi);
     return copy_audio_result(result, out, out_length);
   });
@@ -499,9 +513,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!f0_hz || n_frames == 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -543,30 +555,14 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
   const float target_midi = config ? config->target_midi : constants::kMidiA4;
 
   // Match the fixed-target entry point's pYIN/Nyquist contract.
-  for (size_t i = 0; i < n_frames; ++i) {
-    const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
-    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!voiced && voiced_prob &&
-        (!std::isfinite(voiced_prob[i]) || voiced_prob[i] < 0.0f || voiced_prob[i] > 1.0f)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+  if (!valid_pitch_track(f0_hz, voiced_prob, voiced, n_frames, sample_rate)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::PitchCorrector corrector(core_config);
-    editing::pitch_editor::F0Track track;
-    track.sample_rate = sample_rate;
-    track.hop_length = hop_length;
-    track.f0_hz.assign(f0_hz, f0_hz + n_frames);
-    track.voiced.resize(n_frames);
-    track.voiced_prob.resize(n_frames);
-    for (size_t i = 0; i < n_frames; ++i) {
-      const bool is_voiced = is_voiced_frame(voiced, voiced_prob, i);
-      track.voiced[i] = is_voiced;
-      track.voiced_prob[i] = !voiced && voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
-    }
+    const editing::pitch_editor::F0Track track =
+        build_pitch_track(f0_hz, voiced_prob, voiced, n_frames, hop_length, sample_rate);
     Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)
                               : corrector.correct_to_midi_timevarying(audio, track, target_midi);
     return copy_audio_result(result, out, out_length);
@@ -582,9 +578,7 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -651,9 +645,7 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
                                 size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -988,9 +980,7 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             const SonarePercussiveRenderConfig* config, float** out,
                                             size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (events == nullptr && count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   editing::event_model::PercussiveEventRenderConfig render_config;
@@ -1033,9 +1023,7 @@ SonareError sonare_note_move(const float* samples, size_t length, int sample_rat
                              size_t* out_length) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {

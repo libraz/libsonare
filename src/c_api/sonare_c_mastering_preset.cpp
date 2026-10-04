@@ -86,17 +86,7 @@ SonareError sonare_master_audio(const char* preset_name, const float* samples, s
                                 size_t override_count, SonareMasteringChainResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  // Define the result before any validation return, so a rejected call hands
-  // back a defined struct rather than the caller's untouched stack slot.
-  out->samples = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->stages = nullptr;
-  out->stages_count = 0;
-  zero_chain_metrics(out);
+  clear_chain_result(out, sample_rate);
 
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -118,24 +108,11 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
                                        SonareMasteringChainStereoResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  // Define the result before any validation return, so a rejected call hands
-  // back a defined struct rather than the caller's untouched stack slot.
-  out->left = nullptr;
-  out->right = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->stages = nullptr;
-  out->stages_count = 0;
-  zero_chain_metrics(out);
+  clear_chain_result(out, sample_rate);
 
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
-  SonareError verr = validate_audio_params(left, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  verr = validate_audio_params(right, length, sample_rate);
+  SonareError verr = validate_stereo_audio_params(left, right, length, sample_rate);
   if (verr != SONARE_OK) return verr;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -156,17 +133,7 @@ SonareError sonare_master_audio_with_progress_ex(
     SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  // Define the result before any validation return, so a rejected call hands
-  // back a defined struct rather than the caller's untouched stack slot.
-  out->samples = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->stages = nullptr;
-  out->stages_count = 0;
-  zero_chain_metrics(out);
+  clear_chain_result(out, sample_rate);
 
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -181,14 +148,8 @@ SonareError sonare_master_audio_with_progress_ex(
                                                          cpp_overrides.size());
   }
   sonare::mastering::api::MasteringChain chain(std::move(config));
-  if (callback) {
-    chain.set_progress_callback([callback, user_data](float progress, const char* stage) {
-      callback(progress, stage, user_data);
-    });
-  }
+  attach_chain_callbacks(chain, callback, user_data, cancel_cb, cancel_user_data);
   if (cancel_cb) {
-    chain.set_cancel_callback(
-        [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
     auto result = chain.process_mono_cancellable(samples, length, sample_rate);
     if (!result) return SONARE_ERROR_CANCELLED;
     fill_mono_chain_result(*result, out);
@@ -207,24 +168,11 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
     SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
-  // Define the result before any validation return, so a rejected call hands
-  // back a defined struct rather than the caller's untouched stack slot.
-  out->left = nullptr;
-  out->right = nullptr;
-  out->length = 0;
-  out->sample_rate = sample_rate;
-  out->input_lufs = 0.0f;
-  out->output_lufs = 0.0f;
-  out->applied_gain_db = 0.0f;
-  out->stages = nullptr;
-  out->stages_count = 0;
-  zero_chain_metrics(out);
+  clear_chain_result(out, sample_rate);
 
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
-  SonareError verr = validate_audio_params(left, length, sample_rate);
-  if (verr != SONARE_OK) return verr;
-  verr = validate_audio_params(right, length, sample_rate);
+  SonareError verr = validate_stereo_audio_params(left, right, length, sample_rate);
   if (verr != SONARE_OK) return verr;
   if (!overrides && override_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -237,14 +185,8 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
                                                          cpp_overrides.size());
   }
   sonare::mastering::api::MasteringChain chain(std::move(config));
-  if (callback) {
-    chain.set_progress_callback([callback, user_data](float progress, const char* stage) {
-      callback(progress, stage, user_data);
-    });
-  }
+  attach_chain_callbacks(chain, callback, user_data, cancel_cb, cancel_user_data);
   if (cancel_cb) {
-    chain.set_cancel_callback(
-        [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
     auto result = chain.process_stereo_cancellable(left, right, length, sample_rate);
     if (!result) return SONARE_ERROR_CANCELLED;
     fill_stereo_chain_result(*result, out);

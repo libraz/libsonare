@@ -19,6 +19,7 @@
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 using sonare::Audio;
+using sonare_c_detail::begin_vector_output;
 using sonare_c_detail::run_mono_offline;
 using sonare_c_detail::run_offline;
 #endif
@@ -308,9 +309,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                               const SonareRoomMorphConfig* config, float** out,
                               size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_warning();
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;

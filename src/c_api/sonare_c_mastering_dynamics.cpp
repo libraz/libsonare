@@ -77,11 +77,6 @@ sonare::mastering::dynamics::TransientShaperConfig to_cpp_transient_shaper_confi
   return cpp;
 }
 
-void clear_float_output(float** out, size_t* out_length) {
-  *out = nullptr;
-  *out_length = 0;
-}
-
 template <typename Processor>
 void run_processor_offline(Processor& processor, std::vector<float>& samples, int sample_rate,
                            int* out_latency_samples) {
@@ -101,8 +96,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
                                                  size_t* out_length, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = 0;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
@@ -119,8 +113,7 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
                                            size_t* out_length, int* out_latency_samples) {
   SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = 0;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 
@@ -139,8 +132,7 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
                                                        int* out_latency_samples) {
   SONARE_C_API_ENTRY;
   if (out_latency_samples) *out_latency_samples = 0;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
 

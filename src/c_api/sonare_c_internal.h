@@ -162,6 +162,16 @@ inline sonare::WindowType to_window_type(int value) {
   return sonare::WindowType::Hann;
 }
 
+/// @brief Null-checks and zeroes a (pointer, length) output pair before any
+///        validation return; false means refuse with SONARE_ERROR_INVALID_PARAMETER.
+template <typename T>
+inline bool begin_vector_output(T** out, size_t* out_length) {
+  if (!out || !out_length) return false;
+  *out = nullptr;
+  *out_length = 0;
+  return true;
+}
+
 template <typename T>
 T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();

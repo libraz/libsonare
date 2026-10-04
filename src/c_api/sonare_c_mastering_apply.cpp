@@ -165,9 +165,7 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   out->loudness_target_limited = 0;
   out->non_finite_substitution_count = 0;
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -182,12 +180,8 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   out->latency_samples = result.latency_samples;
   out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   out->non_finite_substitution_count = result.non_finite_substitution_count;
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -522,13 +516,11 @@ SonareError sonare_mastering_apply_pair_processor_stereo_ex(
   clear_stereo_result(out, sample_rate);
   if (!processor_name || processor_name[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
 
-  SonareError err = validate_audio_params(source_left, source_length, sample_rate);
+  SonareError err =
+      validate_stereo_audio_params(source_left, source_right, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params(source_right, source_length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(reference_left, reference_length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(reference_right, reference_length, sample_rate);
+  err =
+      validate_stereo_audio_params(reference_left, reference_right, reference_length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -589,9 +581,7 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
   SONARE_C_API_ENTRY;
   if (!json_out || !analysis_name) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
   if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -611,9 +601,7 @@ SonareError sonare_mastering_ab_match_loudness(const float* source, size_t sourc
   // error code must not read the scalars left in the struct by whatever wrote
   // it last as though this call had measured them.
   if (out_match) *out_match = SonareLoudnessMatch{};
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
   err = validate_audio_params(reference, reference_length, sample_rate);
@@ -640,13 +628,11 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   clear_stereo_result(out, sample_rate);
 
-  SonareError err = validate_audio_params(source_left, source_length, sample_rate);
+  SonareError err =
+      validate_stereo_audio_params(source_left, source_right, source_length, sample_rate);
   if (err != SONARE_OK) return err;
-  err = validate_audio_params(source_right, source_length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(reference_left, reference_length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(reference_right, reference_length, sample_rate);
+  err =
+      validate_stereo_audio_params(reference_left, reference_right, reference_length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY

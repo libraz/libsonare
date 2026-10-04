@@ -119,6 +119,68 @@ inline void zero_chain_metrics(ChainResultT* out) {
   std::memset(&out->report, 0, sizeof(out->report));
 }
 
+// Validate both channels of a stereo pair, left first.
+inline SonareError validate_stereo_audio_params(const float* left, const float* right,
+                                                size_t length, int sample_rate) {
+  SonareError err = sonare_c_detail::validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  return sonare_c_detail::validate_audio_params(right, length, sample_rate);
+}
+
+// Copy a stereo pair into two freshly allocated arrays and release them to the
+// caller. Both arrays are allocated before either output pointer is written.
+inline void copy_stereo_channels(const float* left, const float* right, size_t length,
+                                 float** out_left, float** out_right) {
+  std::unique_ptr<float[]> left_out(new float[length]);
+  std::unique_ptr<float[]> right_out(new float[length]);
+  std::memcpy(left_out.get(), left, length * sizeof(float));
+  std::memcpy(right_out.get(), right, length * sizeof(float));
+  *out_left = sonare_c_detail::release_array(left_out);
+  *out_right = sonare_c_detail::release_array(right_out);
+}
+
+// Define a chain result before any validation return, so a rejected call hands
+// back a defined struct rather than the caller's untouched stack slot.
+inline void clear_chain_result(SonareMasteringChainResult* out, int sample_rate) {
+  out->samples = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->input_lufs = 0.0f;
+  out->output_lufs = 0.0f;
+  out->applied_gain_db = 0.0f;
+  out->stages = nullptr;
+  out->stages_count = 0;
+  zero_chain_metrics(out);
+}
+
+inline void clear_chain_result(SonareMasteringChainStereoResult* out, int sample_rate) {
+  out->left = nullptr;
+  out->right = nullptr;
+  out->length = 0;
+  out->sample_rate = sample_rate;
+  out->input_lufs = 0.0f;
+  out->output_lufs = 0.0f;
+  out->applied_gain_db = 0.0f;
+  out->stages = nullptr;
+  out->stages_count = 0;
+  zero_chain_metrics(out);
+}
+
+// Forward the optional progress and cancel callbacks onto a chain.
+inline void attach_chain_callbacks(sonare::mastering::api::MasteringChain& chain,
+                                   SonareMasteringProgressCallback callback, void* user_data,
+                                   SonareCancelCallback cancel_cb, void* cancel_user_data) {
+  if (callback) {
+    chain.set_progress_callback([callback, user_data](float progress, const char* stage) {
+      callback(progress, stage, user_data);
+    });
+  }
+  if (cancel_cb) {
+    chain.set_cancel_callback(
+        [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
+  }
+}
+
 inline void set_mastering_loudness_summary(
     const sonare::mastering::api::MasteringLoudnessSummary& summary,
     SonareMasteringLoudnessSummary* out) {
@@ -219,12 +281,8 @@ inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainRe
   out->applied_gain_db = result.applied_gain_db;
 
   if (out->length > 0) {
-    std::unique_ptr<float[]> left_out(new float[out->length]);
-    std::unique_ptr<float[]> right_out(new float[out->length]);
-    std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-    std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-    out->left = sonare_c_detail::release_array(left_out);
-    out->right = sonare_c_detail::release_array(right_out);
+    copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                         &out->right);
   }
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();

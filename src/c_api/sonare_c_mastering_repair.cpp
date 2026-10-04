@@ -15,10 +15,13 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
 #include "sonare_c_internal.h"
+#include "sonare_c_mastering_helpers.h"
 #include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
+using sonare_c_mastering_detail::copy_stereo_channels;
+using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
@@ -371,21 +374,13 @@ SonareError run_linked(const float* const* channels, size_t channel_count, size_
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
-void clear_float_output(float** out, size_t* out_length) {
-  *out = nullptr;
-  *out_length = 0;
-}
-
 }  // namespace
 
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
                                             const SonareDeclickConfig* config, float** out,
                                             size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::declick(audio, to_cpp_declick_config(config));
@@ -403,9 +398,7 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
   // result rather than whatever the caller's stack slot held.
   *out = SonareDeclickStereoResult{};
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -415,12 +408,8 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
   out->length = result.left.size();
   out->left_report = to_c_declick_report(result.left_report);
   out->right_report = to_c_declick_report(result.right_report);
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -441,10 +430,7 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       const SonareDenoiseClassicalConfig* config,
                                                       float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -472,9 +458,7 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -483,12 +467,8 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
       to_cpp_denoise_config(config));
   out->length = result.left.size();
   out->report = to_c_denoise_report(result.report);
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -548,10 +528,7 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
                                            const SonareDeclipConfig* config, float** out,
                                            size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config));
@@ -569,9 +546,7 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
   // result rather than whatever the caller's stack slot held.
   *out = SonareDeclipStereoResult{};
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -581,12 +556,8 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
   out->length = result.left.size();
   out->left_report = to_c_declip_report(result.left_report);
   out->right_report = to_c_declip_report(result.right_report);
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -606,10 +577,7 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
                                               const SonareDecrackleConfig* config, float** out,
                                               size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config));
@@ -627,9 +595,7 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
   // result rather than whatever the caller's stack slot held.
   *out = SonareDecrackleStereoResult{};
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -639,12 +605,8 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
   out->length = result.left.size();
   out->left_report = to_c_decrackle_report(result.left_report);
   out->right_report = to_c_decrackle_report(result.right_report);
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -664,10 +626,7 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
                                           const SonareDehumConfig* config, float** out,
                                           size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::dehum(audio, to_cpp_dehum_config(config));
@@ -685,9 +644,7 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
   // result rather than whatever the caller's stack slot held.
   *out = SonareDehumStereoResult{};
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -697,12 +654,8 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
   out->length = result.left.size();
   out->left_report = to_c_dehum_report(result.left_report);
   out->right_report = to_c_dehum_report(result.right_report);
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -722,10 +675,7 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        const SonareDereverbClassicalConfig* config,
                                                        float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (config) {
     if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
     if (config->hop_length <= 0 || config->hop_length > config->n_fft) {
@@ -757,9 +707,7 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
       return SONARE_ERROR_INVALID_PARAMETER;
     }
   }
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -768,12 +716,8 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
       to_cpp_dereverb_config(config));
   out->length = result.left.size();
   out->report = to_c_dereverb_report(result.report);
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -815,10 +759,7 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
                                                  const SonareTrimSilenceConfig* config, float** out,
                                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  clear_float_output(out, out_length);
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result =
@@ -837,9 +778,7 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
   // result rather than whatever the caller's stack slot held.
   *out = SonareTrimSilenceStereoResult{};
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
@@ -854,12 +793,8 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
   // produce. Hand back (NULL, 0) rather than a zero-length allocation, matching
   // the empty-result policy the mono entries take through copy_audio_result.
   if (out->length == 0) return SONARE_OK;
-  std::unique_ptr<float[]> left_out(new float[out->length]);
-  std::unique_ptr<float[]> right_out(new float[out->length]);
-  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-  out->left = release_array(left_out);
-  out->right = release_array(right_out);
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -885,9 +820,7 @@ SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, 
   // range rather than whatever the caller's stack slot held.
   *out = SonareTrimRange{};
 
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY

@@ -28,10 +28,12 @@
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
 #include "sonare_c_internal.h"
+#include "sonare_c_mastering_helpers.h"
 #include "util/zero_is_default.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
+using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
 
@@ -114,9 +116,7 @@ SonareError sonare_metering_crest_factor_db_stereo(const float* left, const floa
   SONARE_C_API_ENTRY;
   if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
   *out_db = 0.0f;
-  SonareError err = validate_audio_params(left, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  err = validate_audio_params(right, length, sample_rate);
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY

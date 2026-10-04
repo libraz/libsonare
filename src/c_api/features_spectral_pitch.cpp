@@ -10,9 +10,7 @@
 SonareError sonare_tone(float frequency, int sample_rate, float duration, float phase,
                         float amplitude, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   return fill_audio_samples(tone(frequency, sample_rate, duration, phase, amplitude), out,
                             out_length);
@@ -22,9 +20,7 @@ SonareError sonare_tone(float frequency, int sample_rate, float duration, float 
 SonareError sonare_chirp(float fmin, float fmax, int sample_rate, float duration, int linear,
                          float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (linear != 0 && linear != 1) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   return fill_audio_samples(chirp(fmin, fmax, sample_rate, duration, linear != 0), out, out_length);
@@ -34,9 +30,7 @@ SonareError sonare_chirp(float fmin, float fmax, int sample_rate, float duration
 SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, int length,
                           float frequency, float click_duration, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!times && time_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::vector<float> values;
@@ -140,9 +134,7 @@ SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sam
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_count = 0;
+  if (!begin_vector_output(out, out_count)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
@@ -166,9 +158,7 @@ SonareError sonare_spectral_flatness(const float* samples, size_t length, int sa
 SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
                                  int hop_length, int lag, float** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_count = 0;
+  if (!begin_vector_output(out, out_count)) return SONARE_ERROR_INVALID_PARAMETER;
   if (lag < 1) return SONARE_ERROR_INVALID_PARAMETER;
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
@@ -189,9 +179,7 @@ SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int s
                                       int frame_length, int hop_length, float** out,
                                       size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_count = 0;
+  if (!begin_vector_output(out, out_count)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> result = zero_crossing_rate(audio, frame_length, hop_length);
@@ -284,9 +272,7 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
                                   int ref_magnitude, int pad, int zero_pos, int** out,
                                   size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_count = 0;
+  if (!begin_vector_output(out, out_count)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!samples && length > 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!numeric::finite_non_negative(threshold)) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -305,9 +291,7 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
 SonareError sonare_onset_backtrack(const int* events, size_t event_count, const float* energy,
                                    size_t energy_count, int** out, size_t* out_count) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_count = 0;
+  if (!begin_vector_output(out, out_count)) return SONARE_ERROR_INVALID_PARAMETER;
   if ((!events && event_count > 0) || (!energy && energy_count > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -642,9 +626,7 @@ int sonare_time_to_frames(float time, int sr, int hop_length) {
 SonareError sonare_resample(const float* samples, size_t length, int src_sr, int target_sr,
                             float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (src_sr < kMinSampleRate || src_sr > kMaxSampleRate || target_sr < kMinSampleRate ||
       target_sr > kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
