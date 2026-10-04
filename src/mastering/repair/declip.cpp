@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
+#include "mastering/repair/run_union.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/lpc.h"
@@ -113,22 +114,7 @@ ClipDetection to_detection(const std::vector<float>& samples, const std::vector<
 /// both channels reconstruct over. Runs that merely touch stay separate, as two
 /// adjacent runs already do in one channel.
 std::vector<ClipRun> union_runs(const std::vector<ClipRun>& a, const std::vector<ClipRun>& b) {
-  std::vector<ClipRun> merged;
-  merged.reserve(a.size() + b.size());
-  merged.insert(merged.end(), a.begin(), a.end());
-  merged.insert(merged.end(), b.begin(), b.end());
-  std::sort(merged.begin(), merged.end(),
-            [](const ClipRun& lhs, const ClipRun& rhs) { return lhs.start < rhs.start; });
-
-  std::vector<ClipRun> result;
-  for (const ClipRun& run : merged) {
-    if (!result.empty() && run.start < result.back().end) {
-      result.back().end = std::max(result.back().end, run.end);
-      continue;
-    }
-    result.push_back(run);
-  }
-  return result;
+  return union_sorted_runs(a, b);
 }
 
 bool any_at_or_past(const std::vector<float>& samples, const ClipRun& run, float clip_threshold) {

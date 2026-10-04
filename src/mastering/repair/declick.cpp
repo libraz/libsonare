@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
+#include "mastering/repair/run_union.h"
 #include "util/exception.h"
 #include "util/lpc.h"
 #include "util/validated.h"
@@ -200,22 +201,7 @@ ClickDetection to_detection(const ChannelAnalysis& analysis, size_t size, int sa
 /// both channels are repaired over. Runs that merely touch stay separate; each
 /// then anchors on the other's repaired output, as adjacent runs already do.
 std::vector<ClickRun> union_runs(const std::vector<ClickRun>& a, const std::vector<ClickRun>& b) {
-  std::vector<ClickRun> merged;
-  merged.reserve(a.size() + b.size());
-  merged.insert(merged.end(), a.begin(), a.end());
-  merged.insert(merged.end(), b.begin(), b.end());
-  std::sort(merged.begin(), merged.end(),
-            [](const ClickRun& lhs, const ClickRun& rhs) { return lhs.start < rhs.start; });
-
-  std::vector<ClickRun> result;
-  for (const ClickRun& run : merged) {
-    if (!result.empty() && run.start < result.back().end) {
-      result.back().end = std::max(result.back().end, run.end);
-      continue;
-    }
-    result.push_back(run);
-  }
-  return result;
+  return union_sorted_runs(a, b);
 }
 
 size_t count_linked_runs(const std::vector<ClickRun>& applied, const std::vector<ClickRun>& own) {
