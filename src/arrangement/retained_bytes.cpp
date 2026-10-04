@@ -68,6 +68,14 @@ std::size_t SetTrackMute::retained_bytes() const noexcept { return sizeof(*this)
 std::size_t SetTrackSolo::retained_bytes() const noexcept { return sizeof(*this); }
 std::size_t SetTrackPan::retained_bytes() const noexcept { return sizeof(*this); }
 
+// Part rig commands ---------------------------------------------------------
+
+std::size_t SetPartRig::retained_bytes() const noexcept {
+  return add(sizeof(*this), retained::dynamic_bytes(entry_));
+}
+
+std::size_t ClearPartRig::retained_bytes() const noexcept { return sizeof(*this); }
+
 // Clip commands -------------------------------------------------------------
 
 std::size_t AddClip::retained_bytes() const noexcept {

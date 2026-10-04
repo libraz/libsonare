@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,6 +36,47 @@ using namespace detail;
 
 constexpr double kMinProjectSampleRate = 8000.0;
 constexpr double kMaxProjectSampleRate = 384000.0;
+
+constexpr const char* kPartRigModeNames[] = {"bank", "none", "chain"};
+
+Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
+  Object o;
+  o["destination_id"] = static_cast<double>(entry.destination_id);
+  o["part"] = static_cast<double>(entry.part);
+  o["mode"] = std::string(kPartRigModeNames[static_cast<size_t>(entry.rig.mode)]);
+  if (entry.rig.mode == midi::PartRigMode::kChain) {
+    Array inserts;
+    for (const auto& stage : entry.rig.stages) {
+      Object so;
+      so["processor"] = stage.processor;
+      so["params"] = stage.params_json;
+      inserts.push_back(std::move(so));
+    }
+    o["inserts"] = std::move(inserts);
+  }
+  return o;
+}
+
+// Returns nullopt for a value no part rig can take (part or mode out of range).
+// Whether the stages fit the mode is left to Project::set_part_rig.
+std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v) {
+  arrangement::ProjectPartRig entry;
+  entry.destination_id = uint_or(v, "destination_id", 0);
+  uint8_t part = 0;
+  if (!numeric::checked_integral_cast(num_or(v, "part", 0.0), &part)) return std::nullopt;
+  entry.part = part;
+  const std::string mode = str_or(v, "mode", "");
+  const auto* found = std::find(std::begin(kPartRigModeNames), std::end(kPartRigModeNames), mode);
+  if (found == std::end(kPartRigModeNames)) return std::nullopt;
+  entry.rig.mode = static_cast<midi::PartRigMode>(found - std::begin(kPartRigModeNames));
+  if (const auto* inserts = array_at(v, "inserts")) {
+    for (const auto& sv : *inserts) {
+      if (!sv.is_object()) return std::nullopt;
+      entry.rig.stages.push_back({str_or(sv, "processor", ""), str_or(sv, "params", "{}")});
+    }
+  }
+  return entry;
+}
 
 bool count_array_entities(const Value& value, std::size_t limit, std::size_t* total) {
   if (value.is_array()) {
@@ -118,7 +160,9 @@ Value project_to_value(const arrangement::Project& project,
       project.clips().begin(), project.clips().end(),
       [](const arrangement::EditClip& clip) { return !clip.comp_render_parts.empty(); });
   uint32_t schema_version = SONARE_PROJECT_SCHEMA_VERSION_OPAQUE;
-  if (has_comp_render_parts) {
+  if (!project.part_rigs().empty()) {
+    schema_version = SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS;
+  } else if (has_comp_render_parts) {
     schema_version = SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS;
   } else if (has_physical_clip_field) {
     schema_version = SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
@@ -152,6 +196,12 @@ Value project_to_value(const arrangement::Project& project,
   Array warp_maps;
   for (const auto& map : project.warp_maps()) warp_maps.push_back(warp_map_to_json(map));
   root["warp_maps"] = std::move(warp_maps);
+
+  if (!project.part_rigs().empty()) {
+    Array part_rigs;
+    for (const auto& entry : project.part_rigs()) part_rigs.push_back(part_rig_to_json(entry));
+    root["part_rigs"] = std::move(part_rigs);
+  }
 
   Array markers;
   for (const auto& m : project.markers()) markers.push_back(marker_to_json(m));
@@ -518,6 +568,22 @@ DeserializeResult project_from_json(const std::string& json_text) {
                    " has an invalid id or malformed anchors and was dropped"});
         } else {
           warp_ids.insert(map_id);
+        }
+      }
+    }
+
+    // Part rigs (plain project metadata, schema version 5 and later). An entry
+    // that fails the shared shape check is dropped with a warning.
+    if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS) {
+      if (const auto* arr = array_at(root, "part_rigs")) {
+        for (const auto& rv : *arr) {
+          if (!rv.is_object()) continue;
+          const auto entry = part_rig_from_json(rv);
+          if (!entry || !project.set_part_rig(*entry)) {
+            result.diagnostics.push_back({DiagnosticSeverity::kWarning, "invalid_part_rig",
+                                          "a part rig entry has an invalid part, mode or inserts "
+                                          "and was dropped"});
+          }
         }
       }
     }

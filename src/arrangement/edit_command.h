@@ -583,6 +583,40 @@ class RemoveWarpMap final : public EditCommand {
   WarpRefId id_;
 };
 
+/// Sets (inserts or replaces) the part rig for (destination_id, part).
+/// Deterministic, undoable.
+class SetPartRig final : public EditCommand {
+ public:
+  SetPartRig(uint32_t destination_id, uint8_t part, midi::PartRig rig)
+      : entry_{destination_id, part, std::move(rig)} {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetPartRig"; }
+  std::size_t retained_bytes() const noexcept override;
+  bool mutates_midi_store() const noexcept override { return false; }
+
+ private:
+  ProjectPartRig entry_;
+};
+
+/// Removes the part rig for (destination_id, part). Fails when none exists.
+class ClearPartRig final : public EditCommand {
+ public:
+  ClearPartRig(uint32_t destination_id, uint8_t part)
+      : destination_id_(destination_id), part_(part) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "ClearPartRig"; }
+  std::size_t retained_bytes() const noexcept override;
+  bool mutates_midi_store() const noexcept override { return false; }
+
+ private:
+  uint32_t destination_id_;
+  uint8_t part_;
+};
+
 class RestoreWarpMap final : public EditCommand {
  public:
   RestoreWarpMap(WarpMapRef map, std::vector<ClipId> clip_ids)

@@ -305,6 +305,37 @@ std::pair<WarpMapRef, bool> Project::remove_warp_map(WarpRefId id) {
   return {WarpMapRef{}, false};
 }
 
+const ProjectPartRig* Project::find_part_rig(uint32_t destination_id, uint8_t part) const noexcept {
+  for (const ProjectPartRig& entry : part_rigs_) {
+    if (entry.destination_id == destination_id && entry.part == part) return &entry;
+  }
+  return nullptr;
+}
+
+bool Project::set_part_rig(ProjectPartRig entry) {
+  if (!midi::validate_part_rig(entry.part, entry.rig)) return false;
+  const auto key = [](const ProjectPartRig& e) { return std::pair(e.destination_id, e.part); };
+  auto it = std::lower_bound(
+      part_rigs_.begin(), part_rigs_.end(), entry,
+      [&](const ProjectPartRig& a, const ProjectPartRig& b) { return key(a) < key(b); });
+  if (it != part_rigs_.end() && key(*it) == key(entry)) {
+    *it = std::move(entry);
+  } else {
+    part_rigs_.insert(it, std::move(entry));
+  }
+  return true;
+}
+
+bool Project::remove_part_rig(uint32_t destination_id, uint8_t part) {
+  for (auto it = part_rigs_.begin(); it != part_rigs_.end(); ++it) {
+    if (it->destination_id == destination_id && it->part == part) {
+      part_rigs_.erase(it);
+      return true;
+    }
+  }
+  return false;
+}
+
 uint32_t Project::add_marker(double ppq, std::string name, uint8_t kind, int8_t key_fifths,
                              bool key_minor) {
   const uint32_t id = allocate_entity_id(next_marker_id_);

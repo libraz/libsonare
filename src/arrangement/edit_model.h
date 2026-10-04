@@ -32,6 +32,7 @@
 #include "arrangement/edit_source.h"
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
+#include "midi/part_rig.h"
 #include "mixing/api/scene.h"
 #include "transport/tempo_map.h"
 
@@ -82,6 +83,16 @@ struct WarpMapRef {
     return id == o.id && name == o.name && anchors == o.anchors;
   }
   bool operator!=(const WarpMapRef& o) const noexcept { return !(*this == o); }
+};
+
+/// A per-part rig selection owned by the project. @c part is a GS part slot
+/// (0-15) or @ref sonare::midi::kPartRigAllParts for the destination default;
+/// entries are unique per (destination_id, part). A destination no track
+/// references is kept as-is.
+struct ProjectPartRig {
+  uint32_t destination_id = 0;
+  uint8_t part = 0;
+  midi::PartRig rig;
 };
 
 // ===========================================================================
@@ -618,6 +629,12 @@ class Project {
   WarpMapRef* find_warp_map_mutable(WarpRefId id) noexcept;
   bool has_warp_map(WarpRefId id) const noexcept { return find_warp_map(id) != nullptr; }
 
+  // ---- Part rigs ------------------------------------------------------------
+
+  /// Entries in canonical (destination_id, part) order.
+  const std::vector<ProjectPartRig>& part_rigs() const noexcept { return part_rigs_; }
+  const ProjectPartRig* find_part_rig(uint32_t destination_id, uint8_t part) const noexcept;
+
   // ---- Low-level mutation helpers (used by EditCommand; not for general use) -
   //
   // The arrangement subsystem routes ALL public mutation through EditCommand
@@ -699,6 +716,12 @@ class Project {
   /// Removes a warp map by id and returns the removed map plus success flag.
   std::pair<WarpMapRef, bool> remove_warp_map(WarpRefId id);
 
+  /// Replaces or inserts a part rig by (destination_id, part). Returns false
+  /// when the shape fails @ref sonare::midi::validate_part_rig.
+  bool set_part_rig(ProjectPartRig entry);
+  /// Removes a part rig. Returns false when no such entry exists.
+  bool remove_part_rig(uint32_t destination_id, uint8_t part);
+
  private:
   // Default project sample rate. 48 kHz is the conventional DAW production rate
   // (the librosa analysis default of 22.05 kHz is lo-fi for arrangement render).
@@ -717,6 +740,7 @@ class Project {
   mixing::api::Scene scene_;
   std::vector<AssistSidecar> assist_sidecars_;
   std::vector<WarpMapRef> warp_maps_;
+  std::vector<ProjectPartRig> part_rigs_;
 
   // Independent, monotonic, never-reused id counters (deterministic; no rand).
   // Never-reused holds WITHIN a project lifetime only: the counters are not

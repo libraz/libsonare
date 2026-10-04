@@ -180,6 +180,14 @@ inline std::size_t dynamic_bytes(const mixing::api::Scene& value) noexcept {
   return saturating_add(total, dynamic_bytes(value.connections));
 }
 
+inline std::size_t dynamic_bytes(const midi::PartRigStage& value) noexcept {
+  return saturating_add(dynamic_bytes(value.processor), dynamic_bytes(value.params_json));
+}
+
+inline std::size_t dynamic_bytes(const ProjectPartRig& value) noexcept {
+  return dynamic_bytes(value.rig.stages);
+}
+
 /// Account all project-owned dynamic containers. The Project object itself is
 /// counted by bytes(Project); this helper only describes its dynamic payload.
 inline std::size_t dynamic_bytes(const Project& value) noexcept {
@@ -192,7 +200,8 @@ inline std::size_t dynamic_bytes(const Project& value) noexcept {
   total = saturating_add(total, dynamic_bytes(value.annotation()));
   total = saturating_add(total, dynamic_bytes(value.scene()));
   total = saturating_add(total, dynamic_bytes(value.assist_sidecars()));
-  return saturating_add(total, dynamic_bytes(value.warp_maps()));
+  total = saturating_add(total, dynamic_bytes(value.warp_maps()));
+  return saturating_add(total, dynamic_bytes(value.part_rigs()));
 }
 
 template <typename T>

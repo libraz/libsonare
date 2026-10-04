@@ -1485,6 +1485,7 @@ if(BUILD_WASM)
       c_api/project_external_stems.cpp
       c_api/project_midi.cpp
       c_api/project_mir.cpp
+      c_api/project_part_rig.cpp
       c_api/sonare_c_transcribe.cpp
       c_api/sonare_c_assist.cpp
       c_api/project_soundfont.cpp
