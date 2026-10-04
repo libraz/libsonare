@@ -84,6 +84,7 @@ describe('Sonare WASM Module', () => {
         arrangement: true,
         acousticSim: true,
         pitchEditor: true,
+        vocalEdit: true,
         voiceChanger: true,
         playback: true,
       });
@@ -98,6 +99,7 @@ describe('Sonare WASM Module', () => {
         'mixingAssistant',
         'pitchEditor',
         'playback',
+        'vocalEdit',
         'voiceChanger',
       ]);
       expect(capabilities().hardwareConcurrency).toBeGreaterThanOrEqual(1);

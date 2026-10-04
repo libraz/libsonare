@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyzePolyphonic,
+  createVocalEditSession,
   HrtfSet,
   init,
   Mixer,
@@ -74,6 +75,7 @@ describe('WASM handle disposal names', () => {
       () => new PlaybackRenderer({ config: {}, hrtf: HrtfSet.fromBytes(hrtfBytes()) }),
     ],
     ['PlaybackLoudnessMeter', () => new PlaybackLoudnessMeter(2, 48000)],
+    ['VocalEditSession', () => createVocalEditSession({ samples: tone(), sampleRate: 22050 })],
   ];
 
   for (const [name, create] of handles) {

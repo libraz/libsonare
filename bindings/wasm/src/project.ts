@@ -121,4 +121,5 @@ export {
   PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
   PROJECT_AUTOMATION_TARGET_TRACK_PAN,
 } from './project_types';
+export type * from './public_types_vocal_project';
 export { SampleBank } from './sample_bank';

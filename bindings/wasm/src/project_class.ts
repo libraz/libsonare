@@ -60,6 +60,13 @@ import type {
   ProjectWarpMapDesc,
   ProjectWarpMode,
 } from './project_types';
+import type {
+  ProjectVocalEditApplyRequest,
+  ProjectVocalEditApplyResult,
+  ProjectVocalEditDependency,
+  ProjectVocalOriginalSource,
+  ProjectVocalRehydrateItem,
+} from './public_types_vocal_project';
 import {
   assertBoundedInteger,
   assertNibble,
@@ -67,6 +74,11 @@ import {
   assertSamples,
   assertU7,
 } from './validation';
+import {
+  projectApplyVocalEdit,
+  projectGetVocalEditDependencies,
+  projectRehydrateVocalEdits,
+} from './vocal_project';
 
 /**
  * Folds the positional and request call forms of `bakeMidiFx` into one shape,
@@ -199,7 +211,33 @@ function midi2Byte(fnName: string, value: number, argName: string): number {
  */
 export class Project {
   private native: WasmProject;
+
+  applyVocalEdit(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyResult {
+    return projectApplyVocalEdit(this.native, request);
+  }
+
+  getVocalEditDependencies(): ProjectVocalEditDependency[] {
+    return projectGetVocalEditDependencies(this.native);
+  }
+
+  rehydrateVocalEdits(
+    originals: readonly ProjectVocalOriginalSource[],
+    cancel?: () => boolean,
+  ): ProjectVocalRehydrateItem[] {
+    this.activeVocalRehydrateCalls += 1;
+    try {
+      return projectRehydrateVocalEdits(this.native, originals, cancel);
+    } finally {
+      this.activeVocalRehydrateCalls -= 1;
+      if (this.activeVocalRehydrateCalls === 0 && this.deleteRequested) {
+        this.native.delete();
+      }
+    }
+  }
+
   private released = false;
+  private deleteRequested = false;
+  private activeVocalRehydrateCalls = 0;
 
   constructor() {
     this.native = new (projectModule().Project)();
@@ -1540,12 +1578,20 @@ export class Project {
     return this.native.lastBounceCompileResult();
   }
 
-  /** Release the underlying WASM object. Idempotent, as the Node facade is. */
+  /**
+   * Release the underlying WASM object. Idempotent, as the Node facade is.
+   * Called from a rehydrate cancel callback, the release happens when the
+   * outermost {@link rehydrateVocalEdits} call returns.
+   */
   delete(): void {
     if (this.released) {
       return;
     }
     this.released = true;
+    if (this.activeVocalRehydrateCalls !== 0) {
+      this.deleteRequested = true;
+      return;
+    }
     this.native.delete();
   }
 

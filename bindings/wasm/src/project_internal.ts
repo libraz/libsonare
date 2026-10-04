@@ -120,6 +120,9 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | s
 // arrangement surface is probed for, since a build without arrangement support
 // registers neither the class nor its free functions.
 export interface WasmProject {
+  applyVocalEdit: (request: unknown) => unknown;
+  getVocalEditDependencies: () => unknown;
+  rehydrateVocalEdits: (originals: unknown, cancel?: unknown) => unknown;
   toJson: () => string;
   setSampleRate: (sampleRate: number) => void;
   addTrack: (desc: { kind?: number | string; name?: string }) => number;

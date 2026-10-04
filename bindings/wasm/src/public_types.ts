@@ -41,6 +41,7 @@ export interface SonareCapabilities {
     arrangement: boolean;
     acousticSim: boolean;
     pitchEditor: boolean;
+    vocalEdit: boolean;
     voiceChanger: boolean;
     /** True when the playback renderer (upmix, binaural, speaker output) is compiled in. */
     playback: boolean;

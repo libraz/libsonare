@@ -25,6 +25,7 @@ import type {
   SpectralRegionOp,
   SurroundPan,
 } from './public_types';
+import type { VocalWasmExports } from './vocal_edit';
 
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
@@ -1759,6 +1760,39 @@ export interface WasmSynthEnumTables {
 }
 
 export interface SonareModule {
+  vocalEditApiVersion: VocalWasmExports['vocalEditApiVersion'];
+  vocalEditAvailable: VocalWasmExports['vocalEditAvailable'];
+  vocalEditSessionCreate: VocalWasmExports['vocalEditSessionCreate'];
+  vocalEditSessionRestore: VocalWasmExports['vocalEditSessionRestore'];
+  vocalEditSessionDestroy: VocalWasmExports['vocalEditSessionDestroy'];
+  vocalEditSessionNotes: VocalWasmExports['vocalEditSessionNotes'];
+  vocalEditDraftNotes: VocalWasmExports['vocalEditDraftNotes'];
+  vocalEditSessionToken: VocalWasmExports['vocalEditSessionToken'];
+  vocalEditDraftToken: VocalWasmExports['vocalEditDraftToken'];
+  vocalEditSessionAnalysis: VocalWasmExports['vocalEditSessionAnalysis'];
+  vocalEditSessionCapabilities: VocalWasmExports['vocalEditSessionCapabilities'];
+  vocalEditSessionOutputLength: VocalWasmExports['vocalEditSessionOutputLength'];
+  vocalEditSessionHistory: VocalWasmExports['vocalEditSessionHistory'];
+  vocalEditSessionBeginEdit: VocalWasmExports['vocalEditSessionBeginEdit'];
+  vocalEditDraftApply: VocalWasmExports['vocalEditDraftApply'];
+  vocalEditDraftCommit: VocalWasmExports['vocalEditDraftCommit'];
+  vocalEditDraftCancel: VocalWasmExports['vocalEditDraftCancel'];
+  vocalEditDraftDestroy: VocalWasmExports['vocalEditDraftDestroy'];
+  vocalEditSessionApplyHistory: VocalWasmExports['vocalEditSessionApplyHistory'];
+  vocalEditEvaluatePitch: VocalWasmExports['vocalEditEvaluatePitch'];
+  vocalEditMapCoordinate: VocalWasmExports['vocalEditMapCoordinate'];
+  vocalEditCaptureSnapshot: VocalWasmExports['vocalEditCaptureSnapshot'];
+  vocalEditSnapshotDestroy: VocalWasmExports['vocalEditSnapshotDestroy'];
+  vocalEditSnapshotOutputLength: VocalWasmExports['vocalEditSnapshotOutputLength'];
+  vocalEditSnapshotRender: VocalWasmExports['vocalEditSnapshotRender'];
+  vocalEditRenderJobBegin: VocalWasmExports['vocalEditRenderJobBegin'];
+  vocalEditRenderJobNext: VocalWasmExports['vocalEditRenderJobNext'];
+  vocalEditRenderJobFinalize: VocalWasmExports['vocalEditRenderJobFinalize'];
+  vocalEditRenderJobAbort: VocalWasmExports['vocalEditRenderJobAbort'];
+  vocalEditRenderJobDestroy: VocalWasmExports['vocalEditRenderJobDestroy'];
+  vocalEditSessionExportState: VocalWasmExports['vocalEditSessionExportState'];
+  vocalEditLastErrorDetail: VocalWasmExports['vocalEditLastErrorDetail'];
+
   audioFromMemory: (bytes: Uint8Array) => WasmAudioFromMemoryResult;
 
   // Quick API (high-level)

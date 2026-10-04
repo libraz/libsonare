@@ -23,6 +23,10 @@
       "types": "./dist/worker.d.ts",
       "import": "./dist/worker.js"
     },
+    "./vocal-edit-worker": {
+      "types": "./dist/vocal_edit_worker.d.ts",
+      "import": "./dist/vocal_edit_worker.js"
+    },
     "./wasm": "./dist/sonare.wasm",
     "./schemas/realtime-voice-changer-preset.schema.json": "./dist/schemas/realtime-voice-changer-preset.schema.json",
     "./schemas/realtime-voice-changer-preset-pack.schema.json": "./dist/schemas/realtime-voice-changer-preset-pack.schema.json",
@@ -60,6 +64,7 @@
     "test:browser": "node scripts/audio-worklet-smoke.mjs",
     "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:boundary": "node scripts/boundary-smoke.mjs",
+    "test:browser:vocal-worker": "node scripts/vocal-edit-worker-smoke.mjs",
     "test:watch": "vitest",
     "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && cp ../../NOTICE NOTICE && yarn build && yarn lint && yarn test && yarn test:types"
   },

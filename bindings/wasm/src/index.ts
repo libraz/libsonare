@@ -835,6 +835,7 @@ export {
   PitchClass,
   SectionType,
 } from './public_types';
+export type * from './public_types_vocal_edit';
 export type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,
@@ -959,6 +960,29 @@ export {
 export type { TranscribeRequest } from './transcribe';
 export { transcribe } from './transcribe';
 export type { ValidateOptions } from './validation';
+export {
+  createVocalEditSession,
+  restoreVocalEditSession,
+  VocalEditDraft,
+  VocalEditSession,
+  VocalRenderJob,
+  VocalRenderSnapshot,
+  vocalEditApiVersion,
+  vocalEditAvailable,
+} from './vocal_edit';
+export type {
+  VocalEditWorker,
+  VocalEditWorkerCallOptions,
+  VocalEditWorkerClientOptions,
+  VocalEditWorkerTransferOptions,
+} from './vocal_edit_worker_client';
+export {
+  VocalEditWorkerClient,
+  VocalEditWorkerSession,
+  VocalEditWorkerStaleResultError,
+  VocalEditWorkerTask,
+} from './vocal_edit_worker_client';
+export type * from './vocal_edit_worker_protocol';
 export type {
   BindWebMidiOptions,
   WebMidiBinding,
@@ -1154,3 +1178,5 @@ export function realtimeVoiceChangerPresetConfig(
 // ============================================================================
 
 export { PitchClass as Pitch } from './public_types';
+
+export type * from './public_types_vocal_project';
