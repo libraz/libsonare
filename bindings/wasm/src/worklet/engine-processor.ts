@@ -1162,6 +1162,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       if (meter.frame !== this.lastMeterFrame) {
         this.lastMeterFrame = meter.frame;
       }
+      // Only the postMessage path carries per-insert values; the ring layout is fixed.
+      meter.insertGainReductionDb = this.engine.meterTargetInsertGainReduction(meter.targetId);
       // The ring branch returned above, so this is the structured-clone
       // fallback. `onMeter` and `postMessage` are alternative channels for the
       // same record, not a broadcast pair: the AudioWorklet registration

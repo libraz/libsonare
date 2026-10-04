@@ -86,8 +86,8 @@ void MixerWasm::setPanLaw(const val& strip_index_val, const val& pan_law_val) {
   checkStripError(sonare_strip_set_pan_law(stripAt(strip_index), pan_law), "failed to set pan law");
 }
 
-// Sets a per-strip channel delay in samples. This changes the strip's reported
-// latency; recompile to re-run latency compensation.
+// Sets a per-strip channel delay in samples, moving the strip later relative to the
+// other strips; it is not latency, so compensation does not cancel it.
 void MixerWasm::setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const int delay_samples = checkedIntFromVal(delay_samples_val, "delaySamples");

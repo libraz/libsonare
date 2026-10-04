@@ -1727,6 +1727,7 @@ export interface WasmRealtimeEngine {
   meterScratchInputPeakDbR: () => number;
   drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
   drainMeterTelemetryWide: (maxRecords: number) => WasmEngineMeterTelemetryWide[];
+  meterTargetInsertGainReduction: (targetId: number) => number[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
   drainScopeTelemetry: (maxRecords: number) => WasmEngineScopeTelemetry[];
   popScopeTelemetryToScratch: () => boolean;

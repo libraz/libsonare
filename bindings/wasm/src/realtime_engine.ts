@@ -1499,8 +1499,9 @@ export class RealtimeEngine {
   }
 
   /**
-   * Sets a track lane strip's inter-channel alignment delay (whole samples).
-   * Adjusts strip latency, so PDC and reported graph latency are refreshed.
+   * Sets a track lane strip's alignment delay (whole samples), moving this lane
+   * later relative to every other lane. It is not latency: PDC does not
+   * compensate it and the reported graph latency is unchanged.
    */
   setTrackStripChannelDelaySamples(trackId: number, delaySamples: number): void {
     this.native.setTrackStripChannelDelaySamples(trackId, delaySamples);
@@ -1831,6 +1832,16 @@ export class RealtimeEngine {
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords);
+  }
+
+  /**
+   * Per-insert gain reduction in dB (each <= 0) of a meter target's strip from the
+   * last rendered block, in combined pre-to-post insert order. `targetId` uses the
+   * meter-record encoding (0 master, 1..32 lanes, 33..40 buses; 0xFFFF monitor
+   * yields an empty array). Throws for an id outside that range.
+   */
+  meterTargetInsertGainReduction(targetId: number): number[] {
+    return this.native.meterTargetInsertGainReduction(targetId);
   }
 
   /**

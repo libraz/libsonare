@@ -504,8 +504,8 @@ export class Mixer {
   }
 
   /**
-   * Set a per-strip channel delay in samples. This changes the strip's reported
-   * latency; recompile to re-run latency compensation.
+   * Set a per-strip channel delay in samples, moving the strip later relative to
+   * the others. It is not latency: latency compensation does not undo it.
    */
   setChannelDelaySamples(stripIndex: number, delaySamples: number): void {
     this.mixer.setChannelDelaySamples(stripIndex, delaySamples);

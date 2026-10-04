@@ -376,6 +376,9 @@ class RealtimeEngineWasm {
   float meterScratchInputPeakDbL() const;
   float meterScratchInputPeakDbR() const;
   emscripten::val drainMeterTelemetryWide(const emscripten::val& max_records_val);
+  // Per-insert gain reduction (dB <= 0, pre->post order) of a meter target's strip
+  // from the last rendered block. Throws on a target id outside the encoded range.
+  emscripten::val meterTargetInsertGainReduction(const emscripten::val& target_id_val) const;
   unsigned int configureScopeTelemetry(const emscripten::val& interval_frames_val,
                                        const emscripten::val& band_count_val);
   emscripten::val drainScopeTelemetry(const emscripten::val& max_records_val);

@@ -107,8 +107,8 @@ class MixerWasm {
   // 3 = linear (0 dB).
   void setPanLaw(const val& strip_index_val, const val& pan_law_val);
 
-  // Sets a per-strip channel delay in samples. This changes the strip's reported
-  // latency; recompile to re-run latency compensation.
+  // Sets a per-strip channel delay in samples, moving the strip later relative to the
+  // other strips; it is not latency, so compensation does not cancel it.
   void setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val);
 
   // Sets the strip's live VCA gain offset in dB (not persisted to the scene).

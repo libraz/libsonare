@@ -91,6 +91,25 @@ val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
   return out;
 }
 
+val RealtimeEngineWasm::meterTargetInsertGainReduction(const val& target_id_val) const {
+  const uint32_t target_id = checkedUintFromVal(target_id_val, "targetId");
+  val out = val::array();
+#if defined(SONARE_WITH_MIXING)
+  // Matches SONARE_METER_MAX_INSERTS.
+  float values[128];
+  size_t count = 0;
+  if (!engine_.read_meter_target_insert_gain_reduction(target_id, values, 128, &count)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "targetId is outside the meter target range");
+  }
+  if (count > 128) count = 128;
+  for (size_t i = 0; i < count; ++i) out.set(static_cast<unsigned>(i), values[i]);
+#else
+  (void)target_id;
+#endif
+  return out;
+}
+
 bool RealtimeEngineWasm::popMeterTelemetryToScratch() {
 #if defined(SONARE_WITH_MIXING)
   return engine_.pop_meter_telemetry(meter_telemetry_scratch_);
@@ -302,6 +321,8 @@ void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {
       .function("meterScratchInputPeakDbL", &RealtimeEngineWasm::meterScratchInputPeakDbL)
       .function("meterScratchInputPeakDbR", &RealtimeEngineWasm::meterScratchInputPeakDbR)
       .function("drainMeterTelemetryWide", &RealtimeEngineWasm::drainMeterTelemetryWide)
+      .function("meterTargetInsertGainReduction",
+                &RealtimeEngineWasm::meterTargetInsertGainReduction)
       .function("configureScopeTelemetry", &RealtimeEngineWasm::configureScopeTelemetry)
       .function("drainScopeTelemetry", &RealtimeEngineWasm::drainScopeTelemetry)
       .function("popScopeTelemetryToScratch", &RealtimeEngineWasm::popScopeTelemetryToScratch)
