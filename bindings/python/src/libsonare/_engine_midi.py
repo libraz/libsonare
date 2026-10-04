@@ -8,7 +8,7 @@ the concrete :class:`RealtimeEngine`); this is not a public class on its own.
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from ._ffi_types_mastering_project import SonareControllerBinding, SonareSynthInstrumentBinding
@@ -21,6 +21,7 @@ from ._project import (
     _cc_binding_to_c,
     _synth_patch_arg,
 )
+from ._project_edit import _part_rig_inserts_arg, _part_rig_mode_value
 from ._project_synth import (
     _articulation_name,
     _articulation_value,
@@ -602,6 +603,40 @@ class _EngineMidiMixin:
                 _to_c_uint32(destination_id, "destination_id"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_int(_articulation_value(articulation), "articulation"),
+            )
+        )
+
+    def set_part_rig(
+        self,
+        destination_id: int,
+        part: int,
+        *,
+        mode: str | int,
+        inserts: Sequence[Mapping[str, object]] | None = None,
+    ) -> None:
+        """Set one part's rig on the instrument bound to ``destination_id``.
+
+        Takes the same ``mode`` / ``inserts`` as :meth:`Project.set_part_rig`;
+        ``part`` is 0..15 or :data:`PART_RIG_ALL_PARTS`. Unlike a project bounce,
+        this is a direct call and refuses what it cannot apply:
+        :class:`SonareError` with ``INVALID_PARAMETER`` for an unbound
+        destination, an out-of-range part or an invalid chain, and
+        ``NOT_SUPPORTED`` for an instrument without part rigs (builtin or
+        callback) or a chain in a build without mastering.
+
+        Control-thread only: do not call concurrently with :meth:`process`.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_part_rig"):
+            raise RuntimeError("libsonare was built without the part rig ABI")
+        mode_value = _part_rig_mode_value(mode)
+        _check(
+            lib.sonare_engine_set_part_rig(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(part, "part"),
+                mode_value,
+                _part_rig_inserts_arg(mode_value, inserts),
             )
         )
 

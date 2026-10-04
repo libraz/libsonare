@@ -352,6 +352,14 @@ class RealtimeEngine:
     def set_articulation(
         self, destination_id: int, channel: int, articulation: str | int
     ) -> None: ...
+    def set_part_rig(
+        self,
+        destination_id: int,
+        part: int,
+        *,
+        mode: str | int,
+        inserts: Sequence[Mapping[str, object]] | None = ...,
+    ) -> None: ...
     def articulation(self, destination_id: int, channel: int) -> str | int: ...
     def legato_fallback_count(self, destination_id: int) -> int: ...
     def bind_midi_cc(

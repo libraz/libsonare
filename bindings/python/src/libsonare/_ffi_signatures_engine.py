@@ -1006,6 +1006,15 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(ctypes.c_int),
         ]
+    if hasattr(lib, "sonare_engine_set_part_rig"):
+        lib.sonare_engine_set_part_rig.restype = ctypes.c_int32
+        lib.sonare_engine_set_part_rig.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_int,
+            ctypes.c_char_p,
+        ]
     if hasattr(lib, "sonare_engine_set_articulation"):
         lib.sonare_engine_set_articulation.restype = ctypes.c_int32
         lib.sonare_engine_set_articulation.argtypes = [

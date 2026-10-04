@@ -19,6 +19,8 @@ from ._project import Sf2ProgramStatus as Sf2ProgramStatus
 from ._project import SynthModRouting as SynthModRouting
 from ._project import SynthPatch as SynthPatch
 from ._project import TakeAlignment as TakeAlignment
+from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
+from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._project import align_take_to_reference as align_take_to_reference
 from ._project import controller_profile_names as controller_profile_names
 from ._project import project_abi_version as project_abi_version

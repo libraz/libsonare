@@ -35,6 +35,7 @@ from ._project import (
     synth_preset_names,
     synth_preset_patch,
 )
+from ._project_edit import PART_RIG_ALL_PARTS, PART_RIG_MODES
 from ._runtime import ErrorCode, SonareError, SonareValueError
 from .analyzer import (
     Mixer,
@@ -727,6 +728,8 @@ __all__ = [
     "StreamStats",
     "StreamingMasteringChain",
     "StreamingEqualizer",
+    "PART_RIG_ALL_PARTS",
+    "PART_RIG_MODES",
     "TakeAlignment",
     "TimbreFrame",
     "TimbreResult",

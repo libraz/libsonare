@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import math
 import operator
 from collections.abc import Mapping, Sequence
@@ -59,9 +60,46 @@ from ._runtime import (
     _to_c_int,
     _to_c_int64,
     _to_c_size_t,
+    _to_c_uint8,
     _to_c_uint32,
     _warp_mode_value,
 )
+
+# SonarePartRigMode, and SONARE_PART_RIG_ALL_PARTS (every part of a destination).
+PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
+PART_RIG_ALL_PARTS = 0xFF
+
+
+def _part_rig_mode_value(mode: str | int) -> int:
+    """Resolve a part-rig mode name (or its ordinal) to the C value."""
+    if isinstance(mode, str):
+        try:
+            return PART_RIG_MODES[mode]
+        except KeyError:
+            raise SonareValueError(
+                f"unknown part rig mode {mode!r}; expected one of {sorted(PART_RIG_MODES)}"
+            ) from None
+    return _narrow_int(mode, "mode", _C_INT_MIN, _C_INT_MAX)
+
+
+def _part_rig_inserts_arg(
+    mode_value: int, inserts: Sequence[Mapping[str, object]] | None
+) -> bytes | None:
+    """Serialize a chain's inserts to the C JSON form; None unless the mode is a chain."""
+    if inserts is None:
+        return None
+    entries = []
+    for i, insert in enumerate(inserts):
+        if "processor" not in insert:
+            raise SonareValueError(f"inserts[{i}] needs a 'processor' key")
+        params = insert.get("params", {})
+        entries.append(
+            {
+                "processor": insert["processor"],
+                "params": params if isinstance(params, str) else json.dumps(params),
+            }
+        )
+    return json.dumps(entries).encode("utf-8")
 
 
 @dataclass(frozen=True)
@@ -713,6 +751,97 @@ class _ProjectEditMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint32(destination_id, "destination_id"),
+            )
+        )
+
+    def set_part_rig(
+        self,
+        destination_id: int,
+        part: int,
+        *,
+        mode: str | int,
+        inserts: Sequence[Mapping[str, object]] | None = None,
+    ) -> None:
+        """Pick the rig for one part of a destination's instrument via an undoable edit.
+
+        ``mode`` is ``"bank"`` (the instrument's own rig), ``"none"`` (dry) or
+        ``"chain"``. A chain takes ``inserts``: 1-8 mappings of
+        ``{"processor": name, "params": dict | JSON-object string}``. ``part`` is
+        0..15, or :data:`PART_RIG_ALL_PARTS` for the destination default; a
+        ``"bank"`` entry is kept so it can override that default.
+
+        The entry is stored data: bounces apply it to a NativeSynth or SF2
+        instrument bound to the destination and ignore it on a builtin or
+        callback instrument. Raises :class:`SonareValueError` for malformed
+        input and :class:`SonareError` with ``INVALID_PARAMETER`` for an
+        out-of-range part or an invalid chain, and ``NOT_SUPPORTED`` for a chain
+        in a build without mastering.
+        """
+        mode_value = _part_rig_mode_value(mode)
+        json_arg = _part_rig_inserts_arg(mode_value, inserts)
+        _check(
+            _get_lib().sonare_project_set_part_rig(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(part, "part"),
+                mode_value,
+                json_arg,
+            )
+        )
+
+    def get_part_rig(
+        self, destination_id: int, part: int
+    ) -> tuple[str | int, list[dict[str, object]] | None] | None:
+        """Read back :meth:`set_part_rig` as ``(mode, inserts)``, or ``None`` if unset.
+
+        ``mode`` is the canonical name (the raw ordinal for a value this binding
+        has no name for). ``inserts`` is a list of ``{"processor", "params"}``
+        dicts with ``params`` decoded to a dict for a ``"chain"`` entry and
+        ``None`` otherwise.
+        """
+        lib = _get_lib()
+        mode = ctypes.c_int()
+        out_json = ctypes.c_char_p()
+        present = ctypes.c_int()
+        _check(
+            lib.sonare_project_get_part_rig(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(part, "part"),
+                ctypes.byref(mode),
+                ctypes.byref(out_json),
+                ctypes.byref(present),
+            )
+        )
+        try:
+            raw = out_json.value
+        finally:
+            if out_json.value and hasattr(lib, "sonare_free_string"):
+                lib.sonare_free_string(out_json)
+        if not present.value:
+            return None
+        names = {value: name for name, value in PART_RIG_MODES.items()}
+        mode_out: str | int = names.get(int(mode.value), int(mode.value))
+        if raw is None:
+            return mode_out, None
+        inserts = []
+        for entry in json.loads(raw.decode("utf-8")):
+            params = entry.get("params", "{}")
+            inserts.append(
+                {
+                    "processor": entry["processor"],
+                    "params": json.loads(params) if isinstance(params, str) else params,
+                }
+            )
+        return mode_out, inserts
+
+    def clear_part_rig(self, destination_id: int, part: int) -> None:
+        """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""
+        _check(
+            _get_lib().sonare_project_clear_part_rig(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(part, "part"),
             )
         )
 
