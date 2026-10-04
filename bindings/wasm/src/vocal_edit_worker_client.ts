@@ -1,10 +1,13 @@
+import { SonareError } from './errors';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
   VocalCapabilities,
   VocalCreateRequest,
   VocalEditResult,
+  VocalHistoryState,
   VocalNotesResult,
+  VocalPitchEvaluation,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
@@ -183,12 +186,24 @@ function workerError(message: VocalWorkerErrorMessage): Error {
   if (message.error.name === 'StaleResultError') {
     return new VocalEditWorkerStaleResultError(message.error.message);
   }
-  const error = new Error(message.error.message);
+  const { code, codeName } = message.error;
+  const error =
+    message.error.name === 'SonareError' && typeof code === 'number'
+      ? new SonareError(code, codeName ?? '', message.error.message)
+      : new Error(message.error.message);
   error.name = message.error.name;
-  for (const key of ['code', 'reason', 'field', 'expected', 'actual'] as const) {
+  for (const key of [
+    'code',
+    'reason',
+    'field',
+    'expected',
+    'actual',
+    'expectedText',
+    'actualText',
+  ] as const) {
     const value = message.error[key];
     if (value !== undefined) {
-      Object.defineProperty(error, key, { value, enumerable: true });
+      Object.defineProperty(error, key, { value, enumerable: true, configurable: true });
     }
   }
   return error;
@@ -546,6 +561,11 @@ export class VocalEditWorkerClient {
   };
 }
 
+/** Selects the open draft instead of the committed session for a read-only call. */
+export interface VocalEditWorkerReadOptions {
+  draft?: boolean;
+}
+
 export class VocalEditWorkerSession {
   readonly sessionId: string;
   private tokenValue: VocalStateToken;
@@ -585,6 +605,11 @@ export class VocalEditWorkerSession {
     return { ...this.tokenValue };
   }
 
+  /** The adopted revision; like {@link token}, it follows replies already received. */
+  revision(): VocalUint64 {
+    return this.token().revision;
+  }
+
   notes(): VocalEditWorkerTask<VocalNotesResult> {
     this.requireAlive();
     return this.client.callMutation(this, { kind: 'notes' });
@@ -600,6 +625,64 @@ export class VocalEditWorkerSession {
     return this.client.callMutation(this, { kind: 'capabilities' });
   }
 
+  outputLengthSamples(): VocalEditWorkerTask<number> {
+    this.requireAlive();
+    return this.client.callMutation(this, { kind: 'outputLength' });
+  }
+
+  history(): VocalEditWorkerTask<VocalHistoryState> {
+    this.requireAlive();
+    return this.client.callMutation(this, { kind: 'history' });
+  }
+
+  /** Token of the open draft; rejects when no draft is open. */
+  draftToken(): VocalEditWorkerTask<VocalStateToken> {
+    this.requireAlive();
+    return this.client.callMutation(this, { kind: 'draftToken' });
+  }
+
+  evaluatePitch(
+    noteId: number,
+    options: VocalEditWorkerReadOptions = {},
+  ): VocalEditWorkerTask<VocalPitchEvaluation> {
+    this.requireAlive();
+    return this.client.callMutation(this, {
+      kind: 'evaluatePitch',
+      noteId,
+      draft: options.draft === true,
+    });
+  }
+
+  sourceSampleToDestinationSample(
+    noteId: number,
+    sourceSample: number,
+    options: VocalEditWorkerReadOptions = {},
+  ): VocalEditWorkerTask<number> {
+    this.requireAlive();
+    return this.client.callMutation(this, {
+      kind: 'mapCoordinate',
+      noteId,
+      sample: sourceSample,
+      inverse: false,
+      draft: options.draft === true,
+    });
+  }
+
+  destinationSampleToSourceSample(
+    noteId: number,
+    destinationSample: number,
+    options: VocalEditWorkerReadOptions = {},
+  ): VocalEditWorkerTask<number> {
+    this.requireAlive();
+    return this.client.callMutation(this, {
+      kind: 'mapCoordinate',
+      noteId,
+      sample: destinationSample,
+      inverse: true,
+      draft: options.draft === true,
+    });
+  }
+
   beginEdit(options: RevisionArgument = {}): VocalEditWorkerTask<VocalStateToken> {
     this.requireAlive();
     return this.client.callMutation(this, {
@@ -613,6 +696,9 @@ export class VocalEditWorkerSession {
     options: VocalEditWorkerTransferOptions = {},
   ): VocalEditWorkerTask<VocalEditResult> {
     this.requireAlive();
+    if (request.expectedGeneration === undefined) {
+      throw new TypeError('expectedGeneration is required');
+    }
     return this.client.callMutation(this, { kind: 'apply', request }, options);
   }
 
@@ -658,6 +744,7 @@ export class VocalEditWorkerSession {
     return this.client.callPreview(this, request, options);
   }
 
+  /** Releases the Worker session and any open draft; later calls on it are rejected. */
   dispose(): VocalEditWorkerTask<null> {
     if (this.disposed) {
       return new VocalEditWorkerTask(Promise.resolve(null), () => {});

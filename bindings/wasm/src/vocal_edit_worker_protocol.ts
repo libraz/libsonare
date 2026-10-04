@@ -4,7 +4,9 @@ import type {
   VocalCapabilities,
   VocalCreateRequest,
   VocalEditResult,
+  VocalHistoryState,
   VocalNotesResult,
+  VocalPitchEvaluation,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
@@ -23,7 +25,19 @@ export type VocalWorkerMutation =
   | { kind: 'notes' }
   | { kind: 'analysis' }
   | { kind: 'capabilities' }
-  | { kind: 'exportState' };
+  | { kind: 'exportState' }
+  | { kind: 'outputLength' }
+  | { kind: 'history' }
+  | { kind: 'draftToken' }
+  | { kind: 'evaluatePitch'; noteId: number; draft?: boolean }
+  | {
+      kind: 'mapCoordinate';
+      noteId: number;
+      sample: number;
+      /** `false` maps source to destination; `true` maps destination to source. */
+      inverse: boolean;
+      draft?: boolean;
+    };
 
 export type VocalWorkerCreateRequest =
   | { kind: 'create'; request: VocalCreateRequest }
@@ -94,18 +108,23 @@ export interface VocalWorkerResponseBase {
   token?: VocalStateToken;
 }
 
+export type VocalWorkerResult =
+  | VocalWorkerCreateResult
+  | VocalEditResult
+  | VocalNotesResult
+  | VocalAnalysis
+  | VocalCapabilities
+  | VocalStateBytes
+  | VocalRenderResult
+  | VocalStateToken
+  | VocalHistoryState
+  | VocalPitchEvaluation
+  | number
+  | null;
+
 export interface VocalWorkerResultMessage extends VocalWorkerResponseBase {
   type: 'sonare:vocal-result';
-  result:
-    | VocalWorkerCreateResult
-    | VocalEditResult
-    | VocalNotesResult
-    | VocalAnalysis
-    | VocalCapabilities
-    | VocalStateBytes
-    | VocalRenderResult
-    | VocalStateToken
-    | null;
+  result: VocalWorkerResult;
 }
 
 export interface VocalWorkerProgressMessage extends VocalWorkerResponseBase {
@@ -119,10 +138,13 @@ export interface VocalWorkerErrorMessage extends VocalWorkerResponseBase {
     name: string;
     message: string;
     code?: number;
+    codeName?: string;
     reason?: number;
     field?: string;
     expected?: VocalUint64;
     actual?: VocalUint64;
+    expectedText?: string;
+    actualText?: string;
   };
 }
 

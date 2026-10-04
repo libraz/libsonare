@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { isSonareError } from '../src/errors';
 import type {
   VocalAnalysis,
   VocalCapabilities,
   VocalEditOperation,
   VocalNotesResult,
+  VocalPitchEvaluation,
   VocalRenderResult,
   VocalStateToken,
 } from '../src/public_types_vocal_edit';
@@ -197,6 +199,7 @@ class BridgeWorker implements VocalEditWorker {
   private workerListener: ((event: MessageEvent) => void) | undefined;
   readonly posted: VocalWorkerRequestMessage[] = [];
   disposedSessions = 0;
+  notesError: Error | undefined;
 
   constructor() {
     let revision = 0;
@@ -229,9 +232,20 @@ class BridgeWorker implements VocalEditWorker {
         dispose: () => {},
       };
     };
+    const pitch = (scope: number): VocalPitchEvaluation => ({
+      sourceSamples: new Float64Array([scope]),
+      measuredMidi: new Float64Array([60]),
+      targetMidi: new Float64Array([62]),
+      effectiveMidi: new Float64Array([61]),
+      voiced: new Uint8Array([1]),
+      hasTarget: new Uint8Array([1]),
+    });
     const draft: VocalEditWorkerNativeDraft = {
       token: stateToken,
       notes: () => notes,
+      evaluatePitch: () => pitch(1),
+      sourceSampleToDestinationSample: (_noteId, sample) => sample + 100,
+      destinationSampleToSourceSample: (_noteId, sample) => sample - 100,
       apply: (request) => {
         if (request.expectedGeneration !== String(generation)) {
           throw new Error(`generation conflict: ${request.expectedGeneration} != ${generation}`);
@@ -254,7 +268,17 @@ class BridgeWorker implements VocalEditWorker {
     };
     const session: VocalEditWorkerNativeSession = {
       token: stateToken,
-      notes: () => notes,
+      notes: () => {
+        if (this.notesError) {
+          throw this.notesError;
+        }
+        return notes;
+      },
+      outputLengthSamples: () => 480,
+      history: () => ({ canUndo: false, canRedo: true }),
+      evaluatePitch: () => pitch(0),
+      sourceSampleToDestinationSample: (_noteId, sample) => sample + 10,
+      destinationSampleToSourceSample: (_noteId, sample) => sample - 10,
       analysis: () => analysis,
       capabilities: () => capabilities,
       beginEdit: () => {
@@ -427,6 +451,126 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       const range = { startSample: 0, endSample: 1, probe: new Float32Array([3]) };
       await session.preview({ range, requestId: '5' }, { copy: true });
       expect(range.probe.length).toBe(1);
+    } finally {
+      client.dispose();
+    }
+  });
+
+  it('reads session and draft state through the read-only methods', async () => {
+    const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      expect(session.revision()).toBe('0');
+      expect(await session.outputLengthSamples()).toBe(480);
+      expect(await session.history()).toEqual({ canUndo: false, canRedo: true });
+      expect((await session.evaluatePitch(1)).sourceSamples[0]).toBe(0);
+      expect(await session.sourceSampleToDestinationSample(1, 5)).toBe(15);
+      expect(await session.destinationSampleToSourceSample(1, 15)).toBe(5);
+      await expect(session.draftToken()).rejects.toThrow(/No vocal edit draft/);
+
+      await session.beginEdit();
+      expect((await session.draftToken()).draftId).toBe('1');
+      expect((await session.evaluatePitch(1, { draft: true })).sourceSamples[0]).toBe(1);
+      expect(await session.sourceSampleToDestinationSample(1, 5, { draft: true })).toBe(105);
+      expect(await session.destinationSampleToSourceSample(1, 105, { draft: true })).toBe(5);
+    } finally {
+      client.dispose();
+    }
+  });
+
+  it('requires expectedGeneration on apply like the main-thread draft', async () => {
+    const worker = new BridgeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      await session.beginEdit();
+      const before = worker.posted.length;
+      expect(() =>
+        session.apply({ operations: [] } as unknown as {
+          expectedGeneration: string;
+          operations: [];
+        }),
+      ).toThrow(TypeError);
+      expect(worker.posted.length).toBe(before);
+    } finally {
+      client.dispose();
+    }
+  });
+
+  it('sends the full transition shape and restore limits to the Worker', async () => {
+    const worker = new BridgeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    try {
+      const restored = await client.restore({
+        samples: new Float32Array([0]),
+        sampleRate: 16000,
+        state: new Uint8Array([1]),
+        limits: { maxUndoDepth: 4, maxHistoryBytes: '1024' },
+      });
+      const restoreMessage = worker.posted.find((m) => m.type === 'sonare:vocal-create');
+      expect(
+        restoreMessage?.type === 'sonare:vocal-create' && restoreMessage.request.kind === 'restore'
+          ? restoreMessage.request.request.limits
+          : undefined,
+      ).toEqual({ maxUndoDepth: 4, maxHistoryBytes: '1024' });
+
+      await restored.beginEdit();
+      const transition = {
+        leftNoteId: 1,
+        rightNoteId: 2,
+        leftWindowSamples: 64,
+        rightWindowSamples: 32,
+        strength: 0.5,
+        curve: 'smoothstep',
+      } as const;
+      await restored.apply({
+        expectedGeneration: '0',
+        operations: [{ kind: 'setTransition', transition }],
+      });
+      const applied = worker.posted.at(-1);
+      expect(
+        applied?.type === 'sonare:vocal-mutate' && applied.mutation.kind === 'apply'
+          ? applied.mutation.request.operations
+          : undefined,
+      ).toEqual([{ kind: 'setTransition', transition }]);
+    } finally {
+      client.dispose();
+    }
+  });
+
+  it('rebuilds a structured native error with every detail field', async () => {
+    const worker = new BridgeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      worker.notesError = Object.assign(new Error('revision conflict'), {
+        name: 'SonareError',
+        code: 5,
+        codeName: 'InvalidState',
+        reason: 2,
+        field: 'revision',
+        expected: '0',
+        actual: '1',
+        expectedText: 'revision 0',
+        actualText: 'revision 1',
+      });
+      const error = await session.notes().result.then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+      expect(isSonareError(error)).toBe(true);
+      expect(error).toMatchObject({
+        name: 'SonareError',
+        message: 'revision conflict',
+        code: 5,
+        codeName: 'InvalidState',
+        reason: 2,
+        field: 'revision',
+        expected: '0',
+        actual: '1',
+        expectedText: 'revision 0',
+        actualText: 'revision 1',
+      });
     } finally {
       client.dispose();
     }

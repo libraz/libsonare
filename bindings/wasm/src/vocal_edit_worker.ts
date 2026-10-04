@@ -5,7 +5,9 @@ import type {
   VocalCreateRequest,
   VocalEditOperation,
   VocalEditResult,
+  VocalHistoryState,
   VocalNotesResult,
+  VocalPitchEvaluation,
   VocalRenderResult,
   VocalRestoreRequest,
   VocalStateBytes,
@@ -26,6 +28,7 @@ import {
   type VocalWorkerPreviewMessage,
   type VocalWorkerRequestMessage,
   type VocalWorkerResponseMessage,
+  type VocalWorkerResult,
 } from './vocal_edit_worker_protocol';
 
 export interface VocalEditWorkerEndpoint {
@@ -45,6 +48,9 @@ export interface VocalEditWorkerNativeDraft {
   }): VocalEditResult;
   commit(expectedRevision: string): VocalEditResult;
   cancel(): void;
+  evaluatePitch(noteId: number): VocalPitchEvaluation;
+  sourceSampleToDestinationSample(noteId: number, sourceSample: number): number;
+  destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
   captureRenderSnapshot(): VocalRenderSnapshot;
   exportState?(): VocalStateBytes;
   dispose(): void;
@@ -58,6 +64,11 @@ export interface VocalEditWorkerNativeSession {
   beginEdit(expectedRevision?: string): VocalEditWorkerNativeDraft;
   undo(expectedRevision?: string): VocalEditResult;
   redo(expectedRevision?: string): VocalEditResult;
+  outputLengthSamples(): number;
+  history(): VocalHistoryState;
+  evaluatePitch(noteId: number): VocalPitchEvaluation;
+  sourceSampleToDestinationSample(noteId: number, sourceSample: number): number;
+  destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
   captureRenderSnapshot(): VocalRenderSnapshot;
   exportState(): Uint8Array;
   dispose(): void;
@@ -92,24 +103,34 @@ interface WorkerSession {
   queue: QueuedCommand[];
   running: ActiveCommand | undefined;
   draining: boolean;
+  /** Set synchronously when a dispose arrives; the session accepts no more work. */
+  disposing: boolean;
+  /** Settles once the native session is released. */
+  released?: Promise<void>;
 }
 
 function errorPayload(error: unknown): VocalWorkerErrorMessage['error'] {
   const candidate = error as Partial<Error> & {
     code?: number;
+    codeName?: string;
     reason?: number;
     field?: string;
     expected?: string;
     actual?: string;
+    expectedText?: string;
+    actualText?: string;
   };
   return {
     name: candidate.name ?? 'Error',
     message: candidate.message ?? String(error),
     ...(candidate.code === undefined ? {} : { code: candidate.code }),
+    ...(candidate.codeName === undefined ? {} : { codeName: candidate.codeName }),
     ...(candidate.reason === undefined ? {} : { reason: candidate.reason }),
     ...(candidate.field === undefined ? {} : { field: candidate.field }),
     ...(candidate.expected === undefined ? {} : { expected: candidate.expected }),
     ...(candidate.actual === undefined ? {} : { actual: candidate.actual }),
+    ...(candidate.expectedText === undefined ? {} : { expectedText: candidate.expectedText }),
+    ...(candidate.actualText === undefined ? {} : { actualText: candidate.actualText }),
   };
 }
 
@@ -164,8 +185,8 @@ function nextMacrotask(): Promise<void> {
 }
 
 function resultToken(value: unknown, session: WorkerSession): VocalStateToken {
-  const candidate = value as { token?: VocalStateToken };
-  return candidate.token ?? currentToken(session);
+  const candidate = value as { token?: VocalStateToken } | null;
+  return candidate?.token ?? currentToken(session);
 }
 
 function currentToken(session: WorkerSession): VocalStateToken {
@@ -177,16 +198,7 @@ function postResult(
   id: number,
   sessionId: string,
   clientIntentSequence: string,
-  result:
-    | VocalWorkerCreateResult
-    | VocalEditResult
-    | VocalNotesResult
-    | VocalAnalysis
-    | VocalCapabilities
-    | VocalStateBytes
-    | VocalRenderResult
-    | VocalStateToken
-    | null,
+  result: VocalWorkerResult,
   token?: VocalStateToken,
 ): void {
   endpoint.postMessage(
@@ -260,6 +272,14 @@ function draftRequired(session: WorkerSession): VocalEditWorkerNativeDraft {
   return session.draft;
 }
 
+/** The open draft when `draft` is set, otherwise the session. */
+function readTarget(
+  session: WorkerSession,
+  draft: boolean | undefined,
+): VocalEditWorkerNativeDraft | VocalEditWorkerNativeSession {
+  return draft === true ? draftRequired(session) : session.value;
+}
+
 async function runPreview(
   message: VocalWorkerPreviewMessage,
   session: WorkerSession,
@@ -310,16 +330,7 @@ async function execute(
   session.running = active;
   try {
     ensureSameEpoch(message, session);
-    let result:
-      | VocalWorkerCreateResult
-      | VocalEditResult
-      | VocalNotesResult
-      | VocalAnalysis
-      | VocalCapabilities
-      | VocalStateBytes
-      | VocalRenderResult
-      | VocalStateToken
-      | null;
+    let result: VocalWorkerResult;
     if (message.type === 'sonare:vocal-preview') {
       result = await runPreview(message, session, active, endpoint);
     } else {
@@ -373,6 +384,25 @@ async function execute(
           }
           result = { data: session.value.exportState() };
           break;
+        case 'outputLength':
+          result = session.value.outputLengthSamples();
+          break;
+        case 'history':
+          result = session.value.history();
+          break;
+        case 'draftToken':
+          result = draftRequired(session).token();
+          break;
+        case 'evaluatePitch':
+          result = readTarget(session, mutation.draft).evaluatePitch(mutation.noteId);
+          break;
+        case 'mapCoordinate': {
+          const target = readTarget(session, mutation.draft);
+          result = mutation.inverse
+            ? target.destinationSampleToSourceSample(mutation.noteId, mutation.sample)
+            : target.sourceSampleToDestinationSample(mutation.noteId, mutation.sample);
+          break;
+        }
       }
     }
     // A mutation that ran is reported as run: cancellation covers renders only.
@@ -407,7 +437,7 @@ async function drain(session: WorkerSession, endpoint: VocalEditWorkerEndpoint):
   }
   session.draining = true;
   try {
-    while (session.queue.length !== 0) {
+    while (session.queue.length !== 0 && !session.disposing) {
       const command = session.queue.shift() as QueuedCommand;
       await execute(command, session, endpoint);
     }
@@ -422,7 +452,7 @@ function queueCommand(
   message: VocalWorkerMutateMessage | VocalWorkerPreviewMessage,
 ): void {
   const session = sessions.get(message.sessionId);
-  if (!session) {
+  if (!session || session.disposing) {
     postError(
       endpoint,
       message.id,
@@ -496,6 +526,11 @@ const mutationKinds = new Set<string>([
   'analysis',
   'capabilities',
   'exportState',
+  'outputLength',
+  'history',
+  'draftToken',
+  'evaluatePitch',
+  'mapCoordinate',
 ]);
 
 function malformed(message: string): TypeError {
@@ -683,6 +718,7 @@ export function installVocalEditWorkerEndpoint(
         queue: [],
         running: undefined,
         draining: false,
+        disposing: false,
       });
       value = undefined;
       postResult(
@@ -708,21 +744,30 @@ export function installVocalEditWorkerEndpoint(
       postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null);
       return;
     }
+    if (session.disposing) {
+      // A repeated dispose settles with the first one.
+      void session.released?.then(() =>
+        postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null),
+      );
+      return;
+    }
+    session.disposing = true;
     const active = session.running;
     if (active) {
       active.cancelled = true;
     }
     rejectQueuedCommands(endpoint, session, new Error('Vocal session disposed'));
-    const release = async (): Promise<void> => {
+    session.released = (async (): Promise<void> => {
       while (session.draining) {
         await nextMacrotask();
       }
       session.draft?.dispose();
       session.value.dispose();
       sessions.delete(message.sessionId);
-      postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null);
-    };
-    void release();
+    })();
+    void session.released.then(() =>
+      postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, null),
+    );
   };
 
   endpoint.addEventListener('message', (event) => {

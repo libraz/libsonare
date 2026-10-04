@@ -4,6 +4,7 @@ import type {
   VocalCapabilities,
   VocalCreateRequest,
   VocalNotesResult,
+  VocalPitchEvaluation,
   VocalRenderResult,
   VocalStateToken,
 } from '../src/public_types_vocal_edit';
@@ -14,6 +15,7 @@ import {
   type VocalEditWorkerNativeSession,
 } from '../src/vocal_edit_worker';
 import type {
+  VocalWorkerMutation,
   VocalWorkerRequestMessage,
   VocalWorkerResponseMessage,
 } from '../src/vocal_edit_worker_protocol';
@@ -58,6 +60,31 @@ const capabilities: VocalCapabilities = {
   analysisCancellable: false,
   minimumFormantShiftSemitones: -10.3,
   maximumFormantShiftSemitones: 8.7,
+};
+
+/** Read-only native operations whose values identify the scope they ran against. */
+function readOnlyOps(scope: 'session' | 'draft') {
+  const offset = scope === 'draft' ? 0.5 : 0;
+  return {
+    evaluatePitch: (noteId: number): VocalPitchEvaluation => ({
+      sourceSamples: new Float64Array([noteId, offset]),
+      measuredMidi: new Float64Array([60]),
+      targetMidi: new Float64Array([62]),
+      effectiveMidi: new Float64Array([61]),
+      voiced: new Uint8Array([1]),
+      hasTarget: new Uint8Array([1]),
+    }),
+    sourceSampleToDestinationSample: (noteId: number, sample: number) =>
+      sample * 2 + noteId + offset,
+    destinationSampleToSourceSample: (noteId: number, sample: number) =>
+      (sample - noteId - offset) / 2,
+  };
+}
+
+const sessionReadOnlyOps = {
+  ...readOnlyOps('session'),
+  outputLengthSamples: () => 480,
+  history: () => ({ canUndo: true, canRedo: false }),
 };
 
 class Endpoint {
@@ -129,6 +156,7 @@ function fakeFactory(renderUnits = 1): {
       const draft: VocalEditWorkerNativeDraft = {
         token: sessionToken,
         notes: () => notes,
+        ...readOnlyOps('draft'),
         apply: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
         commit: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
         cancel: () => {},
@@ -140,6 +168,7 @@ function fakeFactory(renderUnits = 1): {
         notes: () => notes,
         analysis: () => analysis,
         capabilities: () => capabilities,
+        ...sessionReadOnlyOps,
         beginEdit: () => draft,
         undo: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
         redo: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
@@ -389,6 +418,7 @@ function statefulFactory(
       const draft: VocalEditWorkerNativeDraft = {
         token: stateToken,
         notes: () => notes,
+        ...readOnlyOps('draft'),
         apply: (request) => {
           if (request.expectedGeneration !== String(generation)) {
             throw Object.assign(new Error('generation conflict'), { field: 'generation' });
@@ -415,6 +445,7 @@ function statefulFactory(
         notes: () => notes,
         analysis: () => analysis,
         capabilities: () => capabilities,
+        ...sessionReadOnlyOps,
         beginEdit: () => {
           draftOpen = true;
           return draft;
@@ -674,5 +705,201 @@ describe('vocal edit Worker mutation semantics', () => {
     });
     await settle();
     expect(endpoint.takeFinal(26)?.type).toBe('sonare:vocal-result');
+  });
+
+  it('answers every read-only command against the session or the open draft', async () => {
+    const endpoint = new Endpoint();
+    installVocalEditWorkerEndpoint(endpoint, statefulFactory().dependencies);
+    endpoint.dispatch(createMessage(1, '1'));
+    await settle();
+    endpoint.take(1);
+    let sequence = 1;
+    const read = async (id: number, mutation: VocalWorkerMutation) => {
+      sequence += 1;
+      endpoint.dispatch({
+        type: 'sonare:vocal-mutate',
+        id,
+        sessionId: 's',
+        clientIntentSequence: String(sequence),
+        mutation,
+      });
+      await settle();
+      return endpoint.takeFinal(id);
+    };
+    const result = async (id: number, mutation: VocalWorkerMutation) => {
+      const response = await read(id, mutation);
+      expect(response?.type, `id ${id}`).toBe('sonare:vocal-result');
+      return response?.type === 'sonare:vocal-result' ? response.result : undefined;
+    };
+
+    expect(await result(2, { kind: 'outputLength' })).toBe(480);
+    expect(await result(3, { kind: 'history' })).toEqual({ canUndo: true, canRedo: false });
+    expect(await result(4, { kind: 'evaluatePitch', noteId: 3 })).toMatchObject({
+      sourceSamples: new Float64Array([3, 0]),
+    });
+    expect(await result(5, { kind: 'mapCoordinate', noteId: 1, sample: 10, inverse: false })).toBe(
+      21,
+    );
+    expect(await result(6, { kind: 'mapCoordinate', noteId: 1, sample: 21, inverse: true })).toBe(
+      10,
+    );
+
+    // Without a draft, draft-scoped reads and the draft token are refused.
+    for (const [id, mutation] of [
+      [7, { kind: 'draftToken' }],
+      [8, { kind: 'evaluatePitch', noteId: 3, draft: true }],
+      [9, { kind: 'mapCoordinate', noteId: 1, sample: 10, inverse: false, draft: true }],
+    ] as const) {
+      const response = await read(id, mutation);
+      expect(response?.type, `id ${id}`).toBe('sonare:vocal-error');
+    }
+
+    await result(10, { kind: 'beginEdit', expectedRevision: '0' });
+    expect(await result(11, { kind: 'draftToken' })).toMatchObject({ draftId: '1' });
+    expect(await result(12, { kind: 'evaluatePitch', noteId: 3, draft: true })).toMatchObject({
+      sourceSamples: new Float64Array([3, 0.5]),
+    });
+    expect(
+      await result(13, {
+        kind: 'mapCoordinate',
+        noteId: 1,
+        sample: 10,
+        inverse: false,
+        draft: true,
+      }),
+    ).toBe(21.5);
+    expect(
+      await result(14, {
+        kind: 'mapCoordinate',
+        noteId: 1,
+        sample: 21.5,
+        inverse: true,
+        draft: true,
+      }),
+    ).toBe(10);
+    // The default scope stays the committed session while a draft is open.
+    expect(await result(15, { kind: 'evaluatePitch', noteId: 3 })).toMatchObject({
+      sourceSamples: new Float64Array([3, 0]),
+    });
+  });
+
+  it('rejects everything that arrives after a dispose while a render is running', async () => {
+    const endpoint = new Endpoint();
+    const fake = statefulFactory({ renderUnits: 1000 });
+    installVocalEditWorkerEndpoint(endpoint, fake.dependencies);
+    endpoint.dispatch(createMessage(1, '1'));
+    await settle();
+    endpoint.take(1);
+    endpoint.dispatch({
+      type: 'sonare:vocal-preview',
+      id: 2,
+      sessionId: 's',
+      clientIntentSequence: '2',
+      request: { range: { startSample: 0, endSample: 1 } },
+    });
+    await settle();
+    endpoint.dispatch({
+      type: 'sonare:vocal-dispose',
+      id: 3,
+      sessionId: 's',
+      clientIntentSequence: '3',
+    });
+    endpoint.dispatch({
+      type: 'sonare:vocal-preview',
+      id: 4,
+      sessionId: 's',
+      clientIntentSequence: '4',
+      request: { range: { startSample: 0, endSample: 1 } },
+    });
+    endpoint.dispatch({
+      type: 'sonare:vocal-mutate',
+      id: 5,
+      sessionId: 's',
+      clientIntentSequence: '5',
+      mutation: { kind: 'beginEdit', expectedRevision: '0' },
+    });
+    endpoint.dispatch({
+      type: 'sonare:vocal-dispose',
+      id: 6,
+      sessionId: 's',
+      clientIntentSequence: '6',
+    });
+    await settle(20);
+
+    expect(endpoint.takeFinal(2)?.type).toBe('sonare:vocal-error');
+    for (const id of [4, 5]) {
+      const late = endpoint.takeFinal(id);
+      expect(late?.type, `id ${id}`).toBe('sonare:vocal-error');
+      if (late?.type === 'sonare:vocal-error') {
+        expect(late.error.message).toBe('Unknown vocal session');
+      }
+    }
+    expect(endpoint.takeFinal(3)?.type).toBe('sonare:vocal-result');
+    expect(endpoint.takeFinal(6)?.type).toBe('sonare:vocal-result');
+    expect(fake.disposedSessions()).toBe(1);
+  });
+
+  it('carries every field of a structured native error', async () => {
+    const endpoint = new Endpoint();
+    const base = statefulFactory();
+    const factory = base.dependencies.factory as NonNullable<
+      VocalEditWorkerDependencies['factory']
+    >;
+    const failure = Object.assign(new Error('revision conflict'), {
+      name: 'SonareError',
+      code: 5,
+      codeName: 'InvalidState',
+      reason: 2,
+      field: 'revision',
+      expected: '0',
+      actual: '1',
+      expectedText: 'revision 0',
+      actualText: 'revision 1',
+    });
+    let armed = false;
+    installVocalEditWorkerEndpoint(endpoint, {
+      ...base.dependencies,
+      factory: {
+        ...factory,
+        create: (request) => ({
+          ...factory.create(request),
+          // Armed after create, which itself reads notes().
+          notes: () => {
+            if (armed) {
+              throw failure;
+            }
+            return notes;
+          },
+        }),
+      },
+    });
+    endpoint.dispatch(createMessage(1, '1'));
+    await settle();
+    endpoint.take(1);
+    armed = true;
+    endpoint.dispatch({
+      type: 'sonare:vocal-mutate',
+      id: 2,
+      sessionId: 's',
+      clientIntentSequence: '2',
+      mutation: { kind: 'notes' },
+    });
+    await settle();
+    const response = endpoint.takeFinal(2);
+    expect(response?.type).toBe('sonare:vocal-error');
+    if (response?.type === 'sonare:vocal-error') {
+      expect(response.error).toEqual({
+        name: 'SonareError',
+        message: 'revision conflict',
+        code: 5,
+        codeName: 'InvalidState',
+        reason: 2,
+        field: 'revision',
+        expected: '0',
+        actual: '1',
+        expectedText: 'revision 0',
+        actualText: 'revision 1',
+      });
+    }
   });
 });

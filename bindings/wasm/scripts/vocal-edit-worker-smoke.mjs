@@ -315,6 +315,11 @@ const runFlow = async () => {
       { copy: true },
     );
     assert(restored.created.notes.notes.length === 1, 'restore lost the monophonic note');
+    assert(
+      (await restored.outputLengthSamples()) === (await session.outputLengthSamples()),
+      'restore changed the output length',
+    );
+    assert((await session.history()).canUndo === true, 'committed edit is not undoable');
     const restoredPreview = await restored.preview({ requestId: '13' });
     assert(
       maxAbsDelta(committedPreview.samples, restoredPreview.samples) <= 1e-6,
