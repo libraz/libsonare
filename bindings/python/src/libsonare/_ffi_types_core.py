@@ -157,6 +157,7 @@ class SonareMeterTelemetryRecord(CStruct):
 
 
 SONARE_METER_MAX_CHANNELS = 8
+SONARE_METER_MAX_INSERTS = 128
 
 
 class SonareMeterTelemetryRecordWide(CStruct):

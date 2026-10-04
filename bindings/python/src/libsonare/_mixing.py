@@ -408,7 +408,7 @@ class Mixer:
         _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
 
     def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None:
-        """Set a per-strip channel delay in samples (recompiled on next compile)."""
+        """Set a per-strip channel delay in samples, moving it later than the other strips."""
         handle = self._strip_handle(strip)
         _check(
             _get_lib().sonare_strip_set_channel_delay_samples(

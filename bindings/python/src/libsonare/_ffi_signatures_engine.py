@@ -721,6 +721,15 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_size_t),
         ]
+    if hasattr(lib, "sonare_engine_meter_target_insert_gain_reduction"):
+        lib.sonare_engine_meter_target_insert_gain_reduction.restype = ctypes.c_int32
+        lib.sonare_engine_meter_target_insert_gain_reduction.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
     if hasattr(lib, "sonare_engine_drain_meter_telemetry_wide_v2"):
         lib.sonare_engine_drain_meter_telemetry_wide_v2.restype = ctypes.c_int32
         lib.sonare_engine_drain_meter_telemetry_wide_v2.argtypes = [

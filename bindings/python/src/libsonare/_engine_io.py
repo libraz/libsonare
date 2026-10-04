@@ -21,6 +21,7 @@ from ._engine_conversions import (
     _telemetry_from_c,
 )
 from ._ffi_types_core import (
+    SONARE_METER_MAX_INSERTS,
     SonareClipPageRequest,
     SonareEngineBounceOptions,
     SonareEngineBounceResult,
@@ -504,6 +505,30 @@ class _EngineIoMixin:
             )
         )
         return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
+
+    def meter_target_insert_gain_reduction(self, target_id: int) -> list[float]:
+        """Return per-insert gain reduction in dB (<= 0) for a meter target's strip.
+
+        Entries follow the combined insert order (pre-fader, then post-fader)
+        of the last rendered block. ``target_id`` uses the meter-record
+        encoding: 0 master, 1..32 lanes, 33..40 buses; the input monitor
+        (0xFFFF) and unused slots give an empty list.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_meter_target_insert_gain_reduction"):
+            raise RuntimeError("libsonare was built without insert gain-reduction support")
+        raw = (ctypes.c_float * SONARE_METER_MAX_INSERTS)()
+        count = ctypes.c_size_t()
+        _check(
+            lib.sonare_engine_meter_target_insert_gain_reduction(
+                self._require_handle(),
+                _to_c_uint(target_id, "target_id"),
+                raw,
+                ctypes.c_size_t(SONARE_METER_MAX_INSERTS),
+                ctypes.byref(count),
+            )
+        )
+        return [float(raw[i]) for i in range(min(count.value, SONARE_METER_MAX_INSERTS))]
 
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""

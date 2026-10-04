@@ -348,7 +348,7 @@ class _EngineMixingMixin:
         )
 
     def set_track_strip_channel_delay_samples(self, track_id: int, delay_samples: int) -> None:
-        """Set a track strip's inter-channel delay in samples (Haas widening)."""
+        """Set a track strip's alignment delay in samples, moving it later than the other lanes."""
         _check(
             _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
                 self._require_handle(),
