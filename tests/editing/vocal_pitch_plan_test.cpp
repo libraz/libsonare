@@ -42,7 +42,6 @@ VocalAnalysisData analysis(std::vector<float> f0, std::vector<uint8_t> voiced, d
 VocalNote note(uint32_t start, uint32_t end, double centre_midi = 60.0) {
   VocalNote result;
   result.id = 1;
-  result.content_generation = 1;
   result.source_range = {static_cast<int64_t>(start * 480), static_cast<int64_t>(end * 480)};
   result.analysis_frame_start = start;
   result.analysis_frame_end = end;

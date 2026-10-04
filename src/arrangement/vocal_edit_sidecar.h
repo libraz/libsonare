@@ -40,7 +40,8 @@ AssistSidecar encode_envelope(Key key, const Envelope& envelope);
 
 void remove_clip_sidecars(Project* project, ClipId clip_id);
 void clone_clip_sidecars(Project* project, ClipId from, ClipId to);
-/// Drops `after.id` sidecars whose take vanished or now resolves to another source or offset.
+/// Drops `after.id` sidecars whose take vanished or now resolves to another source. The envelope
+/// covers the whole source, so a source-offset change (trim, split, slip) keeps it.
 void prune_changed_bindings(Project* project, const EditClip& before, const EditClip& after);
 
 /// Wraps an inverse so undo also restores, in place, only the sidecars of `affected_clip_ids`.

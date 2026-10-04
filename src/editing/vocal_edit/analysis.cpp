@@ -10,6 +10,7 @@
 
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_segmenter.h"
+#include "editing/vocal_edit/source_digest.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/sha256.h"
@@ -99,22 +100,13 @@ SourceDescriptor describe_source(const Audio& source) {
     if (!std::isfinite(sample)) invalid("source", "source audio contains a non-finite sample");
   }
 
-  util::Sha256 hash;
-  for (const float sample : source) {
-    uint32_t bits = 0;
-    std::memcpy(&bits, &sample, sizeof(bits));
-    uint8_t bytes[4] = {static_cast<uint8_t>(bits), static_cast<uint8_t>(bits >> 8),
-                        static_cast<uint8_t>(bits >> 16), static_cast<uint8_t>(bits >> 24)};
-    hash.update(bytes, sizeof(bytes));
-  }
-
   SourceDescriptor descriptor;
   descriptor.sample_rate = static_cast<uint32_t>(source.sample_rate());
   if (source.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
     invalid("source.sample_count", "source sample count is too large");
   }
   descriptor.sample_count = static_cast<int64_t>(source.size());
-  descriptor.digest = hash.finalize();
+  descriptor.digest = digest_source_pcm(source.data(), source.size());
   return descriptor;
 }
 
@@ -363,7 +355,6 @@ VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analy
   }
   VocalNote note;
   note.id = id;
-  note.content_generation = 1;
   note.source_range = source_range;
   note.analysis_frame_start = frame_start;
   note.analysis_frame_end = frame_end;

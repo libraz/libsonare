@@ -393,14 +393,6 @@ VocalNoteId issue_id(uint64_t& next_id) {
   return issued;
 }
 
-uint64_t next_generation(uint64_t current) {
-  if (current == std::numeric_limits<uint64_t>::max()) {
-    throw VocalEditException(VocalReason::kCounterExhausted, "content generation exhausted",
-                             "generation");
-  }
-  return current + 1;
-}
-
 void split_target(const VocalPitchTarget& target, double cut, VocalPitchTarget& left,
                   VocalPitchTarget& right) {
   left = target;
@@ -453,21 +445,6 @@ std::vector<float> split_envelope(const std::vector<float>& envelope, double fra
     result[index] = value_at(left ? cut * local : cut + (1.0 - cut) * local);
   }
   return result;
-}
-
-void append_transition_dirty(const VocalEditState& state, VocalNoteId id,
-                             std::vector<SampleRange>& dirty) {
-  for (const auto& transition : state.transitions) {
-    if (transition.left_note_id != id && transition.right_note_id != id) continue;
-    for (const auto& note : state.notes) {
-      if (note.id == transition.left_note_id || note.id == transition.right_note_id) {
-        dirty.push_back(note.source_range);
-        dirty.push_back({note.edit.destination_start_sample,
-                         checked_end(note.edit.destination_start_sample,
-                                     note.edit.destination_length_samples, "destination")});
-      }
-    }
-  }
 }
 
 void normalize_ranges(std::vector<SampleRange>& ranges) {
@@ -530,55 +507,32 @@ const VocalNote* find_note_or_null(const VocalEditState& state, VocalNoteId id) 
   return nullptr;
 }
 
-void append_transition_range(const VocalEditState& state, const PitchTransition& transition,
-                             std::vector<SampleRange>& ranges) {
-  const auto* left = find_note_or_null(state, transition.left_note_id);
-  const auto* right = find_note_or_null(state, transition.right_note_id);
-  if (!left || !right) return;
-  const int64_t left_end = checked_end(left->edit.destination_start_sample,
-                                       left->edit.destination_length_samples, "destination");
-  if (transition.left_window_samples > left_end - left->edit.destination_start_sample ||
-      transition.right_window_samples >
-          std::numeric_limits<int64_t>::max() - right->edit.destination_start_sample) {
-    return;
-  }
-  const int64_t begin = left_end - transition.left_window_samples;
-  const int64_t end = right->edit.destination_start_sample + transition.right_window_samples;
-  if (begin < end) ranges.push_back({begin, end});
+void append_note_ranges(const VocalNote& note, std::vector<SampleRange>& ranges) {
+  ranges.push_back(note.source_range);
+  ranges.push_back({note.edit.destination_start_sample,
+                    checked_end(note.edit.destination_start_sample,
+                                note.edit.destination_length_samples, "destination")});
 }
 
+/// Every sample either state can render differently: changed notes, plus both endpoint notes of
+/// any transition that changed or touches a changed note. A bridge bends the whole neighbour
+/// note's plan, and a plan change re-synthesizes that note end to end.
 std::vector<SampleRange> dirty_ranges_for_states(const VocalEditState& old_state,
                                                  const VocalEditState& new_state,
                                                  int64_t output_length) {
-  std::vector<SampleRange> ranges;
   std::map<VocalNoteId, const VocalNote*> old_notes;
   std::map<VocalNoteId, const VocalNote*> new_notes;
   for (const auto& note : old_state.notes) old_notes.emplace(note.id, &note);
   for (const auto& note : new_state.notes) new_notes.emplace(note.id, &note);
-  std::set<VocalNoteId> all_ids;
-  for (const auto& entry : old_notes) all_ids.insert(entry.first);
-  for (const auto& entry : new_notes) all_ids.insert(entry.first);
-  for (const auto id : all_ids) {
-    const auto old_it = old_notes.find(id);
-    const auto new_it = new_notes.find(id);
-    if (old_it != old_notes.end() && new_it != new_notes.end() &&
-        same_note_content(*old_it->second, *new_it->second)) {
-      continue;
+  std::set<VocalNoteId> changed;
+  for (const auto& entry : old_notes) {
+    const auto other = new_notes.find(entry.first);
+    if (other == new_notes.end() || !same_note_content(*entry.second, *other->second)) {
+      changed.insert(entry.first);
     }
-    if (old_it != old_notes.end()) {
-      ranges.push_back(old_it->second->source_range);
-      ranges.push_back(
-          {old_it->second->edit.destination_start_sample,
-           checked_end(old_it->second->edit.destination_start_sample,
-                       old_it->second->edit.destination_length_samples, "destination")});
-    }
-    if (new_it != new_notes.end()) {
-      ranges.push_back(new_it->second->source_range);
-      ranges.push_back(
-          {new_it->second->edit.destination_start_sample,
-           checked_end(new_it->second->edit.destination_start_sample,
-                       new_it->second->edit.destination_length_samples, "destination")});
-    }
+  }
+  for (const auto& entry : new_notes) {
+    if (old_notes.find(entry.first) == old_notes.end()) changed.insert(entry.first);
   }
   const auto transition_in = [](const std::vector<PitchTransition>& transitions,
                                 const PitchTransition& wanted) {
@@ -586,13 +540,26 @@ std::vector<SampleRange> dirty_ranges_for_states(const VocalEditState& old_state
              return same_transition(value, wanted);
            }) != transitions.end();
   };
-  for (const auto& transition : old_state.transitions) {
-    if (!transition_in(new_state.transitions, transition))
-      append_transition_range(old_state, transition, ranges);
-  }
-  for (const auto& transition : new_state.transitions) {
-    if (!transition_in(old_state.transitions, transition))
-      append_transition_range(new_state, transition, ranges);
+  std::set<VocalNoteId> affected = changed;
+  const auto collect = [&](const std::vector<PitchTransition>& transitions,
+                           const std::vector<PitchTransition>& other) {
+    for (const auto& transition : transitions) {
+      if (!transition_in(other, transition) || contains_id(changed, transition.left_note_id) ||
+          contains_id(changed, transition.right_note_id)) {
+        affected.insert(transition.left_note_id);
+        affected.insert(transition.right_note_id);
+      }
+    }
+  };
+  collect(old_state.transitions, new_state.transitions);
+  collect(new_state.transitions, old_state.transitions);
+
+  std::vector<SampleRange> ranges;
+  for (const auto id : affected) {
+    const auto old_it = old_notes.find(id);
+    const auto new_it = new_notes.find(id);
+    if (old_it != old_notes.end()) append_note_ranges(*old_it->second, ranges);
+    if (new_it != new_notes.end()) append_note_ranges(*new_it->second, ranges);
   }
   for (auto& range : ranges) {
     range.start = std::clamp<int64_t>(range.start, 0, output_length);
@@ -711,23 +678,9 @@ std::vector<CompiledPitchPlan> evaluate_state(const VocalAnalysisData& analysis,
   return plans;
 }
 
-void mark_note_changed(VocalNote& note) {
-  note.content_generation = next_generation(note.content_generation);
-}
-
-void apply_set_edit(VocalEditState& state, const SetNoteEditOp& operation,
-                    const VocalAnalysisData& analysis, int64_t output_length,
-                    std::vector<SampleRange>& dirty) {
+void apply_set_edit(VocalEditState& state, const SetNoteEditOp& operation) {
   const size_t index = find_note_or_throw(state, operation.note_id);
-  dirty.push_back(state.notes[index].source_range);
-  dirty.push_back({state.notes[index].edit.destination_start_sample,
-                   checked_end(state.notes[index].edit.destination_start_sample,
-                               state.notes[index].edit.destination_length_samples, "destination")});
   state.notes[index].edit = operation.edit;
-  mark_note_changed(state.notes[index]);
-  append_transition_dirty(state, operation.note_id, dirty);
-  static_cast<void>(analysis);
-  static_cast<void>(output_length);
 }
 
 uint32_t frame_for_sample_start(const AnalysisGrid& grid, uint32_t frame_count, int64_t sample) {
@@ -751,8 +704,8 @@ uint32_t frame_for_sample_end(const AnalysisGrid& grid, uint32_t frame_count, in
 }
 
 void apply_set_source(VocalEditState& state, const SetNoteSourceSpanOp& operation,
-                      const Audio& source, const VocalAnalysisData& analysis, int64_t source_length,
-                      int64_t output_length, std::vector<SampleRange>& dirty) {
+                      const Audio& source, const VocalAnalysisData& analysis,
+                      int64_t source_length) {
   const size_t index = find_note_or_throw(state, operation.note_id);
   if (operation.source_range.start < 0 ||
       operation.source_range.end <= operation.source_range.start ||
@@ -765,7 +718,6 @@ void apply_set_source(VocalEditState& state, const SetNoteSourceSpanOp& operatio
       analysis.grid, static_cast<uint32_t>(analysis.f0_hz.size()), operation.source_range.end);
   const VocalNote previous = state.notes[index];
   VocalNote candidate = measure_vocal_note(source, analysis, previous.id, operation.source_range);
-  candidate.content_generation = previous.content_generation;
   candidate.edit = previous.edit;
   if (previous.edit.pitch.target.mode == PitchTargetMode::kCurve &&
       (previous.edit.pitch.target.points.empty() ||
@@ -775,19 +727,12 @@ void apply_set_source(VocalEditState& state, const SetNoteSourceSpanOp& operatio
            static_cast<double>(operation.source_range.end))) {
     candidate.edit.pitch.target = respan_target(previous.edit.pitch.target, operation.source_range);
   }
-  dirty.push_back(candidate.source_range);
-  dirty.push_back(operation.source_range);
-  dirty.push_back({candidate.edit.destination_start_sample,
-                   checked_end(candidate.edit.destination_start_sample,
-                               candidate.edit.destination_length_samples, "destination")});
   candidate.source_range = operation.source_range;
   candidate.analysis_frame_start = frame_start;
   candidate.analysis_frame_end = frame_end;
   candidate.edit.destination_start_sample = operation.destination_start_sample;
   candidate.edit.destination_length_samples = operation.destination_length_samples;
-  static_cast<void>(output_length);
   state.notes[index] = std::move(candidate);
-  mark_note_changed(state.notes[index]);
 }
 
 void rewire_split_transitions(VocalEditState& state, VocalNoteId old_id, const VocalNote& left_note,
@@ -810,8 +755,7 @@ void rewire_split_transitions(VocalEditState& state, VocalNoteId old_id, const V
 
 void apply_split(VocalEditState& state, const SplitNoteOp& operation, const Audio& source,
                  const VocalAnalysisData& analysis, int64_t source_length, int64_t output_length,
-                 uint64_t& next_id, std::vector<SampleRange>& dirty,
-                 std::vector<IdChange>& changes) {
+                 uint64_t& next_id, std::vector<IdChange>& changes) {
   const size_t index = find_note_or_throw(state, operation.note_id);
   const VocalNote original = state.notes[index];
   if (operation.source_sample <= original.source_range.start ||
@@ -861,10 +805,6 @@ void apply_split(VocalEditState& state, const SplitNoteOp& operation, const Audi
   validate_note(left, analysis, source_length, output_length);
   validate_note(right, analysis, source_length, output_length);
 
-  dirty.push_back(original.source_range);
-  dirty.push_back({original.edit.destination_start_sample,
-                   checked_end(original.edit.destination_start_sample,
-                               original.edit.destination_length_samples, "destination")});
   state.notes.erase(state.notes.begin() + static_cast<std::ptrdiff_t>(index));
   state.notes.insert(state.notes.begin() + static_cast<std::ptrdiff_t>(index), {left, right});
   rewire_split_transitions(state, original.id, left, right);
@@ -1056,7 +996,7 @@ void rewire_merge_transitions(VocalEditState& state, const std::set<VocalNoteId>
 void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Audio& source,
                  const VocalAnalysisData& analysis, int64_t source_length, int64_t output_length,
                  const RenderSettings& render_settings, uint64_t& next_id,
-                 std::vector<SampleRange>& dirty, std::vector<IdChange>& changes) {
+                 std::vector<IdChange>& changes) {
   if (operation.note_ids.size() < 2) invalid("note_ids", "merge requires at least two notes");
   std::vector<size_t> indices;
   indices.reserve(operation.note_ids.size());
@@ -1129,13 +1069,7 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
   }
   validate_note(merged, analysis, source_length, output_length);
   std::set<VocalNoteId> retired;
-  for (const auto& note : selected) {
-    retired.insert(note.id);
-    dirty.push_back(note.source_range);
-    dirty.push_back({note.edit.destination_start_sample,
-                     checked_end(note.edit.destination_start_sample,
-                                 note.edit.destination_length_samples, "destination")});
-  }
+  for (const auto& note : selected) retired.insert(note.id);
   const size_t first_index = indices.front();
   state.notes.erase(state.notes.begin() + static_cast<std::ptrdiff_t>(indices.front()),
                     state.notes.begin() + static_cast<std::ptrdiff_t>(indices.back() + 1));
@@ -1145,8 +1079,7 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
   for (const auto id : operation.note_ids) changes.push_back({0, id, {new_id}});
 }
 
-void apply_set_transition(VocalEditState& state, const SetTransitionOp& operation,
-                          std::vector<SampleRange>& dirty) {
+void apply_set_transition(VocalEditState& state, const SetTransitionOp& operation) {
   const auto& transition = operation.transition;
   const size_t left_index = find_note_or_throw(state, transition.left_note_id);
   const size_t right_index = find_note_or_throw(state, transition.right_note_id);
@@ -1179,12 +1112,9 @@ void apply_set_transition(VocalEditState& state, const SetTransitionOp& operatio
     }
   }
   state.transitions.push_back(transition);
-  dirty.push_back(state.notes[left_index].source_range);
-  dirty.push_back(state.notes[right_index].source_range);
 }
 
-void apply_remove_transition(VocalEditState& state, const RemoveTransitionOp& operation,
-                             std::vector<SampleRange>& dirty) {
+void apply_remove_transition(VocalEditState& state, const RemoveTransitionOp& operation) {
   const auto before = state.transitions.size();
   state.transitions.erase(
       std::remove_if(state.transitions.begin(), state.transitions.end(),
@@ -1194,8 +1124,8 @@ void apply_remove_transition(VocalEditState& state, const RemoveTransitionOp& op
                      }),
       state.transitions.end());
   if (state.transitions.size() == before) invalid("transition", "transition was not found");
-  dirty.push_back(state.notes[find_note_or_throw(state, operation.left_note_id)].source_range);
-  dirty.push_back(state.notes[find_note_or_throw(state, operation.right_note_id)].source_range);
+  static_cast<void>(find_note_or_throw(state, operation.left_note_id));
+  static_cast<void>(find_note_or_throw(state, operation.right_note_id));
 }
 
 }  // namespace
@@ -1583,7 +1513,6 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
 
   auto candidate = std::make_shared<VocalEditState>(*candidate_);
   uint64_t next_id = local_next_note_id_;
-  std::vector<SampleRange> dirty;
   std::vector<IdChange> changes;
   std::set<VocalNoteId> expanded_curve_ids;
   std::set<VocalNoteId> expanded_envelope_ids;
@@ -1615,8 +1544,7 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
         [&](const auto& typed) {
           using T = std::decay_t<decltype(typed)>;
           if constexpr (std::is_same_v<T, SetNoteEditOp>) {
-            apply_set_edit(*candidate, typed, *impl_->analysis, impl_->output_length_samples,
-                           dirty);
+            apply_set_edit(*candidate, typed);
           } else if constexpr (std::is_same_v<T, SetNoteSourceSpanOp>) {
             const size_t current_index = find_note_or_throw(*candidate, typed.note_id);
             const auto& current = candidate->notes[current_index];
@@ -1631,27 +1559,24 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
               expanded_envelope_ids.insert(typed.note_id);
             }
             apply_set_source(*candidate, typed, impl_->source, *impl_->analysis,
-                             impl_->source_descriptor.sample_count, impl_->output_length_samples,
-                             dirty);
+                             impl_->source_descriptor.sample_count);
           } else if constexpr (std::is_same_v<T, SplitNoteOp>) {
             apply_split(*candidate, typed, impl_->source, *impl_->analysis,
                         impl_->source_descriptor.sample_count, impl_->output_length_samples,
-                        next_id, dirty, changes);
+                        next_id, changes);
           } else if constexpr (std::is_same_v<T, MergeNotesOp>) {
             apply_merge(*candidate, typed, impl_->source, *impl_->analysis,
                         impl_->source_descriptor.sample_count, impl_->output_length_samples,
-                        impl_->render_settings, next_id, dirty, changes);
+                        impl_->render_settings, next_id, changes);
           } else if constexpr (std::is_same_v<T, SetTransitionOp>) {
-            apply_set_transition(*candidate, typed, dirty);
+            apply_set_transition(*candidate, typed);
           } else if constexpr (std::is_same_v<T, RemoveTransitionOp>) {
-            apply_remove_transition(*candidate, typed, dirty);
+            apply_remove_transition(*candidate, typed);
           } else if constexpr (std::is_same_v<T, ResetNotesOp>) {
             for (const auto id : typed.note_ids) {
               const size_t index = find_note_or_throw(*candidate, id);
-              dirty.push_back(candidate->notes[index].source_range);
               candidate->notes[index].edit =
                   VocalNoteEdit::identity_for(candidate->notes[index].source_range);
-              mark_note_changed(candidate->notes[index]);
             }
           }
         },
@@ -1694,8 +1619,7 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
   sort_transitions(*candidate);
   validate_vocal_edit_state(*candidate, *impl_->analysis, impl_->source_descriptor.sample_count,
                             impl_->output_length_samples, impl_->render_settings);
-  dirty = dirty_ranges_for_states(*candidate_, *candidate, impl_->output_length_samples);
-  normalize_ranges(dirty);
+  auto dirty = dirty_ranges_for_states(*candidate_, *candidate, impl_->output_length_samples);
   auto next_token = draft_token_;
   ++next_token.draft_generation;
   DraftApplyResult result{next_token, std::move(dirty), std::move(changes)};
@@ -1757,6 +1681,16 @@ StateChangeResult VocalEditDraft::commit(VocalRevision expected_revision,
     invalid_state("draft", "draft is not active");
   if (expected_revision != impl_->revision)
     revision_conflict("revision", expected_revision, impl_->revision);
+  // A draft that was never applied closes without touching history or redo.
+  if (draft_token_.draft_generation == 1) {
+    StateChangeResult unchanged{{impl_->epoch, impl_->revision, 0, 0}, {}};
+    if (before_publish) before_publish(unchanged);
+    impl_->draft_open = false;
+    active_ = false;
+    draft_token_.draft_id = 0;
+    draft_token_.draft_generation = 0;
+    return unchanged;
+  }
   if (impl_->revision == std::numeric_limits<VocalRevision>::max()) {
     throw VocalEditException(VocalReason::kCounterExhausted, "revision exhausted", "revision");
   }

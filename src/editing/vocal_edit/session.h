@@ -98,6 +98,8 @@ class VocalEditDraft {
   std::vector<CompiledPitchPlan> evaluate_pitch(
       const std::vector<VocalNoteId>& note_ids = {}) const;
   std::shared_ptr<const VocalRenderSnapshot> capture_render_snapshot() const;
+  /// Publishes the candidate as a new revision. A draft never applied closes as a no-op: no
+  /// history entry, no redo truncation, and the returned token keeps the current revision.
   StateChangeResult commit(VocalRevision expected_revision,
                            const StateResultPreparation& before_publish = {});
   void cancel() noexcept;

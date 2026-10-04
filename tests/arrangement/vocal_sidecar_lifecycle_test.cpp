@@ -315,8 +315,15 @@ TEST_CASE("source and take rebind prune only changed resolved bindings", "[arran
                           history.project().assist_sidecars().end(),
                           [clip](const arr::AssistSidecar& sidecar) {
                             const auto key = vocal::parse_key(sidecar.module_id);
-                            return key.has_value() && key->clip_id == clip && key->take_id != 0;
+                            return key.has_value() && key->clip_id == clip && key->take_id == 1;
                           }));
+  // Take 2 keeps its source and only slips its offset, so its sidecar survives.
+  CHECK(std::any_of(history.project().assist_sidecars().begin(),
+                    history.project().assist_sidecars().end(),
+                    [clip](const arr::AssistSidecar& sidecar) {
+                      const auto key = vocal::parse_key(sidecar.module_id);
+                      return key.has_value() && key->clip_id == clip && key->take_id == 2;
+                    }));
   CHECK(std::any_of(history.project().assist_sidecars().begin(),
                     history.project().assist_sidecars().end(),
                     [clip](const arr::AssistSidecar& sidecar) {
@@ -327,6 +334,58 @@ TEST_CASE("source and take rebind prune only changed resolved bindings", "[arran
   CHECK(same_sidecars(history.project().assist_sidecars(), before));
   REQUIRE(history.redo());
   CHECK(same_sidecars(history.project().assist_sidecars(), after_takes));
+}
+
+TEST_CASE("source-offset changes keep the whole-source vocal sidecar",
+          "[arrangement][vocal][vocal_offset]") {
+  struct Row {
+    const char* name;
+    arr::TakeId take_id;
+  };
+  const Row rows[] = {{"trim", 0}, {"split", 0}, {"take slip", 1}};
+  for (const Row& row : rows) {
+    DYNAMIC_SECTION(row.name) {
+      arr::ClipId clip = 0;
+      arr::SourceId source_a = 0;
+      arr::SourceId source_b = 0;
+      arr::Project project = make_audio_project(&clip, &source_a, &source_b);
+      project.find_clip_mutable(clip)->takes = {{1, source_b, 0.0, "take"}};
+      project.add_assist_sidecar(vocal_sidecar(clip, row.take_id, {0x41, 0x42}));
+      const auto before = project.assist_sidecars();
+      arr::EditHistory history{std::move(project)};
+      const double offset_before =
+          row.take_id == 0 ? history.project().find_clip(clip)->source_offset_ppq
+                           : history.project().find_clip(clip)->takes[0].source_offset_ppq;
+
+      arr::EditCommandPtr command;
+      if (std::string(row.name) == "trim") {
+        command = std::make_unique<arr::TrimClip>(clip, 2.0, 8.0);
+      } else if (std::string(row.name) == "split") {
+        command = std::make_unique<arr::SplitClip>(clip, 4.0);
+      } else {
+        command = std::make_unique<arr::SetClipTakes>(
+            clip, std::vector<arr::ClipTake>{{1, source_b, 1.5, "take"}}, 1);
+      }
+      REQUIRE(history.apply(std::move(command)));
+      const arr::EditClip* edited = history.project().find_clip(clip);
+      REQUIRE(edited != nullptr);
+      const double offset_after =
+          row.take_id == 0 ? edited->source_offset_ppq : edited->takes[0].source_offset_ppq;
+      // Split moves the offset of the right half; the others move this clip's.
+      if (std::string(row.name) != "split") CHECK(offset_after != offset_before);
+      const auto key = vocal::make_key({clip, row.take_id});
+      CHECK(std::any_of(
+          history.project().assist_sidecars().begin(), history.project().assist_sidecars().end(),
+          [&](const arr::AssistSidecar& sidecar) {
+            return sidecar.module_id == key && sidecar.payload == std::vector<uint8_t>{0x41, 0x42};
+          }));
+      const auto after = history.project().assist_sidecars();
+      REQUIRE(history.undo());
+      CHECK(same_sidecars(history.project().assist_sidecars(), before));
+      REQUIRE(history.redo());
+      CHECK(same_sidecars(history.project().assist_sidecars(), after));
+    }
+  }
 }
 
 TEST_CASE("removing a track removes every clip vocal key and undo restores it",

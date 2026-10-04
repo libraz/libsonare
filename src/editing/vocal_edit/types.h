@@ -139,7 +139,6 @@ struct VocalNoteEdit {
 
 struct VocalNote {
   VocalNoteId id = kInvalidVocalNoteId;
-  uint64_t content_generation = 0;
   SampleRange source_range{};
   uint32_t analysis_frame_start = 0;
   uint32_t analysis_frame_end = 0;
@@ -157,7 +156,6 @@ struct PitchTransition {
   int64_t right_window_samples = 0;
   double strength = 0.0;
   TransitionCurve curve = TransitionCurve::kSmoothstep;
-  uint64_t content_generation = 0;
 };
 
 struct VocalStateToken {

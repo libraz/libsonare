@@ -109,20 +109,17 @@ size_t captured_bytes(const CapturedVocal& captured) noexcept {
   return retained::saturating_add(total, retained::dynamic_bytes(captured.out_of_scope_anchors));
 }
 
-SourceId resolved_source(const EditClip& clip, TakeId take_id, bool* exists = nullptr,
-                         double* offset = nullptr) noexcept {
+SourceId resolved_source(const EditClip& clip, TakeId take_id, bool* exists) noexcept {
   if (take_id == 0) {
-    if (exists != nullptr) *exists = true;
-    if (offset != nullptr) *offset = clip.source_offset_ppq;
+    *exists = true;
     return clip.source_id;
   }
   for (const ClipTake& take : clip.takes) {
     if (take.id != take_id) continue;
-    if (exists != nullptr) *exists = true;
-    if (offset != nullptr) *offset = take.source_offset_ppq;
+    *exists = true;
     return take.source_id == 0 ? clip.source_id : take.source_id;
   }
-  if (exists != nullptr) *exists = false;
+  *exists = false;
   return 0;
 }
 
@@ -345,23 +342,20 @@ void clone_clip_sidecars(Project* project, ClipId from, ClipId to) {
 void prune_changed_bindings(Project* project, const EditClip& before, const EditClip& after) {
   if (project == nullptr || before.id != after.id) return;
   auto& sidecars = project->assist_sidecars_mutable();
-  sidecars.erase(
-      std::remove_if(sidecars.begin(), sidecars.end(),
-                     [&](const AssistSidecar& sidecar) {
-                       const auto key = parse_key(sidecar.module_id);
-                       if (!key.has_value() || key->clip_id != after.id) return false;
-                       bool before_exists = false;
-                       bool after_exists = false;
-                       double before_offset = 0.0;
-                       double after_offset = 0.0;
-                       const SourceId before_source =
-                           resolved_source(before, key->take_id, &before_exists, &before_offset);
-                       const SourceId after_source =
-                           resolved_source(after, key->take_id, &after_exists, &after_offset);
-                       return !before_exists || !after_exists || before_source != after_source ||
-                              before_offset != after_offset;
-                     }),
-      sidecars.end());
+  sidecars.erase(std::remove_if(sidecars.begin(), sidecars.end(),
+                                [&](const AssistSidecar& sidecar) {
+                                  const auto key = parse_key(sidecar.module_id);
+                                  if (!key.has_value() || key->clip_id != after.id) return false;
+                                  bool before_exists = false;
+                                  bool after_exists = false;
+                                  const SourceId before_source =
+                                      resolved_source(before, key->take_id, &before_exists);
+                                  const SourceId after_source =
+                                      resolved_source(after, key->take_id, &after_exists);
+                                  return !before_exists || !after_exists ||
+                                         before_source != after_source;
+                                }),
+                 sidecars.end());
 }
 
 EditCommandPtr wrap_inverse(EditCommandPtr ordinary_inverse, const Project& before,

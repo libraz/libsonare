@@ -115,7 +115,6 @@ VocalPersistedState fixture() {
 
   VocalNote note;
   note.id = 1;
-  note.content_generation = 99;  // runtime invalidation hint; never persisted.
   note.source_range = {0, 480};
   note.analysis_frame_start = 0;
   note.analysis_frame_end = 2;
@@ -179,8 +178,6 @@ void check_equal(const VocalPersistedState& lhs, const VocalPersistedState& rhs)
     const auto& a = lhs.edit_state.notes[i];
     const auto& b = rhs.edit_state.notes[i];
     CHECK(a.id == b.id);
-    CHECK(a.content_generation == 0);
-    CHECK(b.content_generation == 0);
     CHECK(a.source_range.start == b.source_range.start);
     CHECK(a.source_range.end == b.source_range.end);
     CHECK(a.analysis_frame_start == b.analysis_frame_start);
@@ -223,8 +220,6 @@ void check_equal(const VocalPersistedState& lhs, const VocalPersistedState& rhs)
     CHECK(a.right_window_samples == b.right_window_samples);
     CHECK(a.strength == b.strength);
     CHECK(a.curve == b.curve);
-    CHECK(a.content_generation == 0);
-    CHECK(b.content_generation == 0);
   }
   CHECK(lhs.render_settings.profile == rhs.render_settings.profile);
   CHECK(lhs.render_settings.algorithm_version == rhs.render_settings.algorithm_version);
@@ -241,12 +236,9 @@ TEST_CASE("SVE1 golden bytes are canonical little endian", "[vocal_state_codec]"
   CHECK(bytes == expected);
 }
 
-TEST_CASE("SVE1 round trip preserves authored state and drops runtime generation",
-          "[vocal_state_codec]") {
+TEST_CASE("SVE1 round trip preserves authored state", "[vocal_state_codec]") {
   const auto decoded = decode_vocal_state(encode_vocal_state(fixture()));
-  auto expected = fixture();
-  expected.edit_state.notes.front().content_generation = 0;
-  check_equal(expected, decoded);
+  check_equal(fixture(), decoded);
 }
 
 TEST_CASE("SVE1 accepts the built-in host analysis provider", "[vocal_state_codec]") {
