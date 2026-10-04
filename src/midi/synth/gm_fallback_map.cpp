@@ -82,10 +82,8 @@ SONARE_TUNABLE(kSendsSfxCho, 1.0f);
 /// crest from 0 to 60 dB — so it sets the program's level and nothing else.
 /// Drive moves the triode's operating point AND the bright-cap shelf in front
 /// of it, so buying saturation with it also buys brightness, which is why the
-/// driven bindings buy theirs with the trim.
+/// driven bindings buy theirs with the trim and the pedal ahead of it.
 ///
-/// Measured on E3 at velocity 100, peak-to-RMS, against the same voice direct
-/// (23.8 dB): clean stays there, 29 lands 3.0 dB under it and 30 lands 8.1.
 /// The clean binding takes no trim because its amplifier is linear at drive
 /// 0.35 — every trim value renders the same crest, so a trim there would only
 /// duplicate the level.
@@ -113,11 +111,11 @@ SONARE_TUNABLE(kRigLeadPresenceDb, 0.0f);
 SONARE_TUNABLE(kRigCleanDrive, 0.35f);
 SONARE_TUNABLE(kRigCleanLevelDb, 44.1f);
 SONARE_TUNABLE(kRigCrunchDrive, 0.55f);
-// The crunch and lead levels match the amped reference's peak over notes 40-64 at
-// velocity 104 (they read a median 6.4 and 2.3 dB under it at these input trims).
-SONARE_TUNABLE(kRigCrunchLevelDb, 23.1f);
+// The crunch and lead levels match the amped reference's median peak over notes
+// 40-64 at velocity 104 through the full chain, pedal included.
+SONARE_TUNABLE(kRigCrunchLevelDb, 28.4f);
 SONARE_TUNABLE(kRigLeadDrive, 0.95f);
-SONARE_TUNABLE(kRigLeadLevelDb, 22.1f);
+SONARE_TUNABLE(kRigLeadLevelDb, 22.5f);
 
 /// The amplifiers a binding can name, indexed by its preset selector. The order
 /// mirrors the mastering module's `amp_preset_names()`, which the synth
@@ -134,8 +132,8 @@ constexpr int kRigPresetCount = static_cast<int>(std::size(kRigPresets));
 /// another one is otherwise a rebuild: the preset is a construction-time string
 /// that no binding and no CLI can set.
 SONARE_TUNABLE(kRigCleanPreset, 0.0f);
-SONARE_TUNABLE(kRigCrunchPreset, 2.0f);
-SONARE_TUNABLE(kRigLeadPreset, 2.0f);
+SONARE_TUNABLE(kRigCrunchPreset, 4.0f);  // britStack
+SONARE_TUNABLE(kRigLeadPreset, 5.0f);    // modernLead
 
 const char* rig_preset(float selector) noexcept {
   const int index = static_cast<int>(selector + 0.5f);
@@ -164,22 +162,37 @@ constexpr const char* kRigStages[] = {"",
                                       "effects.modulation.phaser",
                                       "effects.delay.stereo",
                                       "effects.reverb.plate",
-                                      "effects.reverb.room"};
+                                      "effects.reverb.room",
+                                      "saturation.overdrive",
+                                      "saturation.distortion"};
 constexpr int kRigStageCount = static_cast<int>(std::size(kRigStages));
 
-/// A pedal ahead of the amplifier and a rack stage behind it, per binding. Both
-/// ship empty: what a rig carries is a voicing decision, and the slots exist so
-/// one can be heard rather than to be filled.
+/// A pedal ahead of the amplifier and a rack stage behind it, per binding. The
+/// driven bindings carry a drive pedal: no preset alone reaches the amped
+/// references' band above 2 kHz (29 sat 33 dB under it, 30 17 dB under).
 SONARE_TUNABLE(kRigCleanPre, 0.0f);
 SONARE_TUNABLE(kRigCleanPost, 0.0f);
-SONARE_TUNABLE(kRigCrunchPre, 0.0f);
+SONARE_TUNABLE(kRigCrunchPre, 12.0f);  // saturation.overdrive
 SONARE_TUNABLE(kRigCrunchPost, 0.0f);
-SONARE_TUNABLE(kRigLeadPre, 0.0f);
+SONARE_TUNABLE(kRigLeadPre, 13.0f);  // saturation.distortion
 SONARE_TUNABLE(kRigLeadPost, 0.0f);
+
+/// The drive pedal's controls, read only when the pre slot names one. Gain set
+/// so the median >2 kHz share at v104 sits within 1.1 dB of the amped reference;
+/// tone moved neither share nor crest by more than 1 dB over 1.5-6 kHz.
+SONARE_TUNABLE(kRigCrunchPedalGainDb, 36.0f);
+SONARE_TUNABLE(kRigCrunchPedalToneHz, 3000.0f);
+SONARE_TUNABLE(kRigLeadPedalGainDb, 30.0f);
+SONARE_TUNABLE(kRigLeadPedalToneHz, 4000.0f);
 
 const char* rig_stage(float selector) noexcept {
   const int index = static_cast<int>(selector + 0.5f);
   return kRigStages[std::clamp(index, 0, kRigStageCount - 1)];
+}
+
+bool is_drive_pedal(const char* stage) noexcept {
+  return std::strcmp(stage, "saturation.overdrive") == 0 ||
+         std::strcmp(stage, "saturation.distortion") == 0;
 }
 
 /// A binding's amplifier as insert-factory params. One place says how a rig's
@@ -203,10 +216,13 @@ std::string amp_params_json(const GmFallbackRig& rig) {
   return json + "}";
 }
 
-/// The two slot selectors a binding uses, so the chain builder reads one place.
+/// The two slot selectors a binding uses, and the pedal's controls should the
+/// pre slot name one, so the chain builder reads one place.
 struct RigSlots {
   float pre;
   float post;
+  float pedal_gain_db = 0.0f;
+  float pedal_tone_hz = 0.0f;
 };
 
 RigSlots rig_slots(uint8_t id) noexcept {
@@ -214,12 +230,17 @@ RigSlots rig_slots(uint8_t id) noexcept {
     case 1:
       return {kRigCleanPre, kRigCleanPost};
     case 2:
-      return {kRigCrunchPre, kRigCrunchPost};
+      return {kRigCrunchPre, kRigCrunchPost, kRigCrunchPedalGainDb, kRigCrunchPedalToneHz};
     case 3:
-      return {kRigLeadPre, kRigLeadPost};
+      return {kRigLeadPre, kRigLeadPost, kRigLeadPedalGainDb, kRigLeadPedalToneHz};
     default:
       return {0.0f, 0.0f};
   }
+}
+
+std::string pedal_params_json(const RigSlots& slots) {
+  return std::string("{\"gainDb\":") + std::to_string(slots.pedal_gain_db) +
+         ",\"toneHz\":" + std::to_string(slots.pedal_tone_hz) + "}";
 }
 
 /// A GS variation tone the model floor voices with a patch of its own: the
@@ -808,7 +829,8 @@ std::vector<GsEfxStage> gm_rig_chain(uint8_t id) {
   const RigSlots slots = rig_slots(id);
   std::vector<GsEfxStage> chain;
   const char* pedal = rig_stage(slots.pre);
-  if (pedal[0] != '\0') chain.push_back({pedal, "{}"});
+  if (pedal[0] != '\0')
+    chain.push_back({pedal, is_drive_pedal(pedal) ? pedal_params_json(slots) : "{}"});
   chain.push_back({"saturation.ampSim", amp_params_json(rig)});
   const char* rack = rig_stage(slots.post);
   if (rack[0] != '\0') chain.push_back({rack, "{}"});

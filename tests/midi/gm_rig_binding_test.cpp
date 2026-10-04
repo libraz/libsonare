@@ -294,8 +294,8 @@ TEST_CASE("every amplifier a binding can name is one the mastering module has",
   // And each binding's default still names the amplifier the bank was voiced
   // through, which is what makes the selector free in a shipped build.
   REQUIRE(std::string(gm_rig_binding(1).preset) == "cleanCombo");
-  REQUIRE(std::string(gm_rig_binding(2).preset) == "classicCrunch");
-  REQUIRE(std::string(gm_rig_binding(3).preset) == "classicCrunch");
+  REQUIRE(std::string(gm_rig_binding(2).preset) == "britStack");
+  REQUIRE(std::string(gm_rig_binding(3).preset) == "modernLead");
 }
 
 TEST_CASE("a file that selects program 30 and asks for nothing comes out amplified",
@@ -394,14 +394,16 @@ TEST_CASE("each bound rig drives its amplifier where the bank's own level puts i
           "[midi][sf2][rig]") {
   // The presets are voiced for a full-scale input and the bank's electric guitar
   // arrives 12 dB under one, so what a binding's drive has to be checked against
-  // is the level the bank actually delivers rather than the preset's own.
+  // is the level the bank actually delivers rather than the preset's own. The
+  // whole bound chain is measured, since a driven binding's pedal is part of it.
   auto thd_at_bank_level = [](const GmFallbackRig& rig) {
-    auto proc = sonare::mastering::api::make_insert(
-        "saturation.ampSim", std::string("{\"preset\":\"") + rig.preset +
-                                 "\",\"drive\":" + std::to_string(rig.drive) +
-                                 ",\"inputDb\":" + std::to_string(rig.input_db) + "}");
-    REQUIRE(proc != nullptr);
-    proc->prepare(kOutRate, 256);
+    std::vector<std::unique_ptr<sonare::rt::ProcessorBase>> chain;
+    for (const auto& stage : sonare::midi::synth::gm_rig_chain(rig.id)) {
+      chain.push_back(sonare::mastering::api::make_insert(stage.name, stage.params_json));
+      REQUIRE(chain.back() != nullptr);
+      chain.back()->prepare(kOutRate, 256);
+    }
+    REQUIRE_FALSE(chain.empty());
     // A whole number of blocks: a tail that ran past the last processed block
     // would measure raw input, which sits 48 dB above what the amplifier answers.
     std::vector<float> l(24576, 0.0f), r(24576, 0.0f);
@@ -411,7 +413,7 @@ TEST_CASE("each bound rig drives its amplifier where the bank's own level puts i
     }
     for (size_t off = 0; off + 256 <= l.size(); off += 256) {
       float* blk[2] = {l.data() + off, r.data() + off};
-      proc->process(blk, 2, 256);
+      for (auto& proc : chain) proc->process(blk, 2, 256);
     }
     const std::vector<float> tail(l.begin() + 12288, l.end());
     auto bin = [&](double hz) {
@@ -435,10 +437,9 @@ TEST_CASE("each bound rig drives its amplifier where the bank's own level puts i
   REQUIRE(clean > 0.3);
   REQUIRE(clean < 3.0);
   REQUIRE(crunch > 10.0);
-  // Programs 29 and 30 are one amplifier at two gains, which is what separates
-  // them on a module — so the distortion guitar has to distort MORE than the
-  // overdriven one rather than merely differently. A brighter preset for 30 put
-  // its 5 kHz band 12.6 dB over its reference against this rig's 3.6.
+  // What separates programs 29 and 30 on a module is gain, so the distortion
+  // guitar has to distort MORE than the overdriven one rather than merely
+  // differently.
   const double lead = thd_at_bank_level(gm_fallback_rig(0, 30));
   REQUIRE(lead > crunch);
 }
@@ -514,19 +515,28 @@ TEST_CASE("a bank rig is a chain, and every block it can carry is a real insert"
   }
   REQUIRE(std::string(gm_rig_stage_name(0)).empty());  // index 0 is no stage
 
-  // Every bound rig realises, and ships as the amplifier alone: the pedal and
-  // rack slots are empty until an ear puts something in one.
+  // Every bound rig realises. The clean ones ship as the amplifier alone; the
+  // two driven ones put a drive pedal ahead of it, overdrive for 29 and
+  // distortion for 30. No rack stage ships.
   for (const uint8_t bound : {26, 27, 28, 29, 30, 31}) {
     const uint8_t id = gm_fallback_rig(0, bound).id;
     INFO("program " << int(bound));
     const std::vector<sonare::midi::synth::GsEfxStage> chain = gm_rig_chain(id);
-    REQUIRE(chain.size() == 1);
-    REQUIRE(chain.front().name == "saturation.ampSim");
+    const char* pedal = bound == 29   ? "saturation.overdrive"
+                        : bound == 30 ? "saturation.distortion"
+                                      : nullptr;
+    REQUIRE(chain.size() == (pedal != nullptr ? 2u : 1u));
+    if (pedal != nullptr) {
+      REQUIRE(chain.front().name == pedal);
+      REQUIRE(chain.front().params_json.find("\"gainDb\"") != std::string::npos);
+    }
+    REQUIRE(chain.back().name == "saturation.ampSim");
     // The stage carries the binding's own numbers rather than a second spelling
     // of them, which is what a caller reading a rig has to be able to rely on.
-    REQUIRE(chain.front().params_json.find(gm_fallback_rig(0, bound).preset) != std::string::npos);
-    REQUIRE(sonare::mastering::api::make_insert(chain.front().name, chain.front().params_json) !=
-            nullptr);
+    REQUIRE(chain.back().params_json.find(gm_fallback_rig(0, bound).preset) != std::string::npos);
+    for (const auto& stage : chain) {
+      REQUIRE(sonare::mastering::api::make_insert(stage.name, stage.params_json) != nullptr);
+    }
   }
   REQUIRE(gm_rig_chain(0).empty());
   REQUIRE(gm_rig_chain(200).empty());
@@ -567,7 +577,8 @@ TEST_CASE("a rig's tone controls are absent until one is turned", "[midi][sf2][r
   // would do it silently -- the render would simply be a different amplifier.
   for (const uint8_t bound : {26, 27, 28, 29, 30, 31}) {
     INFO("program " << int(bound));
-    const std::string params = gm_rig_chain(gm_fallback_rig(0, bound).id).front().params_json;
+    // The amplifier is the chain's last stage; a driven binding has a pedal ahead.
+    const std::string params = gm_rig_chain(gm_fallback_rig(0, bound).id).back().params_json;
     for (const char* control : {"bassDb", "midDb", "trebleDb", "presenceDb"}) {
       INFO(control);
       REQUIRE(params.find(control) == std::string::npos);

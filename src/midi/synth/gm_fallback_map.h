@@ -195,9 +195,9 @@ GmFallbackRig gm_rig_binding(uint8_t id) noexcept;
 const char* gm_rig_preset_name(uint8_t index) noexcept;
 
 /// The stage a rig's pedal or rack selector names at `index`, or nullptr past
-/// the end. Index 0 is no stage, which is what every binding ships with — the
-/// vocabulary is the GS multi-effect blocks (`gs_efx_insert_chain`), so a bank
-/// rig and a file's own GTR Multi are built from the same pieces.
+/// the end. Index 0 is no stage. The vocabulary is the GS multi-effect blocks
+/// (`gs_efx_insert_chain`), so a bank rig and a file's own GTR Multi are built
+/// from the same pieces.
 const char* gm_rig_stage_name(uint8_t index) noexcept;
 
 /// The ordered stages the bank's default rig for @p id realises, in signal-flow
@@ -205,9 +205,9 @@ const char* gm_rig_stage_name(uint8_t index) noexcept;
 /// GS multi-effect realises, so a bank rig is a chain rather than a single
 /// insert. An unbound id yields an empty chain.
 ///
-/// What a binding carries is voicing rather than structure, so the pedal and
-/// rack slots ship empty and are moved by the ear, not filled here to justify
-/// the shape.
+/// What a binding carries is voicing rather than structure: the driven bindings
+/// carry a drive pedal because the amplifier alone does not reach their
+/// references, and every other slot ships empty.
 std::vector<GsEfxStage> gm_rig_chain(uint8_t id);
 
 /// Longest amp-envelope release across all fallback patches (ms) — players
