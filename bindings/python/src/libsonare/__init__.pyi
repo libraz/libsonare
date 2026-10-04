@@ -19,8 +19,6 @@ from ._project import Sf2ProgramStatus as Sf2ProgramStatus
 from ._project import SynthModRouting as SynthModRouting
 from ._project import SynthPatch as SynthPatch
 from ._project import TakeAlignment as TakeAlignment
-from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
-from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._project import align_take_to_reference as align_take_to_reference
 from ._project import controller_profile_names as controller_profile_names
 from ._project import project_abi_version as project_abi_version
@@ -30,6 +28,8 @@ from ._project import synth_gs_drum_kit_name as synth_gs_drum_kit_name
 from ._project import synth_gs_variation_is_voiced_apart as synth_gs_variation_is_voiced_apart
 from ._project import synth_preset_names as synth_preset_names
 from ._project import synth_preset_patch as synth_preset_patch
+from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
+from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._runtime import ErrorCode as ErrorCode
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
