@@ -37,6 +37,16 @@ Ump make_midi1(uint8_t group, UmpStatus status, uint8_t channel, uint8_t data1,
   return ump;
 }
 
+Ump make_midi2(uint8_t group, UmpStatus status, uint8_t channel, uint8_t byte2, uint8_t byte3,
+               uint32_t word1 = 0) noexcept {
+  Ump ump;
+  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(status), channel, byte2, byte3);
+  ump.words[1] = word1;
+  ump.word_count = 2;
+  ump.group = static_cast<uint8_t>(group & 0x0Fu);
+  return ump;
+}
+
 }  // namespace
 
 namespace {
@@ -143,166 +153,83 @@ Ump make_midi1_pitch_bend(uint8_t group, uint8_t channel, uint16_t bend14) noexc
 
 Ump make_midi2_note_on(uint8_t group, uint8_t channel, uint8_t note, uint16_t velocity16,
                        uint8_t attribute_type, uint16_t attribute_data) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kNoteOn), channel,
-                             static_cast<uint8_t>(note & 0x7Fu), attribute_type);
-  ump.words[1] = (static_cast<uint32_t>(velocity16) << 16u) | attribute_data;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kNoteOn, channel, note & 0x7Fu, attribute_type,
+                    (static_cast<uint32_t>(velocity16) << 16u) | attribute_data);
 }
 
 Ump make_midi2_note_off(uint8_t group, uint8_t channel, uint8_t note,
                         uint16_t velocity16) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kNoteOff), channel,
-                             static_cast<uint8_t>(note & 0x7Fu), 0);
-  ump.words[1] = static_cast<uint32_t>(velocity16) << 16u;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kNoteOff, channel, note & 0x7Fu, 0,
+                    static_cast<uint32_t>(velocity16) << 16u);
 }
 
 Ump make_midi2_poly_pressure(uint8_t group, uint8_t channel, uint8_t note,
                              uint32_t pressure32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kPolyPressure), channel,
-                             static_cast<uint8_t>(note & 0x7Fu), 0);
-  ump.words[1] = pressure32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kPolyPressure, channel, note & 0x7Fu, 0, pressure32);
 }
 
 Ump make_midi2_control_change(uint8_t group, uint8_t channel, uint8_t controller,
                               uint32_t value32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kControlChange), channel,
-                             static_cast<uint8_t>(controller & 0x7Fu), 0);
-  ump.words[1] = value32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kControlChange, channel, controller & 0x7Fu, 0, value32);
 }
 
 Ump make_midi2_program_change(uint8_t group, uint8_t channel, uint8_t program, uint8_t bank_msb,
                               uint8_t bank_lsb, bool bank_valid) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kProgramChange), channel, 0,
-                             bank_valid ? 0x01u : 0x00u);
-  ump.words[1] = (static_cast<uint32_t>(program & 0x7Fu) << 24u) |
-                 (static_cast<uint32_t>(bank_msb & 0x7Fu) << 8u) |
-                 static_cast<uint32_t>(bank_lsb & 0x7Fu);
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kProgramChange, channel, 0, bank_valid ? 0x01u : 0x00u,
+                    (static_cast<uint32_t>(program & 0x7Fu) << 24u) |
+                        (static_cast<uint32_t>(bank_msb & 0x7Fu) << 8u) |
+                        static_cast<uint32_t>(bank_lsb & 0x7Fu));
 }
 
 Ump make_midi2_channel_pressure(uint8_t group, uint8_t channel, uint32_t pressure32) noexcept {
-  Ump ump;
-  ump.words[0] =
-      midi2_word0(group, static_cast<uint8_t>(UmpStatus::kChannelPressure), channel, 0, 0);
-  ump.words[1] = pressure32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kChannelPressure, channel, 0, 0, pressure32);
 }
 
 Ump make_midi2_pitch_bend(uint8_t group, uint8_t channel, uint32_t bend32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kPitchBend), channel, 0, 0);
-  ump.words[1] = bend32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kPitchBend, channel, 0, 0, bend32);
 }
 
 Ump make_midi2_per_note_controller(uint8_t group, uint8_t channel, uint8_t note, uint8_t index,
                                    uint32_t value32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kRegisteredPerNoteController),
-                             channel, static_cast<uint8_t>(note & 0x7Fu), index);
-  ump.words[1] = value32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kRegisteredPerNoteController, channel, note & 0x7Fu, index,
+                    value32);
 }
 
 Ump make_midi2_assignable_per_note_controller(uint8_t group, uint8_t channel, uint8_t note,
                                               uint8_t index, uint32_t value32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kAssignablePerNoteController),
-                             channel, static_cast<uint8_t>(note & 0x7Fu), index);
-  ump.words[1] = value32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kAssignablePerNoteController, channel, note & 0x7Fu, index,
+                    value32);
 }
 
 Ump make_midi2_registered_controller(uint8_t group, uint8_t channel, uint8_t bank, uint8_t index,
                                      uint32_t value32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kRegisteredController), channel,
-                             bank, index);
-  ump.words[1] = value32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kRegisteredController, channel, bank, index, value32);
 }
 
 Ump make_midi2_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank, uint8_t index,
                                      uint32_t value32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kAssignableController), channel,
-                             bank, index);
-  ump.words[1] = value32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kAssignableController, channel, bank, index, value32);
 }
 
 Ump make_midi2_relative_registered_controller(uint8_t group, uint8_t channel, uint8_t bank,
                                               uint8_t index, uint32_t delta32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kRelativeRegisteredController),
-                             channel, bank, index);
-  ump.words[1] = delta32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kRelativeRegisteredController, channel, bank, index, delta32);
 }
 
 Ump make_midi2_relative_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank,
                                               uint8_t index, uint32_t delta32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kRelativeAssignableController),
-                             channel, bank, index);
-  ump.words[1] = delta32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kRelativeAssignableController, channel, bank, index, delta32);
 }
 
 Ump make_midi2_per_note_pitch_bend(uint8_t group, uint8_t channel, uint8_t note,
                                    uint32_t bend32) noexcept {
-  Ump ump;
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kPerNotePitchBend), channel,
-                             static_cast<uint8_t>(note & 0x7Fu), 0);
-  ump.words[1] = bend32;
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kPerNotePitchBend, channel, note & 0x7Fu, 0, bend32);
 }
 
 Ump make_midi2_per_note_management(uint8_t group, uint8_t channel, uint8_t note, bool detach,
                                    bool reset) noexcept {
-  Ump ump;
   const uint8_t flags = static_cast<uint8_t>((detach ? 0x02u : 0x00u) | (reset ? 0x01u : 0x00u));
-  ump.words[0] = midi2_word0(group, static_cast<uint8_t>(UmpStatus::kPerNoteManagement), channel,
-                             static_cast<uint8_t>(note & 0x7Fu), flags);
-  ump.word_count = 2;
-  ump.group = static_cast<uint8_t>(group & 0x0Fu);
-  return ump;
+  return make_midi2(group, UmpStatus::kPerNoteManagement, channel, note & 0x7Fu, flags);
 }
 
 Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept {

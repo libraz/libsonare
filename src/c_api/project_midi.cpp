@@ -35,16 +35,32 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// Checks the fields every MIDI builder carries: the position, the group and the channel.
+bool valid_midi_head(double ppq, uint8_t group, uint8_t channel) {
+  return sonare::transport::valid_public_ppq(ppq) && valid_nibble(group) && valid_nibble(channel);
+}
+
+// Packs `ump` into `out` unless `out` is null or the arguments were `invalid`.
+SonareError emit_midi_pod(SonareMidiEventPod* out, bool invalid, double ppq,
+                          const sonare::midi::Ump& ump) {
+  if (!out || invalid) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = pod_from_ump(ppq, ump);
+  return SONARE_OK;
+}
+
+}  // namespace
+#endif
+
 SonareError sonare_midi_note_on(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                 uint8_t velocity, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || !valid_u7(note) || !valid_u7(velocity)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi1_note_on(group, channel, note, velocity));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note) || !valid_u7(velocity), ppq,
+      sonare::midi::make_midi1_note_on(group, channel, note, velocity));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity, out);
@@ -55,12 +71,9 @@ SonareError sonare_midi_note_off(double ppq, uint8_t group, uint8_t channel, uin
                                  uint8_t velocity, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || !valid_u7(note) || !valid_u7(velocity)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi1_note_off(group, channel, note, velocity));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note) || !valid_u7(velocity), ppq,
+      sonare::midi::make_midi1_note_off(group, channel, note, velocity));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity, out);
@@ -71,13 +84,9 @@ SonareError sonare_midi_cc(double ppq, uint8_t group, uint8_t channel, uint8_t c
                            uint8_t value, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || !valid_u7(controller) || !valid_u7(value)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out =
-      pod_from_ump(ppq, sonare::midi::make_midi1_control_change(group, channel, controller, value));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(controller) || !valid_u7(value), ppq,
+      sonare::midi::make_midi1_control_change(group, channel, controller, value));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, controller, value, out);
@@ -88,12 +97,9 @@ SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel
                                       uint8_t pressure, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || !valid_u7(note) || !valid_u7(pressure)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi1_poly_pressure(group, channel, note, pressure));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note) || !valid_u7(pressure), ppq,
+      sonare::midi::make_midi1_poly_pressure(group, channel, note, pressure));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, pressure, out);
@@ -104,41 +110,22 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
                                 SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || !valid_u7(program)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi1_program_change(group, channel, program));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(program), ppq,
+                       sonare::midi::make_midi1_program_change(group, channel, program));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, program, out);
 #endif
 }
 
-#if defined(SONARE_WITH_ARRANGEMENT)
-namespace {
-
-// Checks the fields every MIDI 2.0 builder carries: the position, the group and
-// the channel.
-bool valid_midi2_head(double ppq, uint8_t group, uint8_t channel) {
-  return sonare::transport::valid_public_ppq(ppq) && valid_nibble(group) && valid_nibble(channel);
-}
-
-}  // namespace
-#endif
-
 SonareError sonare_midi2_note_on(double ppq, uint8_t group, uint8_t channel, uint8_t note,
                                  uint16_t velocity16, uint8_t attribute_type,
                                  uint16_t attribute_data, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_note_on(group, channel, note, velocity16,
-                                                            attribute_type, attribute_data));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+                       sonare::midi::make_midi2_note_on(group, channel, note, velocity16,
+                                                        attribute_type, attribute_data));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity16, attribute_type, attribute_data,
@@ -150,11 +137,8 @@ SonareError sonare_midi2_note_off(double ppq, uint8_t group, uint8_t channel, ui
                                   uint16_t velocity16, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_note_off(group, channel, note, velocity16));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+                       sonare::midi::make_midi2_note_off(group, channel, note, velocity16));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, velocity16, out);
@@ -165,12 +149,9 @@ SonareError sonare_midi2_cc(double ppq, uint8_t group, uint8_t channel, uint8_t 
                             uint32_t value32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(controller)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq,
-                      sonare::midi::make_midi2_control_change(group, channel, controller, value32));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(controller), ppq,
+      sonare::midi::make_midi2_control_change(group, channel, controller, value32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, controller, value32, out);
@@ -181,12 +162,8 @@ SonareError sonare_midi2_poly_pressure(double ppq, uint8_t group, uint8_t channe
                                        uint32_t pressure32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out =
-      pod_from_ump(ppq, sonare::midi::make_midi2_poly_pressure(group, channel, note, pressure32));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+                       sonare::midi::make_midi2_poly_pressure(group, channel, note, pressure32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, pressure32, out);
@@ -197,11 +174,8 @@ SonareError sonare_midi2_channel_pressure(double ppq, uint8_t group, uint8_t cha
                                           uint32_t pressure32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_channel_pressure(group, channel, pressure32));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel), ppq,
+                       sonare::midi::make_midi2_channel_pressure(group, channel, pressure32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, pressure32, out);
@@ -212,11 +186,8 @@ SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, 
                                     SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_pitch_bend(group, channel, bend32));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel), ppq,
+                       sonare::midi::make_midi2_pitch_bend(group, channel, bend32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bend32, out);
@@ -228,13 +199,12 @@ SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uin
                                  SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(program) || !valid_u7(bank_msb) ||
-      !valid_u7(bank_lsb)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_program_change(
-                               group, channel, program, bank_msb, bank_lsb, bank_valid != 0));
-  return SONARE_OK;
+  return emit_midi_pod(out,
+                       !valid_midi_head(ppq, group, channel) || !valid_u7(program) ||
+                           !valid_u7(bank_msb) || !valid_u7(bank_lsb),
+                       ppq,
+                       sonare::midi::make_midi2_program_change(group, channel, program, bank_msb,
+                                                               bank_lsb, bank_valid != 0));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, program, bank_valid, bank_msb, bank_lsb, out);
@@ -246,12 +216,9 @@ SonareError sonare_midi2_registered_controller(double ppq, uint8_t group, uint8_
                                                SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(
-      ppq, sonare::midi::make_midi2_registered_controller(group, channel, bank, index, value32));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
+      sonare::midi::make_midi2_registered_controller(group, channel, bank, index, value32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, value32, out);
@@ -263,12 +230,9 @@ SonareError sonare_midi2_assignable_controller(double ppq, uint8_t group, uint8_
                                                SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(
-      ppq, sonare::midi::make_midi2_assignable_controller(group, channel, bank, index, value32));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
+      sonare::midi::make_midi2_assignable_controller(group, channel, bank, index, value32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, value32, out);
@@ -280,12 +244,10 @@ SonareError sonare_midi2_relative_registered_controller(double ppq, uint8_t grou
                                                         int32_t delta32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_relative_registered_controller(
-                               group, channel, bank, index, static_cast<uint32_t>(delta32)));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
+      sonare::midi::make_midi2_relative_registered_controller(group, channel, bank, index,
+                                                              static_cast<uint32_t>(delta32)));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, delta32, out);
@@ -297,12 +259,10 @@ SonareError sonare_midi2_relative_assignable_controller(double ppq, uint8_t grou
                                                         int32_t delta32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_relative_assignable_controller(
-                               group, channel, bank, index, static_cast<uint32_t>(delta32)));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(bank) || !valid_u7(index), ppq,
+      sonare::midi::make_midi2_relative_assignable_controller(group, channel, bank, index,
+                                                              static_cast<uint32_t>(delta32)));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bank, index, delta32, out);
@@ -314,12 +274,9 @@ SonareError sonare_midi2_registered_per_note_controller(double ppq, uint8_t grou
                                                         uint32_t value32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(
-      ppq, sonare::midi::make_midi2_per_note_controller(group, channel, note, index, value32));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+      sonare::midi::make_midi2_per_note_controller(group, channel, note, index, value32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, index, value32, out);
@@ -331,12 +288,9 @@ SonareError sonare_midi2_assignable_per_note_controller(double ppq, uint8_t grou
                                                         uint32_t value32, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_assignable_per_note_controller(
-                               group, channel, note, index, value32));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+                       sonare::midi::make_midi2_assignable_per_note_controller(group, channel, note,
+                                                                               index, value32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, index, value32, out);
@@ -348,12 +302,8 @@ SonareError sonare_midi2_per_note_pitch_bend(double ppq, uint8_t group, uint8_t 
                                              SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out =
-      pod_from_ump(ppq, sonare::midi::make_midi2_per_note_pitch_bend(group, channel, note, bend32));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+                       sonare::midi::make_midi2_per_note_pitch_bend(group, channel, note, bend32));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, bend32, out);
@@ -365,12 +315,9 @@ SonareError sonare_midi2_per_note_management(double ppq, uint8_t group, uint8_t 
                                              SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !valid_midi2_head(ppq, group, channel) || !valid_u7(note)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi2_per_note_management(group, channel, note,
-                                                                        detach != 0, reset != 0));
-  return SONARE_OK;
+  return emit_midi_pod(
+      out, !valid_midi_head(ppq, group, channel) || !valid_u7(note), ppq,
+      sonare::midi::make_midi2_per_note_management(group, channel, note, detach != 0, reset != 0));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, note, detach, reset, out);
@@ -765,12 +712,8 @@ SonareError sonare_midi_channel_pressure(double ppq, uint8_t group, uint8_t chan
                                          uint8_t pressure, SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || !valid_u7(pressure)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi1_channel_pressure(group, channel, pressure));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || !valid_u7(pressure), ppq,
+                       sonare::midi::make_midi1_channel_pressure(group, channel, pressure));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, pressure, out);
@@ -781,12 +724,8 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
                                    SonareMidiEventPod* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!out || !sonare::transport::valid_public_ppq(ppq) || !valid_nibble(group) ||
-      !valid_nibble(channel) || bend > 16383u) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  *out = pod_from_ump(ppq, sonare::midi::make_midi1_pitch_bend(group, channel, bend));
-  return SONARE_OK;
+  return emit_midi_pod(out, !valid_midi_head(ppq, group, channel) || bend > 16383u, ppq,
+                       sonare::midi::make_midi1_pitch_bend(group, channel, bend));
 #else
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(ppq, group, channel, bend, out);
