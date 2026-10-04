@@ -55,8 +55,10 @@ class Phaser : public rt::ProcessorBase {
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = rate_hz (clamped to >= 0; updates the LFO in place)
-  //   1 = min_hz (sweep lower bound)
-  //   2 = max_hz (sweep upper bound)
+  //   1 = min_hz (sweep bound; stored as written)
+  //   2 = max_hz (sweep bound; stored as written)
+  //   The lower/upper roles of 1 and 2 are resolved at use (min/max of the pair),
+  //   so the state after a set of writes does not depend on their order.
   //   3 = dry_wet
   //   4 = feedback (clamped to [-0.95, 0.95] in process())
   //   5 = depth (clamped to [0, 1])
@@ -69,8 +71,8 @@ class Phaser : public rt::ProcessorBase {
 
  private:
   /// Allpass coefficient for one channel's current LFO value, mapping the
-  /// oscillator's [-1, 1] output onto the sweep from `min_hz` to @p top_hz.
-  float sweep_coeff(float lfo_value, float top_hz) const noexcept;
+  /// oscillator's [-1, 1] output onto the sweep from @p min_hz to @p top_hz.
+  float sweep_coeff(float lfo_value, float min_hz, float top_hz) const noexcept;
   float process_channel(float input, int channel, float coeff, float feedback);
 
   /// Returns the allpass sections and the feedback loop's cells to rest once a

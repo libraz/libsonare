@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -328,4 +329,81 @@ TEST_CASE("the phaser's notch count and feedback-driven peaks match the measured
 
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 30);
+}
+
+namespace {
+
+// Renders a noise-like tone through a phaser after silent warm-up blocks, with
+// @p writes applied in order after the first one.
+std::vector<float> render_phaser_after(const PhaserConfig& start,
+                                       const std::vector<std::pair<unsigned int, float>>& writes) {
+  constexpr double kRate = 48000.0;
+  constexpr int kBlock = 512;
+  Phaser phaser(start);
+  phaser.prepare(kRate, kBlock);
+  std::vector<float> silence(kBlock, 0.0f);
+  float* silent[] = {silence.data()};
+  phaser.process(silent, 1, kBlock);
+  for (const auto& [id, value] : writes) REQUIRE(phaser.set_parameter(id, value));
+  auto signal =
+      sonare::test::generate_sine_samples(700.0f, static_cast<int>(kRate), kBlock * 4, 0.5f);
+  float* channels[] = {signal.data()};
+  phaser.process(channels, 1, static_cast<int>(signal.size()));
+  return signal;
+}
+
+float phaser_max_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  REQUIRE(a.size() == b.size());
+  float worst = 0.0f;
+  for (size_t i = 0; i < a.size(); ++i) worst = std::max(worst, std::fabs(a[i] - b[i]));
+  return worst;
+}
+
+}  // namespace
+
+TEST_CASE("the phaser's sweep bounds resolve independently of write order", "[effects][phaser]") {
+  // The silent warm-up leaves no state behind, so the rendering is a pure
+  // function of the final bounds; only float rounding scale is allowed.
+  constexpr float kTolerance = 1.0e-6f;
+  const bool upward = GENERATE(true, false);
+  INFO((upward ? "upward" : "downward"));
+
+  PhaserConfig low;
+  low.min_hz = 100.0f;
+  low.max_hz = 200.0f;
+  PhaserConfig high;
+  high.min_hz = 300.0f;
+  high.max_hz = 400.0f;
+  const PhaserConfig& start = upward ? low : high;
+  const PhaserConfig& target = upward ? high : low;
+
+  const auto min_first = render_phaser_after(start, {{1u, target.min_hz}, {2u, target.max_hz}});
+  const auto max_first = render_phaser_after(start, {{2u, target.max_hz}, {1u, target.min_hz}});
+  const auto expected = render_phaser_after(target, {});
+
+  CHECK(phaser_max_difference(min_first, max_first) <= kTolerance);
+  CHECK(phaser_max_difference(min_first, expected) <= kTolerance);
+  CHECK(phaser_max_difference(max_first, expected) <= kTolerance);
+}
+
+TEST_CASE("a single phaser bound change keeps the sweep range ordered", "[effects][phaser]") {
+  constexpr float kTolerance = 1.0e-6f;
+  PhaserConfig start;
+  start.min_hz = 300.0f;
+  start.max_hz = 1600.0f;
+
+  SECTION("min written above max") {
+    PhaserConfig ordered = start;
+    ordered.min_hz = 1600.0f;
+    ordered.max_hz = 2000.0f;
+    CHECK(phaser_max_difference(render_phaser_after(start, {{1u, 2000.0f}}),
+                                render_phaser_after(ordered, {})) <= kTolerance);
+  }
+  SECTION("max written below min") {
+    PhaserConfig ordered = start;
+    ordered.min_hz = 200.0f;
+    ordered.max_hz = 300.0f;
+    CHECK(phaser_max_difference(render_phaser_after(start, {{2u, 200.0f}}),
+                                render_phaser_after(ordered, {})) <= kTolerance);
+  }
 }

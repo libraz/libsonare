@@ -37,13 +37,11 @@ Phaser::Phaser(PhaserConfig config) : config_(config) {}
 
 void Phaser::prepare(double sample_rate, int) {
   sample_rate_ = effective_sample_rate(sample_rate);
-  // Clamp/order the sweep range here so construction-time config honors the same
-  // invariant the automation path (set_parameter) enforces, keeping
-  // tan(pi*freq/sr) well-defined (freq in [1, sr*0.49], min_hz <= max_hz).
+  // Clamp each bound like the automation path does, keeping tan(pi*freq/sr)
+  // well-defined; their order is resolved where they are read.
   const float nyquist = max_sweep_hz(sample_rate_);
   config_.min_hz = std::clamp(config_.min_hz, 1.0f, nyquist);
   config_.max_hz = std::clamp(config_.max_hz, 1.0f, nyquist);
-  config_.min_hz = std::min(config_.min_hz, config_.max_hz);
   const int stages = std::clamp(config_.stages, 1, 12);
   for (int ch = 0; ch < 2; ++ch) {
     x1_[static_cast<size_t>(ch)].assign(static_cast<size_t>(stages), 0.0f);
@@ -75,11 +73,11 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   const float feedback = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
   // Top of the sweep for this block; a full depth is max_hz itself, not its pow() image.
   const float depth = std::clamp(config_.depth, 0.0f, 1.0f);
-  const float top_hz = depth >= 1.0f
-                           ? config_.max_hz
-                           : config_.min_hz * std::pow(config_.max_hz / config_.min_hz, depth);
+  const float min_hz = std::min(config_.min_hz, config_.max_hz);
+  const float max_hz = std::max(config_.min_hz, config_.max_hz);
+  const float top_hz = depth >= 1.0f ? max_hz : min_hz * std::pow(max_hz / min_hz, depth);
   for (int i = 0; i < num_samples; ++i) {
-    const float coeff_l = sweep_coeff(lfos_[0].process(), top_hz);
+    const float coeff_l = sweep_coeff(lfos_[0].process(), min_hz, top_hz);
     const float in_l = left[i];
     left[i] = dry * in_l + wet * process_channel(in_l, 0, coeff_l, feedback);
     if (stereo) {
@@ -87,7 +85,7 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
       // input so a mono buffer is not written twice and channel-1 state is left
       // untouched. The quarter-cycle offset between the two oscillators is what
       // keeps the notches from tracking each other across the pair.
-      const float coeff_r = sweep_coeff(lfos_[1].process(), top_hz);
+      const float coeff_r = sweep_coeff(lfos_[1].process(), min_hz, top_hz);
       const float in_r = right[i];
       right[i] = dry * in_r + wet * process_channel(in_r, 1, coeff_r, feedback);
     }
@@ -130,14 +128,11 @@ bool Phaser::set_parameter_impl(unsigned int param_id, float value) {
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
+      // Stored as written; process() orders the pair so write order never matters.
       config_.min_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
-      // Keep the sweep range ordered (min <= max) to avoid inverted/NaN coeffs.
-      config_.min_hz = std::min(config_.min_hz, config_.max_hz);
       return true;
     case 2:
       config_.max_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
-      // Keep the sweep range ordered (min <= max) to avoid inverted/NaN coeffs.
-      config_.max_hz = std::max(config_.max_hz, config_.min_hz);
       return true;
     case 3:
       config_.dry_wet = value;
@@ -179,9 +174,9 @@ void Phaser::reset() {
   lfos_[1].reset(0.25);
 }
 
-float Phaser::sweep_coeff(float lfo_value, float top_hz) const noexcept {
+float Phaser::sweep_coeff(float lfo_value, float min_hz, float top_hz) const noexcept {
   const float sweep = 0.5f + 0.5f * lfo_value;
-  const float freq = config_.min_hz + (top_hz - config_.min_hz) * sweep;
+  const float freq = min_hz + (top_hz - min_hz) * sweep;
   const float t = std::tan(kPi * freq / static_cast<float>(sample_rate_));
   return (1.0f - t) / (1.0f + t);
 }
