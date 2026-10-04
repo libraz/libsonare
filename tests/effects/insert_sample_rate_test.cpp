@@ -49,6 +49,8 @@
 ///   corner itself, which the section's design places exactly at every rate.
 /// - binaural panner, the ITD at 90 degrees in microseconds: the ring's stored ITD,
 ///   read as the difference of the two ears' excess delays.
+/// - overdrive / distortion tone, the low-pass half-power corner in Hz: the corner
+///   itself, with a reference corner's own bilinear pole divided out of the ratio.
 ///
 /// Reach is an output: the case reports how many comparisons it made, because
 /// a run that compared nothing looks exactly like a run that passed.
@@ -1404,6 +1406,72 @@ double cab_rolloff_3db_hz(const std::vector<float>& response, double sample_rate
   return std::sqrt(a * b);
 }
 
+// --- pedal tone controls ----------------------------------------------------
+
+// The tone corner is a bilinear pole, placed exactly by its design at every rate.
+constexpr double kPedalToneTolerance = 0.01;
+// Small enough that neither pedal's clipping core leaves its linear region.
+constexpr float kPedalImpulseAmplitude = 1.0e-3f;
+
+// Each reference corner is inside its pedal's tone range and under 0.45 of both
+// rates, so the pole the test divides out is the one the pedal builds.
+struct PedalToneProbe {
+  const char* name;
+  float tone_hz;
+  float reference_hz;
+};
+constexpr PedalToneProbe kPedalToneProbes[] = {
+    {"saturation.overdrive", 800.0f, 8000.0f},
+    {"saturation.overdrive", 2000.0f, 8000.0f},
+    {"saturation.distortion", 1000.0f, 16000.0f},
+    {"saturation.distortion", 4000.0f, 16000.0f},
+};
+
+/// A pedal at zero gain with its tone at @p tone_hz, as an impulse response.
+std::vector<float> pedal_impulse(const char* name, float tone_hz, double sample_rate) {
+  std::ostringstream json;
+  json << "{\"gainDb\":0,\"toneHz\":" << tone_hz << "}";
+  auto pedal = sonare::mastering::api::make_insert(name, json.str());
+  REQUIRE(pedal != nullptr);
+  pedal->prepare(sample_rate, kFftLength);
+  std::vector<float> response(kFftLength, 0.0f);
+  response[0] = kPedalImpulseAmplitude;
+  sonare::test::process(*pedal, response);
+  return response;
+}
+
+/// Gain of a bilinear one-pole low-pass cornered at @p corner_hz, at @p hz.
+double bilinear_lowpass_db(double corner_hz, double hz, double sample_rate) {
+  const double ratio = std::tan(kPiD * hz / sample_rate) / std::tan(kPiD * corner_hz / sample_rate);
+  return -10.0 * std::log10(1.0 + ratio * ratio);
+}
+
+/// Where the tone low-pass alone crosses half power, bisected in log frequency
+/// over two octaves either side of the corner. The ratio to the same pedal at
+/// the reference corner cancels every other stage; the reference pole's own
+/// gain is added back. Zero where the response does not straddle half power.
+double pedal_tone_corner_hz(const PedalToneProbe& probe, double sample_rate) {
+  const std::vector<float> response = pedal_impulse(probe.name, probe.tone_hz, sample_rate);
+  const std::vector<float> reference = pedal_impulse(probe.name, probe.reference_hz, sample_rate);
+  const auto tone_db = [&](double hz) {
+    return response_db(response, hz, sample_rate) - response_db(reference, hz, sample_rate) +
+           bilinear_lowpass_db(probe.reference_hz, hz, sample_rate) - kHalfPowerDb;
+  };
+  double lo = static_cast<double>(probe.tone_hz) / 4.0;
+  double hi = std::min(static_cast<double>(probe.tone_hz) * 4.0, sample_rate * 0.45);
+  const double at_lo = tone_db(lo);
+  if (at_lo * tone_db(hi) >= 0.0) return 0.0;
+  for (int i = 0; i < 60; ++i) {
+    const double mid = std::sqrt(lo * hi);
+    if (tone_db(mid) * at_lo > 0.0) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return std::sqrt(lo * hi);
+}
+
 std::string at_rate(double sample_rate) {
   return " at " + std::to_string(static_cast<int>(sample_rate)) + " Hz";
 }
@@ -1915,8 +1983,25 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
                << rates[1]);
   }
 
+  // --- pedal tone: the tone low-pass's half-power corner, in hertz -----------
+  for (const PedalToneProbe& probe : kPedalToneProbes) {
+    const std::string asked = std::string(probe.name) + "'s tone corner, asked for " +
+                              std::to_string(static_cast<int>(probe.tone_hz)) + " Hz";
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      measured[r] = pedal_tone_corner_hz(probe, rates[r]);
+      tally.at_least(measured[r], 1.0, asked + at_rate(rates[r]) + ", is readable at all");
+      tally.within(measured[r], static_cast<double>(probe.tone_hz), kPedalToneTolerance,
+                   asked + at_rate(rates[r]) + ", against the corner asked for");
+    }
+    tally.within(measured[0], measured[1], kPedalToneTolerance,
+                 asked + ", lands on one frequency at both rates");
+    WARN(asked << ": " << measured[0] << " Hz at " << rates[0] << ", " << measured[1] << " Hz at "
+               << rates[1]);
+  }
+
   WARN("auto-wah LFO rate: " << auto_wah_lfo_rate_hz(rates[0]) << " Hz at " << rates[0] << ", "
                              << auto_wah_lfo_rate_hz(rates[1]) << " Hz at " << rates[1]);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 221);
+  REQUIRE(tally.count() >= 241);
 }

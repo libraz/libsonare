@@ -101,6 +101,10 @@ const std::vector<Exemption>& PeakShiftedConfigurations() {
       // something about latency for these two.
       {"saturation.tape", "*", "*", "magnetization plateau"},
       {"saturation.transformer", "*", "*", "magnetization plateau"},
+      // The tone low-pass and the antiderivative stages' sample averaging move
+      // the peak a sample or two past the oversampler's round trip.
+      {"saturation.overdrive", "*", "*", "tone low-pass group delay"},
+      {"saturation.distortion", "*", "*", "tone low-pass group delay"},
       // The crossover spreads the impulse across each band's filter response
       // rather than one sample, and the top band's envelope follower starts
       // cold, so it under-reads the arrival sample and expands it down harder

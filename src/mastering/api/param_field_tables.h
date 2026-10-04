@@ -970,6 +970,12 @@ inline double field_as_double(Enum value) {
   X("asymmetry", asymmetry)          \
   X("mix", mix)
 
+// Shared by saturation.overdrive and saturation.distortion.
+#define SONARE_FIELDS_PEDAL(X) \
+  X("gainDb", gain_db)         \
+  X("toneHz", tone_hz)         \
+  X("levelDb", level_db)
+
 // --- Spectral ---
 
 #define SONARE_FIELDS_AIR_BAND(X)               \

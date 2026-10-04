@@ -71,6 +71,7 @@
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
 #include "mastering/saturation/multiband_exciter.h"
+#include "mastering/saturation/pedal.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/transformer.h"
@@ -547,6 +548,12 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.multibandExciter") {
     saturation::MultibandExciter p(detail::multiband_exciter_config(params));
+    run_processor(p, channels, sample_rate, outcome);
+  } else if (name == "saturation.overdrive") {
+    saturation::Overdrive p(detail::overdrive_config(params));
+    run_processor(p, channels, sample_rate, outcome);
+  } else if (name == "saturation.distortion") {
+    saturation::Distortion p(detail::distortion_config(params));
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "saturation.ampSim") {
     saturation::AmpSim p(detail::amp_sim_config(params));

@@ -64,6 +64,7 @@
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
 #include "mastering/saturation/multiband_exciter.h"
+#include "mastering/saturation/pedal.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/transformer.h"
@@ -1017,6 +1018,18 @@ inline saturation::TransformerConfig transformer_config(const ParamMap& params) 
   return config;
 }
 
+inline saturation::OverdriveConfig overdrive_config(const ParamMap& params) {
+  saturation::OverdriveConfig config;
+  SONARE_FIELDS_PEDAL(SONARE_READ_FIELD)
+  return config;
+}
+
+inline saturation::DistortionConfig distortion_config(const ParamMap& params) {
+  saturation::DistortionConfig config;
+  SONARE_FIELDS_PEDAL(SONARE_READ_FIELD)
+  return config;
+}
+
 inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMap& params) {
   saturation::MultibandExciterConfig config;
   config.crossover = crossover_config(params);
@@ -1249,6 +1262,8 @@ SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_SOFT_CLIPPER, saturation::SoftClipperCo
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_WAVESHAPER, saturation::WaveshaperConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TUBE, saturation::TubeConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TRANSFORMER, saturation::TransformerConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PEDAL, saturation::OverdriveConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PEDAL, saturation::DistortionConfig, 0);
 
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_AIR_BAND, spectral::AirBandConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_LOW_END_FOCUS, spectral::LowEndFocusConfig, 0);

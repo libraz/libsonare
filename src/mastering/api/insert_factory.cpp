@@ -55,6 +55,7 @@
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
 #include "mastering/saturation/multiband_exciter.h"
+#include "mastering/saturation/pedal.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/transformer.h"
@@ -396,6 +397,12 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
   }
   if (name == "saturation.multibandExciter") {
     return make<saturation::MultibandExciter>(detail::multiband_exciter_config(params));
+  }
+  if (name == "saturation.overdrive") {
+    return make<saturation::Overdrive>(detail::overdrive_config(params));
+  }
+  if (name == "saturation.distortion") {
+    return make<saturation::Distortion>(detail::distortion_config(params));
   }
   if (name == "saturation.ampSim") {
     // Guitar amp-sim: drive -> tone stack -> cab-EQ (the track-insert layer of
@@ -1234,6 +1241,8 @@ std::vector<std::string> insert_factory_names() {
       "saturation.tube",
       "saturation.transformer",
       "saturation.multibandExciter",
+      "saturation.overdrive",
+      "saturation.distortion",
       "saturation.ampSim",
       "spectral.airBand",
       "spectral.lowEndFocus",

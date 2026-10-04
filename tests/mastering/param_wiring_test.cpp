@@ -33,6 +33,7 @@
 #include "mastering/repair/declip.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
+#include "mastering/saturation/pedal.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/waveshaper.h"
@@ -630,6 +631,67 @@ TEST_CASE("saturation.tape rejects an oversample factor its core cannot run",
           "[mastering][saturation][param_wiring]") {
   REQUIRE_THROWS_AS(make_insert("saturation.tape", R"({"oversampleFactor":3})"),
                     sonare::SonareException);
+}
+
+TEST_CASE("pedal gain, tone and level reach the processor from both parameter surfaces",
+          "[mastering][saturation][param_wiring][pedal]") {
+  using sonare::mastering::saturation::Distortion;
+  using sonare::mastering::saturation::Overdrive;
+
+  struct Probe {
+    const char* name;
+    float gain_db;
+    float tone_hz;
+    float level_db;
+  };
+  const Probe probes[] = {{"saturation.overdrive", 12.0f, 2500.0f, -3.0f},
+                          {"saturation.distortion", 45.0f, 6000.0f, -6.0f}};
+  const auto input = three_band_signal();
+  for (const Probe& probe : probes) {
+    CAPTURE(probe.name);
+    const std::string json = R"({"gainDb":)" + std::to_string(probe.gain_db) + R"(,"toneHz":)" +
+                             std::to_string(probe.tone_hz) + R"(,"levelDb":)" +
+                             std::to_string(probe.level_db) + "}";
+    auto processor = make_insert(probe.name, json);
+    REQUIRE(processor != nullptr);
+    float gain_db = 0.0f;
+    float tone_hz = 0.0f;
+    float level_db = 0.0f;
+    if (const auto* overdrive = dynamic_cast<const Overdrive*>(processor.get())) {
+      gain_db = overdrive->config().gain_db;
+      tone_hz = overdrive->config().tone_hz;
+      level_db = overdrive->config().level_db;
+    } else {
+      const auto* distortion = dynamic_cast<const Distortion*>(processor.get());
+      REQUIRE(distortion != nullptr);
+      gain_db = distortion->config().gain_db;
+      tone_hz = distortion->config().tone_hz;
+      level_db = distortion->config().level_db;
+    }
+    CHECK(gain_db == probe.gain_db);
+    CHECK(tone_hz == probe.tone_hz);
+    CHECK(level_db == probe.level_db);
+
+    // The flat surface builds the same processor: its latency-trimmed render
+    // matches the JSON-built insert's, and differs from the defaults'.
+    const auto inserted = run_insert(probe.name, json, input);
+    const auto latency = static_cast<std::size_t>(processor->latency_samples());
+    const auto flat =
+        apply_named_processor(probe.name, input.data(), input.size(), kNonlinearSampleRate,
+                              {{"gainDb", static_cast<double>(probe.gain_db)},
+                               {"toneHz", static_cast<double>(probe.tone_hz)},
+                               {"levelDb", static_cast<double>(probe.level_db)}});
+    const auto defaults =
+        apply_named_processor(probe.name, input.data(), input.size(), kNonlinearSampleRate, {});
+    REQUIRE(flat.samples.size() == input.size());
+    float deviation = 0.0f;
+    for (std::size_t i = 0; i + latency < input.size(); ++i) {
+      deviation = std::max(deviation, std::abs(flat.samples[i] - inserted[i + latency]));
+    }
+    CAPTURE(deviation);
+    CHECK(deviation < 1.0e-5f);
+    CHECK(flat.samples != defaults.samples);
+  }
 }
 
 TEST_CASE("saturation clippers see every declared antialiasing mode",
