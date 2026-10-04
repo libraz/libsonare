@@ -374,6 +374,54 @@ SonareError run_linked(const float* const* channels, size_t channel_count, size_
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
+/// Config pre-check shared by every denoise entry point (mono, stereo, linked).
+bool denoise_config_valid(const SonareDenoiseClassicalConfig* config) {
+  return !config || (is_power_of_two(config->n_fft) && config->hop_length > 0);
+}
+
+/// Config pre-check shared by the mono and stereo dereverb entry points.
+bool dereverb_config_valid(const SonareDereverbClassicalConfig* config) {
+  return !config || (is_power_of_two(config->n_fft) && config->hop_length > 0 &&
+                     config->hop_length <= config->n_fft);
+}
+
+/// Shared body of the stereo repair entry points, which differ only in their
+/// result type and the core call. @p process receives both channels and fills
+/// @p out; @p params_ok is the caller's config pre-check, applied after the
+/// result is cleared and before the audio is validated.
+template <typename CResult, typename Fn>
+SonareError run_stereo(bool params_ok, const float* left, const float* right, size_t length,
+                       int sample_rate, CResult* out, Fn process) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = CResult{};
+  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+
+  const SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  process(Audio::from_buffer(left, length, sample_rate),
+          Audio::from_buffer(right, length, sample_rate));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+template <typename CResult, typename Fn>
+SonareError run_stereo(const float* left, const float* right, size_t length, int sample_rate,
+                       CResult* out, Fn process) {
+  return run_stereo(true, left, right, length, sample_rate, out, process);
+}
+
+/// Copy a stereo core result's channels into @p out and record the length.
+template <typename StereoResult, typename CResult>
+void fill_stereo_channels(const StereoResult& result, CResult* out) {
+  out->length = result.left.size();
+  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
+                       &out->right);
+}
+
 }  // namespace
 
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
@@ -393,25 +441,13 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
                                                    const SonareDeclickConfig* config,
                                                    SonareDeclickStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareDeclickStereoResult{};
-
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::declick_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_declick_config(config));
-  out->length = result.left.size();
-  out->left_report = to_c_declick_report(result.left_report);
-  out->right_report = to_c_declick_report(result.right_report);
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
+    const auto result =
+        sonare::mastering::repair::declick_stereo(l, r, to_cpp_declick_config(config));
+    out->left_report = to_c_declick_report(result.left_report);
+    out->right_report = to_c_declick_report(result.right_report);
+    fill_stereo_channels(result, out);
+  });
 }
 
 SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
@@ -431,10 +467,7 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (config) {
-    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!denoise_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result =
@@ -447,30 +480,15 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareDenoiseStereoResult{};
-
   // Mirrors the mono entry's pre-check so the two agree on which configs they
   // reject before the core ever sees them.
-  if (config) {
-    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::denoise_classical_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_denoise_config(config));
-  out->length = result.left.size();
-  out->report = to_c_denoise_report(result.report);
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(denoise_config_valid(config), left, right, length, sample_rate, out,
+                    [&](const Audio& l, const Audio& r) {
+                      const auto result = sonare::mastering::repair::denoise_classical_stereo(
+                          l, r, to_cpp_denoise_config(config));
+                      out->report = to_c_denoise_report(result.report);
+                      fill_stereo_channels(result, out);
+                    });
 }
 
 SonareError sonare_mastering_repair_denoise_classical_linked(
@@ -481,10 +499,7 @@ SonareError sonare_mastering_repair_denoise_classical_linked(
   // Mirrors the mono and stereo entries' pre-check so the three agree on which
   // configs they reject before the core ever sees them.
   if (out_report) *out_report = {};
-  if (config) {
-    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!denoise_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_linked(
       channels, channel_count, length, sample_rate, out_channels, out_report,
@@ -541,25 +556,13 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
                                                   const SonareDeclipConfig* config,
                                                   SonareDeclipStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareDeclipStereoResult{};
-
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::declip_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_declip_config(config));
-  out->length = result.left.size();
-  out->left_report = to_c_declip_report(result.left_report);
-  out->right_report = to_c_declip_report(result.right_report);
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
+    const auto result =
+        sonare::mastering::repair::declip_stereo(l, r, to_cpp_declip_config(config));
+    out->left_report = to_c_declip_report(result.left_report);
+    out->right_report = to_c_declip_report(result.right_report);
+    fill_stereo_channels(result, out);
+  });
 }
 
 SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
@@ -590,25 +593,13 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
                                                      const SonareDecrackleConfig* config,
                                                      SonareDecrackleStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareDecrackleStereoResult{};
-
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::decrackle_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_decrackle_config(config));
-  out->length = result.left.size();
-  out->left_report = to_c_decrackle_report(result.left_report);
-  out->right_report = to_c_decrackle_report(result.right_report);
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
+    const auto result =
+        sonare::mastering::repair::decrackle_stereo(l, r, to_cpp_decrackle_config(config));
+    out->left_report = to_c_decrackle_report(result.left_report);
+    out->right_report = to_c_decrackle_report(result.right_report);
+    fill_stereo_channels(result, out);
+  });
 }
 
 SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
@@ -639,25 +630,12 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
                                                  const SonareDehumConfig* config,
                                                  SonareDehumStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareDehumStereoResult{};
-
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::dehum_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_dehum_config(config));
-  out->length = result.left.size();
-  out->left_report = to_c_dehum_report(result.left_report);
-  out->right_report = to_c_dehum_report(result.right_report);
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
+    const auto result = sonare::mastering::repair::dehum_stereo(l, r, to_cpp_dehum_config(config));
+    out->left_report = to_c_dehum_report(result.left_report);
+    out->right_report = to_c_dehum_report(result.right_report);
+    fill_stereo_channels(result, out);
+  });
 }
 
 SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
@@ -676,12 +654,7 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (config) {
-    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-    if (config->hop_length <= 0 || config->hop_length > config->n_fft) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-  }
+  if (!dereverb_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result =
@@ -694,32 +667,15 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareDereverbStereoResult{};
-
   // Mirrors the mono entry's pre-check, which bounds hop_length by n_fft where
   // the denoise pair only requires it positive.
-  if (config) {
-    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
-    if (config->hop_length <= 0 || config->hop_length > config->n_fft) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-  }
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::dereverb_classical_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_dereverb_config(config));
-  out->length = result.left.size();
-  out->report = to_c_dereverb_report(result.report);
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(dereverb_config_valid(config), left, right, length, sample_rate, out,
+                    [&](const Audio& l, const Audio& r) {
+                      const auto result = sonare::mastering::repair::dereverb_classical_stereo(
+                          l, r, to_cpp_dereverb_config(config));
+                      out->report = to_c_dereverb_report(result.report);
+                      fill_stereo_channels(result, out);
+                    });
 }
 
 SonareError sonare_mastering_repair_dereverb_classical_linked(
@@ -773,30 +729,17 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
                                                         const SonareTrimSilenceConfig* config,
                                                         SonareTrimSilenceStereoResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  // Defined before any validation return, so a rejected call hands back an empty
-  // result rather than whatever the caller's stack slot held.
-  *out = SonareTrimSilenceStereoResult{};
-
-  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
-  if (err != SONARE_OK) return err;
-
-  SONARE_C_TRY
-  const auto result = sonare::mastering::repair::trim_silence_stereo(
-      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
-      to_cpp_trim_silence_config(config));
-  out->report = to_c_trim_report(result.report);
-  out->left_range = to_c_trim_range(result.left_range);
-  out->right_range = to_c_trim_range(result.right_range);
-  out->length = result.left.size();
-  // A trimmed pair can come back empty, which no other repair stereo entry can
-  // produce. Hand back (NULL, 0) rather than a zero-length allocation, matching
-  // the empty-result policy the mono entries take through copy_audio_result.
-  if (out->length == 0) return SONARE_OK;
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
+    const auto result =
+        sonare::mastering::repair::trim_silence_stereo(l, r, to_cpp_trim_silence_config(config));
+    out->report = to_c_trim_report(result.report);
+    out->left_range = to_c_trim_range(result.left_range);
+    out->right_range = to_c_trim_range(result.right_range);
+    // A trimmed pair can come back empty, which no other repair stereo entry can
+    // produce. Hand back (NULL, 0) rather than a zero-length allocation, matching
+    // the empty-result policy the mono entries take through copy_audio_result.
+    if (!result.left.empty()) fill_stereo_channels(result, out);
+  });
 }
 
 SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size_t length,
