@@ -524,7 +524,7 @@ class _EngineIoMixin:
                 self._require_handle(),
                 _to_c_uint(target_id, "target_id"),
                 raw,
-                ctypes.c_size_t(SONARE_METER_MAX_INSERTS),
+                _to_c_size_t(SONARE_METER_MAX_INSERTS, "capacity"),
                 ctypes.byref(count),
             )
         )
