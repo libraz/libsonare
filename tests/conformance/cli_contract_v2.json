@@ -12329,6 +12329,7 @@
                 "mixingAssistant": "boolean",
                 "pitchEditor": "boolean",
                 "playback": "boolean",
+                "vocalEdit": "boolean",
                 "voiceChanger": "boolean"
               }
             },
