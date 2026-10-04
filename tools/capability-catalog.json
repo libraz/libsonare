@@ -82326,6 +82326,56 @@
     {
       "category": "saturation",
       "channelPolicy": "multichannel",
+      "id": "saturation.distortion",
+      "kind": "realtime",
+      "latencySamples": 48,
+      "params": [
+        {
+          "choices": null,
+          "default": 30,
+          "id": 0,
+          "max": 60,
+          "min": 0,
+          "name": "gainDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 4000,
+          "id": 1,
+          "max": 20000,
+          "min": 475,
+          "name": "toneHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 2,
+          "max": 770.637,
+          "min": null,
+          "name": "levelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCost": "low",
+      "realtimeInsertable": true,
+      "slots": [],
+      "stereoOnly": false,
+      "tailSamples": 0
+    },
+    {
+      "category": "saturation",
+      "channelPolicy": "multichannel",
       "id": "saturation.exciter",
       "kind": "realtime",
       "latencySamples": 0,
@@ -83241,6 +83291,56 @@
           "parent": null
         }
       ],
+      "stereoOnly": false,
+      "tailSamples": 0
+    },
+    {
+      "category": "saturation",
+      "channelPolicy": "multichannel",
+      "id": "saturation.overdrive",
+      "kind": "realtime",
+      "latencySamples": 48,
+      "params": [
+        {
+          "choices": null,
+          "default": 20,
+          "id": 0,
+          "max": 41,
+          "min": 0,
+          "name": "gainDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "choices": null,
+          "default": 3000,
+          "id": 1,
+          "max": 8000,
+          "min": 500,
+          "name": "toneHz",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "choices": null,
+          "default": 0,
+          "id": 2,
+          "max": 770.637,
+          "min": null,
+          "name": "levelDb",
+          "rtSafe": true,
+          "slot": null,
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCost": "low",
+      "realtimeInsertable": true,
+      "slots": [],
       "stereoOnly": false,
       "tailSamples": 0
     },
