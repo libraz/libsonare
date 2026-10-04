@@ -12,10 +12,12 @@ import type {
   ControllerBinding,
   MpeDimension,
   NoteTracking,
+  PartRigInsert,
+  PartRigMode,
   ProjectMidiCcBinding,
   SynthPatch,
 } from './project';
-import { normalizeSynthInstrument } from './project_internal';
+import { normalizeSynthInstrument, partRigInsertsJson } from './project_internal';
 import type {
   EqBand,
   PanLawInput,
@@ -574,6 +576,23 @@ export class RealtimeEngine {
     articulation: Articulation | number,
   ): void {
     this.native.setArticulation(destinationId, channel, articulation);
+  }
+
+  /**
+   * Set the rig of one part (0-15), or of the destination's default when `part`
+   * is `PART_RIG_ALL_PARTS`, on the instrument bound to `destinationId`. A
+   * direct call, not a stored edit: a destination with no instrument is an
+   * invalid parameter, and an instrument without part rigs (a builtin, a
+   * host-callback instrument) is refused as not implemented rather than
+   * succeeding quietly. `'chain'` takes 1-8 `inserts`; no other mode does.
+   */
+  setPartRig(
+    destinationId: number,
+    part: number,
+    mode: PartRigMode | number,
+    inserts?: PartRigInsert[],
+  ): void {
+    this.native.setPartRig(destinationId, part, mode, partRigInsertsJson(inserts));
   }
 
   /**

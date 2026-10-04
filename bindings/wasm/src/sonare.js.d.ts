@@ -1580,6 +1580,12 @@ export interface WasmRealtimeEngine {
     channel: number,
   ) => import('./instrument_types').Articulation | number;
   legatoFallbackCount: (destinationId: number) => number;
+  setPartRig: (
+    destinationId: number,
+    part: number,
+    mode: import('./instrument_types').PartRigMode | number,
+    insertsJson: string | undefined,
+  ) => void;
   setMidiFx: (destinationId: number, configJson: string) => void;
   clearMidiFx: (destinationId: number) => void;
   setMidiInputSource: (destinationId: number) => void;

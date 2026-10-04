@@ -127,6 +127,9 @@ struct ProjectWasm {
   void setTrackMute(const val& track_id, bool mute);
   void setTrackSolo(const val& track_id, bool solo);
   void setTrackPan(const val& track_id, const val& pan_val);
+  void setPartRig(const val& destination_id, const val& part, val mode, val inserts_json);
+  val getPartRig(const val& destination_id, const val& part) const;
+  void clearPartRig(const val& destination_id, const val& part);
   void undo();
   void redo();
   void clearHistory();

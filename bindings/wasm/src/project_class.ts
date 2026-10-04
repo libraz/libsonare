@@ -1,5 +1,8 @@
 import type {
   BuiltinSynthBinding,
+  PartRig,
+  PartRigInsert,
+  PartRigMode,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
@@ -7,6 +10,8 @@ import type {
 import {
   assertProjectMidiEvents,
   normalizeSynthInstrument,
+  partRigFromNative,
+  partRigInsertsJson,
   projectAutomationPointValue,
   projectAutomationTargetKindValue,
   projectLoopModeValue,
@@ -834,6 +839,34 @@ export class Project {
    */
   setTrackGain(trackId: number, gain: number): void {
     this.native.setTrackGain(trackId, gain);
+  }
+
+  /**
+   * Set the rig of one part (0-15), or of the destination's default when `part`
+   * is {@link PART_RIG_ALL_PARTS}, on MIDI destination `destinationId`, via an
+   * undoable edit. `'chain'` takes 1-8 `inserts` and is the only mode that does;
+   * a destination no track references is stored and read back all the same.
+   * Refused: a malformed insert document (invalid format), an out-of-range part,
+   * an unknown mode or processor, or inserts on a non-chain mode (invalid
+   * parameter), and an insert chain in a build without mastering.
+   */
+  setPartRig(
+    destinationId: number,
+    part: number,
+    mode: PartRigMode | number,
+    inserts?: PartRigInsert[],
+  ): void {
+    this.native.setPartRig(destinationId, part, mode, partRigInsertsJson(inserts));
+  }
+
+  /** The stored rig for `(destinationId, part)`, or null when none is stored. */
+  getPartRig(destinationId: number, part: number): PartRig | null {
+    return partRigFromNative(this.native.getPartRig(destinationId, part));
+  }
+
+  /** Remove the stored rig for `(destinationId, part)` via an undoable edit (no-op when absent). */
+  clearPartRig(destinationId: number, part: number): void {
+    this.native.clearPartRig(destinationId, part);
   }
 
   /** Set a track's mute flag via an undoable edit (a muted track is silent). */

@@ -1,6 +1,9 @@
 import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes';
 import type {
   BuiltinSynthBinding,
+  PartRig,
+  PartRigInsert,
+  PartRigMode,
   SampleDesc,
   SampleZoneDesc,
   Sf2InstrumentConfig,
@@ -114,6 +117,46 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | s
   return { ...rest, sampleBankId: sampleBank.nativeId };
 }
 
+/**
+ * Serializes a part rig's inserts into the JSON array the native layer reads
+ * (`params` always a JSON object string), or undefined when none were given.
+ */
+export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
+  if (inserts === undefined || inserts === null) {
+    return undefined;
+  }
+  if (!Array.isArray(inserts)) {
+    throw new TypeError('inserts must be an array');
+  }
+  return JSON.stringify(
+    inserts.map((insert) => {
+      const { processor, params } = insert;
+      return params === undefined
+        ? { processor }
+        : { processor, params: typeof params === 'string' ? params : JSON.stringify(params) };
+    }),
+  );
+}
+
+/** Reads a native `{ mode, insertsJson }` part rig back into the public shape. */
+export function partRigFromNative(
+  native: { mode: PartRig['mode']; insertsJson: string | null } | null,
+): PartRig | null {
+  if (native === null) {
+    return null;
+  }
+  if (native.insertsJson === null) {
+    return { mode: native.mode };
+  }
+  const inserts = (JSON.parse(native.insertsJson) as { processor: string; params: string }[]).map(
+    ({ processor, params }) => ({
+      processor,
+      params: JSON.parse(params) as Record<string, unknown>,
+    }),
+  );
+  return { mode: native.mode, inserts };
+}
+
 // Embind handle for the C++ `ProjectWasm` class. `SonareModule` describes the
 // raw module's free functions and does not carry bound-class handles, so the
 // module is narrowed through this shape here — which is also where the
@@ -143,6 +186,17 @@ export interface WasmProject {
   setTrackMute: (trackId: number, mute: boolean) => void;
   setTrackSolo: (trackId: number, solo: boolean) => void;
   setTrackPan: (trackId: number, pan: number) => void;
+  setPartRig: (
+    destinationId: number,
+    part: number,
+    mode: PartRigMode | number,
+    insertsJson: string | undefined,
+  ) => void;
+  getPartRig: (
+    destinationId: number,
+    part: number,
+  ) => { mode: PartRigMode; insertsJson: string | null } | null;
+  clearPartRig: (destinationId: number, part: number) => void;
   undo: () => void;
   redo: () => void;
   clearHistory: () => void;

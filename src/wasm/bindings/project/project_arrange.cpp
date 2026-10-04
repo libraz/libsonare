@@ -317,6 +317,67 @@ void ProjectWasm::setTrackPan(const val& track_id_val, const val& pan_val) {
               "failed to set track pan");
 }
 
+namespace {
+
+constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
+static_assert(SONARE_PART_RIG_BANK == 0 && SONARE_PART_RIG_NONE == 1 && SONARE_PART_RIG_CHAIN == 2,
+              "WASM PartRigMode table drifted from C");
+
+// A part is 0-15 or SONARE_PART_RIG_ALL_PARTS; anything else is refused before
+// the byte it would narrow into, so 256 cannot arrive as part 0.
+uint8_t partRigPart(int part) {
+  if (part != static_cast<int>(SONARE_PART_RIG_ALL_PARTS)) {
+    requireOrdinalInRange(part, 0, 15, "part");
+  }
+  return static_cast<uint8_t>(part);
+}
+
+}  // namespace
+
+void ProjectWasm::setPartRig(const val& destination_id_val, const val& part_val, val mode_val,
+                             val inserts_json_val) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const uint8_t part = partRigPart(checkedIntFromVal(part_val, "part"));
+  const int mode = sonare_wasm_synth::enumFromVal(mode_val, kPartRigModes, 3, "part rig mode");
+  std::string inserts_json;
+  const bool has_inserts = !inserts_json_val.isUndefined() && !inserts_json_val.isNull();
+  if (has_inserts) inserts_json = inserts_json_val.as<std::string>();
+  checkCError(sonare_project_set_part_rig(project_.get(), destination_id, part, mode,
+                                          has_inserts ? inserts_json.c_str() : nullptr),
+              "failed to set part rig");
+}
+
+// Returns null when no entry is stored for (destinationId, part); otherwise
+// { mode, insertsJson } with insertsJson null for every mode but chain.
+val ProjectWasm::getPartRig(const val& destination_id_val, const val& part_val) const {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const uint8_t part = partRigPart(checkedIntFromVal(part_val, "part"));
+  int mode = 0;
+  int present = 0;
+  char* inserts = nullptr;
+  checkCError(
+      sonare_project_get_part_rig(project_.get(), destination_id, part, &mode, &inserts, &present),
+      "failed to get part rig");
+  std::string inserts_json;
+  const bool has_inserts = inserts != nullptr;
+  if (has_inserts) {
+    inserts_json = inserts;
+    sonare_free_string(inserts);
+  }
+  if (!present) return val::null();
+  val out = val::object();
+  out.set("mode", sonare_wasm_synth::enumNameVal(mode, kPartRigModes, 3));
+  out.set("insertsJson", has_inserts ? val(inserts_json) : val::null());
+  return out;
+}
+
+void ProjectWasm::clearPartRig(const val& destination_id_val, const val& part_val) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const uint8_t part = partRigPart(checkedIntFromVal(part_val, "part"));
+  checkCError(sonare_project_clear_part_rig(project_.get(), destination_id, part),
+              "failed to clear part rig");
+}
+
 void ProjectWasm::undo() {
   const SonareError err = sonare_project_undo(project_.get());
   if (err != SONARE_OK) {
@@ -365,6 +426,11 @@ void registerProjectArrange(class_<ProjectWasm>& cls) {
       .function("setTrackMute", &ProjectWasm::setTrackMute)
       .function("setTrackSolo", &ProjectWasm::setTrackSolo)
       .function("setTrackPan", &ProjectWasm::setTrackPan)
+      // destinationId, part, mode, insertsJson -- the C ABI's own argument order
+      // minus the project handle.
+      .function("setPartRig", &ProjectWasm::setPartRig)
+      .function("getPartRig", &ProjectWasm::getPartRig)
+      .function("clearPartRig", &ProjectWasm::clearPartRig)
       .function("undo", &ProjectWasm::undo)
       .function("redo", &ProjectWasm::redo)
       .function("clearHistory", &ProjectWasm::clearHistory)

@@ -11,11 +11,13 @@
 #include <type_traits>
 
 #include "c_api/midi_fx_json.h"
+#include "c_api/part_rig_json.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
 #include "midi/midi_fx.h"
+#include "midi/part_rig.h"
 #include "realtime_engine_wasm.h"
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/synth_patch_val.h"
@@ -796,6 +798,66 @@ uint32_t RealtimeEngineWasm::legatoFallbackCount(const val& destination_id_val) 
 #endif
 }
 
+// Rebuilds one part's (or, for kPartRigAllParts, the destination default's) rig
+// on the destination's instrument. Mirrors sonare_engine_set_part_rig: shape
+// first, then the chain's processors, then the instrument, whose refusal is
+// NotImplemented (NOT_SUPPORTED) because a rig the instrument cannot hold would
+// otherwise read as one that took.
+void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& part_val, val mode,
+                                    val inserts_json) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  static constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
+  static_assert(static_cast<int>(sonare::midi::PartRigMode::kChain) == 2,
+                "WASM PartRigMode table drifted from C");
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const int part = checkedIntFromVal(part_val, "part");
+  if (part != static_cast<int>(sonare::midi::kPartRigAllParts)) {
+    requireOrdinalInRange(part, 0, 15, "part");
+  }
+  sonare::midi::PartRig rig;
+  rig.mode = static_cast<sonare::midi::PartRigMode>(
+      sonare_wasm_synth::enumFromVal(mode, kPartRigModes, 3, "part rig mode"));
+  const bool has_inserts = !inserts_json.isUndefined() && !inserts_json.isNull();
+  if ((rig.mode == sonare::midi::PartRigMode::kChain) != has_inserts) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "insertsJson is required for the chain mode and only then");
+  }
+  if (has_inserts) {
+    const std::string json = inserts_json.as<std::string>();
+    const SonareError parsed = sonare_c_detail::parse_part_rig_inserts(json.c_str(), &rig.stages);
+    if (parsed == SONARE_ERROR_INVALID_FORMAT) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid part rig inserts");
+    }
+  }
+  if (!sonare::midi::validate_part_rig(static_cast<uint8_t>(part), rig)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid part rig");
+  }
+#if defined(SONARE_WITH_MASTERING)
+  if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid part rig insert chain");
+  }
+#else
+  if (rig.mode == sonare::midi::PartRigMode::kChain) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "insert chains are not available in this build");
+  }
+#endif
+  if (!wasmBoundInstrument(engine_, destination_id)
+           ->set_part_rig(static_cast<uint8_t>(part), rig)) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "the bound instrument has no part rigs");
+  }
+#else
+  (void)destination_id_val;
+  (void)part_val;
+  (void)mode;
+  (void)inserts_json;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
 void RealtimeEngineWasm::setMidiFx(const val& destination_id_val, const std::string& config_json) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
@@ -1529,6 +1591,9 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("setArticulation", &RealtimeEngineWasm::setArticulation)
       .function("articulation", &RealtimeEngineWasm::articulation)
       .function("legatoFallbackCount", &RealtimeEngineWasm::legatoFallbackCount)
+      // destinationId, part, mode, insertsJson -- the C ABI's own argument order
+      // minus the engine handle, checked against sonare_engine_set_part_rig.
+      .function("setPartRig", &RealtimeEngineWasm::setPartRig)
       .function("setMidiFx", &RealtimeEngineWasm::setMidiFx)
       .function("clearMidiFx", &RealtimeEngineWasm::clearMidiFx)
       .function("setMidiInputSource", &RealtimeEngineWasm::setMidiInputSource)

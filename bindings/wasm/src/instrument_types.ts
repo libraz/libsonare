@@ -228,6 +228,16 @@ export const CONTROLLER_AXES = [
  */
 export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
 
+/**
+ * How a part's signal path is built. `'bank'` keeps whatever the instrument's
+ * own bank/program selection resolves to, `'none'` bypasses the rig stage, and
+ * `'chain'` replaces it with an explicit insert chain.
+ */
+export const PART_RIG_MODES = ['bank', 'none', 'chain'] as const;
+
+/** The `part` value that addresses a destination's default instead of one part (0-15). */
+export const PART_RIG_ALL_PARTS = 0xff;
+
 /** The three dimensions MPE carries per note ({@link RealtimeEngine.setControllerNoteTracking}). */
 export const MPE_DIMENSIONS = ['bend', 'pressure', 'timbre'] as const;
 
@@ -379,6 +389,23 @@ export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
 
 /** Per-channel note-overlap rule ({@link RealtimeEngine.setArticulation}). */
 export type Articulation = (typeof ARTICULATIONS)[number];
+
+/** How a part's rig is built ({@link PART_RIG_MODES}). */
+export type PartRigMode = (typeof PART_RIG_MODES)[number];
+
+/** One stage of a `'chain'` part rig: a processor name and its parameters. */
+export interface PartRigInsert {
+  processor: string;
+  /** Processor parameters, as an object or an already-serialized JSON object string. */
+  params?: Record<string, unknown> | string;
+}
+
+/** A part rig as stored on a project ({@link Project.getPartRig}). */
+export interface PartRig {
+  mode: PartRigMode;
+  /** Present for `'chain'` only; `params` is the parsed parameter object. */
+  inserts?: { processor: string; params: Record<string, unknown> }[];
+}
 
 /** One per-note MPE dimension ({@link MPE_DIMENSIONS}). */
 export type MpeDimension = (typeof MPE_DIMENSIONS)[number];
