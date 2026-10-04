@@ -26,7 +26,7 @@
 ///      slow "aftersound" rate — the double decay + shimmer signature.
 ///   4. SOUNDBOARD: a single shared modal bank (PianoSoundboard, in piano_resonance.h) driven
 ///      by the summed instrument output approximates the soundboard's dominant
-///      radiating modes (the cheap end of commuted synthesis). It is host-owned
+///      radiating modes as a parallel resonator bank. It is host-owned
 ///      and instrument-wide, not per voice, so a chord shares one board the way
 ///      a real grand does; the per-note hammer knock still radiates through it.
 ///

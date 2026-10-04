@@ -1,26 +1,18 @@
 #pragma once
 
 /// @file body_resonator.h
-/// @brief Fixed body/formant resonance bank for NativeSynth voices — the
-///        cheap end of commuted synthesis (Smith & Van Duyne): a handful of
-///        low-Q two-pole resonators approximating an instrument body's
-///        dominant modes, mixed over the dry voice.
+/// @brief Fixed body/formant resonance bank for NativeSynth voices: a handful
+///        of low-Q two-pole resonators approximating an instrument body's
+///        dominant modes, run in parallel after the voice and mixed over it.
 ///
-/// Data-free voicings:
+/// Voicings:
 ///   - kGuitar: dreadnought-ish air + plate modes (~100/200/400/550 Hz).
-///   - kViolin: a measured violin-corpus modal bank — the A0 Helmholtz air
-///     mode, the CBR / B1-/B1+ signature corpus modes, a mid-range wood-mode
-///     cluster, and the broad 2-3 kHz "bridge hill" (Dünnwald, Jansson,
-///     Bissinger, Gough). Shared across the whole bowed family.
-///   - kWoodTube: the tuned pipe under a marimba/xylophone bar — note-tracked
-///     (the tube is cut for its bar), one strong fundamental resonance plus a
-///     faint upper mode.
-///   - kBrassBell: the flaring bell's radiation resonance — a broad "brass
-///     formant" near 1.2 kHz with brilliance modes above it. Fixed by bell
-///     geometry (note-independent), tuned for the trumpet family; larger-bore
-///     brass keeps kNone.
-///   - kVocal: an open-vowel vocal tract ("aah") — F1..F4 of a mixed choir
-///     (~700/1080/2650/3500 Hz), note-independent like a real tract.
+///   - kViolin: measured violin-corpus modes (A0, CBR, B1-/B1+, wood cluster,
+///     2-3 kHz bridge hill); shared across the bowed family.
+///   - kWoodTube: the tuned pipe under a mallet bar, note-tracked.
+///   - kBrassBell: the bell's ~1.2 kHz radiation formant, note-independent;
+///     trumpet family only.
+///   - kVocal: open-vowel ("aah") F1..F4 of a mixed choir, note-independent.
 ///
 /// RT contract: start()/process() are allocation-free; determinism: fixed
 /// tables, no RNG.
@@ -215,14 +207,10 @@ class BodyResonator {
 
   static float q_to_t60(float freq_hz, float q) noexcept { return kT60SecPerQHz * q / freq_hz; }
 
-  /// Expands a literature modal table (freq/Q/weight) into resonator Specs,
-  /// scaling every weight by @p level so the bank's broadband contribution
-  /// stays matched to the earlier hand-placed voicing (the per-preset body_mix
-  /// was calibrated against it), and every centre frequency by @p scale — a
-  /// dimension ratio (identity at 1.0) that can only ever place A0, since rib
-  /// depth does not scale with body length the way A0 does; Q is held fixed so
-  /// t60 is rebuilt from the scaled frequency. Returns the number of Specs
-  /// written.
+  /// Expands a literature modal table (freq/Q/weight) into resonator Specs:
+  /// weights scaled by @p level, centre frequencies by @p scale (a dimension
+  /// ratio that can only place A0), Q held so t60 follows the scaled
+  /// frequency. Returns the number of Specs written.
   template <size_t N>
   static int fill_from_modal(std::array<Spec, kMaxModes>& out, const std::array<ModeQ, N>& bank,
                              float level, float scale) noexcept {
@@ -235,12 +223,9 @@ class BodyResonator {
     return count;
   }
 
-  // Violin corpus, from measured mobility/radiativity surveys (Dünnwald,
-  // Jansson, Bissinger, Gough). A0 is the Helmholtz air resonance; CBR the
-  // centre-bout rhomboid; B1-/B1+ the two main corpus bending modes (B1+ the
-  // strongest radiator). 700 Hz-2 kHz is the wood-mode cluster; the broad,
-  // low-Q pair near 2.4/2.7 kHz is the "bridge hill" that gives the violin its
-  // carrying brilliance; above ~3 kHz the corpus rolls off.
+  // Violin corpus from measured mobility/radiativity surveys (Dünnwald,
+  // Jansson, Bissinger, Gough). CBR is the centre-bout rhomboid; B1-/B1+ the
+  // main corpus bending modes, B1+ the strongest radiator.
   static constexpr std::array<ModeQ, 14> kViolinBank = {{
       {275.0f, 24.0f, 0.90f},   // A0 (air / Helmholtz)
       {405.0f, 20.0f, 0.50f},   // CBR

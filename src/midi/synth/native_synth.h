@@ -164,8 +164,8 @@ struct NativeSynthPatch {
   float glide_ms = 0.0f;
 
   // --- realism polish ---
-  /// Body/formant resonance voicing applied to the voice output (commuted
-  /// synthesis, body_resonator.h) and its mix in [0,1].
+  /// Body/formant resonance voicing applied to the voice output (parallel
+  /// resonator bank, body_resonator.h) and its mix in [0,1].
   BodyType body = BodyType::kNone;
   float body_mix = 0.0f;
   /// Per-voice seeded stereo pan scatter in [0,1] (0 keeps every voice
