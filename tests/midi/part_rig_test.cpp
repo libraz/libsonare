@@ -5,11 +5,13 @@
 
 #include "midi/part_rig.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #if defined(SONARE_WITH_MASTERING)
@@ -501,6 +503,151 @@ TEST_CASE("native: a chain without an amplifier stays stereo", "[midi][rig][part
   const StereoRender center = render_panned(native_with_factory(), driven, 64);
   const StereoRender left = render_panned(native_with_factory(), driven, 0);
   REQUIRE(relative_rms_difference(center.left, left.left, sonare::constants::kInvSqrt2) > 1.0e-2);
+}
+
+namespace {
+
+enum class RigSource : uint8_t {
+  kPartChain,
+  kPartNone,
+  kPartBank,
+  kDestNone,
+  kDestChain,
+  kClearBankRig,
+  kNone
+};
+
+struct RigRow {
+  RigSource source;
+  bool efx_route;
+  bool with_amp;
+  uint8_t program;
+  bool clear_bank_rig;
+  bool gm_programs;  ///< Native only; the Sf2Player always plays GM programs.
+};
+
+const char* source_name(RigSource s) {
+  switch (s) {
+    case RigSource::kPartChain:
+      return "part-chain";
+    case RigSource::kPartNone:
+      return "part-none";
+    case RigSource::kPartBank:
+      return "part-bank";
+    case RigSource::kDestNone:
+      return "dest-none";
+    case RigSource::kDestChain:
+      return "dest-chain";
+    case RigSource::kClearBankRig:
+      return "clear_bank_rig";
+    case RigSource::kNone:
+      return "none";
+  }
+  return "";
+}
+
+PartRig row_chain(const RigRow& row) {
+  return row.with_amp ? chain({kCleanAmp, kDelay}) : chain({kClipper});
+}
+
+/// The stage names part 0 must realise, by the resolution order: part entry,
+/// destination default, clear_bank_rig, bank. A GS route retires the bank rig.
+Names expected_names(const RigRow& row) {
+  switch (row.source) {
+    case RigSource::kPartChain:
+    case RigSource::kDestChain: {
+      Names out;
+      for (const auto& stage : row_chain(row).stages) out.push_back(stage.processor);
+      return out;
+    }
+    case RigSource::kPartNone:
+    case RigSource::kDestNone:
+    case RigSource::kClearBankRig:
+      return {};
+    case RigSource::kPartBank:
+    case RigSource::kNone:
+      return row.gm_programs && !row.efx_route ? bank_names(row.program) : Names{};
+  }
+  return {};
+}
+
+/// Applies the row to a fresh player and returns part 0's realised stage names.
+template <typename Player, typename Config>
+Names realised_names(Config cfg, const RigRow& row) {
+  cfg.bank_rig_binding = !row.clear_bank_rig;
+  if constexpr (std::is_same_v<Player, NativeSynth>) cfg.use_gm_programs = row.gm_programs;
+  Player player(cfg);
+  player.prepare(kOutRate, 256);
+  switch (row.source) {
+    case RigSource::kPartChain:
+      REQUIRE(player.set_part_rig(0, row_chain(row)));
+      REQUIRE(player.set_part_rig(kPartRigAllParts, mode(PartRigMode::kNone)));
+      break;
+    case RigSource::kPartNone:
+      REQUIRE(player.set_part_rig(0, mode(PartRigMode::kNone)));
+      REQUIRE(player.set_part_rig(kPartRigAllParts, chain({kDelay})));
+      break;
+    case RigSource::kPartBank:
+      REQUIRE(player.set_part_rig(0, mode(PartRigMode::kBank)));
+      REQUIRE(player.set_part_rig(kPartRigAllParts, mode(PartRigMode::kNone)));
+      break;
+    case RigSource::kDestNone:
+      REQUIRE(player.set_part_rig(kPartRigAllParts, mode(PartRigMode::kNone)));
+      break;
+    case RigSource::kDestChain:
+      REQUIRE(player.set_part_rig(kPartRigAllParts, row_chain(row)));
+      break;
+    case RigSource::kClearBankRig:
+    case RigSource::kNone:
+      break;
+  }
+  program(player, 0, row.program);
+  if (row.efx_route) route_to_unit(player, 0);
+  settle(player);
+  return player.part_rig_stage_names(0);
+}
+
+void check_row(const RigRow& row, const Names& got, const char* player) {
+  INFO(player << " source=" << source_name(row.source) << " efx=" << row.efx_route
+              << " amp=" << row.with_amp << " program=" << int(row.program)
+              << " clear=" << row.clear_bank_rig << " gm=" << row.gm_programs);
+  REQUIRE(got == expected_names(row));
+  if (row.with_amp) {
+    // Exactly one amplifier: the chain's, never the bank preset's on top.
+    REQUIRE(std::count(got.begin(), got.end(), std::string("saturation.ampSim")) == 1);
+  }
+}
+
+}  // namespace
+
+// Rows completing pairwise coverage of {player, rig source, EFX route, amp in
+// chain, program, clear_bank_rig, GM programs} beyond the cases above. A chain
+// holding an amp is only meaningful for the two chain sources, and an EFX route
+// exists only where the player reads GS (never native without GM programs).
+TEST_CASE("part rig: sources resolve in order across the remaining combinations",
+          "[midi][rig][part]") {
+  const RigRow sf2_rows[] = {
+      {RigSource::kDestNone, true, false, 0, true, true},
+      {RigSource::kPartNone, true, false, 29, true, true},
+      {RigSource::kPartNone, false, false, 0, false, true},
+      {RigSource::kClearBankRig, true, false, 29, true, true},
+  };
+  for (const RigRow& row : sf2_rows) {
+    check_row(row, realised_names<Sf2Player>(with_factory(), row), "sf2");
+  }
+  const RigRow native_rows[] = {
+      {RigSource::kDestChain, true, true, 0, true, true},
+      {RigSource::kPartBank, true, false, 0, false, true},
+      {RigSource::kPartBank, false, false, 29, true, false},
+      {RigSource::kClearBankRig, false, false, 0, true, false},
+      {RigSource::kDestChain, false, true, 29, true, false},
+      {RigSource::kPartNone, false, false, 29, false, false},
+      {RigSource::kPartChain, true, false, 29, true, true},
+      {RigSource::kDestNone, false, false, 29, false, false},
+  };
+  for (const RigRow& row : native_rows) {
+    check_row(row, realised_names<NativeSynth>(native_with_factory(), row), "native");
+  }
 }
 
 #endif  // SONARE_WITH_MASTERING
