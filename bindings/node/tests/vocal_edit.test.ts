@@ -161,6 +161,43 @@ describe('Node vocal edit facade', () => {
     }
   });
 
+  it('rejects NUL bytes in a supplied analysis algorithm id', () => {
+    const input = request();
+    if (input.analysis === undefined) {
+      throw new Error('test request must include analysis');
+    }
+    input.analysis = { ...input.analysis, algorithmId: 'host\0suffix' };
+    expect(() => createVocalEditSession(input)).toThrow(RangeError);
+  });
+
+  it('returns amplitude envelopes as ordinary arrays after a committed edit', () => {
+    const session = create();
+    try {
+      const note = session.notes().notes[0];
+      expect(note).toBeDefined();
+      const draft = session.beginEdit();
+      const envelope = [0.25, 0.5, 0.75];
+      draft.apply({
+        expectedGeneration: draft.token().generation,
+        operations: [
+          {
+            kind: 'setEdit',
+            noteId: note.id,
+            edit: { ...identityEdit(note), amplitudeEnvelope: envelope },
+          },
+        ],
+      });
+      draft.commit();
+      const result = session.notes().notes.find((candidate) => candidate.id === note.id);
+      expect(result).toBeDefined();
+      expect(Array.isArray(result?.edit.amplitudeEnvelope)).toBe(true);
+      expect(result?.edit.amplitudeEnvelope).toEqual(envelope);
+      expect(result?.edit.amplitudeEnvelope.concat([1])).toEqual([...envelope, 1]);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('exposes destination length and history state and defaults a snapshot to the full output', () => {
     const session = create();
     const snapshot = session.captureRenderSnapshot();

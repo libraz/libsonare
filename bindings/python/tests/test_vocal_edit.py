@@ -99,6 +99,14 @@ def test_supplied_analysis_rejects_non_binary_voiced_mask() -> None:
         create_vocal_edit_session(source, 16_000, analysis=invalid)
 
 
+def test_supplied_analysis_rejects_nul_algorithm_id() -> None:
+    source, analysis = _source_and_analysis()
+    with pytest.raises(SonareValueError, match="algorithm_id"):
+        create_vocal_edit_session(
+            source, 16_000, analysis=replace(analysis, algorithm_id="host\0suffix")
+        )
+
+
 def test_context_lifetime_and_owned_note_arrays() -> None:
     source, analysis = _source_and_analysis()
     with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:

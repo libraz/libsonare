@@ -16,6 +16,7 @@ import type {
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
+  VocalSessionLimits,
   VocalStateToken,
   VocalUint64,
 } from './public_types_vocal_edit';
@@ -338,6 +339,18 @@ function copyRender(value: VocalRenderResult): VocalRenderResult {
   };
 }
 
+function validateSessionLimits(limits: VocalSessionLimits | undefined): void {
+  if (limits === undefined) {
+    return;
+  }
+  if (limits.maxHistoryBytes !== undefined) {
+    requireToken(limits.maxHistoryBytes, 'limits.maxHistoryBytes');
+  }
+  if (limits.maxCacheBytes !== undefined) {
+    requireToken(limits.maxCacheBytes, 'limits.maxCacheBytes');
+  }
+}
+
 function copyEditResult(value: VocalEditResult): VocalEditResult {
   return {
     token: copyToken(value.token),
@@ -364,8 +377,17 @@ function validateCreate(request: VocalCreateRequest): void {
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
   }
+  validateSessionLimits(request.limits);
   if (request.analysis) {
     const analysis = request.analysis;
+    if (analysis.algorithmId !== undefined) {
+      if (typeof analysis.algorithmId !== 'string') {
+        throw new TypeError('analysis.algorithmId must be a string');
+      }
+      if (analysis.algorithmId.includes('\0')) {
+        throw new RangeError('analysis.algorithmId must not contain NUL');
+      }
+    }
     requireFinite(analysis.frameOriginSample, 'analysis.frameOriginSample');
     requireFinite(analysis.samplesPerFrame, 'analysis.samplesPerFrame');
     if (analysis.samplesPerFrame <= 0) {
@@ -434,6 +456,7 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
     requireFinite(sample, 'samples');
   }
   requireSampleRate(request.sampleRate);
+  validateSessionLimits(request.limits);
   if (!vocalEditAvailable()) {
     throw new Error('vocal edit is unavailable in this WASM build');
   }

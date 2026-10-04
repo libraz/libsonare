@@ -534,6 +534,9 @@ uint64_t checkedDecimalUint64FromVal(const val& value, const char* key) {
   }
   const std::string text = value.as<std::string>();
   uint64_t result = 0;
+  if (text.size() > 1 && text.front() == '0') {
+    throw SonareException(ErrorCode::InvalidParameter, message);
+  }
   const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result, 10);
   if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
     throw SonareException(ErrorCode::InvalidParameter, message);

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init } from '../src/index';
+import { getSonareModule } from '../src/module_state';
 import type { VocalEditOperation } from '../src/public_types_vocal_edit';
 import { createVocalEditSession, restoreVocalEditSession } from '../src/vocal_edit';
 
@@ -11,6 +12,23 @@ function tone(length: number, frequency = 220): Float32Array {
     out[i] = 0.35 * Math.sin((2 * Math.PI * frequency * i) / SAMPLE_RATE);
   }
   return out;
+}
+
+function suppliedOneFrameRequest(limits?: { maxHistoryBytes?: string; maxCacheBytes?: string }) {
+  return {
+    samples: tone(256),
+    sampleRate: SAMPLE_RATE,
+    analysis: {
+      frameOriginSample: 0,
+      samplesPerFrame: 256,
+      frameLengthSamples: 256,
+      f0Hz: new Float32Array([220]),
+      voiced: new Uint8Array([1]),
+      algorithmId: 'host',
+      algorithmVersion: 1,
+    },
+    ...(limits === undefined ? {} : { limits }),
+  };
 }
 
 describe('WASM vocal edit facade', () => {
@@ -40,6 +58,21 @@ describe('WASM vocal edit facade', () => {
     const samples = tone(512);
     samples[17] = Number.NaN;
     expect(() => createVocalEditSession({ samples, sampleRate: SAMPLE_RATE })).toThrow();
+  });
+
+  it('rejects NUL bytes in a supplied analysis algorithm id', () => {
+    const request = suppliedOneFrameRequest();
+    request.analysis.algorithmId = 'host\0suffix';
+    expect(() => createVocalEditSession(request)).toThrow(RangeError);
+  });
+
+  it('rejects NUL bytes through the native WASM vocal export', () => {
+    const request = suppliedOneFrameRequest();
+    request.analysis.algorithmId = 'host\0suffix';
+    const native = getSonareModule();
+    expect(() =>
+      native.vocalEditSessionCreate(request.samples, request.sampleRate, request),
+    ).toThrow();
   });
 
   it('preserves native vocal error detail on a revision conflict', () => {
@@ -221,6 +254,65 @@ describe('WASM vocal edit facade', () => {
       snapshot.dispose();
       restored.dispose();
     }
+  });
+
+  it('requires canonical decimal uint64 session limits on create and restore', () => {
+    const valid = suppliedOneFrameRequest({ maxHistoryBytes: '0', maxCacheBytes: '7' });
+    const session = createVocalEditSession(valid);
+    const state = session.exportState();
+    session.dispose();
+
+    for (const limits of [{ maxHistoryBytes: '007' }, { maxCacheBytes: '007' }]) {
+      expect(() => createVocalEditSession(suppliedOneFrameRequest(limits))).toThrow();
+      expect(() =>
+        restoreVocalEditSession({
+          samples: valid.samples,
+          sampleRate: SAMPLE_RATE,
+          state,
+          limits,
+        }),
+      ).toThrow();
+    }
+
+    const accepted = createVocalEditSession(suppliedOneFrameRequest({ maxHistoryBytes: '0' }));
+    accepted.dispose();
+    const restored = restoreVocalEditSession({
+      samples: valid.samples,
+      sampleRate: SAMPLE_RATE,
+      state,
+      limits: { maxCacheBytes: '7' },
+    });
+    restored.dispose();
+  });
+
+  it('enforces canonical limits through the native WASM vocal exports', () => {
+    const native = getSonareModule();
+    const valid = suppliedOneFrameRequest({ maxHistoryBytes: '0', maxCacheBytes: '7' });
+    const session = createVocalEditSession(valid);
+    const state = session.exportState();
+    session.dispose();
+
+    for (const limits of [{ maxHistoryBytes: '007' }, { maxCacheBytes: '007' }]) {
+      const createRequest = suppliedOneFrameRequest(limits);
+      expect(() =>
+        native.vocalEditSessionCreate(
+          createRequest.samples,
+          createRequest.sampleRate,
+          createRequest,
+        ),
+      ).toThrow();
+      expect(() =>
+        native.vocalEditSessionRestore(valid.samples, SAMPLE_RATE, state, { limits }),
+      ).toThrow();
+    }
+
+    const acceptedRequest = suppliedOneFrameRequest({ maxCacheBytes: '7' });
+    const handle = native.vocalEditSessionCreate(
+      acceptedRequest.samples,
+      acceptedRequest.sampleRate,
+      acceptedRequest,
+    );
+    native.vocalEditSessionDestroy(handle);
   });
 
   it('refuses a sample rate outside the supported range on create and restore', () => {

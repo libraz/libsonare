@@ -429,6 +429,10 @@ SonareVocalCreateOptions optionsFromVal(const val& object, CreateStorage* storag
       throw SonareException(ErrorCode::InvalidParameter, "analysis arrays must have equal length");
     }
     storage->algorithm = stringPropertyStrict(analysis, "algorithmId", "host");
+    if (storage->algorithm.find('\0') != std::string::npos) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "analysis.algorithmId must not contain NUL");
+    }
     storage->analysis.algorithm_version = uintProperty(analysis, "algorithmVersion", 1);
     storage->analysis.f0_hz = storage->f0.data();
     storage->analysis.voiced = storage->voiced.data();

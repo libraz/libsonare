@@ -458,10 +458,10 @@ Napi::Object EditToObject(Napi::Env env, const SonareVocalNoteEdit& edit) {
              Napi::Number::New(env, static_cast<double>(edit.destination_length_samples)));
   result.Set("gainDb", edit.gain_db);
   result.Set("muted", Napi::Boolean::New(env, edit.muted != 0));
-  Napi::Float32Array envelope = Napi::Float32Array::New(env, edit.amplitude_envelope_count);
-  if (edit.amplitude_envelope_count != 0) {
-    std::memcpy(envelope.Data(), edit.amplitude_envelope,
-                edit.amplitude_envelope_count * sizeof(float));
+  Napi::Array envelope = Napi::Array::New(env, edit.amplitude_envelope_count);
+  for (uint64_t i = 0; i < edit.amplitude_envelope_count; ++i) {
+    envelope.Set(static_cast<uint32_t>(i),
+                 Napi::Number::New(env, static_cast<double>(edit.amplitude_envelope[i])));
   }
   result.Set("amplitudeEnvelope", envelope);
   result.Set("formant", formant);
@@ -836,6 +836,11 @@ bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreat
     *algorithm_storage = StringProperty(analysis, "algorithmId", "libsonare.pyin");
     if (algorithm_storage->empty()) {
       Napi::RangeError::New(env, "analysis.algorithmId must not be empty")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    if (algorithm_storage->find('\0') != std::string::npos) {
+      Napi::RangeError::New(env, "analysis.algorithmId must not contain NUL")
           .ThrowAsJavaScriptException();
       return false;
     }
