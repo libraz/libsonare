@@ -173,15 +173,20 @@ Insert insert_from_value(const JsonValue& object) {
 // an empty id that the caller never wrote -- and a save/load cycle would then
 // persist it. Skipping keeps the entity count equal to the number of
 // object-typed elements, order preserved, on every scene-decoding path.
-std::vector<Insert> inserts_from_value(const JsonValue& array) {
-  std::vector<Insert> out;
+template <typename T>
+std::vector<T> array_from_value(const JsonValue& array, T (*parse)(const JsonValue&)) {
+  std::vector<T> out;
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
     if (!entry.is_object()) continue;
-    out.push_back(insert_from_value(entry));
+    out.push_back(parse(entry));
   }
   return out;
+}
+
+std::vector<Insert> inserts_from_value(const JsonValue& array) {
+  return array_from_value<Insert>(array, insert_from_value);
 }
 
 Send send_from_value(const JsonValue& object) {
@@ -202,14 +207,7 @@ Send send_from_value(const JsonValue& object) {
 }
 
 std::vector<Send> sends_from_value(const JsonValue& array) {
-  std::vector<Send> out;
-  if (!array.is_array()) return out;
-  out.reserve(array.as_array().size());
-  for (const auto& entry : array.as_array()) {
-    if (!entry.is_object()) continue;
-    out.push_back(send_from_value(entry));
-  }
-  return out;
+  return array_from_value<Send>(array, send_from_value);
 }
 
 // Strip and Bus share one EQ shape (StripEq) and one validation. `field_prefix`
@@ -330,14 +328,7 @@ Strip strip_from_value(const JsonValue& object) {
 }
 
 std::vector<Strip> strips_from_value(const JsonValue& array) {
-  std::vector<Strip> out;
-  if (!array.is_array()) return out;
-  out.reserve(array.as_array().size());
-  for (const auto& entry : array.as_array()) {
-    if (!entry.is_object()) continue;
-    out.push_back(strip_from_value(entry));
-  }
-  return out;
+  return array_from_value<Strip>(array, strip_from_value);
 }
 
 Bus bus_from_value(const JsonValue& object) {
@@ -400,14 +391,7 @@ Bus bus_from_value(const JsonValue& object) {
 }
 
 std::vector<Bus> buses_from_value(const JsonValue& array) {
-  std::vector<Bus> out;
-  if (!array.is_array()) return out;
-  out.reserve(array.as_array().size());
-  for (const auto& entry : array.as_array()) {
-    if (!entry.is_object()) continue;
-    out.push_back(bus_from_value(entry));
-  }
-  return out;
+  return array_from_value<Bus>(array, bus_from_value);
 }
 
 VcaGroup vca_group_from_value(const JsonValue& object) {
@@ -425,14 +409,7 @@ VcaGroup vca_group_from_value(const JsonValue& object) {
 }
 
 std::vector<VcaGroup> vca_groups_from_value(const JsonValue& array) {
-  std::vector<VcaGroup> out;
-  if (!array.is_array()) return out;
-  out.reserve(array.as_array().size());
-  for (const auto& entry : array.as_array()) {
-    if (!entry.is_object()) continue;
-    out.push_back(vca_group_from_value(entry));
-  }
-  return out;
+  return array_from_value<VcaGroup>(array, vca_group_from_value);
 }
 
 Connection connection_from_value(const JsonValue& object) {
@@ -443,14 +420,7 @@ Connection connection_from_value(const JsonValue& object) {
 }
 
 std::vector<Connection> connections_from_value(const JsonValue& array) {
-  std::vector<Connection> out;
-  if (!array.is_array()) return out;
-  out.reserve(array.as_array().size());
-  for (const auto& entry : array.as_array()) {
-    if (!entry.is_object()) continue;
-    out.push_back(connection_from_value(entry));
-  }
-  return out;
+  return array_from_value<Connection>(array, connection_from_value);
 }
 
 // ---------------------------------------------------------------------------
