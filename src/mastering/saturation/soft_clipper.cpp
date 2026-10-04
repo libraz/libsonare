@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/saturation/saturation_process.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -46,40 +47,18 @@ void SoftClipper::process(float* const* channels, int num_channels, int num_samp
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   ensure_state(num_channels);
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      for (int i = 0; i < num_samples; ++i) {
-        channels[ch][i] = process_sample(channels[ch][i], ch);
-      }
-    }
+    detail::process_direct(channels, num_channels, num_samples,
+                           [this](float x, int ch) { return process_sample(x, ch); });
     return;
   }
 
-  // Oversampled path. Reuse the preallocated scratch buffers (sized in
-  // prepare()) so this audio-thread path never allocates; reject blocks wider
-  // than the prepared size instead of resizing here.
+  // Oversampled path runs on the preallocated scratch from prepare().
   const float drive = Waveshaper::db_to_linear(config_.drive_db);
-  const size_t os_samples =
-      static_cast<size_t>(num_samples) * static_cast<size_t>(kOversampleFactor);
-  if (os_samples > up_scratch_.size() || static_cast<size_t>(num_samples) > down_scratch_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared SoftClipper oversampling scratch");
-  }
-  for (int ch = 0; ch < num_channels; ++ch) {
-    const float* input = channels[ch];
-    auto& state = oversampler_states_[static_cast<size_t>(ch)];
-    oversampler_.upsample_to_streaming(input, static_cast<size_t>(num_samples), up_scratch_.data(),
-                                       up_scratch_.size(), &state);
-    for (size_t i = 0; i < os_samples; ++i) {
-      up_scratch_[i] = config_.ceiling * std::tanh(up_scratch_[i] * drive / config_.ceiling);
-    }
-    oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
-                                         down_scratch_.size(), &state);
-    for (int i = 0; i < num_samples; ++i) {
-      const float dry = dry_delays_[static_cast<size_t>(ch)].process(input[i]);
-      const float wet = down_scratch_[static_cast<size_t>(i)];
-      channels[ch][i] = dry * (1.0f - config_.mix) + wet * config_.mix;
-    }
-  }
+  detail::process_oversampled(
+      channels, num_channels, num_samples, kOversampleFactor, oversampler_, oversampler_states_,
+      dry_delays_, up_scratch_, down_scratch_, config_.mix, "SoftClipper",
+      [&](float x) { return config_.ceiling * std::tanh(x * drive / config_.ceiling); },
+      [](float wet) { return wet; });
 }
 
 void SoftClipper::reset() {
