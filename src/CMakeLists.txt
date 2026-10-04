@@ -1629,6 +1629,7 @@ if(BUILD_WASM)
       midi/layered_instrument.cpp
       midi/midi_clip.cpp
       midi/sequencer.cpp
+      midi/synth/native_synth_live_control.cpp
       midi/synth/sf2_player_control.cpp
       TARGET_DIRECTORY sonare_midi
       PROPERTIES COMPILE_OPTIONS -fexceptions)
