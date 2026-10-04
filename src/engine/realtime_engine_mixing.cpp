@@ -12,6 +12,7 @@
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
 #include "engine/track_mixer.h"
+#include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "rt/command.h"
 #include "util/constants.h"
@@ -22,6 +23,30 @@ namespace sonare::engine {
 #if defined(SONARE_WITH_MIXING)
 
 using sonare::constants::kFloorDb;
+
+bool RealtimeEngine::read_meter_target_insert_gain_reduction(uint32_t target_id, float* out,
+                                                             size_t capacity,
+                                                             size_t* out_count) const noexcept {
+  using Kind = MeterTargetSlot::Kind;
+  const MeterTargetSlot slot = decode_meter_target(target_id);
+  switch (slot.kind) {
+    case Kind::Master:
+      *out_count = master_insert_gr_board_.read(out, capacity);
+      return true;
+    case Kind::Lane:
+      *out_count = track_mixer_runtime_.lane_insert_gain_reduction(slot.index).read(out, capacity);
+      return true;
+    case Kind::Bus:
+      *out_count = track_mixer_runtime_.bus_insert_gain_reduction(slot.index).read(out, capacity);
+      return true;
+    case Kind::InputMonitor:
+      *out_count = 0;
+      return true;
+    case Kind::Invalid:
+      break;
+  }
+  return false;
+}
 
 namespace {
 
@@ -749,11 +774,7 @@ bool RealtimeEngine::set_bus_eq_band(uint32_t bus_id, size_t band_index,
 
 bool RealtimeEngine::set_track_channel_delay_samples(uint32_t track_id,
                                                      int delay_samples) noexcept {
-  const bool ok = track_mixer_runtime_.set_track_channel_delay_samples(track_id, delay_samples);
-  if (ok) {
-    update_reported_graph_latency();
-  }
-  return ok;
+  return track_mixer_runtime_.set_track_channel_delay_samples(track_id, delay_samples);
 }
 
 bool RealtimeEngine::set_master_eq_band(size_t band_index,

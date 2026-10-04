@@ -271,8 +271,8 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       SONARE_C_TRY
       strip->strip.set_channel_delay_samples(delay_samples);
       strip->scene_strip.channel_delay_samples = delay_samples;
-      // Channel delay changes the strip's reported latency; mark the graph dirty so
-      // latency compensation re-runs at the next compile.
+      // Channel delay changes the strip's tail (not its latency); mark the graph
+      // dirty so the next compile re-derives the mixer tail.
       if (strip->owner != nullptr) {
         strip->owner->compiled_dirty = true;
       }

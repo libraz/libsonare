@@ -243,6 +243,13 @@ class ChannelStrip : public rt::ProcessorBase {
   bool metering_enabled() const noexcept { return metering_enabled_; }
   /// Audible insert gain reduction from the last block, including when meters are disabled.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// Per-insert audible gain reduction (dB <= 0) of the last block, pre-fader then post-fader.
+  /// Copies min(@p capacity, count) entries and returns the count. Audio-thread read only.
+  size_t insert_gain_reduction_db(float* out, size_t capacity) const noexcept {
+    const size_t n = std::min(capacity, insert_gain_reduction_count_);
+    for (size_t i = 0; i < n; ++i) out[i] = insert_gain_reduction_db_[i];
+    return insert_gain_reduction_count_;
+  }
 
   // Inserts are control-thread mutators and must not run concurrently with process().
   // @p stereo_pair_only marks an inherently-stereo insert (mastering ChannelPolicy
@@ -462,6 +469,9 @@ class ChannelStrip : public rt::ProcessorBase {
   // internal metering, avoiding their long LUFS rings and TP scratch.
   bool metering_enabled_ = true;
   float last_gain_reduction_db_ = 0.0f;
+  // Audio-thread-owned per-insert reduction behind last_gain_reduction_db_.
+  std::array<float, 2 * kMaxInserts> insert_gain_reduction_db_{};
+  size_t insert_gain_reduction_count_ = 0;
   // Fixed at construction; see ChannelStripConfig::meter for why there is no
   // setter.
   MeterConfig meter_config_{/*measure_lufs=*/true, /*measure_true_peak=*/true,

@@ -3,6 +3,7 @@
 /// @file bus.h
 /// @brief Summing bus primitive for subgroup, aux and master buses.
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -76,6 +77,13 @@ class BusProcessor : public rt::ProcessorBase {
   // set_insert_sidechain() clear their processor's sidechain; others are left alone.
   void clear_insert_sidechains() noexcept;
   MeterSnapshot meter_snapshot() const noexcept { return meter_.snapshot(); }
+  /// Per-insert audible gain reduction (dB <= 0) of the last block. Copies
+  /// min(@p capacity, count) entries and returns the count. Audio-thread read only.
+  size_t insert_gain_reduction_db(float* out, size_t capacity) const noexcept {
+    const size_t n = std::min(capacity, insert_gain_reduction_count_);
+    for (size_t i = 0; i < n; ++i) out[i] = insert_gain_reduction_db_[i];
+    return insert_gain_reduction_count_;
+  }
   size_t insert_sidechain_slot_count() const noexcept { return insert_sidechains_.size(); }
   size_t insert_sidechains_capacity() const noexcept { return insert_sidechains_.capacity(); }
 
@@ -119,6 +127,8 @@ class BusProcessor : public rt::ProcessorBase {
   int max_inputs_ = 0;
   ChannelLayout layout_ = ChannelLayout::Stereo;
   std::vector<std::unique_ptr<rt::ProcessorBase>> inserts_;
+  std::array<float, kMaxInserts> insert_gain_reduction_db_{};
+  size_t insert_gain_reduction_count_ = 0;
   // Parallel to inserts_: 1 marks a StereoPairOnly insert (front-pair-only on a
   // surround bus). Reserved at construction alongside inserts_ so add_insert
   // never reallocates it while process() iterates.

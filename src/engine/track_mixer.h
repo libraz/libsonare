@@ -14,6 +14,7 @@
 
 #include "engine/clip_player.h"
 #include "engine/insert_automation_id.h"
+#include "engine/insert_gain_reduction_board.h"
 #include "mastering/eq/parametric.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
@@ -127,6 +128,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   static constexpr size_t kMaxTrackLanes = 32;
   static constexpr size_t kMaxBusLanes = 8;
   static constexpr int kMaxLaneChannels = 2;
+  /// Per-insert gain reduction published by the audio thread; empty for an unused slot.
+  const InsertGainReductionBoard& lane_insert_gain_reduction(size_t lane_index) const noexcept {
+    return lane_insert_gr_boards_[lane_index];
+  }
+  const InsertGainReductionBoard& bus_insert_gain_reduction(size_t bus_index) const noexcept {
+    return bus_insert_gr_boards_[bus_index];
+  }
   // Widest master mix or group bus the lane scatter can drive (7.1). Lane source
   // buffers stay stereo (kMaxLaneChannels); the master mix and surround group
   // buses can be wider when a lane is surround-panned into them.
@@ -345,11 +353,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Granular realtime panner/channel-delay updates for a track lane strip. The
   // strip is resolved read-only from the control-thread binding table, and the
   // pan/pan-law/pan-mode/dual-pan setters write strip atomics, so those four are
-  // glitch-free and safe to call while process() renders. Channel delay
-  // reallocates the alignment delay line (like a PDC recompute) and so adjusts
-  // strip latency — callers should treat it as a structural change (not
-  // concurrent with process()). Each returns false if the track id has no bound
-  // lane strip.
+  // glitch-free and safe to call while process() renders. Channel delay moves the
+  // lane relative to the others without changing strip latency or PDC, but it
+  // reallocates the strip's delay line, so callers should treat it as a
+  // structural change (not concurrent with process()). Each returns false if the
+  // track id has no bound lane strip.
   bool set_track_pan(uint32_t track_id, float pan) noexcept;
   bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
   bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
@@ -418,6 +426,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// first audible milliseconds. Intended for offline rendering between
   /// process() calls; not safe concurrently with the audio thread.
   void settle_smoothers() noexcept;
+  /// Adopts the published lane snapshot and refreshes every lane's mute/solo
+  /// gate target without rendering, so settle_smoothers() has the targets a
+  /// block would set while no strip, send or bus processor advances.
+  /// Offline pre-roll only; not safe concurrently with the audio thread.
+  void prime_lane_controls() noexcept;
   /// Snap only insert automation slots without changing fader/pan ramps.
   void settle_insert_automations() noexcept;
   void settle_insert_automations(const std::vector<TrackLaneConfig>& next_lanes,
@@ -841,6 +854,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // the product, after refreshing the gate target from the lane's own mute and
   // the block's solo state. Must run before mix_lane_sends()/apply_lane_to_mix().
   void advance_lane_gain(size_t lane_index, int num_samples, bool any_solo) noexcept;
+  void update_lane_gate_target(size_t lane_index, bool any_solo) noexcept;
   void mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
                       int64_t timeline_sample) noexcept;
   // Processes every configured bus at its own declared width in bus_order_
@@ -979,6 +993,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // active snapshot. Retired metadata remains in the inactive tail for a
   // remove/re-add, but its raw clip delay bank is reset before reuse.
   size_t applied_lane_count_ = 0;
+  std::array<InsertGainReductionBoard, kMaxTrackLanes> lane_insert_gr_boards_{};
+  std::array<InsertGainReductionBoard, kMaxBusLanes> bus_insert_gr_boards_{};
   int latency_samples_q8_ = 0;
 };
 

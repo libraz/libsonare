@@ -787,7 +787,7 @@ TEST_CASE("TrackMixerRuntime aligns strip latency across active lanes", "[engine
   REQUIRE(mixer.set_track_lanes({{10}, {20}}));
 
   sonare::mixing::ChannelStrip latent_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
-  latent_strip.set_channel_delay_samples(4);
+  latent_strip.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(4));
   REQUIRE(mixer.bind_track_strip(10, &latent_strip));
   REQUIRE(mixer.latency_samples_q8() == (4 << 8));
 
@@ -1996,8 +1996,8 @@ TEST_CASE("TrackMixerRuntime keeps PDC delay history across an unrelated strip e
   REQUIRE(mixer.set_track_strip(20, quieter));
   REQUIRE(mixer.pdc_storage_generation() == generation_before);
 
-  // ... and the same through the EQ-band and channel-delay setters, the other
-  // two routes into recompute_lane_pdc.
+  // ... and the same through the EQ-band setter, the other route into
+  // recompute_lane_pdc, and the channel-delay setter, which leaves PDC alone.
   REQUIRE(mixer.set_track_eq_band(10, 0, sonare::mastering::eq::EqBand{}));
   REQUIRE(mixer.set_track_channel_delay_samples(10, 0));
   REQUIRE(mixer.pdc_storage_generation() == generation_before);
@@ -2029,8 +2029,7 @@ TEST_CASE("TrackMixerRuntime keeps a failed lane snapshot atomic", "[engine][tra
   REQUIRE(old_strip.send_timing(0) == sonare::mixing::SendTiming::PostFader);
 
   sonare::mixing::ChannelStrip rejected_strip;
-  rejected_strip.set_channel_delay_samples(kMaxDelay);
-  rejected_strip.add_pre_insert(std::make_unique<FixedLatencyProcessor>(1));
+  rejected_strip.add_pre_insert(std::make_unique<FixedLatencyProcessor>(kMaxDelay + 1));
   REQUIRE(mixer.bind_track_strip(20, &rejected_strip));
 
   std::array<uint32_t, 2> old_ids{};
@@ -2578,14 +2577,16 @@ TEST_CASE("TrackMixerRuntime rejects an out-of-range channel delay in the core",
   sonare::engine::TrackMixerRuntime mixer;
   mixer.prepare(48000.0, 64);
   REQUIRE(mixer.set_track_lanes({{10}}));
-  REQUIRE(mixer.set_track_strip(10, sonare::mixing::api::Strip{}));
+  sonare::mixing::ChannelStrip strip;
+  REQUIRE(mixer.bind_track_strip(10, &strip));
 
   constexpr int kMax = sonare::mixing::kMaxAlignmentDelaySamples;
 
   // The largest usable value is applied exactly, so the bound rejects only what
-  // is genuinely out of range.
+  // is genuinely out of range. A channel delay is not latency.
   REQUIRE(mixer.set_track_channel_delay_samples(10, kMax));
-  REQUIRE(mixer.latency_samples() == kMax);
+  REQUIRE(strip.channel_delay_samples() == kMax);
+  REQUIRE(mixer.latency_samples() == 0);
 
   // Both ends of the acceptance condition.
   CHECK_FALSE(mixer.set_track_channel_delay_samples(10, -1));
@@ -2594,10 +2595,10 @@ TEST_CASE("TrackMixerRuntime rejects an out-of-range channel delay in the core",
 
   // A rejected request leaves the previously applied delay alone: the failure
   // is a rejection, not a silent substitution.
-  REQUIRE(mixer.latency_samples() == kMax);
+  REQUIRE(strip.channel_delay_samples() == kMax);
 
   REQUIRE(mixer.set_track_channel_delay_samples(10, 0));
-  REQUIRE(mixer.latency_samples() == 0);
+  REQUIRE(strip.channel_delay_samples() == 0);
 }
 
 TEST_CASE("TrackMixerRuntime re-snaps a lane's scatter gains when the master width changes",

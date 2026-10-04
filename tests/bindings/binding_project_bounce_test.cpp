@@ -1552,7 +1552,9 @@ TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "
 
   constexpr int kLatency = 16;
   const char* scene_json =
-      "{\"version\":1,\"strips\":[{\"id\":\"latency\",\"channelDelaySamples\":16}],"
+      "{\"version\":1,\"strips\":[{\"id\":\"latency\",\"inserts\":[{\"slot\":\"pre\","
+      "\"processor\":\"dynamics.limiter\","
+      "\"params\":\"{\\\"thresholdDb\\\":24,\\\"lookaheadMs\\\":0.33333333}\"}]}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
       "\"connections\":[{\"source\":\"latency\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -2393,16 +2395,18 @@ TEST_CASE("all-unbound project bounce auto-length includes the master FX tail",
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("legacy opaque fader automation stays on musical time after channel PDC",
           "[project][audio_workflow][pdc]") {
-  const auto render = [](int channel_delay_samples) {
+  // Strip latency comes from a lookahead insert: a channel delay is not compensated.
+  const auto render = [](int latency_samples) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
     const std::string scene_json =
         "{\"version\":1,\"strips\":[{\"id\":\"voice\","
-        "\"channelDelaySamples\":" +
-        std::to_string(channel_delay_samples) +
-        "}],"
+        "\"inserts\":[{\"slot\":\"pre\",\"processor\":\"dynamics.limiter\","
+        "\"params\":\"{\\\"thresholdDb\\\":24,\\\"lookaheadMs\\\":" +
+        std::to_string(latency_samples / 48.0) +
+        "}\"}]}],"
         "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
 
@@ -2477,17 +2481,18 @@ TEST_CASE("legacy opaque fader automation stays on musical time after channel PD
 
 TEST_CASE("legacy opaque automation follows the pre-fader insert clock",
           "[project][audio_workflow][pdc]") {
-  const auto render = [](int channel_delay_samples) {
+  // Strip latency comes from a lookahead insert: a channel delay is not compensated.
+  const auto render = [](int latency_samples) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
     REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
 
     const std::string scene_json =
         "{\"version\":1,\"strips\":[{\"id\":\"voice\","
-        "\"channelDelaySamples\":" +
-        std::to_string(channel_delay_samples) +
-        ","
-        "\"inserts\":[{\"slot\":\"pre\","
+        "\"inserts\":[{\"slot\":\"pre\",\"processor\":\"dynamics.limiter\","
+        "\"params\":\"{\\\"thresholdDb\\\":24,\\\"lookaheadMs\\\":" +
+        std::to_string(latency_samples / 48.0) +
+        "}\"},{\"slot\":\"pre\","
         "\"processor\":\"dynamics.brickwallLimiter\","
         "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}],"
         "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";

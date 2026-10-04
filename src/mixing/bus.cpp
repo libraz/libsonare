@@ -61,10 +61,13 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
                    bypass_alignment_delays_.data(), bypass_scratch_channels_.data(),
                    kMaxBusScratchChannels, max_block_size_);
   float gain_reduction_db = 0.0f;
-  for (const auto& insert : inserts_) {
-    if (insert != nullptr && !insert->bypassed()) {
-      gain_reduction_db = std::min(gain_reduction_db, insert->last_gain_reduction_db());
-    }
+  insert_gain_reduction_count_ = inserts_.size();
+  for (size_t i = 0; i < inserts_.size(); ++i) {
+    const auto& insert = inserts_[i];
+    const float reduction_db =
+        insert != nullptr && !insert->bypassed() ? insert->last_gain_reduction_db() : 0.0f;
+    insert_gain_reduction_db_[i] = std::min(0.0f, reduction_db);
+    gain_reduction_db = std::min(gain_reduction_db, insert_gain_reduction_db_[i]);
   }
   meter_.set_gain_reduction_db(gain_reduction_db);
   meter_.process(channels, num_channels, num_samples);

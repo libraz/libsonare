@@ -175,8 +175,9 @@ SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left
 // DualPan use their direct left/right gain mapping. Returns
 // @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
 SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
-// Sets a per-strip channel delay in samples. This changes the strip's reported
-// latency; the routing graph re-runs latency compensation at the next compile.
+// Sets a per-strip channel delay in samples, moving the strip later relative to the
+// others. It is not latency: latency compensation does not undo it and the mixer's
+// reported latency is unchanged, while the mixer tail grows by the delay.
 SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay_samples);
 // Sets the strip's live VCA gain offset in dB. VCA is a group concept with no
 // per-strip scene field, so this is not persisted to the scene JSON.

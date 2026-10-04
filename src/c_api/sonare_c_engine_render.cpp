@@ -496,6 +496,28 @@ SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* en
 #endif
 }
 
+SonareError sonare_engine_meter_target_insert_gain_reduction(SonareRealtimeEngine* engine,
+                                                             uint32_t target_id, float* out_db,
+                                                             size_t capacity, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (out_count) *out_count = 0;
+  if (!engine || !out_count || (capacity > 0 && !out_db)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  if (!engine->engine.read_meter_target_insert_gain_reduction(target_id, out_db, capacity,
+                                                              out_count)) {
+    *out_count = 0;
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+#else
+  (void)target_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
 SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine,
                                                     int interval_frames, unsigned int band_count,
                                                     unsigned int* out_band_count) {

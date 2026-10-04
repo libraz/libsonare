@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "engine/clip_player.h"
@@ -267,12 +268,12 @@ TEST_CASE("RealtimeEngine reports track and master strip latency", "[engine][rea
   REQUIRE(engine.set_track_lanes({{10}, {20}}));
 
   sonare::mixing::ChannelStrip track_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
-  track_strip.set_channel_delay_samples(4);
+  track_strip.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(4));
   REQUIRE(engine.bind_track_strip(10, &track_strip));
   REQUIRE(engine.graph_latency_samples_q8() == (4 << 8));
 
   sonare::mixing::ChannelStrip master_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
-  master_strip.set_channel_delay_samples(3);
+  master_strip.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(3));
   REQUIRE(engine.bind_mixing_strip(&master_strip));
   engine.set_mixing_enabled(true);
   REQUIRE(engine.graph_latency_samples_q8() == (7 << 8));
@@ -2755,6 +2756,184 @@ TEST_CASE("RealtimeEngine processes owned track strip specs before lane mix",
 
   REQUIRE(left.back() > 1.20f);
   REQUIRE(left.back() < 1.40f);
+}
+
+TEST_CASE("RealtimeEngine live channel delay edit renders like a fresh build of the same delay",
+          "[engine][realtime][pdc]") {
+  constexpr int kBlock = 128;
+  constexpr int kBlocks = 40;
+  constexpr int kFrames = kBlock * kBlocks;
+  constexpr int kEditBlock = 4;
+  constexpr int kImpulseFrame = 2048;
+  constexpr int kDelay = 100;
+  // Track 10 carries a latent insert (8-sample lookahead) and a reverb tail, track 20 is plain.
+  constexpr uint32_t kLatentTrack = 10;
+  constexpr uint32_t kPlainTrack = 20;
+
+  const auto strip_for = [](uint32_t track_id, int delay) {
+    sonare::mixing::api::Strip spec;
+    spec.channel_delay_samples = delay;
+    if (track_id == kLatentTrack) {
+      spec.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
+                              R"({"thresholdDb":24,"lookaheadMs":0.16666667,"releaseMs":50})"});
+      spec.inserts.push_back(
+          {sonare::mixing::api::InsertSlot::PostFader, "effects.reverb.plate", R"({"mix":0.5})"});
+    }
+    return spec;
+  };
+
+  // Renders the stereo master with only the lanes in @p sounding carrying the impulse.
+  const auto render = [&](uint32_t edited, bool live, bool sound_latent, bool sound_plain) {
+    std::vector<float> latent_src(kFrames, 0.0f);
+    std::vector<float> plain_src(kFrames, 0.0f);
+    if (sound_latent) latent_src[kImpulseFrame] = 1.0f;
+    if (sound_plain) plain_src[kImpulseFrame] = 0.5f;
+    const float* latent_channels[] = {latent_src.data(), latent_src.data()};
+    const float* plain_channels[] = {plain_src.data(), plain_src.data()};
+
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, kBlock);
+    sonare::engine::ClipSchedule latent_clip{
+        1, {latent_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+    latent_clip.track_id = kLatentTrack;
+    sonare::engine::ClipSchedule plain_clip{
+        2, {plain_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+    plain_clip.track_id = kPlainTrack;
+    engine.set_clips({latent_clip, plain_clip});
+    REQUIRE(engine.set_track_lanes({{kLatentTrack}, {kPlainTrack}}));
+    for (const uint32_t track : {kLatentTrack, kPlainTrack}) {
+      const int delay = (!live && track == edited) ? kDelay : 0;
+      REQUIRE(engine.set_track_strip(track, strip_for(track, delay)));
+    }
+
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+
+    std::vector<float> out_l(kFrames, 0.0f);
+    std::vector<float> out_r(kFrames, 0.0f);
+    for (int block = 0; block < kBlocks; ++block) {
+      if (live && block == kEditBlock) {
+        REQUIRE(engine.set_track_channel_delay_samples(edited, kDelay));
+      }
+      float* io[] = {out_l.data() + block * kBlock, out_r.data() + block * kBlock};
+      engine.process(io, 2, kBlock);
+    }
+    return std::make_pair(out_l, out_r);
+  };
+
+  for (const uint32_t edited : {kLatentTrack, kPlainTrack}) {
+    for (const auto& [sound_latent, sound_plain] :
+         {std::pair{true, true}, std::pair{true, false}, std::pair{false, true}}) {
+      INFO("edited track " << edited << ", latent lane sounding " << sound_latent
+                           << ", plain lane sounding " << sound_plain);
+      const auto fresh = render(edited, false, sound_latent, sound_plain);
+      const auto live = render(edited, true, sound_latent, sound_plain);
+      float peak = 0.0f;
+      for (const float v : fresh.first) peak = std::max(peak, std::abs(v));
+      REQUIRE(peak > 0.1f);
+      const float tolerance = 1.0e-5f * std::max(1.0f, peak);
+      for (int i = kEditBlock * kBlock; i < kFrames; ++i) {
+        INFO("frame " << i);
+        const auto index = static_cast<size_t>(i);
+        REQUIRE(std::abs(live.first[index] - fresh.first[index]) <= tolerance);
+        REQUIRE(std::abs(live.second[index] - fresh.second[index]) <= tolerance);
+      }
+    }
+  }
+}
+
+TEST_CASE("RealtimeEngine channel delay moves its own lane relative to the others",
+          "[engine][realtime][pdc]") {
+  constexpr int kBlock = 128;
+  constexpr int kBlocks = 32;
+  constexpr int kFrames = kBlock * kBlocks;
+  constexpr int kEditBlock = 4;
+  constexpr int kImpulseFrame = 2048;
+  constexpr int kDelay = 100;
+  // 0.16666667 ms of lookahead is exactly 8 samples at 48 kHz.
+  constexpr int kInsertLatency = 8;
+  constexpr uint32_t kLatentTrack = 10;
+  constexpr uint32_t kPlainTrack = 20;
+  enum class Path { kSpec, kSetterBeforeRender, kLive };
+
+  struct Result {
+    int onset = -1;
+    int latency_q8 = -1;
+  };
+  // Onset of the master output with only @p sounding carrying an impulse.
+  const auto render = [&](uint32_t edited, int delay, Path path, uint32_t sounding) {
+    std::vector<float> latent_src(kFrames, 0.0f);
+    std::vector<float> plain_src(kFrames, 0.0f);
+    (sounding == kLatentTrack ? latent_src : plain_src)[kImpulseFrame] = 1.0f;
+    const float* latent_channels[] = {latent_src.data(), latent_src.data()};
+    const float* plain_channels[] = {plain_src.data(), plain_src.data()};
+
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, kBlock);
+    REQUIRE(engine.set_track_lanes({{kLatentTrack}, {kPlainTrack}}));
+    for (const uint32_t track : {kLatentTrack, kPlainTrack}) {
+      sonare::mixing::api::Strip spec;
+      if (path == Path::kSpec && track == edited) spec.channel_delay_samples = delay;
+      if (track == kLatentTrack) {
+        spec.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
+                                R"({"thresholdDb":24,"lookaheadMs":0.16666667,"releaseMs":50})"});
+      }
+      REQUIRE(engine.set_track_strip(track, spec));
+    }
+    sonare::engine::ClipSchedule latent_clip{
+        1, {latent_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+    latent_clip.track_id = kLatentTrack;
+    sonare::engine::ClipSchedule plain_clip{
+        2, {plain_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+    plain_clip.track_id = kPlainTrack;
+    engine.set_clips({latent_clip, plain_clip});
+    if (path == Path::kSetterBeforeRender) {
+      REQUIRE(engine.set_track_channel_delay_samples(edited, delay));
+    }
+
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+
+    std::vector<float> out_l(kFrames, 0.0f);
+    std::vector<float> out_r(kFrames, 0.0f);
+    for (int block = 0; block < kBlocks; ++block) {
+      if (path == Path::kLive && block == kEditBlock) {
+        REQUIRE(engine.set_track_channel_delay_samples(edited, delay));
+      }
+      float* io[] = {out_l.data() + block * kBlock, out_r.data() + block * kBlock};
+      engine.process(io, 2, kBlock);
+    }
+    Result result;
+    result.latency_q8 = engine.graph_latency_samples_q8();
+    for (int i = 0; i < kFrames; ++i) {
+      if (std::abs(out_l[static_cast<size_t>(i)]) > 0.5f) {
+        result.onset = i;
+        break;
+      }
+    }
+    return result;
+  };
+
+  const int baseline = kImpulseFrame + kInsertLatency;
+  for (const uint32_t edited : {kLatentTrack, kPlainTrack}) {
+    const uint32_t other = edited == kLatentTrack ? kPlainTrack : kLatentTrack;
+    for (const Path path : {Path::kSpec, Path::kSetterBeforeRender, Path::kLive}) {
+      INFO("edited track " << edited << ", path " << static_cast<int>(path));
+      const Result undelayed = render(edited, 0, path, edited);
+      REQUIRE(undelayed.onset == baseline);
+      const Result moved = render(edited, kDelay, path, edited);
+      const Result unmoved = render(edited, kDelay, path, other);
+      CHECK(moved.onset == baseline + kDelay);
+      CHECK(unmoved.onset == baseline);
+      // A channel delay is an alignment choice, not processing latency.
+      CHECK(moved.latency_q8 == undelayed.latency_q8);
+      CHECK(moved.latency_q8 == kInsertLatency << 8);
+    }
+  }
 }
 
 TEST_CASE("RealtimeEngine processes owned master strip specs after lane mix",

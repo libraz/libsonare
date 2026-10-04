@@ -197,6 +197,91 @@ TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api]
 
   sonare_engine_destroy(freeze_engine);
 }
+
+namespace {
+
+// Builds a one-lane engine playing @p clip_channels through a tape insert at
+// @p bias. The caller destroys it.
+SonareRealtimeEngine* make_tape_bias_engine(const float* const* clip_channels, float bias) {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kPreRollBlock, 64, 16) == SONARE_OK);
+
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = kPreRollFrames;
+  clip.length_samples = kPreRollFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  const std::string strip_json =
+      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",)"
+      R"("processor":"saturation.tape","params":"{\"bias\":)" +
+      std::to_string(bias) + R"(}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json.c_str()) == SONARE_OK);
+  return engine;
+}
+
+}  // namespace
+
+TEST_CASE("an engine bounce matches a raw offline render through a biased tape insert",
+          "[c_api][engine][bounce]") {
+  // A biased tape core relaxes toward a DC operating point even on silence, so
+  // any audio the bounce pre-roll runs through the strip shifts its state.
+  std::array<float, kPreRollFrames> clip_l{};
+  std::array<float, kPreRollFrames> clip_r{};
+  for (int i = 0; i < kPreRollFrames; ++i) {
+    clip_l[static_cast<size_t>(i)] =
+        0.5f * std::sin(sonare::constants::kTwoPi * 220.0f * i / 48000.0f);
+    clip_r[static_cast<size_t>(i)] = clip_l[static_cast<size_t>(i)];
+  }
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = kPreRollFrames;
+  options.block_size = kPreRollBlock;
+  options.num_channels = 2;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+  options.normalize_lufs = 0;
+  options.dither = 0;
+
+  for (const float bias : {0.0f, 0.5f}) {
+    CAPTURE(bias);
+    SonareRealtimeEngine* render_engine = make_tape_bias_engine(clip_channels, bias);
+    std::array<float, kPreRollFrames> left{};
+    std::array<float, kPreRollFrames> right{};
+    float* channels[] = {left.data(), right.data()};
+    REQUIRE(sonare_engine_render_offline(render_engine, channels, 2, kPreRollFrames,
+                                         kPreRollBlock) == SONARE_OK);
+    sonare_engine_destroy(render_engine);
+
+    SonareRealtimeEngine* bounce_engine = make_tape_bias_engine(clip_channels, bias);
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(bounce_engine, &options, &result) == SONARE_OK);
+    REQUIRE(result.frames == kPreRollFrames);
+
+    float peak = 0.0f;
+    float max_diff = 0.0f;
+    for (int frame = 0; frame < kPreRollFrames; ++frame) {
+      const auto f = static_cast<size_t>(frame);
+      peak = std::max({peak, std::abs(left[f]), std::abs(right[f])});
+      max_diff = std::max(max_diff, std::abs(result.interleaved[f * 2] - left[f]));
+      max_diff = std::max(max_diff, std::abs(result.interleaved[f * 2 + 1] - right[f]));
+    }
+    REQUIRE(peak > 0.1f);
+    CHECK(max_diff <= peak * 1e-6f);
+    sonare_free_bounce_result(&result);
+    sonare_engine_destroy(bounce_engine);
+  }
+}
 #endif  // SONARE_WITH_MIXING
 
 TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_api][engine]") {

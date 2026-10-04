@@ -345,33 +345,29 @@ void RealtimeEngine::adopt_tempo_map_snapshot() noexcept {
 }
 
 void RealtimeEngine::prime_offline_parameters(int num_channels, int block_size) {
-  // An unprepared engine has no scratch to render into and nothing to settle;
-  // the offline entry points reject it separately.
+  // An unprepared engine has nothing to settle; the offline entry points reject
+  // it separately.
   if (max_block_size_ <= 0 || num_channels <= 0) return;
-  const int channels = std::min(num_channels, prepared_channels_);
   const int frames = std::max(1, std::min(block_size, max_block_size_));
 
-  // Apply the queued commands first. They set the smoother targets this call
-  // exists to snap, and draining them here rather than inside the throwaway
-  // block below is what lets the transport be held stopped for the whole block:
-  // a queued kTransportPlay drained mid-block would start the playhead rolling
-  // and the discarded audio would consume the first frames of the render.
+  // Apply the queued commands first; they set the smoother targets this call
+  // exists to snap.
   flush_control_commands();
 
   const bool was_playing = transport_.playing();
   transport_.stop();
-  {
-    // Lane fader/pan/gate smoothers only advance while the lanes render, so one
-    // process() pass is what applies automation at the start position and gives
-    // settle_parameters() the targets to snap to. The transport is stopped, so
-    // clips and sequenced MIDI contribute nothing and the playhead stays put.
-    std::vector<std::vector<float>> scratch(static_cast<size_t>(channels),
-                                            std::vector<float>(static_cast<size_t>(frames), 0.0f));
-    std::vector<float*> pointers;
-    pointers.reserve(scratch.size());
-    for (auto& channel : scratch) pointers.push_back(channel.data());
-    process(pointers.data(), channels, frames);
-  }
+  // Resolve what one block would set -- published snapshots, automation at the
+  // start position, lane gate targets -- without rendering: any processor
+  // advanced here would make the bounce diverge from a plain render_offline().
+  adopt_tempo_map_snapshot();
+#if defined(SONARE_WITH_GRAPH)
+  graph_runtime_.acquire();
+#endif
+  automation_.acquire_lanes();
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.prime_lane_controls();
+#endif
+  automation_.apply(transport_.snapshot(), 0, frames);
   settle_parameters();
   if (was_playing) transport_.play();
 }

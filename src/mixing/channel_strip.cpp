@@ -65,13 +65,17 @@ int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inse
 // current, but its gain reduction is not applied to the audible bypass path.
 // Exclude that hidden reading from the strip snapshot, as the mute path also
 // forces inaudible reduction to 0 dB.
-float aggregate_gain_reduction_db(
-    const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
-  float reduction_db = 0.0f;
-  for (const auto& insert : inserts) {
-    if (insert->bypassed()) continue;
-    reduction_db = std::min(reduction_db, insert->last_gain_reduction_db());
+void fold_insert_gain_reduction_db(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
+                                   float* out) noexcept {
+  for (size_t i = 0; i < inserts.size(); ++i) {
+    if (inserts[i]->bypassed()) continue;
+    out[i] = std::min(out[i], inserts[i]->last_gain_reduction_db());
   }
+}
+
+float deepest_gain_reduction_db(const float* values, size_t count) noexcept {
+  float reduction_db = 0.0f;
+  for (size_t i = 0; i < count; ++i) reduction_db = std::min(reduction_db, values[i]);
   return reduction_db;
 }
 
@@ -309,8 +313,8 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // segment, so sampling it once after the loop would report the final
   // segment's GR rather than the block maximum. Accumulate the per-segment max
   // so the segmented path agrees with the unsegmented path's block-level value.
-  float pre_gain_reduction_db = 0.0f;
-  float post_gain_reduction_db = 0.0f;
+  insert_gain_reduction_count_ = pre_inserts_.size() + post_inserts_.size();
+  std::fill_n(insert_gain_reduction_db_.begin(), insert_gain_reduction_count_, 0.0f);
   while (cursor < num_samples) {
     while (fader_index < fader_count && fader_events[fader_index].offset == cursor) {
       apply_automation_event(fader_events[fader_index++].event);
@@ -334,10 +338,9 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     if (segment_samples > 0) {
       process_segment(channels, num_channels, cursor, segment_samples, cursor);
       if (!muted) {
-        pre_gain_reduction_db =
-            std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(pre_inserts_));
-        post_gain_reduction_db =
-            std::min(post_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+        fold_insert_gain_reduction_db(pre_inserts_, insert_gain_reduction_db_.data());
+        fold_insert_gain_reduction_db(post_inserts_,
+                                      insert_gain_reduction_db_.data() + pre_inserts_.size());
       }
       cursor += segment_samples;
     } else {
@@ -345,10 +348,6 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
       ++cursor;
     }
   }
-
-  // post GR is clamped to be no less aggressive than pre GR for snapshot
-  // consistency, matching the unsegmented path.
-  post_gain_reduction_db = std::min(pre_gain_reduction_db, post_gain_reduction_db);
 
   if (muted) {
     // Keep the inserts' state advance but publish exact silence.
@@ -359,9 +358,16 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     }
     zero_taps(pre_tap_, num_channels, 0, clamped_samples);
     zero_taps(post_tap_, num_channels, 0, clamped_samples);
-    pre_gain_reduction_db = 0.0f;
-    post_gain_reduction_db = 0.0f;
   }
+
+  // post GR is clamped to be no less aggressive than pre GR for snapshot
+  // consistency, matching the unsegmented path.
+  const float pre_gain_reduction_db =
+      deepest_gain_reduction_db(insert_gain_reduction_db_.data(), pre_inserts_.size());
+  const float post_gain_reduction_db =
+      std::min(pre_gain_reduction_db,
+               deepest_gain_reduction_db(insert_gain_reduction_db_.data() + pre_inserts_.size(),
+                                         post_inserts_.size()));
 
   // Meter every plane the strip just processed, not just the front pair. The
   // unsegmented path already drives the pre meter from the full-width buffer;
@@ -442,7 +448,11 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
       }
     }
   }
-  const float pre_gain_reduction_db = muted ? 0.0f : aggregate_gain_reduction_db(pre_inserts_);
+  insert_gain_reduction_count_ = pre_inserts_.size() + post_inserts_.size();
+  std::fill_n(insert_gain_reduction_db_.begin(), insert_gain_reduction_count_, 0.0f);
+  if (!muted) fold_insert_gain_reduction_db(pre_inserts_, insert_gain_reduction_db_.data());
+  const float pre_gain_reduction_db =
+      deepest_gain_reduction_db(insert_gain_reduction_db_.data(), pre_inserts_.size());
 
   // Pre-fader tap (after trim, polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux.
   copy_to_taps(channels, pre_tap_, num_channels, clamped_samples);
@@ -471,8 +481,14 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
       }
     }
   }
+  if (!muted) {
+    fold_insert_gain_reduction_db(post_inserts_,
+                                  insert_gain_reduction_db_.data() + pre_inserts_.size());
+  }
   const float post_gain_reduction_db =
-      muted ? 0.0f : std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
+      std::min(pre_gain_reduction_db,
+               deepest_gain_reduction_db(insert_gain_reduction_db_.data() + pre_inserts_.size(),
+                                         post_inserts_.size()));
   last_gain_reduction_db_ = post_gain_reduction_db;
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
@@ -695,12 +711,16 @@ int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8()
 int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }
 
 int ChannelStrip::tail_samples() const noexcept {
-  return combine_tail_samples(processor_chain_tail_samples(pre_inserts_),
-                              processor_chain_tail_samples(post_inserts_), TailTopology::kSerial);
+  // The channel delay is not latency, so the audio it holds back is owed as tail.
+  const int insert_tail =
+      combine_tail_samples(processor_chain_tail_samples(pre_inserts_),
+                           processor_chain_tail_samples(post_inserts_), TailTopology::kSerial);
+  return combine_tail_samples(alignment_delay_.delay_samples(), insert_tail, TailTopology::kSerial);
 }
 
 int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {
-  return alignment_delay_.latency_samples_q8() + total_latency_q8(pre_inserts_);
+  // The channel delay moves this strip relative to the others; PDC must not undo it.
+  return total_latency_q8(pre_inserts_);
 }
 
 int ChannelStrip::post_fader_latency_samples_q8() const noexcept {

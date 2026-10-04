@@ -565,12 +565,13 @@ SonareError sonare_engine_set_bus_strip_pan_mode(SonareRealtimeEngine* engine, u
 ///   position is not finite.
 SonareError sonare_engine_set_bus_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
                                                  float left_pan, float right_pan);
-/// @brief Realtime change of a track lane strip's inter-channel alignment delay.
-/// @details @p delay_samples is a non-negative whole-sample delay. This adjusts
-///   strip latency, so PDC and the reported graph latency are refreshed; treat it
-///   as a structural change (do not call concurrently with
-///   @ref sonare_engine_process). Returns SONARE_ERROR_INVALID_PARAMETER if the
-///   track has no bound lane strip or @p delay_samples is negative.
+/// @brief Realtime change of a track lane strip's alignment delay.
+/// @details @p delay_samples is a non-negative whole-sample delay that moves this
+///   lane later relative to every other lane. It is not latency: PDC does not
+///   compensate it and the reported graph latency is unchanged. Treat it as a
+///   structural change (do not call concurrently with @ref sonare_engine_process).
+///   Returns SONARE_ERROR_INVALID_PARAMETER if the track has no bound lane strip or
+///   @p delay_samples is negative.
 SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEngine* engine,
                                                                 uint32_t track_id,
                                                                 int delay_samples);
@@ -816,6 +817,27 @@ SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
 SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
                                                         size_t max_records, size_t* out_count);
+/* Upper bound on the inserts one meter target's strip carries: a track or master
+   strip's pre-fader plus post-fader inserts. A bus strip carries at most half. */
+#define SONARE_METER_MAX_INSERTS 128u
+/// @brief Reads the gain reduction of each insert on one meter target's strip.
+/// @details @p target_id uses the meter record encoding (see
+///   SONARE_TELEMETRY_TARGET_MASTER). Entries follow the combined insert index the
+///   insert setters use -- pre-fader inserts first, then post-fader -- and hold
+///   the reduction in dB (<= 0) from the most recently rendered block, taken as
+///   the deepest value across that block's automation segments. A bypassed insert,
+///   an insert without dynamics and a muted strip read 0. The meter record's
+///   gain_reduction_db for the same block is the minimum of these entries. Reads
+///   values the audio thread publishes; safe while sonare_engine_process runs.
+/// @param out_db Receives min(@p capacity, *@p out_count) entries; may be NULL
+///   when @p capacity is 0.
+/// @param out_count Receives the insert count of the strip as of the most recently
+///   rendered block; 0 before the first block, for the input-monitor target and
+///   for an unused lane/bus slot.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a target id outside the encoded range.
+SonareError sonare_engine_meter_target_insert_gain_reduction(SonareRealtimeEngine* engine,
+                                                             uint32_t target_id, float* out_db,
+                                                             size_t capacity, size_t* out_count);
 /// @brief Enables/configures per-target spectrum + vectorscope telemetry.
 /// @param interval_frames Minimum render-frame gap between published snapshots
 ///   (0 disables capture). @param band_count Requested FFT band resolution

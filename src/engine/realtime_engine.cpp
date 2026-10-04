@@ -394,6 +394,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   std::array<float, mixing::kMaxMeterChannels> master_input_peak_db =
       mixing::detail::meter_floor_array();
   float master_gain_reduction_db = 0.0f;
+  bool master_gr_published = false;
 #endif
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {
@@ -761,8 +762,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                                  transport_.sample_position());
       if (const auto* strip = mixing_runtime_.strip()) {
         master_gain_reduction_db = strip->last_gain_reduction_db();
+        master_insert_gr_board_.publish(*strip);
+        master_gr_published = true;
       }
     }
+    if (!master_gr_published) master_insert_gr_board_.clear();
     // Legacy raw-strip solo/mute + PFL/AFL remains an independent producer of
     // the same monitor bus. Lane-owned monitor modes were accumulated above;
     // neither path is registered in the other, so each source is summed once.

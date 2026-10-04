@@ -197,7 +197,7 @@ bool TrackMixerRuntime::plan_pdc(
     plan->lane_q8[lane_index] = max_strip_q8 - (strip != nullptr ? strip->latency_samples_q8() : 0);
     // Pre-fader send stage: the same target offset, measured from the earlier
     // tap. A strip's pre-fader latency is what it has accrued by the time the
-    // pre tap is taken (channel delay + pre inserts), so this bank carries the
+    // pre tap is taken (its pre inserts), so this bank carries the
     // rest of the widest strip latency -- including the strip's own
     // post-insert chain, which the lane's output passes through and the pre
     // tap does not.

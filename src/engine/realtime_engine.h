@@ -367,6 +367,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   int64_t clip_page_prefetch_frames() const noexcept { return clip_player_.page_prefetch_frames(); }
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
+  /// Reads the per-insert gain reduction (dB <= 0) of the meter target @p target_id
+  /// (meter record encoding) from the last rendered block. Copies min(@p capacity,
+  /// count) entries and sets @p out_count to the full count. Returns false only for a
+  /// target id outside the encoded range. Safe while process() runs on another thread.
+  bool read_meter_target_insert_gain_reduction(uint32_t target_id, float* out, size_t capacity,
+                                               size_t* out_count) const noexcept;
   /// Enqueues an audio-thread-safe reset of the master meter's integrated
   /// loudness history. @p render_frame follows command sample-time semantics:
   /// -1 applies at the next block head; a non-negative value applies at that
@@ -765,9 +771,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Granular realtime panner/channel-delay updates for a track lane strip.
   // Control-thread only. pan/pan-law/pan-mode/dual-pan are glitch-free atomic
   // writes resolved read-only on the control thread, so they are safe during
-  // playback; channel delay adjusts strip latency and refreshes PDC + reported
-  // graph latency (structural -- not concurrent with process()). Each returns
-  // false if the track has no bound lane strip.
+  // playback; channel delay moves the lane relative to the others without
+  // changing PDC or the reported graph latency (structural -- not concurrent with
+  // process()). Each returns false if the track has no bound lane strip.
   bool set_track_pan(uint32_t track_id, float pan) noexcept;
   bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
   bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
@@ -805,7 +811,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// Snaps every in-flight parameter ramp to its target: engine-level smoothed
   /// parameters are pushed at their final value and retired, and the track
   /// mixer's lane fader/pan/gate and bus gain smoothers jump to their targets.
-  /// Offline renders call this after a priming process() block (which drains
+  /// Offline renders call this from @ref prime_offline_parameters (which drains
   /// queued commands and applies automation at the seek position) so the first
   /// audible block renders at the settled values instead of ramping in from
   /// defaults. Not safe concurrently with a running audio thread.
@@ -817,17 +823,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// event or overfills the pending bank.
   void apply_commands_due_now_preserving_future() noexcept;
   /// Runs the offline pre-roll a one-shot render needs before its first audible
-  /// block: applies every queued command, renders one throwaway block so lane
-  /// automation resolves at the start position, then calls
-  /// @ref settle_parameters. The transport is held stopped across the throwaway
-  /// block and restored afterwards, so the playhead does not move and no clip or
-  /// sequenced MIDI renders into the discarded audio.
+  /// block: applies every queued command, adopts the published lane, graph,
+  /// automation and tempo snapshots, resolves automation and lane gates at the
+  /// start position, then calls @ref settle_parameters. Nothing is rendered, so
+  /// no processor state advances and the render that follows matches a plain
+  /// @ref render_offline from the same state. The transport is held stopped and
+  /// restored afterwards, so the playhead does not move.
   ///
   /// Every offline entry point that renders a whole span in one call (the
   /// engine's bounce and freeze) runs this; @ref render_offline does not, because
   /// a chunked render would re-prime on every chunk. A host driving
   /// @ref render_offline itself calls this once before its first chunk.
-  /// Control-thread only, and it allocates the throwaway block.
+  /// Control-thread only.
   void prime_offline_parameters(int num_channels, int block_size);
   /// Applies commands queued on an offline/control-only engine immediately.
   /// @warning Not safe concurrently with @ref process. This exists for hosts
@@ -1359,6 +1366,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   Metronome metronome_{};
 #if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};
+  InsertGainReductionBoard master_insert_gr_board_{};
   ScopeTelemetryTap scope_tap_{};
   std::atomic<int> scope_interval_frames_{0};
   uint32_t scope_band_count_ = 48;

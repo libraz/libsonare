@@ -304,6 +304,9 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
   if (lane.strip) {
     deliver_lane_sidechains(lane_index, num_channels, num_samples);
     lane.strip->process_at(lane_channel_ptrs_.data(), num_channels, num_samples, timeline_sample);
+    lane_insert_gr_boards_[lane_index].publish(*lane.strip);
+  } else {
+    lane_insert_gr_boards_[lane_index].clear();
   }
   lane_pdc_delays_[lane_index].process(lane_channel_ptrs_.data(), num_channels, num_samples);
   // PFL is deliberately taken after the lane strip (and its PDC) but before
@@ -332,11 +335,27 @@ void TrackMixerRuntime::add_lane_monitor_pfl(size_t lane_index, int num_channels
 void TrackMixerRuntime::advance_lane_gain(size_t lane_index, int num_samples,
                                           bool any_solo) noexcept {
   LaneState& lane = lane_states_[lane_index];
-  const bool audible = !lane.mute && (!any_solo || lane.solo);
-  lane.gate.set_target(audible ? 1.0f : 0.0f);
+  update_lane_gate_target(lane_index, any_solo);
   float* gain = lane_gain(lane_index);
   for (int i = 0; i < num_samples; ++i) {
     gain[i] = lane.fader_gain.process() * lane.gate.process();
+  }
+}
+
+void TrackMixerRuntime::update_lane_gate_target(size_t lane_index, bool any_solo) noexcept {
+  LaneState& lane = lane_states_[lane_index];
+  const bool audible = !lane.mute && (!any_solo || lane.solo);
+  lane.gate.set_target(audible ? 1.0f : 0.0f);
+}
+
+void TrackMixerRuntime::prime_lane_controls() noexcept {
+  acquire_lanes();
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes || lanes->empty() || scratch_.empty()) return;
+  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
+  const bool any_solo = any_lane_solo(*lanes);
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    update_lane_gate_target(lane_index, any_solo);
   }
 }
 
@@ -494,6 +513,7 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
       bus.eq.process(lane_channel_ptrs_.data(), bus_channels, num_samples);
     }
     bus.bus->process(lane_channel_ptrs_.data(), bus_channels, num_samples);
+    bus_insert_gr_boards_[bus_index].publish(bus.bus->bus());
     // Output pan (post-insert, pre-width), stereo buses only. Skipped at rest:
     // the centred panner is not an exact identity under every law.
     if (bus_channels == 2 && !bus.panner.at_rest_identity()) {

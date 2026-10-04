@@ -2,9 +2,11 @@
 /// @brief Engine C ABI bus routing (bus output, bus sends), bus/master
 ///        sidechain keys, and MIDI clip gain/fade conversion.
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <initializer_list>
+#include <string>
 #include <vector>
 
 #include "sonare_c_engine_test_helpers.h"
@@ -85,6 +87,58 @@ float direct_level() {
   sonare_engine_destroy(engine);
   REQUIRE(level > 0.5f);
   return level;
+}
+
+// Comp (pre, index 0), EQ (pre, index 1), limiter (post, index 2): two dynamics
+// stages that reduce by different amounts around a non-dynamics insert.
+constexpr const char* kThreeInsertInserts =
+    R"({"slot":"pre","processor":"dynamics.compressor","params":{"thresholdDb":-6,"ratio":2,"attackMs":0.1,"releaseMs":100,"kneeDb":0}},)"
+    R"({"slot":"pre","processor":"eq.parametric","params":{}},)"
+    R"({"slot":"post","processor":"dynamics.limiter","params":{"thresholdDb":-20,"lookaheadMs":0,"releaseMs":50}})";
+
+std::string three_insert_track_json(bool muted = false) {
+  return std::string(R"({"version":1,"strips":[{"id":"track-10","muted":)") +
+         (muted ? "true" : "false") + R"(,"inserts":[)" + kThreeInsertInserts +
+         R"(]}],"buses":[],"connections":[]})";
+}
+
+struct InsertGainReduction {
+  std::vector<float> entries;
+  size_t count = 0;
+  float record_db = 0.0f;
+};
+
+// Renders DC blocks and reads one target's per-insert reduction beside the
+// meter record of the same (last) block.
+InsertGainReduction render_and_read_insert_gr(SonareRealtimeEngine* engine, uint32_t target_id,
+                                              int blocks = 30) {
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kRoutingBlock> block{};
+  float* io[] = {block.data()};
+  InsertGainReduction result;
+  for (int b = 0; b < blocks; ++b) {
+    block.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+    std::array<SonareMeterTelemetryRecordV2, 16> records{};
+    size_t written = 0;
+    REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
+                                                   &written) == SONARE_OK);
+    for (size_t i = 0; i < written; ++i) {
+      if (records[i].target_id == target_id) result.record_db = records[i].gain_reduction_db;
+    }
+  }
+  result.entries.assign(SONARE_METER_MAX_INSERTS, 1.0f);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, target_id, result.entries.data(),
+                                                           result.entries.size(),
+                                                           &result.count) == SONARE_OK);
+  result.entries.resize(result.count);
+  return result;
+}
+
+float deepest(const std::vector<float>& values) {
+  float deepest_db = 0.0f;
+  for (float v : values) deepest_db = std::min(deepest_db, v);
+  return deepest_db;
 }
 #endif
 
@@ -534,6 +588,170 @@ TEST_CASE("C engine wide meter carries pre-trim input and compressor reduction",
   REQUIRE(master.input_peak_db[0] == Catch::Approx(0.0f).margin(0.001f));
   REQUIRE(master.gain_reduction_db < -10.0f);
   REQUIRE(master.peak_db[0] < master.input_peak_db[0] - 10.0f);
+  sonare_engine_destroy(engine);
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("per-insert gain reduction reports each dynamics stage of a lane",
+          "[c_api][engine][meter][insert_gr]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, three_insert_track_json().c_str()) ==
+          SONARE_OK);
+
+  // Before the first block the strip has published nothing.
+  size_t count = 99;
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 1, nullptr, 0, &count) ==
+          SONARE_OK);
+  REQUIRE(count == 0);
+
+  const InsertGainReduction gr = render_and_read_insert_gr(engine, 1);
+  REQUIRE(gr.count == 3);
+  REQUIRE(gr.entries[0] < -1.0f);
+  REQUIRE(gr.entries[0] > -6.0f);
+  REQUIRE(gr.entries[1] == 0.0f);
+  REQUIRE(gr.entries[2] < -10.0f);
+  REQUIRE(gr.entries[2] < gr.entries[0] - 5.0f);
+  REQUIRE(gr.record_db == Catch::Approx(deepest(gr.entries)).margin(0.01f));
+
+  // Capacity below the count truncates but still reports the full count.
+  std::array<float, 2> two{};
+  size_t full = 0;
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 1, two.data(), two.size(),
+                                                           &full) == SONARE_OK);
+  REQUIRE(full == 3);
+  REQUIRE(two[0] == gr.entries[0]);
+  REQUIRE(two[1] == 0.0f);
+
+  // Capacity 0 with a NULL buffer is a count query.
+  full = 0;
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 1, nullptr, 0, &full) ==
+          SONARE_OK);
+  REQUIRE(full == 3);
+
+  // A bypassed insert reads 0 and drops out of the record.
+  REQUIRE(sonare_engine_set_track_strip_insert_bypassed(engine, 10, 2, 1, 0) == SONARE_OK);
+  const InsertGainReduction bypassed = render_and_read_insert_gr(engine, 1);
+  REQUIRE(bypassed.count == 3);
+  REQUIRE(bypassed.entries[2] == 0.0f);
+  REQUIRE(bypassed.entries[0] < -1.0f);
+  REQUIRE(bypassed.record_db == Catch::Approx(deepest(bypassed.entries)).margin(0.01f));
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("per-insert gain reduction reads 0 on a muted strip",
+          "[c_api][engine][meter][insert_gr]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, three_insert_track_json(true).c_str()) ==
+          SONARE_OK);
+  const InsertGainReduction gr = render_and_read_insert_gr(engine, 1);
+  REQUIRE(gr.count == 3);
+  for (float v : gr.entries) REQUIRE(v == 0.0f);
+  REQUIRE(gr.record_db == 0.0f);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("per-insert gain reduction covers the master and a bus",
+          "[c_api][engine][meter][insert_gr]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  const SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  const SonareEngineTrackLane lane[] = {{10, send, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_bus_strip_json(
+          engine, 1,
+          R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"connections":[]})") ==
+      SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_master_strip_json(
+          engine,
+          R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}},{"slot":"post","processor":"dynamics.compressor","params":{"thresholdDb":-30,"ratio":10,"attackMs":0.1,"releaseMs":100}}]}],"buses":[]})") ==
+      SONARE_OK);
+
+  const uint32_t kBusTarget = 33;
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kRoutingBlock> block{};
+  float* io[] = {block.data()};
+  float master_record = 0.0f;
+  float bus_record = 0.0f;
+  for (int b = 0; b < 30; ++b) {
+    block.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+    std::array<SonareMeterTelemetryRecordV2, 16> records{};
+    size_t written = 0;
+    REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
+                                                   &written) == SONARE_OK);
+    for (size_t i = 0; i < written; ++i) {
+      if (records[i].target_id == 0) master_record = records[i].gain_reduction_db;
+      if (records[i].target_id == kBusTarget) bus_record = records[i].gain_reduction_db;
+    }
+  }
+
+  std::array<float, 8> entries{};
+  size_t count = 0;
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, SONARE_TELEMETRY_TARGET_MASTER,
+                                                           entries.data(), entries.size(),
+                                                           &count) == SONARE_OK);
+  REQUIRE(count == 2);
+  REQUIRE(entries[0] == 0.0f);
+  REQUIRE(entries[1] < -10.0f);
+  REQUIRE(master_record == Catch::Approx(entries[1]).margin(0.01f));
+
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, kBusTarget, entries.data(),
+                                                           entries.size(), &count) == SONARE_OK);
+  REQUIRE(count == 1);
+  REQUIRE(entries[0] < -10.0f);
+  REQUIRE(bus_record == Catch::Approx(entries[0]).margin(0.01f));
+
+  // Unused bus slot and lane slot read empty.
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 34, entries.data(),
+                                                           entries.size(), &count) == SONARE_OK);
+  REQUIRE(count == 0);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 2, entries.data(),
+                                                           entries.size(), &count) == SONARE_OK);
+  REQUIRE(count == 0);
+
+  // Removing the buses clears the board.
+  REQUIRE(sonare_engine_set_track_lanes(engine, nullptr, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_buses(engine, nullptr, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, kBusTarget, entries.data(),
+                                                           entries.size(), &count) == SONARE_OK);
+  REQUIRE(count == 0);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("per-insert gain reduction validates its arguments",
+          "[c_api][engine][meter][insert_gr]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  std::array<float, 4> entries{};
+  size_t count = 99;
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(nullptr, 0, entries.data(),
+                                                           entries.size(), &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 0, entries.data(),
+                                                           entries.size(), nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 0, nullptr, 1, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, 0, nullptr, 0, &count) ==
+          SONARE_OK);
+  REQUIRE(count == 0);
+  REQUIRE(sonare_engine_meter_target_insert_gain_reduction(
+              engine, SONARE_TELEMETRY_TARGET_INPUT_MONITOR, entries.data(), entries.size(),
+              &count) == SONARE_OK);
+  REQUIRE(count == 0);
+  for (uint32_t bad : {41u, 100u, 0xFFFEu, 0x10000u}) {
+    count = 99;
+    REQUIRE(sonare_engine_meter_target_insert_gain_reduction(engine, bad, entries.data(),
+                                                             entries.size(), &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
   sonare_engine_destroy(engine);
 }
 #endif

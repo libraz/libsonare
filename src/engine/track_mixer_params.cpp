@@ -515,18 +515,12 @@ bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
   if (delay_samples < 0 || delay_samples > mixing::kMaxAlignmentDelaySamples) return false;
   mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
   if (!strip) return false;
+  // The channel delay moves this lane relative to the others and is not strip
+  // latency, so PDC and the reported latency are left alone.
   try {
     strip->set_channel_delay_samples(delay_samples);
   } catch (...) {
     return false;
-  }
-  // Channel delay contributes to strip latency, so refresh PDC alignment. Use
-  // the control-side snapshot: this is a control-thread structural change (not
-  // concurrent with process()), and lanes_.current() belongs to the audio
-  // thread. recompute_lane_pdc is noexcept and reports an allocation failure as
-  // false, so this setter's own noexcept bool contract holds on every exit path.
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    if (!recompute_lane_pdc(*lanes)) return false;
   }
   return true;
 }

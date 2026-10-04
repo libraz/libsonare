@@ -45,16 +45,8 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
   // Match render_timeline's offline pre-roll: publish lane state and snap its
   // smoothers before the first audible MIDI block, so the source stems do not
   // fade in relative to the live engine / external scene mixer.
-  {
-    size_t block_count = 0;
-    if (!checked_frame_count(block_size, &block_count)) return false;
-    std::vector<float> prime_l(block_count, 0.0f);
-    std::vector<float> prime_r(block_count, 0.0f);
-    float* prime[] = {prime_l.data(), prime_r.data()};
-    engine.process(prime, 2, block_size);
-    engine.settle_parameters();
-    sink->settle_typed_automation();
-  }
+  engine.prime_offline_parameters(2, block_size);
+  sink->settle_typed_automation();
   engine.set_instrument_source_render_sink(sink);
   std::vector<std::vector<float>> discard(2, std::vector<float>(render_frame_count, 0.0f));
   float* channels[] = {discard[0].data(), discard[1].data()};

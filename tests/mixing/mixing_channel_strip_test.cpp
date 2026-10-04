@@ -658,7 +658,9 @@ TEST_CASE("ChannelStrip applies polarity delay width and dual meter taps", "[mix
   REQUIRE(strip.polarity_invert_left());
   REQUIRE_FALSE(strip.polarity_invert_right());
   REQUIRE(strip.channel_delay_samples() == 1);
-  REQUIRE(strip.latency_samples() == 1);
+  // The channel delay is an alignment offset, not latency; its held-back sample is tail.
+  REQUIRE(strip.latency_samples() == 0);
+  REQUIRE(strip.tail_samples() == 1);
 
   // After polarity and one-sample delay, the first nonzero stereo frame is (-1, 10).
   // Width 0 collapses the post-fader signal to mono, so both channels become 4.5.
@@ -1044,15 +1046,17 @@ TEST_CASE("ChannelStrip input trim starts the fixed strip order", "[mixing]") {
   REQUIRE(strip.meter_snapshot(sonare::mixing::TapPoint::PostFader).seq == 1);
 }
 
-TEST_CASE("ChannelStrip aggregates Q8 latency across delay and inserts", "[mixing]") {
+TEST_CASE("ChannelStrip aggregates Q8 latency across inserts but not the channel delay",
+          "[mixing]") {
   sonare::mixing::ChannelStrip strip;
 
   strip.set_channel_delay_samples(2);
   strip.add_pre_insert(std::make_unique<TestQ8LatencyProcessor>(3 << 8));
   strip.add_post_insert(std::make_unique<TestQ8LatencyProcessor>((5 << 8) + 128));
 
-  REQUIRE(strip.latency_samples_q8() == ((10 << 8) + 128));
-  REQUIRE(strip.latency_samples() == 10);
+  REQUIRE(strip.latency_samples_q8() == ((8 << 8) + 128));
+  REQUIRE(strip.latency_samples() == 8);
+  REQUIRE(strip.pre_fader_latency_samples_q8() == (3 << 8));
 }
 
 TEST_CASE("ChannelStrip pre-fader meter width is independent of automation",

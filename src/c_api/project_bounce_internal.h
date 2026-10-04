@@ -217,24 +217,10 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
   }
 
   // Prime the parameter smoothers before the audible render so a non-default
-  // static fader/pan does not fade in over the first ~5 ms block. Lane fader/pan
-  // smoothers only advance while lanes render, so one process() pass with the
-  // transport stopped applies automation at the start position and drains queued
-  // commands (setting the smoother targets), then settle_parameters() snaps the
-  // smoothers to those targets. Without this the bounce's first block ramps in
-  // from 0 dB / centre, which live playback never does and which breaks bit-exact
-  // determinism. The primed block renders into a throwaway buffer.
-  {
-    size_t block_count = 0;
-    if (!checked_frame_count(block_size, &block_count)) return false;
-    std::vector<std::vector<float>> prime(static_cast<size_t>(num_channels),
-                                          std::vector<float>(block_count, 0.0f));
-    std::vector<float*> prime_ptrs;
-    prime_ptrs.reserve(prime.size());
-    for (auto& channel : prime) prime_ptrs.push_back(channel.data());
-    engine.process(prime_ptrs.data(), num_channels, block_size);
-    engine.settle_parameters();
-  }
+  // static fader/pan does not fade in over the first ~5 ms block, which live
+  // playback never does. The pre-roll renders nothing, so the bounce matches a
+  // plain render_offline() from the same state.
+  engine.prime_offline_parameters(num_channels, block_size);
 
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;

@@ -173,12 +173,13 @@ TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][cap
   REQUIRE(strip != nullptr);
   REQUIRE(sonare_strip_set_channel_delay_samples(strip, 10) == SONARE_OK);
 
+  // A channel delay is not latency, but its delayed output is still owed as tail.
   int latency = -1;
   REQUIRE(sonare_mixer_latency_samples(mixer, &latency) == SONARE_OK);
-  REQUIRE(latency == 10);
+  REQUIRE(latency == 0);
   int tail = -1;
   REQUIRE(sonare_mixer_tail_samples(mixer, &tail) == SONARE_OK);
-  REQUIRE(tail >= 0);
+  REQUIRE(tail >= 10);
   REQUIRE(sonare_mixer_latency_samples(nullptr, &latency) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_mixer_tail_samples(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
@@ -200,6 +201,72 @@ TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][cap
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API mixer channel delay moves its own strip relative to the others",
+          "[mixing][capi][pdc]") {
+  constexpr int kBlock = 256;
+  constexpr int kBlocks = 4;
+  constexpr int kImpulse = 10;
+  constexpr int kDelay = 100;
+  // 0.16666667 ms of lookahead is exactly 8 samples at 48 kHz.
+  constexpr int kInsertLatency = 8;
+
+  struct Result {
+    int onset = -1;
+    int latency = -1;
+  };
+  // Strip "a" is plain, strip "b" carries a latent insert; only @p sounding gets the impulse.
+  const auto render = [&](int delay, bool via_setter, size_t sounding) {
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Strip a;
+    a.id = "a";
+    if (!via_setter) a.channel_delay_samples = delay;
+    sonare::mixing::api::Strip b;
+    b.id = "b";
+    b.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
+                         R"({"thresholdDb":24,"lookaheadMs":0.16666667,"releaseMs":50})"});
+    scene.strips = {a, b};
+    const std::string json = sonare::mixing::api::scene_to_json(scene);
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), 48000, kBlock);
+    REQUIRE(mixer != nullptr);
+    if (via_setter) {
+      SonareStrip* strip = sonare_mixer_strip_by_id(mixer, "a");
+      REQUIRE(strip != nullptr);
+      REQUIRE(sonare_strip_set_channel_delay_samples(strip, delay) == SONARE_OK);
+    }
+
+    std::array<std::vector<float>, 2> inputs{std::vector<float>(kBlock, 0.0f),
+                                             std::vector<float>(kBlock, 0.0f)};
+    const float* inputs_l[] = {inputs[0].data(), inputs[1].data()};
+    const float* inputs_r[] = {inputs[0].data(), inputs[1].data()};
+    std::vector<float> out_l(kBlock, 0.0f);
+    std::vector<float> out_r(kBlock, 0.0f);
+    Result result;
+    for (int block = 0; block < kBlocks; ++block) {
+      inputs[sounding][kImpulse] = block == 0 ? 1.0f : 0.0f;
+      REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 2, out_l.data(), out_r.data(),
+                                          kBlock) == SONARE_OK);
+      for (int i = 0; i < kBlock && result.onset < 0; ++i) {
+        if (std::abs(out_l[static_cast<size_t>(i)]) > 0.25f) result.onset = block * kBlock + i;
+      }
+    }
+    REQUIRE(sonare_mixer_latency_samples(mixer, &result.latency) == SONARE_OK);
+    sonare_mixer_destroy(mixer);
+    return result;
+  };
+
+  const int baseline = kImpulse + kInsertLatency;
+  for (const bool via_setter : {false, true}) {
+    INFO("via setter " << via_setter);
+    REQUIRE(render(0, via_setter, 0).onset == baseline);
+    REQUIRE(render(0, via_setter, 1).onset == baseline);
+    const Result moved = render(kDelay, via_setter, 0);
+    const Result unmoved = render(kDelay, via_setter, 1);
+    CHECK(moved.onset == baseline + kDelay);
+    CHECK(unmoved.onset == baseline);
+    CHECK(moved.latency == kInsertLatency);
+  }
 }
 
 // Routes through effects.delay.stereo at every stage, so this case

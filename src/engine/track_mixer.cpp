@@ -618,6 +618,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     if (!kept[index]) retire_bus_state(bus_states_[index]);
   }
   bus_configs_ = std::move(buses);
+  for (InsertGainReductionBoard& board : bus_insert_gr_boards_) board.clear();
   // Retire selectors for buses that disappeared. Keeping the mapping entry as
   // an inactive tombstone makes an old queued id a no-op; if the same numeric
   // id is later reused, it receives a fresh selector instead of reviving the
@@ -838,8 +839,8 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   // strip's parameters instead of rebuilding it. A rebuild constructs a fresh
   // strip whose fader/pan/trim smoothers settle straight to the new value, so a
   // live gain/pan edit would jump (an audible click); an in-place update keeps
-  // the smoother state so the change ramps. PDC is recomputed in case the channel
-  // delay changed; the strip pointer is unchanged so the lane binding stays valid.
+  // the smoother state so the change ramps. PDC is recomputed in case the EQ
+  // latency changed; the strip pointer is unchanged so the lane binding stays valid.
   for (OwnedStrip& owned : owned_strips_) {
     if (owned.track_id == track_id && owned.strip &&
         strip_inserts_equal(owned.spec.inserts, spec.inserts)) {
@@ -1611,6 +1612,8 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
   }
   applied_lane_snapshot_ = &lanes;
   applied_lane_count_ = lanes.size();
+  // Slot identities were restaged, so no published reading still belongs to its slot.
+  for (InsertGainReductionBoard& board : lane_insert_gr_boards_) board.clear();
 }
 
 void TrackMixerRuntime::remap_lane_insert_automations(
