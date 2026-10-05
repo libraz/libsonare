@@ -18,7 +18,9 @@
 
 import { $, el, state, roleClass, roleOf, sourceLabel, oracleSources } from './state.js';
 import { t, phrase, tree, currentLang } from './i18n.js';
-import { comparedAgainst, conditions } from './player.js';
+import {
+  activeKey, comparedAgainst, conditions, evaluation, evidenceClaim,
+} from './player.js';
 
 const fb = {
   node: null,      // the question on screen, or null once an answer is final
@@ -195,9 +197,16 @@ function say(msg, bad) {
 
 /// One way to reach the log, so a note, a blind result and an undo report the
 /// same way and none of them can be sent twice by an impatient second click.
+/// True once the server has written it.
+///
+/// A 409 means the set was re-rendered after this page read it: nothing was
+/// written, the composer keeps its text and the page offers to re-read the set.
+/// A reply arriving after another set was opened is not this set's log, so it
+/// commits nothing to the panel.
 async function post(payload, done, after) {
-  if (fb.busy) return;
+  if (fb.busy) return false;
   fb.busy = true;
+  const setEpoch = state.setEpoch;
   say(t('fb.sending'));
   try {
     const res = await fetch('feedback', {
@@ -205,15 +214,25 @@ async function post(payload, done, after) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    if (res.status === 409) {
+      const why = await res.json().catch(() => ({}));
+      if (setEpoch !== state.setEpoch) return false;
+      say(t('fb.stale', { reason: why.reason || '409' }), true);
+      $('fbReload').hidden = false;
+      return false;
+    }
     if (!res.ok) throw new Error(String(res.status));
     const got = await res.json();
+    if (setEpoch !== state.setEpoch) return true;
     fb.entries = got.entries || [];
     fb.path = got.path || fb.path;
     if (after) after();
     renderRecent();
     say(t(done));
+    return true;
   } catch (err) {
-    say(t('fb.failed', { msg: err.message }), true);
+    if (setEpoch === state.setEpoch) say(t('fb.failed', { msg: err.message }), true);
+    return false;
   } finally {
     fb.busy = false;
   }
@@ -222,7 +241,10 @@ async function post(payload, done, after) {
 async function send() {
   const text = $('fbComment').value.trim();
   if (!fb.trail.length && !text) { say(t('fb.needSomething'), true); return; }
+  const attached = $('fbAttach').checked && Boolean(state.take);
+  const judged = evaluation({ attached });
   await post({
+    schema_version: 2,
     lang: currentLang(),
     grade: grade(),
     tag: finalTag(),
@@ -234,6 +256,9 @@ async function send() {
     conditions: $('fbAttach').checked
       ? conditions()
       : { set: state.setId, compared_against: comparedAgainst() },
+    evaluation: judged,
+    // A memo about the voice names no recording, and carries no evidence.
+    evidence: attached ? evidenceClaim(judged.judged_source) : null,
   }, 'fb.sent', () => {
     $('fbComment').value = '';
     resetComposer();
@@ -253,14 +278,28 @@ async function send() {
  * take the ear could not split is a result about the voice — the two versions
  * are that close — and counting it as a pick for whichever one was sounding is
  * how a tally comes to claim a discrimination nobody made. */
-export async function recordBlind(summary, picks, unseparated) {
-  await post({
+/* `blind_answers` are each answer as it was given — take, draw, comparison,
+ * generation, time — so the run carries no playhead or take from the moment it
+ * happened to be sent. */
+export async function recordBlind(summary, picks, unseparated, blindAnswers) {
+  const judged = evaluation({ attached: false });
+  return post({
+    schema_version: 2,
     lang: currentLang(),
     grade: '',
     tag: 'blind',
     answers: [],
     text: summary,
-    conditions: { ...conditions(), picks, unseparated: unseparated || [] },
+    conditions: {
+      set: state.setId,
+      comparison_id: judged.comparison_id,
+      blind: true,
+      picks,
+      unseparated: unseparated || [],
+    },
+    evaluation: judged,
+    evidence: evidenceClaim(null),
+    blind_answers: blindAnswers || [],
   }, 'fb.sent');
 }
 
@@ -279,13 +318,19 @@ export async function recordBlind(summary, picks, unseparated) {
  */
 export async function recordPreference() {
   const text = $('fbComment').value.trim();
+  if (!state.take) return;
+  const sounding = activeKey();
   await post({
+    schema_version: 2,
     lang: currentLang(),
     grade: '',
     tag: 'prefer',
     answers: [],
     text,
     conditions: conditions(),
+    // A preference is about the version sounding, whichever side it is on.
+    evaluation: { ...evaluation(), judged_source: sounding },
+    evidence: evidenceClaim(sounding),
   }, 'fb.sent', () => { $('fbComment').value = ''; });
 }
 
@@ -375,17 +420,23 @@ function renderRecent() {
 
 /// Reload the log for whichever set is open, and start the questions over.
 export async function loadFeedback() {
+  const setEpoch = state.setEpoch;
   fb.entries = [];
   fb.path = '';
+  $('fbReload').hidden = true;
+  let got = null;
   try {
-    const got = await (await fetch(
+    got = await (await fetch(
       `feedback.json?set=${encodeURIComponent(state.setId || '')}`)).json();
-    fb.entries = got.entries || [];
-    fb.path = got.path || '';
   } catch {
     // The page is usable against a directory of renders served by anything at
     // all; a server with no feedback endpoint leaves the composer up and fails
     // on send, which is where the message belongs.
+  }
+  if (setEpoch !== state.setEpoch) return;
+  if (got) {
+    fb.entries = got.entries || [];
+    fb.path = got.path || '';
   }
   resetComposer();
   renderRecent();
@@ -415,4 +466,10 @@ export function wireFeedback() {
     if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') { ev.preventDefault(); send(); }
   });
   $('cmpOverride').addEventListener('change', onOverrideChange);
+  // `listen.js` re-reads the set; the composer is left as it is.
+  $('fbReload').addEventListener('click', () => {
+    $('fbReload').hidden = true;
+    say('');
+    document.dispatchEvent(new CustomEvent('audition:reload-set'));
+  });
 }

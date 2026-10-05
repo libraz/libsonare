@@ -62,6 +62,18 @@ Notes land in `<scratch root>/feedback/<set>.jsonl`, one JSON line per note, app
 
 `grade` is the verdict and `tag` is the finest point the narrowing reached; they are separate because `tone/dark` is the same string whether the voice is shippable or unrecognisable. The strings in `answers` are what the listener actually saw, in the language they saw it in, so a tag can be checked against the question it came from.
 
+**A note is `schema_version: 2` and names the recording it is about.** `evaluation` is the comparison it was taken in and what it judged; `evidence` is the recording's identity, read from the served manifest rather than from the page:
+
+```json
+{"schema_version": 2,
+ "evaluation": {"comparison_id": "gm_gs_product", "scope": "product", "judged_source": "model",
+                "oracle_source": "gm027", "comparison_status": "matched", "blind": false},
+ "evidence": {"set_generation": "9f2c…", "take": "riff", "request_id": "…", "asset_id": "…",
+              "build_id": "…", "path_digest": "…", "completeness": "complete", "rig_evidence": "inferred"}}
+```
+
+The page posts only which generation, take and source it was listening to. The server checks that claim against the set's current `manifest.json` and fills every identity from it; `scope` and `comparison_status` are the manifest's too. A claim the manifest no longer holds — the set was rendered again, or the take or version is gone — is answered `409` with `{"error": "stale", "reason": …}` and nothing is written; the page keeps the typed text and offers to re-read the set. `completeness` is `complete`, `incomplete` or `unrecorded` (no path record: an older page, or a render made without a tuning build). `path_digest` and `rig_evidence` appear only where there is one. A note sent with `attach what is sounding right now` off names no recording and is stored with `evidence: null`. A body without `schema_version` is stored as before.
+
 The scratch root is untracked, which is the same reasoning as the renders themselves: a note is taken against renders that cannot be redistributed, and a note whose subject no longer exists is worse than no note.
 
 ## Reading the notes back
@@ -84,9 +96,11 @@ A page built without a tuning build names no patch, so its notes cannot be dated
 Every set, take and version has an address, and the page rewrites it as it is navigated:
 
 ```
-http://127.0.0.1:8730/#piano-body/single-c4/E_strike
-http://127.0.0.1:8730/?set=piano-body&take=single-c4&v=E_strike
+http://127.0.0.1:8730/#piano-body/single-c4/E_strike?c=gm_gs_product
+http://127.0.0.1:8730/?set=piano-body&take=single-c4&v=E_strike&c=gm_gs_product
 ```
+
+`c` is the selected comparison, written on a page that defines comparisons, so a link opens on the same one.
 
 Either form opens on exactly that render, and an address arriving at a page already open on the bank switches it to the listening surface — it names a render and is therefore a request to listen to it. The fragment is what the page writes back. `serve.py` prints the per-set form for each set it finds. `copy what I hear` puts the whole set of conditions, and a link that reproduces them, on the clipboard.
 
@@ -132,6 +146,7 @@ Name none and they are discovered under the scratch root the rest of the harness
 
 - **All versions overlaid** on the waveform, each in its role's colour, the active one solid and the rest dimmed, so a level or envelope difference is visible before it is audible.
 - **A log-frequency spectrogram** of the active version, which is where an inharmonicity or a decay-rate difference shows itself as a shape rather than as a number. Its ramp is built from the sounding version's own role colour.
+- **The path the sounding render took**, under the banner: the voice, the rig stages, the GS insertion unit with its type and realisation (a switched-off stage reads `bypassed`), and where the sends are taken. A pre-rig send is drawn as a branch off the voice. It is read from the version's `evidence.path` at the playhead — the first interval while stopped — and says when the path changes during the take. Where nothing was recorded it says why; the raw record is the tooltip. Blind mode shows only the comparison and whether it is matched.
 - **Levels as captured.** Versions of a take are expected to be written at one shared gain so their level difference survives; `match the loudness of the versions` equalises them when that difference is in the way, and says how much gain it applied.
 
 Everything that is set once and then left alone is behind `options`. What stays on the listening surface is what is being listened to, and what is being said about it.
@@ -180,7 +195,7 @@ The digits count in the order the versions are shown, which is by role, not the 
 
 **A blind run is one question, so it is run on the path that ships.** A candidate rendered again with the rig cleared is the same candidate, and a tally taken across both paths counts a vote for a setting as a vote for a path. Those renders stay on the page and are not in the draw.
 
-Picks live in this browser's local storage, keyed by the set; re-rendering a set keeps them. `record this result` writes the tally, the per-take answers and the takes that could not be separated into the same log as every other note — a run is a result, not an impression, and it used to leave the page only through a download nobody remembered to make.
+Picks live in this browser's local storage, keyed by the set, its `set_generation` and the comparison. Picks held under another generation, or under a key written before generations or comparisons, are counted under *earlier generation* and never enter the current tally. Each answer records its take, the versions in the draw, `picked` or abstained, the comparison, the generation and when it was given, and the run is sent as `blind_answers` exactly as recorded, without the conditions in force when it is sent. `record this result` writes the tally, the per-take answers and the takes that could not be separated into the same log as every other note — a run is a result, not an impression, and it used to leave the page only through a download nobody remembered to make.
 
 ## The manifest
 
@@ -230,7 +245,7 @@ Any format the browser decodes will play. 16-bit PCM WAV is the safe choice — 
 `serve.py` and `heard.py` stay at the top, beside their tests; the page is `web/`. `web/index.html` loads one stylesheet per region from `web/css/` — `base.css` holds the tokens and shared controls, then `header.css`, `listen.css`, `console.css`, `feedback.css` and `bank.css` — and one ES module per job from `web/js/`:
 
 - `app.js` wires the two views, the keys and the frame loop.
-- `listen.js` loads a set and moves between its takes; `versions.js` is the version switch and the banner naming what is sounding; `blind.js` is blind mode; `address.js` is the URL, the breadcrumbs and the copied block; `palette.js` is the voice picker; `subject.js` is the line saying which slot the page is about.
+- `listen.js` loads a set and moves between its takes; `versions.js` is the version switch and the banner naming what is sounding; `blind.js` is blind mode; `address.js` is the URL, the breadcrumbs and the copied block; `path.js` is the signal-path line; `palette.js` is the voice picker; `subject.js` is the line saying which slot the page is about.
 - `player.js` is the transport, `scope.js` draws the two pictures, `bank.js` is the bank, `feedback.js` is the panel that takes a note, `i18n.js` holds every string in both languages and the question tree, `take-text.js` translates take labels, and `state.js` is what they all read.
 
 The server serves `web/js/*.js` and `web/css/*.css` by pattern and nothing else from the tree, so a new file under either needs no change to it; a new directory does.

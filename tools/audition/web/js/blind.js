@@ -5,7 +5,8 @@
 'use strict';
 
 import {
-  $, state, scopeOf, picksKey, sourceLabel, selectedComparison, comparisonKeys,
+  $, state, scopeOf, picksKey, earlierPicksKeys, sourceLabel, selectedComparison, comparisonKeys,
+  setGeneration,
 } from './state.js';
 import { t } from './i18n.js';
 import { recordBlind } from './feedback.js';
@@ -96,10 +97,25 @@ export function reshuffleBlind() {
  * it: "not sure" is an answer. Two explicit acts now, and neither of them is
  * moving between versions.
  */
+/* What an answer was given against, fixed when it is given: the take, the
+ * versions in the draw, the comparison and the generation. Sending the run
+ * later carries these as they were, never the conditions in force by then. */
+function answered(id) {
+  const c = selectedComparison();
+  return {
+    take: id,
+    candidates: state.blindOrder.map((i) => state.take.keys[i]),
+    comparison_id: c ? c.id : null,
+    set_generation: setGeneration(),
+    answered_at: new Date().toISOString(),
+  };
+}
+
 export function chooseBlind() {
   if (!state.blind || !state.take) return;
   const id = state.items[state.itemIndex].id;
   state.picks[id] = {
+    ...answered(id),
     slot: state.versionIndex,
     key: state.take.keys[state.blindOrder[state.versionIndex]],
     revealed: false,
@@ -113,8 +129,20 @@ export function abstainBlind() {
   // Recorded rather than left absent, because "could not tell them apart" and
   // "has not been listened to" are different results and the tally is read as
   // though every take in it was decided.
-  state.picks[id] = { unseparated: true, revealed: false };
+  state.picks[id] = { ...answered(id), unseparated: true, revealed: false };
   writePicks();
+}
+
+/// Takes answered under an earlier generation or key: shown, never tallied.
+function earlierCount() {
+  let n = 0;
+  for (const key of earlierPicksKeys()) {
+    try {
+      n += Object.values(JSON.parse(localStorage.getItem(key) || '{}'))
+        .filter((p) => p && (p.key || p.unseparated)).length;
+    } catch { /* a malformed old entry counts for nothing */ }
+  }
+  return n;
 }
 
 function writePicks() {
@@ -170,10 +198,12 @@ export function renderScore() {
   unsure.setAttribute('aria-pressed', String(Boolean(here && here.unseparated)));
   const { n, parts } = blindTally();
   btn.hidden = n === 0;
-  if (!n) { $('blindScore').textContent = t('blind.pickEach'); return; }
-  $('blindScore').textContent = blindRevealed
+  const old = earlierCount();
+  const earlier = old ? `   ${t('blind.earlier', { n: old })}` : '';
+  if (!n) { $('blindScore').textContent = t('blind.pickEach') + earlier; return; }
+  $('blindScore').textContent = (blindRevealed
     ? `${t('blind.preferred')}: ${parts.join('   ')}`
-    : t('blind.decided', { n });
+    : t('blind.decided', { n })) + earlier;
 }
 
 /// A blind run is a result, so it goes into the same log as everything else
@@ -181,7 +211,19 @@ export function renderScore() {
 export async function recordBlindResult() {
   const { picks, unsure, n, parts } = blindTally();
   if (!n) return;
-  await recordBlind(t('blind.result', { n, tally: parts.join(', ') }), picks, unsure);
+  const answers = Object.entries(state.picks).filter(([, p]) => p && (p.key || p.unseparated))
+    .map(([id, p]) => ({
+      take: p.take ?? id,
+      candidates: p.candidates ?? null,
+      picked: p.key || null,
+      abstained: Boolean(p.unseparated),
+      comparison_id: p.comparison_id ?? null,
+      set_generation: p.set_generation ?? null,
+      answered_at: p.answered_at ?? null,
+    }));
+  const sent = await recordBlind(t('blind.result', { n, tally: parts.join(', ') }), picks, unsure,
+    answers);
+  if (!sent) return;
   blindRevealed = true;
   renderScore();
 }

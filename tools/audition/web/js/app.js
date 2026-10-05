@@ -33,6 +33,7 @@ import {
 import { renderSubject } from './subject.js';
 import { bankKey, loadBank, refreshBank, renderBank, wireBank } from './bank.js';
 import { refreshFeedback, wireFeedback } from './feedback.js';
+import { renderPath } from './path.js';
 
 function fail(msg) {
   // Held, because the bank view clears the title otherwise: the one failure a
@@ -301,6 +302,8 @@ function wire() {
       drawWave();
       drawSpec();
     }
+    // Follows the playhead, so a take whose path changes shows the one heard.
+    renderPath();
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);

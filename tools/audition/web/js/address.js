@@ -1,6 +1,6 @@
 /* The address of what is sounding.
  *
- * The fragment is `#<set>/<take>/<version>` and it is rewritten on every move,
+ * The fragment is `#<set>/<take>/<version>?c=<comparison>` and it is rewritten on every move,
  * so the page can be pointed at one exact render and the address bar always
  * names the one being heard. The breadcrumbs and the copied block are the same
  * address, read back to whoever is listening.
@@ -8,7 +8,7 @@
 
 'use strict';
 
-import { $, el, state } from './state.js';
+import { $, el, state, comparisons, selectedComparison } from './state.js';
 import { t } from './i18n.js';
 import { activeKey, conditions, hitAt, playhead } from './player.js';
 
@@ -20,17 +20,21 @@ export function readRoute() {
   // sixty times a second.
   const at = Number.parseFloat(q.get('t'));
   const tt = Number.isFinite(at) ? at : null;
-  const frag = location.hash.replace(/^#\/?/, '');
+  const [frag, fragQuery] = location.hash.replace(/^#\/?/, '').split('?');
   if (frag) {
     const [set, take, ver] = frag.split('/');
     return {
       set: decodeURIComponent(set || ''),
       take: decodeURIComponent(take || ''),
       ver: decodeURIComponent(ver || ''),
+      cmp: new URLSearchParams(fragQuery || '').get('c') || '',
       t: tt,
     };
   }
-  return { set: q.get('set') || '', take: q.get('take') || '', ver: q.get('v') || '', t: tt };
+  return {
+    set: q.get('set') || '', take: q.get('take') || '', ver: q.get('v') || '',
+    cmp: q.get('c') || '', t: tt,
+  };
 }
 
 export function routeHash() {
@@ -40,7 +44,10 @@ export function routeHash() {
   // Left out in blind mode along with the path and the label: an address bar is
   // visible, and hiding the name is the whole point of that mode.
   if (item && state.take && !state.blind) parts.push(activeKey());
-  return '#' + parts.filter(Boolean).map(encodeURIComponent).join('/');
+  // The comparison decides which versions are on the switch, so a link names it.
+  const c = comparisons().length ? selectedComparison() : null;
+  return '#' + parts.filter(Boolean).map(encodeURIComponent).join('/')
+    + (c ? `?c=${encodeURIComponent(c.id)}` : '');
 }
 
 /// Rewritten rather than pushed: every arrow key is a move, and a hundred of

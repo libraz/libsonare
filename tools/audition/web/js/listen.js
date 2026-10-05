@@ -18,7 +18,9 @@ import {
 import { loadFeedback } from './feedback.js';
 import { writeRoute } from './address.js';
 import { buildSetPicker, paletteOpen, renderPickLabel } from './palette.js';
-import { buildVersionButtons, renderCaptions, selectVersionByKey } from './versions.js';
+import {
+  buildVersionButtons, renderCaptions, selectComparison, selectVersionByKey,
+} from './versions.js';
 import { applyBlindGate, renderScore, reshuffleBlind } from './blind.js';
 import { renderHeadStage, renderSubject } from './subject.js';
 
@@ -27,7 +29,9 @@ import { renderHeadStage, renderSubject } from './subject.js';
 /* Counts every selection of a set or a take. A load that finishes after a later
  * selection began belongs to a choice nobody is looking at, so it commits
  * nothing: otherwise the slower of two quick switches wins and plays under the
- * other one's name. */
+ * other one's name. The committed take is stamped with it, which is what the
+ * pictures key their caches on; `state.setEpoch` is the per-set half that the
+ * feedback replies check. */
 let selectEpoch = 0;
 
 /* Sending is off from the moment a selection starts until its own load lands,
@@ -44,6 +48,15 @@ document.addEventListener('keydown', (ev) => {
   }
 }, true);
 
+/* A note refused because the set was re-rendered asks for this: the same set,
+ * take, version and comparison, re-read. The composer's text is left alone. */
+document.addEventListener('audition:reload-set', () => {
+  const item = state.items[state.itemIndex];
+  loadSet(state.setId, {
+    set: state.setId, take: item ? item.id : '', ver: state.wantKey, cmp: state.comparisonId,
+  });
+});
+
 /* ----------------------------------------------------------------- route */
 
 export async function applyRoute(r) {
@@ -53,8 +66,9 @@ export async function applyRoute(r) {
   }
   if (r.ver) state.wantKey = r.ver;
   const i = r.take ? state.items.findIndex((it) => it.id === r.take) : -1;
-  if (i >= 0 && i !== state.itemIndex) { await selectTake(i); return; }
-  if (r.ver) selectVersionByKey(r.ver);
+  if (i >= 0 && i !== state.itemIndex) await selectTake(i);
+  else if (r.ver) selectVersionByKey(r.ver);
+  if (r.cmp) selectComparison(r.cmp);
 }
 
 /* ------------------------------------------------------------------- set */
@@ -63,10 +77,14 @@ export async function loadSet(id, want) {
   const entry = state.sets.find((s) => s.id === id) || state.sets[0];
   if (!entry) return;
   const epoch = ++selectEpoch;
+  state.setEpoch += 1;
   setSending(false);
   stopSources();
   state.playing = false;
   markPlay(false);
+  // Nothing of the previous set may be acted on while this one loads.
+  state.take = null;
+  $('versions').replaceChildren();
   state.setId = entry.id;
   state.base = `s/${entry.id}/`;
   localStorage.setItem(SET_KEY, entry.id);
@@ -91,6 +109,11 @@ export async function loadSet(id, want) {
   $('title').textContent = m.title || '';
   $('notes').textContent = m.notes || '';
   $('sharedNote').textContent = m.sources_note || '';
+  // Before the picks, which are keyed by the comparison a link names.
+  const wanted = want || {};
+  if (wanted.cmp && (m.comparisons || []).some((c) => c && c.id === wanted.cmp)) {
+    state.comparisonId = wanted.cmp;
+  }
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
   // A note taken before the feedback log existed is still somebody's listening
   // note, so it is offered back once rather than silently dropped.
@@ -99,7 +122,6 @@ export async function loadSet(id, want) {
   renderHeadStage();
   renderSubject();
 
-  const wanted = want || {};
   if (wanted.ver) state.wantKey = wanted.ver;
   const i = wanted.take ? state.items.findIndex((it) => it.id === wanted.take) : -1;
   state.itemIndex = i >= 0 ? i : 0;
@@ -209,6 +231,7 @@ export async function selectTake(i) {
     return;
   }
   if (epoch !== selectEpoch) return;
+  take.epoch = epoch;
   state.take = take;
   setSending(true);
   cap.className = '';

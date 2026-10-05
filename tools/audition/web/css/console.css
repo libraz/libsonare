@@ -123,6 +123,34 @@
   color: var(--ink-dim);
 }
 
+/* ---- signal path ---- */
+
+/* Quiet by default: it is a record to check against, not a second banner. A
+   branch and a change of path sit on their own lines so neither reads as a
+   stage in series. */
+.path-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 2px;
+  min-width: 0;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.path-line:empty { display: none; }
+
+.path-head { flex: none; font-weight: 600; }
+
+.path-chain { min-width: 0; color: var(--ink); }
+
+.path-branch,
+.path-change { flex-basis: 100%; padding-left: 2.5em; }
+
+.path-warn { color: var(--warn); }
+
 /* ---- identity strip ---- */
 
 /* The tail of the transport row. The basis is what the crumbs and the copy

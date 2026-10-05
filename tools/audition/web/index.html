@@ -202,6 +202,10 @@
         <button id="swapBtn" type="button" class="swap compare-only" hidden></button>
       </div>
 
+      <!-- The path the sounding render took, from its own record; the raw
+           record is the tooltip. -->
+      <div id="pathLine" class="path-line"></div>
+
       <div id="transport">
         <!-- The three controls that make a sound are one object, set apart from
              the readouts beside them. Evenly spaced in a flat row, nothing said
@@ -315,6 +319,7 @@
           </label>
           <span class="grow"></span>
           <span id="fbStatus" class="fb-status"></span>
+          <button id="fbReload" type="button" class="ghost" hidden data-i18n="fb.reload">reload this set</button>
           <button id="fbSend" type="button" class="send" data-i18n="fb.send">send</button>
         </div>
 

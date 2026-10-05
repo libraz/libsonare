@@ -11,7 +11,7 @@
 'use strict';
 
 import {
-  $, state, SWITCH_RAMP, FUSED_S, roleOf, sourceLabel, selectedComparison,
+  $, state, SWITCH_RAMP, FUSED_S, roleOf, sourceLabel, selectedComparison, setGeneration,
 } from './state.js';
 import { t } from './i18n.js';
 
@@ -30,16 +30,36 @@ export async function loadTake(item) {
   const keys = Object.keys(item.tracks);
   const buffers = {};
   const rms = {};
+  const rates = {};
   await Promise.all(keys.map(async (k) => {
     const url = state.base + item.tracks[k];
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${url}: ${res.status}`);
-    const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+    const bytes = await res.arrayBuffer();
+    // Read before decoding, which resamples to the context rate and detaches the bytes.
+    rates[k] = wavRate(bytes);
+    const buf = await ctx.decodeAudioData(bytes);
     buffers[k] = buf;
     rms[k] = bufferRms(buf);
+    if (!rates[k]) rates[k] = buf.sampleRate;
   }));
   const duration = Math.max(...keys.map((k) => buffers[k].duration));
-  return { id: item.id, keys, buffers, rms, duration, specs: {}, peaks: {} };
+  return { id: item.id, keys, buffers, rms, rates, duration, specs: {}, peaks: {} };
+}
+
+/// The sample rate a RIFF/WAVE file was written at, or 0 for anything else.
+/// A render's path record counts frames at this rate, not at the context's.
+function wavRate(bytes) {
+  const v = new DataView(bytes);
+  const tag = (at) => String.fromCharCode(v.getUint8(at), v.getUint8(at + 1),
+    v.getUint8(at + 2), v.getUint8(at + 3));
+  if (v.byteLength < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return 0;
+  for (let at = 12; at + 8 <= v.byteLength;) {
+    const size = v.getUint32(at + 4, true);
+    if (tag(at) === 'fmt ' && at + 16 <= v.byteLength) return v.getUint32(at + 12, true);
+    at += 8 + size + (size & 1);
+  }
+  return 0;
 }
 
 function bufferRms(buf) {
@@ -356,6 +376,34 @@ export function comparedAgainst() {
     label: sourceLabel(picked.key),
     chosen: state.oracleOverride ? 'manual' : 'last_played',
   };
+}
+
+/* What a note judges, for FB v2. `judged_source` is the library render the
+ * note is about — the one sounding, or the last one heard while a reference
+ * plays — and is recorded in blind mode too, where the page hides it but the
+ * log has to say what was heard. The server re-reads scope and status from the
+ * manifest rather than trusting these. */
+export function evaluation({ attached = true } = {}) {
+  const c = selectedComparison();
+  const sounding = state.take ? activeKey() : null;
+  const judged = !attached || !sounding ? null
+    : roleOf(sounding) === 'model' || !roleOf(sounding) ? sounding : lastModelKey();
+  const ca = comparedAgainst();
+  return {
+    comparison_id: c ? c.id : null,
+    scope: c ? c.scope || null : null,
+    judged_source: judged,
+    oracle_source: ca ? ca.version : null,
+    comparison_status: c ? c.status || null : null,
+    blind: state.blind,
+  };
+}
+
+/// Which recording a note claims to be about; the server fills the evidence
+/// from its own manifest and refuses a claim made against an older generation.
+export function evidenceClaim(source) {
+  const item = state.items[state.itemIndex];
+  return { set_generation: setGeneration(), take: item ? item.id : null, source: source || null };
 }
 
 export function conditions() {

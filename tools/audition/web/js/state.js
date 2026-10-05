@@ -47,6 +47,7 @@ export const state = {
   blindOrder: [],      // slot -> real version index
   picks: {},           // itemId -> { slot, key, revealed }, for the selected comparison
   comparisonId: null,  // the manifest comparison being listened to, or null for its default
+  setEpoch: 0,         // bumped per set load; an async reply about an older set commits nothing
   wantByComparison: {}, // comparison id -> the version last chosen in it
   oldNotes: {},        // notes this browser holds from before the feedback log
   bank: { voices: [], loaded: false, shown: [], cursor: -1 },
@@ -141,11 +142,35 @@ export function oracleSources() {
       .map((key) => ({ role, key, label: sourceLabel(key) })));
 }
 
+/// The manifest's generation digest, or null for a page written before it.
+export const setGeneration = () => (state.manifest && state.manifest.set_generation) || null;
+
 export const notesKey = () => `audition:picks-note:${state.setId || 'untitled'}`;
-/// Picks are held per comparison; a page with none keeps the key it always had.
+/// Picks are held per comparison and per generation; a page with neither keeps
+/// the key it always had.
+const picksBase = (c) => `audition:picks:${state.setId || 'untitled'}${c ? `:${c.id}` : ''}`;
 export const picksKey = () => {
-  const c = selectedComparison();
-  return `audition:picks:${state.setId || 'untitled'}${c ? `:${c.id}` : ''}`;
+  const gen = setGeneration();
+  return picksBase(selectedComparison()) + (gen ? `@${gen.slice(0, 16)}` : '');
 };
+
+/// Picks this browser holds for the same set and comparison under another
+/// generation, or under a key written before generations or comparisons. Read
+/// to be shown apart; never part of the current tally.
+export function earlierPicksKeys() {
+  const current = picksKey();
+  const c = selectedComparison();
+  const base = picksBase(c);
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key === current) continue;
+    if (key === base || key.startsWith(`${base}@`)) out.push(key);
+  }
+  // The pre-comparison key held the product draw, so only that comparison inherits it.
+  const bare = picksBase(null);
+  if (c && c.scope === 'product' && localStorage.getItem(bare) !== null) out.push(bare);
+  return out;
+}
 export const SET_KEY = 'audition:set';
 export const VIEW_KEY = 'audition:view';

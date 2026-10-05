@@ -67,6 +67,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import http.server
 import json
 import os
@@ -700,6 +701,155 @@ class Sets:
             )
 
 
+class StaleClaim(Exception):
+    """A note names a recording the served manifest no longer holds as named."""
+
+    def __init__(self, reason: str, detail: str) -> None:
+        super().__init__(f"{reason}: {detail}")
+        self.reason = reason
+        self.detail = detail
+
+
+def json_digest(obj: object) -> str:
+    """SHA-256 of a JSON value in `boundary.canonical_digest`'s form.
+
+    Spelled here because `boundary` is not importable without the voicematch
+    environment; for a value that is already plain JSON the two forms agree.
+    """
+    text = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def path_completeness(ev: dict) -> str:
+    """`complete`, `incomplete`, or `unrecorded` where no path record exists."""
+    if ev.get("status") != "recorded" or not isinstance(ev.get("path"), dict):
+        return "unrecorded"
+    return "complete" if ev.get("complete") else "incomplete"
+
+
+def oracle_rig_evidence(manifest: dict, comparison: dict | None, oracle: str | None) -> str | None:
+    """How the oracle's rig class was argued: the comparison's own copy, else its capture's.
+
+    Read from the capture only where the oracle is one of that capture's
+    timbres, since a timbre id alone does not name a capture. Absent on the
+    capture is `unknown`, as `boundary.rig_evidence` reads it.
+    """
+    if comparison and comparison.get("rig_evidence"):
+        return str(comparison["rig_evidence"])
+    capture = (manifest.get("voice") or {}).get("capture")
+    if not oracle or not capture:
+        return None
+    cfg = _read_json(CAPTURE_DIR / f"{capture}.json")
+    ids = {t.get("id") for t in cfg.get("timbres") or [] if isinstance(t, dict)}
+    return str(cfg.get("rig_evidence") or "unknown") if oracle in ids else None
+
+
+def fill_evidence(manifest: dict, claim: dict, evaluation: dict) -> tuple[dict, dict]:
+    """The evaluation and evidence a note stores, read from the served manifest.
+
+    The page says which generation, take and source it was listening to; every
+    identity stored beside them is the manifest's, never the page's. A claim
+    the manifest does not hold raises `StaleClaim`. A manifest written before
+    generations has none, and a page reading it claims none.
+    """
+    current = manifest.get("set_generation")
+    if claim.get("set_generation") != current:
+        raise StaleClaim(
+            "set_generation",
+            f"the page read {claim.get('set_generation')!r}, the set is at {current!r}",
+        )
+    comparisons = {
+        c["id"]: c for c in manifest.get("comparisons") or [] if isinstance(c, dict) and c.get("id")
+    }
+    cid = evaluation.get("comparison_id")
+    if cid is not None and cid not in comparisons:
+        raise StaleClaim("comparison", f"{cid!r} is not a comparison of this set")
+    comparison = comparisons.get(cid)
+    evaluation = {
+        **evaluation,
+        "scope": comparison.get("scope") if comparison else None,
+        "comparison_status": comparison.get("status") if comparison else None,
+    }
+
+    take = claim.get("take")
+    evidence = {
+        "set_generation": current,
+        "take": take,
+        "request_id": None,
+        "asset_id": None,
+        "build_id": None,
+        "completeness": None,
+    }
+    if take is None:
+        return evaluation, evidence
+    item = next((i for i in manifest.get("items") or [] if i.get("id") == take), None)
+    if item is None:
+        raise StaleClaim("take", f"{take!r} is not a take of this set")
+    tracks = item.get("tracks") or {}
+    for field in ("judged_source", "oracle_source"):
+        key = evaluation.get(field)
+        if key is not None and key not in tracks:
+            raise StaleClaim("source", f"{key!r} is not a version of {take!r}")
+    source = claim.get("source")
+    if source is not None and source not in tracks:
+        raise StaleClaim("source", f"{source!r} is not a version of {take!r}")
+    ev = ((item.get("evidence") or {}).get(source) or {}) if source else {}
+    evidence.update(
+        request_id=ev.get("request_id"),
+        asset_id=ev.get("asset_id"),
+        build_id=ev.get("build_id"),
+        completeness=path_completeness(ev),
+    )
+    if isinstance(ev.get("path"), dict):
+        evidence["path_digest"] = json_digest(ev["path"])
+    rig = oracle_rig_evidence(manifest, comparison, evaluation.get("oracle_source"))
+    if rig is not None:
+        evidence["rig_evidence"] = rig
+    return evaluation, evidence
+
+
+def feedback_entry(payload: dict, now: str) -> dict:
+    """The line a posted note is stored as.
+
+    Schema 2 carries `evaluation` and `evidence`. A note naming a recording is
+    checked against the served manifest and its evidence filled from it; a memo
+    names none and stores `evidence: null`. Blind answers are stored as sent,
+    each with the take, draw, comparison and generation it was given under. A
+    payload without `schema_version` is stored the way it always was.
+    """
+    conditions = payload.get("conditions") or {}
+    entry = {
+        "at": now,
+        # The verdict is kept apart from the finer tag: "recognisably the
+        # instrument and I would still change it" and "this is a different
+        # instrument" are the same `onset/hard` underneath, and only one of
+        # them is a defect.
+        "grade": payload.get("grade") or "",
+        "tag": payload.get("tag") or "",
+        "answers": payload.get("answers") or [],
+        "text": payload.get("text") or "",
+        "lang": payload.get("lang") or "",
+        "conditions": conditions,
+    }
+    if payload.get("schema_version") != 2:
+        return entry
+    evaluation = payload.get("evaluation")
+    evaluation = dict(evaluation) if isinstance(evaluation, dict) else {}
+    claim = payload.get("evidence")
+    evidence = None
+    if isinstance(claim, dict):
+        set_name = payload.get("set") or conditions.get("set") or ""
+        root = Sets.by_id.get(set_name)
+        if root is None:
+            raise StaleClaim("set", f"{set_name!r} is not served")
+        evaluation, evidence = fill_evidence(read_manifest(root), claim, evaluation)
+    entry.update(schema_version=2, evaluation=evaluation, evidence=evidence)
+    answers = payload.get("blind_answers")
+    if isinstance(answers, list):
+        entry["blind_answers"] = [a for a in answers if isinstance(a, dict)]
+    return entry
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     """Serve the page from `tools/audition/web/` and the audio from the render dirs."""
 
@@ -744,9 +894,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # process's working directory if one is ever added.
         return str(target) if target is not None else str(self.app_dir / "index.html")
 
-    def _json(self, payload) -> None:
+    def _json(self, payload, status: int = 200) -> None:
         body = json.dumps(payload).encode()
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -805,7 +955,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         body is trusted to be JSON and nothing else is accepted: the endpoint
         exists so that what somebody heard reaches the tree while they are still
         hearing it, and every field it stores came off the page's own readouts
-        rather than out of anyone's memory.
+        rather than out of anyone's memory. The one thing not taken from the
+        page is the identity of what was heard: a note naming a recording the
+        manifest no longer holds is answered 409 and nothing is written.
         """
         if self.path.split("?", 1)[0].lstrip("/") != "feedback":
             self.send_error(404, "not found")
@@ -833,24 +985,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if payload.get("op") == "undo":
             drop_last_feedback(path)
         else:
-            append_feedback(
-                path,
-                {
-                    "at": datetime.datetime.now(datetime.timezone.utc)
-                    .replace(microsecond=0)
-                    .isoformat(),
-                    # The verdict is kept apart from the finer tag: "recognisably
-                    # the instrument and I would still change it" and "this is a
-                    # different instrument" are the same `onset/hard` underneath,
-                    # and only one of them is a defect.
-                    "grade": payload.get("grade") or "",
-                    "tag": payload.get("tag") or "",
-                    "answers": payload.get("answers") or [],
-                    "text": payload.get("text") or "",
-                    "lang": payload.get("lang") or "",
-                    "conditions": conditions,
-                },
-            )
+            now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+            try:
+                entry = feedback_entry(payload, now)
+            except StaleClaim as stale:
+                self._json({"error": "stale", "reason": stale.reason, "detail": stale.detail}, 409)
+                return
+            append_feedback(path, entry)
         self._json({"entries": read_feedback(path), "path": str(path)})
 
     def end_headers(self) -> None:

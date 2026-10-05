@@ -286,9 +286,9 @@ function buildComparisonRow(box) {
  * kept for the way back; picks, the blind gate and the draw are the new one's
  * own, and the judged oracle starts empty rather than pointing at the other
  * comparison's reference. */
-function selectComparison(id) {
+export function selectComparison(id) {
   const from = selectedComparison();
-  if (!state.take || !from || from.id === id) return;
+  if (!state.take || !from || from.id === id || !comparisons().some((c) => c.id === id)) return;
   if (!state.blind) state.wantByComparison[from.id] = activeKey();
   state.comparisonId = id;
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');

@@ -13,8 +13,12 @@ from __future__ import annotations
 
 import json
 import re
+import socketserver
 import sys
 import tempfile
+import threading
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -650,6 +654,289 @@ def test_a_set_outside_the_bank_is_left_as_it_is() -> None:
     manifest = {"sources": {"a": {"role": "model"}}}
     assert not serve.label_sources(manifest, "not-a-voice")
     assert manifest["sources"]["a"] == {"role": "model"}
+
+
+#: One recorded path: a rig ahead of a GS unit whose second stage is bypassed.
+_PATH = {
+    "schema": 1,
+    "bank_registry_digest": "ab" * 32,
+    "library_version": "0.0.0",
+    "complete": True,
+    "reason": None,
+    "events": [
+        {
+            "frame": 0,
+            "kind": "topology",
+            "parts": [
+                {
+                    "part": 0,
+                    "program": 27,
+                    "bank": 0,
+                    "backend": "model",
+                    "rig_source": "bank",
+                    "stages": ["amp", "cab"],
+                    "unit": 0,
+                    "mono_prefix": 0,
+                    "send_tap": "pre_rig",
+                }
+            ],
+            "units": [
+                {
+                    "unit": 0,
+                    "type": "0x0110",
+                    "realization": "modern",
+                    "stages": ["od", "amp"],
+                    "enabled": [True, False],
+                }
+            ],
+        },
+        {"frame": 24000, "kind": "param", "unit": 0, "slot": 3, "value": 1},
+    ],
+}
+
+
+def _v2_set(root: Path, generation: str = "g" * 64) -> Path:
+    """A schema-2 set: one take, a model render with a path record and a reference."""
+    _write_set(root, {"riff": ["model", "ref"]})
+    manifest = json.loads((root / "manifest.json").read_text())
+    manifest.update(
+        schema_version=2,
+        set_generation=generation,
+        voice={"program": 27, "bank": 0},
+        sources={"model": {"role": "model", "scope": "product"}, "ref": {"role": "reference"}},
+        comparisons=[
+            {
+                "id": "gm_gs_product",
+                "scope": "product",
+                "model_sources": ["model"],
+                "oracle_sources": ["ref"],
+                "status": "matched",
+                "rig_evidence": "verified",
+            }
+        ],
+    )
+    manifest["items"][0]["evidence"] = {
+        "model": {
+            "request_id": "req-m",
+            "source_id": None,
+            "build_id": "build-m",
+            "asset_id": "asset-m",
+            "path": _PATH,
+            "complete": True,
+            "status": "recorded",
+            "reason": None,
+        },
+        "ref": {
+            "request_id": "req-r",
+            "source_id": "src-r",
+            "build_id": None,
+            "asset_id": "asset-r",
+            "path": None,
+            "complete": None,
+            "status": "verified",
+            "reason": None,
+            "origin": "rendered",
+        },
+    }
+    (root / "manifest.json").write_text(json.dumps(manifest))
+    return root
+
+
+def _note(generation: str | None, **over) -> dict:
+    """A schema-2 note about the model render, as the page posts it."""
+    note = {
+        "schema_version": 2,
+        "grade": "acceptable",
+        "tag": "tone/dark",
+        "answers": [],
+        "text": "dull",
+        "lang": "en",
+        "conditions": {"set": "riffset", "take": "riff", "version": "model"},
+        "evaluation": {
+            "comparison_id": "gm_gs_product",
+            # Wrong on purpose: scope and status are the manifest's to say.
+            "scope": "instrument",
+            "judged_source": "model",
+            "oracle_source": "ref",
+            "comparison_status": "context_only",
+            "blind": False,
+        },
+        "evidence": {"set_generation": generation, "take": "riff", "source": "model"},
+    }
+    note.update(over)
+    return note
+
+
+def _served(fn):
+    """Run with one v2 set served as `riffset` and the feedback log in scratch."""
+
+    def run() -> None:
+        original = (serve.Sets.by_id, serve.FEEDBACK_ROOT)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                _feedback_in(tmp)
+                serve.Sets.by_id = {"riffset": _v2_set(Path(tmp).resolve() / "riffset")}
+                fn(Path(tmp).resolve())
+        finally:
+            serve.Sets.by_id, serve.FEEDBACK_ROOT = original
+
+    run.__name__ = fn.__name__
+    run.__doc__ = fn.__doc__
+    return run
+
+
+@_served
+def test_evidence_is_filled_from_the_manifest_not_the_page(tmp: Path) -> None:
+    payload = _note("g" * 64)
+    payload["evidence"]["asset_id"] = "forged"
+    entry = serve.feedback_entry(payload, "2026-10-05T00:00:00+00:00")
+    ev = entry["evidence"]
+    assert entry["schema_version"] == 2
+    assert ev["set_generation"] == "g" * 64 and ev["take"] == "riff"
+    assert (ev["request_id"], ev["asset_id"], ev["build_id"]) == ("req-m", "asset-m", "build-m")
+    assert ev["completeness"] == "complete"
+    assert ev["path_digest"] == serve.json_digest(_PATH)
+    assert ev["rig_evidence"] == "verified"
+    assert "source" not in ev and "forged" not in json.dumps(ev)
+    assert entry["evaluation"]["scope"] == "product"
+    assert entry["evaluation"]["comparison_status"] == "matched"
+    assert entry["evaluation"]["judged_source"] == "model"
+
+
+def test_the_path_digest_matches_the_canonical_one_where_it_can_be_imported() -> None:
+    """Skipped where the voicematch environment is absent: system python has no numpy."""
+    sys.path.insert(0, str(serve.REPO_ROOT / "tools" / "voicematch"))
+    try:
+        from boundary import canonical_digest
+    except ImportError:
+        return
+    assert serve.json_digest(_PATH) == canonical_digest(_PATH)
+
+
+@_served
+def test_a_claim_on_another_generation_or_take_is_refused(tmp: Path) -> None:
+    for payload, reason in (
+        (_note("h" * 64), "set_generation"),
+        (_note(None), "set_generation"),
+        (_note("g" * 64, evidence={"set_generation": "g" * 64, "take": "gone"}), "take"),
+        (
+            _note("g" * 64, evidence={"set_generation": "g" * 64, "take": "riff", "source": "x"}),
+            "source",
+        ),
+    ):
+        try:
+            serve.feedback_entry(payload, "now")
+        except serve.StaleClaim as stale:
+            assert stale.reason == reason, (stale.reason, reason)
+        else:
+            raise AssertionError(f"accepted a stale claim: {payload['evidence']}")
+    bad = _note("g" * 64)
+    bad["evaluation"]["comparison_id"] = "instrument_di"
+    try:
+        serve.feedback_entry(bad, "now")
+    except serve.StaleClaim as stale:
+        assert stale.reason == "comparison"
+    else:
+        raise AssertionError("accepted a comparison the manifest does not define")
+
+
+@_served
+def test_a_memo_is_accepted_with_null_evidence(tmp: Path) -> None:
+    memo = _note("h" * 64, evidence=None, conditions={"set": "riffset"})
+    entry = serve.feedback_entry(memo, "now")
+    assert entry["evidence"] is None
+    assert entry["schema_version"] == 2
+    # A set served by nothing still takes a memo: the log is keyed by name.
+    stray = _note(None, evidence=None, conditions={"set": "elsewhere"})
+    assert serve.feedback_entry(stray, "now")["evidence"] is None
+
+
+@_served
+def test_blind_answers_are_stored_as_sent(tmp: Path) -> None:
+    answers = [
+        {
+            "take": "riff",
+            "candidates": ["ref", "model"],
+            "picked": "model",
+            "abstained": False,
+            "comparison_id": "gm_gs_product",
+            "set_generation": "g" * 64,
+            "answered_at": "2026-10-01T09:00:00.000Z",
+        },
+        {
+            "take": "older",
+            "candidates": ["model", "ref"],
+            "picked": None,
+            "abstained": True,
+            "comparison_id": "gm_gs_product",
+            "set_generation": "g" * 64,
+            "answered_at": "2026-10-01T09:01:00.000Z",
+        },
+    ]
+    payload = _note(
+        "g" * 64,
+        tag="blind",
+        evidence={"set_generation": "g" * 64, "take": None, "source": None},
+        blind_answers=answers,
+    )
+    payload["evaluation"]["judged_source"] = None
+    entry = serve.feedback_entry(payload, "2026-10-05T00:00:00+00:00")
+    assert entry["blind_answers"] == answers
+    # The run's evidence names the generation and no recording of the moment it was sent.
+    assert entry["evidence"]["set_generation"] == "g" * 64
+    assert entry["evidence"]["take"] is None and entry["evidence"]["asset_id"] is None
+
+
+def _post(port: int, body: dict) -> tuple[int, dict]:
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/feedback",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
+
+
+def _get(port: int, rel: str) -> tuple[int, dict]:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/{rel}", timeout=5) as r:
+        return r.status, json.load(r)
+
+
+@_served
+def test_the_endpoint_answers_409_and_writes_nothing(tmp: Path) -> None:
+    """Through the handler, so the status code and the body are the ones the page reads."""
+    # A v1 set beside it: written before generations, still served and still noted.
+    legacy = _write_set(tmp / "oldset", {"riff": ["model", "ref"]})
+    serve.Sets.by_id["oldset"] = legacy
+    server = socketserver.TCPServer(("127.0.0.1", 0), serve.Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        status, body = _post(port, _note("h" * 64))
+        assert status == 409, status
+        assert body["error"] == "stale" and body["reason"] == "set_generation", body
+        assert serve.read_feedback(serve.feedback_path("riffset")) == []
+
+        status, body = _post(port, _note("g" * 64))
+        assert status == 200 and len(body["entries"]) == 1, (status, body)
+
+        status, manifest = _get(port, "s/oldset/manifest.json")
+        assert status == 200 and manifest["items"][0]["id"] == "riff"
+        assert "set_generation" not in manifest
+        old = _note(None, conditions={"set": "oldset"})
+        old["evaluation"]["comparison_id"] = None
+        status, body = _post(port, old)
+        assert status == 200, (status, body)
+        ev = body["entries"][-1]["evidence"]
+        assert ev["set_generation"] is None and ev["completeness"] == "unrecorded", ev
+        assert ev["asset_id"] is None
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def _run_all() -> int:

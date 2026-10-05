@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
+import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -332,6 +335,225 @@ def test_the_comparison_selector_and_what_attaches_to_it() -> None:
     assert wanted <= table["en"], sorted(wanted - table["en"])
     # The reference is named by the manifest's own label, never by the page.
     assert "(cur.oracle_sources || []).map(sourceLabel)" in versions
+
+
+#: Just enough of a browser for the page's modules to load under node: what
+#: they touch at import time, and the storage and address the tests set.
+_NODE_PRELUDE = """
+const store = new Map(Object.entries(JSON.parse(process.env.STORE || '{}')));
+globalThis.localStorage = {
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => { store.set(k, String(v)); },
+  key: (i) => [...store.keys()][i] ?? null,
+  get length() { return store.size; },
+};
+Object.defineProperty(globalThis, 'navigator',
+  { value: { languages: ['en'], language: 'en' }, configurable: true });
+globalThis.document = {
+  addEventListener() {}, getElementById() { return null; },
+  documentElement: { lang: 'en' }, querySelectorAll() { return []; },
+};
+globalThis.window = globalThis;
+globalThis.location = { search: '', hash: process.env.HASH || '', origin: '', pathname: '/' };
+const dir = process.env.JS_DIR;
+"""
+
+
+def _node(script: str, **env: str) -> list[str] | None:
+    """Run `script` as an ES module after the prelude; None where node is absent."""
+    node = shutil.which("node")
+    if node is None:
+        return None
+    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as fh:
+        fh.write(_NODE_PRELUDE + script)
+    try:
+        out = subprocess.run(
+            [node, fh.name],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={"PATH": "/usr/bin:/bin", "JS_DIR": str(JS_DIR), **env},
+        )
+    finally:
+        Path(fh.name).unlink()
+    return out.stdout.splitlines()
+
+
+def _render_path_source() -> str:
+    text = (JS_DIR / "path.js").read_text()
+    return text.split("export function renderPath", 1)[1]
+
+
+def test_the_path_line_draws_the_recorded_chain() -> None:
+    """Executed under node where it is installed: the chain, the bypassed
+    stage, the pre-rig branch and the interval the playhead falls in."""
+    got = _node(
+        """
+const path = await import(`${dir}/path.js`);
+const units = [{ unit: 0, type: '0x0110', realization: 'classic',
+  stages: ['od', 'amp'], enabled: [true, false] }];
+const part = { part: 0, stages: ['amp', 'cab'], unit: 0, send_tap: 'pre_rig' };
+console.log(JSON.stringify(path.partChain(part, units)));
+console.log(JSON.stringify(path.partChain({ ...part, stages: [], send_tap: 'post_unit' }, units)));
+console.log(JSON.stringify(path.partChain({ ...part, unit: null, send_tap: 'none' }, units)));
+const ev = [{ frame: 0 }, { frame: 48000 }];
+console.log([0, 47999, 48000, 96000].map((f) => path.topologyIndexAt(ev, f)).join(','));
+console.log(path.topologyIndexAt([{ frame: 100 }], 0));
+"""
+    )
+    if got is not None:
+        pre, post, none, at, before = got
+        assert json.loads(pre) == {
+            "chain": "voice → amp → cab → GS 0x0110 unit (classic) [od, amp (bypassed)]",
+            "branch": "voice ↳ sends taken here, before the rig",
+        }, pre
+        assert json.loads(post)["chain"].endswith("[od, amp (bypassed)] → sends"), post
+        assert json.loads(post)["branch"] is None
+        assert json.loads(none)["chain"] == "voice → amp → cab  ·  no sends", none
+        assert at == "0,0,1,1", at
+        assert before == "0", "before the first topology, the first is shown"
+    body = _render_path_source()
+    assert "ev.status !== 'recorded'" in body and "t('path.notRecorded'" in body
+    assert "ev.complete === false" in body and "t('path.incomplete'" in body
+    assert "events.length > 1" in body and "t('path.changes'" in body
+    assert "state.take.rates[key]" in body, "frames are counted at the file's own rate"
+    assert "renderPath();" in (JS_DIR / "app.js").read_text()
+    assert "rates[k] = wavRate(bytes);" in (JS_DIR / "player.js").read_text()
+    table = _string_table()
+    for key in (
+        "path.realization.modern",
+        "path.realization.classic",
+        "path.sends.pre_rig",
+        "path.sends.post_unit",
+        "path.sends.none",
+    ):
+        assert key in table["en"] and key in table["ja"], key
+
+
+def test_blind_hides_the_path_but_names_the_comparison() -> None:
+    body = _render_path_source()
+    blind = body.split("if (state.blind) {", 1)[1].split("\n  }\n", 1)[0]
+    assert "return;" in blind
+    assert "compare.status." in blind and "t('path.hidden')" in blind
+    # Nothing that names a stage, a source or the raw record before the blind return.
+    head = body.split("if (state.blind) {", 1)[0] + blind
+    for named in ("partChain(", "rawText(", "box.title = rawText", "path.reference"):
+        assert named not in head, named
+
+
+def test_picks_are_keyed_by_generation_and_comparison() -> None:
+    gen = "a" * 64
+    store = {
+        f"audition:picks:p027:gm_gs_product@{gen[:16]}": json.dumps({"t1": {"key": "m"}}),
+        f"audition:picks:p027:gm_gs_product@{'b' * 16}": json.dumps({"t1": {"key": "m"}}),
+        "audition:picks:p027:gm_gs_product": json.dumps({"t2": {"unseparated": True}}),
+        "audition:picks:p027": json.dumps({"t3": {"key": "m"}}),
+        "audition:picks:p027:instrument_di": json.dumps({"t4": {"key": "m"}}),
+        "audition:picks:p0270:gm_gs_product": json.dumps({"t5": {"key": "m"}}),
+    }
+    got = _node(
+        f"""
+const s = await import(`${{dir}}/state.js`);
+s.state.setId = 'p027';
+s.state.manifest = {{ set_generation: '{gen}',
+  comparisons: [{{ id: 'gm_gs_product', scope: 'product', status: 'matched' }}] }};
+console.log(s.picksKey());
+console.log(JSON.stringify(s.earlierPicksKeys().sort()));
+s.state.manifest = {{ items: [] }};
+console.log(s.picksKey());
+""",
+        STORE=json.dumps(store),
+    )
+    if got is not None:
+        current, earlier, legacy = got
+        assert current == f"audition:picks:p027:gm_gs_product@{gen[:16]}", current
+        assert json.loads(earlier) == sorted(
+            [
+                f"audition:picks:p027:gm_gs_product@{'b' * 16}",
+                "audition:picks:p027:gm_gs_product",
+                "audition:picks:p027",
+            ]
+        ), earlier
+        assert legacy == "audition:picks:p027", "a page with neither keeps its old key"
+    blind = (JS_DIR / "blind.js").read_text()
+    tally = blind.split("function blindTally", 1)[1].split("\n}\n", 1)[0]
+    assert "state.picks" in tally and "earlier" not in tally, "earlier picks stay out of the tally"
+    assert "t('blind.earlier'" in blind
+
+
+def test_blind_answers_carry_what_they_were_given_under() -> None:
+    blind = (JS_DIR / "blind.js").read_text()
+    answered = blind.split("function answered", 1)[1].split("\n}\n", 1)[0]
+    for field in ("take:", "candidates:", "comparison_id:", "set_generation:", "answered_at:"):
+        assert field in answered, field
+    record = blind.split("export async function recordBlindResult", 1)[1].split("\n}\n", 1)[0]
+    for field in ("picked:", "abstained:", "p.set_generation", "p.answered_at", "p.candidates"):
+        assert field in record, field
+    feedback = (JS_DIR / "feedback.js").read_text()
+    sent = feedback.split("export async function recordBlind", 1)[1].split("\n}\n", 1)[0]
+    assert "...conditions()" not in sent, "a run carries no conditions from the moment it is sent"
+    assert "blind_answers: blindAnswers" in sent
+
+
+def test_a_note_is_schema_2_and_a_409_keeps_the_text() -> None:
+    feedback = (JS_DIR / "feedback.js").read_text()
+    send = feedback.split("async function send()", 1)[1].split("\n}\n", 1)[0]
+    assert "schema_version: 2" in send and "evaluation: judged" in send
+    assert "evidence: attached ? evidenceClaim(judged.judged_source) : null" in send
+    post = feedback.split("async function post(", 1)[1].split("\n}\n", 1)[0]
+    stale = post.split("if (res.status === 409) {", 1)[1].split("\n    }\n", 1)[0]
+    assert "after" not in stale, "a refused note must not clear the composer"
+    assert "$('fbReload').hidden = false" in stale
+    assert "new CustomEvent('audition:reload-set')" in feedback
+    assert "document.addEventListener('audition:reload-set'" in (JS_DIR / "listen.js").read_text()
+
+
+def test_the_address_carries_the_comparison() -> None:
+    got = _node(
+        """
+const a = await import(`${dir}/address.js`);
+console.log(JSON.stringify(a.readRoute()));
+""",
+        HASH="#p027/riff/model?c=instrument_di",
+    )
+    if got is not None:
+        route = json.loads(got[0])
+        assert (route["set"], route["take"], route["ver"], route["cmp"]) == (
+            "p027",
+            "riff",
+            "model",
+            "instrument_di",
+        ), route
+    address = (JS_DIR / "address.js").read_text()
+    assert "`?c=${encodeURIComponent(c.id)}`" in address
+    listen = (JS_DIR / "listen.js").read_text()
+    route = listen.split("export async function applyRoute", 1)[1].split("\n}\n", 1)[0]
+    assert "selectComparison(r.cmp)" in route
+    load = listen.split("export async function loadSet", 1)[1].split("\n}\n", 1)[0]
+    assert load.index("state.comparisonId = wanted.cmp") < load.index("picksKey()")
+
+
+def test_the_epoch_also_guards_set_switch_feedback_and_pictures() -> None:
+    """Source shape only; that a late reply is actually dropped needs a browser."""
+    listen = (JS_DIR / "listen.js").read_text()
+    load = listen.split("export async function loadSet", 1)[1].split("\n}\n", 1)[0]
+    first_await = load.index("await ")
+    assert load.index("state.setEpoch += 1;") < first_await
+    assert load.index("state.take = null;") < first_await
+    take = _select_take_source()
+    assert take.index("take.epoch = epoch;") < take.index("state.take = take;")
+    feedback = (JS_DIR / "feedback.js").read_text()
+    post = feedback.split("async function post(", 1)[1].split("\n}\n", 1)[0]
+    assert "const setEpoch = state.setEpoch;" in post
+    commit = post.index("fb.entries = got.entries")
+    assert "if (setEpoch !== state.setEpoch) return true;" in post[:commit]
+    load_fb = feedback.split("export async function loadFeedback", 1)[1].split("\n}\n", 1)[0]
+    assert load_fb.index("if (setEpoch !== state.setEpoch) return;") < load_fb.index(
+        "fb.entries = got.entries"
+    )
+    scope = (JS_DIR / "scope.js").read_text()
+    assert scope.count("const sig = `${state.take.epoch}|") == 2
+    assert "${state.take.id}|" not in scope
 
 
 def _run_all() -> int:

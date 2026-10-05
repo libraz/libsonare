@@ -19,6 +19,8 @@ import {
 } from './state.js';
 import { activeKey, playhead, takeHits } from './player.js';
 
+/// Keyed by the take's load epoch rather than its id: two sets share take ids,
+/// and a take loaded again is a new decode.
 const layers = { wave: { sig: '', cv: null }, spec: { sig: '', cv: null } };
 
 function fitCanvas(cv) {
@@ -82,7 +84,7 @@ export function drawWave() {
   const g = cv.getContext('2d');
   if (!state.take) { g.clearRect(0, 0, w, h); return; }
   const active = activeKey();
-  const sig = `${state.take.id}|${active}|${state.blind}|${w}x${h}`;
+  const sig = `${state.take.epoch}|${active}|${state.blind}|${w}x${h}`;
   const off = layer('wave', w, h, sig, (c) => {
     c.clearRect(0, 0, w, h);
     const mid = h / 2;
@@ -269,7 +271,7 @@ export function drawSpec() {
   const g = cv.getContext('2d');
   if (!state.take) { g.clearRect(0, 0, w, h); return; }
   const key = activeKey();
-  const sig = `${state.take.id}|${key}|${state.blind}|${w}x${h}`;
+  const sig = `${state.take.epoch}|${key}|${state.blind}|${w}x${h}`;
   const off = layer('spec', w, h, sig, (c) => {
     const s = specFor(key, Math.min(w, 1400));
     const stops = rampFor(traceRgb(key));
