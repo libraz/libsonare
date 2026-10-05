@@ -34,6 +34,14 @@ uint16_t binding_type(const GsEfx& state) noexcept {
   return gs_efx_binding_type(rows, state.type);
 }
 
+uint64_t efx_stage_discard_sum(const Sf2EfxUnitRt& unit) noexcept {
+  uint64_t total = 0;
+  for (const Sf2EfxStageRt& stage : unit.stages) {
+    if (stage.proc != nullptr) total += stage.proc->non_finite_discard_count();
+  }
+  return total;
+}
+
 }  // namespace
 
 int sf2_find_efx_stage(const Sf2EfxUnitRt& unit, std::string_view name, uint8_t ordinal) noexcept {
@@ -147,6 +155,36 @@ int64_t delay_support_samples(int delay_samples_q8) noexcept {
 }
 
 }  // namespace
+
+int sf2_efx_unit_tail_samples(const Sf2EfxUnitRt& unit) noexcept {
+  int64_t front = 0;
+  int64_t half_a = 0;
+  int64_t half_b = 0;
+  int64_t back = 0;
+  for (const Sf2EfxStageRt& stage : unit.stages) {
+    if (stage.proc == nullptr) continue;
+    const int64_t value = std::max(0, stage.proc->tail_samples());
+    switch (stage.branch) {
+      case kGsEfxBranchHalfA:
+        half_a = add_support_samples(half_a, value);
+        break;
+      case kGsEfxBranchHalfB:
+        half_b = add_support_samples(half_b, value);
+        break;
+      case kGsEfxBranchBack:
+        back = add_support_samples(back, value);
+        break;
+      case kGsEfxBranchFront:
+      default:
+        front = add_support_samples(front, value);
+        break;
+    }
+  }
+  int64_t total = add_support_samples(add_support_samples(front, std::max(half_a, half_b)), back);
+  total = add_support_samples(total, unit.latency_compensation_tail_samples);
+  return total > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
+                                                 : static_cast<int>(total);
+}
 
 void Sf2EfxDelayRt::prepare(int delay_samples_q8) {
   // Never clamp a nonnegative value: a shorter delay would disagree with the reported latency.
@@ -570,6 +608,7 @@ void GsEfxProcessor::process(float* const* channels, int num_channels, int num_s
   }
   ensure_prepared(prepared_, "GsEfxProcessor");
   validate_channel_buffers(channels, num_channels);
+  const uint64_t discards_before = efx_stage_discard_sum(unit_);
   for (int offset = 0; offset < num_samples;) {
     const int n = std::min(max_block_size_, num_samples - offset);
     float* left = channels[0] + offset;
@@ -583,6 +622,7 @@ void GsEfxProcessor::process(float* const* channels, int num_channels, int num_s
     }
     offset += n;
   }
+  if (efx_stage_discard_sum(unit_) != discards_before) note_non_finite_discard();
 }
 
 void GsEfxProcessor::reset() { sf2_reset_efx_unit(unit_); }
@@ -597,35 +637,7 @@ int GsEfxProcessor::latency_samples_q8() const noexcept {
   return sf2_efx_unit_latency_samples_q8(unit_);
 }
 
-int GsEfxProcessor::tail_samples() const noexcept {
-  int64_t front = 0;
-  int64_t half_a = 0;
-  int64_t half_b = 0;
-  int64_t back = 0;
-  for (const Sf2EfxStageRt& stage : unit_.stages) {
-    if (stage.proc == nullptr) continue;
-    const int64_t value = std::max(0, stage.proc->tail_samples());
-    switch (stage.branch) {
-      case kGsEfxBranchHalfA:
-        half_a = add_support_samples(half_a, value);
-        break;
-      case kGsEfxBranchHalfB:
-        half_b = add_support_samples(half_b, value);
-        break;
-      case kGsEfxBranchBack:
-        back = add_support_samples(back, value);
-        break;
-      case kGsEfxBranchFront:
-      default:
-        front = add_support_samples(front, value);
-        break;
-    }
-  }
-  int64_t total = add_support_samples(add_support_samples(front, std::max(half_a, half_b)), back);
-  total = add_support_samples(total, unit_.latency_compensation_tail_samples);
-  return total > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
-                                                 : static_cast<int>(total);
-}
+int GsEfxProcessor::tail_samples() const noexcept { return sf2_efx_unit_tail_samples(unit_); }
 
 bool GsEfxProcessor::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   if (param_id >= state_.params.size()) return false;

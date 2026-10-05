@@ -219,6 +219,10 @@ void sf2_reset_efx_unit(Sf2EfxUnitRt& unit) noexcept;
 /// that realization remains intentionally uncompensated.
 int sf2_efx_unit_latency_samples_q8(const Sf2EfxUnitRt& unit) noexcept;
 
+/// Tail of a realised unit's serial/parallel graph, including any fractional
+/// latency compensation support beyond the floored graph latency.
+int sf2_efx_unit_tail_samples(const Sf2EfxUnitRt& unit) noexcept;
+
 /// AUDIO thread: run @p unit in place over @p n frames (n <= the max_block it
 /// was built for): the front stages, then each half on its own copy of their
 /// output summed back, then the back stages. Allocation-free.

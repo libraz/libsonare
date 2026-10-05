@@ -108,6 +108,37 @@ class ProbeStage final : public ProcessorBase {
   float parameter_gain_ = 1.0f;
 };
 
+struct DiscardTelemetryProbe {
+  bool armed = false;
+  uint64_t child_discards = 0;
+};
+
+/// Calls the protected discard note on demand so the facade's aggregation can
+/// be observed without manufacturing a non-finite sample in the graph.
+class DiscardTelemetryStage final : public ProcessorBase {
+ public:
+  explicit DiscardTelemetryStage(std::shared_ptr<DiscardTelemetryProbe> probe)
+      : probe_(std::move(probe)) {}
+
+  void prepare(double, int, int) override {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {
+    if (!probe_->armed) return;
+    ++probe_->child_discards;
+    note_non_finite_discard();
+  }
+  void reset() override {}
+
+  bool parameter_is_realtime_safe(unsigned int) const noexcept override { return false; }
+  std::vector<ParamDescriptor> parameter_descriptors() const override { return {}; }
+
+ protected:
+  bool set_parameter_impl(unsigned int, float) override { return false; }
+
+ private:
+  std::shared_ptr<DiscardTelemetryProbe> probe_;
+};
+
 /// A fixed-delay identity stage makes branch alignment and bypass compensation
 /// observable without depending on a mastering processor's impulse shape.
 class FixedLatencyStage final : public ProcessorBase {
@@ -650,12 +681,12 @@ TEST_CASE("GS EFX real factory impulse reports its amp-sim latency",
   const GsEfx state = state_for(0x0200);
   const auto stages = gs_efx_insert_chain(state);
   // Every stage sits on the timeline, the disabled amps included.
-  int stage_latency = 0;
+  int stage_latency_q8 = 0;
   for (const auto& stage : stages) {
     auto proc = factory(stage.name, stage.params_json);
     REQUIRE(proc != nullptr);
     proc->prepare(kSampleRate, 512);
-    stage_latency += proc->latency_samples();
+    stage_latency_q8 = add_latency_saturated(stage_latency_q8, proc->latency_samples_q8());
   }
   const auto peak_of = [](const std::vector<float>& left, const std::vector<float>& right) {
     int peak_index = 0;
@@ -670,7 +701,9 @@ TEST_CASE("GS EFX real factory impulse reports its amp-sim latency",
     REQUIRE(peak > 1.0e-5f);
     return peak_index;
   };
-  const std::size_t length = static_cast<std::size_t>(stage_latency) + 160;
+  const int stage_latency = stage_latency_q8 >> 8;
+  const int stage_latency_ceil = (stage_latency_q8 + 255) >> 8;
+  const std::size_t length = static_cast<std::size_t>(stage_latency_ceil) + 160;
 
   GsEfxProcessor processor(state, GsEfxRealization::kModern, factory);
   processor.prepare(kSampleRate, 512, 2);
@@ -695,14 +728,13 @@ TEST_CASE("GS EFX real factory impulse reports its amp-sim latency",
       proc->process(ref_channels, 2, static_cast<int>(length));
       continue;
     }
-    const auto delay = static_cast<std::ptrdiff_t>(proc->latency_samples());
-    for (auto* channel : {&ref_left, &ref_right}) {
-      std::rotate(channel->rbegin(), channel->rbegin() + delay, channel->rend());
-      std::fill(channel->begin(), channel->begin() + delay, 0.0f);
-    }
+    Sf2EfxDelayRt delay;
+    delay.prepare(proc->latency_samples_q8());
+    delay.process(ref_left.data(), ref_right.data(), static_cast<int>(length));
   }
-  CAPTURE(stage_latency);
+  CAPTURE(stage_latency, stage_latency_q8, stage_latency_ceil);
   REQUIRE(stage_latency > 0);
+  REQUIRE(processor.latency_samples_q8() == stage_latency_q8);
   REQUIRE(processor.latency_samples() == stage_latency);
   REQUIRE(peak_of(left, right) == peak_of(ref_left, ref_right));
 }
@@ -769,6 +801,60 @@ TEST_CASE("GS EFX facade supports mono folding, chunking, reset, and RT raw-byte
   REQUIRE(mono.parameter_is_realtime_safe(1));
   REQUIRE(mono.set_parameter(1, 127.0f));
   REQUIRE(mono.state().params[1] == 127);
+}
+
+TEST_CASE("GS EFX facade records one discard per public process call",
+          "[midi][gs][efx][audio][telemetry]") {
+  const auto probe = std::make_shared<DiscardTelemetryProbe>();
+  GsEfxProcessor processor(state_for(0x0110), GsEfxRealization::kModern,
+                           [probe](std::string_view, std::string_view) {
+                             return std::make_unique<DiscardTelemetryStage>(probe);
+                           });
+  processor.prepare(kSampleRate, 64, 2);
+
+  std::vector<float> left(129, 0.0f);
+  std::vector<float> right(129, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  probe->armed = true;
+  std::size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    processor.process(channels, 2, static_cast<int>(left.size()));
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+  REQUIRE(probe->child_discards > 1);  // several stages x three internal chunks
+  REQUIRE(processor.non_finite_discard_count() == 1);
+
+  const uint64_t child_after_first = probe->child_discards;
+  {
+    sonare::test::AllocationGuard guard;
+    processor.process(channels, 2, static_cast<int>(left.size()));
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+  REQUIRE(probe->child_discards > child_after_first);
+  REQUIRE(processor.non_finite_discard_count() == 2);
+
+  probe->armed = false;
+  const uint64_t child_after_second = probe->child_discards;
+  {
+    sonare::test::AllocationGuard guard;
+    processor.process(channels, 2, static_cast<int>(left.size()));
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+  REQUIRE(probe->child_discards == child_after_second);
+  REQUIRE(processor.non_finite_discard_count() == 2);
+
+  {
+    sonare::test::AllocationGuard guard;
+    processor.process(channels, 2, 0);
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+  REQUIRE(probe->child_discards == child_after_second);
+  REQUIRE(processor.non_finite_discard_count() == 2);
 }
 
 TEST_CASE("GS EFX Thru refuses raw bytes in both realizations and passes audio dry",
