@@ -13,8 +13,8 @@
 ///   high-pass between them.
 ///
 /// Every coefficient is built from its corner in hertz once the rate is known.
-/// The reported latency is the 2x oversampler's round trip, the same number of
-/// samples at every rate.
+/// The reported latency includes the 2x oversampler round trip and each core's
+/// ADAA delay, expressed in Q8 so the fractional part is preserved.
 
 #include <cstddef>
 #include <vector>
@@ -57,6 +57,7 @@ class OverdriveCore {
   static constexpr float kMaxGainDb = 41.0f;
   static constexpr float kMinToneHz = 500.0f;
   static constexpr float kMaxToneHz = 8000.0f;
+  static constexpr int kLatencySamplesQ8 = 128;
   static constexpr const char* kName = "Overdrive";
 
   void prepare(double oversampled_rate);
@@ -79,6 +80,7 @@ class DistortionCore {
   static constexpr float kMaxGainDb = 60.0f;
   static constexpr float kMinToneHz = 475.0f;
   static constexpr float kMaxToneHz = 20000.0f;
+  static constexpr int kLatencySamplesQ8 = 256;
   static constexpr const char* kName = "Distortion";
 
   void prepare(double oversampled_rate);
@@ -107,6 +109,7 @@ class Pedal : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
   void set_config(const Config& config);
   const Config& config() const { return config_; }
 

@@ -283,7 +283,13 @@ void Pedal<Core>::reset() {
 
 template <typename Core>
 int Pedal<Core>::latency_samples() const noexcept {
-  return oversampler_.streaming_round_trip_latency_samples();
+  return latency_samples_q8() >> 8;
+}
+
+template <typename Core>
+int Pedal<Core>::latency_samples_q8() const noexcept {
+  return (oversampler_.streaming_round_trip_latency_samples() << 8) +
+         Core::kLatencySamplesQ8 / kOversampleFactor;
 }
 
 template <typename Core>

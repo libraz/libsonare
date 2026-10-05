@@ -5,6 +5,8 @@
 ///        difference in clipping hardness between the two circuits.
 
 #include <algorithm>
+#include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -14,6 +16,8 @@
 
 #include "mastering/api/insert_factory.h"
 #include "midi/part_rig.h"
+#include "rt/adaa.h"
+#include "rt/oversampler.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
 
@@ -117,6 +121,36 @@ constexpr Circuit kCircuits[] = {
     {kDistortion, 60.0, 20000.0},
 };
 
+struct IdentityNonlinearity {
+  float apply(float x) const noexcept { return x; }
+  float antiderivative(float x) const noexcept { return 0.5f * x * x; }
+};
+
+template <size_t N>
+double impulse_centroid(const std::array<float, N>& impulse) {
+  double weight = 0.0;
+  double moment = 0.0;
+  for (size_t i = 0; i < impulse.size(); ++i) {
+    weight += impulse[i];
+    moment += static_cast<double>(i) * impulse[i];
+  }
+  REQUIRE(weight > 0.0);
+  return moment / weight;
+}
+
+template <size_t N>
+std::array<float, N> identity_adaa_impulse_response() {
+  const std::array<float, N> impulse = [] {
+    std::array<float, N> value{};
+    value[0] = 1.0f;
+    return value;
+  }();
+  sonare::rt::Adaa1<IdentityNonlinearity> adaa;
+  std::array<float, N> response{};
+  for (size_t i = 0; i < impulse.size(); ++i) response[i] = adaa.process(impulse[i]);
+  return response;
+}
+
 }  // namespace
 
 TEST_CASE("both pedals are factory inserts with a bounded fixed latency",
@@ -131,6 +165,45 @@ TEST_CASE("both pedals are factory inserts with a bounded fixed latency",
       CHECK(processor->latency_samples() > 0);
       CHECK(processor->latency_samples() <= sonare::midi::kMaxPartRigLatencySamples);
     }
+  }
+}
+
+TEST_CASE("factory pedals report oversampled ADAA latency in Q8",
+          "[mastering][saturation][pedal][latency]") {
+  const sonare::rt::Oversampler reference_oversampler(2);
+  const int oversampler_latency_q8 = reference_oversampler.streaming_round_trip_latency_samples()
+                                     << 8;
+  const auto overdrive_adaa_impulse = identity_adaa_impulse_response<3>();
+  const auto distortion_input = overdrive_adaa_impulse;
+  sonare::rt::Adaa1<IdentityNonlinearity> second_adaa;
+  std::array<float, 3> distortion_adaa_impulse{};
+  for (size_t i = 0; i < distortion_input.size(); ++i) {
+    distortion_adaa_impulse[i] = second_adaa.process(distortion_input[i]);
+  }
+  CHECK(overdrive_adaa_impulse[0] == Catch::Approx(0.5f));
+  CHECK(overdrive_adaa_impulse[1] == Catch::Approx(0.5f));
+  CHECK(overdrive_adaa_impulse[2] == Catch::Approx(0.0f));
+  CHECK(distortion_adaa_impulse[0] == Catch::Approx(0.25f));
+  CHECK(distortion_adaa_impulse[1] == Catch::Approx(0.5f));
+  CHECK(distortion_adaa_impulse[2] == Catch::Approx(0.25f));
+  const int overdrive_core_latency_q8 = static_cast<int>(std::lround(
+      impulse_centroid(overdrive_adaa_impulse) * 256.0 / reference_oversampler.factor()));
+  const int distortion_core_latency_q8 = static_cast<int>(std::lround(
+      impulse_centroid(distortion_adaa_impulse) * 256.0 / reference_oversampler.factor()));
+  REQUIRE(overdrive_core_latency_q8 == 64);
+  REQUIRE(distortion_core_latency_q8 == 128);
+
+  for (const double rate : {44100.0, 48000.0}) {
+    CAPTURE(rate);
+    auto overdrive = build(kOverdrive, "{}", rate);
+    auto distortion = build(kDistortion, "{}", rate);
+    const int overdrive_expected_q8 = oversampler_latency_q8 + overdrive_core_latency_q8;
+    const int distortion_expected_q8 = oversampler_latency_q8 + distortion_core_latency_q8;
+    CAPTURE(overdrive_expected_q8, distortion_expected_q8);
+    CHECK(overdrive->latency_samples_q8() == overdrive_expected_q8);
+    CHECK(overdrive->latency_samples() == (overdrive_expected_q8 >> 8));
+    CHECK(distortion->latency_samples_q8() == distortion_expected_q8);
+    CHECK(distortion->latency_samples() == (distortion_expected_q8 >> 8));
   }
 }
 
