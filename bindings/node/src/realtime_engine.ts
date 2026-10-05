@@ -1,5 +1,6 @@
 import { ClipPageProvider, FileClipPageProvider } from './clip_page_provider.js';
 import { addon } from './native.js';
+import type { ProjectTimeline } from './project.js';
 import type {
   Articulation,
   BuiltinSynthConfig,
@@ -383,9 +384,36 @@ export class RealtimeEngine {
   /**
    * Keys one insert of a lane strip from another lane's post-strip audio
    * (ducking/sidechainRouter inserts). sourceTrackId 0 removes the binding.
+   *
+   * A key naming the track itself, or a binding that would close a cycle
+   * across the track ids' bindings as a whole, throws and leaves the existing
+   * bindings unchanged. The source and destination tracks need not exist yet,
+   * and the insert index is not range-checked: a binding outlives lane
+   * re-publication. The key is taken after the source's lane strip, with the
+   * delay to the keyed insert planned so the rendered result does not depend
+   * on lane order or block size. Control-thread only: must not be called
+   * concurrently with {@link process}.
    */
   setLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): void {
     this.native.setLaneSidechain(trackId, insertIndex, sourceTrackId);
+  }
+
+  /**
+   * Install a timeline compiled by {@link Project.compileTimeline}, all or
+   * nothing. Stopped transport only: a playing engine throws and is left
+   * unchanged, as does any validation failure. The timeline replaces tempo and
+   * time-signature segments, markers, track lanes, automation lanes, clips and
+   * the project mixer scene's track strips; a value set on one of these through
+   * a low-level setter is overwritten by the next apply. Instruments, buses,
+   * the master strip, metronome, loop and capture are untouched, so bind
+   * instruments with {@link setBuiltinInstrument} (or a sibling) using each
+   * MIDI track's destination id.
+   *
+   * The engine keeps its own reference, so the timeline may be disposed right
+   * after this call. A disposed timeline throws.
+   */
+  applyProjectTimeline(timeline: ProjectTimeline): void {
+    this.native.applyProjectTimeline((timeline as unknown as { native: unknown }).native);
   }
 
   /**

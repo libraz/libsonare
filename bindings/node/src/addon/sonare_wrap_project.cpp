@@ -93,6 +93,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::GetAssistSidecar>("getAssistSidecar"),
           InstanceMethod<&ProjectWrap::AssistSidecars>("assistSidecars"),
           InstanceMethod<&ProjectWrap::Compile>("compile"),
+          InstanceMethod<&ProjectWrap::CompileTimeline>("compileTimeline"),
           InstanceMethod<&ProjectWrap::LastBounceCompileResult>("lastBounceCompileResult"),
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
           InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(

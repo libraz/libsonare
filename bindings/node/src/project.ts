@@ -19,6 +19,7 @@ import type {
   ProjectClipFade,
   ProjectClipTake,
   ProjectCompileResult,
+  ProjectCompileTimelineResult,
   ProjectKeySegment,
   ProjectLoopMode,
   ProjectLoopRecordingDesc,
@@ -188,6 +189,40 @@ function midi2I32(fnName: string, value: number, argName: string): number {
 function midi2Byte(fnName: string, value: number, argName: string): number {
   assertBoundedInteger(fnName, value, argName, 0, 0xff);
   return value;
+}
+
+/**
+ * Immutable compiled playback snapshot of a {@link Project}, produced by
+ * {@link Project.compileTimeline} and installed with
+ * {@link RealtimeEngine.applyProjectTimeline}. The native handle is not
+ * garbage-collected, so release it with {@link dispose} (or `using`).
+ */
+export class ProjectTimeline {
+  private native: InstanceType<typeof addon.ProjectTimeline>;
+  private disposed = false;
+
+  /** @internal Created by {@link Project.compileTimeline}. */
+  constructor(native: InstanceType<typeof addon.ProjectTimeline>) {
+    this.native = native;
+  }
+
+  /**
+   * Release the native timeline. Idempotent. An engine the timeline was
+   * applied to keeps its own reference, so this is safe right after
+   * {@link RealtimeEngine.applyProjectTimeline}.
+   */
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.native.destroy();
+  }
+
+  /** Releases the native timeline; lets `using` (Node 22+) free it automatically. */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 }
 
 /**
@@ -1425,6 +1460,17 @@ export class Project {
   /** Compile the project into an RT-readable timeline, surfacing diagnostics. */
   compile(): ProjectCompileResult {
     return this.native.compile();
+  }
+
+  /**
+   * Compile the project and keep the resulting timeline. Returns the same
+   * result as {@link compile} plus `timeline`, which is `null` when compilation
+   * produced none. Install it with {@link RealtimeEngine.applyProjectTimeline};
+   * later project edits do not change an already compiled timeline.
+   */
+  compileTimeline(): ProjectCompileTimelineResult {
+    const { timeline, ...result } = this.native.compileTimeline();
+    return { ...result, timeline: timeline === null ? null : new ProjectTimeline(timeline) };
   }
 
   /**

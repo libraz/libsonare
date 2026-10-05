@@ -10,6 +10,7 @@
 #include "sonare_wrap_playback.h"
 #include "sonare_wrap_polyphony.h"
 #include "sonare_wrap_project.h"
+#include "sonare_wrap_project_timeline.h"
 #include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_transcribe.h"
@@ -566,6 +567,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   RealtimeEngineWrap::Init(env, exports);
   ProjectWrap::Init(env, exports);
   SampleBankWrap::Init(env, exports);
+  ProjectTimelineWrap::Init(env, exports);
   sonare_node::PolyphonicAnalysisWrap::Init(env, exports);
   HrtfSetWrap::Init(env, exports);
   PlaybackRendererWrap::Init(env, exports);

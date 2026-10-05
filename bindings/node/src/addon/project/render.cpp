@@ -7,6 +7,7 @@
 #include "project/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
+#include "sonare_wrap_project_timeline.h"
 #include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
@@ -83,6 +84,20 @@ Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_compile(project_, &result));
   if (env.IsExceptionPending()) return env.Undefined();
   return CompileResultToObject(env, &result);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::CompileTimeline(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SonareProjectCompileResult result{};
+  SonareProjectTimeline* timeline = nullptr;
+  ThrowIfError(env, sonare_project_compile_timeline(project_, &result, &timeline));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = CompileResultToObject(env, &result);
+  out.Set("timeline",
+          timeline != nullptr ? Napi::Value(ProjectTimelineWrap::Wrap(env, timeline)) : env.Null());
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

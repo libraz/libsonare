@@ -206,6 +206,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::ClipCount>("clipCount"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackLanes>("setTrackLanes"),
           InstanceMethod<&RealtimeEngineWrap::SetLaneSidechain>("setLaneSidechain"),
+          InstanceMethod<&RealtimeEngineWrap::ApplyProjectTimeline>("applyProjectTimeline"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackBuses>("setTrackBuses"),
           InstanceMethod<&RealtimeEngineWrap::SetBusSidechain>("setBusSidechain"),
           InstanceMethod<&RealtimeEngineWrap::SetMasterSidechain>("setMasterSidechain"),

@@ -1,5 +1,6 @@
 // Type-only, so the erased import adds no runtime edge: to the coercion module
 // below, and to the bank module, which names these types back.
+import type { ProjectTimeline } from './project.js';
 import type { PROJECT_AUTOMATION_CURVE_VALUES } from './value_coercion.js';
 
 /**
@@ -344,6 +345,15 @@ export interface ProjectCompileResult {
   /** Newline-joined human-readable diagnostic detail. */
   messages: string;
   diagnostics: ProjectDiagnostic[];
+}
+
+/** Result of {@link Project.compileTimeline}. */
+export interface ProjectCompileTimelineResult extends ProjectCompileResult {
+  /**
+   * The compiled playback snapshot, or `null` when compilation produced none
+   * (see `diagnostics`). Owned by the caller: dispose it when done.
+   */
+  timeline: ProjectTimeline | null;
 }
 
 /**

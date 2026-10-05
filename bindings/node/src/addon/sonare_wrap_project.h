@@ -125,6 +125,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   // -- compile / render --
   Napi::Value Compile(const Napi::CallbackInfo& info);
+  Napi::Value CompileTimeline(const Napi::CallbackInfo& info);
   Napi::Value LastBounceCompileResult(const Napi::CallbackInfo& info);
   Napi::Value Bounce(const Napi::CallbackInfo& info);
   Napi::Value BounceWithBuiltinInstruments(const Napi::CallbackInfo& info);

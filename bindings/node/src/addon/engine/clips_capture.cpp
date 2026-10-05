@@ -6,6 +6,7 @@
 #include "engine/common.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_project_timeline.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node::engine;
@@ -306,6 +307,16 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
           sonare_node::node_narrow_uint32(env, info[0], sonare_node::node_arg_label(0).c_str()),
           sonare_node::node_narrow_uint32(env, info[1], sonare_node::node_arg_label(1).c_str()),
           sonare_node::node_narrow_uint32(env, info[2], sonare_node::node_arg_label(2).c_str())));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ApplyProjectTimeline(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const SonareProjectTimeline* timeline = nullptr;
+  if (!ProjectTimelineWrap::ReadHandle(env, info[0], &timeline)) return env.Undefined();
+  ThrowIfError(env, sonare_engine_apply_project_timeline(engine_, timeline));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

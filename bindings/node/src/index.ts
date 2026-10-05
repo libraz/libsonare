@@ -247,6 +247,7 @@ export type {
   ProjectClipFade,
   ProjectClipTake,
   ProjectCompileResult,
+  ProjectCompileTimelineResult,
   ProjectDiagnostic,
   ProjectFadeCurve,
   ProjectKeySegment,
