@@ -371,3 +371,160 @@ def test_module_reference_rows_merges_across_sibling_module_captures(tmp_path):
         font_path, "STANDARD 1", "t0", capture_dir=capture_dir, reference_dir=reference_dir
     )
     assert sorted(rows) == [41, 45, 49]
+
+
+# --- reference classification drives the model side of a page -------------------
+
+
+def _classified_voice(room=None, rig=None, *, dry=False, name="electric_guitar_di"):
+    """A voice aimed at a real capture definition with its room/rig class overridden."""
+    from dataclasses import replace
+
+    cap = bank.load_capture(bank.CAPTURE_DIR / f"{name}.json")
+    raw = {k: v for k, v in cap.raw.items() if k not in ("room", "rig")}
+    if room is not None:
+        raw["room"] = room
+    if rig is not None:
+        raw["rig"] = rig
+    cap = replace(cap, raw=raw, dry=dry)
+    return bank.Voice(program=cap.program, captures=(cap,))
+
+
+def _render_take_stubbed(monkeypatch, tmp_path, voice, *, model_sends="auto", variants=()):
+    """Run `render_take` with every render stubbed; returns (sends, variant calls, item)."""
+    seen = {"sends": None, "variants": []}
+
+    def fake_smf(notes, **kw):
+        seen["sends"] = kw["sends"]
+        return b"smf"
+
+    def fake_model(smf, seconds, sr, rig=True, preset=""):
+        return np.full((64, 2), 0.1 if rig else 0.2, dtype=np.float32)
+
+    def fake_variant(smf, seconds, sr, overrides, lib="", rig=True, preset=""):
+        seen["variants"].append({"overrides": overrides, "rig": rig, "preset": preset})
+        return np.zeros((64, 2), dtype=np.float32)
+
+    monkeypatch.setattr(make_audition, "write_smf", fake_smf)
+    monkeypatch.setattr(make_audition, "render_model", fake_model)
+    monkeypatch.setattr(make_audition, "render_variant", fake_variant)
+    monkeypatch.setattr(make_audition, "render_reference_timbres", lambda *a, **k: ({}, {}))
+    monkeypatch.setattr(make_audition, "write_wav", lambda *a, **k: None)
+    take = SimpleNamespace(
+        id="t",
+        label="t",
+        sub="",
+        group="g",
+        notes=[Note(60, 100, 0.0, 1.0)],
+        tail_s=1.0,
+        cc_events=(),
+        channel=0,
+        duration=lambda: 2.0,
+    )
+    args = _args(model_sends=model_sends, archive_references="")
+    timbres = list(voice.capture.timbres)
+    item = make_audition.render_take(take, voice, timbres, tmp_path, args, list(variants), None)
+    return seen["sends"], seen["variants"], item
+
+
+def test_auto_sends_follow_the_room_class_not_the_hosts_dry_flag(monkeypatch, tmp_path):
+    none, _, _ = _render_take_stubbed(monkeypatch, tmp_path, _classified_voice("none", "none"))
+    present, _, _ = _render_take_stubbed(monkeypatch, tmp_path, _classified_voice("present"))
+    unset, _, _ = _render_take_stubbed(monkeypatch, tmp_path, _classified_voice())
+    assert none == (0, 0, 0)
+    assert present == (None, None, None)
+    assert unset == (0, 0, 0)
+
+
+def test_explicit_model_sends_beats_the_room_class(monkeypatch, tmp_path):
+    voice = _classified_voice("none", "none")
+    gs, _, _ = _render_take_stubbed(monkeypatch, tmp_path, voice, model_sends="gs")
+    dry, _, _ = _render_take_stubbed(
+        monkeypatch, tmp_path, _classified_voice("present"), model_sends="dry"
+    )
+    assert gs == (None, None, None)
+    assert dry == (0, 0, 0)
+
+
+def test_reference_note_is_generated_from_room_class_and_decision():
+    timbres = [{"id": "x"}]
+    none = make_audition.reference_note(_classified_voice("none", "none"), timbres)
+    assert "carries no room" in none and "zeroed" in none
+    assert "room of its own" not in none and "room included" not in none
+    unset = make_audition.reference_note(_classified_voice(), timbres)
+    assert "room is unclassified" in unset and "zeroed" in unset
+    present = make_audition.reference_note(_classified_voice("present"), timbres)
+    assert "room of its own" in present and "GS power-on" in present
+    forced = make_audition.reference_note(_classified_voice("none", "none"), timbres, "gs")
+    assert "carries no room" in forced and "GS power-on" in forced and "--model-sends" in forced
+
+
+def test_candidates_receive_the_same_preset_as_the_baseline(monkeypatch, tmp_path):
+    from dataclasses import replace
+
+    voice = replace(_classified_voice("none", "baked"), preset="SomePreset")
+    variants = [make_audition.Variant("v", "a=1")]
+    _, calls, _ = _render_take_stubbed(monkeypatch, tmp_path, voice, variants=variants)
+    assert calls and all(c["preset"] == "SomePreset" for c in calls)
+
+
+def test_variant_worker_keeps_the_native_channel_layout():
+    assert "mean(axis" not in make_audition._VARIANT_WORKER
+
+
+def test_digest_treats_mono_and_stereo_of_one_signal_as_equal():
+    mono = np.linspace(-1, 1, 32, dtype=np.float32)
+    assert make_audition.digest(mono) == make_audition.digest(np.stack([mono, mono], axis=1))
+
+
+def test_di_reference_makes_the_direct_render_primary(monkeypatch, tmp_path):
+    voice = _classified_voice("none", "none")
+    variants = [make_audition.Variant("v", "a=1")]
+    _, _, item = _render_take_stubbed(monkeypatch, tmp_path, voice, variants=variants)
+    assert "model-di" in item["tracks"]
+    sources = make_audition.build_sources(voice, list(voice.capture.timbres), variants, [], di=True)
+    keys = list(sources)
+    assert sources["model-di"]["block"] == "primary" and sources["v-di"]["block"] == "primary"
+    assert sources["model"]["block"] == "secondary" and sources["v"]["block"] == "secondary"
+    assert keys.index("model-di") < keys.index("model")
+    text = sources["model-di"]["detail"] + make_audition.reference_note(
+        voice, list(voice.capture.timbres)
+    )
+    assert "amplifier" not in text.replace("no amplifier", "").replace("amplifier in it", "")
+    assert "module's samples" not in text and "room included" not in text
+
+
+def test_baked_and_unclassified_references_keep_the_rigged_model_primary():
+    for rig in ("baked", None):
+        voice = _classified_voice("none", rig)
+        sources = make_audition.build_sources(voice, list(voice.capture.timbres), [], [], di=True)
+        assert "block" not in sources["model"] and "block" not in sources["model-di"]
+        assert next(iter(sources)) == "model"
+
+
+def test_manifest_voice_carries_the_capture_rig_class(monkeypatch, tmp_path):
+    def run(voice):
+        take = SimpleNamespace(id="t", duration=lambda: 1.0)
+        item = {"id": "t", "tracks": {"model": "t/model.wav"}, "_digests": set()}
+        monkeypatch.setattr(make_audition, "build_takes", lambda *a, **k: [take])
+        monkeypatch.setattr(make_audition, "render_take", lambda *a, **k: dict(item))
+        out = tmp_path / voice.slug
+        args = _args(
+            model_only=False,
+            wanted_timbres=(),
+            no_comparisons=True,
+            no_music=True,
+            only_takes=(),
+            reference_from="",
+            title="",
+            note="",
+            probe=False,
+            model_sends="auto",
+        )
+        make_audition.render_set(voice, out, args, {}, [])
+        return json.loads((out / "manifest.json").read_text())
+
+    assert run(_classified_voice("none", "none"))["voice"]["rig"] == "none"
+    assert run(_classified_voice("none", "baked"))["voice"]["rig"] == "baked"
+    assert run(_classified_voice())["voice"]["rig"] == "unclassified"
+    assert run(bank.Voice(program=0, captures=()))["voice"]["rig"] is None

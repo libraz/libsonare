@@ -114,7 +114,15 @@ from _repo import REPO_ROOT
 from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
 from bank import Capture, Voice, load_capture, parse_selection, voices, write_index
 from calibration import Variant
-from capture import CORPUS_ROOT, resolve_font, source_for
+from capture import (
+    CORPUS_ROOT,
+    RIG_UNCLASSIFIED,
+    ROOM_NONE,
+    ROOM_PRESENT,
+    ROOM_UNCLASSIFIED,
+    resolve_font,
+    source_for,
+)
 from capture import load_config as capture_load_config
 from metrics import _db
 from phrases import Take, build_takes
@@ -155,7 +163,7 @@ preset = sys.argv[6] if len(sys.argv) > 6 else ""
 with open(smf, "rb") as fh:
     a = np.asarray(render_model(fh.read(), seconds, sr, rig=rig, preset=preset),
                    dtype=np.float32)
-np.save(out, a.mean(axis=1) if a.ndim > 1 else a)
+np.save(out, a)
 """
 
 
@@ -206,10 +214,10 @@ def render_variant(
 def digest(audio: np.ndarray) -> str:
     """A render's identity, comparable across the two ways one is produced.
 
-    The baseline comes back stereo from `render_model` and a variant comes back
-    mono from the subprocess worker, so the arrays are hashed after a downmix or
-    the two could never be equal — and the check that wants them compared is
-    exactly the one asking whether a variant changed anything at all.
+    Renders keep their native channel layout, so the arrays are hashed after a
+    downmix: the check that wants them compared is asking whether a variant
+    changed anything at all, and a mono and a stereo layout of one signal must
+    not read as a difference.
     """
     mono = audio.mean(axis=1) if audio.ndim > 1 else audio
     return hashlib.sha256(np.ascontiguousarray(mono, dtype=np.float32).tobytes()).hexdigest()
@@ -335,6 +343,52 @@ def comparison_detail(cap: Capture) -> str:
     return f"{kind} — {cap.label.split(',')[0]}"
 
 
+def capture_room(voice: Voice) -> str:
+    """The room class of the voice's reference capture, `unclassified` when it names none."""
+    if voice.capture is None:
+        return ROOM_UNCLASSIFIED
+    return str(voice.capture.raw.get("room", ROOM_UNCLASSIFIED))
+
+
+def capture_rig(voice: Voice) -> str | None:
+    """The rig class of the voice's reference capture, None when there is no capture."""
+    if voice.capture is None:
+        return None
+    return str(voice.capture.raw.get("rig", RIG_UNCLASSIFIED))
+
+
+def model_sends_wet(model_sends: str, voice: Voice, timbres: list[dict]) -> bool:
+    """Whether the model renders with the GS reverb/chorus sends at power-on.
+
+    `auto` follows what the reference recording contains (`room`), never the
+    host's `dry` instruction: only a reference with a room gets the model's own
+    ambience, and an unclassified one is compared without it.
+    """
+    if model_sends != "auto":
+        return model_sends == "gs"
+    return voice.capture is not None and bool(timbres) and capture_room(voice) == ROOM_PRESENT
+
+
+def _rig_explanation(rig: str | None) -> str:
+    """What the reference's rig class says about which model path it is comparable with."""
+    if rig == "none":
+        return (
+            "the reference is a direct-input recording with no amplifier in it, "
+            "so this direct render is what it is compared with; the rigged `model` "
+            "is a separate, secondary block"
+        )
+    if rig == "baked":
+        return (
+            "the reference has the rig recorded into it, so `model` (what ships, "
+            "with the bank's rig) is what it is comparable with and this render "
+            "is what the rig is being asked to work on"
+        )
+    return (
+        "the reference's rig is unclassified, so it is not known whether `model` "
+        "or this render is the comparable one"
+    )
+
+
 def build_sources(
     voice: Voice,
     timbres: list[dict],
@@ -370,10 +424,7 @@ def build_sources(
             # interleaves them asks one question where there are two.
             "path": "direct",
             "detail": "the same voice with the bank's rig cleared, which is where "
-            "the instrument itself stops. `model` is what ships and what "
-            "the reference is comparable with, since a module's samples "
-            "of this program have an amplifier recorded into them; this "
-            "is what the rig is being asked to work on.",
+            "the instrument itself stops; " + _rig_explanation(capture_rig(voice)) + ".",
         }
     for variant in variants:
         sources[variant.name] = {
@@ -397,6 +448,16 @@ def build_sources(
                 "candidate did to the decay. — " + variant.detail,
                 **calibration.source_text(variant, direct=True),
             }
+    if di and capture_rig(voice) == "none":
+        # A DI reference is compared with the direct render; the rigged
+        # versions move to a secondary block behind it.
+        has_twin = {k[: -len("-di")] for k in sources if k.endswith("-di")}
+        for key, src in sources.items():
+            if key.endswith("-di"):
+                src["block"] = "primary"
+            elif key == "model" or key in has_twin:
+                src["block"] = "secondary"
+        sources = dict(sorted(sources.items(), key=lambda kv: kv[1].get("block") != "primary"))
     reference_of = voice.capture.label.split(",")[0] if voice.capture else ""
     for t in timbres:
         sources[t["id"]] = {
@@ -422,36 +483,51 @@ def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto")
     `--model-only` page of a captured voice does not describe a reference that
     is not on it.
     """
-    forced = ""
-    if model_sends == "gs":
-        forced = (
-            "The model side renders with CC91/93/94 at their GS power-on values "
-            "whatever the reference does, because this page was built to be heard "
-            "through libsonare's own ambience. "
-        )
-    elif model_sends == "dry":
-        forced = "The model side renders with CC91/93/94 zeroed, by request. "
     if voice.capture is None or not timbres:
-        return forced + (
+        return (
             "Nothing is being compared here: this page holds the model alone, "
             "either because no reference has been captured for this voice or "
             "because none was asked for."
         )
-    if voice.capture.dry:
-        return forced + (
-            "The reference is captured dry — every effect section of the plugin is "
-            "switched off — so what is being compared is the instrument and not a room."
+    room = capture_room(voice)
+    rig = capture_rig(voice)
+    wet = model_sends_wet(model_sends, voice, timbres)
+    if room == ROOM_PRESENT:
+        reference = (
+            "The reference carries a room of its own, so part of what is heard on "
+            "the reference side is that room. "
         )
-    return (
-        "The reference is NOT captured dry: this one carries effects of its own "
-        "that cannot be switched off per slot, so part of what is heard on the "
-        "reference side is its room. The model side therefore renders the way it "
-        "ships — CC91/93/94 left at their GS power-on values, weighted per program "
-        "by `gm_fallback_sends` — rather than at the zero a dry-versus-dry metric "
-        "needs. That is libsonare's own ambience and the only ambience a listener "
-        "gets from it, so what is being compared is the product against the "
-        "recording, room included on both sides."
-    )
+    elif room == ROOM_NONE:
+        reference = (
+            "The reference carries no room, so what is being compared is the "
+            "instrument and not a space. "
+        )
+    else:
+        reference = (
+            "The reference's room is unclassified: whether the recording contains "
+            "a room has not been answered, so none is assumed. "
+        )
+    by_request = " (set by --model-sends)" if model_sends != "auto" else ""
+    if wet:
+        model_side = (
+            "The model side renders with CC91/93/94 at their GS power-on values"
+            f"{by_request}, weighted per program by `gm_fallback_sends` — "
+            "libsonare's own ambience."
+        )
+    else:
+        model_side = (
+            f"The model side renders with CC91/93/94 zeroed{by_request}, so it carries no room."
+        )
+    if rig == "none":
+        path = (
+            " The reference is a direct-input recording (no rig), so the primary "
+            "comparison is the direct model render and the rigged one is secondary."
+        )
+    elif rig == "baked":
+        path = " The reference has its rig recorded in, so it is compared with the rigged model."
+    else:
+        path = " The reference's rig is unclassified, so the model path it is comparable with is not known."
+    return reference + model_side + path
 
 
 def render_reference_timbres(
@@ -602,12 +678,7 @@ def render_take(
     # has to be checked for collateral is whichever one the listener knows best
     # — usually a dry-captured one, whose page would otherwise render at CC91 0
     # and hold the one setting the question is about perfectly inert.
-    wet = args.model_sends == "gs" or (
-        args.model_sends == "auto"
-        and voice.capture is not None
-        and not voice.capture.dry
-        and bool(timbres)
-    )
+    wet = model_sends_wet(args.model_sends, voice, timbres)
     smf = write_smf(
         take.notes,
         program=voice.program,
@@ -669,7 +740,7 @@ def render_take(
     tuned = [v for v in variants if v.overrides]
     digests: set[str] = {digest(renders["model"])} if tuned else set()
     for variant in variants:
-        audio = render_variant(smf, total, SR, variant.overrides, args.lib)
+        audio = render_variant(smf, total, SR, variant.overrides, args.lib, preset=voice.preset)
         renders[variant.name] = audio
         if variant.overrides:
             digests.add(digest(audio))
@@ -680,7 +751,7 @@ def render_take(
         # instrument through it is judging the wrong end of the chain.
         if di_state.get("bound") and moves_the_instrument(variant.overrides):
             renders[f"{variant.name}-di"] = render_variant(
-                smf, total, SR, variant.overrides, args.lib, rig=False
+                smf, total, SR, variant.overrides, args.lib, rig=False, preset=voice.preset
             )
             print(f"  {variant.name}-di", file=sys.stderr)
 
@@ -866,7 +937,7 @@ def render_set(
         # Travels with the data rather than with the directory, so a probe
         # copied or pointed at explicitly is still not served.
         "probe": bool(args.probe),
-        "voice": voice.describe(),
+        "voice": {**voice.describe(), "rig": capture_rig(voice)},
         "notes": ((args.note + " ") if args.note else "")
         + (
             "Every version of a take is written at one shared gain, so the level "

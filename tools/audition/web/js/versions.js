@@ -32,8 +32,11 @@ function displayOrder() {
     const key = state.take.keys[slot];
     const at = ROLE_ORDER.indexOf(roleOf(key));
     // The direct path after the shipped one within a role, so the two blocks of
-    // a role sit together rather than either of them splitting the other.
-    return (at < 0 ? ROLE_ORDER.length : at) * 2 + (pathOf(key) ? 1 : 0);
+    // a role sit together rather than either of them splitting the other —
+    // unless the manifest marks which block is primary (a DI reference).
+    const { block } = sourceOf(key);
+    const sub = block ? (block === 'primary' ? 0 : 1) : (pathOf(key) ? 1 : 0);
+    return (at < 0 ? ROLE_ORDER.length : at) * 2 + sub;
   };
   // Stable, so a role's own versions keep the order the manifest gave them.
   return slots.map((s, i) => [s, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
