@@ -52,6 +52,15 @@ MidiEvent tracked_note_off(int64_t frame, uint8_t note, uint32_t source_track_id
   return event;
 }
 
+MidiEvent midi2_note_off_with_attribute(int64_t frame, uint8_t group, uint8_t channel, uint8_t note,
+                                        uint16_t velocity, uint8_t attribute_type,
+                                        uint16_t attribute_data) {
+  MidiEvent event{frame, sonare::midi::make_midi2_note_off(group, channel, note, velocity)};
+  event.ump.words[0] = (event.ump.words[0] & ~0xFFu) | attribute_type;
+  event.ump.words[1] = (event.ump.words[1] & ~0xFFFFu) | attribute_data;
+  return event;
+}
+
 }  // namespace
 
 TEST_CASE("MidiFx transpose shifts note numbers and clamps", "[midi]") {
@@ -780,5 +789,84 @@ TEST_CASE("MidiFx MIDI 2.0 velocity keeps its low bits through a pass-through tr
     REQUIRE(out.events[0].ump.note_number() == 65);
     REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) == v);
     REQUIRE(static_cast<uint16_t>(out.events[1].ump.words[1] >> 16u) == v);
+  }
+}
+
+TEST_CASE("MidiFx preserves MIDI 2.0 note-off attributes while rewriting notes", "[midi][midi2]") {
+  constexpr uint8_t group = 7;
+  constexpr uint8_t channel = 11;
+  constexpr uint8_t source_note = 60;
+  constexpr uint16_t velocity = 0xBEEFu;
+
+  auto require_note_off = [&](const MidiEvent& event, uint8_t expected_note, uint8_t attribute_type,
+                              uint16_t attribute_data) {
+    REQUIRE(event.ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+    REQUIRE(event.ump.is_note_off());
+    REQUIRE(event.ump.group == group);
+    REQUIRE(event.ump.channel() == channel);
+    REQUIRE(event.ump.note_number() == expected_note);
+    REQUIRE(static_cast<uint16_t>(event.ump.words[1] >> 16u) == velocity);
+    REQUIRE(sonare::midi::note_attribute_type(event.ump) == attribute_type);
+    REQUIRE(sonare::midi::note_attribute_data(event.ump) == attribute_data);
+  };
+
+  SECTION("default chain keeps zero and nonzero attributes") {
+    MidiFxChain fx;
+    fx.prepare();
+    const MidiEvent input[] = {
+        midi2_note_off_with_attribute(10, group, channel, source_note, velocity, 0, 0),
+        midi2_note_off_with_attribute(20, group, channel, source_note, velocity, 1, 0x1234u),
+        midi2_note_off_with_attribute(30, group, channel, source_note, velocity, 2, 0x5678u),
+    };
+    MidiFxBuffer out;
+    fx.process(input, 3, &out);
+
+    REQUIRE(out.size == 3);
+    require_note_off(out.events[0], source_note, 0, 0);
+    require_note_off(out.events[1], source_note, 1, 0x1234u);
+    require_note_off(out.events[2], source_note, 2, 0x5678u);
+  }
+
+  SECTION("transpose keeps note-off attributes and note-on attributes") {
+    MidiFxChain fx;
+    fx.prepare();
+    TransposeConfig transpose;
+    transpose.enabled = true;
+    transpose.semitones = 5;
+    fx.set_transpose(transpose);
+
+    const MidiEvent input[] = {
+        {10, sonare::midi::make_midi2_note_on(group, channel, source_note, velocity, 2, 0x9ABCu)},
+        midi2_note_off_with_attribute(20, group, channel, source_note, velocity, 1, 0x1234u),
+    };
+    MidiFxBuffer out;
+    fx.process(input, 2, &out);
+
+    REQUIRE(out.size == 2);
+    REQUIRE(out.events[0].ump.is_note_on());
+    REQUIRE(out.events[0].ump.note_number() == source_note + 5);
+    REQUIRE(sonare::midi::note_attribute_type(out.events[0].ump) == 2);
+    REQUIRE(sonare::midi::note_attribute_data(out.events[0].ump) == 0x9ABCu);
+    require_note_off(out.events[1], source_note + 5, 1, 0x1234u);
+  }
+
+  SECTION("chord keeps note-off attributes on every generated note") {
+    MidiFxChain fx;
+    fx.prepare();
+    ChordConfig chord;
+    chord.enabled = true;
+    chord.count = 2;
+    chord.intervals = {0, 7};
+    fx.set_chord(chord);
+
+    const MidiEvent input[] = {
+        midi2_note_off_with_attribute(10, group, channel, source_note, velocity, 1, 0x1234u),
+    };
+    MidiFxBuffer out;
+    fx.process(input, 1, &out);
+
+    REQUIRE(out.size == 2);
+    require_note_off(out.events[0], source_note, 1, 0x1234u);
+    require_note_off(out.events[1], source_note + 7, 1, 0x1234u);
   }
 }

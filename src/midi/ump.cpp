@@ -85,7 +85,7 @@ uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept {
 
 uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept {
   const uint8_t velocity7 = scale_velocity_16_to_7(velocity16);
-  return velocity16 != 0 && velocity7 == 0 ? 1u : velocity7;
+  return velocity7 == 0 ? 1u : velocity7;
 }
 
 uint32_t scale_cc_7_to_32(uint8_t value7) noexcept {
@@ -203,22 +203,26 @@ Ump make_midi2_assignable_per_note_controller(uint8_t group, uint8_t channel, ui
 
 Ump make_midi2_registered_controller(uint8_t group, uint8_t channel, uint8_t bank, uint8_t index,
                                      uint32_t value32) noexcept {
-  return make_midi2(group, UmpStatus::kRegisteredController, channel, bank, index, value32);
+  return make_midi2(group, UmpStatus::kRegisteredController, channel, bank & 0x7Fu, index & 0x7Fu,
+                    value32);
 }
 
 Ump make_midi2_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank, uint8_t index,
                                      uint32_t value32) noexcept {
-  return make_midi2(group, UmpStatus::kAssignableController, channel, bank, index, value32);
+  return make_midi2(group, UmpStatus::kAssignableController, channel, bank & 0x7Fu, index & 0x7Fu,
+                    value32);
 }
 
 Ump make_midi2_relative_registered_controller(uint8_t group, uint8_t channel, uint8_t bank,
                                               uint8_t index, uint32_t delta32) noexcept {
-  return make_midi2(group, UmpStatus::kRelativeRegisteredController, channel, bank, index, delta32);
+  return make_midi2(group, UmpStatus::kRelativeRegisteredController, channel, bank & 0x7Fu,
+                    index & 0x7Fu, delta32);
 }
 
 Ump make_midi2_relative_assignable_controller(uint8_t group, uint8_t channel, uint8_t bank,
                                               uint8_t index, uint32_t delta32) noexcept {
-  return make_midi2(group, UmpStatus::kRelativeAssignableController, channel, bank, index, delta32);
+  return make_midi2(group, UmpStatus::kRelativeAssignableController, channel, bank & 0x7Fu,
+                    index & 0x7Fu, delta32);
 }
 
 Ump make_midi2_per_note_pitch_bend(uint8_t group, uint8_t channel, uint8_t note,

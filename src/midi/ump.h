@@ -154,14 +154,22 @@ struct Ump {
   uint8_t data2_7bit() const noexcept { return static_cast<uint8_t>(words[0] & 0x7Fu); }
 
   bool is_note_on() const noexcept {
+    const UmpMessageType type = message_type();
+    if (type != UmpMessageType::kMidi1ChannelVoice && type != UmpMessageType::kMidi2ChannelVoice) {
+      return false;
+    }
     if (status_nibble() != static_cast<uint8_t>(UmpStatus::kNoteOn)) return false;
     // MIDI 1.0 convention: note-on with velocity 0 is semantically note-off.
     // MIDI 2.0 does not use that convention, so only apply it to MT=2 packets.
-    return message_type() != UmpMessageType::kMidi1ChannelVoice || data2_7bit() != 0;
+    return type != UmpMessageType::kMidi1ChannelVoice || data2_7bit() != 0;
   }
   bool is_note_off() const noexcept {
+    const UmpMessageType type = message_type();
+    if (type != UmpMessageType::kMidi1ChannelVoice && type != UmpMessageType::kMidi2ChannelVoice) {
+      return false;
+    }
     return status_nibble() == static_cast<uint8_t>(UmpStatus::kNoteOff) ||
-           (message_type() == UmpMessageType::kMidi1ChannelVoice &&
+           (type == UmpMessageType::kMidi1ChannelVoice &&
             status_nibble() == static_cast<uint8_t>(UmpStatus::kNoteOn) && data2_7bit() == 0);
   }
   /// Note number for note-on/off/poly-pressure messages (both protocols store
@@ -520,10 +528,9 @@ inline bool is_registered_or_assignable_controller(const Ump& ump) noexcept {
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept;
 /// 16-bit -> 7-bit velocity down-scale (top 7 bits). LOSSY.
 uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept;
-/// 16-bit -> 7-bit down-scale for a NOTE-ON velocity. As
-/// scale_velocity_16_to_7, except that a nonzero MIDI 2.0 velocity never
-/// down-scales to 0: velocity 0 on a MIDI 1.0 note-on means note-off, so the
-/// quietest audible note-on clamps to 1 instead of being silently dropped.
+/// 16-bit -> 7-bit down-scale for a NOTE-ON velocity. Every MIDI 2.0 note-on
+/// maps to a nonzero MIDI 1.0 velocity per M2-104-UM D.2.1, including input 0,
+/// because MIDI 1.0 velocity 0 denotes note-off.
 uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept;
 /// 7-bit -> 32-bit CC up-scale, min-center-max.
 uint32_t scale_cc_7_to_32(uint8_t value7) noexcept;

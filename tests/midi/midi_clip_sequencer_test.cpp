@@ -47,6 +47,15 @@ MidiClipEvent ev(double ppq, const Ump& ump) {
   return e;
 }
 
+Ump raw_ump(uint8_t message_type, uint8_t status, uint8_t note = 60, uint8_t data2 = 100) {
+  Ump packet;
+  packet.words[0] = (static_cast<uint32_t>(message_type) << 28) |
+                    (static_cast<uint32_t>(status) << 20) | (static_cast<uint32_t>(note) << 8) |
+                    data2;
+  packet.word_count = sonare::midi::ump_word_count_for_word0(packet.words[0]);
+  return packet;
+}
+
 // A capturing test sink that records dispatched events into a vector. Used only
 // for dispatch-correctness tests (NOT the no-alloc test, which uses a fixed
 // counter sink).
@@ -362,6 +371,31 @@ TEST_CASE("MidiClip sort_stable orders by ppq, note-off before note-on, stable t
   REQUIRE(clip.events() == before);
 }
 
+TEST_CASE("same-time ranking treats only channel voice notes as notes", "[midi]") {
+  using sonare::midi::kGeneralRank;
+  using sonare::midi::same_time_rank;
+
+  const Ump midi1_zero_velocity = sonare::midi::make_midi1_note_on(0, 0, 60, 0);
+  const Ump midi2_zero_velocity = sonare::midi::make_midi2_note_on(0, 0, 60, 0);
+  REQUIRE(same_time_rank(midi1_zero_velocity) == 0);
+  REQUIRE(same_time_rank(midi2_zero_velocity) == 5);
+  REQUIRE(same_time_rank(sonare::midi::make_midi1_note_off(0, 0, 60, 0)) == 0);
+  REQUIRE(same_time_rank(sonare::midi::make_midi2_note_off(0, 0, 60, 0)) == 0);
+
+  for (uint8_t message_type = 0; message_type < 16; ++message_type) {
+    if (message_type == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) ||
+        message_type == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
+      continue;
+    }
+    CHECK(same_time_rank(
+              raw_ump(message_type, static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOff))) ==
+          kGeneralRank);
+    CHECK(same_time_rank(
+              raw_ump(message_type, static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOn))) ==
+          kGeneralRank);
+  }
+}
+
 TEST_CASE("sort_render_events_stable orders same-frame events note-off before note-on", "[midi]") {
   // The live/realtime clip paths (C-ABI and WASM setMidiClips) feed absolute
   // render-frame events through this shared sort. A same-frame re-trigger must
@@ -496,6 +530,28 @@ TEST_CASE("MidiClip validate_note_pairs reports matched and unmatched notes", "[
     REQUIRE(report.unmatched_note_ons == 1);
     REQUIRE(report.unmatched_note_offs == 1);
   }
+}
+
+TEST_CASE("MidiClip note validation ignores non-channel note-shaped packets", "[midi]") {
+  MidiClip clip;
+  // These packets carry note-looking status/data fields, but their message
+  // types are not channel voice and must not create an unmatched pair.
+  clip.add_event(ev(0.0, raw_ump(0x3, static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOn),
+                                 /*note=*/60, /*velocity=*/100)));
+  clip.add_event(ev(1.0, raw_ump(0x5, static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOff),
+                                 /*note=*/61, /*velocity=*/0)));
+
+  // MIDI 1.0 velocity-zero note-on is a note-off, while MIDI 2.0 retains a
+  // note-on even when its velocity is zero.
+  clip.add_event(ev(2.0, sonare::midi::make_midi1_note_on(0, 0, 62, 100)));
+  clip.add_event(ev(3.0, sonare::midi::make_midi1_note_on(0, 0, 62, 0)));
+  clip.add_event(ev(4.0, sonare::midi::make_midi2_note_on(0, 0, 63, 0)));
+  clip.add_event(ev(5.0, sonare::midi::make_midi2_note_off(0, 0, 63, 0)));
+
+  const auto report = clip.validate_note_pairs();
+  REQUIRE(report.ok);
+  REQUIRE(report.unmatched_note_ons == 0);
+  REQUIRE(report.unmatched_note_offs == 0);
 }
 
 TEST_CASE("MidiClip sort_stable keeps bank select before program change at same ppq", "[midi]") {
@@ -813,6 +869,26 @@ TEST_CASE("MidiSequencer retains sustain state for global and destination stop r
     seq.all_notes_off_for_destination(kDestination, /*render_frame=*/4);
     require_reset(sink, 4);
   }
+}
+
+TEST_CASE("MidiSequencer does not stop-track non-channel note-shaped packets", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  const Ump nonchannel_note_on =
+      raw_ump(0x3, static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOn));
+  seq.inject_event(/*destination=*/5, /*render_frame=*/0, nonchannel_note_on);
+
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events.front().event.ump == nonchannel_note_on);
+  REQUIRE(seq.active_note_count() == 0);
+
+  sink.events.clear();
+  seq.all_notes_off(/*render_frame=*/1);
+  REQUIRE(sink.events.empty());
+  REQUIRE(seq.active_note_count() == 0);
 }
 
 TEST_CASE("MidiSequencer resets all retained channel triples at ledger capacity", "[midi]") {

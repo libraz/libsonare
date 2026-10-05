@@ -677,10 +677,11 @@ TEST_CASE("MIDI 2.0 note-on velocity uses the canonical 16-to-7-bit conversion",
           "[midi][synth][sf2][gm]") {
   // This is the conversion shared by NativeSynth and Sf2Player. Keep an
   // independent reference here so the helper's low-velocity clamp cannot drift
-  // back to the plain (note-off-producing) 16 -> 7-bit down-scale.
+  // back to the plain (note-off-producing) 16 -> 7-bit down-scale. D.2.1 also
+  // requires input velocity zero to become MIDI 1.0 NoteOn velocity one.
   const auto canonical = [](uint16_t velocity16) {
     const uint8_t velocity7 = static_cast<uint8_t>(velocity16 >> 9u);
-    return velocity16 != 0 && velocity7 == 0 ? uint8_t{1} : velocity7;
+    return velocity7 == 0 ? uint8_t{1} : velocity7;
   };
   constexpr uint16_t boundaries[] = {0, 1, 511, 512, 65535};
 
@@ -713,6 +714,7 @@ TEST_CASE("MIDI 2.0 note-on velocity uses the canonical 16-to-7-bit conversion",
        {uint8_t{1}, uint8_t{40}, uint8_t{64}, uint8_t{100}, uint8_t{127}}) {
     sounds_as(sonare::midi::Velocity16::from7(velocity7).raw, velocity7);
   }
+  sounds_as(0, 1);
   sounds_as(511, 1);
   sounds_as(65535, 127);
 }

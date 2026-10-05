@@ -140,6 +140,25 @@ TEST_CASE("MIDI 1.0 note-on velocity zero is treated as note-off", "[midi]") {
   REQUIRE_FALSE(midi2_zero_vel.is_note_off());
 }
 
+TEST_CASE("UMP note predicates ignore non-channel message types", "[midi]") {
+  for (uint8_t message_type = 0; message_type < 16; ++message_type) {
+    if (message_type == static_cast<uint8_t>(UmpMessageType::kMidi1ChannelVoice) ||
+        message_type == static_cast<uint8_t>(UmpMessageType::kMidi2ChannelVoice)) {
+      continue;
+    }
+    for (const uint8_t status :
+         {static_cast<uint8_t>(UmpStatus::kNoteOff), static_cast<uint8_t>(UmpStatus::kNoteOn)}) {
+      Ump packet;
+      packet.words[0] = (static_cast<uint32_t>(message_type) << 28) |
+                        (static_cast<uint32_t>(status) << 20) | (60u << 8) | 100u;
+      packet.word_count = sonare::midi::ump_word_count_for_word0(packet.words[0]);
+
+      CHECK_FALSE(packet.is_note_on());
+      CHECK_FALSE(packet.is_note_off());
+    }
+  }
+}
+
 TEST_CASE("MIDI 1.0 -> 2.0 lowers a velocity-zero note-on to a note-off", "[midi]") {
   const Ump m1_zero = sonare::midi::make_midi1_note_on(2, 5, /*note=*/60, /*velocity7=*/0);
   const Ump m2 = sonare::midi::midi1_to_midi2(m1_zero);
@@ -688,13 +707,25 @@ TEST_CASE("MIDI 2.0 -> 1.0 velocity/CC down-scale is the top-7-bit truncation", 
   const Ump quiet_on = sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_on(0, 0, 60, 1));
   REQUIRE(quiet_on.is_note_on());
   REQUIRE((quiet_on.words[0] & 0x7Fu) == 1u);
-  const Ump silent_on = sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_on(0, 0, 60, 0));
-  REQUIRE(status_of(silent_on) == static_cast<uint8_t>(UmpStatus::kNoteOn));
-  REQUIRE((silent_on.words[0] & 0x7Fu) == 0u);
+  // D.2.1 reserves MIDI 1.0 velocity zero for note-off, so every MIDI 2.0
+  // note-on whose down-scaled velocity is zero clamps to the quietest on value.
+  for (const uint16_t velocity16 : {0u, 1u, 0x01FFu, 0x0200u}) {
+    INFO("note-on velocity16 " << velocity16);
+    REQUIRE(sonare::midi::scale_note_on_velocity_16_to_7(velocity16) == 1u);
+    const Ump lowered =
+        sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_on(0, 0, 60, velocity16));
+    REQUIRE(status_of(lowered) == static_cast<uint8_t>(UmpStatus::kNoteOn));
+    REQUIRE(lowered.data2_7bit() == 1u);
+    REQUIRE(lowered.is_note_on());
+  }
   const Ump quiet_off =
       sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_off(0, 0, 60, 1));
   REQUIRE(quiet_off.is_note_off());
   REQUIRE((quiet_off.words[0] & 0x7Fu) == 0u);
+  const Ump silent_off =
+      sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_off(0, 0, 60, 0));
+  REQUIRE(silent_off.is_note_off());
+  REQUIRE(silent_off.data2_7bit() == 0u);
 
   REQUIRE(sonare::midi::scale_cc_32_to_7(0x80000000u) == 64u);
   REQUIRE(sonare::midi::scale_cc_32_to_7(0xFFFFFFFFu) == 127u);
@@ -901,6 +932,22 @@ TEST_CASE("MIDI 2.0 relative controller, per-note bend and management builders l
   REQUIRE(pnm.words[0] == 0x40F53D03u);
   REQUIRE(pnm.words[1] == 0u);
   REQUIRE(pnm.word_count == 2);
+}
+
+TEST_CASE("MIDI 2.0 controller builders mask bank and index fields to 7 bits", "[midi]") {
+  const std::array<Ump, 4> controllers = {
+      sonare::midi::make_midi2_registered_controller(0, 0, 0xFF, 0xFF, 0),
+      sonare::midi::make_midi2_assignable_controller(0, 0, 0xFF, 0xFF, 0),
+      sonare::midi::make_midi2_relative_registered_controller(0, 0, 0xFF, 0xFF, 0),
+      sonare::midi::make_midi2_relative_assignable_controller(0, 0, 0xFF, 0xFF, 0),
+  };
+  for (const Ump& controller : controllers) {
+    CAPTURE(controller.words[0]);
+    CHECK(((controller.words[0] >> 8u) & 0x7Fu) == 0x7Fu);
+    CHECK((controller.words[0] & 0x7Fu) == 0x7Fu);
+    CHECK((controller.words[0] & 0x8000u) == 0u);
+    CHECK((controller.words[0] & 0x80u) == 0u);
+  }
 }
 
 TEST_CASE("MIDI 2.0 note-on exposes its attribute type and data", "[midi]") {

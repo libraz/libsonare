@@ -193,7 +193,10 @@ Ump make_note_preserving_velocity(const Ump& src, bool note_on, uint8_t note) no
       const uint16_t attr_data = static_cast<uint16_t>(src.words[1] & 0xFFFFu);
       return make_midi2_note_on(src.group, src.channel(), note, velocity16, attr_type, attr_data);
     }
-    return make_midi2_note_off(src.group, src.channel(), note, velocity16);
+    // Patch only the note number so the NoteOff's velocity and attribute survive.
+    Ump out = src;
+    out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
+    return out;
   }
   return make_note(src, note_on, note, Velocity16::from7(midi1_velocity7(src)));
 }
