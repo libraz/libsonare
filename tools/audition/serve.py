@@ -74,10 +74,12 @@ import os
 import re
 import socketserver
 import sys
+import tempfile
 import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import webbrowser
 from pathlib import Path
 from typing import ClassVar
@@ -170,9 +172,11 @@ def read_feedback(path: Path) -> list[dict]:
         if not line:
             continue
         try:
-            out.append(json.loads(line))
+            entry = json.loads(line)
         except ValueError:
             continue
+        if isinstance(entry, dict):
+            out.append(entry)
     return out
 
 
@@ -219,18 +223,39 @@ def append_feedback(path: Path, entry: dict) -> None:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def drop_last_feedback(path: Path) -> None:
-    """Undo, which is a rewrite of the file without its last valid entry.
+def drop_feedback(path: Path, entry_id: object) -> bool:
+    """Undo one note: rewrite the log without the line whose entry carries `entry_id`.
 
-    Offered because a note is sent while the sound is still going and the wrong
-    version is one keystroke away; without it the only fix is editing a file by
-    hand, which nobody does mid-session.
+    Every other line is kept byte for byte, malformed ones included, and the
+    file is replaced atomically so a crash leaves the old log or the new one.
+    Returns False, writing nothing, where no entry has that id.
     """
-    entries = read_feedback(path)
-    if not entries:
-        return
-    body = "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries[:-1])
-    path.write_text(body, encoding="utf-8")
+    if not isinstance(entry_id, str) or not entry_id:
+        return False
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return False
+    lines = re.findall(rb"[^\n]*\n|[^\n]+", data)
+    for n, raw in enumerate(lines):
+        try:
+            found = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(found, dict) and found.get("id") == entry_id:
+            del lines[n]
+            break
+    else:
+        return False
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(b"".join(lines))
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    return True
 
 
 def read_bank() -> dict:
@@ -519,7 +544,12 @@ def infer_manifest(root: Path) -> dict:
 def read_manifest(root: Path) -> dict:
     explicit = root / "manifest.json"
     if explicit.exists():
-        return json.loads(explicit.read_text())
+        try:
+            loaded = json.loads(explicit.read_text())
+        except (OSError, ValueError) as err:
+            print(f"unreadable manifest: {explicit}: {err}", file=sys.stderr)
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
     return infer_manifest(root)
 
 
@@ -527,7 +557,7 @@ def read_manifest(root: Path) -> dict:
 GENERIC_NAMES = ("audition", "renders", "out")
 
 
-def set_id(root: Path) -> str:
+def set_id(root: Path, scratch: Path | None = None) -> str:
     """A short URL-safe name for a set, and the one its links carry.
 
     Taken from the parent directory when the leaf says nothing, so that two sets
@@ -536,7 +566,7 @@ def set_id(root: Path) -> str:
     parent is the scratch root and names the harness rather than the set.
     """
     name = root.name
-    if name in GENERIC_NAMES and root.parent not in (root, SCRATCH_ROOT):
+    if name in GENERIC_NAMES and root.parent not in (root, scratch or SCRATCH_ROOT):
         name = root.parent.name
     return re.sub(r"[^a-zA-Z0-9._-]+", "-", name).strip("-") or "set"
 
@@ -588,14 +618,16 @@ def expand(root: Path) -> list[Path]:
     return inside or [root]
 
 
-def discover(paths: list[str]) -> list[Path]:
+def discover(paths: list[str], scratch: Path | None = None) -> list[Path]:
     """The directories to serve: the ones named, else whatever the scratch root holds."""
     if paths:
         named = [Path(p).expanduser().resolve() for p in paths]
         return [q for q in dict.fromkeys(r for p in named for r in expand(p)) if not is_probe(q)]
     found: list[Path] = []
     for pattern in FALLBACK_GLOBS:
-        found += [p.resolve() for p in sorted(SCRATCH_ROOT.glob(pattern)) if p.is_dir()]
+        found += [
+            p.resolve() for p in sorted((scratch or SCRATCH_ROOT).glob(pattern)) if p.is_dir()
+        ]
     unique = list(dict.fromkeys(found))
     # A directory a set's manifest names as one of its own takes is part of that
     # set, not a set beside it. The default output directory is the parent of
@@ -637,6 +669,30 @@ def is_probe(path: Path) -> bool:
         return False
 
 
+def assign_id(root: Path, taken: dict | set, scratch: Path | None = None) -> str:
+    """The set's id, suffixed `-2`, `-3` ... until it is not one of `taken`.
+
+    Two directories with the same leaf name would otherwise shadow each other,
+    and the second would silently never be reachable.
+    """
+    ident = base = set_id(root, scratch)
+    n = 2
+    while ident in taken:
+        ident = f"{base}-{n}"
+        n += 1
+    return ident
+
+
+def resolve_set(ident: str, scratch: Path | None = None) -> Path | None:
+    """The directory a set id names, by the naming `Sets` serves it under."""
+    taken: dict[str, Path] = {}
+    for root in discover([], scratch):
+        # Skipped as `Sets.load` skips it, or the suffixes would count differently.
+        if root.is_dir() and read_manifest(root).get("items"):
+            taken[assign_id(root, taken, scratch)] = root
+    return taken.get(ident)
+
+
 class Sets:
     """The served sets, by id, and the index the page reads to list them.
 
@@ -659,20 +715,14 @@ class Sets:
 
     @classmethod
     def load(cls, roots: list[Path]) -> None:
-        cls.by_id = {}
-        cls.index = []
+        # Built aside and swapped in whole, so a set that fails to load never
+        # leaves the index half rebuilt.
+        by_id: dict[str, Path] = {}
+        index: list[dict] = []
         for root in roots:
             if not root.is_dir():
                 print(f"skipping (not a directory): {root}", file=sys.stderr)
                 continue
-            ident = set_id(root)
-            # Two directories with the same leaf name would otherwise shadow
-            # each other, and the second would silently never be reachable.
-            base = ident
-            n = 2
-            while ident in cls.by_id:
-                ident = f"{base}-{n}"
-                n += 1
             manifest = read_manifest(root)
             items = manifest.get("items", [])
             if not items:
@@ -680,12 +730,13 @@ class Sets:
                 # the picker that plays nothing.
                 print(f"skipping (no renders in it): {root}", file=sys.stderr)
                 continue
+            ident = assign_id(root, by_id)
             # A set whose takes each hold one version has nothing to compare, so
             # the page drops the comparison controls rather than showing a
             # switcher with one entry.
             compare = any(len(it.get("tracks", {})) > 1 for it in items)
-            cls.by_id[ident] = root
-            cls.index.append(
+            by_id[ident] = root
+            index.append(
                 {
                     "id": ident,
                     "title": manifest.get("title") or root.name,
@@ -699,6 +750,8 @@ class Sets:
                     "path": str(root),
                 }
             )
+        cls.by_id = by_id
+        cls.index = index
 
 
 class StaleClaim(Exception):
@@ -744,6 +797,26 @@ def oracle_rig_evidence(manifest: dict, comparison: dict | None, oracle: str | N
     return str(cfg.get("rig_evidence") or "unknown") if oracle in ids else None
 
 
+def fill_comparison(manifest: dict, evaluation: dict) -> tuple[dict, dict | None]:
+    """The evaluation with scope and status taken from the comparison it names.
+
+    A comparison the manifest does not hold raises `StaleClaim`; none named
+    leaves both null. The page's own scope is never kept.
+    """
+    comparisons = {
+        c["id"]: c for c in manifest.get("comparisons") or [] if isinstance(c, dict) and c.get("id")
+    }
+    cid = evaluation.get("comparison_id")
+    if cid is not None and cid not in comparisons:
+        raise StaleClaim("comparison", f"{cid!r} is not a comparison of this set")
+    comparison = comparisons.get(cid)
+    return {
+        **evaluation,
+        "scope": comparison.get("scope") if comparison else None,
+        "comparison_status": comparison.get("status") if comparison else None,
+    }, comparison
+
+
 def fill_evidence(manifest: dict, claim: dict, evaluation: dict) -> tuple[dict, dict]:
     """The evaluation and evidence a note stores, read from the served manifest.
 
@@ -758,18 +831,7 @@ def fill_evidence(manifest: dict, claim: dict, evaluation: dict) -> tuple[dict, 
             "set_generation",
             f"the page read {claim.get('set_generation')!r}, the set is at {current!r}",
         )
-    comparisons = {
-        c["id"]: c for c in manifest.get("comparisons") or [] if isinstance(c, dict) and c.get("id")
-    }
-    cid = evaluation.get("comparison_id")
-    if cid is not None and cid not in comparisons:
-        raise StaleClaim("comparison", f"{cid!r} is not a comparison of this set")
-    comparison = comparisons.get(cid)
-    evaluation = {
-        **evaluation,
-        "scope": comparison.get("scope") if comparison else None,
-        "comparison_status": comparison.get("status") if comparison else None,
-    }
+    evaluation, comparison = fill_comparison(manifest, evaluation)
 
     take = claim.get("take")
     evidence = {
@@ -819,6 +881,7 @@ def feedback_entry(payload: dict, now: str) -> dict:
     """
     conditions = payload.get("conditions") or {}
     entry = {
+        "id": uuid.uuid4().hex,
         "at": now,
         # The verdict is kept apart from the finer tag: "recognisably the
         # instrument and I would still change it" and "this is a different
@@ -836,13 +899,24 @@ def feedback_entry(payload: dict, now: str) -> dict:
     evaluation = payload.get("evaluation")
     evaluation = dict(evaluation) if isinstance(evaluation, dict) else {}
     claim = payload.get("evidence")
+    if not isinstance(claim, dict):
+        claim = None
+    named = [evaluation.get(f) for f in ("comparison_id", "judged_source", "oracle_source")]
+    named += [claim.get(f) for f in ("take", "source")] if claim else []
+    if any(v is not None and not isinstance(v, str) for v in named):
+        raise ValueError("evaluation and evidence names must be strings")
     evidence = None
-    if isinstance(claim, dict):
-        set_name = payload.get("set") or conditions.get("set") or ""
-        root = Sets.by_id.get(set_name)
+    set_name = payload.get("set") or conditions.get("set") or ""
+    root = Sets.by_id.get(set_name)
+    if claim is not None:
         if root is None:
             raise StaleClaim("set", f"{set_name!r} is not served")
         evaluation, evidence = fill_evidence(read_manifest(root), claim, evaluation)
+    elif root is not None:
+        evaluation, _ = fill_comparison(read_manifest(root), evaluation)
+    else:
+        # Nothing served to check against: the page's own scope and status are not kept.
+        evaluation = {**evaluation, "scope": None, "comparison_status": None}
     entry.update(schema_version=2, evaluation=evaluation, evidence=evidence)
     answers = payload.get("blind_answers")
     if isinstance(answers, list):
@@ -883,11 +957,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         root, rest = self._set_and_rest(rel)
         if root is None or not rest:
             return None
-        target = (root / rest).resolve()
+        try:
+            target = (root / rest).resolve()
+        except (OSError, ValueError):
+            return None
         return target if root in target.parents else None
 
     def translate_path(self, path: str) -> str:
-        rel = path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
+        rel = urllib.parse.unquote(path.split("?", 1)[0].split("#", 1)[0]).lstrip("/")
         target = self._resolve(rel)
         # Unreachable in practice: do_GET answers before this is consulted. The
         # path keeps SimpleHTTPRequestHandler's other verbs from serving the
@@ -907,7 +984,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return urllib.parse.parse_qs(parts[1]) if len(parts) > 1 else {}
 
     def do_GET(self) -> None:
-        rel = self.path.split("?", 1)[0].lstrip("/")
+        rel = urllib.parse.unquote(self.path.split("?", 1)[0]).lstrip("/")
         if rel == "sets.json":
             # Re-scan here, so a set rendered after the server started appears
             # on a refresh instead of needing a second server.
@@ -949,7 +1026,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
-        """Take one listening note, or undo the last one.
+        """Take one listening note, or undo one by id.
 
         The page is the only client and it is served from this process, so the
         body is trusted to be JSON and nothing else is accepted: the endpoint
@@ -962,7 +1039,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path.split("?", 1)[0].lstrip("/") != "feedback":
             self.send_error(404, "not found")
             return
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self.send_error(400, "bad Content-Length")
+            return
         if length <= 0 or length > MAX_FEEDBACK_BYTES:
             self.send_error(413, "too large")
             return
@@ -976,14 +1057,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         conditions = payload.get("conditions") or {}
+        if not isinstance(conditions, dict):
+            self.send_error(400, "conditions is not an object")
+            return
         set_id = payload.get("set") or conditions.get("set") or ""
+        if not isinstance(set_id, str):
+            self.send_error(400, "set is not a string")
+            return
         path = feedback_path(set_id)
         if path is None:
             self.send_error(400, "no set")
             return
 
+        extra = {}
         if payload.get("op") == "undo":
-            drop_last_feedback(path)
+            if not drop_feedback(path, payload.get("id")):
+                self._json({"error": "not_found"}, 404)
+                return
         else:
             now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
             try:
@@ -991,8 +1081,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except StaleClaim as stale:
                 self._json({"error": "stale", "reason": stale.reason, "detail": stale.detail}, 409)
                 return
+            except ValueError as bad:
+                self.send_error(400, str(bad))
+                return
             append_feedback(path, entry)
-        self._json({"entries": read_feedback(path), "path": str(path)})
+            extra = {"entry_id": entry["id"]}
+        self._json({"entries": read_feedback(path), "path": str(path), **extra})
 
     def end_headers(self) -> None:
         # A render is overwritten in place by the next tuning iteration, and a

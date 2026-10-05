@@ -99,7 +99,8 @@ def _audition(
     voice = {"program": 40, "patch": patch}
     if kit:
         voice = {"program": 0, "kit": True}
-    manifest = {"voice": voice}
+    # One take, as every set the server serves has.
+    manifest = {"voice": voice, "items": [{"id": "single-long", "tracks": {"model": "model.wav"}}]}
     if sources:
         manifest["sources"] = sources
     (root / set_id / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
@@ -927,6 +928,78 @@ def test_a_candidate_with_overrides_is_never_the_default_signoff() -> None:
             raise AssertionError("expected a refusal")
         except ValueError as e:
             assert "bow-light is a candidate" in str(e), e
+
+
+def _v1_page_with_v2_note(root: Path, at: str) -> dict:
+    """A v1 page (no comparisons) and a v2 note posted on it; its digest note."""
+    heard.FEEDBACK_ROOT = root / "feedback"
+    _bank(root, {"violin": {"2026-09-20": 2}})
+    _audition(root / "audition", "p040-violin", "violin", sources=_SOURCES)
+    note = _v2(at, "ok", cid="", scope="")
+    note["evaluation"].update(comparison_id=None, scope=None, comparison_status=None)
+    _log(heard.FEEDBACK_ROOT, "p040-violin", [note])
+    return heard.collect([], "")[0]["notes"][0]
+
+
+@_with_scratch
+def test_a_v2_note_on_a_page_without_comparisons_is_still_a_verdict() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        note = _v1_page_with_v2_note(Path(tmp), "2026-09-25T10:00:00+00:00")
+        assert note["scope"] == "product" and note["kind"] == "verdict", note
+        assert note["freshness"] == "unverified", note
+
+
+@_with_scratch
+def test_a_v2_note_on_a_v1_page_gets_the_date_based_stale_check() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        note = _v1_page_with_v2_note(Path(tmp), "2026-09-10T10:00:00+00:00")
+        assert note["freshness"] == "stale", note
+        assert "last moved on 2026-09-20" in note["freshness_reasons"][0], note
+
+
+@_with_scratch
+def test_a_set_is_found_by_the_id_the_server_gives_it() -> None:
+    """A leaf named `audition` takes its parent's name; a duplicate name gets `-2`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.AUDITION_ROOT = root / "audition"
+        for rel, program in (("audition/dup", 1), ("dup/audition", 2), ("harp/audition", 3)):
+            (root / rel).mkdir(parents=True)
+            (root / rel / "manifest.json").write_text(
+                json.dumps({"voice": {"program": program}, "items": [{"id": "t"}]}),
+                encoding="utf-8",
+            )
+        assert heard.voice_of("harp") == {"program": 3}
+        assert heard.voice_of("dup") == {"program": 1}
+        assert heard.voice_of("dup-2") == {"program": 2}
+        assert heard.manifest_of("audition") == {}
+
+
+def _blind_or_preference(root: Path, note: dict) -> dict:
+    heard.FEEDBACK_ROOT = root / "feedback"
+    digest = _bank(root, {"violin": {"2026-09-11": 1}})
+    _page(root / "audition", "p040-violin", digest)
+    _log(heard.FEEDBACK_ROOT, "p040-violin", [note])
+    return heard.collect([], "")[0]["notes"][0]
+
+
+@_with_scratch
+def test_a_blind_run_is_unverified_not_stale() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        blind = _v2("2026-09-25T10:00:00+00:00", "")
+        blind["evaluation"].update(judged_source=None, oracle_source=None, blind=True)
+        note = _blind_or_preference(Path(tmp), blind)
+        assert note["freshness"] == "unverified", note
+        assert "blind" in note["freshness_reasons"][0], note
+
+
+@_with_scratch
+def test_a_preference_for_a_reference_key_is_not_stale_for_being_one() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        pref = _v2("2026-09-25T10:00:00+00:00", "", judged="gm041")
+        pref.update(tag="prefer")
+        note = _blind_or_preference(Path(tmp), pref)
+        assert note["freshness"] != "stale", note
 
 
 def _run_all() -> int:

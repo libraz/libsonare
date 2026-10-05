@@ -122,11 +122,19 @@ def logs(root: Path | None = None) -> dict[str, list[dict]]:
 
 
 def manifest_of(set_id: str) -> dict:
-    """The page's manifest as it stands now, empty when there is none."""
+    """The page's manifest as it stands now, empty when there is none.
+
+    The directory is the one the server serves under this id, so a set the
+    server names after its parent, or suffixes, is found by the same name.
+    """
+    # Imported here: serve imports this module, so a top-level import would cycle.
+    import serve
+
+    root = serve.resolve_set(set_id, AUDITION_ROOT.parent.resolve())
+    if root is None:
+        return {}
     try:
-        manifest = json.loads(
-            (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return manifest if isinstance(manifest, dict) else {}
@@ -172,6 +180,17 @@ def judged(entry: dict, roles: dict[str, str]) -> str:
     return version
 
 
+def scope_of(subject: str, manifest: dict) -> str:
+    """The scope a source was rendered at, from the page, a v1 `path: direct` or a `-di` key."""
+    source = (manifest.get("sources") or {}).get(subject) or {}
+    scope = source.get("scope") if isinstance(source, dict) else None
+    if scope in DEFAULT_COMPARISON:
+        return scope
+    direct = isinstance(source, dict) and source.get("path") == "direct"
+    direct = direct or subject.endswith("-di")
+    return claims.SCOPE_INSTRUMENT if direct else claims.SCOPE_PRODUCT
+
+
 def evaluation_of(entry: dict, manifest: dict, roles: dict[str, str]) -> dict:
     """What a note judged, at which scope and against what.
 
@@ -181,25 +200,21 @@ def evaluation_of(entry: dict, manifest: dict, roles: dict[str, str]) -> dict:
     """
     evaluation = entry.get("evaluation")
     if entry.get("schema_version") == 2 and isinstance(evaluation, dict):
+        judged_source = str(evaluation.get("judged_source") or "")
         return {
             "comparison_id": str(evaluation.get("comparison_id") or ""),
-            "scope": str(evaluation.get("scope") or ""),
-            "judged": str(evaluation.get("judged_source") or ""),
+            # A v2 note on a page with no comparisons carries no scope; read it as v1 does.
+            "scope": str(evaluation.get("scope") or "") or scope_of(judged_source, manifest),
+            "judged": judged_source,
             "oracle": str(evaluation.get("oracle_source") or ""),
             "blind": bool(evaluation.get("blind")),
         }
     subject = judged(entry, roles)
-    source = (manifest.get("sources") or {}).get(subject) or {}
-    scope = source.get("scope") if isinstance(source, dict) else None
-    if scope not in DEFAULT_COMPARISON:
-        direct = isinstance(source, dict) and source.get("path") == "direct"
-        direct = direct or subject.endswith("-di")
-        scope = claims.SCOPE_INSTRUMENT if direct else claims.SCOPE_PRODUCT
     cond = entry.get("conditions") or {}
     against = cond.get("compared_against")
     return {
         "comparison_id": "",
-        "scope": scope,
+        "scope": scope_of(subject, manifest),
         "judged": subject,
         "oracle": str(against.get("version") or "") if isinstance(against, dict) else "",
         "blind": bool(cond.get("blind")),
@@ -215,19 +230,25 @@ def freshness(
     generation and the versions of `units` -- when it could be established.
     """
     evidence = entry.get("evidence")
+    at = str(entry.get("at") or "")[:10]
+    predates = last_moved and at < last_moved
+    stale_by_date = (
+        claims.STALE,
+        [f"heard {at}, before {'/'.join(units)} last moved on {last_moved}"],
+        {},
+    )
     if entry.get("schema_version") != 2 or not isinstance(evidence, dict):
-        at = str(entry.get("at") or "")[:10]
-        if last_moved and at < last_moved:
-            return (
-                claims.STALE,
-                [f"heard {at}, before {'/'.join(units)} last moved on {last_moved}"],
-                {},
-            )
+        if predates:
+            return stale_by_date
         why = "v1 note" if entry.get("schema_version") != 2 else "the note recorded no evidence"
         return claims.UNVERIFIED, [f"{why}: which recording was heard is unknown"], {}
-    if manifest.get("schema_version") != 2:
-        return claims.UNVERIFIED, ["the page's manifest records no render evidence"], {}
     subject = evaluation["judged"]
+    if not subject:
+        return claims.UNVERIFIED, ["a blind run names no single recording"], {}
+    if manifest.get("schema_version") != 2:
+        if predates:
+            return stale_by_date
+        return claims.UNVERIFIED, ["the page's manifest records no render evidence"], {}
     item = next(
         (i for i in manifest.get("items") or [] if i.get("id") == evidence.get("take")), None
     )
@@ -256,9 +277,13 @@ def freshness(
     if comparison is None:
         return claims.STALE, [f"comparison {cid or '(none)'} is not defined on the page"], {}
     oracle = evaluation["oracle"]
+    allowed = list(comparison.get("model_sources") or [])
+    if entry.get("tag") == "prefer":
+        # A preference can be put forward for a reference or comparison key too.
+        allowed += comparison.get("oracle_sources") or []
     if (
         comparison.get("scope") != evaluation["scope"]
-        or subject not in (comparison.get("model_sources") or [])
+        or subject not in allowed
         or (oracle and oracle not in (comparison.get("oracle_sources") or []))
     ):
         return claims.STALE, [f"comparison {cid} no longer pairs {subject} with {oracle}"], {}

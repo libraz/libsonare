@@ -11,6 +11,7 @@ there was nothing to notice beyond a picker that had grown.
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import socketserver
@@ -247,23 +248,37 @@ def test_feedback_is_one_append_only_file_per_set() -> None:
 
 
 @_with_feedback_root
-def test_feedback_undo_drops_only_the_last_entry() -> None:
+def test_feedback_undo_removes_exactly_the_entry_with_that_id() -> None:
     """A note is sent while the sound is still going and the wrong version is
-    one keystroke away, so undo has to be exact rather than a truncation."""
+    one keystroke away, so undo has to be exact -- and byte-preserving."""
     with tempfile.TemporaryDirectory() as tmp:
         _feedback_in(tmp)
         path = serve.feedback_path("p040-violin")
+        ids = []
         for tag in ("off/unsure", "onset/hard", "tone/bright"):
-            serve.append_feedback(path, {"tag": tag})
-        serve.drop_last_feedback(path)
-        assert [e["tag"] for e in serve.read_feedback(path)] == ["off/unsure", "onset/hard"]
-        serve.drop_last_feedback(path)
-        serve.drop_last_feedback(path)
-        assert serve.read_feedback(path) == []
-        # An undo on an empty log is a no-op rather than an error: the button is
-        # on screen before anything has been sent.
-        serve.drop_last_feedback(path)
-        assert serve.read_feedback(path) == []
+            entry = serve.feedback_entry({"tag": tag}, "now")
+            ids.append(entry["id"])
+            serve.append_feedback(path, entry)
+        assert len(set(ids)) == 3 and all(re.fullmatch(r"[0-9a-f]{32}", i) for i in ids), ids
+        # A malformed line, a non-object line and a legacy entry with no id.
+        with path.open("ab") as fh:
+            fh.write(b'{"tag": "legacy"}\n{broken\n[1, 2]\n')
+        before = path.read_bytes()
+        assert serve.drop_feedback(path, ids[1]) is True
+        lines = before.splitlines(keepends=True)
+        assert path.read_bytes() == b"".join(lines[:1] + lines[2:])
+        assert [e["tag"] for e in serve.read_feedback(path)] == [
+            "off/unsure",
+            "tone/bright",
+            "legacy",
+        ]
+        # Unknown, repeated, missing and non-string ids write nothing.
+        after = path.read_bytes()
+        for bad in (ids[1], "nope", None, "", 7):
+            assert serve.drop_feedback(path, bad) is False, bad
+        assert path.read_bytes() == after
+        assert [p.name for p in path.parent.iterdir()] == [path.name]
+        assert serve.drop_feedback(path.with_name("none.jsonl"), ids[0]) is False
 
 
 @_with_feedback_root
@@ -937,6 +952,163 @@ def test_the_endpoint_answers_409_and_writes_nothing(tmp: Path) -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+def _with_server(fn):
+    """Run `fn(port)` against a live handler, the sets and feedback root as the caller left them."""
+    server = socketserver.TCPServer(("127.0.0.1", 0), serve.Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        return fn(server.server_address[1])
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _raw_post(port: int, body: bytes, length: str | None = None) -> int:
+    """The status of a POST whose headers are chosen by the caller; 0 where the connection dropped."""
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.putrequest("POST", "/feedback")
+        conn.putheader("Content-Length", str(len(body)) if length is None else length)
+        conn.endheaders(body)
+        return conn.getresponse().status
+    except (http.client.HTTPException, OSError):
+        return 0
+    finally:
+        conn.close()
+
+
+@_served
+def test_an_appended_note_gets_a_server_id_and_undo_removes_it_by_id(tmp: Path) -> None:
+    def run(port: int) -> None:
+        mine = _post(port, {**_note("g" * 64), "id": "client-chosen"})
+        other = _post(port, _note("g" * 64))
+        assert mine[0] == 200 and other[0] == 200
+        first = mine[1]["entry_id"]
+        assert re.fullmatch(r"[0-9a-f]{32}", first), first
+        assert mine[1]["entries"][0]["id"] == first and "client-chosen" not in json.dumps(mine[1])
+        assert set(mine[1]) == {"entries", "path", "entry_id"}
+        status, body = _post(port, {"op": "undo", "set": "riffset", "id": first})
+        assert status == 200 and "entry_id" not in body, (status, body)
+        assert [e["id"] for e in body["entries"]] == [other[1]["entry_id"]]
+        for undo in (
+            {"op": "undo", "set": "riffset", "id": first},
+            {"op": "undo", "set": "riffset"},
+        ):
+            status, body = _post(port, undo)
+            assert (status, body) == (404, {"error": "not_found"}), (status, body)
+        assert len(serve.read_feedback(serve.feedback_path("riffset"))) == 1
+
+    _with_server(run)
+
+
+@_served
+def test_malformed_posts_are_answered_400_not_dropped(tmp: Path) -> None:
+    def run(port: int) -> None:
+        bad_cid = _note("g" * 64)
+        bad_cid["evaluation"]["comparison_id"] = ["gm_gs_product"]
+        bad_judged = _note("g" * 64)
+        bad_judged["evaluation"]["judged_source"] = {"a": 1}
+        bad_take = _note("g" * 64, evidence={"set_generation": "g" * 64, "take": ["riff"]})
+        for body in (
+            {"set": ["riffset"], "grade": "ok"},
+            {"conditions": ["x"], "grade": "ok"},
+            bad_cid,
+            bad_judged,
+            bad_take,
+            [1, 2],
+        ):
+            data = json.dumps(body).encode()
+            assert _raw_post(port, data) == 400, body
+        assert _raw_post(port, b"{}", length="abc") == 400
+        assert serve.read_feedback(serve.feedback_path("riffset")) == []
+
+    _with_server(run)
+
+
+@_served
+def test_log_lines_that_are_json_but_not_objects_are_skipped(tmp: Path) -> None:
+    path = serve.feedback_path("riffset")
+    serve.append_feedback(path, {"grade": "ok", "at": "2026-10-01"})
+    with path.open("a") as fh:
+        fh.write('[1]\n"text"\n7\nnull\n')
+    assert len(serve.read_feedback(path)) == 1
+    assert serve.feedback_index()["riffset"]["n"] == 1
+
+
+def test_one_unreadable_manifest_skips_its_set_and_leaves_the_rest() -> None:
+    original = (serve.Sets.by_id, serve.Sets.index)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            good = _write_set(Path(tmp).resolve() / "good", {"a": ["x", "y"]})
+            bad = _write_set(Path(tmp).resolve() / "bad", {"a": ["x", "y"]})
+            (bad / "manifest.json").write_text("{not json")
+            last = _write_set(Path(tmp).resolve() / "last", {"a": ["x", "y"]})
+            serve.Sets.load([good, bad, last])
+            assert list(serve.Sets.by_id) == ["good", "last"], serve.Sets.by_id
+            assert [e["id"] for e in serve.Sets.index] == ["good", "last"]
+    finally:
+        serve.Sets.by_id, serve.Sets.index = original
+
+
+@_served
+def test_request_paths_are_url_decoded_before_they_are_resolved(tmp: Path) -> None:
+    def run(port: int) -> None:
+        def status(rel: str) -> int:
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/{rel}", timeout=5) as r:
+                    return r.status
+            except urllib.error.HTTPError as e:
+                return e.code
+
+        assert status("s/riffset/riff/model.wav") == 200
+        assert status("s/riffset/riff%2Fmodel.wav") == 200
+        assert status("s/riffset/ri%66f/model.wav") == 200
+        (tmp / "secret.txt").write_text("outside the set")
+        assert status("s/riffset/%2e%2e/secret.txt") == 404
+        assert status("s/riffset/riff/%2e%2e/%2e%2e/%2e%2e/etc/hosts") == 404
+        assert status("s/riffset/riff/model.wav%00") == 404
+
+    _with_server(run)
+
+
+@_served
+def test_an_unattached_note_takes_scope_from_the_manifest_not_the_page(tmp: Path) -> None:
+    unattached = _note("g" * 64, evidence=None)
+    entry = serve.feedback_entry(unattached, "now")
+    assert entry["evaluation"]["scope"] == "product", entry["evaluation"]
+    assert entry["evaluation"]["comparison_status"] == "matched"
+    unknown = _note("g" * 64, evidence=None)
+    unknown["evaluation"]["comparison_id"] = "made_up"
+    try:
+        serve.feedback_entry(unknown, "now")
+    except serve.StaleClaim as stale:
+        assert stale.reason == "comparison"
+    else:
+        raise AssertionError("accepted a comparison the manifest does not define")
+    none_named = _note("g" * 64, evidence=None)
+    none_named["evaluation"]["comparison_id"] = None
+    ev = serve.feedback_entry(none_named, "now")["evaluation"]
+    assert ev["scope"] is None and ev["comparison_status"] is None, ev
+    # A set nothing serves cannot vouch for what the page sent either.
+    stray = _note(None, evidence=None, conditions={"set": "elsewhere"})
+    ev = serve.feedback_entry(stray, "now")["evaluation"]
+    assert ev["scope"] is None and ev["comparison_status"] is None, ev
+
+
+@_served
+def test_a_source_the_take_does_not_hold_is_refused_as_source_not_as_a_rerender(
+    tmp: Path,
+) -> None:
+    payload = _note("g" * 64)
+    payload["evaluation"]["oracle_source"] = "elsewhere-ref"
+    try:
+        serve.feedback_entry(payload, "now")
+    except serve.StaleClaim as stale:
+        assert stale.reason == "source", stale.reason
+    else:
+        raise AssertionError("accepted an oracle the take does not hold")
 
 
 def _run_all() -> int:
