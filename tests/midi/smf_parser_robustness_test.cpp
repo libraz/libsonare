@@ -66,17 +66,23 @@ void push_tag(std::vector<uint8_t>* v, const char* tag) {
   for (int i = 0; i < 4; ++i) v->push_back(static_cast<uint8_t>(tag[i]));
 }
 
-std::vector<uint8_t> wrap_format0_track(const std::vector<uint8_t>& body) {
+std::vector<uint8_t> make_smf(uint16_t format, const std::vector<std::vector<uint8_t>>& tracks) {
   std::vector<uint8_t> smf;
   push_tag(&smf, "MThd");
   push_u32(&smf, 6);
-  push_u16(&smf, 0);
-  push_u16(&smf, 1);
+  push_u16(&smf, format);
+  push_u16(&smf, static_cast<uint16_t>(tracks.size()));
   push_u16(&smf, 480);
-  push_tag(&smf, "MTrk");
-  push_u32(&smf, static_cast<uint32_t>(body.size()));
-  smf.insert(smf.end(), body.begin(), body.end());
+  for (const auto& body : tracks) {
+    push_tag(&smf, "MTrk");
+    push_u32(&smf, static_cast<uint32_t>(body.size()));
+    smf.insert(smf.end(), body.begin(), body.end());
+  }
   return smf;
+}
+
+std::vector<uint8_t> wrap_format0_track(const std::vector<uint8_t>& body) {
+  return make_smf(0, {body});
 }
 
 std::vector<uint8_t> make_running_status_smf(std::size_t event_count) {
@@ -123,6 +129,74 @@ MidiClipEvent ev(double ppq, const Ump& ump) {
 }
 
 }  // namespace
+
+TEST_CASE("SMF format 0 declares exactly one track", "[midi][smf]") {
+  const std::vector<uint8_t> empty_track = {0x00, 0xFF, 0x2F, 0x00};
+
+  SECTION("zero tracks is rejected") {
+    const SmfImportResult imported = import_smf(make_smf(0, std::vector<std::vector<uint8_t>>{}));
+    REQUIRE_FALSE(imported.ok());
+    CHECK(imported.status == SmfStatus::kBadHeader);
+    CHECK(imported.diagnostic.find("format 0") != std::string::npos);
+  }
+
+  SECTION("two valid end-of-track tracks are rejected") {
+    const SmfImportResult imported = import_smf(make_smf(0, {empty_track, empty_track}));
+    REQUIRE_FALSE(imported.ok());
+    CHECK(imported.status == SmfStatus::kBadHeader);
+    CHECK(imported.diagnostic.find("format 0") != std::string::npos);
+  }
+
+  SECTION("one valid end-of-track track remains accepted") {
+    const SmfImportResult imported = import_smf(make_smf(0, {empty_track}));
+    REQUIRE(imported.ok());
+    CHECK(imported.format == 0);
+    CHECK(imported.clips.empty());
+  }
+}
+
+TEST_CASE("SMF import validates key-signature fifths and mode", "[midi][smf]") {
+  std::vector<uint8_t> body;
+  const auto append_key_signature = [&body](uint8_t fifths, uint8_t minor) {
+    body.insert(body.end(), {0x00, 0xFF, 0x59, 0x02, fifths, minor});
+  };
+
+  // Both representable fifths endpoints and both mode values are retained.
+  append_key_signature(0xF9, 0);  // -7, major
+  append_key_signature(0xF9, 1);  // -7, minor
+  append_key_signature(0x07, 0);  // +7, major
+  append_key_signature(0x07, 1);  // +7, minor
+  // These are outside the SMF key-signature domain and must be skipped.
+  append_key_signature(0xF8, 0);  // -8
+  append_key_signature(0x08, 0);  // +8
+  append_key_signature(0x00, 2);  // mode is neither major nor minor
+  body.insert(body.end(), {0x00, 0xFF, 0x2F, 0x00});
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.markers.size() == 4);
+  REQUIRE(imported.skipped_events == 3);
+
+  CHECK(imported.markers[0].kind == sonare::midi::SmfMarkerKind::kKeySignature);
+  CHECK(imported.markers[0].key_fifths == -7);
+  CHECK(imported.markers[0].key_minor == false);
+  CHECK(imported.markers[0].text == "Cb major");
+
+  CHECK(imported.markers[1].kind == sonare::midi::SmfMarkerKind::kKeySignature);
+  CHECK(imported.markers[1].key_fifths == -7);
+  CHECK(imported.markers[1].key_minor == true);
+  CHECK(imported.markers[1].text == "Ab minor");
+
+  CHECK(imported.markers[2].kind == sonare::midi::SmfMarkerKind::kKeySignature);
+  CHECK(imported.markers[2].key_fifths == 7);
+  CHECK(imported.markers[2].key_minor == false);
+  CHECK(imported.markers[2].text == "C# major");
+
+  CHECK(imported.markers[3].kind == sonare::midi::SmfMarkerKind::kKeySignature);
+  CHECK(imported.markers[3].key_fifths == 7);
+  CHECK(imported.markers[3].key_minor == true);
+  CHECK(imported.markers[3].text == "A# minor");
+}
 
 // A track with a corrupt in-track event length is skipped/repaired, and the
 // following track still imports (instead of the whole file failing).
@@ -534,6 +608,49 @@ TEST_CASE("SMF import keeps the prefix and later tracks past an in-track event d
   }
   SECTION("SysEx length VLQ longer than four bytes") {
     require_recovered(import_with_defect({0x00, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00}));
+  }
+}
+
+TEST_CASE("SMF import rejects channel data bytes with the status bit and keeps later tracks",
+          "[midi][smf]") {
+  const std::vector<uint8_t> track1 = {0x00, 0x90, 0x40, 0x64, 0x00, 0xFF, 0x2F, 0x00};  // note 64
+  const std::vector<uint8_t> prefix = {0x00, 0x90, 0x3C, 0x64};                          // note 60
+
+  const auto import_with_bad_message = [&](const std::vector<uint8_t>& message) {
+    std::vector<uint8_t> track0 = prefix;
+    track0.insert(track0.end(), message.begin(), message.end());
+    return import_smf(make_smf(1, {track0, track1}));
+  };
+  const auto require_recovered = [](const SmfImportResult& imported) {
+    REQUIRE_FALSE(imported.ok());
+    REQUIRE(imported.status == SmfStatus::kTruncated);
+    REQUIRE(imported.diagnostic.find("truncated") != std::string::npos);
+    REQUIRE(imported.clips.size() == 2);
+    // The malformed event is not adapted into a masked UMP. The valid prefix
+    // and the independently framed later track both remain available.
+    REQUIRE(imported.clips[0].events().size() == 1);
+    REQUIRE(imported.clips[0].events()[0].ump.note_number() == 60);
+    REQUIRE(imported.clips[1].events().size() == 1);
+    REQUIRE(imported.clips[1].events()[0].ump.note_number() == 64);
+  };
+
+  SECTION("first data byte of a two-data message") {
+    require_recovered(import_with_bad_message({0x00, 0x90, 0x80, 0x40}));
+  }
+
+  SECTION("second data byte of a two-data message") {
+    require_recovered(import_with_bad_message({0x00, 0x90, 0x3D, 0x80}));
+  }
+
+  SECTION("the sole data byte of a one-data message") {
+    require_recovered(import_with_bad_message({0x00, 0xC0, 0x80}));
+  }
+
+  SECTION("second data byte after running status") {
+    // The first byte after the delta is the running-status message's first
+    // data byte; the following high-bit byte must not be masked by the UMP
+    // adapter into a valid velocity.
+    require_recovered(import_with_bad_message({0x00, 0x3D, 0x80}));
   }
 }
 

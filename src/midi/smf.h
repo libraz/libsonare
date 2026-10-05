@@ -33,7 +33,8 @@
 ///     is still consumed, so what follows stays in time.
 ///   - Export writes format 1: track 0 carries the tempo/time-signature map and
 ///     any @ref SmfExportOptions::markers, then one track per MidiClip. SysEx
-///     handles re-emit only when `SmfExportOptions::sysex_store` is supplied.
+///     handles re-emit only when `SmfExportOptions::sysex_store` is supplied and
+///     the stored payload is representable as MIDI 1.0 SysEx7.
 
 #include <cstdint>
 #include <string>
@@ -161,10 +162,14 @@ inline SmfImportResult import_smf(const std::vector<uint8_t>& data,
 /// Options controlling SMF export.
 struct SmfExportOptions {
   /// Ticks per quarter note written to the header (and used to quantize PPQ
-  /// event positions to integer ticks). Defaults to the common 480 PPQN.
+  /// event positions to integer ticks). Defaults to the common 480 PPQN. A
+  /// nonzero value above 0x7FFF is rejected because the SMF non-SMPTE division
+  /// field is a positive 15-bit PPQN value.
   uint16_t ticks_per_quarter = 480;
   /// Optional payload store used to serialize UMP SysEx handles back to SMF.
-  /// When omitted, SysEx-handle events are skipped without failing export.
+  /// Only payloads with optional outer F0/F7 framing and 7-bit inner bytes are
+  /// emitted; unresolved or non-SysEx7-representable handles are skipped and
+  /// counted in SmfExportResult::skipped_events.
   const SysExStore* sysex_store = nullptr;
   /// Optional marker meta events written to track 0.
   std::vector<SmfMarker> markers;
@@ -175,8 +180,9 @@ struct SmfExportResult {
   SmfStatus status = SmfStatus::kOk;
   std::string diagnostic;
   std::vector<uint8_t> bytes;
-  /// Count of events skipped lossily during export (unresolved SysEx handles,
-  /// MIDI 2.0-only controller forms, non-channel voice packets, etc.).
+  /// Count of events skipped lossily during export (unresolved or
+  /// non-SysEx7-representable handles, MIDI 2.0-only controller forms,
+  /// non-channel voice packets, etc.).
   uint32_t skipped_events = 0;
   /// Count of events written at an earlier tick than their own because the gap
   /// from the previously written event exceeded what a 4-byte delta time can
@@ -193,7 +199,8 @@ struct SmfExportResult {
 /// format-1 SMF byte buffer. Track 0 carries the tempo + time-signature meta
 /// (and end-of-track); each clip becomes one MTrk whose channel-voice UMP
 /// events are serialized via the ump.h adapter. SysEx-handle events are written
-/// when `options.sysex_store` can resolve the payload. `clip_names` (if
+/// when `options.sysex_store` can resolve a MIDI 1.0 SysEx7-representable
+/// payload. `clip_names` (if
 /// non-empty and index-parallel to `clips`) supplies per-track name meta events.
 /// The result is round-trippable through @ref import_smf for MIDI 1.0
 /// channel-voice data and stored SysEx payloads. Format 1 reserves one 16-bit

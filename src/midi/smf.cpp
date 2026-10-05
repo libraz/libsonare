@@ -439,11 +439,17 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         case kMetaKeySignature: {
           if (meta_len >= 2) {
             if (!consume_event()) return false;
+            const int key_fifths = payload[0] < 0x80u ? static_cast<int>(payload[0])
+                                                      : static_cast<int>(payload[0]) - 0x100;
+            if (key_fifths < -7 || key_fifths > 7 || payload[1] > 1u) {
+              ++(*skipped);
+              break;
+            }
             SmfMarker marker;
             marker.ppq = ppq;
             marker.kind = SmfMarkerKind::kKeySignature;
-            marker.key_fifths = static_cast<int8_t>(payload[0]);
-            marker.key_minor = payload[1] != 0;
+            marker.key_fifths = static_cast<int8_t>(key_fifths);
+            marker.key_minor = payload[1] == 1u;
             marker.text = key_signature_name(marker.key_fifths, marker.key_minor);
             markers->push_back(std::move(marker));
           } else {
@@ -588,6 +594,19 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     }
     if (reader->overflow()) return false;
 
+    bool invalid_data_byte = false;
+    for (size_t i = 1; i < raw_len; ++i) {
+      if ((raw[i] & 0x80u) != 0) {
+        invalid_data_byte = true;
+        break;
+      }
+    }
+    if (invalid_data_byte) {
+      // Masking to 7 bits would turn a malformed event into a different valid one.
+      mark_truncated();
+      break;
+    }
+
     Ump ump;
     uint8_t rs = status;
     const size_t consumed = midi1_bytes_to_ump(raw.data(), raw_len, /*group=*/0, &rs, &ump);
@@ -686,6 +705,13 @@ SmfImportResult parse_smf(const uint8_t* data, size_t size,
   if (format > 1) {
     result.status = SmfStatus::kUnsupportedFormat;
     result.diagnostic = "SMF format 2 is not supported";
+    return result;
+  }
+  // Format 0 stores one multi-channel track; any other declared count is a
+  // malformed header rather than a recoverable track-prefix condition.
+  if (format == 0 && num_tracks != 1) {
+    result.status = SmfStatus::kBadHeader;
+    result.diagnostic = "SMF format 0 requires exactly one track";
     return result;
   }
   if (division & 0x8000u) {
@@ -859,6 +885,20 @@ void put_meta(std::vector<uint8_t>* body, uint32_t delta, uint8_t type, const ui
   }
 }
 
+/// True when @p payload, less optional outer F0/F7 framing, is a non-empty 7-bit
+/// SysEx body. An embedded F7 is data and makes it unrepresentable.
+bool is_sysex7_representable(const std::vector<uint8_t>& payload) {
+  size_t begin = 0;
+  size_t end = payload.size();
+  if (begin < end && payload[begin] == kSysExStart) ++begin;
+  if (end > begin && payload[end - 1] == kSysExEscape) --end;
+  if (begin == end) return false;
+  for (size_t i = begin; i < end; ++i) {
+    if (payload[i] > 0x7Fu) return false;
+  }
+  return true;
+}
+
 // SysEx is stored as a reassembled payload with no record of its on-disk framing
 // (a single F0 event, an F0 dump split across continuation packets, or an
 // independent F7 escape all import to the same payload). Export therefore emits
@@ -889,6 +929,13 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                            const SmfExportOptions& options) {
   SmfExportResult result;
   const uint16_t ppqn = options.ticks_per_quarter != 0 ? options.ticks_per_quarter : 480;
+
+  // Bit 15 of the division field selects SMPTE timing, so PPQN must fit 15 bits.
+  if (ppqn > 0x7FFFu) {
+    result.status = SmfStatus::kInvalidArgument;
+    result.diagnostic = "SMF ticks-per-quarter must fit the positive 15-bit division field";
+    return result;
+  }
 
   constexpr size_t kMaxDataTracks = static_cast<size_t>(std::numeric_limits<uint16_t>::max()) - 1;
   if (clips.size() > kMaxDataTracks) {
@@ -962,12 +1009,12 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
       // would land off by the amount the clamp ate.
       prev_tick += static_cast<int64_t>(delta);
       if (item.kind == 0) {
-        const double us = kMicrosPerMinute / item.bpm;
         // SMF stores tempo as a 24-bit microseconds-per-quarter field; clamp so
         // an extremely slow tempo (bpm < ~3.576) does not wrap to an unrelated
         // fast tempo when masked to 3 bytes.
-        const uint32_t us_per_quarter =
-            static_cast<uint32_t>(std::min<int64_t>(std::llround(us), 0xFFFFFF));
+        const double us =
+            std::clamp(kMicrosPerMinute / item.bpm, 1.0, static_cast<double>(0xFFFFFFu));
+        const uint32_t us_per_quarter = static_cast<uint32_t>(std::llround(us));
         const uint8_t payload[3] = {static_cast<uint8_t>((us_per_quarter >> 16) & 0xFFu),
                                     static_cast<uint8_t>((us_per_quarter >> 8) & 0xFFu),
                                     static_cast<uint8_t>(us_per_quarter & 0xFFu)};
@@ -1047,6 +1094,10 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                                                   ? options.sysex_store->lookup(ev.ump.sysex_handle)
                                                   : nullptr;
         if (payload == nullptr) {
+          ++result.skipped_events;
+          continue;
+        }
+        if (!is_sysex7_representable(*payload)) {
           ++result.skipped_events;
           continue;
         }

@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cfenv>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -57,6 +59,16 @@ void push_vlq(std::vector<uint8_t>* v, uint32_t value) {
     buf[n++] = static_cast<uint8_t>((value & 0x7Fu) | 0x80u);
   }
   for (int i = n - 1; i >= 0; --i) v->push_back(buf[i]);
+}
+
+uint32_t first_smf_tempo_word(const std::vector<uint8_t>& bytes) {
+  for (size_t i = 0; i + 5 < bytes.size(); ++i) {
+    if (bytes[i] == 0xFFu && bytes[i + 1] == 0x51u && bytes[i + 2] == 0x03u) {
+      return (static_cast<uint32_t>(bytes[i + 3]) << 16) |
+             (static_cast<uint32_t>(bytes[i + 4]) << 8) | static_cast<uint32_t>(bytes[i + 5]);
+    }
+  }
+  return 0;
 }
 
 // Builds a known-good format-0 SMF with 480 PPQN containing:
@@ -538,6 +550,33 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   }
 }
 
+TEST_CASE("SMF export rejects a PPQN outside the positive 15-bit header field", "[midi]") {
+  for (const uint16_t ppqn : {uint16_t{0x8000u}, uint16_t{0xFFFFu}}) {
+    CAPTURE(ppqn);
+    SmfExportOptions options;
+    options.ticks_per_quarter = ppqn;
+    const auto exported = export_smf({}, {}, {}, {}, options);
+    REQUIRE(exported.status == SmfStatus::kInvalidArgument);
+    REQUIRE(exported.bytes.empty());
+    REQUIRE_FALSE(exported.diagnostic.empty());
+  }
+}
+
+TEST_CASE("SMF export writes valid and default PPQN values to the header", "[midi]") {
+  for (const auto [requested, expected] :
+       {std::pair<uint16_t, uint16_t>{0x7FFFu, 0x7FFFu}, std::pair<uint16_t, uint16_t>{0u, 480u}}) {
+    CAPTURE(requested, expected);
+    SmfExportOptions options;
+    options.ticks_per_quarter = requested;
+    const auto exported = export_smf({}, {}, {}, {}, options);
+    REQUIRE(exported.ok());
+    REQUIRE(exported.bytes.size() >= 14);
+    const uint16_t actual = static_cast<uint16_t>((static_cast<uint16_t>(exported.bytes[12]) << 8) |
+                                                  exported.bytes[13]);
+    CHECK(actual == expected);
+  }
+}
+
 TEST_CASE("SMF export clamps an extreme slow tempo to the 24-bit field", "[midi]") {
   // bpm = 1.0 -> 60,000,000 us/quarter, which overflows the 24-bit SMF tempo
   // field. Without clamping the value wraps to ~6.2 BPM (an unrelated tempo);
@@ -558,6 +597,36 @@ TEST_CASE("SMF export clamps an extreme slow tempo to the 24-bit field", "[midi]
   REQUIRE(round.tempo_segments.size() == 1);
   const double clamped_bpm = 60'000'000.0 / static_cast<double>(0xFFFFFF);
   REQUIRE(round.tempo_segments[0].bpm == Catch::Approx(clamped_bpm).epsilon(1e-6));
+}
+
+TEST_CASE("SMF export clamps a tiny positive BPM before converting to the wire field", "[midi]") {
+  for (const double bpm : {std::numeric_limits<double>::min(), 1.0e-20}) {
+    CAPTURE(bpm);
+    const std::vector<sonare::transport::TempoSegment> tempos = {{0.0, bpm, 0.0}};
+    std::feclearexcept(FE_ALL_EXCEPT);
+    const auto exported = export_smf({}, tempos, {}, {}, {});
+    // Both inputs produce a quotient larger than the integer conversion range;
+    // clamping the floating quotient first avoids llround's invalid operation.
+    CHECK((std::fetestexcept(FE_INVALID) & FE_INVALID) == 0);
+    REQUIRE(exported.ok());
+    REQUIRE(first_smf_tempo_word(exported.bytes) == 0xFFFFFFu);
+  }
+
+  const auto normal = export_smf({}, {{0.0, 120.0, 0.0}}, {}, {}, {});
+  REQUIRE(normal.ok());
+  CHECK(first_smf_tempo_word(normal.bytes) == 500'000u);
+}
+
+TEST_CASE("SMF export round-trips the minimum representable tempo", "[midi]") {
+  const double minimum_bpm = 60'000'000.0 / static_cast<double>(0xFFFFFFu);
+  const auto exported = export_smf({}, {{0.0, minimum_bpm, 0.0}}, {}, {}, {});
+  REQUIRE(exported.ok());
+  REQUIRE(first_smf_tempo_word(exported.bytes) == 0xFFFFFFu);
+
+  const SmfImportResult imported = import_smf(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.tempo_segments.size() == 1);
+  CHECK(imported.tempo_segments.front().bpm == Catch::Approx(minimum_bpm).epsilon(1e-12));
 }
 
 TEST_CASE("SMF export flags a non-power-of-two time-signature denominator as lossy", "[midi]") {
@@ -846,6 +915,78 @@ TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]")
   const std::vector<uint8_t>* round_payload = round.sysex_store.lookup(round_ump.sysex_handle);
   REQUIRE(round_payload != nullptr);
   REQUIRE(*round_payload == payload);
+}
+
+TEST_CASE("SMF export skips a SysEx payload that is not representable as SysEx7", "[midi]") {
+  sonare::midi::SysExStore store;
+  const sonare::midi::SysExHandle handle = store.add(std::vector<uint8_t>{0x7D, 0x80, 0x01});
+  REQUIRE(handle != 0);
+
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{1.0, sonare::midi::make_sysex_handle(0, handle)});
+  clip.add_event(MidiClipEvent{2.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  opts.sysex_store = &store;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 1);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  REQUIRE(round.clips[0].events().size() == 1);
+  REQUIRE(round.clips[0].events()[0].ump.is_note_on());
+  REQUIRE(round.clips[0].events()[0].ump.note_number() == 60);
+  // Skipping the unrepresentable SysEx must not consume the two-quarter-note
+  // gap before the following event.
+  REQUIRE(round.clips[0].events()[0].ppq == 2.0);
+  REQUIRE(round.sysex_store.size() == 0);
+}
+
+TEST_CASE("SMF export accepts optional SysEx framing but rejects embedded high-bit bytes",
+          "[midi]") {
+  struct Case {
+    std::vector<uint8_t> payload;
+    bool representable;
+  };
+  const std::vector<Case> cases = {
+      {{0x7D, 0x01}, true},
+      {{0xF0, 0x7D, 0x01}, true},
+      {{0x7D, 0x01, 0xF7}, true},
+      {{0xF0, 0x7D, 0x01, 0xF7}, true},
+      {{0xF0, 0x7D, 0xF7, 0x01}, false},
+      {{0x7D, 0xF8, 0x01, 0xF7}, false},
+  };
+
+  for (size_t i = 0; i < cases.size(); ++i) {
+    INFO("SysEx payload case " << i);
+    sonare::midi::SysExStore store;
+    const sonare::midi::SysExHandle handle = store.add(cases[i].payload);
+    REQUIRE(handle != 0);
+
+    MidiClip clip;
+    clip.add_event(MidiClipEvent{0.0, sonare::midi::make_sysex_handle(0, handle)});
+    SmfExportOptions opts;
+    opts.sysex_store = &store;
+    const auto exported = export_smf({clip}, {}, {}, {}, opts);
+    REQUIRE(exported.ok());
+    CHECK(exported.skipped_events == (cases[i].representable ? 0u : 1u));
+
+    const SmfImportResult round = import_smf(exported.bytes);
+    REQUIRE(round.ok());
+    if (!cases[i].representable) {
+      CHECK(round.clips.empty());
+      continue;
+    }
+    REQUIRE(round.clips.size() == 1);
+    REQUIRE(round.clips[0].events().size() == 1);
+    const std::vector<uint8_t>* round_payload =
+        round.sysex_store.lookup(round.clips[0].events()[0].ump.sysex_handle);
+    REQUIRE(round_payload != nullptr);
+    REQUIRE(*round_payload == std::vector<uint8_t>{0x7D, 0x01, 0xF7});
+  }
 }
 
 TEST_CASE("SMF normalizes an F7-escape SysEx to an F0 event on export", "[midi]") {
