@@ -135,8 +135,7 @@ std::vector<double> avg_spectrum(const std::vector<float>& x, size_t from, size_
   std::vector<std::complex<float>> spec(static_cast<size_t>(fft.n_bins()));
   std::vector<double> acc(static_cast<size_t>(fft.n_bins()), 0.0);
   int frames = 0;
-  for (size_t start = from; start + kFft <= from + len && start + kFft <= x.size();
-       start += kHop) {
+  for (size_t start = from; start + kFft <= from + len && start + kFft <= x.size(); start += kHop) {
     for (int i = 0; i < kFft; ++i) {
       const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979323846 * i / (kFft - 1));
       frame[static_cast<size_t>(i)] = x[start + static_cast<size_t>(i)] * static_cast<float>(w);
@@ -158,8 +157,7 @@ double spectral_diff_db(const std::vector<double>& ref, const std::vector<double
   size_t count = 0;
   for (size_t b = 0; b < ref.size(); ++b) {
     if (ref[b] < ref_floor && other[b] < other_floor) continue;
-    const double d =
-        20.0 * std::log10(std::max(other[b], 1.0e-12) / std::max(ref[b], 1.0e-12));
+    const double d = 20.0 * std::log10(std::max(other[b], 1.0e-12) / std::max(ref[b], 1.0e-12));
     sum += d * d;
     ++count;
   }
@@ -355,8 +353,8 @@ size_t play(const Scenario& sc, NativeSynth& s, Stereo& out, float initial, cons
   s.prepare(kRate, kBlock);
   REQUIRE(s.apply_parameter(pid(sc.param), initial));
   if (sc.tl == Timeline::kGlide) {
-    s.set_articulation(0, sc.modal_glide ? ArticulationMode::kMonoRetrigger
-                                         : ArticulationMode::kMonoLegato);
+    s.set_articulation(
+        0, sc.modal_glide ? ArticulationMode::kMonoRetrigger : ArticulationMode::kMonoLegato);
   }
   auto apply_change = [&] {
     if (voices_before != nullptr) *voices_before = s.active_voice_count();
@@ -482,8 +480,8 @@ Stereo carrier_run(const Scenario& sc) {
 /// for the filter envelope the dB gap, which is linear in the envelope (the
 /// sine sits 4+ octaves above the cutoff). @p full_scale is the reading at
 /// envelope level 1.
-double envelope_tau(const Scenario& sc, const std::vector<float>& x, size_t from,
-                    double full_scale, const std::vector<float>& carrier) {
+double envelope_tau(const Scenario& sc, const std::vector<float>& x, size_t from, double full_scale,
+                    const std::vector<float>& carrier) {
   const Frames f = tkeo_frames(x, from, kWindow);
   const Frames g = tkeo_frames(carrier, from, kWindow);
   const bool filter = is_filter_env_param(sc.param);
@@ -542,8 +540,7 @@ Verdict evaluate(const Scenario& sc, const Runs& r) {
       const auto h = avg_spectrum(r.held.l, hf, kWindow);
       const auto c = avg_spectrum(r.ctrl.l, hf, kWindow);
       const auto f = avg_spectrum(r.ref.l, rf, kWindow);
-      v = {spectral_diff_db(f, h), spectral_diff_db(f, c), spectral_diff_db(c, h),
-           kSpectrumTolDb};
+      v = {spectral_diff_db(f, h), spectral_diff_db(f, c), spectral_diff_db(c, h), kSpectrumTolDb};
       break;
     }
     case Obs::kPanRatio: {
@@ -807,8 +804,7 @@ std::vector<Scenario> expand(const PairwiseRow& row, size_t index) {
     case Row::kConverter: {
       Scenario hold = make("sampleHoldHz", VaWaveform::kSine);
       hold.param = P::kSampleHoldHz;
-      std::tie(hold.a, hold.b) =
-          transition_values(tr, 1500.0f, tr == T::kOnOn ? 6000.0f : 3000.0f);
+      std::tie(hold.a, hold.b) = transition_values(tr, 1500.0f, tr == T::kOnOn ? 6000.0f : 3000.0f);
       hold.name += " " + std::to_string(hold.a) + "->" + std::to_string(hold.b);
       out.push_back(hold);
       Scenario bits = make("bitDepth", VaWaveform::kSine);
@@ -900,8 +896,8 @@ std::vector<Scenario> expand(const PairwiseRow& row, size_t index) {
     }
     case Row::kSustain: {
       for (bool filter : {false, true}) {
-        Scenario sc = make(filter ? "filterSustain 0.5->0.25" : "ampSustain 0.5->0.25",
-                           VaWaveform::kSine);
+        Scenario sc =
+            make(filter ? "filterSustain 0.5->0.25" : "ampSustain 0.5->0.25", VaWaveform::kSine);
         auto& p = sc.cfg.patch;
         sc.notes = {81};
         sc.obs = Obs::kLevel;
@@ -978,13 +974,17 @@ TEST_CASE("live params: the 21 note-on ids cover the pairwise expansion",
           "[midi][synth][synth-live]") {
   std::vector<bool> seen(sonare::midi::synth::native_synth_param_count(), false);
   for (const Scenario& sc : sc1_scenarios()) seen[pid(sc.param)] = true;
-  const std::array<P, 7> already_live{P::kGain,          P::kBusDrive,        P::kCutoffHz,
-                                      P::kResonanceQ,    P::kEnvToCutoffCents, P::kLfoToPitchCents,
+  const std::array<P, 7> already_live{P::kGain,
+                                      P::kBusDrive,
+                                      P::kCutoffHz,
+                                      P::kResonanceQ,
+                                      P::kEnvToCutoffCents,
+                                      P::kLfoToPitchCents,
                                       P::kPitchOffsetCents};
   int covered = 0;
   for (size_t i = 0; i < seen.size(); ++i) {
-    const bool live = std::find(already_live.begin(), already_live.end(),
-                                static_cast<P>(i)) != already_live.end();
+    const bool live = std::find(already_live.begin(), already_live.end(), static_cast<P>(i)) !=
+                      already_live.end();
     INFO("param id " << i);
     CHECK(seen[i] != live);
     if (seen[i]) ++covered;
@@ -1001,8 +1001,8 @@ TEST_CASE("live params: a spectral parameter moved on a held note sounds as if s
 
 TEST_CASE("live params: pan, level and pitch parameters reach a held note",
           "[midi][synth][synth-live]") {
-  for (const Scenario& sc : sc1_group({Obs::kPanRatio, Obs::kLevel, Obs::kLfoPeriod,
-                                       Obs::kLfoStop, Obs::kPitchDeviation})) {
+  for (const Scenario& sc : sc1_group(
+           {Obs::kPanRatio, Obs::kLevel, Obs::kLfoPeriod, Obs::kLfoStop, Obs::kPitchDeviation})) {
     DYNAMIC_SECTION(sc.name) { check_equivalence(sc); }
   }
 }
@@ -1032,16 +1032,16 @@ TEST_CASE("live params: a change reaches every voice of a held chord",
   const std::vector<uint8_t> mid{57, 61, 64};
   std::vector<Scenario> all;
   all.push_back(chord("drive 0.2->0.8", VaWaveform::kSaw, P::kDrive, 0.2f, 0.8f, mid));
-  all.push_back(chord("hpCutoffHz 100->800", VaWaveform::kSaw, P::kHpCutoffHz, 100.0f, 800.0f,
-                      {36, 40, 43}));
+  all.push_back(
+      chord("hpCutoffHz 100->800", VaWaveform::kSaw, P::kHpCutoffHz, 100.0f, 800.0f, {36, 40, 43}));
   all.push_back(
       chord("sampleHoldHz 1500->6000", VaWaveform::kSine, P::kSampleHoldHz, 1500.0f, 6000.0f, mid));
   all.push_back(chord("bitDepth 2->6", VaWaveform::kSine, P::kBitDepth, 2.0f, 6.0f, mid));
-  all.push_back(
-      chord("detuneCents 25->100", VaWaveform::kSaw, P::kDetuneCents, 25.0f, 100.0f, {76, 80, 83}, 3));
+  all.push_back(chord("detuneCents 25->100", VaWaveform::kSaw, P::kDetuneCents, 25.0f, 100.0f,
+                      {76, 80, 83}, 3));
   {
-    Scenario sc = chord("keyTrack 0.25->1", VaWaveform::kSaw, P::kKeyTrack, 0.25f, 1.0f,
-                        {84, 88, 91});
+    Scenario sc =
+        chord("keyTrack 0.25->1", VaWaveform::kSaw, P::kKeyTrack, 0.25f, 1.0f, {84, 88, 91});
     sc.cfg.patch.cutoff_hz = 2000.0f;
     all.push_back(sc);
   }
@@ -1064,14 +1064,13 @@ TEST_CASE("live params: a change reaches every voice of a held chord",
     all.push_back(sc);
   }
   {
-    Scenario sc = chord("ampSustain 0.5->0.25", VaWaveform::kSine, P::kAmpSustain, 0.5f, 0.25f, mid);
+    Scenario sc =
+        chord("ampSustain 0.5->0.25", VaWaveform::kSine, P::kAmpSustain, 0.5f, 0.25f, mid);
     sc.obs = Obs::kLevel;
     all.push_back(sc);
   }
   for (const Scenario& sc : all) {
-    DYNAMIC_SECTION(sc.name) {
-      check_equivalence(sc);
-    }
+    DYNAMIC_SECTION(sc.name) { check_equivalence(sc); }
   }
 }
 
@@ -1223,8 +1222,7 @@ TEST_CASE("live params: re-applying every current value leaves a held chord bit-
 
 // --- SC6 -------------------------------------------------------------------
 
-TEST_CASE("live params: a GM program voice ignores patch automation",
-          "[midi][synth][synth-live]") {
+TEST_CASE("live params: a GM program voice ignores patch automation", "[midi][synth][synth-live]") {
   NativeSynthConfig cfg;
   cfg.use_gm_programs = true;
   NativeSynth touched(cfg);
@@ -1283,11 +1281,11 @@ TEST_CASE("live params: a choked voice does not take a lengthened release",
   // The replacing note waits out a 300 ms delay stage, so the window after the
   // cut holds only the cut voice's tail.
   constexpr float kDelayMs = 300.0f;
-  constexpr size_t kPreCut = 24576;  // past the delay and into the sustain
+  constexpr size_t kPreCut = 24576;    // past the delay and into the sustain
   constexpr size_t kAfterCut = 12288;  // inside the replacing note's delay
 
-  auto cut_tail = [&](NativeSynthConfig cfg, ArticulationMode mode, uint8_t first,
-                      uint8_t second, bool lengthen) {
+  auto cut_tail = [&](NativeSynthConfig cfg, ArticulationMode mode, uint8_t first, uint8_t second,
+                      bool lengthen) {
     cfg.dc_block = false;
     NativeSynth s(cfg);
     s.prepare(kRate, kBlock);
@@ -1357,7 +1355,8 @@ struct Continuity {
 };
 
 /// Steady difference between the pre- and post-change spans, with its floor.
-std::pair<double, double> steady_effect(const Continuity& c, const Stereo& out, size_t last_change) {
+std::pair<double, double> steady_effect(const Continuity& c, const Stereo& out,
+                                        size_t last_change) {
   const std::vector<float>& x = out.l;
   const size_t pre_from = c.change_at >= kWindow ? c.change_at - kWindow : 0;
   const size_t post_from = last_change + kSettle;
@@ -1522,15 +1521,25 @@ TEST_CASE("live params: a held-note change does not click", "[midi][synth][synth
   all.push_back({"drive 0->0.6", sine(), P::kDrive, 0.0f, {0.6f}, kAt});
   all.push_back({"drive 0.6->0", sine(), P::kDrive, 0.6f, {0.0f}, kAt});
   all.push_back({"drive 0.05->0.15", sine(), P::kDrive, 0.05f, {0.15f}, kAt});
-  all.push_back({"drive 0->0.6->0->0.6 inside one fade", sine(), P::kDrive, 0.0f,
-                 {0.6f, 0.0f, 0.6f}, kAt, 64});
+  all.push_back({"drive 0->0.6->0->0.6 inside one fade",
+                 sine(),
+                 P::kDrive,
+                 0.0f,
+                 {0.6f, 0.0f, 0.6f},
+                 kAt,
+                 64});
   {
     NativeSynthConfig cfg = sine();
     cfg.patch.body = BodyType::kWoodTube;
     all.push_back({"bodyMix 0->1", cfg, P::kBodyMix, 0.0f, {1.0f}, kAt});
     all.push_back({"bodyMix 1->0", cfg, P::kBodyMix, 1.0f, {0.0f}, kAt});
-    all.push_back({"bodyMix 0->1->0->1 inside one fade", cfg, P::kBodyMix, 0.0f,
-                   {1.0f, 0.0f, 1.0f}, kAt, 64});
+    all.push_back({"bodyMix 0->1->0->1 inside one fade",
+                   cfg,
+                   P::kBodyMix,
+                   0.0f,
+                   {1.0f, 0.0f, 1.0f},
+                   kAt,
+                   64});
   }
   for (const Continuity& c : all) {
     DYNAMIC_SECTION(c.name) { check_continuity(c); }
