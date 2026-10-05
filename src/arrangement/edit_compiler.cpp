@@ -1,10 +1,12 @@
 #include "arrangement/edit_compiler.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <set>
 #include <string>
 #include <utility>
@@ -19,6 +21,7 @@
 #include "rt/pan_law.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::arrangement {
@@ -1327,48 +1330,21 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   return result;
 }
 
-bool apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine) {
-  bool lanes_installed = true;
-  // Engine prescribed CONTROL-THREAD direct-setter order. All of these are
-  // direct-setter / publisher installs, NOT push_command.
+namespace {
 
-  // 1) Tempo / time signature. Install full segment vectors so transport,
-  //    metronome, automation and clip rescheduling share the compiled map.
-  if (!timeline.tempo_segments.empty()) {
-    engine.set_tempo_segments(timeline.tempo_segments);
-  } else {
-    engine.set_tempo(kDefaultBpm);
-  }
-  if (!timeline.time_signatures.empty()) {
-    engine.set_time_signature_segments(timeline.time_signatures);
-  } else {
-    engine.set_time_signature(4, 4);
-  }
+ApplyResult apply_refused(ErrorCode code, std::string message) {
+  ApplyResult result;
+  result.code = code;
+  result.message = std::move(message);
+  result.outcome = ApplyOutcome::kUnchanged;
+  return result;
+}
 
-  // 2) Markers. The CompiledTimeline owns the name strings; the transport::Marker
-  //    name pointers point into that stable storage and stay valid while RT holds
-  //    the snapshot (the caller must keep this CompiledTimeline alive).
-  engine.set_markers(timeline.markers);
-
-  // 3) Track lanes.  The control-side lane vector is installed before typed
-  // automation is resolved so the reserved id's lane index and the runtime's
-  // lane state have one deterministic contract.
-#if defined(SONARE_WITH_MIXING)
-  std::vector<engine::TrackLaneConfig> track_lanes;
-  track_lanes.reserve(timeline.track_lanes.size());
-  for (const CompiledTrackLane& lane : timeline.track_lanes) {
-    track_lanes.emplace_back(lane.track_id);
-  }
-  lanes_installed = engine.set_track_lanes(std::move(track_lanes));
-#endif
-
-  // 4) Resolve typed lanes to engine-reserved ids, then publish the compiled
-  // lane vector. Opaque ids remain untouched for legacy host targets. The
-  // compiler already applied deterministic project-order first-wins filtering
-  // to opaque lanes; set_lanes() defensively preserves that legacy global
-  // contract if a hand-built snapshot violates the invariant. This lookup is
-  // control-thread work; the audio thread only decodes the already-packed lane
-  // index/kind fields.
+// Resolves typed lanes to engine-reserved ids against the compiled lane order.
+// Opaque ids remain untouched for legacy host targets; the compiler already
+// applied project-order first-wins filtering to them, and set_lanes()
+// defensively preserves that contract for a hand-built snapshot.
+std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTimeline& timeline) {
   std::vector<automation::AutomationLane> playback_lanes;
   playback_lanes.reserve(timeline.mixer.automation_bindings.empty()
                              ? timeline.automation_lanes.size()
@@ -1383,61 +1359,227 @@ bool apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
         playback_lanes.push_back(lane);
       }
     }
-  } else {
-    for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
-      automation::AutomationLane lane = binding.lane;
-      if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
-        size_t lane_index = 0;
-        bool found = false;
-        for (size_t i = 0; i < timeline.track_lanes.size(); ++i) {
-          if (timeline.track_lanes[i].track_id == binding.track_id) {
-            lane_index = i;
-            found = true;
-            break;
-          }
-        }
-        // Without the compiled lanes in the engine a typed id would address another track's lane.
-        if (!lanes_installed || !found || lane_index > 0xFFu) continue;
-        lane.set_target_param_id(engine::make_track_lane_param_id(
-            lane_index, static_cast<uint32_t>(lane.target_kind())));
-      }
-      playback_lanes.push_back(std::move(lane));
-    }
+    return playback_lanes;
   }
-  engine.automation().set_lanes(std::move(playback_lanes));
+  for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
+    automation::AutomationLane lane = binding.lane;
+    if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
+      size_t lane_index = 0;
+      bool found = false;
+      for (size_t i = 0; i < timeline.track_lanes.size(); ++i) {
+        if (timeline.track_lanes[i].track_id == binding.track_id) {
+          lane_index = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found || lane_index > 0xFFu) continue;
+      lane.set_target_param_id(
+          engine::make_track_lane_param_id(lane_index, static_cast<uint32_t>(lane.target_kind())));
+    }
+    playback_lanes.push_back(std::move(lane));
+  }
+  return playback_lanes;
+}
 
-  // 5) Audio clips. The ClipSchedule::storage shared_ptr keeps the baked buffers
-  //    alive across the RtPublisher swap; the engine's set_clips follows the
-  //    retire protocol, so old buffers are released back to the control thread.
-  engine.set_clips(timeline.audio_clips);
+#if defined(SONARE_WITH_MIXING)
+const mixing::api::Strip* find_scene_strip(const MixerRequest& mixer,
+                                           const std::string& id) noexcept {
+  for (const mixing::api::Strip& strip : mixer.scene.strips) {
+    if (strip.id == id) return &strip;
+  }
+  return nullptr;
+}
 
-  // 5b) MIDI clips. set_midi_clips is a control-thread direct-setter that
-  //     publishes through the MidiSequencer's RtPublisher (no rt::Command, no
-  //     ABI bump). Only present when arrangement (and thus the sequencer member)
-  //     is compiled in.
-#if defined(SONARE_WITH_ARRANGEMENT)
-  engine.set_midi_clips(timeline.midi_clips);
+bool has_track_lane(const CompiledTimeline& timeline, TrackId track_id) noexcept {
+  for (const CompiledTrackLane& lane : timeline.track_lanes) {
+    if (lane.track_id == track_id) return true;
+  }
+  return false;
+}
+
+bool has_strip_binding(const CompiledTimeline& timeline, TrackId track_id) noexcept {
+  for (const MixerStripBinding& binding : timeline.mixer.bindings) {
+    if (binding.track_id == track_id) return true;
+  }
+  return false;
+}
 #endif
 
-  // 6) Graph swap: no Project field currently requests a graph replacement, so
-  //    timeline.graph.requested remains false. The mixer binding is value-only:
-  //    the caller turns each MixerStripBinding into a live mixing::ChannelStrip
-  //    and calls bind_mixing_strip itself, because the compiler must not own RT
-  //    objects.
-  //
-  //    Reachability constraint: this helper does NOT wire timeline.mixer.bindings
-  //    into the engine, so the live path never groups tracks onto a shared scene
-  //    strip. A scene strip referenced by several tracks (N tracks -> 1 strip) is
-  //    summed THEN processed once through that strip's inserts ("sum-then-process")
-  //    only in the offline channel-strip bounce (c_api/project_bounce.cpp
-  //    bounce_through_mixer, which renders one summed stem per strip). The live
-  //    TrackMixerRuntime is strictly one track <-> one lane <-> one strip
-  //    (set_track_lanes rejects duplicate track ids), so it has no shared-strip
-  //    grouping and a naive per-track wiring would be "process-then-sum" -- which
-  //    diverges from the bounce whenever the strip holds a nonlinear insert (see
-  //    the mixing_channel_strip_test case pinning sum!=process order). Any future
-  //    live wiring of shared strips must preserve the summed-input grouping.
-  return lanes_installed;
+// Empties every timeline-owned domain. Each step is attempted even when an
+// earlier one throws, so the result is as empty as the allocator allows.
+void clear_timeline_domains(engine::RealtimeEngine& engine) noexcept {
+  const auto attempt = [](auto&& step) noexcept {
+    try {
+      step();
+    } catch (...) {
+    }
+  };
+  attempt([&] { engine.set_clips({}); });
+#if defined(SONARE_WITH_ARRANGEMENT)
+  attempt([&] { engine.publish_midi_clips(engine.prepare_midi_clips({})); });
+#endif
+  attempt([&] { engine.automation().set_lanes({}); });
+  attempt([&] { engine.set_markers({}); });
+#if defined(SONARE_WITH_MIXING)
+  // Unbind while the lanes still exist; bind_track_strip on an unknown track claims a free lane.
+  std::array<uint32_t, engine::TrackMixerRuntime::kMaxTrackLanes> lane_ids{};
+  const size_t lane_count =
+      engine.track_mixer().copy_lane_track_ids(lane_ids.data(), lane_ids.size());
+  for (size_t i = 0; i < lane_count; ++i) {
+    attempt([&] { engine.bind_track_strip(lane_ids[i], nullptr); });
+  }
+  attempt([&] { engine.set_track_lanes({}); });
+#endif
+  attempt([&] { engine.set_tempo(kDefaultBpm); });
+  attempt([&] { engine.set_time_signature(4, 4); });
+}
+
+ApplyResult apply_cleared(engine::RealtimeEngine& engine, ErrorCode code, std::string message) {
+  clear_timeline_domains(engine);
+  ApplyResult result;
+  result.code = code;
+  result.outcome = ApplyOutcome::kCleared;
+  try {
+    result.message = std::move(message);
+  } catch (...) {
+  }
+  return result;
+}
+
+}  // namespace
+
+ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine,
+                            const ApplyOptions& options) {
+  // (1) Pure validation and every allocation that can precede the first mutation.
+  for (const transport::TempoSegment& segment : timeline.tempo_segments) {
+    if (!transport::valid_public_tempo_segment(segment)) {
+      return apply_refused(ErrorCode::InvalidParameter,
+                           "tempo segments contain invalid timeline or out-of-range BPM values");
+    }
+  }
+  for (const transport::TimeSignatureSegment& segment : timeline.time_signatures) {
+    if (!transport::valid_public_time_signature_segment(segment)) {
+      return apply_refused(ErrorCode::InvalidParameter,
+                           "time signature segments contain invalid timeline or signature values");
+    }
+  }
+#if !defined(SONARE_WITH_MIXING)
+  if (options.bind_strips && !timeline.mixer.bindings.empty()) {
+    return apply_refused(
+        ErrorCode::NotImplemented,
+        "strip binding requested but SONARE_WITH_MIXING is disabled in this build");
+  }
+#endif
+
+  std::vector<automation::AutomationLane> playback_lanes;
+  ApplyResult result;
+#if defined(SONARE_WITH_MIXING)
+  std::vector<engine::TrackLaneConfig> track_lanes;
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+  engine::RealtimeEngine::PreparedMidiClips prepared_midi;
+#endif
+  try {
+#if defined(SONARE_WITH_MIXING)
+    track_lanes.reserve(timeline.track_lanes.size());
+    for (const CompiledTrackLane& lane : timeline.track_lanes) {
+      track_lanes.emplace_back(lane.track_id);
+    }
+    if (!engine.validate_track_lanes(track_lanes)) {
+      return apply_refused(ErrorCode::InvalidParameter, "the engine refuses the track-lane vector");
+    }
+    if (options.bind_strips) {
+      const std::vector<MixerStripBinding>& bindings = timeline.mixer.bindings;
+      for (size_t i = 0; i < bindings.size(); ++i) {
+        const mixing::api::Strip* strip = find_scene_strip(timeline.mixer, bindings[i].strip_id);
+        if (strip == nullptr || !has_track_lane(timeline, bindings[i].track_id)) {
+          return apply_refused(ErrorCode::InvalidParameter,
+                               "strip binding names a missing scene strip or track lane");
+        }
+        for (size_t j = i + 1; j < bindings.size(); ++j) {
+          if (bindings[j].strip_id == bindings[i].strip_id) {
+            return apply_refused(ErrorCode::NotImplemented,
+                                 "scene strip \"" + bindings[i].strip_id +
+                                     "\" is bound by several tracks; live playback is one strip "
+                                     "per track");
+          }
+        }
+        if (!engine.validate_track_strip(*strip)) {
+          return apply_refused(ErrorCode::InvalidParameter,
+                               "scene strip \"" + bindings[i].strip_id + "\" cannot be built");
+        }
+      }
+    }
+#endif
+    playback_lanes = resolve_playback_lanes(timeline);
+    result.installed_automation = playback_lanes;
+
+    // (2) Own and prepare every SysEx payload without publishing.
+#if defined(SONARE_WITH_ARRANGEMENT)
+    prepared_midi = engine.prepare_midi_clips(timeline.midi_clips);
+#endif
+  } catch (const SonareException& e) {
+    return apply_refused(e.code(), e.what());
+  } catch (const std::bad_alloc&) {
+    return apply_refused(ErrorCode::OutOfMemory, "out of memory while preparing the timeline");
+  }
+
+  try {
+    // (3) Track lanes: the first mutation. The engine leaves its lanes untouched on refusal.
+#if defined(SONARE_WITH_MIXING)
+    if (!engine.set_track_lanes(std::move(track_lanes))) {
+      return apply_refused(ErrorCode::InvalidParameter, "the engine refuses the track-lane vector");
+    }
+#endif
+
+    // (4) Publish the remaining domains. All are direct-setter / publisher installs, not
+    // push_command; tempo goes first so clip rescheduling uses the compiled map.
+    if (!timeline.tempo_segments.empty()) {
+      engine.set_tempo_segments(timeline.tempo_segments);
+    } else {
+      engine.set_tempo(kDefaultBpm);
+    }
+    if (!timeline.time_signatures.empty()) {
+      engine.set_time_signature_segments(timeline.time_signatures);
+    } else {
+      engine.set_time_signature(4, 4);
+    }
+    // Marker names point into the timeline's own storage.
+    engine.set_markers(timeline.markers);
+    engine.automation().set_lanes(std::move(playback_lanes));
+    // ClipSchedule::storage keeps the baked buffers alive across the RtPublisher swap.
+    engine.set_clips(timeline.audio_clips);
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine.publish_midi_clips(std::move(prepared_midi));
+#endif
+#if defined(SONARE_WITH_MIXING)
+    if (options.bind_strips) {
+      for (const MixerStripBinding& binding : timeline.mixer.bindings) {
+        if (!engine.set_track_strip(binding.track_id,
+                                    *find_scene_strip(timeline.mixer, binding.strip_id))) {
+          return apply_cleared(engine, ErrorCode::InvalidState,
+                               "the engine refused a validated track strip");
+        }
+      }
+      for (const CompiledTrackLane& lane : timeline.track_lanes) {
+        if (has_strip_binding(timeline, lane.track_id)) continue;
+        if (!engine.bind_track_strip(lane.track_id, nullptr)) {
+          return apply_cleared(engine, ErrorCode::InvalidState,
+                               "the engine refused to unbind a track strip");
+        }
+      }
+    }
+#endif
+  } catch (const SonareException& e) {
+    return apply_cleared(engine, e.code(), e.what());
+  } catch (const std::bad_alloc&) {
+    return apply_cleared(engine, ErrorCode::OutOfMemory,
+                         "out of memory while applying the timeline");
+  }
+  // The graph request has no Project authoring surface; timeline.graph.requested stays false.
+  result.outcome = ApplyOutcome::kApplied;
+  return result;
 }
 
 }  // namespace sonare::arrangement

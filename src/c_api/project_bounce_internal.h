@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "util/exception.h"
 #include "util/numeric_validation.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -209,7 +210,12 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(sample_rate, block_size);
-  if (!arr::apply_to_engine(filtered, engine)) return false;
+  const arr::ApplyResult applied = arr::apply_to_engine(filtered, engine);
+  // Out-of-memory keeps its own error code; every other refusal fails the bounce as before.
+  if (applied.code == sonare::ErrorCode::OutOfMemory) {
+    throw sonare::SonareException(applied.code, applied.message);
+  }
+  if (!applied.ok()) return false;
   for (const HostedInstrument& hosted : instruments) {
     hosted.instrument->reset();
     // A refused bind (e.g. a scheduled SysEx the instrument cannot prepare) fails the bounce.

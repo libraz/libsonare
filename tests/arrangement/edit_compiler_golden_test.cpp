@@ -168,7 +168,7 @@ TEST_CASE("compile rejects ragged decoded audio channels before scheduling", "[a
 std::vector<float> render(const arr::CompiledTimeline& timeline, int64_t frames) {
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  arr::apply_to_engine(timeline, engine);
+  REQUIRE(arr::apply_to_engine(timeline, engine).ok());
 
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;
@@ -1241,7 +1241,7 @@ TEST_CASE("apply_to_engine installs full tempo and time-signature maps", "[arran
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  arr::apply_to_engine(timeline, engine);
+  REQUIRE(arr::apply_to_engine(timeline, engine).ok());
 
   REQUIRE(engine.bpm_at_sample(0) == 120.0);
   REQUIRE(engine.bpm_at_sample(24000) == 60.0);
@@ -1284,7 +1284,7 @@ TEST_CASE("applying an empty compiled timeline restores transport defaults", "[a
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  arr::apply_to_engine(*compiled_a.timeline, engine);
+  REQUIRE(arr::apply_to_engine(*compiled_a.timeline, engine).ok());
   REQUIRE(engine.bpm_at_sample(0) == 60.0);
   const auto previous_sig = engine.time_signature_at_ppq(0.0);
   REQUIRE(previous_sig.numerator == 7);
@@ -1292,7 +1292,7 @@ TEST_CASE("applying an empty compiled timeline restores transport defaults", "[a
 
   // The empty project compiles against the same defaults used by the runtime
   // TempoMap, then replaces A on the already-prepared engine.
-  arr::apply_to_engine(*compiled_b.timeline, engine);
+  REQUIRE(arr::apply_to_engine(*compiled_b.timeline, engine).ok());
   REQUIRE(engine.bpm_at_sample(0) == 120.0);
   const auto default_sig = engine.time_signature_at_ppq(0.0);
   REQUIRE(default_sig.numerator == 4);
@@ -1535,7 +1535,7 @@ TEST_CASE("typed track automation resolves by project lane and target kind", "[a
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  arr::apply_to_engine(*result.timeline, engine);
+  REQUIRE(arr::apply_to_engine(*result.timeline, engine).ok());
   REQUIRE(engine.automation().lane_count() == 3);
 
   std::array<float, kBlock> prime_l{};
@@ -1568,10 +1568,10 @@ TEST_CASE("typed track automation resolves by project lane and target kind", "[a
 #endif  // SONARE_WITH_MIXING
 
 #if defined(SONARE_WITH_MIXING)
-TEST_CASE("apply_to_engine reports a refused lane vector and installs no typed automation",
+TEST_CASE("apply_to_engine refuses a rejected lane vector before installing anything",
           "[arrangement]") {
   // Duplicate track ids are refused by the engine; the typed lane's id would encode an index into
-  // that refused vector.
+  // that refused vector, so the whole timeline is refused and the engine keeps its prior state.
   arr::CompiledTimeline timeline;
   timeline.track_lanes = {{5}, {5}};
   sonare::automation::AutomationLane typed(900,
@@ -1583,14 +1583,21 @@ TEST_CASE("apply_to_engine reports a refused lane vector and installs no typed a
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  REQUIRE_FALSE(arr::apply_to_engine(timeline, engine));
-  REQUIRE(engine.automation().lane_count() == 1);
+  const arr::ApplyResult refused = arr::apply_to_engine(timeline, engine);
+  REQUIRE_FALSE(refused.ok());
+  REQUIRE(refused.code == sonare::ErrorCode::InvalidParameter);
+  REQUIRE(refused.outcome == arr::ApplyOutcome::kUnchanged);
+  REQUIRE(refused.installed_automation.empty());
+  REQUIRE(engine.automation().lane_count() == 0);
 
   timeline.track_lanes = {{5}};
   sonare::engine::RealtimeEngine ok_engine;
   ok_engine.prepare(kProjectSr, kBlock);
-  REQUIRE(arr::apply_to_engine(timeline, ok_engine));
+  const arr::ApplyResult applied = arr::apply_to_engine(timeline, ok_engine);
+  REQUIRE(applied.ok());
+  REQUIRE(applied.outcome == arr::ApplyOutcome::kApplied);
   REQUIRE(ok_engine.automation().lane_count() == 2);
+  REQUIRE(applied.installed_automation.size() == 2);
 }
 #endif  // SONARE_WITH_MIXING
 
@@ -1787,7 +1794,7 @@ TEST_CASE("compiled automation keeps the opaque first owner", "[arrangement]") {
   // compiler has already applied opaque first-wins deduplication.
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  arr::apply_to_engine(*r.timeline, engine);
+  REQUIRE(arr::apply_to_engine(*r.timeline, engine).ok());
   REQUIRE(engine.automation().lane_count() == 1);
 
   // The offline path receives the same single winning lane.
@@ -1813,6 +1820,6 @@ TEST_CASE("distinct automation targets on several tracks all reach playback", "[
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
-  arr::apply_to_engine(*r.timeline, engine);
+  REQUIRE(arr::apply_to_engine(*r.timeline, engine).ok());
   REQUIRE(engine.automation().lane_count() == 2);
 }

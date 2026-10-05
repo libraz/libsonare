@@ -36,6 +36,7 @@
 #include "mixing/api/scene.h"
 #include "transport/marker.h"
 #include "transport/tempo_map.h"
+#include "util/types.h"
 
 namespace sonare::arrangement {
 
@@ -122,8 +123,8 @@ struct GraphRequest {
 /// Several bindings may share one strip_id (N tracks -> 1 scene strip). That
 /// shared strip is realized -- its inputs summed then processed once through the
 /// strip inserts -- only by the offline channel-strip bounce; apply_to_engine
-/// does not wire these bindings, and the live TrackMixerRuntime is strictly one
-/// track per strip. See apply_to_engine's reachability note.
+/// refuses a shared strip when asked to bind strips, because the live
+/// TrackMixerRuntime is strictly one track per strip.
 ///
 /// Because a shared strip processes the SUM of its tracks, a per-track control
 /// (gain / pan / mute / solo) must NOT be folded into it: that would move every
@@ -362,20 +363,49 @@ struct CompileConfig {
 CompileResult compile(const Project& project, const MidiContentStore& midi,
                       const AudioContentStore& audio, const CompileConfig& config = {});
 
-/// Installs a CompiledTimeline into a RealtimeEngine via the engine's prescribed
-/// CONTROL-THREAD direct-setter order: tempo/time-signature -> markers ->
-/// project-order track lanes -> typed-id resolution + automation publication ->
-/// clips (-> graph swap / mixer bind under flags).
-/// These are all direct-setter / publisher installs, NOT push_command.
+/// Options for apply_to_engine().
+struct ApplyOptions {
+  /// Wire each MixerRequest binding with set_track_strip and unbind every lane without one. Off
+  /// for the offline bounce, which processes scene strips in its own mixer.
+  bool bind_strips = false;
+};
+
+/// What apply_to_engine() left in the engine.
+enum class ApplyOutcome {
+  kApplied,    ///< The whole timeline is installed.
+  kUnchanged,  ///< Refused before the first mutation; the engine is as it was.
+  kCleared,    ///< Failed after mutation began; every timeline-owned domain is empty.
+};
+
+/// Result of apply_to_engine().
+struct ApplyResult {
+  ErrorCode code = ErrorCode::Ok;
+  std::string message;
+  ApplyOutcome outcome = ApplyOutcome::kUnchanged;
+  /// The automation lane vector published to the engine, typed ids already resolved.
+  std::vector<automation::AutomationLane> installed_automation;
+
+  bool ok() const noexcept { return code == ErrorCode::Ok; }
+};
+
+/// @brief Installs a CompiledTimeline into a stopped RealtimeEngine, all or nothing.
 ///
-/// The graph request has no Project authoring surface yet; the mixer binding is
-/// value-only (the caller wires live ChannelStrips), so this helper does not
-/// call bind_mixing_strip — it leaves that to the caller, matching the
-/// "compiler cannot own RT objects" rule.
+/// Every failure validation can detect (tempo / time-signature segments, the track-lane
+/// vector, unpreparable MIDI SysEx, and with @c bind_strips an unbuildable or shared scene strip)
+/// returns before the first mutation with @c kUnchanged. set_track_lanes is the first mutation;
+/// a failure after it clears every timeline-owned domain (clips, MIDI clips, automation, markers,
+/// lanes, strips, tempo back to the default 4/4 map) and returns @c kCleared, so the engine never
+/// holds a mix of the old and new timeline. Instruments, buses, the master strip, metronome,
+/// loop and capture are not timeline-owned and are never touched.
 ///
-/// Returns false when the engine refuses the track-lane vector. Typed
-/// (fader/pan) automation is then not installed, because its ids encode lane
-/// indices of the refused vector; everything else is still installed.
-bool apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine);
+/// The graph request has no Project authoring surface yet and is not acted on. With
+/// @c bind_strips off the mixer bindings are left to the caller; with it on, a strip bound to
+/// several tracks is refused (@c NotImplemented), because the live runtime is one strip per track
+/// and only the offline bounce realizes the sum-then-process grouping.
+///
+/// The engine keeps pointers into @p timeline's marker names, so the timeline must outlive the
+/// engine's use of its markers. CONTROL thread, not concurrent with process().
+ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine,
+                            const ApplyOptions& options = {});
 
 }  // namespace sonare::arrangement

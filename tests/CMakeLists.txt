@@ -584,6 +584,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/external_stems_test.cpp
     arrangement/edit_command_history_test.cpp
     arrangement/edit_compiler_golden_test.cpp
+    arrangement/timeline_apply_test.cpp
     arrangement/edit_compiler_pan_law_test.cpp
     arrangement/shared_strip_midi_controls_test.cpp
     arrangement/c_abi_edit_ops_test.cpp
