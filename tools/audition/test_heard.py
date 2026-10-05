@@ -370,6 +370,8 @@ def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> No
         assert block == {
             "provenance": {"date": "2026-09-19", "bank_generation": 2, "patch_version": 2},
             "take": "single-long",
+            "judged": "model",
+            "compared_against": None,
         }, block
 
 
@@ -613,6 +615,42 @@ def test_a_verdict_on_a_candidate_is_not_a_signoff_of_the_shipped_voice() -> Non
             raise AssertionError("expected a refusal")
         except ValueError as e:
             assert "bow-light" in str(e), e
+
+
+@_with_scratch
+def test_a_direct_path_verdict_is_not_a_signoff_of_the_shipped_voice() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        sources = dict(_SOURCES, **{"model-di": {"role": "model"}})
+        _audition(root / "audition", "p040-violin", "violin", sources=sources)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        entry["conditions"]["version"] = "model-di"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["judged"] == "model-di", note
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "model-di" in str(e) and "direct-path" in str(e), e
+
+
+@_with_scratch
+def test_a_signoff_keeps_the_judged_source_and_its_comparison_counterpart() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin", sources=_SOURCES)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        counterpart = {"role": "reference", "version": "gm041", "label": "gm041"}
+        entry["conditions"]["compared_against"] = counterpart
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        block = heard.signoff("p040-violin")
+        assert block["judged"] == "model", block
+        assert block["compared_against"] == counterpart, block
 
 
 def _run_all() -> int:

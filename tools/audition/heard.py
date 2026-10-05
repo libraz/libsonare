@@ -127,9 +127,10 @@ def voice_of(set_id: str) -> dict:
     return voice if isinstance(voice, dict) else {}
 
 
-#: The versions `make_audition.py` renders from the library as it stands; every
-#: other `model`-role key is a recorded candidate.
-SHIPPED = ("model", "model-di")
+#: The version `make_audition.py` renders from the library as it stands, through
+#: the product path; every other `model`-role key is a recorded candidate, and
+#: `model-di` is a direct-path diagnostic that never signs off the shipped voice.
+SHIPPED = ("model",)
 
 
 def roles_of(set_id: str) -> dict[str, str]:
@@ -530,6 +531,11 @@ def signoff(set_id: str) -> dict:
     # A sign-off is a claim about the shipped voice, not a candidate or an unrecorded subject.
     if chosen["judged"] not in SHIPPED:
         about = chosen["judged"] or "an unrecorded version"
+        if chosen["judged"] == "model-di":
+            raise ValueError(
+                f"{set_id}: the note of {chosen['at'][:10]} is about model-di, a direct-path "
+                f"(DI) diagnostic, not the shipped voice ({' / '.join(SHIPPED)})"
+            )
         raise ValueError(
             f"{set_id}: the note of {chosen['at'][:10]} is about {about}, "
             f"not the shipped voice ({' / '.join(SHIPPED)})"
@@ -548,6 +554,8 @@ def signoff(set_id: str) -> dict:
             "patch_version": facts.get(unit, (0, ""))[0],
         },
         "take": take,
+        "judged": chosen["judged"],
+        "compared_against": (entry.get("conditions") or {}).get("compared_against"),
     }
 
 
