@@ -969,6 +969,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // strip replacement. The immutable construction metadata belongs to the
   // processor instance and is read without allocation on the audio thread.
   bool constructed_insert_parameter_base(uint32_t target_id, float* out_value) const noexcept;
+  // Fallback for a track-lane fader/pan id with no manual base: it has no
+  // construction value, so it returns to the lane's rest value.
+  bool restore_track_lane_parameter(uint32_t target_id) noexcept;
   // Sets the smoothed target of a master-strip insert parameter from a reserved
   // automation lane. The master insert chain lives outside TrackMixerRuntime, so
   // its automated params get a parallel slot table here, advanced once per

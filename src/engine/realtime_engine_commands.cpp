@@ -85,6 +85,10 @@ void RealtimeEngine::release_parameter_base(uint32_t target_id) noexcept {
   if (!found && is_insert_param_id(target_id)) {
     found = constructed_insert_parameter_base(target_id, &value);
   }
+  if (!found) {
+    restore_track_lane_parameter(target_id);
+    return;
+  }
 #endif
   if (!found) return;  // No manual or construction baseline is available.
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)

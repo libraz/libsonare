@@ -1,5 +1,6 @@
 /// @file timeline_apply_test.cpp
-/// @brief apply_to_engine atomicity, re-apply replacement and strip binding.
+/// @brief apply_to_engine atomicity, re-apply replacement, strip binding and the
+///        static state a re-apply restores once a lane is gone.
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
@@ -11,6 +12,7 @@
 #include "arrangement/edit_compiler.h"
 #include "arrangement/edit_model.h"
 #include "automation/automation_lane.h"
+#include "engine/insert_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
 #include "midi/ump.h"
@@ -414,6 +416,157 @@ TEST_CASE("successive applies with fresh track ids never exhaust the strip table
     INFO("round " << round);
     REQUIRE(result.ok());
     REQUIRE(result.outcome == arr::ApplyOutcome::kApplied);
+  }
+}
+namespace {
+
+/// The parameter a re-apply case automates in timeline A and leaves static in B.
+enum class AutomatedTarget { kFader, kPan, kInsert };
+
+constexpr const char* kSceneStripId = "scene";
+
+/// One track with a 1:1 scene strip (fader, pan and a gain insert off their defaults).
+arr::CompiledTimeline strip_timeline() {
+  arr::CompiledTimeline timeline = make_timeline(ProjectSpec{});
+  sonare::mixing::api::Strip strip;
+  strip.id = kSceneStripId;
+  strip.fader_db = -2.0f;
+  strip.pan = 0.2f;
+  strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":-3.0})"});
+  timeline.mixer.scene.strips.push_back(strip);
+  timeline.mixer.bindings = {{timeline.track_lanes.front().track_id, kSceneStripId}};
+  return timeline;
+}
+
+/// The engine param id of the scene strip's gain insert "levelDb".
+uint32_t insert_level_param_id(const arr::CompiledTimeline& timeline,
+                               const arr::ApplyOptions& options) {
+  RealtimeEngine scratch;
+  REQUIRE(arr::apply_to_engine(timeline, *prepared(scratch), options).ok());
+  size_t lane_index = 0;
+  unsigned int param_id = 0;
+  REQUIRE(scratch.track_mixer().resolve_track_insert_param(timeline.track_lanes.front().track_id, 0,
+                                                           "levelDb", &lane_index, &param_id));
+  return sonare::engine::make_insert_param_id(static_cast<uint32_t>(lane_index), 0, param_id);
+}
+
+/// @p b plus one lane ramping @p target well away from its static value inside one render.
+arr::CompiledTimeline with_lane(const arr::CompiledTimeline& b, AutomatedTarget target,
+                                const arr::ApplyOptions& options) {
+  using sonare::automation::AutomationLane;
+  using sonare::automation::AutomationTargetKind;
+  using sonare::automation::CurveType;
+  arr::CompiledTimeline a = b;
+  AutomationLane lane;
+  switch (target) {
+    case AutomatedTarget::kFader:
+      lane = AutomationLane(900, AutomationTargetKind::kTrackFaderDb);
+      lane.set_points({{0.0, 0.0f, CurveType::Linear}, {0.05, -12.0f, CurveType::Linear}});
+      break;
+    case AutomatedTarget::kPan:
+      lane = AutomationLane(901, AutomationTargetKind::kTrackPan);
+      lane.set_points({{0.0, 0.0f, CurveType::Linear}, {0.05, 0.8f, CurveType::Linear}});
+      break;
+    case AutomatedTarget::kInsert:
+      lane = AutomationLane(insert_level_param_id(b, options));
+      lane.set_points({{0.0, -3.0f, CurveType::Linear}, {0.05, -15.0f, CurveType::Linear}});
+      break;
+  }
+  a.automation_lanes.push_back(lane);
+  a.mixer.automation_bindings.push_back({a.track_lanes.front().track_id, lane});
+  return a;
+}
+
+/// Renders @p a on one engine, re-applies @p b there and requires the render of a fresh engine
+/// given @p b. Returns the render of @p a so a caller can show its lane was audible.
+std::vector<float> require_reapply_matches_fresh(const arr::CompiledTimeline& a,
+                                                 const arr::CompiledTimeline& b,
+                                                 const arr::ApplyOptions& options) {
+  RealtimeEngine engine;
+  REQUIRE(arr::apply_to_engine(a, *prepared(engine), options).ok());
+  const std::vector<float> first = render(engine);
+  sonare::rt::Command stop{};
+  stop.type = sonare::rt::CommandType::kTransportStop;
+  stop.sample_time = -1;
+  REQUIRE(engine.push_command(stop));
+  sonare::rt::Command seek{};
+  seek.type = sonare::rt::CommandType::kTransportSeekSample;
+  seek.sample_time = -1;
+  seek.arg.i = 0;
+  REQUIRE(engine.push_command(seek));
+  engine.flush_control_commands();
+  REQUIRE(arr::apply_to_engine(b, engine, options).ok());
+  const std::vector<float> reapplied = render(engine);
+
+  RealtimeEngine fresh;
+  REQUIRE(arr::apply_to_engine(b, *prepared(fresh), options).ok());
+  REQUIRE(reapplied == render(fresh));
+  return first;
+}
+
+arr::ApplyOptions binding_strips() {
+  arr::ApplyOptions options;
+  options.bind_strips = true;
+  return options;
+}
+
+}  // namespace
+
+TEST_CASE("re-applying the same timeline after a render matches a fresh engine",
+          "[arrangement][timeline-apply]") {
+  // Control for the cases below: rendering and rewinding leave nothing a fresh engine lacks.
+  const arr::ApplyOptions options = binding_strips();
+  const arr::CompiledTimeline b = strip_timeline();
+  require_reapply_matches_fresh(b, b, options);
+  const arr::CompiledTimeline plain = make_timeline(ProjectSpec{});
+  require_reapply_matches_fresh(plain, plain, {});
+}
+
+TEST_CASE("re-applying without a fader lane restores the static fader",
+          "[arrangement][timeline-apply]") {
+  const arr::ApplyOptions options = binding_strips();
+  const arr::CompiledTimeline b = strip_timeline();
+  const arr::CompiledTimeline a = with_lane(b, AutomatedTarget::kFader, options);
+  const std::vector<float> first = require_reapply_matches_fresh(a, b, options);
+  RealtimeEngine fresh;
+  REQUIRE(arr::apply_to_engine(b, *prepared(fresh), options).ok());
+  REQUIRE(first != render(fresh));
+}
+
+TEST_CASE("re-applying without a pan lane restores the static pan",
+          "[arrangement][timeline-apply]") {
+  const arr::ApplyOptions options = binding_strips();
+  const arr::CompiledTimeline b = strip_timeline();
+  const arr::CompiledTimeline a = with_lane(b, AutomatedTarget::kPan, options);
+  const std::vector<float> first = require_reapply_matches_fresh(a, b, options);
+  RealtimeEngine fresh;
+  REQUIRE(arr::apply_to_engine(b, *prepared(fresh), options).ok());
+  REQUIRE(first != render(fresh));
+}
+
+TEST_CASE("re-applying without an insert lane restores the scene strip's insert value",
+          "[arrangement][timeline-apply]") {
+  const arr::ApplyOptions options = binding_strips();
+  const arr::CompiledTimeline b = strip_timeline();
+  const arr::CompiledTimeline a = with_lane(b, AutomatedTarget::kInsert, options);
+  const std::vector<float> first = require_reapply_matches_fresh(a, b, options);
+  RealtimeEngine fresh;
+  REQUIRE(arr::apply_to_engine(b, *prepared(fresh), options).ok());
+  REQUIRE(first != render(fresh));
+}
+
+TEST_CASE("re-applying without a lane restores the lane default on a track with no strip",
+          "[arrangement][timeline-apply]") {
+  const arr::CompiledTimeline b = make_timeline(ProjectSpec{});
+  REQUIRE(b.mixer.bindings.empty());
+  for (const AutomatedTarget target : {AutomatedTarget::kFader, AutomatedTarget::kPan}) {
+    INFO("target " << static_cast<int>(target));
+    const arr::CompiledTimeline a = with_lane(b, target, {});
+    const std::vector<float> first = require_reapply_matches_fresh(a, b, {});
+    RealtimeEngine fresh;
+    REQUIRE(arr::apply_to_engine(b, *prepared(fresh)).ok());
+    REQUIRE(first != render(fresh));
   }
 }
 #else

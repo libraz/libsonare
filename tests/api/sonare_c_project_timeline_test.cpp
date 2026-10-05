@@ -380,10 +380,17 @@ TEST_CASE("automation set after apply keeps the applied lanes audible", "[timeli
 
   // The fader lane is audible: the same project without it renders differently.
   REQUIRE(sonare_project_undo(built.project) == SONARE_OK);
-  REQUIRE(project_bounce(built.project) != applied);
-  // Re-applying replaces the whole lane set, the setter's lane included.
+  const std::vector<float> without_lane = project_bounce(built.project);
+  REQUIRE(without_lane != applied);
+  // Leave the fader at the ramp's end value, then rewind without rendering.
+  REQUIRE(sonare_engine_seek_sample(engine, kSampleRate, -1) == SONARE_OK);
+  process_block(engine);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  // Re-applying replaces the whole lane set, the setter's lane included, and the
+  // fader the removed lane drove returns to its static value.
   apply_project(engine, built.project);
   REQUIRE(automation_lane_count(engine) == 0);
+  REQUIRE(engine_bounce(engine) == without_lane);
 
   sonare_engine_destroy(engine);
   sonare_project_destroy(built.project);

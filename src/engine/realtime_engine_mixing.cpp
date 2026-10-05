@@ -1003,6 +1003,14 @@ bool RealtimeEngine::constructed_insert_parameter_base(uint32_t target_id,
       strip, insert_index, param_id, out_value);
 }
 
+bool RealtimeEngine::restore_track_lane_parameter(uint32_t target_id) noexcept {
+  if ((target_id & kEngineParamNamespaceMask) != kEngineParamNamespace) return false;
+  const uint32_t lane = (target_id & kEngineParamLaneMask) >> kEngineParamLaneShift;
+  if (lane >= TrackMixerRuntime::kMaxTrackLanes) return false;
+  return track_mixer_runtime_.restore_lane_parameter(static_cast<size_t>(lane),
+                                                     target_id & kEngineParamKindMask);
+}
+
 bool RealtimeEngine::insert_parameter_constructed_value(uint32_t target_id,
                                                         float* out_value) const noexcept {
   return constructed_insert_parameter_base(target_id, out_value);
