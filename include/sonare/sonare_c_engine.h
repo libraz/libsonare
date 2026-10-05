@@ -275,10 +275,14 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
 /// @brief Keys one insert of a lane strip from another lane's post-strip audio.
 /// @details Sidechain for ducking/sidechainRouter inserts: the source lane's
-///   most recent post-strip buffer feeds the insert's key input every block
-///   (same-block when the source renders earlier, previous block otherwise).
-///   @p source_track_id 0 removes the binding. Control-thread only; must not
-///   be called concurrently with @ref sonare_engine_process.
+///   post-strip, pre-fader audio feeds the insert's key input. Lanes are
+///   processed in key order and the key is delay-compensated to the
+///   destination strip input, so the result depends on neither the lane order
+///   nor the block size. @p source_track_id 0 removes the binding. Rejects
+///   (SONARE_ERROR_INVALID_PARAMETER, bindings unchanged) a lane keying itself,
+///   a binding that would close a cycle over the lane bindings, a full binding
+///   table and an alignment past the delay ceiling. Control-thread only; must
+///   not be called concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id);
 

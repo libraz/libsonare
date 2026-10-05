@@ -105,8 +105,10 @@ void TrackMixerRuntime::finish_block(float* const* channels, int num_channels, i
   const bool any_solo = any_lane_solo(*lanes);
   // Two passes (all strips + sends, then all lane outputs), not one interleaved
   // pass: this is the accumulation order the clip path has always used, so a
-  // clip-only block stays bit-identical.
-  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+  // clip-only block stays bit-identical. Strips run in lane-key order, so every
+  // source lane's key is ready before its destination's strip.
+  for (size_t position = 0; position < lanes->size(); ++position) {
+    const size_t lane_index = lane_at(position, lanes->size());
     if (!source_mix_lane_active_[lane_index]) continue;
     process_lane_strip(lane_index, render_channels, num_samples, timeline_sample);
     advance_lane_gain(lane_index, num_samples, any_solo);
@@ -206,7 +208,8 @@ void TrackMixerRuntime::finish_source_mix(float* const* channels, int num_channe
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   const bool any_solo = any_lane_solo(*lanes);
-  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+  for (size_t position = 0; position < lanes->size(); ++position) {
+    const size_t lane_index = lane_at(position, lanes->size());
     if (!source_mix_lane_active_[lane_index]) continue;
     process_lane_strip(lane_index, render_channels, num_samples, 0);
     advance_lane_gain(lane_index, num_samples, any_solo);
@@ -301,6 +304,7 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
   }
   // Capture the source before the strip mutates the lane buffers in place; kept for telemetry.
   capture_input_peak_db(lane_channel_ptrs_.data(), num_channels, num_samples, lane.input_peak_db);
+  lane_in_pdc_delays_[lane_index].process(lane_channel_ptrs_.data(), num_channels, num_samples);
   if (lane.strip) {
     deliver_lane_sidechains(lane_index, num_channels, num_samples);
     lane.strip->process_at(lane_channel_ptrs_.data(), num_channels, num_samples, timeline_sample);
@@ -308,12 +312,13 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
   } else {
     lane_insert_gr_boards_[lane_index].clear();
   }
+  // The key leaves at p(L) + s(L); each consumer's key edge aligns it from there.
+  snapshot_sidechain_key(lane_index, num_channels, num_samples);
   lane_pdc_delays_[lane_index].process(lane_channel_ptrs_.data(), num_channels, num_samples);
   // PFL is deliberately taken after the lane strip (and its PDC) but before
   // the lane fader/gate/pan stage in apply_lane_to_mix(). It therefore remains
   // audible when the lane is muted or solo-gated, matching the cue tap point.
   add_lane_monitor_pfl(lane_index, num_channels, num_samples);
-  snapshot_sidechain_key(lane_index, num_channels, num_samples);
 }
 
 void TrackMixerRuntime::add_lane_monitor_pfl(size_t lane_index, int num_channels,

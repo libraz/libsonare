@@ -600,31 +600,78 @@ bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db
 bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                                            uint32_t source_track_id) noexcept {
   if (track_id == 0) return false;
-  // Control-thread single writer: edit sidechains_, then publish it whole.
   const int found = find_sidechain_binding(SidechainTargetKind::Lane, track_id, insert_index);
-  if (found >= 0) {
-    if (source_track_id == 0) {
-      // The audio thread clears stale keys before delivering the current table,
-      // so this control path never touches lane_states_.
-      remove_sidechain_binding(static_cast<size_t>(found));
-    } else {
-      sidechains_.bindings[static_cast<size_t>(found)].source_id = source_track_id;
-      publish_sidechains();
-    }
-    return true;
+  if (source_track_id == 0 && found < 0) return true;
+  if (source_track_id != 0 &&
+      lane_key_closes_cycle(track_id, source_track_id,
+                            found >= 0 ? static_cast<size_t>(found) : kMaxSidechainBindings)) {
+    return false;
   }
-  if (source_track_id == 0) return true;
-  const size_t count = sidechains_.count;
-  if (count >= kMaxSidechainBindings) return false;
-  sidechains_.bindings[count] = SidechainBinding{track_id,
-                                                 insert_index,
-                                                 source_track_id,
-                                                 static_cast<uint8_t>(SidechainTargetKind::Lane),
-                                                 static_cast<uint8_t>(SidechainSourceKind::Track),
-                                                 0};
-  sidechains_.count = count + 1;
+  if (source_track_id != 0 && found < 0 && sidechains_.count >= kMaxSidechainBindings) {
+    return false;
+  }
+  const SidechainTable previous = sidechains_;
+  if (source_track_id == 0) {
+    remove_sidechain_binding(static_cast<size_t>(found));
+  } else if (found >= 0) {
+    sidechains_.bindings[static_cast<size_t>(found)].source_id = source_track_id;
+    publish_sidechains();
+  } else {
+    const size_t slot = free_key_slot();
+    key_edge_delays_[slot].reset();
+    sidechains_.bindings[sidechains_.count] =
+        SidechainBinding{track_id,
+                         insert_index,
+                         source_track_id,
+                         static_cast<uint8_t>(SidechainTargetKind::Lane),
+                         static_cast<uint8_t>(SidechainSourceKind::Track),
+                         static_cast<uint8_t>(slot)};
+    ++sidechains_.count;
+    publish_sidechains();
+  }
+  // The edge reorders the lanes and re-derives every delay; a refused plan
+  // puts the previous table back.
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr || recompute_lane_pdc(*lanes)) return true;
+  sidechains_ = previous;
   publish_sidechains();
-  return true;
+  recompute_lane_pdc(*lanes);
+  return false;
+}
+
+bool TrackMixerRuntime::lane_key_closes_cycle(uint32_t track_id, uint32_t source_track_id,
+                                              size_t skip) const noexcept {
+  if (source_track_id == track_id) return true;
+  // Walk forward from the destination along source -> destination lane keys;
+  // reaching the new source means the new edge closes a cycle.
+  std::array<uint32_t, kMaxSidechainBindings + 1> frontier{};
+  std::array<bool, kMaxSidechainBindings> walked{};
+  size_t head = 0;
+  size_t tail = 0;
+  frontier[tail++] = track_id;
+  while (head < tail) {
+    const uint32_t from = frontier[head++];
+    for (size_t i = 0; i < sidechains_.count; ++i) {
+      const SidechainBinding& binding = sidechains_.bindings[i];
+      if (i == skip || walked[i] ||
+          binding.target_kind != static_cast<uint8_t>(SidechainTargetKind::Lane) ||
+          binding.source_kind != static_cast<uint8_t>(SidechainSourceKind::Track) ||
+          binding.source_id != from) {
+        continue;
+      }
+      if (binding.target_id == source_track_id) return true;
+      walked[i] = true;
+      frontier[tail++] = binding.target_id;
+    }
+  }
+  return false;
+}
+
+size_t TrackMixerRuntime::free_key_slot() const noexcept {
+  std::array<bool, kMaxSidechainBindings> used{};
+  for (size_t i = 0; i < sidechains_.count; ++i) used[sidechains_.bindings[i].key_slot] = true;
+  return static_cast<size_t>(
+      std::distance(used.begin(), std::find(used.begin(), used.end(), false)));
 }
 
 int TrackMixerRuntime::find_sidechain_binding(SidechainTargetKind target_kind, uint32_t target_id,
@@ -640,12 +687,18 @@ int TrackMixerRuntime::find_sidechain_binding(SidechainTargetKind target_kind, u
 }
 
 void TrackMixerRuntime::prune_lane_sidechains(uint32_t track_id, size_t insert_count) noexcept {
+  bool dropped = false;
   for (size_t i = sidechains_.count; i > 0; --i) {
     const SidechainBinding& binding = sidechains_.bindings[i - 1];
     if (static_cast<SidechainTargetKind>(binding.target_kind) == SidechainTargetKind::Lane &&
         binding.target_id == track_id && binding.insert_index >= insert_count) {
       remove_sidechain_binding(i - 1);
+      dropped = true;
     }
+  }
+  if (!dropped) return;
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+    recompute_lane_pdc(*lanes);
   }
 }
 
@@ -687,16 +740,8 @@ bool TrackMixerRuntime::store_keyed_binding(SidechainTargetKind target_kind, uin
   const size_t count = sidechains_.count;
   if (count >= kMaxSidechainBindings) return false;
   // A key slot owns a delay line and a buffer, so it is claimed from the slots
-  // no other bus/master binding holds.
-  std::array<bool, kMaxSidechainBindings> used{};
-  for (size_t i = 0; i < count; ++i) {
-    const SidechainBinding& binding = sidechains_.bindings[i];
-    if (binding.target_kind != static_cast<uint8_t>(SidechainTargetKind::Lane)) {
-      used[binding.key_slot] = true;
-    }
-  }
-  const size_t slot =
-      static_cast<size_t>(std::distance(used.begin(), std::find(used.begin(), used.end(), false)));
+  // no other binding holds.
+  const size_t slot = free_key_slot();
   key_edge_delays_[slot].reset();
   sidechains_.bindings[count] = SidechainBinding{target_id,
                                                  insert_index,
@@ -808,7 +853,9 @@ int TrackMixerRuntime::build_keyed_input(size_t binding_index, int lane_channels
   } else {
     const int source_index = lane_index_for_track(source_id);
     if (source_index < 0) return 0;
-    // Same stale-tail rule as deliver_lane_sidechains.
+    // The source's snapshot was taken at ITS sub-block's length, which may be
+    // shorter than this one (a source that did not render this block). Silence
+    // the shortfall so the key never carries an older, longer sub-block's audio.
     int& source_frames = key_frames_[static_cast<size_t>(source_index)];
     const int stale = num_samples - source_frames;
     channels = std::min(lane_channels, kMaxLaneChannels);
@@ -892,33 +939,18 @@ void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_chann
   lane.strip->clear_insert_sidechains();
   const size_t count = audio_sidechains_.count;
   if (count == 0) return;
-  std::array<const float*, kMaxLaneChannels> key{};
   for (size_t i = 0; i < count; ++i) {
     const SidechainBinding& binding = audio_sidechains_.bindings[i];
     if (binding.target_kind != static_cast<uint8_t>(SidechainTargetKind::Lane) ||
         binding.target_id != lane.track_id) {
       continue;
     }
-    const int source_index = lane_index_for_track(binding.source_id);
-    if (source_index < 0) continue;
-    // The source lane's key snapshot holds its most recent post-strip,
-    // pre-fader audio: the current block when the source renders before this
-    // lane, the previous block otherwise (one block of key latency).
-    //
-    // That snapshot was taken at ITS sub-block's length, which may be shorter
-    // than this one. Silence the shortfall so the key never carries audio from
-    // an older, longer sub-block; the snapshot length is then this length, so a
-    // second consumer of the same source does not repeat the clear.
-    int& source_frames = key_frames_[static_cast<size_t>(source_index)];
-    const int stale = num_samples - source_frames;
-    for (int ch = 0; ch < num_channels && ch < kMaxLaneChannels; ++ch) {
-      float* plane = key_channel(static_cast<size_t>(source_index), ch);
-      if (stale > 0) std::fill(plane + source_frames, plane + num_samples, 0.0f);
-      key[static_cast<size_t>(ch)] = plane;
-    }
-    if (stale > 0) source_frames = num_samples;
-    lane.strip->set_insert_sidechain(binding.insert_index, key.data(),
-                                     std::min(num_channels, kMaxLaneChannels), num_samples);
+    // Lanes render in key order, so the source snapshot is this block's audio;
+    // the key edge re-times it to this lane's strip input.
+    std::array<const float*, kMaxLaneChannels> key{};
+    const int channels = build_keyed_input(i, num_channels, num_samples, key, false);
+    if (channels <= 0) continue;
+    lane.strip->set_insert_sidechain(binding.insert_index, key.data(), channels, num_samples);
   }
 }
 
@@ -938,8 +970,8 @@ void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channe
     }
   }
   if (!is_source) return;
-  // Copy the post-strip output before the fader/gate/pan stage mutates the
-  // lane buffer in place, so keyed inserts see the source's pre-fader signal.
+  // Copy the post-strip output before lane PDC and the fader/gate/pan stage
+  // mutate the lane buffer in place, so keyed inserts see the pre-fader signal.
   for (int ch = 0; ch < num_channels && ch < kMaxLaneChannels; ++ch) {
     const float* src = lane_channel(lane_index, ch);
     std::copy(src, src + num_samples, key_channel(lane_index, ch));

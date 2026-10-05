@@ -14,6 +14,9 @@ void TrackMixerRuntime::flush_pdc_delays() noexcept {
   for (mixing::AlignmentDelay& delay : lane_pre_send_pdc_delays_) {
     delay.reset();
   }
+  for (mixing::AlignmentDelay& delay : lane_in_pdc_delays_) {
+    delay.reset();
+  }
   for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {
     delay.reset();
   }
@@ -35,6 +38,9 @@ uint64_t TrackMixerRuntime::pdc_storage_generation() const noexcept {
     total += delay.storage_generation();
   }
   for (const mixing::AlignmentDelay& delay : lane_pre_send_pdc_delays_) {
+    total += delay.storage_generation();
+  }
+  for (const mixing::AlignmentDelay& delay : lane_in_pdc_delays_) {
     total += delay.storage_generation();
   }
   for (const mixing::AlignmentDelay& delay : bus_pdc_delays_) {
@@ -178,31 +184,82 @@ bool TrackMixerRuntime::plan_pdc(
     return candidate_strips != nullptr ? (*candidate_strips)[lane_index]
                                        : lane_states_[lane_index].strip;
   };
-  // Lane stage: the widest strip latency. Every lane leaves process_lane_strip
+  *plan = PdcPlan{};
+  const size_t lane_count = lanes.size();
+  std::array<int, kMaxTrackLanes> strip_q8{};
+  for (size_t lane_index = 0; lane_index < lane_count; ++lane_index) {
+    const mixing::ChannelStrip* strip = strip_at(lane_index);
+    strip_q8[lane_index] = strip != nullptr ? strip->latency_samples_q8() : 0;
+  }
+  const auto lane_of = [&lanes](uint32_t track_id) -> int {
+    for (size_t i = 0; i < lanes.size(); ++i) {
+      if (lanes[i].track_id == track_id) return static_cast<int>(i);
+    }
+    return -1;
+  };
+  const size_t binding_count = sidechains_.count;
+  // Lane-key edges (source lane -> destination lane), indexed like the bindings.
+  std::array<int, kMaxSidechainBindings> edge_source{};
+  std::array<int, kMaxSidechainBindings> edge_target{};
+  edge_source.fill(-1);
+  edge_target.fill(-1);
+  std::array<int, kMaxTrackLanes> indegree{};
+  for (size_t i = 0; i < binding_count; ++i) {
+    const SidechainBinding& binding = sidechains_.bindings[i];
+    if (view.skip_binding[i] ||
+        binding.target_kind != static_cast<uint8_t>(SidechainTargetKind::Lane) ||
+        binding.source_kind != static_cast<uint8_t>(SidechainSourceKind::Track)) {
+      continue;
+    }
+    const int source = lane_of(binding.source_id);
+    const int target = lane_of(binding.target_id);
+    if (source < 0 || target < 0 || source == target) continue;
+    edge_source[i] = source;
+    edge_target[i] = target;
+    ++indegree[static_cast<size_t>(target)];
+  }
+  // Stable Kahn sort (lowest index first), so an edge-free list keeps its order;
+  // p(D) = max(0, max over edges (p(S) + s(S))) follows along it.
+  std::array<int, kMaxTrackLanes> pre_q8{};
+  std::array<bool, kMaxTrackLanes> placed{};
+  for (size_t position = 0; position < lane_count; ++position) {
+    size_t next = lane_count;
+    for (size_t i = 0; i < lane_count && next == lane_count; ++i) {
+      if (!placed[i] && indegree[i] == 0) next = i;
+    }
+    if (next == lane_count) return false;
+    placed[next] = true;
+    plan->lane_order[position] = static_cast<uint8_t>(next);
+    for (size_t i = 0; i < binding_count; ++i) {
+      if (edge_source[i] != static_cast<int>(next)) continue;
+      const size_t target = static_cast<size_t>(edge_target[i]);
+      pre_q8[target] = std::max(pre_q8[target], pre_q8[next] + strip_q8[next]);
+      --indegree[target];
+    }
+  }
+  plan->lane_order_count = lane_count;
+  // Lane stage: the latest strip output. Every lane leaves process_lane_strip
   // at this offset, and every path the lane's audio then takes is tapped from
   // there -- the direct master sum, the output-bus routing and the post-fader
   // sends all read the aligned lane buffer, while a pre-fader send reads the
   // strip's earlier tap through lane_pre_send_pdc_delays_ below. One lane
   // timebase, three exits.
   int max_strip_q8 = 0;
-  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
-    const mixing::ChannelStrip* strip = strip_at(lane_index);
-    if (strip != nullptr) {
-      max_strip_q8 = std::max(max_strip_q8, strip->latency_samples_q8());
-    }
+  for (size_t lane_index = 0; lane_index < lane_count; ++lane_index) {
+    max_strip_q8 = std::max(max_strip_q8, pre_q8[lane_index] + strip_q8[lane_index]);
   }
-  *plan = PdcPlan{};
-  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+  for (size_t lane_index = 0; lane_index < lane_count; ++lane_index) {
     const mixing::ChannelStrip* strip = strip_at(lane_index);
-    plan->lane_q8[lane_index] = max_strip_q8 - (strip != nullptr ? strip->latency_samples_q8() : 0);
+    plan->lane_in_q8[lane_index] = pre_q8[lane_index];
+    plan->lane_q8[lane_index] = max_strip_q8 - pre_q8[lane_index] - strip_q8[lane_index];
     // Pre-fader send stage: the same target offset, measured from the earlier
     // tap. A strip's pre-fader latency is what it has accrued by the time the
     // pre tap is taken (its pre inserts), so this bank carries the
     // rest of the widest strip latency -- including the strip's own
     // post-insert chain, which the lane's output passes through and the pre
     // tap does not.
-    plan->lane_pre_q8[lane_index] =
-        max_strip_q8 - (strip != nullptr ? strip->pre_fader_latency_samples_q8() : 0);
+    plan->lane_pre_q8[lane_index] = max_strip_q8 - pre_q8[lane_index] -
+                                    (strip != nullptr ? strip->pre_fader_latency_samples_q8() : 0);
   }
 
   // Bus stage along the order: in(b) is the latest arrival over the lane stage
@@ -220,7 +277,6 @@ bool TrackMixerRuntime::plan_pdc(
   std::array<int, kMaxBusLanes> bus_out{};
   bus_in.fill(max_strip_q8);
   int master_in = max_strip_q8;
-  const size_t binding_count = sidechains_.count;
   const auto live_bus_key = [&](size_t i, uint32_t source_bus) {
     const SidechainBinding& binding = sidechains_.bindings[i];
     return !view.skip_binding[i] &&
@@ -269,24 +325,35 @@ bool TrackMixerRuntime::plan_pdc(
     }
   }
   plan->master_q8 = master_in - max_strip_q8;
-  // Key edges: in(target) - L from a track, in(target) - out(source) from a bus.
+  // Key edges: in(target) - out(source). A track key is taken after its strip
+  // and before lane PDC, so it leaves at p(S) + s(S); a lane target's input is
+  // its strip input p(D).
   for (size_t i = 0; i < binding_count; ++i) {
     if (view.skip_binding[i]) continue;
     const SidechainBinding& binding = sidechains_.bindings[i];
     const auto target_kind = binding.target_kind;
-    if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Lane)) continue;
-    int target = -1;
-    if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
-      target = index_of(binding.target_id);
-      if (target < 0) continue;
-    }
-    int source_out = max_strip_q8;
+    int source_out = 0;
     if (binding.source_kind == static_cast<uint8_t>(SidechainSourceKind::Bus)) {
       const int source = index_of(binding.source_id);
       if (source < 0) continue;
       source_out = bus_out[static_cast<size_t>(source)];
+    } else {
+      const int source = lane_of(binding.source_id);
+      if (source < 0) continue;
+      source_out = pre_q8[static_cast<size_t>(source)] + strip_q8[static_cast<size_t>(source)];
     }
-    plan->key_q8[binding.key_slot] = input_of(target) - source_out;
+    int target_in = 0;
+    if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Lane)) {
+      if (edge_target[i] < 0) continue;
+      target_in = pre_q8[static_cast<size_t>(edge_target[i])];
+    } else if (target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
+      const int target = index_of(binding.target_id);
+      if (target < 0) continue;
+      target_in = input_of(target);
+    } else {
+      target_in = master_in;
+    }
+    plan->key_q8[binding.key_slot] = target_in - source_out;
   }
   // What the engine advertises to the host: the master input's arrival.
   plan->latency_q8 = master_in;
@@ -297,9 +364,10 @@ bool TrackMixerRuntime::plan_pdc(
   const auto within = [](const auto& values) {
     return std::all_of(values.begin(), values.end(), [](int v) { return v >= 0 && v <= kCapQ8; });
   };
-  return within(plan->lane_q8) && within(plan->lane_pre_q8) && within(plan->bus_in_q8) &&
-         within(plan->edge_q8) && within(plan->key_q8) && plan->master_q8 >= 0 &&
-         plan->master_q8 <= kCapQ8 && plan->latency_q8 >= 0 && plan->latency_q8 <= kCapQ8;
+  return within(plan->lane_q8) && within(plan->lane_pre_q8) && within(plan->lane_in_q8) &&
+         within(plan->bus_in_q8) && within(plan->edge_q8) && within(plan->key_q8) &&
+         plan->master_q8 >= 0 && plan->master_q8 <= kCapQ8 && plan->latency_q8 >= 0 &&
+         plan->latency_q8 <= kCapQ8;
 }
 
 void TrackMixerRuntime::make_lane_pdc_sources(
@@ -360,7 +428,10 @@ bool TrackMixerRuntime::prepare_pdc_updates(
               plan.lane_q8[i], mixing::FractionalDelayMode::Lagrange3, prepared->lane_updates[i]) ||
           !lane_pre_send_pdc_delays_[source].prepare_update(plan.lane_pre_q8[i],
                                                             mixing::FractionalDelayMode::Lagrange3,
-                                                            prepared->lane_pre_send_updates[i])) {
+                                                            prepared->lane_pre_send_updates[i]) ||
+          !lane_in_pdc_delays_[source].prepare_update(plan.lane_in_q8[i],
+                                                      mixing::FractionalDelayMode::Lagrange3,
+                                                      prepared->lane_in_updates[i])) {
         return false;
       }
     }
@@ -405,6 +476,8 @@ void TrackMixerRuntime::commit_pdc_updates(PreparedPdc& prepared) noexcept {
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> next_lane;
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> old_pre = std::move(lane_pre_send_pdc_delays_);
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> next_pre;
+  std::array<mixing::AlignmentDelay, kMaxTrackLanes> old_in = std::move(lane_in_pdc_delays_);
+  std::array<mixing::AlignmentDelay, kMaxTrackLanes> next_in;
   std::array<bool, kMaxTrackLanes> moved{};
   for (size_t destination = 0; destination < kMaxTrackLanes; ++destination) {
     size_t source = prepared.lane_source[destination] >= 0
@@ -414,17 +487,23 @@ void TrackMixerRuntime::commit_pdc_updates(PreparedPdc& prepared) noexcept {
     moved[source] = true;
     next_lane[destination] = std::move(old_lane[source]);
     next_pre[destination] = std::move(old_pre[source]);
+    next_in[destination] = std::move(old_in[source]);
     if (prepared.lane_reset[destination]) {
       next_lane[destination].reset();
       next_pre[destination].reset();
+      next_in[destination].reset();
     }
   }
   lane_pdc_delays_ = std::move(next_lane);
   lane_pre_send_pdc_delays_ = std::move(next_pre);
+  lane_in_pdc_delays_ = std::move(next_in);
   for (size_t i = 0; i < kMaxTrackLanes; ++i) {
     lane_pdc_delays_[i].commit_update(prepared.lane_updates[i]);
     lane_pre_send_pdc_delays_[i].commit_update(prepared.lane_pre_send_updates[i]);
+    lane_in_pdc_delays_[i].commit_update(prepared.lane_in_updates[i]);
   }
+  lane_order_ = prepared.plan.lane_order;
+  lane_order_count_ = prepared.plan.lane_order_count;
   for (size_t i = 0; i < kMaxBusLanes; ++i) {
     bus_pdc_delays_[i].commit_update(prepared.bus_updates[i]);
   }

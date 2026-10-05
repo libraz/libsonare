@@ -784,3 +784,219 @@ TEST_CASE("RealtimeEngine keys the master from a latent bus on the master timeba
   REQUIRE(rms_db(unkeyed, settle) > -40.0);
   CHECK(rms_db(unkeyed, settle) - rms_db(run(true), settle) >= 1.0);
 }
+
+namespace {
+
+constexpr int kMaxOrderBlock = 512;
+
+// Track 20 carries the key (a burst), every other track a program tone.
+float keyed_program(uint32_t track, int channel, int64_t frame) {
+  return track == 20 ? burst(track, channel, frame) : tone(track, channel, frame);
+}
+
+float late_impulse(uint32_t, int, int64_t frame) { return frame == 300 ? 0.25f : 0.0f; }
+
+float constant_by_track(uint32_t track, int, int64_t) { return 0.01f * static_cast<float>(track); }
+
+Strip ducker_strip() {
+  Strip strip;
+  strip.inserts.push_back(
+      {InsertSlot::PreFader, "dynamics.duckingProcessor",
+       R"({"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30})"});
+  return strip;
+}
+
+Strip latent_strip(float lookahead_ms) {
+  Strip strip;
+  strip.inserts.push_back(
+      {InsertSlot::PreFader, "dynamics.limiter",
+       R"({"thresholdDb":24,"releaseMs":50,"lookaheadMs":)" + std::to_string(lookahead_ms) + "}"});
+  return strip;
+}
+
+// Records channel 0 of the audio it processes and of the key it was handed.
+class TapProbe final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int i = 0; i < num_samples; ++i) {
+      input.push_back(num_channels > 0 ? channels[0][i] : 0.0f);
+      key.push_back(static_cast<size_t>(i) < pending_.size() ? pending_[static_cast<size_t>(i)]
+                                                             : 0.0f);
+    }
+    keyed_last_block = !pending_.empty();
+  }
+  void reset() override {}
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override {
+    pending_.assign(static_cast<size_t>(num_samples), 0.0f);
+    if (channels != nullptr && num_channels > 0 && channels[0] != nullptr) {
+      pending_.assign(channels[0], channels[0] + num_samples);
+    }
+  }
+  void clear_sidechain() override { pending_.clear(); }
+  std::vector<float> input;
+  std::vector<float> key;
+  bool keyed_last_block = false;
+
+ private:
+  std::vector<float> pending_;
+};
+
+// Renders @p frames through begin_block / mix_source_into_lane / finish_block
+// (or the source-mix finish) in blocks of @p block frames.
+Planes render_blocks(TrackMixerRuntime& mixer, const std::vector<uint32_t>& tracks, int frames,
+                     int block, Signal signal, bool source_mix = false) {
+  REQUIRE(block <= kMaxOrderBlock);
+  Planes out(2);
+  std::array<std::array<float, kMaxOrderBlock>, 2> source{};
+  std::array<std::array<float, kMaxOrderBlock>, 2> io{};
+  float* io_ptrs[] = {io[0].data(), io[1].data()};
+  for (int start = 0; start < frames; start += block) {
+    for (auto& plane : io) plane.fill(0.0f);
+    REQUIRE(mixer.begin_block(2, block));
+    for (uint32_t track : tracks) {
+      for (int ch = 0; ch < 2; ++ch) {
+        for (int i = 0; i < block; ++i) {
+          source[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+              signal(track, ch, static_cast<int64_t>(start) + i);
+        }
+      }
+      float* src[] = {source[0].data(), source[1].data()};
+      bool routed = false;
+      REQUIRE(mixer.mix_source_into_lane(track, src, io_ptrs, 2, block, routed));
+    }
+    if (source_mix) {
+      mixer.finish_source_mix(io_ptrs, 2, block);
+    } else {
+      mixer.finish_block(io_ptrs, 2, block, start);
+    }
+    for (size_t c = 0; c < 2; ++c) {
+      out[c].insert(out[c].end(), io[c].begin(), io[c].begin() + block);
+    }
+  }
+  return out;
+}
+
+size_t argmax_abs(const std::vector<float>& plane) {
+  size_t best = 0;
+  for (size_t i = 1; i < plane.size(); ++i) {
+    if (std::abs(plane[i]) > std::abs(plane[best])) best = i;
+  }
+  return best;
+}
+
+}  // namespace
+
+TEST_CASE("Track mixer lane sidechain is independent of lane order and block size",
+          "[track_mixer_routing][lane-sidechain-order]") {
+  // Lane 30 ducks from lane 20's burst; lane 20 is muted, so the master holds
+  // lane 30's output alone. Swapping the lane order or the block size must not
+  // move a single sample of it.
+  constexpr int kFrames = 4096;
+  const auto run = [&](bool source_first, int block, bool source_mix) {
+    TrackMixerRuntime m;
+    m.prepare(kSampleRate, kMaxOrderBlock);
+    const std::vector<uint32_t> order =
+        source_first ? std::vector<uint32_t>{20, 30} : std::vector<uint32_t>{30, 20};
+    REQUIRE(m.set_track_lanes({TrackLaneConfig{order[0]}, TrackLaneConfig{order[1]}}));
+    REQUIRE(m.set_track_strip(30, ducker_strip()));
+    REQUIRE(m.set_lane_sidechain(30, 0, 20));
+    REQUIRE(m.set_lane_solo_mute(source_first ? 0 : 1, false, true));
+    m.settle_smoothers();
+    return render_blocks(m, order, kFrames, block, keyed_program, source_mix);
+  };
+  for (bool source_mix : {false, true}) {
+    INFO("source_mix " << source_mix);
+    const Planes reference = run(true, 128, source_mix);
+    // Non-vacuity: the key moves the destination.
+    TrackMixerRuntime unkeyed;
+    unkeyed.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(unkeyed.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+    REQUIRE(unkeyed.set_track_strip(30, ducker_strip()));
+    REQUIRE(unkeyed.set_lane_solo_mute(0, false, true));
+    unkeyed.settle_smoothers();
+    const Planes dry_out =
+        render_blocks(unkeyed, {20, 30}, kFrames, 128, keyed_program, source_mix);
+    REQUIRE(rms_db(dry_out[0], 2048) - rms_db(reference[0], 2048) >= 1.0);
+    for (bool source_first : {true, false}) {
+      for (int block : {64, 128, 512}) {
+        INFO("source_first " << source_first << " block " << block);
+        const Planes got = run(source_first, block, source_mix);
+        CHECK(std::equal(got.begin(), got.end(), reference.begin(), reference.end()));
+      }
+    }
+  }
+}
+
+TEST_CASE("Track mixer lane sidechain key lands on the destination strip input sample",
+          "[track_mixer_routing][lane-sidechain-order][pdc]") {
+  // Both lanes carry the same impulse; the source's strip delays it by 48
+  // samples. The key and the destination's own input must peak together.
+  constexpr int kFrames = 1024;
+  for (bool source_first : {true, false}) {
+    INFO("source_first " << source_first);
+    TrackMixerRuntime m;
+    m.prepare(kSampleRate, kMaxOrderBlock);
+    const std::vector<uint32_t> order =
+        source_first ? std::vector<uint32_t>{20, 30} : std::vector<uint32_t>{30, 20};
+    REQUIRE(m.set_track_lanes({TrackLaneConfig{order[0]}, TrackLaneConfig{order[1]}}));
+    REQUIRE(m.set_track_strip(20, latent_strip(1.0f)));
+    auto* probe = new TapProbe();
+    sonare::mixing::ChannelStrip strip;
+    strip.add_pre_insert(std::unique_ptr<sonare::rt::ProcessorBase>(probe));
+    REQUIRE(m.bind_track_strip(30, &strip));
+    REQUIRE(m.set_lane_sidechain(30, 0, 20));
+    CHECK(m.latency_samples() == 48);
+    m.settle_smoothers();
+    const Planes out = render_blocks(m, order, kFrames, 64, late_impulse);
+    REQUIRE(probe->input.size() == static_cast<size_t>(kFrames));
+    CHECK(argmax_abs(probe->input) == 348);
+    CHECK(argmax_abs(probe->key) == argmax_abs(probe->input));
+    // Both lanes leave the mixer on the common 48-sample timebase.
+    CHECK(argmax_abs(out[0]) == 348);
+    // Unkeyed, the widest strip still sets the latency.
+    REQUIRE(m.set_lane_sidechain(30, 0, 0));
+    CHECK(m.latency_samples() == 48);
+  }
+}
+
+TEST_CASE("Track mixer refuses a self-keyed or cyclic lane sidechain",
+          "[track_mixer_routing][lane-sidechain-order]") {
+  TrackMixerRuntime m;
+  m.prepare(kSampleRate, kBlock);
+  REQUIRE(m.set_track_lanes({TrackLaneConfig{10}, TrackLaneConfig{20}, TrackLaneConfig{30}}));
+  std::array<TapProbe*, 3> probes{};
+  std::array<sonare::mixing::ChannelStrip, 3> strips;
+  for (size_t i = 0; i < 3; ++i) {
+    auto probe = std::make_unique<TapProbe>();
+    probes[i] = probe.get();
+    strips[i].add_pre_insert(std::move(probe));
+    REQUIRE(m.bind_track_strip(static_cast<uint32_t>(10 * (i + 1)), &strips[i]));
+  }
+  // The most recent block's key value names its source (0.01 x track id).
+  const auto keys = [&] {
+    (void)render_blocks(m, {10, 20, 30}, kBlock, kBlock, constant_by_track);
+    std::array<float, 3> values{};
+    for (size_t i = 0; i < 3; ++i) {
+      values[i] = probes[i]->keyed_last_block ? probes[i]->key.back() : -1.0f;
+    }
+    return values;
+  };
+
+  CHECK_FALSE(m.set_lane_sidechain(10, 0, 10));
+  REQUIRE(m.set_lane_sidechain(10, 0, 20));
+  CHECK_FALSE(m.set_lane_sidechain(20, 0, 10));
+  REQUIRE(m.set_lane_sidechain(20, 0, 30));
+  CHECK_FALSE(m.set_lane_sidechain(30, 0, 10));
+  // A replacement that would close a cycle keeps the binding it replaces.
+  CHECK_FALSE(m.set_lane_sidechain(20, 0, 10));
+  const std::array<float, 3> after = keys();
+  CHECK(std::abs(after[0] - 0.2f) < 1.0e-3f);
+  CHECK(std::abs(after[1] - 0.3f) < 1.0e-3f);
+  CHECK(after[2] == -1.0f);
+
+  // Cycles are judged on track ids, whether or not the lanes exist.
+  REQUIRE(m.set_lane_sidechain(40, 0, 50));
+  CHECK_FALSE(m.set_lane_sidechain(50, 0, 40));
+  CHECK_FALSE(m.set_lane_sidechain(40, 1, 40));
+}

@@ -206,13 +206,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     monitor_bus_channel_count_ =
         channels == nullptr ? 0 : std::clamp(num_channels, 0, kMaxBusChannels);
   }
-  /// Routes another lane's most recent post-strip audio into one insert of a
-  /// lane strip as its sidechain key (ducking/sidechainRouter inserts).
-  /// Source lanes rendered earlier in the block deliver same-block audio;
-  /// later ones deliver the previous block (one block of key latency).
-  /// source_track_id 0 removes the binding. Single control-thread writer; safe
-  /// concurrently with process(). Bindings are keyed by track id and survive
-  /// lane republishes. Returns false when the binding table is full.
+  /// Routes another lane's post-strip audio into one insert of a lane strip as
+  /// its sidechain key (ducking/sidechainRouter inserts). Lanes render in key
+  /// order and the key is delay-compensated to the destination strip input, so
+  /// the result depends on neither lane order nor block size.
+  /// source_track_id 0 removes the binding. Bindings are keyed by track id and
+  /// survive lane republishes. Refuses a self key, a binding that closes a cycle
+  /// over the binding table, a full table and a delay past the alignment
+  /// ceiling; a refusal changes nothing. CONTROL thread only, not concurrent
+  /// with process(): a binding reorders the lanes and re-derives the delays.
   bool set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                           uint32_t source_track_id) noexcept;
   /// Keys insert @p insert_index of bus @p bus_id (its scene `inserts` order)
@@ -619,8 +621,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // One table for every keyed insert. target_id is the lane's track id or the
   // bus id (0 for the master); source_id a track id or a bus id per
   // source_kind. key_slot indexes the per-binding key delay line and buffer
-  // (bus and master targets only) and travels with the binding when the table
-  // is compacted.
+  // and travels with the binding when the table is compacted.
   struct SidechainBinding {
     uint32_t target_id = 0;
     unsigned int insert_index = 0;
@@ -719,6 +720,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   struct PdcPlan {
     std::array<int, kMaxTrackLanes> lane_q8{};
     std::array<int, kMaxTrackLanes> lane_pre_q8{};
+    // Pre-strip delay p(L) that puts every lane key on its destination's strip input.
+    std::array<int, kMaxTrackLanes> lane_in_q8{};
+    // Stable topological lane render order over the lane-key edges.
+    std::array<uint8_t, kMaxTrackLanes> lane_order{};
+    size_t lane_order_count = 0;
     std::array<int, kMaxBusLanes> bus_in_q8{};
     std::array<int, kMaxBusLanes * kBusEdgesPerBus> edge_q8{};
     std::array<int, kMaxSidechainBindings> key_q8{};
@@ -731,6 +737,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     std::array<bool, kMaxTrackLanes> lane_reset{};
     std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_updates{};
     std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_pre_send_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_in_updates{};
     std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes> bus_updates{};
     std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes * kBusEdgesPerBus>
         edge_updates{};
@@ -758,6 +765,16 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // sidechains_ ends here.
   void publish_sidechains() noexcept { sidechains_published_.store(sidechains_); }
   void prune_lane_sidechains(uint32_t track_id, size_t insert_count) noexcept;
+  // True when keying @p track_id from @p source_track_id is a self key or closes
+  // a cycle over the lane bindings by track id, skipping entry @p skip.
+  bool lane_key_closes_cycle(uint32_t track_id, uint32_t source_track_id,
+                             size_t skip) const noexcept;
+  // A key slot no binding holds; call only while the table has room.
+  size_t free_key_slot() const noexcept;
+  // Lane index rendered at @p position of a block over @p lane_count lanes.
+  size_t lane_at(size_t position, size_t lane_count) const noexcept {
+    return lane_order_count_ == lane_count ? lane_order_[position] : position;
+  }
   // Adds or replaces the bus/master binding (kind, target, insert).
   bool store_keyed_binding(SidechainTargetKind target_kind, uint32_t target_id,
                            unsigned int insert_index, SidechainSourceKind kind,
@@ -893,7 +910,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   int max_block_size_ = 0;
   std::vector<float> scratch_;
   std::vector<float> bus_scratch_;
-  // Post-strip, pre-fader snapshots of sidechain SOURCE lanes (the lane
+  // Post-strip, pre-lane-PDC snapshots of sidechain SOURCE lanes (the lane
   // buffers themselves are mutated in place by the fader/gate/pan stage).
   std::vector<float> key_scratch_;
   // Frames each lane's key snapshot actually holds. process() is split into
@@ -913,6 +930,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<uint32_t, kMaxTrackLanes> active_track_ids_{};
   std::array<LaneState, kMaxTrackLanes> lane_states_{};
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;
+  // Pre-strip delay p(L), one bank per lane: a lane keyed from another lane waits
+  // for the source's strip so the key meets its own strip input. Rests at zero
+  // without a lane-key edge across a latent strip.
+  std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_in_pdc_delays_;
+  // Lane render order committed with the PDC plan; identity without lane keys.
+  std::array<uint8_t, kMaxTrackLanes> lane_order_{};
+  size_t lane_order_count_ = 0;
   // Pre-fader send alignment, one bank per lane. A pre-fader send taps the strip
   // upstream of its post-insert chain, so it leaves the strip earlier than the
   // lane's output does and lane_pdc_delays_ (which compensates the strip's full

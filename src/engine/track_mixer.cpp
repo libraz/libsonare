@@ -1027,6 +1027,10 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     delay.set_prepared_channels(kMaxLaneChannels);
     delay.prepare(sample_rate_, max_block_size_);
   }
+  for (mixing::AlignmentDelay& delay : lane_in_pdc_delays_) {
+    delay.set_prepared_channels(kMaxLaneChannels);
+    delay.prepare(sample_rate_, max_block_size_);
+  }
   // The bus stage runs on bus and master buffers, which are as wide as the
   // widest layout the mixer renders, not the ≤2-wide lane buffers.
   for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {

@@ -401,6 +401,15 @@ bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
   return ok;
 }
 
+bool RealtimeEngine::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
+                                        uint32_t source_track_id) noexcept {
+  const bool ok = track_mixer_runtime_.set_lane_sidechain(track_id, insert_index, source_track_id);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
 bool RealtimeEngine::set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
                                        SidechainSourceKind kind, uint32_t source_id) {
   const bool ok = track_mixer_runtime_.set_bus_sidechain(bus_id, insert_index, kind, source_id);

@@ -798,10 +798,10 @@ class KeyCaptureProcessor final : public sonare::rt::ProcessorBase {
 
 TEST_CASE("Lane sidechain key never carries a longer sub-block's tail", "[mixing][sidechain]") {
   // process() is split into sub-blocks of differing lengths, and a source lane
-  // snapshots its key at ITS length. A short snapshot followed by a longer
-  // consume used to leave the older, longer sub-block's audio in the tail. One
-  // block cannot see this; it needs a long block, then a short one, then a long
-  // one.
+  // snapshots its key at ITS length. A source that misses a longer sub-block
+  // leaves its short snapshot in place, and the consumer must not read the
+  // older, longer sub-block's audio from the tail. One block cannot see this;
+  // it needs a long block, then a short one, then a long one the source skips.
   constexpr int kBlock = 64;
   constexpr int kShort = 16;
   constexpr double kSr = 48000.0;
@@ -811,15 +811,14 @@ TEST_CASE("Lane sidechain key never carries a longer sub-block's tail", "[mixing
   loud.fill(1.0f);
   quiet.fill(0.0f);
   const float* loud_channels[] = {loud.data()};
-  const float* quiet_channels[] = {quiet.data()};
+  float* quiet_channels[] = {quiet.data()};
 
   sonare::engine::ClipPlayer player;
   player.prepare(kSr, kBlock);
 
   sonare::engine::TrackMixerRuntime mixer;
   mixer.prepare(kSr, kBlock);
-  // Lane 10 consumes, lane 20 is the key source. 20 sorts after 10, which is
-  // the ordering that makes the consumer read the PREVIOUS snapshot.
+  // Lane 10 consumes, lane 20 is the key source.
   REQUIRE(mixer.set_track_lanes({{10}, {20}}));
 
   auto* probe = new KeyCaptureProcessor();
@@ -830,21 +829,24 @@ TEST_CASE("Lane sidechain key never carries a longer sub-block's tail", "[mixing
 
   std::array<float, kBlock> out{};
   float* io[] = {out.data()};
-  const auto run = [&](const float* const* key_source, int frames) {
+  const auto run = [&](int frames) {
     player.set_clips(
-        {dc_clip(1, 10, key_source, 1, frames), dc_clip(2, 20, key_source, 1, frames)});
+        {dc_clip(1, 10, loud_channels, 1, frames), dc_clip(2, 20, loud_channels, 1, frames)});
     out.fill(0.0f);
     REQUIRE(mixer.render_clips(player, io, 1, frames, 0));
   };
 
   // A full-length block with a loud key fills the whole key plane.
-  run(loud_channels, kBlock);
+  run(kBlock);
+  REQUIRE(probe->key.size() == static_cast<size_t>(kBlock));
+  REQUIRE(probe->key.back() == 1.0f);
   // Then a short sub-block, which only refreshes the first kShort frames.
-  run(loud_channels, kShort);
-  // Then a full-length block. Lane 20 sorts after lane 10, so lane 10 reads the
-  // PREVIOUS snapshot — the short one — which is the design's one block of key
-  // latency.
-  run(quiet_channels, kBlock);
+  run(kShort);
+  REQUIRE(probe->key.size() == static_cast<size_t>(kShort));
+  // Then a full-length block that renders lane 10 alone: lane 20 does not
+  // render, so its key is still the short snapshot.
+  out.fill(0.0f);
+  REQUIRE(mixer.mix_source(10, quiet_channels, io, 1, kBlock));
 
   REQUIRE(probe->key.size() == static_cast<size_t>(kBlock));
   // Head: the short snapshot's own audio, which the consumer is entitled to.

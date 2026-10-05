@@ -700,10 +700,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_track_buses(std::vector<TrackBusConfig> buses);
   /// Keys one insert of a lane strip from another lane's post-strip audio
   /// (see TrackMixerRuntime::set_lane_sidechain). source_track_id 0 clears.
+  /// CONTROL thread only, not concurrent with process(): a binding reorders the
+  /// lanes and re-derives their delays.
   bool set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
-                          uint32_t source_track_id) noexcept {
-    return track_mixer_runtime_.set_lane_sidechain(track_id, insert_index, source_track_id);
-  }
+                          uint32_t source_track_id) noexcept;
   /// Keys insert @p insert_index of bus @p bus_id (its scene `inserts` order) from
   /// a track or another bus (see TrackMixerRuntime::set_bus_sidechain).
   /// source_id 0 clears. CONTROL thread only, not concurrent with process():
