@@ -42,6 +42,7 @@ void DahdsrEnvelope::configure(double sample_rate, const DahdsrConfig& config) n
 }
 
 void DahdsrEnvelope::note_on() noexcept {
+  percussive_ = sustain_ <= kSilenceLevel;
   // Retrigger from the current level so overlapping notes stay click-free.
   if (delay_samples_ > 0 && level_ <= kSilenceLevel) {
     stage_ = Stage::kDelay;
@@ -86,15 +87,15 @@ float DahdsrEnvelope::next() noexcept {
     case Stage::kDecay:
       level_ += decay_rate_ * (sustain_ - level_);
       // Within the 5% landing window (relative to full scale) -> sustain.
-      if (level_ - sustain_ <= 0.05f * (1.0f - sustain_) || decay_rate_ >= 1.0f) {
+      if (std::fabs(level_ - sustain_) <= 0.05f * (1.0f - sustain_) || decay_rate_ >= 1.0f) {
         // Keep the exponential glide; only pin once effectively converged.
-        if (level_ - sustain_ <= 1.0e-3f || decay_rate_ >= 1.0f) {
+        if (std::fabs(level_ - sustain_) <= 1.0e-3f || decay_rate_ >= 1.0f) {
           level_ = sustain_;
           stage_ = Stage::kSustain;
         }
       }
-      if (stage_ == Stage::kSustain && sustain_ <= kSilenceLevel) {
-        // A zero-sustain envelope (percussive) ends at the decay floor.
+      if (stage_ == Stage::kSustain && percussive_) {
+        // A note started with zero sustain (percussive) ends at the decay floor.
         kill();
       }
       return level_;

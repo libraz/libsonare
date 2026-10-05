@@ -69,6 +69,8 @@ class DahdsrEnvelope {
   Stage stage_ = Stage::kIdle;
   float level_ = 0.0f;
   float sustain_ = 0.7f;
+  // Sustain was ~0 at note_on: the decay landing ends the note (percussive).
+  bool percussive_ = false;
   // One-pole "new sample weight" rates per stage.
   float attack_rate_ = 1.0f;
   float decay_rate_ = 1.0f;

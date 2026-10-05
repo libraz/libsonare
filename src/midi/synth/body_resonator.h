@@ -154,6 +154,16 @@ class BodyResonator {
 
   bool active() const noexcept { return num_modes_ > 0; }
 
+  /// Rescales the body path of a running bank; a bank that is not running
+  /// stays off (start the bank first).
+  void set_mix(float mix) noexcept { mix_ = std::clamp(mix, 0.0f, 1.0f); }
+
+  /// Drops the bank and its state: the voice reads as a mix-0 note afterwards.
+  void stop() noexcept {
+    mix_ = 0.0f;
+    reset();
+  }
+
   /// One sample through the bank: (tilted) dry floor + mixed body response.
   float process(float x) noexcept {
     // Real radiativity keeps a broadband floor between the modes, but that

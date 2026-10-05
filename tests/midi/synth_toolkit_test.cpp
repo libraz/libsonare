@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "midi/synth/body_resonator.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/interpolation.h"
@@ -25,11 +26,14 @@ namespace {
 
 using Catch::Approx;
 using sonare::midi::synth::AllpassInterpolator;
+using sonare::midi::synth::BodyResonator;
+using sonare::midi::synth::BodyType;
 using sonare::midi::synth::DahdsrConfig;
 using sonare::midi::synth::DahdsrEnvelope;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::NativeSynthVoice;
 using sonare::midi::synth::Sf2ChannelMod;
+using sonare::midi::synth::Sf2Lfo;
 using sonare::midi::synth::Sf2Voice;
 using sonare::midi::synth::Sf2VoiceParams;
 using sonare::midi::synth::TptSvf;
@@ -408,6 +412,149 @@ TEST_CASE("gm_fallback_sends weights ambience per program", "[midi][synth]") {
   // A GS variation bank resolves through the same program, so its weighting
   // follows the capital tone rather than dropping to the neutral default.
   REQUIRE(gm_fallback_sends(8, 19).reverb_scale == organ.reverb_scale);
+}
+
+TEST_CASE("DahdsrEnvelope rises to a sustain raised above the level during decay",
+          "[midi][synth][envelope-live]") {
+  DahdsrConfig cfg;
+  cfg.attack_ms = 1.0f;
+  cfg.decay_ms = 60.0f;
+  cfg.sustain = 0.3f;
+  DahdsrEnvelope env;
+  env.configure(kSampleRate, cfg);
+  env.note_on();
+  while (env.stage() != DahdsrEnvelope::Stage::kDecay) env.next();
+  while (env.level() > 0.6f) env.next();
+  REQUIRE(env.stage() == DahdsrEnvelope::Stage::kDecay);
+
+  cfg.sustain = 0.8f;
+  env.configure(kSampleRate, cfg);
+  float prev = env.level();
+  int rising_in_decay = 0;
+  for (int i = 0; i < 48000 && env.stage() == DahdsrEnvelope::Stage::kDecay; ++i) {
+    const float l = env.next();
+    REQUIRE(l >= prev);
+    REQUIRE(l <= 0.8f + 1.0e-6f);
+    if (env.stage() == DahdsrEnvelope::Stage::kDecay) ++rising_in_decay;
+    prev = l;
+  }
+  // The level climbs over many samples instead of snapping onto the target.
+  REQUIRE(rising_in_decay > 100);
+  REQUIRE(env.stage() == DahdsrEnvelope::Stage::kSustain);
+  REQUIRE(env.level() == Approx(0.8f).margin(1.0e-3));
+}
+
+TEST_CASE("DahdsrEnvelope keeps a held note alive when sustain is automated to zero",
+          "[midi][synth][envelope-live]") {
+  DahdsrConfig cfg;
+  cfg.attack_ms = 1.0f;
+  cfg.decay_ms = 30.0f;
+  cfg.sustain = 0.5f;
+  DahdsrEnvelope env;
+  env.configure(kSampleRate, cfg);
+  env.note_on();
+  while (env.stage() != DahdsrEnvelope::Stage::kDecay) env.next();
+  while (env.level() > 0.7f) env.next();
+
+  cfg.sustain = 0.0f;
+  env.configure(kSampleRate, cfg);
+  for (int i = 0; i < 24000; ++i) env.next();
+  REQUIRE(env.active());
+  REQUIRE(env.stage() == DahdsrEnvelope::Stage::kSustain);
+  REQUIRE(env.level() == 0.0f);
+
+  env.note_off();
+  REQUIRE(env.releasing());
+}
+
+TEST_CASE("DahdsrEnvelope with zero sustain at note-on still ends at the decay landing",
+          "[midi][synth][envelope-live]") {
+  DahdsrConfig cfg;
+  cfg.attack_ms = 1.0f;
+  cfg.decay_ms = 20.0f;
+  cfg.sustain = 0.0f;
+  DahdsrEnvelope env;
+  env.configure(kSampleRate, cfg);
+  env.note_on();
+  for (int i = 0; i < 48000 && env.active(); ++i) env.next();
+  REQUIRE_FALSE(env.active());
+  REQUIRE(env.level() == 0.0f);
+}
+
+TEST_CASE("Sf2Lfo set_frequency keeps the phase and adopts the new period",
+          "[midi][synth][lfo-live]") {
+  Sf2Lfo lfo;
+  lfo.start(kSampleRate, 0.0f, 100.0f);
+  float prev = 0.0f;
+  float max_step = 0.0f;
+  for (int i = 0; i < 1000; ++i) {
+    const float x = lfo.next();
+    if (i > 0) max_step = std::max(max_step, std::fabs(x - prev));
+    prev = x;
+  }
+  lfo.set_frequency(kSampleRate, 200.0f);
+  std::vector<int> rising;
+  for (int i = 0; i < 2000; ++i) {
+    const float x = lfo.next();
+    // Triangle slope at 200 Hz is 4 * 200 / sr per sample; no jump at the change.
+    REQUIRE(std::fabs(x - prev) <= 4.0f * 200.0f / static_cast<float>(kSampleRate) + 1.0e-4f);
+    if (prev < 0.0f && x >= 0.0f) rising.push_back(i);
+    prev = x;
+  }
+  REQUIRE(max_step <= 4.0f * 100.0f / static_cast<float>(kSampleRate) + 1.0e-4f);
+  REQUIRE(rising.size() >= 6);
+  for (size_t k = 1; k < rising.size(); ++k) {
+    REQUIRE(rising[k] - rising[k - 1] == Approx(240.0).margin(2.0));
+  }
+}
+
+TEST_CASE("Sf2Lfo set_frequency to zero stops the output at zero", "[midi][synth][lfo-live]") {
+  // 144 samples at 100 Hz leaves the phase near 0.3 (target 0.5); 384 near 0.8 (target 0).
+  for (const int run : {144, 384, 100, 480}) {
+    Sf2Lfo lfo;
+    lfo.start(kSampleRate, 0.0f, 100.0f);
+    for (int i = 0; i < run; ++i) lfo.next();
+    lfo.set_frequency(kSampleRate, 0.0f);
+    // The remaining half period is at most 240 samples; allow one full period.
+    for (int i = 0; i < 480; ++i) lfo.next();
+    for (int i = 0; i < 1000; ++i) REQUIRE(std::fabs(lfo.next()) < 1.0e-6f);
+  }
+}
+
+TEST_CASE("BodyResonator set_mix rescales the body path and stop() bypasses the bank",
+          "[midi][synth][body-live]") {
+  BodyResonator a;
+  BodyResonator b;
+  a.start(BodyType::kGuitar, kSampleRate, 110.0f, 0.5f);
+  b.start(BodyType::kGuitar, kSampleRate, 110.0f, 1.0f);
+  REQUIRE(a.active());
+  a.set_mix(1.0f);
+  for (int i = 0; i < 512; ++i) {
+    const float x = i == 0 ? 1.0f : 0.0f;
+    REQUIRE(a.process(x) == b.process(x));
+  }
+
+  // Mix 0 leaves only the dry path while the bank stays up.
+  a.set_mix(0.0f);
+  REQUIRE(a.active());
+  REQUIRE(a.process(0.25f) == 0.25f);
+  // Out-of-range mixes clamp like start().
+  BodyResonator c;
+  BodyResonator d;
+  c.start(BodyType::kGuitar, kSampleRate, 110.0f, 0.5f);
+  d.start(BodyType::kGuitar, kSampleRate, 110.0f, 1.0f);
+  c.set_mix(2.0f);
+  for (int i = 0; i < 64; ++i)
+    REQUIRE(c.process(i == 0 ? 1.0f : 0.0f) == d.process(i == 0 ? 1.0f : 0.0f));
+
+  a.stop();
+  REQUIRE_FALSE(a.active());
+  for (int i = 0; i < 64; ++i)
+    REQUIRE(a.process(0.1f * static_cast<float>(i)) == 0.1f * static_cast<float>(i));
+
+  // A stopped bank can be started again.
+  a.start(BodyType::kGuitar, kSampleRate, 110.0f, 0.5f);
+  REQUIRE(a.active());
 }
 
 TEST_CASE("synth toolkit audio path performs no heap allocation", "[midi][synth][rt]") {

@@ -182,6 +182,21 @@ class Sf2Lfo {
     delay_samples_ = delay_seconds > 0.0f ? static_cast<int64_t>(delay_seconds * sr) : 0;
     inc_ = freq_hz > 0.0f ? static_cast<float>(freq_hz / sr) : 0.0f;
     phase_ = 0.0f;
+    settling_ = false;
+  }
+
+  /// Retunes the LFO under a held note without touching the phase. @p freq_hz
+  /// <= 0 keeps the current increment until the phase reaches an output-zero
+  /// point (0 or 0.5), then freezes there so the output rests at 0.
+  void set_frequency(double sample_rate, float freq_hz) noexcept {
+    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+    if (freq_hz > 0.0f) {
+      inc_ = static_cast<float>(freq_hz / sr);
+      settling_ = false;
+    } else if (inc_ > 0.0f) {
+      settling_ = true;
+      settle_phase_ = phase_ < 0.5f ? 0.5f : 1.0f;
+    }
   }
 
   /// Advance one sample; returns the bipolar triangle value in [-1, 1].
@@ -197,6 +212,11 @@ class Sf2Lfo {
     const float p = phase_;
     phase_ += inc_ * rate_scale;
     if (phase_ >= 1.0f) phase_ -= 1.0f;
+    if (settling_ && (settle_phase_ < 1.0f ? phase_ >= settle_phase_ : phase_ < p)) {
+      phase_ = settle_phase_ < 1.0f ? settle_phase_ : 0.0f;
+      inc_ = 0.0f;
+      settling_ = false;
+    }
     if (p < 0.25f) return 4.0f * p;
     if (p < 0.75f) return 2.0f - 4.0f * p;
     return 4.0f * p - 4.0f;
@@ -206,6 +226,9 @@ class Sf2Lfo {
   int64_t delay_samples_ = 0;
   float inc_ = 0.0f;
   float phase_ = 0.0f;
+  // Set by set_frequency(0): run on to settle_phase_, then freeze.
+  bool settling_ = false;
+  float settle_phase_ = 0.0f;
 };
 
 /// Playback parameters resolved from a zone pair for one note-on.
