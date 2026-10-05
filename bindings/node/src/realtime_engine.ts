@@ -714,11 +714,9 @@ export class RealtimeEngine {
    * `unison`, `polyphony`, `body`, `modRoutings`) are not automatable and
    * return `-1`; rebind the instrument with a new patch instead.
    *
-   * `gain`, `busDrive`, `cutoffHz`, `resonanceQ`, `envToCutoffCents`,
-   * `lfoToPitchCents` and `pitchOffsetCents` reach already-sounding voices from
-   * the next block; the rest are cached at note-on and take effect from the
-   * next note, so a lane that moves one of them under a held note looks inert
-   * until the next one speaks — that is the behaviour, not a dropped write.
+   * All automatable parameters of a NativeSynth reach already-sounding voices
+   * from the next processed block. Voices using GM program patches are
+   * unaffected; parameters apply to NativeSynth's own patch only.
    */
   resolveInstrumentAutomationId(destinationId: number, paramName: string): number {
     return this.native.resolveInstrumentAutomationId(destinationId, paramName);

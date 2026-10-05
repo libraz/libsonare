@@ -607,9 +607,8 @@ export interface SynthPatch {
    * whose per-note kit patch replaces this whole section and never reads it.
    *
    * Also automatable under this same name through
-   * {@link RealtimeEngine.resolveInstrumentAutomationId}; it is one of the names
-   * that reaches a voice that is already sounding, rather than waiting for the
-   * next note.
+   * {@link RealtimeEngine.resolveInstrumentAutomationId}; it reaches
+   * already-sounding voices from the next processed block.
    */
   pitchOffsetCents?: number;
   // --- envelopes (ms / sustain in [0, 1]) ---

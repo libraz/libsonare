@@ -266,13 +266,10 @@ class _EngineMidiMixin:
         voice pools or swap DSP topology, which is not audio-thread safe. Rebind
         the instrument with a new patch instead.
 
-        ``gain``, ``busDrive``, ``cutoffHz``, ``resonanceQ``,
-        ``envToCutoffCents``, ``lfoToPitchCents`` and ``pitchOffsetCents`` reach
-        voices that are already sounding from the next block; the rest are
-        cached into per-voice state at note-on and take effect from the next
-        note, so a lane that moves one of them under a held note looks inert
-        until the next one speaks -- that is the behaviour, not a dropped
-        write.
+        All automatable parameters of a NativeSynth reach voices that are
+        already sounding from the next processed block. Voices using GM program
+        patches are unaffected; parameters apply to NativeSynth's own patch
+        only.
 
         Raises :class:`SonareError` when the destination has no bound
         instrument, the instrument exposes no automatable parameters, or the

@@ -1489,12 +1489,9 @@ export class RealtimeEngine {
    * return `-1`: they resize voice pools or swap DSP topology, which is not
    * audio-thread safe. Rebind the instrument with a new patch instead.
    *
-   * `gain`, `busDrive`, `cutoffHz`, `resonanceQ`, `envToCutoffCents`,
-   * `lfoToPitchCents` and `pitchOffsetCents` reach voices that are already
-   * sounding from the next block; the rest are cached into per-voice state at
-   * note-on and take effect from the next note, so a lane that moves one of
-   * them under a held note looks inert until the next one speaks — that is the
-   * behaviour, not a dropped write.
+   * All automatable parameters of a NativeSynth reach already-sounding voices
+   * from the next processed block. Voices using GM program patches are
+   * unaffected; parameters apply to NativeSynth's own patch only.
    *
    * The id survives an unbind/rebind of the same destination and applies
    * nothing while that destination is unbound.

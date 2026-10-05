@@ -1073,13 +1073,9 @@ SonareError sonare_engine_set_synth_instrument_binding(SonareRealtimeEngine* eng
 ///   topology, which is not audio-thread safe. Change them by rebinding the
 ///   instrument with a new patch.
 ///
-///   Two timing classes among the automatable ones. `gain`, `busDrive`,
-///   `cutoffHz`, `resonanceQ`, `envToCutoffCents`, `lfoToPitchCents` and
-///   `pitchOffsetCents` reach voices that are ALREADY SOUNDING from the next
-///   block. The rest are cached into per-voice state at note-on, so they take
-///   effect from the NEXT NOTE — a lane that moves one of them while a note is
-///   held looks inert until the next one speaks, which is the behaviour and not
-///   a dropped write.
+///   All automatable parameters of a NativeSynth reach voices that are already
+///   sounding from the next processed block. Voices using GM program patches are
+///   unaffected; parameters apply to NativeSynth's own patch only.
 ///
 ///   Returns SONARE_ERROR_INVALID_PARAMETER when no instrument is bound to
 ///   @p destination_id, when the bound instrument exposes no automatable
