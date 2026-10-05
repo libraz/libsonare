@@ -102,10 +102,6 @@ export async function loadSet(id, want) {
     state.blind = false;
     $('blind').checked = false;
   }
-  // After the compare check, so a set that cannot be blind-listened to also
-  // leaves any run left over from the previous set.
-  applyBlindGate();
-
   $('title').textContent = m.title || '';
   $('notes').textContent = m.notes || '';
   $('sharedNote').textContent = m.sources_note || '';
@@ -114,6 +110,9 @@ export async function loadSet(id, want) {
   if (wanted.cmp && (m.comparisons || []).some((c) => c && c.id === wanted.cmp)) {
     state.comparisonId = wanted.cmp;
   }
+  // After the compare check and the comparison a link names, so a set or a
+  // comparison that cannot be blind-listened to also ends a run left from before.
+  applyBlindGate();
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
   // A note taken before the feedback log existed is still somebody's listening
   // note, so it is offered back once rather than silently dropped.
