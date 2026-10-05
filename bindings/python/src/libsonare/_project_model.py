@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, SupportsFloat, TypeAli
 import numpy as np
 
 if TYPE_CHECKING:
-    from ._project import Project
+    from ._project import Project, ProjectTimeline
 
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD_AMP_ATTACK_MS,
@@ -1184,6 +1184,7 @@ class ProjectCompileResult:
     has_timeline: bool
     messages: str
     diagnostics: tuple[ProjectDiagnostic, ...]
+    timeline: ProjectTimeline | None = None
 
     @property
     def diagnostic_count(self) -> int:

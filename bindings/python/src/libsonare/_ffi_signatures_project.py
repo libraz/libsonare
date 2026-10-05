@@ -71,6 +71,16 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectCompileResult)
         ]
 
+        lib.sonare_project_compile_timeline.restype = ctypes.c_int32
+        lib.sonare_project_compile_timeline.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectCompileResult),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+
+        lib.sonare_project_timeline_destroy.restype = None
+        lib.sonare_project_timeline_destroy.argtypes = [ctypes.c_void_p]
+
         lib.sonare_project_bounce.restype = ctypes.c_int32
         lib.sonare_project_bounce.argtypes = [
             ctypes.c_void_p,

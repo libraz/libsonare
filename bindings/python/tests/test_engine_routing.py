@@ -353,3 +353,22 @@ def test_grown_structs_match_abi_layout_snapshot() -> None:
     layout = json.loads(layout_path.read_text())
     assert ctypes.sizeof(_RawEngineBus) == layout["SonareEngineBus"]["size"]
     assert ctypes.sizeof(_RawMidiClipSchedule) == layout["SonareEngineMidiClipSchedule"]["size"]
+
+
+def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -> None:
+    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
+    try:
+        engine.set_lane_sidechain(10, 0, 20)
+        with pytest.raises(SonareError):
+            engine.set_lane_sidechain(10, 0, 10)
+        # 20 keyed from 10 would close the 10 <-> 20 cycle over the bindings.
+        with pytest.raises(SonareError):
+            engine.set_lane_sidechain(20, 0, 10)
+        # The refused bindings changed nothing: the first one still stands, and
+        # clearing it frees the opposite direction.
+        engine.set_lane_sidechain(10, 0, 0)
+        engine.set_lane_sidechain(20, 0, 10)
+        with pytest.raises(SonareError):
+            engine.set_lane_sidechain(10, 0, 20)
+    finally:
+        engine.destroy()

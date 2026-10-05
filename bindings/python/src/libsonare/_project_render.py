@@ -44,6 +44,24 @@ def _reshape_bounce(interleaved: np.ndarray, num_channels: int) -> np.ndarray:
     return interleaved.reshape(-1, 1)
 
 
+def _compile_result_fields(
+    result: SonareProjectCompileResult,
+) -> tuple[bool, str, tuple[ProjectDiagnostic, ...]]:
+    """Read ``(has_timeline, messages, diagnostics)`` out of a native compile result."""
+    messages = result.messages.decode("utf-8") if result.messages else ""
+    message_lines = messages.splitlines()
+    diagnostics = tuple(
+        ProjectDiagnostic(
+            code=int(result.diagnostics[i].code),
+            severity=int(result.diagnostics[i].severity),
+            target_id=int(result.diagnostics[i].target_id),
+            message=message_lines[i] if i < len(message_lines) else "",
+        )
+        for i in range(int(result.diagnostic_count))
+    )
+    return bool(result.has_timeline), messages, diagnostics
+
+
 class _ProjectRenderMixin:
     if TYPE_CHECKING:
 
@@ -63,19 +81,7 @@ class _ProjectRenderMixin:
         result = SonareProjectCompileResult()
         _check(lib.sonare_project_compile(self._require_handle(), ctypes.byref(result)))
         try:
-            has_timeline = bool(result.has_timeline)
-            messages = result.messages.decode("utf-8") if result.messages else ""
-            message_lines = messages.splitlines()
-            diagnostics = tuple(
-                ProjectDiagnostic(
-                    code=int(result.diagnostics[i].code),
-                    severity=int(result.diagnostics[i].severity),
-                    target_id=int(result.diagnostics[i].target_id),
-                    message=message_lines[i] if i < len(message_lines) else "",
-                )
-                for i in range(int(result.diagnostic_count))
-            )
-            return ProjectCompileResult(has_timeline, messages, diagnostics)
+            return ProjectCompileResult(*_compile_result_fields(result))
         finally:
             lib.sonare_project_free_compile_result(ctypes.byref(result))
 

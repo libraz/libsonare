@@ -101,8 +101,14 @@ class _EngineMixingMixin:
     def set_lane_sidechain(self, track_id: int, insert_index: int, source_track_id: int) -> None:
         """Key one insert of a lane strip from another lane's post-strip audio.
 
-        Sidechain for ducking/sidechainRouter inserts; ``source_track_id`` 0
-        removes the binding.
+        Sidechain for ducking/sidechainRouter inserts: the source lane's
+        post-strip, pre-fader audio feeds the insert's key input. Lanes are
+        processed in key order and the key is delay-compensated, so the result
+        depends on neither lane order nor block size. ``source_track_id`` 0
+        removes the binding. Raises (bindings unchanged) for a lane keying
+        itself, a binding that closes a cycle over the lane bindings, a full
+        binding table, or an alignment past the delay ceiling. Control thread
+        only; not concurrent with processing.
         """
         _check(
             _get_lib().sonare_engine_set_lane_sidechain(

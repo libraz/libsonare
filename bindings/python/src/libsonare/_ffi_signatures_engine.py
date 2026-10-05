@@ -185,6 +185,12 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_engine_apply_project_timeline"):
+        lib.sonare_engine_apply_project_timeline.restype = ctypes.c_int32
+        lib.sonare_engine_apply_project_timeline.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+        ]
     if hasattr(lib, "sonare_engine_set_lane_sidechain"):
         lib.sonare_engine_set_lane_sidechain.restype = ctypes.c_int32
         lib.sonare_engine_set_lane_sidechain.argtypes = [

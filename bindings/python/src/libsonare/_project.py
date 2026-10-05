@@ -65,8 +65,8 @@ from ._project_model import (
 from ._project_model import (
     _validate_midi_event_word as _validate_midi_event_word,
 )
-from ._project_render import _ProjectRenderMixin
-from ._runtime import SonareValueError, _check, _get_lib
+from ._project_render import _compile_result_fields, _ProjectRenderMixin
+from ._runtime import SonareProjectCompileResult, SonareValueError, _check, _get_lib
 
 if TYPE_CHECKING:
     import numpy as np
@@ -78,6 +78,50 @@ if TYPE_CHECKING:
         ProjectVocalOriginalSource,
         ProjectVocalRehydrateItem,
     )
+
+
+class ProjectTimeline:
+    """Immutable compiled playback snapshot of a :class:`Project`.
+
+    Built by :meth:`Project.compile_timeline` and installed into a stopped
+    engine with :meth:`RealtimeEngine.apply_project_timeline`. It owns
+    everything it references, so later project edits do not change it. The
+    engine keeps its own share, so :meth:`close` may run right after the apply.
+    """
+
+    def __init__(self, handle: ctypes.c_void_p) -> None:
+        # Only Project.compile_timeline constructs this, with a live handle.
+        self._handle: ctypes.c_void_p | None = handle
+
+    def close(self) -> None:
+        """Release the native timeline handle (idempotent)."""
+        if self._handle is not None:
+            _get_lib().sonare_project_timeline_destroy(self._handle)
+            self._handle = None
+
+    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
+    def destroy(self) -> None:
+        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
+        self.close()
+
+    def delete(self) -> None:
+        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
+        self.close()
+
+    def __enter__(self) -> ProjectTimeline:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):
+            self.close()
+
+    def _require_handle(self) -> ctypes.c_void_p:
+        if self._handle is None:
+            raise RuntimeError("ProjectTimeline is closed")
+        return self._handle
 
 
 class Project(
@@ -147,6 +191,33 @@ class Project(
         if self._handle is None or getattr(self, "_close_pending", False):
             raise RuntimeError("Project is closed")
         return self._handle
+
+    def compile_timeline(self) -> ProjectCompileResult:
+        """Compile the project and keep the timeline for an engine.
+
+        Returns the :class:`ProjectCompileResult` :meth:`compile` returns, with
+        ``timeline`` set to a :class:`ProjectTimeline` when compilation produced
+        one and ``None`` otherwise (the error diagnostics say why). Never throws
+        on bad project content.
+        """
+        lib = _get_lib()
+        result = SonareProjectCompileResult()
+        timeline = ctypes.c_void_p()
+        _check(
+            lib.sonare_project_compile_timeline(
+                self._require_handle(), ctypes.byref(result), ctypes.byref(timeline)
+            )
+        )
+        try:
+            return ProjectCompileResult(
+                *_compile_result_fields(result),
+                ProjectTimeline(timeline) if timeline.value else None,
+            )
+        except BaseException:
+            lib.sonare_project_timeline_destroy(timeline)
+            raise
+        finally:
+            lib.sonare_project_free_compile_result(ctypes.byref(result))
 
     def _enter_native_call(self) -> ctypes.c_void_p:
         """Pin the Project handle while a callback-capable native call runs."""

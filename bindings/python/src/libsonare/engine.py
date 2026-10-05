@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ._engine_conversions import (
     _CAPTURE_SOURCE_VALUES as _CAPTURE_SOURCE_VALUES,
@@ -115,6 +115,10 @@ EXPECTED_ENGINE_ABI_VERSION = 3
 _MAX_LOWERED_MIDI1_MESSAGES = 4
 
 
+if TYPE_CHECKING:
+    from ._project import ProjectTimeline
+
+
 class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     """Thin Python wrapper around the native realtime engine handle."""
 
@@ -176,6 +180,23 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         if self._handle is None:
             raise RuntimeError("RealtimeEngine is closed")
         return self._handle
+
+    def apply_project_timeline(self, timeline: ProjectTimeline) -> None:
+        """Install a compiled project timeline into this stopped engine.
+
+        All or nothing: a playing transport raises (``INVALID_STATE``) and a
+        timeline the engine cannot validate raises, both leaving the engine
+        unchanged. The timeline replaces tempo and time-signature segments,
+        markers, track lanes and automation, and audio and MIDI clips; the
+        instrument, bus, master and metronome setup are not touched. The engine
+        keeps its own share of the timeline, so ``timeline.close()`` may follow
+        immediately.
+        """
+        _check(
+            _get_lib().sonare_engine_apply_project_timeline(
+                self._require_handle(), timeline._require_handle()
+            )
+        )
 
     def prepare(
         self,
