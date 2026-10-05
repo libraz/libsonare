@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
@@ -140,6 +141,93 @@ float sampler_velocity_gain(Velocity16 velocity, float exponent) noexcept {
   return std::pow(velocity.f7() / 127.0f, exponent);
 }
 
+// Derivations shared by start() and refresh_live(), so a refreshed voice holds
+// exactly the state a note started at the same value would.
+
+float unison_detune_ratio(float detune_cents, float spread) noexcept {
+  const float detune = 0.5f * detune_cents * spread;
+  return std::exp2(detune / 1200.0f);
+}
+
+float static_cutoff_offset_cents(const NativeSynthPatch& p, float velocity01,
+                                 float note_offset_semitones, float part_cutoff_cents) noexcept {
+  return p.vel_to_cutoff_cents * (velocity01 - 1.0f) +
+         p.key_track * 100.0f * note_offset_semitones + part_cutoff_cents;
+}
+
+/// Gain-compensated tanh drive (same law as the Sf2 part insert); gain 0 = off.
+void drive_law(float drive, float* gain, float* makeup) noexcept {
+  if (drive > 0.0f) {
+    *gain = 1.0f + 9.0f * drive;
+    *makeup = 1.0f / std::tanh(*gain);
+  } else {
+    *gain = 0.0f;
+    *makeup = 1.0f;
+  }
+}
+
+DahdsrConfig scaled_amp_env(const DahdsrConfig& amp, float attack_scale, float decay_scale,
+                            float release_scale) noexcept {
+  DahdsrConfig cfg = amp;
+  cfg.attack_ms *= attack_scale;
+  cfg.decay_ms *= decay_scale;
+  cfg.release_ms *= release_scale;
+  return cfg;
+}
+
+/// A hold rate at or above the mix rate holds nothing, so it is switched off
+/// rather than left to round to one sample.
+float hold_step_for(float sample_hold_hz, double sample_rate) noexcept {
+  const float hold_rate = static_cast<float>(sample_hold_hz / std::max(sample_rate, 1.0));
+  return hold_rate > 0.0f && hold_rate < 1.0f ? hold_rate : 0.0f;
+}
+
+/// Two over the level count, the signal being bipolar.
+float quant_step_for(float bit_depth) noexcept {
+  return bit_depth > 0.0f ? 2.0f / std::exp2(bit_depth) : 0.0f;
+}
+
+float drift_depth(float drift_cents, float seed) noexcept { return drift_cents * seed; }
+
+float pan_scatter_units(float stereo_spread, float scatter) noexcept {
+  return 500.0f * stereo_spread * scatter;
+}
+
+/// One-pole sized so the pitch lands within ~5% in glide_ms.
+float glide_coefficient(float glide_ms, double sample_rate) noexcept {
+  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  return static_cast<float>(std::exp(-3.0 / (glide_ms * 0.001 * sr)));
+}
+
+float law_fade_step(double sample_rate) noexcept {
+  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  return static_cast<float>(1.0 / (sr * static_cast<double>(kLawFadeSeconds)));
+}
+
+/// Advances @p fade one sample; true on the sample it completes.
+bool advance_law_fade(LawFade& fade) noexcept {
+  fade.fade01 += fade.step;
+  if (fade.fade01 < 1.0f) return false;
+  fade.fade01 = 1.0f;
+  fade.step = 0.0f;
+  return true;
+}
+
+/// Starts @p fade toward the current law, or reverses one already running so
+/// the output stays where it is.
+void begin_law_fade(LawFade& fade, double sample_rate) noexcept {
+  if (fade.step > 0.0f) {
+    fade.fade01 = 1.0f - fade.fade01;
+  } else {
+    fade.fade01 = 0.0f;
+    fade.step = law_fade_step(sample_rate);
+  }
+}
+
+float drive_shape(float x, float gain, float makeup) noexcept {
+  return gain > 0.0f ? std::tanh(gain * x) * makeup : x;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -172,6 +260,15 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // engine but the subtractive one is started from the note NUMBER, so a
   // fractional offset folded into the frequency would reach one of thirteen.
   gs_scale_cents = part_mod.pitch_cents;
+  part_cutoff_cents = part_mod.cutoff_cents;
+  part_attack_scale = part_mod.attack_scale;
+  part_decay_scale = part_mod.decay_scale;
+  part_release_scale = part_mod.release_scale;
+  part_vib_rate_scale = part_mod.vib_rate_scale;
+  choked = false;
+  drive_fade = {};
+  body_fade = {};
+  body_fade_in = false;
 
   // A GS kit variation may retune the resolved drum patch's percussion + amp
   // envelope at note-on and scale its level (Standard patch stays shared; no
@@ -186,6 +283,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
       drum_mod.play_note >= 0 ? static_cast<uint8_t>(drum_mod.play_note) : note;
   exclusive_class = drum_mod.exclusive_class >= 0 ? static_cast<uint8_t>(drum_mod.exclusive_class)
                                                   : p.percussion.exclusive_class;
+  note_offset_semitones = static_cast<float>(voiced_note & 0x7Fu) - 60.0f;
 
   // Under note retrigger the slot and the allocation count drop out of every
   // seed, so a repeated note starts from the same state wherever it lands.
@@ -262,8 +360,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
       spread = 2.0f * static_cast<float>(k) / static_cast<float>(unison - 1) - 1.0f;
       spread += 0.1f * seq.bipolar_at(static_cast<uint64_t>(k) * 2);
     }
-    const float detune = 0.5f * p.detune_cents * spread;
-    detune_ratio[static_cast<size_t>(k)] = std::exp2(detune / 1200.0f);
+    unison_spread[static_cast<size_t>(k)] = spread;
+    detune_ratio[static_cast<size_t>(k)] = unison_detune_ratio(p.detune_cents, spread);
     // Seeded start phase: identical unison oscillators starting at phase 0
     // sound phasey/static; noise gets a per-osc seed stream instead.
     const float phase = seq.unipolar_at(static_cast<uint64_t>(k) * 2 + 1);
@@ -272,24 +370,15 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
-  static_cutoff_cents = p.vel_to_cutoff_cents * (velocity.f7() / 127.0f - 1.0f) +
-                        p.key_track * 100.0f * (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) +
-                        part_mod.cutoff_cents;
-  if (p.drive > 0.0f) {
-    // Gain-compensated tanh drive (same law as the Sf2 part insert).
-    drive_gain = 1.0f + 9.0f * p.drive;
-    drive_makeup = 1.0f / std::tanh(drive_gain);
-  } else {
-    drive_gain = 0.0f;
-    drive_makeup = 1.0f;
-  }
+  velocity01 = velocity.f7() / 127.0f;
+  static_cutoff_cents =
+      static_cutoff_offset_cents(p, velocity01, note_offset_semitones, part_cutoff_cents);
+  drive_law(p.drive, &drive_gain, &drive_makeup);
 
   // After any kit variation, so a GS part edit scales the envelope the kit
   // actually gave this note rather than the patch's own.
-  amp_cfg.attack_ms *= part_mod.attack_scale;
-  amp_cfg.decay_ms *= part_mod.decay_scale;
-  amp_cfg.release_ms *= part_mod.release_scale;
-  amp_env.configure(sample_rate, amp_cfg);
+  amp_env.configure(sample_rate, scaled_amp_env(amp_cfg, part_mod.attack_scale,
+                                                part_mod.decay_scale, part_mod.release_scale));
   amp_env.note_on();
   filter_env.configure(sample_rate, p.filter_env);
   filter_env.note_on();
@@ -301,17 +390,13 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
     hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
   }
 
-  // Converter. A hold rate at or above the mix rate holds nothing, so it is
-  // switched off rather than left to round to one sample and cost a branch per
-  // sample for no effect.
-  const float hold_rate = static_cast<float>(p.sample_hold_hz / std::max(sample_rate, 1.0));
-  hold_step = hold_rate > 0.0f && hold_rate < 1.0f ? hold_rate : 0.0f;
+  // Converter.
+  hold_step = hold_step_for(p.sample_hold_hz, sample_rate);
   // Phase at 1 so the first sample is taken rather than a zero being held
   // through the attack.
   hold_phase = 1.0f;
   hold_value = 0.0f;
-  // Two over the level count, the signal being bipolar.
-  quant_step = p.bit_depth > 0.0f ? 2.0f / std::exp2(p.bit_depth) : 0.0f;
+  quant_step = quant_step_for(p.bit_depth);
 
   // The model bank's LFO has no onset delay of its own, so a GS vibrato-delay
   // edit is the only thing that can give it one.
@@ -320,7 +405,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz);
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
   // stacked voices beat against each other instead of wobbling in unison.
-  drift_depth_cents = p.drift_cents * seq.bipolar_at(101);
+  drift_seed = seq.bipolar_at(101);
+  drift_depth_cents = drift_depth(p.drift_cents, drift_seed);
   drift_lfo.start(sample_rate, 0.0f, p.drift_rate_hz * (0.75f + 0.5f * seq.unipolar_at(102)));
 
   // Mod-matrix source constants.
@@ -328,7 +414,6 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   has_engine_control_routes = has_matrix && p.mod_matrix.has_engine_control_route();
   // A reused slot must not inherit the previous note's LFO rate.
   matrix_lfo1_rate_scale = 1.0f;
-  velocity01 = velocity.f7() / 127.0f;
   poly_pressure01 = 0.0f;
   key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);
@@ -343,20 +428,21 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   body.start(p.body, sample_rate, base_freq_hz, p.body_mix,
              bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
              bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
-  pan_spread_units = 500.0f * p.stereo_spread * seq.bipolar_at(104);
+  pan_scatter = seq.bipolar_at(104);
+  pan_spread_units = pan_scatter_units(p.stereo_spread, pan_scatter);
   // A keymap zone places its sample, which is a constant for the voice's life
   // and so joins the scatter rather than the per-sample pan sum.
-  if (p.mode == SynthEngineMode::kSample) pan_spread_units += sampler.pan_units();
+  sampler_pan_units = p.mode == SynthEngineMode::kSample ? sampler.pan_units() : 0.0f;
+  if (p.mode == SynthEngineMode::kSample) pan_spread_units += sampler_pan_units;
 
   // Glide: start offset in cents from the previous note, decaying through a
-  // one-pole sized so the pitch lands within ~5% in glide_ms.
+  // one-pole.
   glide_cents = 0.0f;
   glide_coeff = 0.0f;
   retune_cents = 0.0f;
   if (p.glide_ms > 0.0f && glide_from_hz > 0.0f && base_freq_hz > 0.0f) {
     glide_cents = 1200.0f * std::log2(glide_from_hz / base_freq_hz);
-    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
-    glide_coeff = static_cast<float>(std::exp(-3.0 / (p.glide_ms * 0.001 * sr)));
+    glide_coeff = glide_coefficient(p.glide_ms, sample_rate);
   }
 
   cached_pan_units = 1.0e9f;  // force pan recompute on first render
@@ -599,10 +685,27 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   }
 
   // --- body/formant resonance (after the string/source, before the amp) ---
-  if (body.active()) sample = body.process(sample);
+  if (body.active()) {
+    if (body_fade.step > 0.0f) {
+      const float wet = body.process(sample);
+      const float from = body_fade_in ? sample : wet;
+      const float to = body_fade_in ? wet : sample;
+      sample = from + body_fade.fade01 * (to - from);
+      if (advance_law_fade(body_fade) && !body_fade_in) body.stop();
+    } else {
+      sample = body.process(sample);
+    }
+  }
 
   // --- pre-filter drive (gain-compensated tanh) ---
-  if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
+  if (drive_fade.step > 0.0f) {
+    const float from = drive_shape(sample, drive_fade_gain, drive_fade_makeup);
+    const float to = drive_shape(sample, drive_gain, drive_makeup);
+    sample = from + drive_fade.fade01 * (to - from);
+    advance_law_fade(drive_fade);
+  } else if (drive_gain > 0.0f) {
+    sample = std::tanh(drive_gain * sample) * drive_makeup;
+  }
 
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
   if (!filter_inaudible() || offsets.cutoff_cents != 0.0f || offsets.resonance_q != 0.0f) {
@@ -667,14 +770,126 @@ void NativeSynthVoice::retune(uint8_t new_note, double sample_rate) noexcept {
   }
   if (patch->glide_ms > 0.0f) {
     glide_cents = sounding - target;
-    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
-    glide_coeff = static_cast<float>(std::exp(-3.0 / (patch->glide_ms * 0.001 * sr)));
+    glide_coeff = glide_coefficient(patch->glide_ms, sample_rate);
   } else {
     // No portamento: the new pitch is reached on this sample. Left at zero
     // rather than decayed, because a coefficient of zero never runs the decay
     // and the offset would stand forever.
     glide_cents = 0.0f;
     glide_coeff = 0.0f;
+  }
+}
+
+void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rate,
+                                    uint32_t mask) noexcept {
+  using Id = NativeSynthParamId;
+  const auto has = [mask](Id id) noexcept { return (mask & native_synth_param_bit(id)) != 0u; };
+  const auto has_any = [mask](std::initializer_list<Id> ids) noexcept {
+    for (Id id : ids) {
+      if ((mask & native_synth_param_bit(id)) != 0u) return true;
+    }
+    return false;
+  };
+
+  // Envelopes: configure() swaps rates and the sustain target, keeping the
+  // level and the stage, so a running segment continues from where it is.
+  if (has_any({Id::kAmpAttackMs, Id::kAmpDecayMs, Id::kAmpSustain, Id::kAmpReleaseMs})) {
+    amp_env.configure(sample_rate, scaled_amp_env(p.amp_env, part_attack_scale, part_decay_scale,
+                                                  part_release_scale));
+  }
+  if (has_any(
+          {Id::kFilterAttackMs, Id::kFilterDecayMs, Id::kFilterSustain, Id::kFilterReleaseMs})) {
+    filter_env.configure(sample_rate, p.filter_env);
+  }
+
+  if (has(Id::kLfoRateHz)) {
+    vibrato_lfo.set_frequency(sample_rate, p.lfo_rate_hz * part_vib_rate_scale);
+  }
+  if (has(Id::kLfo2RateHz)) lfo2.set_frequency(sample_rate, p.lfo2_rate_hz);
+
+  if (has(Id::kDetuneCents)) {
+    for (int k = 0; k < unison; ++k) {
+      const size_t i = static_cast<size_t>(k);
+      detune_ratio[i] = unison_detune_ratio(p.detune_cents, unison_spread[i]);
+    }
+  }
+
+  if (has(Id::kDrive)) {
+    float gain = 0.0f;
+    float makeup = 1.0f;
+    drive_law(p.drive, &gain, &makeup);
+    // Across 0 the law jumps (bypass vs a tanh with gain >= 1), so crossfade.
+    if ((gain > 0.0f) != (drive_gain > 0.0f)) {
+      begin_law_fade(drive_fade, sample_rate);
+      drive_fade_gain = drive_gain;
+      drive_fade_makeup = drive_makeup;
+    }
+    drive_gain = gain;
+    drive_makeup = makeup;
+  }
+
+  if (has_any({Id::kKeyTrack, Id::kVelToCutoffCents})) {
+    static_cutoff_cents =
+        static_cutoff_offset_cents(p, velocity01, note_offset_semitones, part_cutoff_cents);
+  }
+
+  if (has(Id::kBodyMix)) {
+    const bool want = p.body_mix > 0.0f;
+    const bool fading = body_fade.step > 0.0f;
+    const bool on = fading ? body_fade_in : body.active();
+    if (want == on) {
+      if (want) body.set_mix(p.body_mix);
+    } else if (fading) {
+      // Bank still running: reverse the fade in place.
+      if (want) body.set_mix(p.body_mix);
+      body_fade_in = want;
+      begin_law_fade(body_fade, sample_rate);
+    } else if (want) {
+      const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
+      body.start(p.body, sample_rate, base_freq_hz, p.body_mix,
+                 bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
+                 bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
+      // A body type with no modes has nothing to fade in, as on a new note.
+      if (body.active()) {
+        body_fade_in = true;
+        begin_law_fade(body_fade, sample_rate);
+      }
+    } else {
+      body_fade_in = false;
+      begin_law_fade(body_fade, sample_rate);
+    }
+  }
+
+  if (has(Id::kStereoSpread)) {
+    pan_spread_units = pan_scatter_units(p.stereo_spread, pan_scatter);
+    if (p.mode == SynthEngineMode::kSample) pan_spread_units += sampler_pan_units;
+  }
+
+  if (has(Id::kDriftCents)) drift_depth_cents = drift_depth(p.drift_cents, drift_seed);
+
+  if (has(Id::kHpCutoffHz)) {
+    if (p.hp_cutoff_hz > 0.0f) {
+      // Opening starts the stage from rest; a running stage keeps its state.
+      if (!hp_active) hp_stage.prepare(sample_rate);
+      hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
+      hp_active = true;
+    } else {
+      hp_active = false;
+    }
+  }
+
+  if (has(Id::kSampleHoldHz)) hold_step = hold_step_for(p.sample_hold_hz, sample_rate);
+  if (has(Id::kBitDepth)) quant_step = quant_step_for(p.bit_depth);
+
+  // Only a glide in progress has anything to retime; zero lands on the pitch,
+  // as retune() does with no portamento.
+  if (has(Id::kGlideMs) && glide_coeff > 0.0f) {
+    if (p.glide_ms > 0.0f) {
+      glide_coeff = glide_coefficient(p.glide_ms, sample_rate);
+    } else {
+      glide_cents = 0.0f;
+      glide_coeff = 0.0f;
+    }
   }
 }
 
@@ -740,6 +955,7 @@ void NativeSynthVoice::choke() noexcept {
   // a ringing voice with a short fade rather than an abrupt kill.
   key_down = false;
   releasing = true;
+  choked = true;
   amp_env.note_off();
 }
 

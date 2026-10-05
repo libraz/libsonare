@@ -269,6 +269,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   dc_x1_ = {};
   dc_y1_ = {};
   bus_drive_gain_ = config_.bus_drive > 0.0f ? 1.0f + 3.0f * config_.bus_drive : 0.0f;
+  live_dirty_ = 0;
   prepared_ = true;
   // The rig entries and the bank rigs the parts' power-on programs bind, so a
   // bussed part routes from the first block.
@@ -279,6 +280,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
 
 void NativeSynth::reset() {
   pool_.reset();
+  live_dirty_ = 0;
   dc_x1_ = {};
   dc_y1_ = {};
   residual_splitter_.reset();
@@ -1221,6 +1223,16 @@ void NativeSynth::process_impl(float* const* channels,
     part_fx_.acquire();
     part_fx_.drain_param_updates();
     part_fx_.apply_controls(*this);
+  }
+  // Automation written since the last block: re-derive the latched state of
+  // the voices playing config_.patch (GM voices point elsewhere).
+  if (live_dirty_ != 0) {
+    for (NativeSynthVoice& v : pool_) {
+      if (v.active && v.patch == &config_.patch && !v.choked) {
+        v.refresh_live(config_.patch, sample_rate_, live_dirty_);
+      }
+    }
+    live_dirty_ = 0;
   }
   // Diagnostic, offline only: the path this block renders through.
   if (path_recorder_ != nullptr) record_render_path();

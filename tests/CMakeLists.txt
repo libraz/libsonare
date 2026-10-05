@@ -601,6 +601,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi1_control_golden_test.cpp
     midi/builtin_synth_test.cpp
     midi/native_synth_test.cpp
+    midi/native_synth_live_params_test.cpp
     midi/native_synth_rig_test.cpp
     midi/native_synth_gsfx_test.cpp
     midi/part_rig_test.cpp

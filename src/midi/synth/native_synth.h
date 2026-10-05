@@ -254,6 +254,17 @@ struct DrumVoiceMod {
   int16_t exclusive_class = -1;
 };
 
+/// Crossfade length for a live change that crosses a stage's off point (drive,
+/// body), where the law itself is discontinuous at 0.
+inline constexpr float kLawFadeSeconds = 0.005f;
+
+/// Progress of a crossfade from a retiring law to the current one; step 0 means
+/// no fade is running and only the current law is computed.
+struct LawFade {
+  float fade01 = 1.0f;
+  float step = 0.0f;
+};
+
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
 /// in Sf2Player's fallback pool). Renders mono; the mixer applies
 /// gain_left/right (refreshed from the channel pan like Sf2Voice).
@@ -274,6 +285,10 @@ struct NativeSynthVoice : VoiceState {
   /// Pre-filter drive gain / makeup (precomputed from patch->drive; 0 = off).
   float drive_gain = 0.0f;
   float drive_makeup = 1.0f;
+  /// The drive law being faded out after a change across 0 (gain 0 = bypass).
+  float drive_fade_gain = 0.0f;
+  float drive_fade_makeup = 1.0f;
+  LawFade drive_fade;
   DahdsrEnvelope amp_env;
   DahdsrEnvelope filter_env;
   SynthFilter filter;
@@ -282,10 +297,10 @@ struct NativeSynthVoice : VoiceState {
   /// always the SVF highpass tap, so the other three models would be dead
   /// state on every voice.
   TptSvf hp_stage;
-  /// Whether this voice runs that stage, decided with its coefficient at
-  /// note-on. The patch is mutable under a sounding voice — an automation lane
-  /// writes it — and reading the cutoff live would open the stage on a voice
-  /// that never prepared or set it.
+  /// Whether this voice runs that stage. Decided at note-on and changed only by
+  /// refresh_live(), which prepares the stage when it opens and retunes it in
+  /// place while it runs; render() never reads the patch cutoff directly, which
+  /// would open the stage on a voice that never prepared or set it.
   bool hp_active = false;
   // Converter stage. `hold_step` is how much of a held period one sample
   // advances, so the rate is compared against the mix rate once at note-on
@@ -331,6 +346,10 @@ struct NativeSynthVoice : VoiceState {
   /// Host PCM source; like KS, the host attach()es the bank before start().
   SampleVoiceCore sampler;
   BodyResonator body;
+  /// Body crossfade after a bodyMix change across 0; body_fade_in names the
+  /// direction (true = dry to body). A finished fade-out stops the bank.
+  LawFade body_fade;
+  bool body_fade_in = false;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;
@@ -403,6 +422,21 @@ struct NativeSynthVoice : VoiceState {
   /// SoundFont bank's filter_bypass = false does.
   bool gs_filter_edited = false;
 
+  // Note-on inputs refresh_live() re-derives patch-dependent state from, so a
+  // refreshed voice matches one started at the new value.
+  float note_offset_semitones = 0.0f;  ///< voiced note - 60
+  float part_cutoff_cents = 0.0f;
+  float part_attack_scale = 1.0f;
+  float part_decay_scale = 1.0f;
+  float part_release_scale = 1.0f;
+  float part_vib_rate_scale = 1.0f;
+  std::array<float, kMaxUnisonOscs> unison_spread{};
+  float drift_seed = 0.0f;
+  float pan_scatter = 0.0f;
+  float sampler_pan_units = 0.0f;
+  /// Set by choke(): the voice is being cut and takes no live refresh.
+  bool choked = false;
+
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
   /// per-voice variation unless the patch retriggers from the note. @p p must outlive the voice. @p
@@ -457,6 +491,11 @@ struct NativeSynthVoice : VoiceState {
   /// the late note-off of the old key must NOT match (holding the old key here
   /// is what would cut the slur).
   void retune(uint8_t new_note, double sample_rate) noexcept;
+  /// Re-derives the state start() latched from @p p for the parameters in
+  /// @p mask (bit = NativeSynthParamId), from the same derivations and the
+  /// note-on inputs saved above. Running state (phases, levels) is kept.
+  /// Audio thread; no allocation.
+  void refresh_live(const NativeSynthPatch& p, double sample_rate, uint32_t mask) noexcept;
   /// Note-off: enter release (ignored by one-shot patches).
   void release() noexcept;
   /// Immediate silence (All Sound Off / steal-kill).
@@ -507,15 +546,12 @@ struct NativeSynthConfig {
 /// persisted automation-target ids, so they are append-only: never renumber an
 /// existing entry.
 ///
-/// Two timing classes, because a voice reads some patch fields every sample and
-/// caches others at note-on:
-///  - applied to SOUNDING voices from the next block: kGain, kBusDrive,
-///    kCutoffHz, kResonanceQ, kEnvToCutoffCents, kLfoToPitchCents,
-///    kPitchOffsetCents
-///  - applied from the NEXT NOTE-ON: kDrive, kKeyTrack, kVelToCutoffCents, the
-///    envelope segments, kLfoRateHz, kLfo2RateHz, kGlideMs, kBodyMix,
-///    kStereoSpread, kDetuneCents, kDriftCents, kHpCutoffHz, kSampleHoldHz,
-///    kBitDepth (each is precomputed into per-voice state when the voice starts)
+/// Every id reaches sounding voices from the next process() block. A voice
+/// reads some patch fields every sample; the state it derives from the others
+/// at note-on is re-derived by NativeSynthVoice::refresh_live() at the top of
+/// the block after the write, so a held note lands where a note struck at the
+/// new value would. Voices of a GM program or kit, and choked voices, are not
+/// refreshed.
 ///
 /// The set is the patch's own continuous fields, less the structural ones a
 /// voice pool or a DSP topology depends on; anything continuous the patch grows
@@ -550,6 +586,11 @@ enum class NativeSynthParamId : unsigned int {
   kSampleHoldHz = 26,
   kBitDepth = 27,
 };
+
+/// Bit for @p id in a refresh_live() mask.
+inline constexpr uint32_t native_synth_param_bit(NativeSynthParamId id) noexcept {
+  return 1u << static_cast<unsigned int>(id);
+}
 
 /// JSON-key name for @p id (the same string a SynthPatch object would use), or
 /// nullptr for an unknown id.
@@ -898,6 +939,9 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   double sample_rate_ = 0.0;
   bool prepared_ = false;
   int64_t tail_samples_ = 0;
+  /// Ids written by apply_parameter whose voice state awaits refresh_live (bit =
+  /// NativeSynthParamId). Audio-thread state under config_.patch's contract.
+  uint32_t live_dirty_ = 0;
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
   /// Mix-bus polish state (per stereo leg): DC blocker + drive constants.

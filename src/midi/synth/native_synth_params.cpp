@@ -62,6 +62,33 @@ constexpr std::array<ParamEntry, 28> kParams{{
     {"bitDepth", NativeSynthParamId::kBitDepth, 0.0f, 24.0f, "bits"},
 }};
 
+static_assert(kParams.size() <= 32, "live_dirty_ holds one bit per parameter id");
+
+/// Ids whose value start() derives voice state from; a write marks the id for
+/// refresh_live. The rest are read by the render every sample.
+constexpr uint32_t kVoiceDerivedParams =
+    native_synth_param_bit(NativeSynthParamId::kDrive) |
+    native_synth_param_bit(NativeSynthParamId::kKeyTrack) |
+    native_synth_param_bit(NativeSynthParamId::kVelToCutoffCents) |
+    native_synth_param_bit(NativeSynthParamId::kAmpAttackMs) |
+    native_synth_param_bit(NativeSynthParamId::kAmpDecayMs) |
+    native_synth_param_bit(NativeSynthParamId::kAmpSustain) |
+    native_synth_param_bit(NativeSynthParamId::kAmpReleaseMs) |
+    native_synth_param_bit(NativeSynthParamId::kFilterAttackMs) |
+    native_synth_param_bit(NativeSynthParamId::kFilterDecayMs) |
+    native_synth_param_bit(NativeSynthParamId::kFilterSustain) |
+    native_synth_param_bit(NativeSynthParamId::kFilterReleaseMs) |
+    native_synth_param_bit(NativeSynthParamId::kLfoRateHz) |
+    native_synth_param_bit(NativeSynthParamId::kLfo2RateHz) |
+    native_synth_param_bit(NativeSynthParamId::kGlideMs) |
+    native_synth_param_bit(NativeSynthParamId::kBodyMix) |
+    native_synth_param_bit(NativeSynthParamId::kStereoSpread) |
+    native_synth_param_bit(NativeSynthParamId::kDetuneCents) |
+    native_synth_param_bit(NativeSynthParamId::kDriftCents) |
+    native_synth_param_bit(NativeSynthParamId::kHpCutoffHz) |
+    native_synth_param_bit(NativeSynthParamId::kSampleHoldHz) |
+    native_synth_param_bit(NativeSynthParamId::kBitDepth);
+
 const ParamEntry* find_param_entry(NativeSynthParamId id) noexcept {
   for (const ParamEntry& entry : kParams) {
     if (entry.id == id) return &entry;
@@ -170,6 +197,7 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
   const ParamEntry* entry = find_param_entry(id);
   if (entry == nullptr) return false;
   NativeSynthPatch& p = config_.patch;
+  live_dirty_ |= native_synth_param_bit(id) & kVoiceDerivedParams;
   switch (id) {
     case NativeSynthParamId::kGain:
       // The instrument master gain, not the per-voice patch gain: it multiplies
