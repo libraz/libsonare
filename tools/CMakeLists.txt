@@ -80,6 +80,7 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/synth_catalog.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_timeline.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp

@@ -243,6 +243,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_bounce_mixer.cpp
   c_api/project_bounce_stems.cpp
   c_api/project_core.cpp
+  c_api/project_timeline.cpp
   c_api/project_edit_track.cpp
   c_api/project_edit_clip.cpp
   c_api/project_vocal_edit.cpp
@@ -1121,6 +1122,7 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_mixing.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_capture.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_render.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_timeline.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_voice_changer.cpp)
   # Always compiled so the playback symbols exist in feature-off shared builds,
   # where every entry point returns NOT_SUPPORTED.
@@ -1479,6 +1481,7 @@ if(BUILD_WASM)
       c_api/project_bounce_mixer.cpp
       c_api/project_bounce_stems.cpp
       c_api/project_core.cpp
+      c_api/project_timeline.cpp
       c_api/project_edit_clip.cpp
       c_api/project_vocal_edit.cpp
       c_api/project_edit_track.cpp

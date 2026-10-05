@@ -134,6 +134,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_mixing.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_capture.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_render.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_engine_timeline.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_voice_changer.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_streaming_retune.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_project.cpp
@@ -142,6 +143,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_bounce_stems.cpp
   ${SONARE_ROOT}/src/c_api/synth_catalog.cpp
   ${SONARE_ROOT}/src/c_api/project_core.cpp
+  ${SONARE_ROOT}/src/c_api/project_timeline.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_track.cpp
   ${SONARE_ROOT}/src/c_api/project_vocal_edit.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_clip.cpp

@@ -501,6 +501,7 @@ target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_eng
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_mixing.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_capture.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_render.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_timeline.cpp)
 
 # Keep the public retune ABI linked when the feature is disabled, so the
 # existing API test source can exercise its NOT_SUPPORTED stubs.
@@ -561,6 +562,7 @@ target_sources(sonare_tests PRIVATE
   ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_stems.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/synth_catalog.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_timeline.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
   ${PROJECT_SOURCE_DIR}/src/c_api/project_vocal_edit.cpp
@@ -706,6 +708,7 @@ if(BUILD_ARRANGEMENT)
     engine/midi_clip_engine_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
+    api/sonare_c_project_timeline_test.cpp
     bindings/project_bounce_overflow_test.cpp
     bindings/project_bounce_tail_channel_test.cpp
     bindings/binding_project_editing_test.cpp

@@ -21,6 +21,7 @@ extern "C" {
 #include "sonare_c_playback.h"
 #include "sonare_c_polyphony.h"
 #include "sonare_c_project.h"
+#include "sonare_c_project_timeline.h"
 #include "sonare_c_sample_bank.h"
 #include "sonare_c_streaming.h"
 #include "sonare_c_transcribe.h"

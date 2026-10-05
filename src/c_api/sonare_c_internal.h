@@ -45,6 +45,9 @@ struct SonareRealtimeEngine {
   std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
   sonare::host::FixedMidiInputSource<512> midi_input_source;
   bool midi_input_source_enabled = false;
+  /// Last timeline applied by sonare_engine_apply_project_timeline; the engine's
+  /// markers point into its name storage, so it is held until the next successful apply.
+  std::shared_ptr<const void> applied_timeline;
 #endif
 };
 
