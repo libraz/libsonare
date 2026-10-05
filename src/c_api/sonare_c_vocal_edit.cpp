@@ -613,13 +613,12 @@ SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, i
                                          const SonareVocalRestoreOptions* input,
                                          SonareVocalEditSession** out_session) {
   if (out_session) *out_session = nullptr;
-  SonareVocalRestoreOptions defaults;
-  sonare_vocal_restore_options_init(&defaults);
-  const auto& v = input ? *input : defaults;
   VOCAL_ACTION(
-      require_pointer(out_session, "out_session"); require_header(&v, "restore options header");
-      auto bytes = copy_input(state, size, "state"); const vocal::VocalSessionLimits limits{
-          v.max_history_bytes, v.max_cache_bytes, v.max_undo_depth, v.max_render_jobs};
+      SonareVocalRestoreOptions defaults; sonare_vocal_restore_options_init(&defaults);
+      const auto& v = input ? *input : defaults; require_pointer(out_session, "out_session");
+      require_header(&v, "restore options header"); auto bytes = copy_input(state, size, "state");
+      const vocal::VocalSessionLimits limits{v.max_history_bytes, v.max_cache_bytes,
+                                             v.max_undo_depth, v.max_render_jobs};
       auto session = vocal::VocalEditSession::restore(
           import_source(samples, frames, channels, sample_rate), bytes, limits);
       *out_session = new SonareVocalEditSession{std::move(session)});
