@@ -9,6 +9,11 @@
 
 #include "realtime_engine_wasm.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/project_timeline_internal.h"
+#include "wasm/bindings/common/project_timeline_wasm.h"
+#endif
+
 void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size) {
   if (!std::isfinite(sample_rate) || sample_rate < sonare::kMinAudioSampleRate ||
       sample_rate > sonare::kMaxAudioSampleRate || max_block_size <= 0) {
@@ -21,6 +26,38 @@ void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size)
 size_t RealtimeEngineWasm::capacity(int requested) {
   return requested == 0 ? 1024 : static_cast<size_t>(requested);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+void RealtimeEngineWasm::applyProjectTimeline(const val& timeline_id_val) {
+  namespace arr = sonare::arrangement;
+  const uint32_t id = checkedUintFromVal(timeline_id_val, "timeline id");
+  const SonareProjectTimeline* handle = ProjectTimelineWasm::lookup(id);
+  if (handle == nullptr || !handle->timeline) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "project timeline has been released");
+  }
+  if (engine_.transport_state_control().playing) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        "a project timeline can only be applied while the transport is stopped");
+  }
+  arr::ApplyOptions options;
+  options.bind_strips = true;
+  arr::ApplyResult result = arr::apply_to_engine(*handle->timeline, engine_, options);
+  // The lane copy is what setAutomationLane republishes, and the marker strings backed markers
+  // the apply has replaced; both follow the engine's new state.
+  if (result.outcome == arr::ApplyOutcome::kApplied) {
+    automation_lanes_ = std::move(result.installed_automation);
+    marker_strings_.clear();
+    applied_timeline_ = handle->timeline;
+  } else if (result.outcome == arr::ApplyOutcome::kCleared) {
+    automation_lanes_.clear();
+    marker_strings_.clear();
+    applied_timeline_.reset();
+  }
+  if (!result.ok()) throw sonare::SonareException(result.code, result.message);
+}
+#endif
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
                                        const val& command_capacity, const val& telemetry_capacity) {
@@ -92,6 +129,9 @@ void registerRealtimeEngineBindings() {
   registerRealtimeEngineParams(cls);
   registerRealtimeEngineMidi(cls);
   registerRealtimeEngineMixer(cls);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  cls.function("applyProjectTimeline", &RealtimeEngineWasm::applyProjectTimeline);
+#endif
   registerRealtimeEngineClips(cls);
   registerRealtimeEngineCapture(cls);
   registerRealtimeEngineProcessing(cls);

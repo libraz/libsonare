@@ -95,6 +95,7 @@ void registerProjectBindings() {
   registerProjectMeta(cls);
   registerProjectFreeFunctions();
   registerSampleBank();
+  registerProjectTimeline();
 #endif
 }
 

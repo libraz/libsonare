@@ -20,6 +20,7 @@ import {
   projectTrackKindValue,
   projectWarpModeValue,
   type WasmProject,
+  type WasmProjectTimeline,
 } from './project_internal';
 import type {
   ExternalSeparatedStemImportRequest,
@@ -38,6 +39,7 @@ import type {
   ProjectClipFade,
   ProjectClipTake,
   ProjectCompileResult,
+  ProjectCompileTimelineResult,
   ProjectDeserializeResult,
   ProjectKeySegment,
   ProjectLoopMode,
@@ -186,6 +188,45 @@ function midi2I32(fnName: string, value: number, argName: string): number {
 function midi2Byte(fnName: string, value: number, argName: string): number {
   assertBoundedInteger(fnName, value, argName, 0, 0xff);
   return value;
+}
+
+/**
+ * An immutable compiled snapshot of a {@link Project}, produced by
+ * {@link Project.compileTimeline} and installed into a stopped realtime engine
+ * with `RealtimeEngine.applyProjectTimeline`.
+ *
+ * An engine keeps its own reference after an apply, so {@link dispose} may be
+ * called right afterwards. The embind handle is not garbage-collected; release
+ * it when no further apply needs it.
+ */
+export class ProjectTimeline {
+  private native: WasmProjectTimeline | null;
+
+  /** @internal */
+  constructor(native: WasmProjectTimeline) {
+    this.native = native;
+  }
+
+  /**
+   * Identity an engine names this timeline by, so no raw pointer crosses into JS.
+   *
+   * @internal
+   */
+  get nativeId(): number {
+    if (this.native === null) {
+      throw new TypeError('ProjectTimeline is disposed');
+    }
+    return this.native.id;
+  }
+
+  /** Release the underlying WASM object. Idempotent. */
+  dispose(): void {
+    if (this.native === null) {
+      return;
+    }
+    this.native.delete();
+    this.native = null;
+  }
 }
 
 /**
@@ -1128,6 +1169,17 @@ export class Project {
   /** Compile the project into a renderable timeline, surfacing diagnostics. */
   compile(): ProjectCompileResult {
     return this.native.compile();
+  }
+
+  /**
+   * Compile the project and keep the resulting timeline. The result is
+   * {@link compile}'s plus `timeline`: a {@link ProjectTimeline} to install with
+   * `RealtimeEngine.applyProjectTimeline`, or `null` when an error diagnostic
+   * means nothing compiled.
+   */
+  compileTimeline(): ProjectCompileTimelineResult {
+    const { timeline, ...result } = this.native.compileTimeline();
+    return { ...result, timeline: timeline === null ? null : new ProjectTimeline(timeline) };
   }
 
   /**

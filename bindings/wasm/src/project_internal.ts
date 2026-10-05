@@ -80,6 +80,18 @@ export interface WasmSampleBank {
   delete: () => void;
 }
 
+// Embind handle for the C++ `ProjectTimelineWasm` class. Registered next to the
+// project, so a build without arrangement support has neither.
+export interface WasmProjectTimeline {
+  readonly id: number;
+  delete: () => void;
+}
+
+/** `compileTimeline` as the embind layer returns it, before the facade wraps the handle. */
+export type NativeProjectCompileTimelineResult = ProjectCompileResult & {
+  timeline: WasmProjectTimeline | null;
+};
+
 /**
  * Swaps a facade {@link SampleBank} in a synth patch descriptor for the id the
  * embind layer looks the native bank up by, leaving every other field alone.
@@ -243,6 +255,7 @@ export interface WasmProject {
   ) => number;
   snapToGrid: (ppq: number, strength: number, division: number) => number;
   compile: () => ProjectCompileResult;
+  compileTimeline: () => NativeProjectCompileTimelineResult;
   bounce: (options: ProjectBounceOptions) => Float32Array;
   bounceWithBuiltinInstrument: (
     bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,

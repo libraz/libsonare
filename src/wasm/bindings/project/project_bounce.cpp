@@ -23,6 +23,19 @@ std::unordered_map<uint32_t, SonareSampleBank*>& sampleBankRegistry() {
   return registry;
 }
 
+/// Live compiled timelines by id, looked up by RealtimeEngineWasm::applyProjectTimeline.
+/// Control thread only, which single-threaded WASM guarantees.
+std::unordered_map<uint32_t, SonareProjectTimeline*>& projectTimelineRegistry() {
+  static std::unordered_map<uint32_t, SonareProjectTimeline*> registry;
+  return registry;
+}
+
+/// Ids start at 1 so zero stays available as "no timeline".
+uint32_t nextProjectTimelineId() {
+  static uint32_t next = 1;
+  return next++;
+}
+
 /// Ids start at 1 so zero stays available as "no bank" in a binding.
 uint32_t nextSampleBankId() {
   static uint32_t next = 1;
@@ -164,6 +177,25 @@ val ProjectWasm::compile() {
   }
   val out = projectCompileResultToVal(result);
   sonare_project_free_compile_result(&result);
+  return out;
+}
+
+val ProjectWasm::compileTimeline() {
+  SonareProjectCompileResult result{};
+  SonareProjectTimeline* timeline = nullptr;
+  const SonareError err = sonare_project_compile_timeline(project_.get(), &result, &timeline);
+  if (err != SONARE_OK) {
+    sonare_project_free_compile_result(&result);
+    sonare_project_timeline_destroy(timeline);
+    throwCError(err, "failed to compile project timeline");
+  }
+  val out = projectCompileResultToVal(result);
+  sonare_project_free_compile_result(&result);
+  if (timeline != nullptr) {
+    out.set("timeline", ProjectTimelineWasm(timeline));
+  } else {
+    out.set("timeline", val::null());
+  }
   return out;
 }
 
@@ -498,6 +530,7 @@ val js_synth_patch_round_trip(val desc) {
 
 void registerProjectBounce(class_<ProjectWasm>& cls) {
   cls.function("compile", &ProjectWasm::compile)
+      .function("compileTimeline", &ProjectWasm::compileTimeline)
       .function("bounce", &ProjectWasm::bounce)
       .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument)
       .function("bounceWithSynthInstrument", &ProjectWasm::bounceWithSynthInstrument)
@@ -506,6 +539,26 @@ void registerProjectBounce(class_<ProjectWasm>& cls) {
       .function("soundFontPresetCount", &ProjectWasm::soundFontPresetCount)
       .function("soundFontManifest", &ProjectWasm::soundFontManifest)
       .function("bounceWithSf2Instrument", &ProjectWasm::bounceWithSf2Instrument);
+}
+
+ProjectTimelineWasm::ProjectTimelineWasm(SonareProjectTimeline* adopted) {
+  id_ = nextProjectTimelineId();
+  const uint32_t id = id_;
+  timeline_ = std::shared_ptr<SonareProjectTimeline>(adopted, [id](SonareProjectTimeline* handle) {
+    projectTimelineRegistry().erase(id);
+    sonare_project_timeline_destroy(handle);
+  });
+  projectTimelineRegistry().emplace(id_, adopted);
+}
+
+SonareProjectTimeline* ProjectTimelineWasm::lookup(uint32_t id) {
+  const auto& registry = projectTimelineRegistry();
+  const auto it = registry.find(id);
+  return it != registry.end() ? it->second : nullptr;
+}
+
+void registerProjectTimeline() {
+  class_<ProjectTimelineWasm>("ProjectTimeline").property("id", &ProjectTimelineWasm::id);
 }
 
 void registerSampleBank() {

@@ -17,6 +17,7 @@ import type {
   ProjectMidiCcBinding,
   SynthPatch,
 } from './project';
+import type { ProjectTimeline } from './project_class';
 import { normalizeSynthInstrument, partRigInsertsJson } from './project_internal';
 import type {
   EqBand,
@@ -1161,9 +1162,37 @@ export class RealtimeEngine {
   /**
    * Keys one insert of a lane strip from another lane's post-strip audio
    * (ducking/sidechainRouter inserts). sourceTrackId 0 removes the binding.
+   * Lanes are processed in key order and the key is delay-compensated to the
+   * destination strip input, so the result depends on neither the lane order
+   * nor the block size. Throws, leaving the bindings unchanged, for a lane
+   * keying itself, a binding that would close a cycle over the lane bindings,
+   * a full binding table and an alignment past the delay ceiling. Not callable
+   * while a block is being processed.
    */
   setLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): void {
     this.native.setLaneSidechain(trackId, insertIndex, sourceTrackId);
+  }
+
+  /**
+   * Installs a compiled project timeline into this stopped engine, all or
+   * nothing: tempo and time-signature segments, markers, track lanes, track
+   * automation, audio and MIDI clips, and the per-track strips of the project's
+   * mixer scene are replaced in full (a later low-level setter on those domains
+   * is overwritten by the next apply). Instruments, buses, the master strip,
+   * metronome, loop and capture are not touched; bind instruments separately.
+   *
+   * Throws while the transport is playing, for a timeline the engine cannot
+   * hold, and for a scene strip routed from several tracks. A validation
+   * failure leaves the engine unchanged. The engine keeps its own reference, so
+   * {@link ProjectTimeline.dispose} may follow immediately.
+   */
+  applyProjectTimeline(timeline: ProjectTimeline): void {
+    // Structural check: a value import of the class would pull the whole project
+    // facade into every realtime bundle.
+    if (timeline === null || typeof timeline !== 'object' || !('nativeId' in timeline)) {
+      throw new TypeError('timeline must be a ProjectTimeline instance');
+    }
+    this.native.applyProjectTimeline(timeline.nativeId);
   }
 
   setTrackBuses(buses: EngineBus[]): void {

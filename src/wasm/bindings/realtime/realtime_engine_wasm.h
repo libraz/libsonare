@@ -22,6 +22,7 @@
 
 #include "wasm/bindings/common/common.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include "arrangement/edit_compiler.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #endif
@@ -208,6 +209,12 @@ class RealtimeEngineWasm {
 
   // ---- Mixer: tracks, buses, strips (realtime_engine_mixer.cpp) --------
   void setTrackLanes(emscripten::val lanes);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// Installs the compiled timeline registered under @p timeline_id (a
+  /// ProjectTimeline handle's id) into the stopped engine, all or nothing.
+  /// Matches sonare_engine_apply_project_timeline.
+  void applyProjectTimeline(const emscripten::val& timeline_id_val);
+#endif
   void setLaneSidechain(const emscripten::val& track_id_val,
                         const emscripten::val& insert_index_val,
                         const emscripten::val& source_track_id_val);
@@ -449,6 +456,10 @@ class RealtimeEngineWasm {
   std::vector<sonare::automation::AutomationLane> automation_lanes_;
   std::deque<std::string> parameter_strings_;
   std::deque<std::string> marker_strings_;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// Timeline last applied; keeps the marker names the engine points into alive.
+  std::shared_ptr<const sonare::arrangement::CompiledTimeline> applied_timeline_;
+#endif
   std::vector<std::shared_ptr<WasmClipPageProvider>> clip_page_providers_;
   sonare::engine::ClipPageRequest clip_page_request_scratch_{};
   sonare::engine::Telemetry telemetry_scratch_{};

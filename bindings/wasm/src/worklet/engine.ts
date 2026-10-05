@@ -505,7 +505,9 @@ export class SonareEngine {
   /**
    * Keys one insert of a lane strip from another lane's post-strip pre-fader
    * audio (ducking/sidechainRouter inserts). sourceTarget null removes the
-   * binding.
+   * binding. Throws, leaving the existing bindings unchanged, for a lane keying
+   * itself or a binding that would close a cycle over the lane bindings; a
+   * refused binding is never recorded, so it is not replayed on resync.
    */
   setLaneSidechain(
     target: string | number,

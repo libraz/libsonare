@@ -20,6 +20,7 @@
 
 #include "c_api/sonare_c_error_mapping.h"
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/common/project_timeline_wasm.h"
 #include "wasm/bindings/common/sample_bank_wasm.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
@@ -170,6 +171,10 @@ struct ProjectWasm {
   // Compiles the project into a renderable timeline, returning a small JS
   // object { diagnosticCount, hasTimeline, messages }.
   val compile();
+
+  // compile() plus the compiled timeline: the result gains `timeline`, a
+  // ProjectTimeline handle, or null when compilation produced none.
+  val compileTimeline();
 
   // Parses a JS bounce-options object into the flat C POD. A missing /
   // null/undefined object leaves the zero-init defaults (which the C ABI maps to

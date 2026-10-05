@@ -101,7 +101,9 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
 
 /// Keys one insert of a lane strip from another lane's post-strip audio
 /// (ducking/sidechainRouter inserts); sourceTrackId 0 removes the binding.
-/// Matches sonare_engine_set_lane_sidechain.
+/// Throws InvalidParameter, leaving the bindings unchanged, for a lane keying
+/// itself, a binding that closes a cycle, a full table and an alignment past
+/// the delay ceiling. Matches sonare_engine_set_lane_sidechain.
 void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& insert_index_val,
                                           const val& source_track_id_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");

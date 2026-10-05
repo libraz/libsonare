@@ -1414,6 +1414,7 @@ export interface WasmRealtimeEngine {
   clipCount: () => number;
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
   setLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => void;
+  applyProjectTimeline: (timelineId: number) => void;
   setTrackBuses: (buses: WasmEngineBus[]) => void;
   setBusSidechain: (
     busId: number,

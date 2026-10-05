@@ -51,7 +51,7 @@ export {
   SYNTH_OSC_WAVEFORMS,
   SYNTH_RETRIGGERS,
 } from './instrument_types';
-export { Project } from './project_class';
+export { Project, ProjectTimeline } from './project_class';
 export {
   controllerProfileNames,
   projectAbiVersion,
@@ -84,6 +84,7 @@ export type {
   ProjectClipFade,
   ProjectClipTake,
   ProjectCompileResult,
+  ProjectCompileTimelineResult,
   ProjectDeserializeResult,
   ProjectDiagnostic,
   ProjectFadeCurve,
