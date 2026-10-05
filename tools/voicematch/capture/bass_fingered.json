@@ -6,6 +6,8 @@
   "audition_title": "libsonare bass fingered vs the sampled reference",
   "_rig": "Measured, not assumed. The instrument's own amplifier stage is switched off in the state this capture loads, and what that removed is the whole of a rig: at the top of the compass the crest factor went from 9.57 to 19.63 dB, 1-3 kHz from -6.2 to -13.9 and 6-12 kHz from -57.2 to -44.7. A cabinet is a filter rather than a space, so none of that is visible to a dryness test and the answer has to be recorded rather than inferred. What is left is the pickup's own output, which is the boundary the model's voice ends at.",
   "rig": "none",
+  "_rig_evidence": "Verified: the instrument's amplifier stage was switched off and the two states measured against each other (`_rig`).",
+  "rig_evidence": "verified",
   "_notes": "Every fourth semitone across the compass this program is probed on, 28 to 52, and no further. A note outside the compass is left out rather than transposed, because there the reference is stretching a sample and a model fitted against it would be fitted against the sampler.",
   "notes": [
     28,
