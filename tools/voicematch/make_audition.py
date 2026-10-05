@@ -1043,7 +1043,15 @@ def render_take(
 
     def keep(key: str, rendered: RenderedAudio) -> None:
         renders[key] = rendered.audio
-        evidence[key] = {**rendered.evidence, "source_id": None}
+        # The score's part and sends, which the path record does not carry: a
+        # direct render is always scored dry, every other one with the product's sends.
+        sends = SENDS_DRY if key.endswith("-di") else product.sends
+        evidence[key] = {
+            **rendered.evidence,
+            "source_id": None,
+            "channel": channel,
+            "sends": list(sends),
+        }
 
     # `--lib` has to reach the unmodified voice as well as the variants.
     # Rendering it in-process instead would take whichever library the loader

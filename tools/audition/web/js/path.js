@@ -35,12 +35,24 @@ export function topologyIndexAt(events, frame) {
   return at;
 }
 
-const stageText = (name, on) => (on === false ? t('path.bypassed', { stage: name }) : name);
+/// A processor's display name: a translated one where there is one, else its last segment.
+const stageName = (name) => {
+  const label = t(`path.stage.${name}`);
+  return label === `path.stage.${name}` ? String(name).split('.').pop() : label;
+};
+
+const stageText = (name, on) => {
+  const shown = stageName(name);
+  return on === false ? t('path.bypassed', { stage: shown }) : shown;
+};
+
+/// True when the score wrote every send at zero, so no send leaves the part at all.
+const sendsZero = (sends) => Array.isArray(sends) && sends.length > 0 && sends.every((v) => v === 0);
 
 /// One part's chain as text, plus the branch line when its sends leave before the rig.
-export function partChain(part, units) {
+export function partChain(part, units, sends) {
   const steps = [t('path.voice')];
-  for (const s of part.stages || []) steps.push(s);
+  (part.stages || []).forEach((s, i) => steps.push(stageText(s, (part.enabled || [])[i])));
   const unit = part.unit == null ? null : units.find((u) => u.unit === part.unit);
   if (unit) {
     const stages = (unit.stages || []).map((s, i) => stageText(s, (unit.enabled || [])[i]));
@@ -49,7 +61,8 @@ export function partChain(part, units) {
       realization: t(`path.realization.${unit.realization}`),
     }) + (stages.length ? ` [${stages.join(', ')}]` : ''));
   }
-  const tap = part.send_tap || 'none';
+  const tap = sendsZero(sends) ? 'zero' : (part.send_tap || 'none');
+  if (tap === 'zero') return { chain: `${steps.join(' → ')}  ·  ${t('path.sends.zero')}`, branch: null };
   if (tap === 'post_unit') steps.push(t('path.sends.post_unit'));
   const chain = steps.join(' → ');
   return {
@@ -114,10 +127,11 @@ export function renderPath() {
     return;
   }
   const topo = events[index];
-  const parts = topo.parts || [];
+  // Only the part the score plays; a record without that says nothing to filter by.
+  const parts = (topo.parts || []).filter((p) => ev.channel == null || p.part === ev.channel);
   const many = parts.length > 1;
   for (const part of parts) {
-    const { chain, branch } = partChain(part, topo.units || []);
+    const { chain, branch } = partChain(part, topo.units || [], ev.sends);
     const prefix = many ? `${t('path.part', { n: part.part + 1 })}: ` : '';
     box.append(el('span', 'path-chain', prefix + chain));
     if (branch) box.append(el('span', 'path-branch', branch));

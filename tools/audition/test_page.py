@@ -430,6 +430,33 @@ console.log(path.topologyIndexAt([{ frame: 100 }], 0));
         assert key in table["en"] and key in table["ja"], key
 
 
+def test_the_path_line_names_stages_and_says_when_no_send_leaves() -> None:
+    """A processor reads by its display name, a disabled part stage as bypassed,
+    a score with every send at zero says so instead of drawing a send tap, and
+    only the part the score plays is drawn."""
+    got = _node(
+        """
+const path = await import(`${dir}/path.js`);
+const part = { part: 0, stages: ['saturation.overdrive', 'saturation.ampSim'],
+  enabled: [false, true], unit: null, send_tap: 'pre_rig' };
+console.log(JSON.stringify(path.partChain(part, [], [0, 0, 0])));
+console.log(JSON.stringify(path.partChain(part, [], [null, null, null])));
+"""
+    )
+    if got is not None:
+        zero, power_on = got
+        assert json.loads(zero) == {
+            "chain": "voice → overdrive (bypassed) → amp  ·  sends at zero (no reverb or chorus)",
+            "branch": None,
+        }, zero
+        assert json.loads(power_on)["branch"] == "voice ↳ sends taken here, before the rig"
+    body = _render_path_source()
+    assert "p.part === ev.channel" in body, "only the scored part is drawn"
+    table = _string_table()
+    for key in ("path.sends.zero", "path.stage.saturation.ampSim"):
+        assert key in table["en"] and key in table["ja"], key
+
+
 def test_blind_hides_the_path_but_names_the_comparison() -> None:
     body = _render_path_source()
     blind = body.split("if (state.blind) {", 1)[1].split("\n  }\n", 1)[0]

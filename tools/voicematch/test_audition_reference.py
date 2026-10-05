@@ -926,6 +926,11 @@ def test_manifest_v2_carries_evidence_for_every_version_of_every_take(monkeypatc
     model_req = manifest["items"][0]["evidence"]["model"]["request_id"]
     di_req = manifest["items"][0]["evidence"]["model-di"]["request_id"]
     assert model_req != di_req
+    # The scored part and sends travel with a model render; the direct one is always dry.
+    first = manifest["items"][0]["evidence"]
+    assert first["model-di"]["sends"] == [0, 0, 0]
+    assert first["model"]["channel"] == first["model-di"]["channel"]
+    assert "sends" not in next(e for k, e in first.items() if k not in ("model", "model-di"))
 
 
 def test_a_new_generation_leaves_the_previous_one_intact(monkeypatch, tmp_path):
