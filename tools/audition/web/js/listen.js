@@ -19,8 +19,30 @@ import { loadFeedback } from './feedback.js';
 import { writeRoute } from './address.js';
 import { buildSetPicker, paletteOpen, renderPickLabel } from './palette.js';
 import { buildVersionButtons, renderCaptions, selectVersionByKey } from './versions.js';
-import { renderScore, reshuffleBlind } from './blind.js';
+import { applyBlindGate, renderScore, reshuffleBlind } from './blind.js';
 import { renderHeadStage, renderSubject } from './subject.js';
+
+/* ------------------------------------------------------------- selection */
+
+/* Counts every selection of a set or a take. A load that finishes after a later
+ * selection began belongs to a choice nobody is looking at, so it commits
+ * nothing: otherwise the slower of two quick switches wins and plays under the
+ * other one's name. */
+let selectEpoch = 0;
+
+/* Sending is off from the moment a selection starts until its own load lands,
+ * because what the note would be attached to is not settled in between. The
+ * button is the visible half; the shortcut calls the send path directly, so it
+ * is stopped before it gets there. */
+const setSending = (on) => { $('fbSend').disabled = !on; };
+
+document.addEventListener('keydown', (ev) => {
+  if ($('fbSend').disabled && (ev.metaKey || ev.ctrlKey) && ev.key === 'Enter'
+      && ev.target === $('fbComment')) {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  }
+}, true);
 
 /* ----------------------------------------------------------------- route */
 
@@ -40,6 +62,8 @@ export async function applyRoute(r) {
 export async function loadSet(id, want) {
   const entry = state.sets.find((s) => s.id === id) || state.sets[0];
   if (!entry) return;
+  const epoch = ++selectEpoch;
+  setSending(false);
   stopSources();
   state.playing = false;
   markPlay(false);
@@ -48,6 +72,7 @@ export async function loadSet(id, want) {
   localStorage.setItem(SET_KEY, entry.id);
 
   const m = await (await fetch(`${state.base}manifest.json`)).json();
+  if (epoch !== selectEpoch) return;
   state.manifest = m;
   state.items = m.items || [];
   // A set whose takes hold one version each has nothing to switch between, so
@@ -59,6 +84,9 @@ export async function loadSet(id, want) {
     state.blind = false;
     $('blind').checked = false;
   }
+  // After the compare check, so a set that cannot be blind-listened to also
+  // leaves any run left over from the previous set.
+  applyBlindGate();
 
   $('title').textContent = m.title || '';
   $('notes').textContent = m.notes || '';
@@ -82,8 +110,9 @@ export async function loadSet(id, want) {
   state.oracleOverride = null;
   buildTakeList();
   await loadFeedback();
+  if (epoch !== selectEpoch) return;
   if (state.items.length) await selectTake(state.itemIndex);
-  else { $('versions').replaceChildren(); writeRoute(); }
+  else { $('versions').replaceChildren(); setSending(true); writeRoute(); }
 }
 
 /* Notes taken in this browser before the page could send anything are still
@@ -150,7 +179,12 @@ function markTakeList() {
 export async function selectTake(i) {
   if (i < 0 || i >= state.items.length) return;
   const wasPlaying = state.playing;
+  const epoch = ++selectEpoch;
   pause();
+  setSending(false);
+  // The previous take's buffer must not stand for this selection while it loads.
+  state.take = null;
+  $('versions').replaceChildren();
   state.itemIndex = i;
   state.startOffset = 0;
   // A passage is marked on one take's picture and means nothing on the next
@@ -166,13 +200,17 @@ export async function selectTake(i) {
   const cap = $('specCaption');
   cap.textContent = t('spec.decoding');
   cap.className = 'loading';
+  let take;
   try {
-    state.take = await loadTake(item);
+    take = await loadTake(item);
   } catch (err) {
+    if (epoch !== selectEpoch) return;
     cap.textContent = t('spec.failed', { msg: err.message });
-    state.take = null;
     return;
   }
+  if (epoch !== selectEpoch) return;
+  state.take = take;
+  setSending(true);
   cap.className = '';
   reshuffleBlind();
   // The version carries across takes by name rather than by position, so
@@ -196,6 +234,7 @@ export async function selectTake(i) {
  * script, so none of them is reached by the static pass over the markup. */
 export function refreshListen() {
   applyStatic();
+  applyBlindGate();
   renderPickLabel();
   if (paletteOpen()) buildSetPicker();
   // The take list holds translated prose now, so it is rebuilt with everything

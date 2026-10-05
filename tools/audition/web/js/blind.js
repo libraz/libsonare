@@ -9,6 +9,41 @@ import { t } from './i18n.js';
 import { recordBlind } from './feedback.js';
 import { rebuildVersions } from './versions.js';
 
+/* A set whose reference is a direct-input recording has no blind comparison to
+ * offer: the draw below takes the shipped path only, and that path is the
+ * amplified model, so the run would set it against a bare signal and the ear
+ * would be separating the amplifier. The manifest says which kind of reference
+ * the set has; anything but a plain `none` keeps blind mode available. */
+export const blindBlocked = () => {
+  const voice = (state.manifest || {}).voice;
+  return Boolean(voice) && voice.rig === 'none';
+};
+
+/* Brings the control and the run in line with the set just loaded. The reason
+ * is shown in the readout beside the transport, which is where blind mode
+ * reports itself, and as the checkbox's tooltip. */
+export function applyBlindGate() {
+  const box = $('blind');
+  const blocked = blindBlocked();
+  box.disabled = blocked;
+  box.parentElement.title = blocked ? t('blind.refDi') : '';
+  if (blocked) {
+    state.blind = false;
+    box.checked = false;
+    document.body.classList.remove('blind-on');
+  }
+}
+
+// The B shortcut flips the box and fires `change` without looking at whether the
+// box is disabled, so a blocked set is refused here, ahead of the handler that
+// would start the run.
+$('blind').addEventListener('change', (ev) => {
+  if (!blindBlocked()) return;
+  $('blind').checked = false;
+  ev.stopImmediatePropagation();
+  renderScore();
+}, true);
+
 /* The draw for a blind run: which versions are in it, in an order that says
  * nothing. Only the shipped path is drawn — see `displayOrder` — so a slot in
  * blind mode is a position in this list rather than an index into the take. */
@@ -95,7 +130,7 @@ export function renderScore() {
   const choose = $('blindPick');
   const unsure = $('blindUnsure');
   if (!state.blind) {
-    $('blindScore').textContent = '';
+    $('blindScore').textContent = blindBlocked() ? t('blind.refDi') : '';
     for (const b of [btn, choose, unsure]) b.hidden = true;
     return;
   }

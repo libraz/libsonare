@@ -158,6 +158,7 @@ const STRINGS = {
     'blind.preferred': 'preferred',
     'blind.record': 'record this result',
     'blind.decided': 'answered on {n} take(s)',
+    'blind.refDi': 'blind listening is off for this voice: its reference is a direct-input recording, and the blind draw would compare the amplified model against it',
     'blind.result': 'blind listening, {n} take(s): {tally}',
 
     'fb.title': 'tell me what you hear',
@@ -408,6 +409,7 @@ const STRINGS = {
     'blind.preferred': '選ばれた回数',
     'blind.record': 'この結果を記録する',
     'blind.decided': '{n} テイク回答済み',
+    'blind.refDi': 'この音色ではブラインド試聴を使えません。参照が直接入力（DI）の録音で、ブラインドの抽選ではアンプ通過後のモデルと比べてしまうためです',
     'blind.result': 'ブラインド試聴、{n} テイク: {tally}',
 
     'fb.title': '聞こえたことを教えてください',

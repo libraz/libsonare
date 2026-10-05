@@ -240,6 +240,54 @@ def test_every_module_the_page_imports_is_present() -> None:
     assert not wanted - here, f"imported and not present: {sorted(wanted - here)}"
 
 
+def _select_take_source() -> str:
+    text = (JS_DIR / "listen.js").read_text()
+    return text.split("export async function selectTake", 1)[1].split("\n}\n", 1)[0]
+
+
+def test_a_take_load_commits_only_under_its_own_selection() -> None:
+    """Source-shape check, not a race test: it pins that the epoch exists, is
+    bumped on selection, and guards the commit and the failure path. That the
+    slower of two loads is actually discarded needs a browser."""
+    body = _select_take_source()
+    assert "let selectEpoch = 0;" in (JS_DIR / "listen.js").read_text()
+    assert "const epoch = ++selectEpoch;" in body
+    commit = body.index("state.take = take;")
+    assert "if (epoch !== selectEpoch) return;" in body[:commit]
+    catch = body.split("} catch (err) {", 1)[1].split("return;", 1)[0]
+    assert "epoch !== selectEpoch" in catch, "a stale failure must not write the caption"
+    # The previous buffer is dropped before the await, not after it.
+    assert body.index("state.take = null;") < body.index("await loadTake(")
+    assert body.index("setSending(false)") < body.index("await loadTake(")
+    assert body.index("setSending(true)") > commit
+
+
+def test_a_set_load_is_also_guarded_by_the_epoch() -> None:
+    text = (JS_DIR / "listen.js").read_text()
+    body = text.split("export async function loadSet", 1)[1].split("\n}\n", 1)[0]
+    assert body.count("epoch !== selectEpoch") >= 2
+
+
+def test_sending_is_gated_for_the_button_and_the_shortcut() -> None:
+    text = (JS_DIR / "listen.js").read_text()
+    assert "$('fbSend').disabled = !on" in text
+    assert re.search(r"addEventListener\('keydown'.*?,\s*true\)", text, re.DOTALL)
+    # feedback.js is what the guard sits in front of: the shortcut calls send()
+    # directly, so a disabled button alone would not have been enough.
+    assert "ev.key === 'Enter'" in (JS_DIR / "feedback.js").read_text()
+
+
+def test_blind_is_refused_for_a_direct_input_reference() -> None:
+    text = (JS_DIR / "blind.js").read_text()
+    assert "voice.rig === 'none'" in text
+    assert "applyBlindGate" in (JS_DIR / "listen.js").read_text()
+    # The B shortcut fires `change` on the box without checking `disabled`.
+    assert re.search(
+        r"\$\('blind'\)\.addEventListener\('change'.*?stopImmediatePropagation", text, re.DOTALL
+    )
+    assert "t('blind.refDi')" in text
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
