@@ -580,9 +580,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
           if (!rv.is_object()) continue;
           const auto entry = part_rig_from_json(rv);
           if (!entry || !project.set_part_rig(*entry)) {
-            result.diagnostics.push_back({DiagnosticSeverity::kWarning, "invalid_part_rig",
-                                          "a part rig entry has an invalid part, mode or inserts "
-                                          "and was dropped"});
+            decode_diagnostics.warn("invalid_part_rig",
+                                    "a part rig entry has an invalid part, mode or inserts "
+                                    "and was dropped");
           }
         }
       }

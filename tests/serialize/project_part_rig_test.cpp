@@ -254,6 +254,37 @@ TEST_CASE("part rig decode honours schema version and shape", "[serialize][part_
   CHECK_FALSE(v6.ok());
 }
 
+TEST_CASE("part rig decode bounds malformed-entry diagnostics", "[serialize][part_rig]") {
+  using sonare::serialize::project_from_json;
+
+  std::string document = R"({"version":5,"part_rigs":[)";
+  for (int i = 0; i < 130; ++i) {
+    if (i > 0) document += ",";
+    document += R"({"destination_id":1,"part":16,"mode":"none"})";
+  }
+  document += "]}";
+
+  const auto result = project_from_json(document);
+  REQUIRE(result.ok());
+  REQUIRE(result.project->part_rigs().empty());
+
+  std::size_t invalid_part_rig_count = 0;
+  std::size_t truncated_count = 0;
+  std::string truncated_message;
+  for (const auto& diagnostic : result.diagnostics) {
+    if (diagnostic.code == "invalid_part_rig") {
+      ++invalid_part_rig_count;
+    } else if (diagnostic.code == "decode_diagnostics_truncated") {
+      ++truncated_count;
+      truncated_message = diagnostic.message;
+    }
+  }
+  CHECK(invalid_part_rig_count == 128);
+  CHECK(truncated_count == 1);
+  CHECK(result.diagnostics.size() == 129);
+  CHECK(truncated_message == "2 additional decode diagnostics were suppressed");
+}
+
 TEST_CASE("Project part rig model keeps one entry per key in canonical order",
           "[serialize][part_rig][arrangement]") {
   namespace arr = sonare::arrangement;
