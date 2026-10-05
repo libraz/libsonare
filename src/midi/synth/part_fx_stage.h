@@ -34,6 +34,8 @@
 
 namespace sonare::midi::synth {
 
+class RenderPathRecorder;
+
 /// Frames per bus chunk; a player renders its voices into the buses this many
 /// frames at a time.
 inline constexpr int kPartFxChunkFrames = 256;
@@ -137,6 +139,12 @@ class PartFxStage {
   PartFxStage& operator=(PartFxStage&&) noexcept;
 
   bool enabled() const noexcept { return static_cast<bool>(config_.insert_factory); }
+
+  /// Offline render thread: record refused rig stages and every parameter byte
+  /// apply_unit_sysex() moves into @p recorder; null detaches. Diagnostic only.
+  void set_path_recorder(RenderPathRecorder* recorder) noexcept { recorder_ = recorder; }
+  /// "part", "destination", "bank" or "none": which entry selects @p part's rig.
+  const char* rig_source_name(int part) const noexcept;
 
   /// CONTROL thread: allocate the buses at @p sample_rate. Allocates.
   void prepare(double sample_rate);
@@ -360,6 +368,8 @@ class PartFxStage {
   /// One bit per part whose rig in force is the bank's, so the AUDIO thread can
   /// tell whether a program change reaches a chain.
   std::unique_ptr<std::atomic<uint32_t>> bank_parts_ = std::make_unique<std::atomic<uint32_t>>(0);
+  /// Attached for one offline render only; never set on a live path.
+  RenderPathRecorder* recorder_ = nullptr;
 };
 
 }  // namespace sonare::midi::synth

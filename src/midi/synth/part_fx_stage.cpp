@@ -10,6 +10,7 @@
 
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_efx_bindings.h"
+#include "midi/synth/render_path_record.h"
 #include "midi/synth/sf2_voice.h"
 #include "util/constants.h"
 
@@ -179,6 +180,13 @@ PartRigMode PartFxStage::effective_mode(int part, const PartRig** entry) const n
   return config_.bank_rig_binding ? PartRigMode::kBank : PartRigMode::kNone;
 }
 
+const char* PartFxStage::rig_source_name(int part) const noexcept {
+  const size_t p = static_cast<size_t>(part & 0x0F);
+  if (rigs_.present[p]) return "part";
+  if (rigs_.present[kDestinationRig]) return "destination";
+  return config_.bank_rig_binding ? "bank" : "none";
+}
+
 void PartFxStage::refresh_bank_parts() noexcept {
   uint32_t bits = 0;
   for (int part = 0; part < 16; ++part) {
@@ -221,8 +229,18 @@ void PartFxStage::assign_part(uint8_t part, uint8_t value) noexcept {
 
 bool PartFxStage::apply_unit_sysex(const uint8_t* data, size_t size) noexcept {
   const int unit = gs_efx_addressed_unit(data, size);
-  if (unit < 0 || !apply_gs_efx_sysex(efx_[static_cast<size_t>(unit)], data, size)) return false;
+  if (unit < 0) return false;
+  GsEfx& target = efx_[static_cast<size_t>(unit)];
+  const std::array<uint8_t, 20> previous = target.params;
+  if (!apply_gs_efx_sysex(target, data, size)) return false;
   dirty_ = true;
+  if (recorder_ != nullptr) {
+    for (size_t slot = 0; slot < previous.size(); ++slot) {
+      if (target.params[slot] == previous[slot]) continue;
+      recorder_->record_param(static_cast<uint8_t>(unit), static_cast<uint8_t>(slot),
+                              target.params[slot]);
+    }
+  }
   return true;
 }
 
@@ -323,6 +341,7 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
   out->part_unit.fill(PartFxSnapshot::kNoUnit);
   out->gs_efx_state = efx_;
   out->gs_part_assign = assign_;
+  if (recorder_ != nullptr) recorder_->begin_snapshot_build();
   for (int part = 0; part < 16; ++part) {
     const size_t p = static_cast<size_t>(part);
     const PartRig* entry = nullptr;
@@ -335,7 +354,10 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
     // still runs. The mono pickup runs through the last amplifier built.
     const auto add_stage = [&](std::string_view name, std::string_view params) {
       auto proc = config_.insert_factory(name, params);
-      if (proc == nullptr) return;
+      if (proc == nullptr) {
+        if (recorder_ != nullptr) recorder_->note_refused_stage(part, name);
+        return;
+      }
       proc->prepare(sample_rate_, kPartFxChunkFrames);
       chain.push_back(std::move(proc));
       names.emplace_back(name);

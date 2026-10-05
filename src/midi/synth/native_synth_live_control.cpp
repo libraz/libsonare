@@ -390,4 +390,54 @@ std::vector<std::string> NativeSynth::part_rig_stage_names(uint8_t part) const {
   return snapshot->stage_names[part];
 }
 
+void NativeSynth::set_transport(const transport::TransportState& state) noexcept {
+  if (path_recorder_ != nullptr) path_recorder_->set_block_frame(state.render_frame);
+}
+
+bool NativeSynth::set_render_path_recorder(RenderPathRecorder* recorder) noexcept {
+  if (recorder != nullptr && !config_.realize_efx_inline) return false;
+  path_recorder_ = recorder;
+  part_fx_.set_path_recorder(recorder);
+  return true;
+}
+
+void NativeSynth::record_render_path() {
+  RenderPathRecorder& recorder = *path_recorder_;
+  if (!recorder.recording()) return;
+  const PartFxSnapshot* snapshot = part_fx_.enabled() ? part_fx_.current() : nullptr;
+  RenderPathTopology topology;
+  topology.parts.resize(16);
+  for (uint8_t part = 0; part < 16; ++part) {
+    const ChannelState& st = channels_[part];
+    RenderPathPart& out = topology.parts[part];
+    out.part = part;
+    out.program = st.program;
+    out.bank = gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
+    out.backend = "model";
+    out.rig_source = part_fx_.rig_source_name(part);
+    if (snapshot != nullptr) out.stages = snapshot->stage_names[part];
+    out.skipped = recorder.refused_stages(part);
+    const uint8_t unit = snapshot != nullptr ? snapshot->part_unit[part] : PartFxSnapshot::kNoUnit;
+    out.unit = unit == PartFxSnapshot::kNoUnit ? -1 : static_cast<int>(unit);
+    out.mono_prefix = snapshot != nullptr ? snapshot->mono_prefix[part] : 0;
+    // No system effects here, so nothing taps a send.
+    out.send_tap = "none";
+  }
+  for (size_t u = 0; snapshot != nullptr && u < kGsEfxUnitCount; ++u) {
+    if (!snapshot->unit_fed[u]) continue;
+    const Sf2EfxUnitRt& unit_rt = snapshot->units[u];
+    RenderPathUnit out;
+    out.unit = static_cast<uint8_t>(u);
+    out.type = snapshot->gs_efx_state[u].type;
+    out.realization = unit_rt.realization;
+    for (const Sf2EfxStageRt& stage : unit_rt.stages) {
+      out.stages.push_back(stage.name);
+      out.enabled.push_back(stage.enabled_target);
+      if (stage.proc == nullptr) out.skipped.push_back(stage.name);
+    }
+    topology.units.push_back(std::move(out));
+  }
+  recorder.record_topology(std::move(topology));
+}
+
 }  // namespace sonare::midi::synth

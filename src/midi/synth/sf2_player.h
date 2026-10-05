@@ -53,6 +53,7 @@
 #include "midi/synth/gs_system_effects.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/part_fx_stage.h"
+#include "midi/synth/render_path_record.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
@@ -336,6 +337,14 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// CONTROL thread: the processor names of the chain last published for
   /// @p part, in signal order (test/diagnostic).
   std::vector<std::string> part_rig_stage_names(uint8_t part) const;
+
+  /// AUDIO thread: the block's first device frame, which a render-path
+  /// recorder stamps its records with. Ignored with no recorder attached.
+  void set_transport(const transport::TransportState& state) noexcept override;
+  /// CONTROL thread, offline renders only: record the realised signal path into
+  /// @p recorder until it is detached with nullptr (diagnostic). Refused, and
+  /// nothing attached, unless the player realises its EFX inline.
+  bool set_render_path_recorder(RenderPathRecorder* recorder) noexcept;
 
  private:
   /// gs_default_cc_positions() widened to the controller record's width.
@@ -625,6 +634,11 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// preset. Also called for every part from the control thread at prepare(),
   /// set_soundfont() and reset, where the audio thread is quiescent.
   void refresh_part_rig(uint8_t channel) noexcept;
+  /// Whether @p channel's notes play the synth fallback rather than a preset.
+  bool part_plays_model_floor(uint8_t channel) const noexcept;
+  /// Offline render thread: hand the recorder the path this block realises.
+  /// Allocates; reached only with a recorder attached.
+  void record_render_path();
   /// Recompute tail_samples_ from the SoundFont release scan, the synth
   /// fallback bank and the effect units (requires prepared_).
   void recompute_tail() noexcept;
@@ -1049,6 +1063,8 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;
 #endif
+  /// Attached for one offline render only.
+  RenderPathRecorder* path_recorder_ = nullptr;
 };
 
 }  // namespace sonare::midi::synth

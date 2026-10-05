@@ -1222,6 +1222,8 @@ void NativeSynth::process_impl(float* const* channels,
     part_fx_.drain_param_updates();
     part_fx_.apply_controls(*this);
   }
+  // Diagnostic, offline only: the path this block renders through.
+  if (path_recorder_ != nullptr) record_render_path();
   const PartFxSnapshot* fx = part_fx_.enabled() ? part_fx_.current() : nullptr;
   // With no part bussed every sample takes exactly the arithmetic it took
   // before the stage existed.

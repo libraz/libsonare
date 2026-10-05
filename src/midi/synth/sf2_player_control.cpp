@@ -1545,22 +1545,26 @@ void Sf2Player::refresh_rx_channels() noexcept {
   }
 }
 
+bool Sf2Player::part_plays_model_floor(uint8_t channel) const noexcept {
+  if (!config_.synth_fallback) return false;
+  const uint8_t ch = channel & 0x0Fu;
+  const uint16_t bank = effective_bank(ch);
+  const uint8_t program = channels_[ch].program;
+  return soundfont_ == nullptr || resolve_preset(bank, program) < 0 ||
+         (config_.prefer_model_for_modeled_families &&
+          gm_program_has_dedicated_model(bank, program));
+}
+
 void Sf2Player::refresh_part_rig(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   uint8_t id = 0;
   // Resolved whether or not the part takes the bank's rig: an entry may select
-  // it later, and the stage decides whether this id reaches a chain.
-  if (config_.synth_fallback) {
-    const uint16_t bank = effective_bank(ch);
-    const uint8_t program = channels_[ch].program;
-    // Only where the note plays the model floor. A SoundFont's electric guitar
-    // was recorded through an amplifier, so a second one on top of it is the
-    // bake docs/voicing.md exists to remove.
-    const bool model_floor = soundfont_ == nullptr || resolve_preset(bank, program) < 0 ||
-                             (config_.prefer_model_for_modeled_families &&
-                              gm_program_has_dedicated_model(bank, program));
-    if (model_floor) id = gm_fallback_rig(bank, program).id;
-  }
+  // it later, and the stage decides whether this id reaches a chain. Only where
+  // the note plays the model floor: a SoundFont's electric guitar was recorded
+  // through an amplifier, so a second one on top of it is the bake
+  // docs/voicing.md exists to remove.
+  if (part_plays_model_floor(ch))
+    id = gm_fallback_rig(effective_bank(ch), channels_[ch].program).id;
   // Same thread split as every other realise trigger: offline rebuilds inline at
   // the next block, live waits for the control thread to come past. A live
   // program change therefore keeps the rig it had, which is the reach a
@@ -1674,6 +1678,72 @@ int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) 
 int Sf2Player::resolve_preset(uint16_t bank, uint8_t program) const noexcept {
   if (soundfont_ == nullptr) return -1;
   return resolve_gs_preset(*soundfont_, bank, program);
+}
+
+void Sf2Player::set_transport(const transport::TransportState& state) noexcept {
+  if (path_recorder_ != nullptr) path_recorder_->set_block_frame(state.render_frame);
+}
+
+bool Sf2Player::set_render_path_recorder(RenderPathRecorder* recorder) noexcept {
+  if (recorder != nullptr && !config_.realize_efx_inline) return false;
+  path_recorder_ = recorder;
+  part_fx_.set_path_recorder(recorder);
+  return true;
+}
+
+void Sf2Player::record_render_path() {
+  RenderPathRecorder& recorder = *path_recorder_;
+  if (!recorder.recording()) return;
+  // What render_chunk() reads: the prepared overlay's routing and units while it
+  // is active, the adopted snapshot's otherwise; part chains are the snapshot's.
+  const PartFxSnapshot* snapshot = part_fx_.current();
+  const bool overlay = prepared_runtime_active_;
+  const PartFxUnitOverrides overrides = overlay ? prepared_unit_overrides() : PartFxUnitOverrides{};
+  RenderPathTopology topology;
+  topology.parts.resize(16);
+  for (uint8_t part = 0; part < 16; ++part) {
+    RenderPathPart& out = topology.parts[part];
+    out.part = part;
+    out.program = channels_[part].program;
+    out.bank = effective_bank(part);
+    if (part_plays_model_floor(part)) {
+      out.backend = "model";
+    } else if (soundfont_ != nullptr &&
+               resolve_preset(effective_bank(part), channels_[part].program) >= 0) {
+      out.backend = "sf2";
+    }
+    out.rig_source = part_fx_.rig_source_name(part);
+    if (snapshot != nullptr) out.stages = snapshot->stage_names[part];
+    out.skipped = recorder.refused_stages(part);
+    const uint8_t unit = overlay               ? prepared_part_unit_[part]
+                         : snapshot != nullptr ? snapshot->part_unit[part]
+                                               : PartFxSnapshot::kNoUnit;
+    out.unit = unit == PartFxSnapshot::kNoUnit ? -1 : static_cast<int>(unit);
+    out.mono_prefix = overlay               ? prepared_mono_prefix_[part]
+                      : snapshot != nullptr ? snapshot->mono_prefix[part]
+                                            : 0;
+#if defined(SONARE_MIDI_WITH_FX)
+    if (effects_ != nullptr) out.send_tap = out.unit >= 0 ? "post_unit" : "pre_rig";
+#endif
+  }
+  for (size_t u = 0; u < kGsEfxUnitCount; ++u) {
+    const bool fed = overlay ? prepared_unit_fed_[u] : snapshot != nullptr && snapshot->unit_fed[u];
+    if (!fed) continue;
+    const Sf2EfxUnitRt* unit_rt = overrides[u];
+    if (unit_rt == nullptr && snapshot != nullptr) unit_rt = &snapshot->units[u];
+    if (unit_rt == nullptr) continue;
+    RenderPathUnit out;
+    out.unit = static_cast<uint8_t>(u);
+    out.type = overlay ? prepared_efx_[u].type : snapshot->gs_efx_state[u].type;
+    out.realization = unit_rt->realization;
+    for (const Sf2EfxStageRt& stage : unit_rt->stages) {
+      out.stages.push_back(stage.name);
+      out.enabled.push_back(stage.enabled_target);
+      if (stage.proc == nullptr) out.skipped.push_back(stage.name);
+    }
+    topology.units.push_back(std::move(out));
+  }
+  recorder.record_topology(std::move(topology));
 }
 
 }  // namespace sonare::midi::synth

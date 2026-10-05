@@ -956,8 +956,36 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_player_control.cpp
     midi/synth/sf2_player_midi.cpp
     midi/synth/sf2_player_render.cpp
+    midi/synth/render_path_record.cpp
   )
   target_include_directories(sonare_midi PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  # The bank registry's digest, embedded so a render-path record can name the
+  # registry state the library was built against. Generated at build time and
+  # depending on the registry itself: the registry carries no configure
+  # dependency, so a configure-time digest would go stale after
+  # `make bank-versions`. Only render_path_record.cpp includes the header.
+  set(_sonare_bank_registry_json ${PROJECT_SOURCE_DIR}/tools/bank-versions.json)
+  set(_sonare_bank_digest_dir ${CMAKE_CURRENT_BINARY_DIR}/generated/bank_registry)
+  set(_sonare_bank_digest_h ${_sonare_bank_digest_dir}/bank_registry_digest.h)
+  set(_sonare_bank_digest_input)
+  set(_sonare_bank_digest_depends ${PROJECT_SOURCE_DIR}/cmake/BankRegistryDigest.cmake)
+  if(EXISTS ${_sonare_bank_registry_json})
+    set(_sonare_bank_digest_input -DINPUT=${_sonare_bank_registry_json})
+    list(APPEND _sonare_bank_digest_depends ${_sonare_bank_registry_json})
+  endif()
+  add_custom_command(
+    OUTPUT ${_sonare_bank_digest_h}
+    COMMAND ${CMAKE_COMMAND} ${_sonare_bank_digest_input}
+            -DOUTPUT=${_sonare_bank_digest_h}
+            -P ${PROJECT_SOURCE_DIR}/cmake/BankRegistryDigest.cmake
+    DEPENDS ${_sonare_bank_digest_depends}
+    COMMENT "Digesting the bank registry"
+    VERBATIM
+  )
+  target_sources(sonare_midi PRIVATE ${_sonare_bank_digest_h})
+  set_source_files_properties(midi/synth/render_path_record.cpp
+    PROPERTIES OBJECT_DEPENDS ${_sonare_bank_digest_h})
+  target_include_directories(sonare_midi PRIVATE ${_sonare_bank_digest_dir})
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation sonare_gs_protocol sonare_gs_efx)
   # The GM fallback tables are constant-initialised so they land in the data
   # section instead of being assembled by start-up code. Clamping a couple of

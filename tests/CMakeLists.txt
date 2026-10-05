@@ -604,6 +604,7 @@ if(BUILD_ARRANGEMENT)
     midi/native_synth_rig_test.cpp
     midi/native_synth_gsfx_test.cpp
     midi/part_rig_test.cpp
+    midi/render_path_record_test.cpp
     midi/retrigger_test.cpp
     midi/gm_program_golden_test.cpp
     midi/excitation_axis_test.cpp

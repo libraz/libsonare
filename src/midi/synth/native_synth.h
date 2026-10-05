@@ -61,6 +61,7 @@
 #include "midi/synth/pipe_organ_voice.h"
 #include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/reed_voice.h"
+#include "midi/synth/render_path_record.h"
 #include "midi/synth/sample_bank.h"
 #include "midi/synth/sample_voice.h"
 #include "midi/synth/sf2_voice.h"
@@ -600,6 +601,13 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// CONTROL thread: the processor names of the chain last published for
   /// @p part, in signal order (test/diagnostic).
   std::vector<std::string> part_rig_stage_names(uint8_t part) const;
+  /// AUDIO thread: the block's first device frame, which a render-path
+  /// recorder stamps its records with. Ignored with no recorder attached.
+  void set_transport(const transport::TransportState& state) noexcept override;
+  /// CONTROL thread, offline renders only: record the realised signal path into
+  /// @p recorder until it is detached with nullptr (diagnostic). Refused, and
+  /// nothing attached, unless the synth realises its EFX inline.
+  bool set_render_path_recorder(RenderPathRecorder* recorder) noexcept;
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
   bool describe_parameter(unsigned int param_id,
@@ -778,6 +786,9 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void apply_efx_sysex(const uint8_t* data, size_t size) noexcept;
   /// Offline render thread: rebuild and publish the stage. Allocates.
   void realize_part_fx();
+  /// Offline render thread: hand the recorder the path this block realises.
+  /// Allocates; reached only with a recorder attached.
+  void record_render_path();
   void control_change(uint8_t channel, uint8_t controller, Control32 control) noexcept;
   void channel_pressure(uint8_t channel, Control32 pressure) noexcept;
   void poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept;
@@ -926,6 +937,8 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::array<float, kPartFxChunkFrames> chunk_board_r_{};
   /// Part buses, rig chains and GS insertion units.
   PartFxStage part_fx_;
+  /// Attached for one offline render only.
+  RenderPathRecorder* path_recorder_ = nullptr;
   /// Open-string halo per part, for a bussed part's sympathetic voices: its
   /// return rides the part's bus and therefore the part's rig, as Sf2Player's
   /// does. Armed at the first qualifying note-on on the part.

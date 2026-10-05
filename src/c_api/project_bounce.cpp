@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -384,6 +385,54 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(const SonareSf2Instrument
   return cfg;
 }
 
+#if defined(SONARE_TUNING) && SONARE_TUNING
+// SONARE_RENDER_PATH_DUMP=<path>: the signal path one bounce realised, for the
+// first hosted instrument. Unlike SONARE_TUNING_DUMP, which a static destructor
+// writes at process exit, this is written per bounce on the calling thread, by
+// the destructor of an object declared after the instruments it watches, so
+// before they are destroyed.
+class RenderPathDump {
+ public:
+  template <typename Instrument>
+  explicit RenderPathDump(const std::vector<std::unique_ptr<Instrument>>& owned)
+      : path_(sonare::midi::synth::render_path_dump_path()) {
+    if (path_.empty()) return;
+    if (owned.empty()) {
+      recorder_.mark_incomplete("no instrument was bound");
+      return;
+    }
+    if (owned.size() > 1) {
+      recorder_.mark_incomplete("more than one instrument; only the first is recorded");
+    }
+    if (!owned.front()->set_render_path_recorder(&recorder_)) {
+      recorder_.mark_incomplete("the instrument does not realise its EFX inline");
+      return;
+    }
+    detach_ = [instrument = owned.front().get()]() {
+      instrument->set_render_path_recorder(nullptr);
+    };
+  }
+  RenderPathDump(const RenderPathDump&) = delete;
+  RenderPathDump& operator=(const RenderPathDump&) = delete;
+  ~RenderPathDump() {
+    if (path_.empty()) return;
+    if (detach_) detach_();
+    try {
+      if (!sonare::midi::synth::write_render_path_dump(path_, recorder_, sonare_version())) {
+        std::fprintf(stderr, "SONARE_RENDER_PATH_DUMP: could not write '%s'\n", path_.c_str());
+      }
+    } catch (...) {
+      std::fprintf(stderr, "SONARE_RENDER_PATH_DUMP: could not serialise the record\n");
+    }
+  }
+
+ private:
+  std::string path_;
+  sonare::midi::synth::RenderPathRecorder recorder_;
+  std::function<void()> detach_;
+};
+#endif
+
 // Applies the project's rig entries for @p destination_id to its instrument: the
 // destination default first, then each part, so a part overrides the default.
 // False when the instrument refuses an entry.
@@ -537,6 +586,9 @@ SonareError sonare_project_bounce_with_synth_instruments(
     }
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  const RenderPathDump path_dump(owned);
+#endif
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH
 #else
@@ -581,6 +633,9 @@ SonareError sonare_project_bounce_with_sf2_instruments(
     }
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  const RenderPathDump path_dump(owned);
+#endif
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH
 #else

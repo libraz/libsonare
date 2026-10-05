@@ -762,6 +762,8 @@ void Sf2Player::process_impl(float* const* channels,
   // While the prepared overlay is active it is the only writer of these destinations.
   if (!prepared_runtime_active_) part_fx_.apply_controls(*this);
   apply_prepared_efx_controls();
+  // Diagnostic, offline only: the path this block renders through.
+  if (path_recorder_ != nullptr) record_render_path();
   if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
   float* left = source_render ? nullptr : channels[0];
   float* right = !source_render && num_channels > 1 ? channels[1] : nullptr;
