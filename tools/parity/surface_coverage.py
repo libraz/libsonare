@@ -77,6 +77,7 @@ DOMAIN_TITLES = {
     "project_external_stems": "project & arrangement",
     "project_instruments": "project & arrangement",
     "project_midi": "project & arrangement",
+    "project_timeline": "project & arrangement",
     "streaming": "streaming",
     "transcribe": "transcription",
     "voice_changer": "voice changer",
