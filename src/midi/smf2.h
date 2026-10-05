@@ -45,6 +45,7 @@ enum class Smf2Status : uint8_t {
   kTruncated,        ///< Buffer ended before a UMP word / the End of Clip.
   kMissingDctpq,     ///< No DCTPQ message in the configuration header.
   kInvalidArgument,  ///< Null / empty input where data was required.
+  kMalformed,        ///< Structurally invalid message ordering or framing.
 };
 
 /// Result of importing a MIDI Clip File byte buffer into normalized midi data.
@@ -108,15 +109,17 @@ inline Smf2ImportResult import_clip_file(const std::vector<uint8_t>& data,
 /// event at.
 ///
 /// A DCS word carries a 20-bit delta, so a larger gap is written as a chain of
-/// max-valued words. The chain length is the gap divided by 0xFFFFF, and the
-/// gaps across a whole clip sum to its span -- so the total DCS cost of an
-/// export is the SPAN divided by 0xFFFFF, whatever the event count. Bounding the
-/// span is therefore what bounds the output; without it a single event at the
-/// legal PPQ ceiling (transport::kMaxPublicPpq, 1e12) asks for ~460 million
-/// words, about 1.8 GB, from one event.
+/// max-valued words with a Null utility word between full-span links. The chain
+/// length is the gap divided by 0xFFFFF, and the gaps across a whole clip sum to
+/// its span -- so the total DCS cost of an export is roughly 8 bytes per full
+/// span, whatever the event count. Bounding the span is therefore what bounds
+/// the output; without it a single event at the legal PPQ ceiling
+/// (transport::kMaxPublicPpq, 1e12) asks for ~460 million words, about 3.6 GB,
+/// from one event.
 ///
 /// 2^32 ticks is ~8.9 million quarter notes at the default 480 DCTPQ -- weeks of
-/// music -- and costs at most 4096 chained words (16 KB) for the whole file.
+/// music -- and costs at most 4096 chained DCS/Null pairs (about 32 KiB) for the
+/// whole file.
 inline constexpr uint64_t kMaxExportTick = 1ull << 32u;
 
 struct Smf2ExportOptions {

@@ -29,16 +29,20 @@ constexpr uint32_t kMtStream = 0xFu;
 constexpr uint8_t kUtilityDctpq = 0x3u;            // Delta Clockstamp Ticks Per Quarter.
 constexpr uint8_t kUtilityDeltaClockstamp = 0x4u;  // Delta Clockstamp (DCS).
 
-// UMP Stream status (word[0] bits 16..25; only the low byte differs here).
-constexpr uint8_t kStreamStartOfClip = 0x20u;
-constexpr uint8_t kStreamEndOfClip = 0x21u;
+// UMP Stream status (word[0] bits 16..25; all ten bits are significant).
+constexpr uint16_t kStreamStartOfClip = 0x20u;
+constexpr uint16_t kStreamEndOfClip = 0x21u;
 
 // Flex Data status banks (word[0] byte 2) and status codes (byte 3).
 constexpr uint8_t kFlexBankSetupPerformance = 0x00u;
 constexpr uint8_t kFlexBankMetadataText = 0x01u;
 constexpr uint8_t kFlexStatusSetTempo = 0x00u;
 constexpr uint8_t kFlexStatusSetTimeSignature = 0x01u;
-constexpr uint8_t kFlexStatusSongName = 0x02u;  // Track / song name (metadata text).
+// Import falls back to Composition Name when a clip carries no Clip Name.
+constexpr uint8_t kFlexStatusCompositionName = 0x02u;
+constexpr uint8_t kFlexStatusClipName = 0x03u;
+constexpr size_t kMaxClipNamePackets = 32u;
+constexpr size_t kMaxClipNameBytes = 384u;
 // Set Time Signature reserves denominator exponent 0 for a non-standard denominator.
 constexpr uint8_t kMinClipFileTimeSignatureExponent = 1;
 
@@ -54,11 +58,14 @@ constexpr uint8_t kSysex7End = 0x3u;
 constexpr double kTenNanosPerQuarterToBpm = 6.0e9;
 constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
 
-/// Set Time Signature data word for @p seg; a denominator it cannot store exactly
-/// is rounded as SMF export rounds it and counted in @p skipped_events.
+/// Set Time Signature data word for @p seg; a numerator or denominator it cannot
+/// store exactly is clamped/rounded as SMF export does and counted in
+/// @p skipped_events.
 uint32_t time_signature_word(const transport::TimeSignatureSegment& seg,
                              uint32_t* skipped_events) noexcept {
-  const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
+  const int stored_numerator = std::clamp(seg.time_sig.numerator, 1, 255);
+  if (stored_numerator != seg.time_sig.numerator) ++(*skipped_events);
+  const uint8_t num = static_cast<uint8_t>(stored_numerator);
   bool exact = true;
   const uint8_t den = encode_time_signature_denominator(seg.time_sig.denominator,
                                                         kMinClipFileTimeSignatureExponent, &exact);
@@ -71,12 +78,9 @@ uint32_t time_signature_word(const transport::TimeSignatureSegment& seg,
 
 uint32_t tempo_10ns_from_bpm(double bpm) noexcept {
   const double safe_bpm = bpm > 0.0 ? bpm : kDefaultBpm;
-  const double tempo = std::llround(kTenNanosPerQuarterToBpm / safe_bpm);
-  if (!(tempo > 0.0)) return 1u;
-  if (tempo > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
-    return std::numeric_limits<uint32_t>::max();
-  }
-  return static_cast<uint32_t>(tempo);
+  const double tempo = std::clamp(kTenNanosPerQuarterToBpm / safe_bpm, 1.0,
+                                  static_cast<double>(std::numeric_limits<uint32_t>::max()));
+  return static_cast<uint32_t>(std::llround(tempo));
 }
 
 // ---------------------------------------------------------------------------
@@ -207,8 +211,8 @@ uint32_t delta_clockstamp_word(uint32_t ticks) noexcept {
 
 // UMP Stream messages are 128-bit (four 32-bit words). Only word[0] carries the
 // status here; the remaining three words are zero.
-void put_stream(std::vector<uint8_t>* out, uint8_t status) {
-  put_word(out, (kMtStream << 28) | (static_cast<uint32_t>(status) << 16));
+void put_stream(std::vector<uint8_t>* out, uint16_t status) {
+  put_word(out, (kMtStream << 28) | ((static_cast<uint32_t>(status) & 0x3FFu) << 16));
   put_word(out, 0);
   put_word(out, 0);
   put_word(out, 0);
@@ -275,6 +279,7 @@ void put_dcs(std::vector<uint8_t>* out, uint64_t* last_tick, uint64_t tick) {
   uint64_t delta = tick >= *last_tick ? tick - *last_tick : 0u;
   while (delta > 0xFFFFFu) {
     put_word(out, delta_clockstamp_word(0xFFFFFu));
+    put_word(out, 0u);  // Null utility message separates chained DCS spans.
     delta -= 0xFFFFFu;
   }
   put_word(out, delta_clockstamp_word(static_cast<uint32_t>(delta)));
@@ -326,13 +331,14 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   reader.advance(sizeof(kFileHeader));
 
   uint16_t dctpq = 0;
+  bool saw_initial_dcs = false;
   bool saw_dctpq = false;
+  bool have_dcs = false;
   uint64_t running_tick = 0;
   bool saw_end_of_clip = false;
   bool saw_start_of_clip = false;
 
   MidiClip clip;
-  std::string name;
   bool has_events = false;
   double last_event_ppq = 0.0;
   double end_clip_ppq = 0.0;
@@ -372,6 +378,57 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     }
     pending_sysex.pop_back();
     pending_lookup[key] = -1;
+  };
+
+  struct PendingName {
+    uint8_t group = 0;
+    uint8_t address = 0;
+    uint8_t channel = 0;
+    uint8_t status = 0;
+    size_t packet_count = 0;
+    size_t byte_count = 0;
+    std::string text;
+  };
+  constexpr size_t kNameStatusKinds = 2u;
+  constexpr size_t kNameKeys = 16u * 16u * 16u * kNameStatusKinds;
+  std::vector<PendingName> pending_names;
+  std::array<int, kNameKeys> pending_name_lookup{};
+  std::array<bool, kNameKeys> completed_names{};
+  std::array<bool, kNameKeys> rejected_names{};
+  pending_name_lookup.fill(-1);
+  bool canonical_name_present = false;
+  bool legacy_name_present = false;
+  std::string canonical_name;
+  std::string legacy_name;
+
+  const auto name_key = [](uint8_t group, uint8_t address, uint8_t channel,
+                           uint8_t status) noexcept {
+    const size_t kind = status == kFlexStatusClipName ? 1u : 0u;
+    return ((((static_cast<size_t>(group) * 16u) + address) * 16u + channel) * kNameStatusKinds) +
+           kind;
+  };
+  const auto remove_pending_name = [&](size_t key) {
+    const int index = pending_name_lookup[key];
+    if (index < 0) return;
+    const size_t last = pending_names.size() - 1u;
+    if (static_cast<size_t>(index) != last) {
+      pending_names[static_cast<size_t>(index)] = std::move(pending_names[last]);
+      const PendingName& moved = pending_names[static_cast<size_t>(index)];
+      pending_name_lookup[name_key(moved.group, moved.address, moved.channel, moved.status)] =
+          index;
+    }
+    pending_names.pop_back();
+    pending_name_lookup[key] = -1;
+  };
+
+  const auto clear_transaction = [&]() {
+    result.ticks_per_quarter = 0;
+    result.clips.clear();
+    result.clip_names.clear();
+    result.clip_lengths_ppq.clear();
+    result.tempo_segments.clear();
+    result.time_signatures.clear();
+    result.sysex_store.clear();
   };
 
   size_t event_count = 0;
@@ -430,8 +487,29 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     return true;
   };
 
-  while (reader.remaining_words() > 0 && !saw_end_of_clip) {
-    const size_t word0_pos = reader.pos();
+  bool configuration_tempo_seen = false;
+  bool configuration_timesig_seen = false;
+
+  const auto complete_name = [&](PendingName&& candidate) {
+    const size_t key =
+        name_key(candidate.group, candidate.address, candidate.channel, candidate.status);
+    if (completed_names[key] || rejected_names[key]) {
+      ++result.skipped_events;
+      return;
+    }
+    completed_names[key] = true;
+    const bool canonical = candidate.status == kFlexStatusClipName;
+    bool* present = canonical ? &canonical_name_present : &legacy_name_present;
+    std::string* selected = canonical ? &canonical_name : &legacy_name;
+    if (*present) {
+      ++result.skipped_events;
+      return;
+    }
+    *present = true;
+    *selected = std::move(candidate.text);
+  };
+
+  while (reader.remaining_words() > 0) {
     const uint32_t word0 = reader.word();
     if (reader.overflow()) break;
     const uint32_t mt = (word0 >> 28) & 0x0Fu;
@@ -450,46 +528,144 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
       result.diagnostic = "buffer ended mid-message";
       break;
     }
-    (void)word0_pos;
 
     const double ppq = tick_to_ppq(running_tick, dctpq);
 
+    // The End of Clip marker is terminal. Reading any following UMP, including
+    // a DCS or Null, is a structural error rather than an ignored extension.
+    if (saw_end_of_clip) {
+      result.status = Smf2Status::kMalformed;
+      result.diagnostic = "data follows the End of Clip marker";
+      break;
+    }
+
     if (mt == kMtUtility) {
       const uint8_t status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
-      if (status == kUtilityDctpq) {
+      if (status == kUtilityDeltaClockstamp) {
+        const uint32_t delta = word0 & 0xFFFFFu;
+        if (!saw_initial_dcs) {
+          if (delta != 0u) {
+            result.status = Smf2Status::kMalformed;
+            result.diagnostic = "the initial DCS must be zero";
+            break;
+          }
+          saw_initial_dcs = true;
+          have_dcs = true;
+        } else if (!saw_dctpq) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "a packet follows the initial DCS before DCTPQ";
+          break;
+        } else {
+          running_tick += delta;
+          have_dcs = true;
+        }
+      } else if (status == kUtilityDctpq) {
+        if (!saw_initial_dcs) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "DCTPQ is not preceded by the initial DCS";
+          break;
+        }
+        if (saw_dctpq) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "duplicate DCTPQ message";
+          break;
+        }
         dctpq = static_cast<uint16_t>(word0 & 0xFFFFu);
-        saw_dctpq = (dctpq != 0);
-      } else if (status == kUtilityDeltaClockstamp) {
-        running_tick += static_cast<uint64_t>(word0 & 0xFFFFFu);
+        if (dctpq == 0u) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "DCTPQ must be non-zero";
+          break;
+        }
+        saw_dctpq = true;
+      } else if (word0 == 0u) {
+        // Null is a separator in a long DCS chain. It carries no event and is
+        // deliberately not included in skipped_events.
+        if (!saw_initial_dcs || !saw_dctpq) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "Null utility message before DCTPQ";
+          break;
+        }
+      } else if (!saw_initial_dcs || !saw_dctpq) {
+        result.status = Smf2Status::kMalformed;
+        result.diagnostic = "unsupported utility message before DCTPQ";
+        break;
       } else {
-        ++result.skipped_events;  // JR clock / timestamp / NOOP — not timed data.
+        ++result.skipped_events;  // JR clock / timestamp / reserved utility.
       }
       continue;
     }
 
+    // A profile exchange may precede the initial DCS. It is opaque at this
+    // layer, so count the packet and do not attempt to assemble a SysEx event.
+    if (!saw_initial_dcs) {
+      if (mt == kMtData64 || mt == kMtData128) {
+        ++result.skipped_events;
+        continue;
+      }
+      result.status = Smf2Status::kMissingDctpq;
+      result.diagnostic = "no initial DCS/DCTPQ configuration header";
+      break;
+    }
+    if (!saw_dctpq) {
+      result.status = Smf2Status::kMalformed;
+      result.diagnostic = "a packet follows the initial DCS before DCTPQ";
+      break;
+    }
+
     if (mt == kMtStream) {
-      const uint8_t status = static_cast<uint8_t>((word0 >> 16) & 0xFFu);
-      if (status == kStreamEndOfClip) {
+      const uint16_t form = static_cast<uint16_t>((word0 >> 26) & 0x03u);
+      const uint16_t status = static_cast<uint16_t>((word0 >> 16) & 0x03FFu);
+      if ((status == kStreamStartOfClip || status == kStreamEndOfClip) && form != 0u) {
+        result.status = Smf2Status::kMalformed;
+        result.diagnostic = "SMF2 Stream marker is not a complete message";
+        break;
+      }
+      if (status == kStreamStartOfClip) {
+        if (saw_start_of_clip) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "duplicate Start of Clip marker";
+          break;
+        }
+        saw_start_of_clip = true;
+      } else if (status == kStreamEndOfClip) {
+        if (!saw_start_of_clip) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "End of Clip precedes Start of Clip";
+          break;
+        }
         saw_end_of_clip = true;
         end_clip_ppq = ppq;
-      } else if (status == kStreamStartOfClip) {
-        saw_start_of_clip = true;
       } else {
         ++result.skipped_events;
       }
       continue;
     }
 
-    if (!saw_dctpq) {
-      result.status = Smf2Status::kMissingDctpq;
-      result.diagnostic = "timed event before DCTPQ";
+    if (!have_dcs) {
+      result.status = Smf2Status::kMalformed;
+      result.diagnostic = "timed packet has no Delta Clockstamp";
       break;
     }
 
     if (mt == kMtFlexData) {
+      const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
+      const uint8_t byte1 = static_cast<uint8_t>((word0 >> 16) & 0xFFu);
+      const uint8_t format = static_cast<uint8_t>((byte1 >> 6) & 0x03u);
+      const uint8_t address = static_cast<uint8_t>((byte1 >> 4) & 0x03u);
+      const uint8_t channel = static_cast<uint8_t>(byte1 & 0x0Fu);
       const uint8_t bank = static_cast<uint8_t>((word0 >> 8) & 0xFFu);
       const uint8_t status = static_cast<uint8_t>(word0 & 0xFFu);
       if (bank == kFlexBankSetupPerformance && status == kFlexStatusSetTempo) {
+        if (!saw_start_of_clip && configuration_tempo_seen) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "duplicate configuration tempo";
+          break;
+        }
+        if (!saw_start_of_clip) configuration_tempo_seen = true;
+        if (format != 0u || address != 1u || channel != 0u) {
+          ++result.skipped_events;
+          continue;
+        }
         if (!consume_event()) break;
         const uint32_t tempo10ns = words[1];
         transport::TempoSegment seg;
@@ -501,6 +677,16 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
           ++result.skipped_events;
         }
       } else if (bank == kFlexBankSetupPerformance && status == kFlexStatusSetTimeSignature) {
+        if (!saw_start_of_clip && configuration_timesig_seen) {
+          result.status = Smf2Status::kMalformed;
+          result.diagnostic = "duplicate configuration time signature";
+          break;
+        }
+        if (!saw_start_of_clip) configuration_timesig_seen = true;
+        if (format != 0u || address != 1u || channel != 0u) {
+          ++result.skipped_events;
+          continue;
+        }
         const uint8_t numerator = static_cast<uint8_t>((words[1] >> 24) & 0xFFu);
         // The denominator is a power-of-two exponent; 0 marks a non-standard one.
         const int denominator = decode_time_signature_denominator(
@@ -517,14 +703,74 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
         } else {
           ++result.skipped_events;
         }
-      } else if (bank == kFlexBankMetadataText && status == kFlexStatusSongName) {
+      } else if (bank == kFlexBankMetadataText &&
+                 (status == kFlexStatusCompositionName || status == kFlexStatusClipName)) {
+        if (address > 1u || (address == 1u && channel != 0u)) {
+          ++result.skipped_events;
+          continue;
+        }
+        if (!consume_event()) break;
         const size_t text_bytes = flex_text_bytes(words);
         if (!resource::bounded_accumulate(text_bytes, limits.max_metadata_bytes, &metadata_bytes)) {
           result.status = Smf2Status::kInvalidArgument;
           result.diagnostic = "MIDI Clip File import resource limit exceeded: metadata";
           break;
         }
-        append_flex_text(words, &name);
+        const size_t key = name_key(group, address, channel, status);
+        // A new Complete or Start packet begins a different logical message;
+        // rejecting an earlier overlong message must not poison this key.
+        if (format == 0u || format == 1u) rejected_names[key] = false;
+        if (format == 0u) {
+          PendingName candidate;
+          candidate.group = group;
+          candidate.address = address;
+          candidate.channel = channel;
+          candidate.status = status;
+          candidate.packet_count = 1u;
+          candidate.byte_count = text_bytes;
+          append_flex_text(words, &candidate.text);
+          complete_name(std::move(candidate));
+          continue;
+        }
+        if (format == 1u) {
+          if (completed_names[key] || rejected_names[key] || pending_name_lookup[key] >= 0) {
+            ++result.skipped_events;
+            if (pending_name_lookup[key] >= 0) remove_pending_name(key);
+            continue;
+          }
+          PendingName candidate;
+          candidate.group = group;
+          candidate.address = address;
+          candidate.channel = channel;
+          candidate.status = status;
+          candidate.packet_count = 1u;
+          candidate.byte_count = text_bytes;
+          append_flex_text(words, &candidate.text);
+          pending_names.push_back(std::move(candidate));
+          pending_name_lookup[key] = static_cast<int>(pending_names.size() - 1u);
+          continue;
+        }
+        const int pending_index = pending_name_lookup[key];
+        if (pending_index < 0 || completed_names[key] || rejected_names[key]) {
+          ++result.skipped_events;
+          continue;
+        }
+        PendingName& candidate = pending_names[static_cast<size_t>(pending_index)];
+        if (candidate.packet_count >= kMaxClipNamePackets ||
+            candidate.byte_count > kMaxClipNameBytes - text_bytes) {
+          rejected_names[key] = true;
+          ++result.skipped_events;
+          remove_pending_name(key);
+          continue;
+        }
+        ++candidate.packet_count;
+        candidate.byte_count += text_bytes;
+        append_flex_text(words, &candidate.text);
+        if (format == 3u) {
+          PendingName completed = std::move(candidate);
+          remove_pending_name(key);
+          complete_name(std::move(completed));
+        }
       } else {
         // Key signature, copyright, lyrics, and other Flex Data forms have no
         // home in the normalized model.
@@ -550,6 +796,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     }
 
     if (mt == kMtData64) {
+      // SysEx7 packet status is the high nibble of word[0] byte 1.
       const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
       if (!resource::bounded_accumulate(sysex7_data_bytes(word0), limits.max_sysex_bytes,
@@ -658,19 +905,24 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     ++result.skipped_events;
   }
 
-  result.skipped_events += pending_sysex.size();
+  result.skipped_events += static_cast<uint32_t>(pending_sysex.size());
+  result.skipped_events += static_cast<uint32_t>(pending_names.size());
 
-  if (result.status != Smf2Status::kOk && result.status != Smf2Status::kMissingDctpq) {
+  if (result.status != Smf2Status::kOk) {
+    clear_transaction();
     return result;
   }
-  if (saw_start_of_clip && !saw_end_of_clip) {
-    result.status = Smf2Status::kTruncated;
-    result.diagnostic = "clip ended without an End of Clip marker";
-    return result;
-  }
-  if (!saw_dctpq && has_events) {
+  if (!saw_dctpq) {
     result.status = Smf2Status::kMissingDctpq;
-    if (result.diagnostic.empty()) result.diagnostic = "no DCTPQ message";
+    result.diagnostic = "no DCTPQ message";
+    clear_transaction();
+    return result;
+  }
+  if (!saw_start_of_clip || !saw_end_of_clip) {
+    result.status = Smf2Status::kTruncated;
+    result.diagnostic = !saw_start_of_clip ? "clip has no Start of Clip marker"
+                                           : "clip ended without an End of Clip marker";
+    clear_transaction();
     return result;
   }
 
@@ -687,8 +939,10 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   if (has_events) {
     clip.sort_stable();
     result.clips.push_back(std::move(clip));
-    result.clip_names.push_back(name);
-    const double length = saw_end_of_clip ? std::max(end_clip_ppq, last_event_ppq) : last_event_ppq;
+    if (canonical_name_present && legacy_name_present) ++result.skipped_events;
+    result.clip_names.push_back(canonical_name_present ? canonical_name
+                                                       : (legacy_name_present ? legacy_name : ""));
+    const double length = std::max(end_clip_ppq, last_event_ppq);
     result.clip_lengths_ppq.push_back(length);
   }
   return result;
@@ -850,8 +1104,10 @@ Smf2ExportResult export_clip_file(
     put_word(&out, 0);
     put_word(&out, 0);
   }
-  if (!options.name.empty()) {
-    put_flex_text(&out, kFlexBankMetadataText, kFlexStatusSongName, options.name);
+  if (options.name.size() > kMaxClipNameBytes) {
+    ++result.skipped_events;
+  } else if (!options.name.empty()) {
+    put_flex_text(&out, kFlexBankMetadataText, kFlexStatusClipName, options.name);
   }
 
   // Start of clip.
