@@ -318,31 +318,34 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
         ]
 
-        lib.sonare_project_set_part_rig.restype = ctypes.c_int32
-        lib.sonare_project_set_part_rig.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.c_int,
-            ctypes.c_char_p,
-        ]
+        if hasattr(lib, "sonare_project_set_part_rig"):
+            lib.sonare_project_set_part_rig.restype = ctypes.c_int32
+            lib.sonare_project_set_part_rig.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_uint8,
+                ctypes.c_int,
+                ctypes.c_char_p,
+            ]
 
-        lib.sonare_project_get_part_rig.restype = ctypes.c_int32
-        lib.sonare_project_get_part_rig.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_char_p),
-            ctypes.POINTER(ctypes.c_int),
-        ]
+        if hasattr(lib, "sonare_project_get_part_rig"):
+            lib.sonare_project_get_part_rig.restype = ctypes.c_int32
+            lib.sonare_project_get_part_rig.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_uint8,
+                ctypes.POINTER(ctypes.c_int),
+                ctypes.POINTER(ctypes.c_char_p),
+                ctypes.POINTER(ctypes.c_int),
+            ]
 
-        lib.sonare_project_clear_part_rig.restype = ctypes.c_int32
-        lib.sonare_project_clear_part_rig.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_uint32,
-            ctypes.c_uint8,
-        ]
+        if hasattr(lib, "sonare_project_clear_part_rig"):
+            lib.sonare_project_clear_part_rig.restype = ctypes.c_int32
+            lib.sonare_project_clear_part_rig.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_uint8,
+            ]
 
         lib.sonare_project_set_track_gain.restype = ctypes.c_int32
         lib.sonare_project_set_track_gain.argtypes = [

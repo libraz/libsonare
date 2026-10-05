@@ -290,6 +290,9 @@ export function partRigInsertsJson(inserts: PartRigRequest['inserts']): string |
         throw new TypeError(`inserts[${index}].processor must be a string`);
       }
       const { params } = insert;
+      if (params === undefined) {
+        return { processor: insert.processor, params: '{}' };
+      }
       if (typeof params === 'string') {
         return { processor: insert.processor, params };
       }

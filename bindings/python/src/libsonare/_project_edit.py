@@ -779,8 +779,14 @@ class _ProjectEditMixin:
         """
         mode_value = _part_rig_mode_value(mode)
         json_arg = _part_rig_inserts_arg(mode_value, inserts)
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_set_part_rig"):
+            raise RuntimeError(
+                "loaded libsonare does not export sonare_project_set_part_rig; "
+                "rebuild or upgrade the shared library before calling set_part_rig"
+            )
         _check(
-            _get_lib().sonare_project_set_part_rig(
+            lib.sonare_project_set_part_rig(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
                 _to_c_uint8(part, "part"),
@@ -800,6 +806,11 @@ class _ProjectEditMixin:
         ``None`` otherwise.
         """
         lib = _get_lib()
+        if not hasattr(lib, "sonare_project_get_part_rig"):
+            raise RuntimeError(
+                "loaded libsonare does not export sonare_project_get_part_rig; "
+                "rebuild or upgrade the shared library before calling get_part_rig"
+            )
         mode = ctypes.c_int()
         out_json = ctypes.c_char_p()
         present = ctypes.c_int()
@@ -837,8 +848,14 @@ class _ProjectEditMixin:
 
     def clear_part_rig(self, destination_id: int, part: int) -> None:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_clear_part_rig"):
+            raise RuntimeError(
+                "loaded libsonare does not export sonare_project_clear_part_rig; "
+                "rebuild or upgrade the shared library before calling clear_part_rig"
+            )
         _check(
-            _get_lib().sonare_project_clear_part_rig(
+            lib.sonare_project_clear_part_rig(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
                 _to_c_uint8(part, "part"),

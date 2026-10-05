@@ -62,6 +62,14 @@ FFI_TYPE_MODULES = (
 # this whole file green by comparing nothing.
 MIN_FUNCTIONS = 600
 MIN_ARGUMENTS = 2500
+
+PROJECT_PART_RIG_SYMBOLS = frozenset(
+    {
+        "sonare_project_set_part_rig",
+        "sonare_project_get_part_rig",
+        "sonare_project_clear_part_rig",
+    }
+)
 MIN_C_DECLARATIONS = 600
 MIN_STRUCT_TYPEDEFS = 140
 
@@ -265,11 +273,14 @@ class _RecordingLib:
     symbol.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, missing: frozenset[str] = frozenset()) -> None:
         object.__setattr__(self, "functions", {})
+        object.__setattr__(self, "missing", missing)
 
     def __getattr__(self, name: str) -> _SignatureRecorder:
         if name.startswith("__"):
+            raise AttributeError(name)
+        if name in self.missing:
             raise AttributeError(name)
         return self.functions.setdefault(name, _SignatureRecorder())
 
@@ -360,6 +371,16 @@ def test_signature_scan_is_not_vacuous() -> None:
         f"only {arguments} arguments captured across {len(functions)} functions; "
         "the recorder is seeing truncated argtypes"
     )
+
+
+def test_project_signatures_tolerate_legacy_library_without_part_rig_symbols() -> None:
+    """A project ABI 2 library may predate the optional part-rig exports."""
+    module = importlib.import_module("libsonare._ffi_signatures_project")
+    lib = _RecordingLib(missing=PROJECT_PART_RIG_SYMBOLS)
+
+    module.configure_project_signatures(lib)
+
+    assert not PROJECT_PART_RIG_SYMBOLS.intersection(lib.functions)
 
 
 def test_every_declared_symbol_exists_in_the_headers() -> None:

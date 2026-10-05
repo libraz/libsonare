@@ -57,6 +57,20 @@ describe('part rig on a project', () => {
     expect((got?.inserts?.[0]?.params as { gainDb: number } | undefined)?.gainDb).toBe(6);
   });
 
+  it('defaults omitted insert params to an empty object', () => {
+    using project = Project.create();
+    project.setPartRig({
+      destinationId: 1,
+      part: 0,
+      mode: 'chain',
+      inserts: [{ processor: 'saturation.overdrive' }],
+    });
+    expect(project.getPartRig({ destinationId: 1, part: 0 })).toEqual({
+      mode: 'chain',
+      inserts: [{ processor: 'saturation.overdrive', params: {} }],
+    });
+  });
+
   it('clears an entry and undo restores it', () => {
     using project = Project.create();
     project.setPartRig({ destinationId: 4, part: 3, mode: 'none' });
@@ -79,6 +93,18 @@ describe('part rig on a project', () => {
     expect(() => set({ destinationId: 'x' })()).toThrow(/destinationId/);
     expect(() => set({ mode: 'chain', inserts: 'nope' })()).toThrow(/inserts/);
     expect(() => set({ mode: 'chain', inserts: [{ params: {} }] })()).toThrow(/processor/);
+    expect(() =>
+      set({
+        mode: 'chain',
+        inserts: [{ processor: 'saturation.overdrive', params: null }],
+      })(),
+    ).toThrow(/params/);
+    expect(() =>
+      set({
+        mode: 'chain',
+        inserts: [{ processor: 'saturation.overdrive', params: 1 }],
+      })(),
+    ).toThrow(/params/);
     expect(codeNameOf(set({ part: 16 }))).toBe('InvalidParameter');
     expect(codeNameOf(set({ mode: 'chain', inserts: [] }))).toBe('InvalidParameter');
     expect(
@@ -109,6 +135,20 @@ describe('part rig on the realtime engine', () => {
     engine.setSynthInstrument({}, 3);
     engine.setPartRig({ destinationId: 3, part: 0, mode: 'chain', inserts: chain });
     engine.setPartRig({ destinationId: 3, part: PART_RIG_ALL_PARTS, mode: 'bank' });
+    engine.destroy();
+  });
+
+  it('accepts omitted insert params on a NativeSynth', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setSynthInstrument({}, 3);
+    expect(() =>
+      engine.setPartRig({
+        destinationId: 3,
+        part: 0,
+        mode: 'chain',
+        inserts: [{ processor: 'saturation.overdrive' }],
+      }),
+    ).not.toThrow();
     engine.destroy();
   });
 });

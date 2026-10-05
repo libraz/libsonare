@@ -697,12 +697,12 @@ export interface Sf2ProgramStatus {
 /** A part-rig mode ({@link PART_RIG_MODES}). */
 export type PartRigMode = (typeof PART_RIG_MODES)[number];
 
-/** One insert of a `'chain'` part rig. `params` is a JSON object or its JSON text. */
+/** One insert of a `'chain'` part rig. Omitted `params` uses an empty JSON object. */
 export interface PartRigInsert {
   /** Processor name, e.g. `'saturation.overdrive'`. */
   processor: string;
   /** Processor parameters; an object is serialized to JSON. */
-  params: Record<string, unknown> | string;
+  params?: Record<string, unknown> | string;
 }
 
 /** Selects one part rig entry of a destination; `part` is 0-15 or {@link PART_RIG_ALL_PARTS}. */
