@@ -54,16 +54,59 @@ makes its record `stale` exactly as a patch bump does. That is read separately
 from the shared units rather than as one generation folding both together: with
 the two merged, fitting forty-three of the kit's own notes reported as
 `unverified` and said a shared unit had moved when none had.
+
+## A musical claim is checked against the recording it rests on
+
+A block `heard.py --signoff` writes carries `evidence`: the comparison, the
+request, asset and build ids, the bank registry digest the library embedded,
+the unit versions under that registry and the comparison boundary.
+`claim_eligibility` is the one check of it, run when the block is written and
+again whenever it is read. A block without `evidence` was dated by hand and is
+`unverified` unless its provenance already says `stale`. Everything here up to
+`claim_eligibility` imports only the standard library, so `heard.py` can share
+it; re-deriving the boundary imports `boundary`, and does so lazily.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_PATH = HERE / "signoff.json"
+REPO_ROOT = HERE.parents[1]
+BANK_VERSIONS = REPO_ROOT / "tools" / "bank-versions.json"
+
+#: `boundary.SCOPE_*` and the matched status, repeated because `boundary` needs
+#: numpy and `heard.py` does not; `test_signoff.py` holds the two in step.
+SCOPE_INSTRUMENT = "instrument"
+SCOPE_PRODUCT = "product"
+STATUS_MATCHED = "matched"
+
+#: The source each scope's default playback is rendered as; every other model
+#: source on a page is a candidate carrying overrides.
+SHIPPED_SOURCE = {SCOPE_PRODUCT: "model", SCOPE_INSTRUMENT: "model-di"}
+
+#: What a written claim's `evidence` must carry before anything else is checked.
+EVIDENCE_FIELDS = (
+    "comparison_id",
+    "scope",
+    "set",
+    "set_generation",
+    "take",
+    "judged",
+    "program",
+    "request_id",
+    "asset_id",
+    "build_id",
+    "bank_registry_digest",
+    "units",
+    "counterpart",
+    "boundary",
+)
 
 #: JSON keys that document the file rather than describing a voice, as in the
 #: capture definitions and `calibrations.json`.
@@ -129,10 +172,11 @@ class Structure:
 
 @dataclass(frozen=True)
 class Music:
-    """A take somebody listened to and signed."""
+    """A take somebody listened to and signed; `evidence` is None on a hand-dated block."""
 
     provenance: Provenance
     take: str = ""
+    evidence: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -189,9 +233,11 @@ def load(path: Path | None = None) -> dict[str, Record]:
         music = None
         if entry.get("music"):
             m = entry["music"]
+            evidence = m.get("evidence")
             music = Music(
                 provenance=_provenance(m.get("provenance") or {}),
                 take=str(m.get("take", "")).strip(),
+                evidence=evidence if isinstance(evidence, dict) else None,
             )
         if structure or music:
             table[slug] = Record(structure=structure, music=music)
@@ -248,28 +294,326 @@ def moved_generation(path: Path, kinds: set[str]) -> int:
 
 
 def axis(
-    claim: Structure | Music | None, dating: int, patch_version: int, own_generation: int = 0
+    claim: Structure | Music | None,
+    dating: int,
+    patch_version: int,
+    own_generation: int = 0,
+    registry: Path | None = None,
 ) -> dict | None:
     """One claim as `status.py` records it, or None where nothing is recorded.
 
     `dating` is the generation at which a shared unit last moved, and the pair
     after it says what the claim's own voice is versioned by: a patch version
     where it has one, a generation over the kinds standing in for it where it
-    does not. See `Provenance.state`.
+    does not. See `Provenance.state`. A musical claim is then held to its
+    recording by `music_state`; `registry` is the bank registry it is read against.
     """
     if claim is None:
         return None
-    out: dict = {
-        "state": claim.provenance.state(dating, patch_version, own_generation),
-        "date": claim.provenance.date,
-    }
+    state = claim.provenance.state(dating, patch_version, own_generation)
+    reasons: list[str] = []
+    if isinstance(claim, Music):
+        state, reasons = music_state(claim, state, registry or BANK_VERSIONS)
+    out: dict = {"state": state, "date": claim.provenance.date}
     if isinstance(claim, Structure):
         out["unreachable"] = list(claim.unreachable)
         out["accepted"] = sorted(claim.accepted or {})
         out["open"] = claim.open_terms
     else:
         out["take"] = claim.take
+    if reasons:
+        out["reasons"] = reasons
     return out
+
+
+def music_state(claim: Music, dated: str, registry: Path) -> tuple[str, list[str]]:
+    """A musical claim's state: `claim_eligibility` where it carries evidence.
+
+    A hand-dated block has nothing to check but its date: the date's own
+    verdict stands where it is not `current`, and `current` becomes `unverified`.
+    """
+    if claim.evidence is None:
+        if dated != CURRENT:
+            return dated, []
+        return UNVERIFIED, [
+            "hand-dated claim without recording evidence: re-sign it with heard.py --signoff"
+        ]
+    return claim_eligibility(
+        claim.evidence, claim.provenance, scope=SCOPE_PRODUCT, registry=registry
+    )
+
+
+def registry_digest(path: Path) -> str | None:
+    """SHA-256 of the registry's raw bytes -- the digest a library embeds -- or None."""
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+#: Registries found by digest in this process, and the paths whose history was read.
+_REGISTRIES: dict[str, dict] = {}
+_SCANNED: set[str] = set()
+
+
+def registry_at(digest: str, path: Path) -> dict | None:
+    """The registry a library was built against, found by its digest.
+
+    The file as it stands answers first; otherwise every committed revision of
+    it is hashed. A registry that was never committed cannot be found, which is
+    None -- unknown, not changed.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    if hashlib.sha256(raw).hexdigest() == digest:
+        return json.loads(raw)
+    try:
+        rel = path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return None
+    if rel not in _SCANNED:
+        _SCANNED.add(rel)
+        git = ["git", "-C", str(REPO_ROOT)]
+        try:
+            revs = subprocess.run(
+                [*git, "log", "--format=%H", "--", rel], capture_output=True, check=True, text=True
+            ).stdout.split()
+        except (OSError, subprocess.CalledProcessError):
+            revs = []
+        for rev in revs:
+            try:
+                blob = subprocess.run(
+                    [*git, "show", f"{rev}:{rel}"], capture_output=True, check=True
+                ).stdout
+                _REGISTRIES.setdefault(hashlib.sha256(blob).hexdigest(), json.loads(blob))
+            except (OSError, subprocess.CalledProcessError, ValueError):
+                continue
+    return _REGISTRIES.get(digest)
+
+
+def _versions(raw: dict) -> dict[str, int]:
+    return {
+        name: int(u.get("version", 0) or 0)
+        for name, u in (raw.get("units") or {}).items()
+        if isinstance(u, dict)
+    }
+
+
+def _shared_moved(raw: dict) -> int:
+    """The generation at which a `shared` unit last moved; see `moved_generation`."""
+    return max(
+        (
+            int(h.get("generation", 0) or 0)
+            for u in (raw.get("units") or {}).values()
+            if isinstance(u, dict) and u.get("kind") == "shared"
+            for h in (u.get("history") or [])
+            if isinstance(h, dict)
+        ),
+        default=0,
+    )
+
+
+def _worst_state(states: list[str]) -> str:
+    for state in (STALE, UNVERIFIED):
+        if state in states:
+            return state
+    return CURRENT
+
+
+def bank_state(
+    digest: str | None,
+    units: list[str],
+    registry: Path,
+    *,
+    then_versions: dict[str, int] | None = None,
+    then_generation: int | None = None,
+) -> tuple[str, list[str], dict]:
+    """Whether a recording's bank still stands: `(state, reasons, then)`.
+
+    `digest` is the registry digest the rendering library embedded. Equal to
+    the current registry's, the recording is `current`. Otherwise the registry
+    it names -- `then_versions`/`then_generation` where a claim recorded them,
+    else found by `registry_at` -- is compared unit by unit: one of `units`
+    moving is `stale`, and a shared unit moving after it is `unverified`, the
+    policy `Provenance.state` applies. `then` is that registry's generation and
+    the versions of `units` in it.
+    """
+    if not digest:
+        return UNVERIFIED, ["the library embedded no bank registry digest"], {}
+    try:
+        now = json.loads(registry.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return UNVERIFIED, ["no bank registry to compare against"], {}
+    if then_versions is None:
+        found = registry_at(digest, registry)
+        if found is None:
+            return (
+                UNVERIFIED,
+                [f"bank registry {digest[:12]} is neither the current one nor a committed one"],
+                {},
+            )
+        then_versions = _versions(found)
+        then_generation = int(found.get("bank_generation", 0) or 0)
+    then = {
+        "bank_generation": int(then_generation or 0),
+        "units": {u: then_versions[u] for u in units if u in then_versions},
+    }
+    if digest == registry_digest(registry):
+        return CURRENT, [], then
+    now_versions = _versions(now)
+    states, reasons = [], []
+    if not units:
+        states.append(UNVERIFIED)
+        reasons.append("the registry moved and no versioned unit is attributable to this voice")
+    for unit in units:
+        before, after = then_versions.get(unit), now_versions.get(unit)
+        if before is None or after is None:
+            states.append(UNVERIFIED)
+            reasons.append(f"{unit} is not in both registries")
+        elif before != after:
+            states.append(STALE)
+            reasons.append(f"{unit} moved from v{before} to v{after} since the recording")
+    shared = _shared_moved(now)
+    if shared > then["bank_generation"]:
+        states.append(UNVERIFIED)
+        reasons.append(
+            f"a shared unit moved at generation {shared}, after the recording's "
+            f"{then['bank_generation']}"
+        )
+    return _worst_state(states), reasons, then
+
+
+def reference_raw(capture_id: str) -> dict | None:
+    """A capture's definition, overlay folded in, or None when this tree has none."""
+    import bank
+
+    for cap in bank.captures():
+        if cap.id == capture_id:
+            return cap.raw
+    return None
+
+
+def capture_of_timbre(timbre: str, prefer: str = "") -> str | None:
+    """The capture a timbre id belongs to, `prefer` first; None when no capture has it."""
+    import bank
+
+    found = [c.id for c in bank.captures() if timbre in {t.get("id") for t in c.timbres}]
+    if prefer in found:
+        return prefer
+    return found[0] if found else None
+
+
+def assess_boundary(scope: str, program: int, raw: dict | None, product_rig: bool | None):
+    """`boundary.assess` for a default-playback request of this scope: `(reference, assessment)`.
+
+    The manifest records request ids, not the sends a page rendered with, so the
+    request here takes the sends the scope asks for and the page's own recorded
+    status is what witnesses the sends (see `claim_eligibility`).
+    """
+    import boundary
+
+    ref = boundary.Reference.from_capture(raw) if raw is not None else None
+    if ref is not None:
+        sends = boundary.expected_sends(scope, ref.room)
+    else:
+        sends = boundary.SENDS_DRY if scope == SCOPE_INSTRUMENT else boundary.SENDS_POWER_ON
+    request = boundary.RenderRequest(
+        program=program, seconds=0.0, rig=scope == SCOPE_PRODUCT, sends=sends
+    )
+    return ref, boundary.assess(ref, scope, request, product_rig=product_rig)
+
+
+def boundary_record(
+    capture: str,
+    raw: dict | None,
+    scope: str,
+    program: int,
+    product_rig: bool | None,
+    page_status: str,
+    page_may_sign_off: bool,
+) -> dict:
+    """The `boundary` a claim records, from the same derivation `claim_eligibility` repeats."""
+    ref, verdict = assess_boundary(scope, program, raw, product_rig)
+    return {
+        "capture": capture,
+        "rig": ref.rig if ref else None,
+        "room": ref.room if ref else None,
+        "rig_evidence": verdict.evidence,
+        "product_rig": product_rig,
+        "status": verdict.status,
+        "may_sign_off": verdict.may_sign_off,
+        "page_status": page_status,
+        "page_may_sign_off": bool(page_may_sign_off),
+        "reasons": list(verdict.reasons),
+    }
+
+
+def claim_eligibility(
+    evidence: dict, provenance: Provenance, *, scope: str, registry: Path | None = None
+) -> tuple[str, list[str]]:
+    """Whether a written claim may stand for the voice: `(state, reasons)`.
+
+    The one check of a claim, run by `heard.py --signoff` before it prints one
+    and by `axis` whenever one is read. A claim stands when it is about the
+    scope's default playback with no overrides, its bank is `current` by
+    `bank_state`, its reference's boundary classes are the ones recorded, the
+    page found the comparison matched, and `boundary.assess` re-derived now
+    still allows a sign-off. A moved unit or reference is `stale`; anything
+    that cannot be established is `unverified`.
+    """
+    registry = registry or BANK_VERSIONS
+    missing = [k for k in EVIDENCE_FIELDS if evidence.get(k) in (None, "", [], {})]
+    if missing:
+        return UNVERIFIED, [f"no recording evidence: {', '.join(missing)} not recorded"]
+    if evidence["scope"] != scope:
+        return UNVERIFIED, [f"a {evidence['scope']} judgement cannot stand as a {scope} claim"]
+    if evidence["judged"] != SHIPPED_SOURCE.get(scope):
+        return UNVERIFIED, [
+            f"judged {evidence['judged']}, not the default playback ({SHIPPED_SOURCE.get(scope)})"
+        ]
+    units = evidence["units"] if isinstance(evidence["units"], dict) else {}
+    states, reasons = [], []
+    state, why, _ = bank_state(
+        evidence["bank_registry_digest"],
+        sorted(units),
+        registry,
+        then_versions={str(k): int(v) for k, v in units.items()},
+        then_generation=provenance.bank_generation,
+    )
+    states.append(state)
+    reasons += why
+
+    recorded = evidence["boundary"] if isinstance(evidence["boundary"], dict) else {}
+    capture = str((evidence["counterpart"] or {}).get("capture") or recorded.get("capture") or "")
+    raw = reference_raw(capture) if capture else None
+    if raw is None:
+        return UNVERIFIED, [
+            *reasons,
+            f"reference capture {capture or '(none)'} is not in this tree",
+        ]
+    ref, verdict = assess_boundary(
+        scope, int(evidence["program"]), raw, recorded.get("product_rig")
+    )
+    moved = [
+        f"{name} {recorded.get(name)} -> {now}"
+        for name, now in (("rig", ref.rig), ("room", ref.room), ("rig_evidence", verdict.evidence))
+        if recorded.get(name) != now
+    ]
+    if moved:
+        states.append(STALE)
+        reasons.append(f"the reference's boundary moved: {', '.join(moved)}")
+    if recorded.get("page_status") != STATUS_MATCHED or not recorded.get("page_may_sign_off"):
+        states.append(UNVERIFIED)
+        reasons.append(
+            f"the page found this comparison {recorded.get('page_status') or 'unrecorded'}"
+            + ("" if recorded.get("page_may_sign_off") else ", not signable")
+        )
+    if not (verdict.status == STATUS_MATCHED and verdict.may_sign_off):
+        states.append(UNVERIFIED)
+        reasons.append(f"comparison {verdict.status}: {verdict.reason}")
+    return _worst_state(states), reasons
 
 
 def settled(structure: dict | None, music: dict | None) -> bool:

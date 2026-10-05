@@ -18,11 +18,16 @@ beside its grade. A tag is where to listen again, never a parameter to move: it
 came out of a question asked in a listener's own words and there is no knob on
 the other side of it.
 
-A NOTE IS DATED AND A VOICE MOVES. `tools/bank-versions.json` records when each
-unit last changed, so a note taken before that is marked: the voice it was
-taken on is not the one in the tree. That is not "answered" — nothing here
-knows whether the bump addressed what was heard — it means re-audition before
-acting rather than acting on a description of an older render.
+A NOTE IS ABOUT A RECORDING AND A VOICE MOVES. A v2 note carries the ids of
+the render it was heard on; it is `current` when that render is still the
+page's, its comparison is still defined, and the bank registry the library
+embedded still stands for the voice's own unit and the shared ones
+(`signoff.bank_state`). A known change since is `stale`; missing evidence -- a
+v1 note, an old library, no path record -- is `unverified`, and no version is
+back-filled onto it. The day posted says only when it was heard; a v1 note heard
+before its unit last moved is `stale`, since the render it heard cannot be newer.
+Verdicts are reduced per comparison, so a DI verdict never stands in for the
+product's; candidates, comparisons and preferences are listed apart.
 
 A KIT IS ONE PART AND FORTY-ODD INSTRUMENTS, and its unit is the drum note. A
 kit has no patch unit at all — `d000`-`d127` are versioned separately — so a
@@ -31,7 +36,8 @@ which strike the note was taken on and which notes that strike held, so each
 one resolves to its own `dNNN`, is named from the GM drum map, and is dated
 against that unit alone.
 
-Only the standard library, like the server that writes the log.
+Only the standard library, like the server that writes the log; `--signoff`
+alone re-derives the comparison boundary, which imports numpy.
 """
 
 from __future__ import annotations
@@ -44,6 +50,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
+if str(REPO_ROOT / "tools" / "voicematch") not in sys.path:
+    sys.path.append(str(REPO_ROOT / "tools" / "voicematch"))
+
+import policy
+import signoff as claims
 
 #: The same root the server writes to and the rest of the harness renders into.
 SCRATCH_ROOT = (
@@ -110,6 +121,17 @@ def logs(root: Path | None = None) -> dict[str, list[dict]]:
     return found
 
 
+def manifest_of(set_id: str) -> dict:
+    """The page's manifest as it stands now, empty when there is none."""
+    try:
+        manifest = json.loads(
+            (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    return manifest if isinstance(manifest, dict) else {}
+
+
 def voice_of(set_id: str) -> dict:
     """What the page said it was of, from the render's own manifest.
 
@@ -117,31 +139,20 @@ def voice_of(set_id: str) -> dict:
     directory of audio, and which patch answers a program is a fallback-table
     decision that moves.
     """
-    try:
-        manifest = json.loads(
-            (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        return {}
-    voice = manifest.get("voice")
+    voice = manifest_of(set_id).get("voice")
     return voice if isinstance(voice, dict) else {}
 
 
-#: The version `make_audition.py` renders from the library as it stands, through
-#: the product path; every other `model`-role key is a recorded candidate, and
-#: `model-di` is a direct-path diagnostic that never signs off the shipped voice.
-SHIPPED = ("model",)
+#: The comparison a v1 note is counted under, by the scope its source was rendered at.
+DEFAULT_COMPARISON = {
+    claims.SCOPE_PRODUCT: policy.GM_GS_PRODUCT,
+    claims.SCOPE_INSTRUMENT: policy.INSTRUMENT_DI,
+}
 
 
 def roles_of(set_id: str) -> dict[str, str]:
     """Each version's role on the page -- `model`, `reference` or `comparison` -- by key."""
-    try:
-        manifest = json.loads(
-            (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        return {}
-    sources = manifest.get("sources")
+    sources = manifest_of(set_id).get("sources")
     if not isinstance(sources, dict):
         return {}
     return {k: str(v.get("role") or "") for k, v in sources.items() if isinstance(v, dict)}
@@ -159,6 +170,122 @@ def judged(entry: dict, roles: dict[str, str]) -> str:
     if roles.get(version) == "reference":
         return str(cond.get("against") or "")
     return version
+
+
+def evaluation_of(entry: dict, manifest: dict, roles: dict[str, str]) -> dict:
+    """What a note judged, at which scope and against what.
+
+    A v2 note says so itself. A v1 note is read through the page: its subject's
+    `scope` (or a v1 `path: direct`) places it, and its comparison is the one
+    that scope defaults to.
+    """
+    evaluation = entry.get("evaluation")
+    if entry.get("schema_version") == 2 and isinstance(evaluation, dict):
+        return {
+            "comparison_id": str(evaluation.get("comparison_id") or ""),
+            "scope": str(evaluation.get("scope") or ""),
+            "judged": str(evaluation.get("judged_source") or ""),
+            "oracle": str(evaluation.get("oracle_source") or ""),
+            "blind": bool(evaluation.get("blind")),
+        }
+    subject = judged(entry, roles)
+    source = (manifest.get("sources") or {}).get(subject) or {}
+    scope = source.get("scope") if isinstance(source, dict) else None
+    if scope not in DEFAULT_COMPARISON:
+        direct = isinstance(source, dict) and source.get("path") == "direct"
+        direct = direct or subject.endswith("-di")
+        scope = claims.SCOPE_INSTRUMENT if direct else claims.SCOPE_PRODUCT
+    cond = entry.get("conditions") or {}
+    against = cond.get("compared_against")
+    return {
+        "comparison_id": "",
+        "scope": scope,
+        "judged": subject,
+        "oracle": str(against.get("version") or "") if isinstance(against, dict) else "",
+        "blind": bool(cond.get("blind")),
+    }
+
+
+def freshness(
+    entry: dict, manifest: dict, evaluation: dict, units: list[str], last_moved: str
+) -> tuple[str, list[str], dict]:
+    """Whether the recording a note was taken on is still the voice: `(state, reasons, bank)`.
+
+    `bank` is the registry state the recording was rendered under -- its
+    generation and the versions of `units` -- when it could be established.
+    """
+    evidence = entry.get("evidence")
+    if entry.get("schema_version") != 2 or not isinstance(evidence, dict):
+        at = str(entry.get("at") or "")[:10]
+        if last_moved and at < last_moved:
+            return (
+                claims.STALE,
+                [f"heard {at}, before {'/'.join(units)} last moved on {last_moved}"],
+                {},
+            )
+        why = "v1 note" if entry.get("schema_version") != 2 else "the note recorded no evidence"
+        return claims.UNVERIFIED, [f"{why}: which recording was heard is unknown"], {}
+    if manifest.get("schema_version") != 2:
+        return claims.UNVERIFIED, ["the page's manifest records no render evidence"], {}
+    subject = evaluation["judged"]
+    item = next(
+        (i for i in manifest.get("items") or [] if i.get("id") == evidence.get("take")), None
+    )
+    held = ((item or {}).get("evidence") or {}).get(subject)
+    if not isinstance(held, dict):
+        return (
+            claims.STALE,
+            [f"{subject} on take {evidence.get('take')} is no longer on the page"],
+            {},
+        )
+    if held.get("asset_id") != evidence.get("asset_id"):
+        return claims.STALE, ["the recording heard has since been re-rendered"], {}
+    if evidence.get("set_generation") != manifest.get("set_generation"):
+        return (
+            claims.UNVERIFIED,
+            ["the page was regenerated; what was heard beside this recording cannot be matched"],
+            {},
+        )
+    if (held.get("request_id"), held.get("build_id")) != (
+        evidence.get("request_id"),
+        evidence.get("build_id"),
+    ):
+        return claims.UNVERIFIED, ["the note's request or build id disagrees with the page"], {}
+    cid = evaluation["comparison_id"]
+    comparison = next((c for c in manifest.get("comparisons") or [] if c.get("id") == cid), None)
+    if comparison is None:
+        return claims.STALE, [f"comparison {cid or '(none)'} is not defined on the page"], {}
+    oracle = evaluation["oracle"]
+    if (
+        comparison.get("scope") != evaluation["scope"]
+        or subject not in (comparison.get("model_sources") or [])
+        or (oracle and oracle not in (comparison.get("oracle_sources") or []))
+    ):
+        return claims.STALE, [f"comparison {cid} no longer pairs {subject} with {oracle}"], {}
+    record = held.get("path")
+    if not isinstance(record, dict):
+        return (
+            claims.UNVERIFIED,
+            ["no render-path record: the library was not a tuning build"],
+            {},
+        )
+    return claims.bank_state(record.get("bank_registry_digest"), units, BANK_VERSIONS)
+
+
+def product_rig_of(manifest: dict) -> bool | None:
+    """Whether the page established that the default playback binds no rig.
+
+    `make_audition` folds the rig-cleared render into the product one only when
+    it found no rig bound, so `model` among the instrument comparison's model
+    sources says False; anything else is not established.
+    """
+    shipped = claims.SHIPPED_SOURCE[claims.SCOPE_PRODUCT]
+    for comparison in manifest.get("comparisons") or []:
+        if comparison.get("id") == policy.INSTRUMENT_DI and shipped in (
+            comparison.get("model_sources") or []
+        ):
+            return False
+    return None
 
 
 def drum_name(note: int) -> str:
@@ -271,8 +398,53 @@ def oracle_flag(cond: dict) -> str:
     return "" if ca["role"] == "reference" else "comparison"
 
 
+def kind_of(entry: dict, evaluation: dict) -> str:
+    """`verdict` for a grade on a scope's default playback, else `preference` or `exploratory`.
+
+    A grade on a candidate, a comparison capture or an unrecorded subject is
+    about something that does not ship, so it is listed but not reduced.
+    """
+    if not entry.get("grade"):
+        return "preference" if entry.get("tag") == "prefer" else "exploratory"
+    if evaluation["judged"] != claims.SHIPPED_SOURCE.get(evaluation["scope"]):
+        return "exploratory"
+    return "verdict"
+
+
+#: Freshness, best first: the order a population's headline pool is chosen in.
+_POOLS = (claims.CURRENT, claims.UNVERIFIED, claims.STALE)
+
+
+def populations(notes: list[dict]) -> list[dict]:
+    """One reduction per comparison, so no scope's verdict overrides another's.
+
+    The headline of each is the worst verdict among its current notes; with
+    none, among the unverified; and only then among the stale, marked as such.
+    """
+    out: dict[str, dict] = {}
+    for note in notes:
+        if note["kind"] != "verdict":
+            continue
+        key = note["comparison_id"] or DEFAULT_COMPARISON[note["scope"]]
+        out.setdefault(key, {"comparison_id": key, "scope": note["scope"], "notes": []})
+        out[key]["notes"].append(note)
+    for pop in out.values():
+        pool = next(
+            (f, [n for n in pop["notes"] if n["freshness"] == f])
+            for f in _POOLS
+            if any(n["freshness"] == f for n in pop["notes"])
+        )
+        pop["freshness"], pop["worst"] = pool[0], _worst(pool[1])
+        pop["n"] = len(pop["notes"])
+        pop["n_current"] = sum(n["freshness"] == claims.CURRENT for n in pop.pop("notes"))
+    return sorted(
+        out.values(), key=lambda p: (p["scope"] != claims.SCOPE_PRODUCT, p["comparison_id"])
+    )
+
+
 def digest(set_id: str, entries: list[dict]) -> dict:
     """One voice's notes, with what is known about the voice around them."""
+    manifest = manifest_of(set_id)
     voice = voice_of(set_id)
     roles = roles_of(set_id)
     facts = unit_facts()
@@ -284,6 +456,8 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         # stale as soon as any one of the six has moved under it.
         moved = max((facts.get(u, (0, ""))[1] for u in units), default="")
         cond = entry.get("conditions") or {}
+        evaluation = evaluation_of(entry, manifest, roles)
+        state, reasons, bank = freshness(entry, manifest, evaluation, units, moved)
         notes.append(
             {
                 "at": at,
@@ -292,29 +466,30 @@ def digest(set_id: str, entries: list[dict]) -> dict:
                 "text": str(entry.get("text") or ""),
                 "lang": str(entry.get("lang") or ""),
                 "where": where(entry, voice, roles),
-                "judged": judged(entry, roles),
+                "judged": evaluation["judged"],
+                "schema": 2 if entry.get("schema_version") == 2 else 1,
+                "comparison_id": evaluation["comparison_id"],
+                "scope": evaluation["scope"],
+                "oracle": evaluation["oracle"],
+                "blind": evaluation["blind"],
+                "kind": kind_of(entry, evaluation),
+                "freshness": state,
+                "freshness_reasons": reasons,
+                "bank": bank,
                 # The oracle the note was judged against; flag is empty for the policy reference.
                 "compared_against": cond.get("compared_against"),
                 "oracle_flag": oracle_flag(cond),
                 "units": units,
                 "last_moved": moved,
-                # Compared as dates, which is all the log records to a day's
-                # resolution on the bump side. A note ON the day a voice moved is
-                # not marked: nothing here can order two events inside one day.
+                # When it was heard against when the unit last moved, both to a
+                # day; a note ON the day a voice moved is not marked.
                 "predates_last_move": bool(moved and at[:10] < moved),
             }
         )
     notes.sort(key=lambda n: n["at"], reverse=True)
-    # The worst verdict still standing, which is the one a reader acts on. A
-    # note taken before the voice moved is not it: the render it describes is
-    # gone, and a summary line built from one sends somebody to fix a voice
-    # nobody has heard. It is only fallen back to when nothing newer has a
-    # verdict at all, and then it is marked as what it is.
-    live = [n for n in notes if not n["predates_last_move"]]
-    worst = _worst(live)
-    stale = not worst
-    if stale:
-        worst = _worst(notes)
+    pops = populations(notes)
+    # The headline is the product's: a DI verdict is about the instrument alone.
+    product = next((p for p in pops if p["scope"] == claims.SCOPE_PRODUCT), None)
     patch = "" if voice.get("kit") else (voice.get("patch") or "")
     return {
         "set": set_id,
@@ -331,8 +506,11 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         "patch": patch,
         "version": facts.get(patch, (0, ""))[0],
         "last_moved": facts.get(patch, (0, ""))[1],
-        "worst": worst,
-        "worst_predates_last_move": bool(worst and stale),
+        "worst": product["worst"] if product else "",
+        "worst_freshness": product["freshness"] if product else "",
+        "worst_predates_last_move": bool(product and product["freshness"] == claims.STALE),
+        "populations": pops,
+        "exploratory": sum(n["kind"] == "exploratory" for n in notes),
         "notes": notes,
     }
 
@@ -411,8 +589,21 @@ def render(voices: list[dict], full: bool) -> str:
             head += f"  →  {MEANS.get(voice['worst'], voice['worst'])}"
             if voice["worst_predates_last_move"]:
                 head += "  (nothing since the voice moved)"
+            elif voice["worst_freshness"] != claims.CURRENT:
+                head += f"  ({voice['worst_freshness']}: no verdict on a current recording)"
         lines.append("")
         lines.append(head)
+        for pop in voice["populations"]:
+            lines.append(
+                f"  {pop['comparison_id']:<16} {pop['worst'] or '-':<16} "
+                f"{pop['n_current']}/{pop['n']} current"
+                + ("" if pop["freshness"] == claims.CURRENT else f", read from {pop['freshness']}")
+            )
+        if voice["exploratory"]:
+            lines.append(
+                f"  {'exploratory':<16} {voice['exploratory']} note(s) on candidates, "
+                "comparisons or an unrecorded subject"
+            )
         if voice["preferred"]:
             kept = "   ".join(
                 f"{p['version']} {p['n']}"
@@ -430,9 +621,10 @@ def render(voices: list[dict], full: bool) -> str:
             unit = f"[{'/'.join(note['units'])}] " if voice["kit"] and note["units"] else ""
             # A verdict against a non-reference or unknown oracle is marked.
             flag = f"  ⚠ oracle={note['oracle_flag']}" if note["oracle_flag"] else ""
+            fresh = "" if note["freshness"] == claims.CURRENT else f"  [{note['freshness']}]"
             lines.append(
                 f"  {note['at'][:16]}  {note['grade'] or '-':<16} "
-                f"{note['tag'] or '-':<23} {unit}{note['where']}{mark}{flag}"
+                f"{note['tag'] or '-':<23} {unit}{note['where']}{mark}{flag}{fresh}"
             )
             if note["text"]:
                 for row in note["text"].splitlines():
@@ -442,45 +634,6 @@ def render(voices: list[dict], full: bool) -> str:
                 f"      … {len(voice['notes']) - len(shown)} more (heard.py {voice['set']})"
             )
     return "\n".join(lines)
-
-
-def bank_generation_at(day: str) -> int:
-    """The registry's generation as it stood on a given day, not today's.
-
-    The highest generation any unit's history carries at or before that day --
-    the registry records bumps rather than every day's value, so a day with no
-    bump of its own correctly inherits the last one below it.
-    """
-    try:
-        raw = json.loads(BANK_VERSIONS.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return 0
-    return max(
-        (
-            int(h.get("generation") or 0)
-            for u in (raw.get("units") or {}).values()
-            if isinstance(u, dict)
-            for h in (u.get("history") or [])
-            if isinstance(h, dict) and str(h.get("date") or "") <= day
-        ),
-        default=0,
-    )
-
-
-def _standing_note(voice: dict) -> dict:
-    """The one note behind a voice's own headline verdict.
-
-    Reads the same pool `digest` reduces to its headline -- current notes, or
-    every note once none of them carry a grade at all -- so this can never
-    name a note the summary line itself would not point to.
-    """
-    notes = voice["notes"]
-    pool = (
-        notes
-        if voice["worst_predates_last_move"]
-        else [n for n in notes if not n["predates_last_move"]]
-    )
-    return next(n for n in pool if n["grade"] == voice["worst"])
 
 
 def _entry_for(entries: list[dict], note: dict) -> dict:
@@ -498,65 +651,156 @@ def _entry_for(entries: list[dict], note: dict) -> dict:
     return {}
 
 
-def signoff(set_id: str) -> dict:
-    """The `music` block for one voice, filled from what is already on disk.
+#: The two blocks `--signoff` writes, by the scope they are claims about.
+BLOCKS = ((claims.SCOPE_PRODUCT, "music"), (claims.SCOPE_INSTRUMENT, "instrument"))
 
-    Raises `ValueError` naming the reason nothing can be signed off -- no
-    verdict stands, the standing one says it is not the instrument, or the
-    note behind it predates the voice's own last move -- rather than handing
-    back a record with the gap papered over. It carries no listener text: the
-    words stay in the untracked log.
+
+def _why_not(note: dict, roles: dict[str, str]) -> list[str]:
+    """Every reason one graded note cannot be signed off, worst first."""
+    out = []
+    if note["grade"] not in ("ok", "acceptable"):
+        out.append(MEANS.get(note["grade"], note["grade"]))
+    subject = note["judged"]
+    if not subject:
+        out.append("an unrecorded version, not the shipped voice")
+    elif subject == claims.SHIPPED_SOURCE[claims.SCOPE_INSTRUMENT]:
+        out.append(
+            f"{subject} is the direct-path (DI) diagnostic: at most an instrument claim, "
+            "never the music block"
+        )
+    elif note["kind"] == "exploratory":
+        role = roles.get(subject) or "candidate"
+        role = "candidate" if role == "model" else role
+        out.append(
+            f"{subject} is a {role}, not the shipped voice ({claims.SHIPPED_SOURCE[claims.SCOPE_PRODUCT]})"
+        )
+    if note["freshness"] != claims.CURRENT:
+        out.append(f"{note['freshness']}: {'; '.join(note['freshness_reasons'])}")
+    return out
+
+
+def _claim(set_id: str, manifest: dict, note: dict, entry: dict) -> tuple[dict | None, list[str]]:
+    """One block for a current verdict on a scope's default playback, or the reasons there is none."""
+    scope = note["scope"]
+    cid = note["comparison_id"]
+    comparison = next((c for c in manifest.get("comparisons") or [] if c.get("id") == cid), {})
+    if not note["oracle"]:
+        return None, [f"{cid}: no reference was recorded beside the verdict"]
+    voice = manifest.get("voice") or {}
+    capture = claims.capture_of_timbre(note["oracle"], str(voice.get("capture") or ""))
+    if capture is None:
+        return None, [f"{cid}: no capture in this tree holds {note['oracle']}"]
+    program = int(voice.get("program", 0) or 0)
+    boundary = claims.boundary_record(
+        capture,
+        claims.reference_raw(capture),
+        scope,
+        program,
+        product_rig_of(manifest),
+        str(comparison.get("status") or ""),
+        bool(comparison.get("may_sign_off")),
+    )
+    evidence = entry.get("evidence") or {}
+    item = next(i for i in manifest["items"] if i.get("id") == evidence.get("take"))
+    held = item["evidence"][note["judged"]]
+    bank = note["bank"]
+    units = bank.get("units") or {}
+    facts = unit_facts()
+    # The unit whose bump dated this note, as the version a hand reader looks for.
+    unit = max(units, key=lambda u: facts.get(u, (0, ""))[1]) if units else ""
+    provenance = {
+        "date": note["at"][:10],
+        "bank_generation": bank.get("bank_generation", 0),
+        "patch_version": units.get(unit, 0),
+    }
+    record = {
+        "comparison_id": cid,
+        "scope": scope,
+        "set": set_id,
+        "set_generation": evidence.get("set_generation"),
+        "take": evidence.get("take"),
+        "judged": note["judged"],
+        "program": program,
+        "request_id": held.get("request_id"),
+        "asset_id": held.get("asset_id"),
+        "build_id": held.get("build_id"),
+        "bank_registry_digest": (held.get("path") or {}).get("bank_registry_digest"),
+        "units": units,
+        "counterpart": {"source": note["oracle"], "capture": capture},
+        "boundary": boundary,
+        "blind": note["blind"],
+        "heard": note["at"],
+    }
+    state, why = claims.claim_eligibility(
+        record,
+        claims.Provenance(
+            date=provenance["date"],
+            bank_generation=provenance["bank_generation"],
+            patch_version=provenance["patch_version"],
+        ),
+        scope=scope,
+        registry=BANK_VERSIONS,
+    )
+    if state != claims.CURRENT:
+        return None, [f"{cid}: {state}: {'; '.join(why)}"]
+    block = {"provenance": provenance, "take": str(evidence.get("take") or ""), "evidence": record}
+    if scope == claims.SCOPE_INSTRUMENT:
+        block["rig_evidence"] = boundary["rig_evidence"]
+    return block, []
+
+
+def signoff(set_id: str) -> dict:
+    """The blocks one voice's current verdicts support, keyed `music` and `instrument`.
+
+    `music` comes only from a current verdict on the product scope's default
+    playback (`model`, no overrides) whose comparison `signoff.claim_eligibility`
+    re-derives as matched and signable; `instrument` from the same on the
+    instrument scope, never in place of `music`. Each scope's standing verdict
+    is the worst of its current ones. Raises `ValueError` naming every reason
+    when neither can be written. No listener text is carried.
     """
     entries = logs().get(set_id)
     if not entries:
         raise ValueError(f"no notes for {set_id}")
+    manifest = manifest_of(set_id)
+    roles = roles_of(set_id)
     voice = digest(set_id, entries)
-    worst = voice["worst"]
-    if worst not in ("ok", "acceptable"):
-        if not worst:
-            raise ValueError(
-                f"{set_id}: nothing but a preference tag -- a preference carries no grade"
+    graded = [n for n in voice["notes"] if n["grade"]]
+    if not graded:
+        raise ValueError(f"{set_id}: nothing but a preference tag -- a preference carries no grade")
+    blocks: dict[str, dict] = {}
+    refusals: list[str] = []
+    for scope, name in BLOCKS:
+        pool = [
+            n
+            for n in graded
+            if n["kind"] == "verdict" and n["scope"] == scope and n["freshness"] == claims.CURRENT
+        ]
+        if not pool:
+            continue
+        worst = _worst(pool)
+        chosen = next(n for n in pool if n["grade"] == worst)
+        if worst not in ("ok", "acceptable"):
+            refusals.append(
+                f"{scope}: standing verdict is {worst} ({chosen['at'][:10]}) -- "
+                f"{MEANS.get(worst, worst)}"
             )
-        chosen = _standing_note(voice)
-        raise ValueError(
-            f"{set_id}: standing verdict is {worst} ({chosen['at'][:10]}) -- "
-            f"{MEANS.get(worst, worst)}"
+            continue
+        block, why = _claim(set_id, manifest, chosen, _entry_for(entries, chosen))
+        if block is None:
+            refusals += why
+        else:
+            blocks[name] = block
+    if blocks:
+        return blocks
+    for note in graded:
+        if note["kind"] == "verdict" and note["freshness"] == claims.CURRENT:
+            continue
+        refusals.append(
+            f"{note['at'][:10]} {note['grade']} on {note['judged'] or 'an unrecorded version'}: "
+            + "; ".join(_why_not(note, roles))
         )
-    chosen = _standing_note(voice)
-    if chosen["predates_last_move"]:
-        raise ValueError(
-            f"{set_id}: note taken {chosen['at'][:10]} predates "
-            f"{'/'.join(chosen['units'])}'s last move on {chosen['last_moved']}"
-        )
-    # A sign-off is a claim about the shipped voice, not a candidate or an unrecorded subject.
-    if chosen["judged"] not in SHIPPED:
-        about = chosen["judged"] or "an unrecorded version"
-        if chosen["judged"] == "model-di":
-            raise ValueError(
-                f"{set_id}: the note of {chosen['at'][:10]} is about model-di, a direct-path "
-                f"(DI) diagnostic, not the shipped voice ({' / '.join(SHIPPED)})"
-            )
-        raise ValueError(
-            f"{set_id}: the note of {chosen['at'][:10]} is about {about}, "
-            f"not the shipped voice ({' / '.join(SHIPPED)})"
-        )
-    entry = _entry_for(entries, chosen)
-    take = str((entry.get("conditions") or {}).get("take") or "")
-    facts = unit_facts()
-    units = chosen["units"]
-    # The unit whose bump dated this note, so the version reported and the
-    # date it is checked against describe the same unit.
-    unit = max(units, key=lambda u: facts.get(u, (0, ""))[1]) if units else ""
-    return {
-        "provenance": {
-            "date": chosen["at"][:10],
-            "bank_generation": bank_generation_at(chosen["at"][:10]),
-            "patch_version": facts.get(unit, (0, ""))[0],
-        },
-        "take": take,
-        "judged": chosen["judged"],
-        "compared_against": (entry.get("conditions") or {}).get("compared_against"),
-    }
+    raise ValueError(f"{set_id}: nothing to sign off\n  " + "\n  ".join(refusals))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -569,18 +813,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--signoff",
         metavar="SET",
-        help="print a `music` block for one voice, ready to paste into "
-        "tools/voicematch/signoff.json",
+        help="print the `music` (product) and `instrument` (DI) blocks one voice's "
+        "current verdicts support, ready to paste into tools/voicematch/signoff.json",
     )
     args = ap.parse_args(argv)
 
     if args.signoff:
         try:
-            block = signoff(args.signoff)
+            blocks = signoff(args.signoff)
         except ValueError as e:
             print(str(e), file=sys.stderr)
             return 1
-        print(f'"music": {json.dumps(block, ensure_ascii=False, indent=2)}')
+        print(
+            ",\n".join(
+                f'"{k}": {json.dumps(v, ensure_ascii=False, indent=2)}' for k, v in blocks.items()
+            )
+        )
         return 0
 
     voices = collect(args.sets, args.grade)

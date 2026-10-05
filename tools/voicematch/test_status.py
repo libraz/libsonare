@@ -441,6 +441,19 @@ def test_an_unheard_voice_stops_below_heard_however_green_it_measures():
     assert status.stage_for(_axes()) == 3
 
 
+def test_a_hand_dated_sign_off_stops_below_heard_and_says_why():
+    """A music block with no recording evidence is unverified, never current."""
+    music = {
+        "state": signoff.UNVERIFIED,
+        "reasons": ["hand-dated claim without recording evidence: re-sign it"],
+    }
+    assert status.stage_for(_axes(music=music)) == 3
+    assert "without recording evidence" in status.next_action(_axes(music=music), 3, [])
+    # A claim with no reasons reads as it always did.
+    stale = status.next_action(_axes(music={"state": signoff.STALE}), 3, [])
+    assert stale == "the sign-off is stale against this bank: listen again"
+
+
 def test_a_heard_voice_still_needs_its_structural_claim():
     """Unknown is not satisfied: the diagnosis is unrecorded."""
     assert status.stage_for(_axes(music={"state": signoff.CURRENT})) == 4

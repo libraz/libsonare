@@ -583,6 +583,8 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
         if candidates:
             return f"judge the recorded candidate(s) — {', '.join(candidates)} — then {listen}"
         music = axes["music"]
+        if music is not None and music.get("reasons"):
+            return f"the sign-off is {music['state']}: {music['reasons'][0]} — listen again"
         if music is not None:
             return f"the sign-off is {music['state']} against this bank: listen again"
         return listen
@@ -652,7 +654,7 @@ def build(catalogue) -> list[dict]:
             "coverage": coverage(v, [c.raw for c in v.captures], gates),
             "agreement": merged_agreement(gates),
             "structure": signoff.axis(claim.structure, shared_gen, patch_version, own_gen),
-            "music": signoff.axis(claim.music, shared_gen, patch_version, own_gen),
+            "music": signoff.axis(claim.music, shared_gen, patch_version, own_gen, BANK_VERSIONS),
         }
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])

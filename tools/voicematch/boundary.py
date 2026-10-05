@@ -283,6 +283,11 @@ _PRODUCT_SENDS = {
 }
 
 
+def expected_sends(scope: str, room: str) -> tuple:
+    """The sends a default-playback render of `scope` is compared with against a `room`."""
+    return SENDS_DRY if scope == SCOPE_INSTRUMENT else _PRODUCT_SENDS[room]
+
+
 @dataclass(frozen=True)
 class _Facts:
     scope: str

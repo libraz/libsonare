@@ -9,6 +9,7 @@ three weeks ago.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -53,7 +54,12 @@ def _hit(n: int, *notes: int) -> dict:
     }
 
 
-def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
+def _bank(
+    root: Path,
+    units: dict[str, dict[str, int]],
+    kinds: dict[str, str] | None = None,
+    generation: int | None = None,
+) -> str:
     """One entry per unit, each date it moved on paired with the generation
     the bump landed at.
 
@@ -62,12 +68,14 @@ def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
     is, not compute one a reader has to re-derive to check the assertion.
     """
     heard.BANK_VERSIONS = root / "bank-versions.json"
+    gens = [g for bumps in units.values() for g in bumps.values()]
     heard.BANK_VERSIONS.write_text(
         json.dumps(
             {
+                "bank_generation": generation if generation is not None else max(gens, default=0),
                 "units": {
                     name: {
-                        "kind": "patch",
+                        "kind": (kinds or {}).get(name, "patch"),
                         "version": len(bumps),
                         "history": [
                             {"date": d, "version": i + 1, "generation": g}
@@ -75,11 +83,12 @@ def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
                         ],
                     }
                     for name, bumps in units.items()
-                }
+                },
             }
         ),
         encoding="utf-8",
     )
+    return hashlib.sha256(heard.BANK_VERSIONS.read_bytes()).hexdigest()
 
 
 def _audition(
@@ -103,13 +112,111 @@ _SOURCES = {
 }
 
 
+#: What the reference capture of every v2 page here says about its boundary.
+_REFERENCE = {"id": "violin", "rig": "none", "room": "none", "rig_evidence": "verified"}
+
+
+def _page(
+    root: Path,
+    set_id: str,
+    digest: str | None,
+    *,
+    patch: str = "violin",
+    program: int = 40,
+    kit: bool = False,
+    comparisons: list[dict] | None = None,
+    path: bool = True,
+) -> None:
+    """A v2 manifest: one take, evidence per source, the page's comparisons."""
+    heard.AUDITION_ROOT = root
+    (root / set_id).mkdir(parents=True, exist_ok=True)
+    voice = {"program": 0, "kit": True} if kit else {"program": program, "patch": patch}
+    voice["capture"] = "violin"
+    sources = {
+        "model": {"role": "model", "scope": "product"},
+        "model-di": {"role": "model", "scope": "instrument"},
+        "bow-light": {"role": "model", "scope": "product"},
+        "gm041": {"role": "reference"},
+    }
+    record = {"schema": 1, "bank_registry_digest": digest, "complete": True, "events": []}
+    evidence = {
+        key: {
+            "request_id": f"req-{key}",
+            "build_id": "build-1",
+            "asset_id": f"asset-{key}",
+            "path": record if path else None,
+        }
+        for key in sources
+    }
+    if comparisons is None:
+        comparisons = [_comparison("gm_gs_product", "product", ["model", "bow-light"])]
+    manifest = {
+        "schema_version": 2,
+        "voice": voice,
+        "sources": sources,
+        "set_generation": "gen-1",
+        "comparisons": comparisons,
+        "items": [{"id": "single-long", "evidence": evidence}],
+    }
+    (root / set_id / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _comparison(cid: str, scope: str, models: list[str], status: str = "matched") -> dict:
+    return {
+        "id": cid,
+        "scope": scope,
+        "model_sources": models,
+        "oracle_sources": ["gm041"],
+        "status": status,
+        "may_sign_off": status == "matched",
+        "reasons": [],
+    }
+
+
+def _v2(
+    at: str,
+    grade: str,
+    judged: str = "model",
+    scope: str = "product",
+    cid: str = "gm_gs_product",
+    hit: dict | None = None,
+) -> dict:
+    """A note as the page writes it now: what was judged, and which recording."""
+    entry = _note(at, grade, hit=hit)
+    entry["conditions"]["version"] = judged
+    entry["schema_version"] = 2
+    entry["evaluation"] = {
+        "comparison_id": cid,
+        "scope": scope,
+        "judged_source": judged,
+        "oracle_source": "gm041",
+        "comparison_status": "matched",
+        "blind": False,
+    }
+    entry["evidence"] = {
+        "set_generation": "gen-1",
+        "take": "single-long",
+        "request_id": f"req-{judged}",
+        "asset_id": f"asset-{judged}",
+        "build_id": "build-1",
+        "completeness": "complete",
+    }
+    return entry
+
+
 def _with_scratch(fn):
     def wrapped() -> None:
         saved = (heard.FEEDBACK_ROOT, heard.AUDITION_ROOT, heard.BANK_VERSIONS)
+        stubs = ("reference_raw", "capture_of_timbre", "registry_at")
+        saved_stubs = {name: getattr(heard.claims, name) for name in stubs}
+        heard.claims.reference_raw = lambda capture: dict(_REFERENCE)
+        heard.claims.capture_of_timbre = lambda timbre, prefer="": "violin"
         try:
             fn()
         finally:
             (heard.FEEDBACK_ROOT, heard.AUDITION_ROOT, heard.BANK_VERSIONS) = saved
+            for name, value in saved_stubs.items():
+                setattr(heard.claims, name, value)
 
     wrapped.__name__ = fn.__name__
     wrapped.__doc__ = fn.__doc__
@@ -357,22 +464,28 @@ def test_what_was_sounding_is_carried_through_to_the_line() -> None:
 
 @_with_scratch
 def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> None:
-    """The common case: one `ok` note, one patch, both numbers filled in."""
+    """The common case: one current `ok` on `model`, its recording's ids carried."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
-        _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
-        entry = _note("2026-09-19T10:00:00+00:00", "ok")
-        entry["conditions"]["take"] = "single-long"
-        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
-        block = heard.signoff("p040-violin")
-        assert block == {
-            "provenance": {"date": "2026-09-19", "bank_generation": 2, "patch_version": 2},
-            "take": "single-long",
-            "judged": "model",
-            "compared_against": None,
+        digest = _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
+        _page(root / "audition", "p040-violin", digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-19T10:00:00+00:00", "ok")])
+        blocks = heard.signoff("p040-violin")
+        assert set(blocks) == {"music"}, blocks
+        block = blocks["music"]
+        assert block["provenance"] == {
+            "date": "2026-09-19",
+            "bank_generation": 2,
+            "patch_version": 2,
         }, block
+        assert block["take"] == "single-long", block
+        ev = block["evidence"]
+        ids = (ev["comparison_id"], ev["request_id"], ev["asset_id"], ev["build_id"])
+        assert ids == ("gm_gs_product", "req-model", "asset-model", "build-1"), ev
+        assert ev["bank_registry_digest"] == digest and ev["units"] == {"violin": 2}, ev
+        assert ev["boundary"]["status"] == "matched", ev
+        assert ev["boundary"]["page_status"] == "matched", ev
 
 
 @_with_scratch
@@ -381,13 +494,10 @@ def test_acceptable_signs_off_the_same_way_as_ok() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
-        _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": {"2026-09-11": 1}})
-        entry = _note("2026-09-19T10:00:00+00:00", "acceptable")
-        entry["conditions"]["take"] = "single-long"
-        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
-        block = heard.signoff("p040-violin")
-        assert block["take"] == "single-long", block
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-19T10:00:00+00:00", "acceptable")])
+        assert heard.signoff("p040-violin")["music"]["take"] == "single-long"
 
 
 @_with_scratch
@@ -460,41 +570,36 @@ def test_a_kit_note_resolves_its_version_from_its_drum_unit() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
-        _audition(root / "audition", "kit000-standard-kit", "", kit=True)
-        _bank(root, {"d038": {"2026-09-11": 1}})
-        entry = _note("2026-09-19T10:00:00+00:00", "ok", hit=_hit(1, 38))
-        entry["conditions"]["take"] = "groove"
+        digest = _bank(root, {"d038": {"2026-09-11": 1}})
+        _page(root / "audition", "kit000-standard-kit", digest, kit=True)
+        entry = _v2("2026-09-19T10:00:00+00:00", "ok", hit=_hit(1, 38))
         _log(heard.FEEDBACK_ROOT, "kit000-standard-kit", [entry])
-        block = heard.signoff("kit000-standard-kit")
+        block = heard.signoff("kit000-standard-kit")["music"]
         assert block["provenance"]["bank_generation"] == 1, block
         assert block["provenance"]["patch_version"] == 1, block
-        assert block["take"] == "groove", block
+        assert block["evidence"]["units"] == {"d038": 1}, block
 
 
 @_with_scratch
-def test_bank_generation_is_the_note_days_not_the_signoffs_own_day() -> None:
+def test_bank_generation_is_the_recordings_registry_not_todays() -> None:
     """A unit unrelated to this voice bumping later must not inflate the record.
 
-    The record's `bank_generation` is a watermark: `signoff.py` reads a later
-    generation than the one stored as a sign that something may have moved
-    under this voice since. Stamping today's generation instead of the day the
-    note was taken sets that watermark too high, so a bump between listening
-    and writing the record would silently stop reading as anything.
+    The record's `bank_generation` is a watermark against which a later shared
+    move reads as `unverified`; stamping today's generation would set it too
+    high. The recording's own registry, found by its digest, supplies it.
     """
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
-        _audition(root / "audition", "p040-violin", "violin")
-        # violin's own bump predates the note, at generation 40; reed's comes
-        # after it, at 70, and must not count -- it is what a later sign-off
-        # day would wrongly include. The two numbers are chosen apart on
-        # purpose: a fixture deriving them from position could not tell this
-        # case from the bug it exists to catch.
+        then_digest = _bank(root, {"violin": {"2026-08-15": 40}})
+        then = json.loads(heard.BANK_VERSIONS.read_text())
         _bank(root, {"violin": {"2026-08-15": 40}, "reed": {"2026-09-20": 70}})
-        entry = _note("2026-09-19T10:00:00+00:00", "ok")
-        entry["conditions"]["take"] = "single-long"
-        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
-        block = heard.signoff("p040-violin")
+        heard.claims.registry_at = lambda d, path: then if d == then_digest else None
+        _page(root / "audition", "p040-violin", then_digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-19T10:00:00+00:00", "ok")])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "current", note
+        block = heard.signoff("p040-violin")["music"]
         assert block["provenance"]["bank_generation"] == 40, block
 
 
@@ -513,7 +618,12 @@ def test_a_note_written_with_the_reference_sounding_is_about_the_model_it_names(
         note = heard.collect([], "")[0]["notes"][0]
         assert note["judged"] == "model", note
         assert "gm041 sounding, about model" in note["where"], note["where"]
-        assert heard.signoff("p040-violin")["take"] == "single-long"
+        # A v1 note says nothing about the recording, so it does not sign off.
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "unverified" in str(e) and "v1 note" in str(e), e
 
 
 @_with_scratch
@@ -642,15 +752,181 @@ def test_a_signoff_keeps_the_judged_source_and_its_comparison_counterpart() -> N
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
-        _audition(root / "audition", "p040-violin", "violin", sources=_SOURCES)
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-19T10:00:00+00:00", "ok")])
+        ev = heard.signoff("p040-violin")["music"]["evidence"]
+        assert ev["judged"] == "model", ev
+        assert ev["counterpart"] == {"source": "gm041", "capture": "violin"}, ev
+        assert ev["set"] == "p040-violin" and ev["set_generation"] == "gen-1", ev
+
+
+@_with_scratch
+def test_a_v1_note_is_unverified_and_never_signs_off() -> None:
+    """Posted today about a WAV nobody can identify: no version is back-filled."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_note("2026-10-05T10:00:00+00:00", "ok")])
+        voice = heard.collect([], "")[0]
+        assert voice["notes"][0]["freshness"] == "unverified", voice
+        assert voice["worst"] == "ok" and voice["worst_freshness"] == "unverified", voice
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "v1 note" in str(e), e
+
+
+@_with_scratch
+def test_the_voices_own_unit_moving_after_the_recording_makes_it_stale() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        then_digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        then = json.loads(heard.BANK_VERSIONS.read_text())
+        # Posted after the bump, about a recording made before it.
+        _bank(root, {"violin": {"2026-09-11": 1, "2026-09-20": 2}})
+        heard.claims.registry_at = lambda d, path: then if d == then_digest else None
+        _page(root / "audition", "p040-violin", then_digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-25T10:00:00+00:00", "ok")])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "stale", note
+        assert "violin moved from v1 to v2" in note["freshness_reasons"][0], note
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "stale" in str(e), e
+
+
+@_with_scratch
+def test_a_shared_unit_moving_alone_leaves_the_note_unverified() -> None:
+    """The existing policy: a shared move cannot be attributed, so it is not `stale`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        kinds = {"bowed_string_voice": "shared"}
+        units = {"violin": {"2026-09-11": 10}, "bowed_string_voice": {"2026-09-01": 5}}
+        then_digest = _bank(root, units, kinds)
+        then = json.loads(heard.BANK_VERSIONS.read_text())
+        _bank(root, dict(units, bowed_string_voice={"2026-09-01": 5, "2026-09-20": 12}), kinds)
+        heard.claims.registry_at = lambda d, path: then if d == then_digest else None
+        _page(root / "audition", "p040-violin", then_digest)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-25T10:00:00+00:00", "ok")])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "unverified", note
+        assert "shared unit moved at generation 12" in note["freshness_reasons"][0], note
+
+
+@_with_scratch
+def test_an_old_library_without_a_bank_digest_is_unverified() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
         _bank(root, {"violin": {"2026-09-11": 1}})
-        entry = _note("2026-09-19T10:00:00+00:00", "ok")
-        counterpart = {"role": "reference", "version": "gm041", "label": "gm041"}
-        entry["conditions"]["compared_against"] = counterpart
+        _page(root / "audition", "p040-violin", None)
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-25T10:00:00+00:00", "ok")])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "unverified", note
+        assert "no bank registry digest" in note["freshness_reasons"][0], note
+        # And a library that wrote no path record at all.
+        _page(root / "audition", "p040-violin", None, path=False)
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "unverified", note
+        assert "not a tuning build" in note["freshness_reasons"][0], note
+
+
+@_with_scratch
+def test_a_re_rendered_recording_is_stale() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        entry = _v2("2026-09-25T10:00:00+00:00", "ok")
+        entry["evidence"]["asset_id"] = "asset-of-an-older-render"
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
-        block = heard.signoff("p040-violin")
-        assert block["judged"] == "model", block
-        assert block["compared_against"] == counterpart, block
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "stale", note
+
+
+@_with_scratch
+def test_a_di_ok_is_an_instrument_claim_and_never_the_music_block() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        digest = _bank(root, {"electric_guitar": {"2026-09-11": 1}})
+        comparisons = [
+            _comparison("instrument_di", "instrument", ["model-di"]),
+            _comparison("gm_gs_product", "product", ["model"], status="context_only"),
+        ]
+        _page(
+            root / "audition",
+            "p027-electric-guitar-clean",
+            digest,
+            patch="electric_guitar",
+            program=27,
+            comparisons=comparisons,
+        )
+        entry = _v2("2026-09-25T10:00:00+00:00", "ok", "model-di", "instrument", "instrument_di")
+        _log(heard.FEEDBACK_ROOT, "p027-electric-guitar-clean", [entry])
+        blocks = heard.signoff("p027-electric-guitar-clean")
+        assert set(blocks) == {"instrument"}, blocks
+        assert blocks["instrument"]["rig_evidence"] == "verified", blocks
+        assert blocks["instrument"]["evidence"]["scope"] == "instrument", blocks
+
+
+@_with_scratch
+def test_a_di_verdict_never_overrides_the_product_headline() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        digest = _bank(root, {"electric_guitar": {"2026-09-11": 1}})
+        comparisons = [
+            _comparison("instrument_di", "instrument", ["model-di"]),
+            _comparison("gm_gs_product", "product", ["model"]),
+        ]
+        _page(
+            root / "audition",
+            "p027-electric-guitar-clean",
+            digest,
+            patch="electric_guitar",
+            program=27,
+            comparisons=comparisons,
+        )
+        di = _v2("2026-09-25T10:00:00+00:00", "broken", "model-di", "instrument", "instrument_di")
+        product = _v2("2026-09-25T10:01:00+00:00", "acceptable")
+        _log(heard.FEEDBACK_ROOT, "p027-electric-guitar-clean", [di, product])
+        voice = heard.collect([], "")[0]
+        assert voice["worst"] == "acceptable", voice
+        by_id = {p["comparison_id"]: p for p in voice["populations"]}
+        assert by_id["instrument_di"]["worst"] == "broken", by_id
+        assert by_id["gm_gs_product"]["worst"] == "acceptable", by_id
+
+
+@_with_scratch
+def test_a_candidate_with_overrides_is_never_the_default_signoff() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [_v2("2026-09-25T10:00:00+00:00", "ok", judged="bow-light")],
+        )
+        voice = heard.collect([], "")[0]
+        assert voice["notes"][0]["kind"] == "exploratory", voice
+        assert voice["worst"] == "" and voice["exploratory"] == 1, voice
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "bow-light is a candidate" in str(e), e
 
 
 def _run_all() -> int:
