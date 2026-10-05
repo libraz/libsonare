@@ -2,6 +2,7 @@
 /// @brief apply_to_engine atomicity, re-apply replacement, strip binding and the
 ///        static state a re-apply restores once a lane is gone.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -568,6 +569,134 @@ TEST_CASE("re-applying without a lane restores the lane default on a track with 
     REQUIRE(arr::apply_to_engine(b, *prepared(fresh)).ok());
     REQUIRE(first != render(fresh));
   }
+}
+
+namespace {
+
+/// Two audio tracks X (first) and Y (second) in that lane order, no automation.
+arr::CompiledTimeline two_track_timeline() {
+  ProjectSpec spec;
+  spec.track_count = 2;
+  return make_timeline(spec);
+}
+
+/// @p timeline with its track lanes in reverse order.
+arr::CompiledTimeline reordered(arr::CompiledTimeline timeline) {
+  std::reverse(timeline.track_lanes.begin(), timeline.track_lanes.end());
+  return timeline;
+}
+
+/// @p timeline keeping only the track lane of @p keep.
+arr::CompiledTimeline only_track(arr::CompiledTimeline timeline, arr::TrackId keep) {
+  std::vector<arr::CompiledTrackLane> lanes;
+  for (const auto& lane : timeline.track_lanes) {
+    if (lane.track_id == keep) lanes.push_back(lane);
+  }
+  timeline.track_lanes = lanes;
+  return timeline;
+}
+
+/// The engine param id of @p kind on the lane currently holding @p track_id.
+uint32_t lane_param_id(RealtimeEngine& engine, arr::TrackId track_id,
+                       sonare::automation::AutomationTargetKind kind) {
+  std::vector<uint32_t> ids(sonare::engine::TrackMixerRuntime::kMaxTrackLanes);
+  ids.resize(engine.track_mixer().copy_lane_track_ids(ids.data(), ids.size()));
+  for (size_t i = 0; i < ids.size(); ++i) {
+    if (ids[i] == track_id) {
+      return sonare::engine::make_track_lane_param_id(i, static_cast<uint32_t>(kind));
+    }
+  }
+  FAIL("track has no lane");
+  return 0;
+}
+
+void set_param_manually(RealtimeEngine& engine, uint32_t target_id, float value) {
+  sonare::rt::Command set{};
+  set.type = sonare::rt::CommandType::kSetParam;
+  set.sample_time = -1;
+  set.target_id = target_id;
+  set.arg.f = value;
+  REQUIRE(engine.push_command(set));
+  engine.flush_control_commands();
+}
+
+void rewind(RealtimeEngine& engine) {
+  sonare::rt::Command stop{};
+  stop.type = sonare::rt::CommandType::kTransportStop;
+  stop.sample_time = -1;
+  REQUIRE(engine.push_command(stop));
+  sonare::rt::Command seek{};
+  seek.type = sonare::rt::CommandType::kTransportSeekSample;
+  seek.sample_time = -1;
+  seek.arg.i = 0;
+  REQUIRE(engine.push_command(seek));
+  engine.flush_control_commands();
+}
+
+/// Applies @p a, optionally sets @p manual_kind to @p manual_value on @p manual_track, renders,
+/// re-applies @p b and requires the render of a fresh engine given @p b and the same manual value.
+void require_reapply_with_manual_matches_fresh(const arr::CompiledTimeline& a,
+                                               const arr::CompiledTimeline& b,
+                                               arr::TrackId manual_track,
+                                               sonare::automation::AutomationTargetKind manual_kind,
+                                               float manual_value) {
+  RealtimeEngine engine;
+  REQUIRE(arr::apply_to_engine(a, *prepared(engine), {}).ok());
+  set_param_manually(engine, lane_param_id(engine, manual_track, manual_kind), manual_value);
+  render(engine);
+  rewind(engine);
+  REQUIRE(arr::apply_to_engine(b, engine, {}).ok());
+  const std::vector<float> reapplied = render(engine);
+
+  RealtimeEngine fresh;
+  REQUIRE(arr::apply_to_engine(b, *prepared(fresh), {}).ok());
+  set_param_manually(fresh, lane_param_id(fresh, manual_track, manual_kind), manual_value);
+  REQUIRE(reapplied == render(fresh));
+
+  // Control: the manual value is audible, so the equality above cannot hold vacuously.
+  RealtimeEngine unset;
+  REQUIRE(arr::apply_to_engine(b, *prepared(unset), {}).ok());
+  REQUIRE(reapplied != render(unset));
+}
+
+void require_lane_release_restores(AutomatedTarget target, bool remove_x) {
+  const arr::CompiledTimeline base = two_track_timeline();
+  const arr::TrackId x = base.track_lanes[0].track_id;
+  const arr::TrackId y = base.track_lanes[1].track_id;
+  const arr::CompiledTimeline a = with_lane(base, target, {});
+  const arr::CompiledTimeline b = remove_x ? only_track(base, y) : reordered(base);
+  const std::vector<float> first = require_reapply_matches_fresh(a, b, {});
+  RealtimeEngine fresh;
+  REQUIRE(arr::apply_to_engine(b, *prepared(fresh)).ok());
+  REQUIRE(first != render(fresh));
+  (void)x;
+}
+
+}  // namespace
+
+TEST_CASE("reordering track lanes restores both tracks' faders once X's fader lane is gone",
+          "[arrangement][timeline-apply]") {
+  require_lane_release_restores(AutomatedTarget::kFader, false);
+}
+
+TEST_CASE("reordering track lanes restores both tracks' pans once X's pan lane is gone",
+          "[arrangement][timeline-apply]") {
+  require_lane_release_restores(AutomatedTarget::kPan, false);
+}
+
+TEST_CASE("removing the automated track leaves the remaining track's fader at rest",
+          "[arrangement][timeline-apply]") {
+  require_lane_release_restores(AutomatedTarget::kFader, true);
+}
+
+TEST_CASE("reordering track lanes keeps a manual fader base on its track",
+          "[arrangement][timeline-apply]") {
+  using sonare::automation::AutomationTargetKind;
+  const arr::CompiledTimeline base = two_track_timeline();
+  const arr::TrackId y = base.track_lanes[1].track_id;
+  const arr::CompiledTimeline a = with_lane(base, AutomatedTarget::kFader, {});
+  require_reapply_with_manual_matches_fresh(a, reordered(base), y,
+                                            AutomationTargetKind::kTrackFaderDb, -6.0f);
 }
 #else
 TEST_CASE("bind_strips with strip bindings is refused without mixing",
