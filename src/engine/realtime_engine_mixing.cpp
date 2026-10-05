@@ -290,6 +290,19 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   return bound;
 }
 
+bool RealtimeEngine::validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const {
+  return track_mixer_runtime_.validate_track_lanes(lanes);
+}
+
+bool RealtimeEngine::validate_track_strip(const mixing::api::Strip& strip) const {
+  if (!strip_eq_acceptable(strip.eq, sample_rate_)) return false;
+  try {
+    return make_channel_strip_from_spec(strip) != nullptr;
+  } catch (...) {
+    return false;
+  }
+}
+
 bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> new_lane_ids{};
   const size_t new_lane_count = std::min(lanes.size(), new_lane_ids.size());

@@ -3553,3 +3553,124 @@ TEST_CASE("Master telemetry measures input without an owned master strip",
   }
 }
 #endif
+
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+std::vector<uint32_t> engine_lane_ids(sonare::engine::RealtimeEngine& engine) {
+  std::vector<uint32_t> ids(sonare::engine::TrackMixerRuntime::kMaxTrackLanes);
+  ids.resize(engine.track_mixer().copy_lane_track_ids(ids.data(), ids.size()));
+  return ids;
+}
+
+}  // namespace
+
+TEST_CASE("validate_track_lanes mirrors set_track_lanes refusals without mutating",
+          "[engine][mixing][timeline-apply-prereq]") {
+  using sonare::engine::TrackBusConfig;
+  using sonare::engine::TrackLaneConfig;
+  using sonare::engine::TrackMixerRuntime;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  TrackBusConfig bus;
+  bus.bus_id = 5;
+  REQUIRE(engine.set_track_buses({bus}));
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+  const std::vector<uint32_t> before{10, 20};
+  REQUIRE(engine_lane_ids(engine) == before);
+
+  std::vector<TrackLaneConfig> too_many(TrackMixerRuntime::kMaxTrackLanes + 1);
+  for (size_t i = 0; i < too_many.size(); ++i) too_many[i].track_id = static_cast<uint32_t>(i + 1);
+  REQUIRE(too_many.size() == 33);
+  TrackLaneConfig routed;
+  routed.track_id = 30;
+  routed.output_bus_id = 99;
+  const std::vector<std::vector<TrackLaneConfig>> refused{too_many, {{7}, {7}}, {{0}}, {routed}};
+  for (const auto& lanes : refused) {
+    REQUIRE_FALSE(engine.validate_track_lanes(lanes));
+    REQUIRE(engine_lane_ids(engine) == before);
+    REQUIRE_FALSE(engine.set_track_lanes(lanes));
+    REQUIRE(engine_lane_ids(engine) == before);
+  }
+
+  routed.output_bus_id = 5;
+  const std::vector<TrackLaneConfig> accepted{{40}, routed};
+  REQUIRE(engine.validate_track_lanes(accepted));
+  REQUIRE(engine_lane_ids(engine) == before);
+  REQUIRE(engine.set_track_lanes(accepted));
+  const std::vector<uint32_t> after{40, 30};
+  REQUIRE(engine_lane_ids(engine) == after);
+}
+
+TEST_CASE("validate_track_strip accepts a valid strip and rejects an unacceptable EQ",
+          "[engine][mixing][timeline-apply-prereq]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  REQUIRE(engine.set_track_lanes({{10}}));
+  const bool mixing_before = engine.mixing_enabled();
+
+  sonare::mixing::api::Strip good;
+  REQUIRE(engine.validate_track_strip(good));
+
+  sonare::mixing::api::Strip bad;
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::TiltShelf;
+  band.enabled = true;
+  bad.eq.bands.push_back(band);
+  REQUIRE_FALSE(engine.validate_track_strip(bad));
+  REQUIRE_FALSE(engine.set_track_strip(10, bad));
+
+  // Validation bound nothing: the lane set and mixing state are untouched.
+  const std::vector<uint32_t> lanes{10};
+  REQUIRE(engine_lane_ids(engine) == lanes);
+  REQUIRE(engine.mixing_enabled() == mixing_before);
+}
+#endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("prepare_midi_clips stages without publishing and publish equals set_midi_clips",
+          "[engine][midi][timeline-apply-prereq]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.length_samples = 1000;
+  sonare::midi::MidiEvent note;
+  note.render_frame = 10;
+  note.ump = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  clip.events = {note};
+
+  sonare::engine::RealtimeEngine direct;
+  direct.prepare(48000.0, 64);
+  direct.set_midi_clips({clip});
+  REQUIRE(direct.midi_clip_count() == 1);
+
+  engine.set_midi_clips({clip});
+  REQUIRE(engine.midi_clip_count() == 1);
+
+  // An unpreparable SysEx (null payload, nonzero size) throws and leaves the published set alone.
+  sonare::midi::MidiClipSchedule broken = clip;
+  broken.id = 2;
+  sonare::midi::MidiEvent sysex;
+  sysex.render_frame = 20;
+  sysex.ump = sonare::midi::make_sysex_handle(0, 1);
+  sysex.sysex_payload = nullptr;
+  sysex.sysex_payload_size = 4;
+  broken.events.push_back(sysex);
+  REQUIRE_THROWS_AS(engine.prepare_midi_clips({clip, broken}), sonare::SonareException);
+  REQUIRE(engine.midi_clip_count() == 1);
+  REQUIRE_THROWS_AS(engine.set_midi_clips({clip, broken}), sonare::SonareException);
+  REQUIRE(engine.midi_clip_count() == 1);
+
+  // Staging alone publishes nothing; publishing lands the same set set_midi_clips would.
+  sonare::midi::MidiClipSchedule second = clip;
+  second.id = 3;
+  auto prepared = engine.prepare_midi_clips({clip, second});
+  REQUIRE(engine.midi_clip_count() == 1);
+  engine.publish_midi_clips(std::move(prepared));
+  direct.set_midi_clips({clip, second});
+  REQUIRE(engine.midi_clip_count() == 2);
+  REQUIRE(engine.midi_clip_count() == direct.midi_clip_count());
+}
+#endif

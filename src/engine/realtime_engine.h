@@ -435,6 +435,24 @@ class RealtimeEngine : private ClipPageRequestSink {
   // only when the arrangement subsystem (and thus the MidiSequencer member) is
   // compiled in.
   void set_midi_clips(std::vector<midi::MidiClipSchedule> clips);
+
+  /// Clip set whose SysEx payloads are owned and prepared but not yet published.
+  class PreparedMidiClips {
+   public:
+    PreparedMidiClips() = default;
+    PreparedMidiClips(PreparedMidiClips&&) noexcept = default;
+    PreparedMidiClips& operator=(PreparedMidiClips&&) noexcept = default;
+    PreparedMidiClips(const PreparedMidiClips&) = delete;
+    PreparedMidiClips& operator=(const PreparedMidiClips&) = delete;
+
+   private:
+    friend class RealtimeEngine;
+    std::vector<midi::MidiClipSchedule> clips_;
+  };
+  /// Owns and prepares every SysEx payload without publishing. Throws SonareException on failure.
+  PreparedMidiClips prepare_midi_clips(std::vector<midi::MidiClipSchedule> clips);
+  /// Publishes a staged clip set to the sequencer; cannot fail on validation grounds.
+  void publish_midi_clips(PreparedMidiClips&& prepared);
   size_t midi_clip_count() const noexcept { return midi_sequencer_.clip_count(); }
   bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
@@ -673,6 +691,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
   bool set_master_strip(const mixing::api::Strip& strip);
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
+  /// Pure, const: true exactly when set_track_lanes would not refuse @p lanes on validation
+  /// grounds.
+  bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const;
+  /// Pure, const: true when set_track_strip would accept the EQ and build @p strip (built, then
+  /// discarded).
+  bool validate_track_strip(const mixing::api::Strip& strip) const;
   bool set_track_buses(std::vector<TrackBusConfig> buses);
   /// Keys one insert of a lane strip from another lane's post-strip audio
   /// (see TrackMixerRuntime::set_lane_sidechain). source_track_id 0 clears.

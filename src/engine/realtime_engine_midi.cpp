@@ -86,7 +86,8 @@ midi::MidiSysExPreparer RealtimeEngine::rack_sysex_preparer() const {
   };
 }
 
-void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
+RealtimeEngine::PreparedMidiClips RealtimeEngine::prepare_midi_clips(
+    std::vector<midi::MidiClipSchedule> clips) {
   reclaim_released_sysex_slots();
   // own_sysex_payloads stages a complete bank, so a failure publishes nothing.
   midi::MidiSysExPayloadError error = midi::MidiSysExPayloadError::kNone;
@@ -96,8 +97,18 @@ void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
                               : ErrorCode::InvalidParameter,
                           midi::describe(error));
   }
+  PreparedMidiClips prepared;
+  prepared.clips_ = std::move(clips);
+  return prepared;
+}
+
+void RealtimeEngine::publish_midi_clips(PreparedMidiClips&& prepared) {
   // The sequencer's own ownership pass keeps each event's bank-owned token.
-  midi_sequencer_.set_midi_clips(std::move(clips));
+  midi_sequencer_.set_midi_clips(std::move(prepared.clips_));
+}
+
+void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
+  publish_midi_clips(prepare_midi_clips(std::move(clips)));
 }
 
 bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,

@@ -174,6 +174,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
+  /// Pure: true exactly when set_track_lanes would accept @p lanes on validation grounds.
+  bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const noexcept {
+    return lane_config_valid(lanes);
+  }
   bool set_buses(std::vector<TrackBusConfig> buses);
   /// AUDIO thread: acquires this block's lane config and sidechain binding table.
   void acquire_lanes() noexcept {
