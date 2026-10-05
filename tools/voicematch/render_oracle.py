@@ -23,6 +23,7 @@ route-blind.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import subprocess
 import sys
@@ -30,6 +31,14 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+from boundary import (
+    SCOPE_INSTRUMENT,
+    SENDS_DRY,
+    Assessment,
+    Reference,
+    RenderRequest,
+    assess,
+)
 from wavio import read_wav
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
@@ -193,7 +202,7 @@ def oracle_may_carry_room(args) -> bool:
     return bool(getattr(args, "au", "")) and not getattr(args, "au_dry", False)
 
 
-def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
+def check_oracle_rig(args, program: int, *, allow: bool = False) -> Assessment | None:
     """What each captureless oracle route may be fitted against, on a rig-capable family.
 
     A capture answers the rig question in its own definition and a fit is refused
@@ -215,11 +224,20 @@ def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
     The certainty is not uniform across the family — 29 and 30 are definitional
     while 33-37 are only usual — but a second table splitting the sure from the
     likely would drift, and erring strict costs one `--allow-rigged-oracle`.
+
+    Returns the instrument-scope assessment where one applies: Route A's, and
+    any route's once `allow` carried it through, which makes it `unverified`.
+    Routes B and C without the flag are warned about and not assessed.
     """
-    from capture import rig_capable
+    from capture import RIG_BAKED, rig_capable
 
     if not rig_capable(program):
-        return
+        return None
+    # Route A is a rig by definition; B and C are nobody's answer. The model side
+    # is the fit's own: rig cleared, system sends at zero.
+    request = RenderRequest(
+        program=program, seconds=0.0, rig=False, sends=SENDS_DRY, allow_rigged_oracle=allow
+    )
     external = (
         "--oracle-wav"
         if getattr(args, "oracle_wav", "")
@@ -236,7 +254,9 @@ def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
             f"capture can answer this.",
             file=sys.stderr,
         )
-        return
+        if allow:
+            return assess(Reference(capture=external), SCOPE_INSTRUMENT, request)
+        return None
     why = (
         f"the built-in GM oracle cannot be a DI for program {program}: general MIDI defines "
         f"these programs by the sound of an amplified instrument, so a sample set's "
@@ -246,14 +266,20 @@ def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
         f"instrument's own parameters. Fit against a reference captured at the instrument's "
         f'own boundary instead (`--corpus` on a capture that says "rig": "none")'
     )
+    reference = Reference(capture="gm-oracle", rig=RIG_BAKED)
+    strict = assess(
+        reference, SCOPE_INSTRUMENT, dataclasses.replace(request, allow_rigged_oracle=False)
+    )
     if allow:
         print(
             f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
             f"transfer to nothing once the rig is a stage of its own.",
             file=sys.stderr,
         )
-        return
-    raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
+        return assess(reference, SCOPE_INSTRUMENT, request)
+    if not strict.may_fit:
+        raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
+    return strict
 
 
 def obtain_oracle(args, smf_bytes: bytes, total_seconds: float, sr: int, onsets_s) -> np.ndarray:

@@ -17,7 +17,7 @@ rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/autof
 
 Use `--corpus <capture directory>` and `--corpus-timbre <id>` when a captured grid exists. The corpus supplies the notes, velocities, gate, tails, room, rig, note map, and oracle audio, so fitting and profile comparison share one stimulus. Without a corpus, the probe is generated from `--pattern`, `--notes`, and `--velocities`; the oracle is fluidsynth unless `--oracle-wav`, `--au`, or another explicit source is selected.
 
-The fit must compare the model at the same instrument boundary as the oracle. `rig: baked` and an unclassified rig on a rig-capable family are refused; see [Reference](reference.md#rig-and-room) for the direct, acceptance, and override routes. Room correction may be applied before scoring because a room is measured and convolved, while a rig is nonlinear.
+The fit must compare the model at the same instrument boundary as the oracle. `rig: baked`, an unclassified rig, and a `rig: none` that rests on no `rig_evidence` on a rig-capable family are refused, as is a `shape fit` or `shape prune` against the same references; a `shape` subcommand that does not fit prints that it is a diagnostic run. `--allow-rigged-oracle` carries a refused reference through as `unverified`: the fit runs and reports, and its values are never written into the source. See [Reference](reference.md#rig-and-room) for the direct, acceptance, and override routes. Room correction may be applied before scoring because a room is measured and convolved, while a rig is nonlinear.
 
 ## Knobs and ranges
 

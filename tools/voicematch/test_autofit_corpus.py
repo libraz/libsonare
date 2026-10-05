@@ -564,9 +564,73 @@ def test_an_unanswered_rig_stops_a_fit_only_where_a_rig_is_possible(tmp_path):
 
 def test_a_reference_captured_at_the_instrument_s_boundary_fits(tmp_path):
     """`none` is the answer a fit is for, on the family that could have said otherwise."""
-    args = _probe_args(program=30, corpus=str(_write_corpus(tmp_path / "di", rig=RIG_NONE)))
+    root = _write_corpus(tmp_path / "di", rig=RIG_NONE)
+    _grant_evidence(root, "inferred")
+    args = _probe_args(program=30, corpus=str(root))
     resolve_probe(args)
     assert args.pattern == "corpus"
+    assert args.fit_assessment.may_adopt
+
+
+def _grant_evidence(root, evidence):
+    """Add a `rig_evidence` answer to a fixture manifest that never carried one."""
+    import json
+
+    path = root / "manifest.json"
+    path.write_text(json.dumps({**json.loads(path.read_text()), "rig_evidence": evidence}))
+
+
+def test_a_direct_reference_resting_on_no_evidence_does_not_fit_a_rig_capable_family(tmp_path):
+    """`none` is an answer, but on a family that can carry a rig it has to be argued."""
+    root = _write_corpus(tmp_path / "di", rig=RIG_NONE)
+    with pytest.raises(ValueError, match="no evidence"):
+        resolve_probe(_probe_args(program=30, corpus=str(root)))
+    # Nobody is owed an argument on a family where no rig is possible.
+    args = _probe_args(program=0, corpus=str(root))
+    resolve_probe(args)
+    assert args.fit_assessment.may_adopt
+
+
+def test_a_rigged_oracle_run_is_unverified_and_is_not_adopted(tmp_path):
+    from autofit import gate_adoption
+    from writeback import adoption_refusal
+
+    args = _probe_args(
+        program=30,
+        allow_rigged_oracle=True,
+        corpus=str(_write_corpus(tmp_path / "amp", rig=RIG_BAKED)),
+    )
+    resolve_probe(args)
+    assert args.fit_assessment.status == "unverified"
+    assert not args.fit_assessment.may_adopt
+    assert "unverified" in adoption_refusal(args.fit_assessment)
+
+    args.dry_run = False
+    evaluator = argparse.Namespace(write_back_refusal=None)
+    gate_adoption(args, evaluator)
+    assert args.dry_run is True
+    assert evaluator.write_back_refusal == "unverified_reference"
+
+
+def test_a_verified_run_keeps_its_write_back(tmp_path):
+    from autofit import gate_adoption
+
+    root = _write_corpus(tmp_path / "di", rig=RIG_NONE)
+    _grant_evidence(root, "verified")
+    args = _probe_args(program=30, corpus=str(root))
+    resolve_probe(args)
+    args.dry_run = False
+    evaluator = argparse.Namespace(write_back_refusal=None)
+    gate_adoption(args, evaluator)
+    assert args.dry_run is False
+    assert evaluator.write_back_refusal is None
+
+
+def test_the_gm_oracle_run_forced_through_is_unverified():
+    args = _probe_args(program=33, allow_rigged_oracle=True)
+    resolve_probe(args)
+    assert args.fit_assessment.status == "unverified"
+    assert not args.fit_assessment.may_adopt
 
 
 def test_comparing_and_diagnosing_a_rigged_reference_are_unaffected(tmp_path):
@@ -681,3 +745,21 @@ def test_an_explicit_kit_weight_is_refused_rather_than_scored_at_its_best(tmp_pa
     args = _probe_args(corpus=str(kit), drum_note=41, w_kit=1.0)
     with pytest.raises(ValueError, match="relations inside a kit"):
         resolve_probe(args)
+
+
+def test_an_unverified_run_says_so_in_its_out_artifact(tmp_path):
+    import json
+
+    from autofit import _fold_assessment
+
+    args = _probe_args(
+        program=30,
+        allow_rigged_oracle=True,
+        corpus=str(_write_corpus(tmp_path / "amp", rig=RIG_BAKED)),
+    )
+    resolve_probe(args)
+    out = tmp_path / "fit.json"
+    out.write_text("{}")
+    _fold_assessment(str(out), args)
+    record = json.loads(out.read_text())["assessment"]
+    assert record["status"] == "unverified" and record["may_adopt"] is False

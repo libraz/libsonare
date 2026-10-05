@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from boundary import RenderRequest
 from shape.loss import ShapeLoss
 from shape.render import (
     DRUM_SCOPE,
@@ -179,13 +180,19 @@ def test_the_reference_key_changes_when_the_corpus_does(tmp_path):
     mf = root / "manifest.json"
     mf.write_text('{"renders": [{"note": 46, "seconds": 2.15}]}')
     sigs = Signals(
-        corpus_root=root, program=0, gate_s=0.05, seconds=8.15, cache_dir=tmp_path / "cache"
+        corpus_root=root,
+        request=RenderRequest(program=0, seconds=8.15),
+        gate_s=0.05,
+        cache_dir=tmp_path / "cache",
     )
     before = sigs._key([(46, 100)], "", True)
 
     mf.write_text('{"renders": [{"note": 46, "seconds": 5.15}]}')
     after = Signals(
-        corpus_root=root, program=0, gate_s=0.05, seconds=8.15, cache_dir=tmp_path / "cache"
+        corpus_root=root,
+        request=RenderRequest(program=0, seconds=8.15),
+        gate_s=0.05,
+        cache_dir=tmp_path / "cache",
     )._key([(46, 100)], "", True)
     assert before != after
 
@@ -196,9 +203,8 @@ def test_a_corpus_with_no_manifest_still_keys(tmp_path):
     assert corpus_fingerprint(tmp_path / "nowhere") == ""
     sigs = Signals(
         corpus_root=tmp_path / "nowhere",
-        program=0,
+        request=RenderRequest(program=0, seconds=8.15),
         gate_s=0.05,
-        seconds=8.15,
         cache_dir=tmp_path / "cache",
     )
     assert sigs._key([(60, 100)], "", False)

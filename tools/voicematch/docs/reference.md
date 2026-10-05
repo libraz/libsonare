@@ -131,7 +131,7 @@ The model's note layout is canonical: it stays on the GM/GS layout that ships to
 
 Direct `--oracle-wav` and `--au` routes have no capture field to answer the rig question, so they warn on rig-capable programs and proceed as unclassified; they do not warn for families that cannot carry a rig. The built-in GM/SF2 oracle is known to include the rig for rig-capable programs and is refused by the fit on that route, because no capture metadata can turn it into a direct signal. A captured corpus uses its explicit `rig` value instead.
 
-`--allow-rigged-oracle` overrides the fit refusal and writes a warning; values learned from an instrument-plus-rig reference describe that combined chain. `--diagnose`, `profile.py compare`, and auditions may read a rigged reference because they inspect or accept the shipped product boundary. `--grid` is not exempt because it evaluates the objective that a fit would search.
+`--allow-rigged-oracle` carries a refused reference through as `unverified`: the fit runs and reports, and its values are never written into the source, because values learned from an instrument-plus-rig reference describe that combined chain. `--diagnose`, `profile.py compare`, and auditions may read a rigged reference because they inspect or accept the shipped product boundary. `--grid` is not exempt because it evaluates the objective that a fit would search.
 
 ## Profiles
 

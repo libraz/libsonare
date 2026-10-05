@@ -20,6 +20,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 
 from _repo import REPO_ROOT
+from boundary import RenderRequest
 
 DEFAULT_DYLIB = REPO_ROOT / "build-python-shared" / "lib" / "libsonare.dylib"
 REFRESH_HINT = "cmake --build build-python-shared --target sonare_shared -j"
@@ -148,3 +149,15 @@ def render_model(
     if manifest is not None:
         check_gm_fallback(manifest)
     return np.asarray(audio, dtype=np.float32)
+
+
+def render_request(request: RenderRequest) -> np.ndarray:
+    """Render the SMF a `RenderRequest` carries, at its rig, preset and sample rate.
+
+    The request's `overrides` travel in `SONARE_TUNING_OVERRIDES`, which the
+    library reads when it loads, so they are the caller's to set before this
+    process starts; they are not applied here.
+    """
+    return render_model(
+        request.smf, request.seconds, request.sample_rate, rig=request.rig, preset=request.preset
+    )

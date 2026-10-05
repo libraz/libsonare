@@ -21,10 +21,16 @@ import re
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    # Not at import time: `boundary` reaches `capture`, which reaches `metrics`, and
+    # `metrics` imports this package.
+    from boundary import RenderRequest
 
 
 def corpus_fingerprint(root) -> str:
@@ -49,29 +55,32 @@ def corpus_fingerprint(root) -> str:
 
 
 _WORKER = r"""
-import json, sys
+import dataclasses, json, sys
 import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 pairs = [tuple(p) for p in json.loads(sys.argv[1])]
-out, root, program, gate_s, seconds = sys.argv[2], sys.argv[3], int(sys.argv[4]), \
-    float(sys.argv[5]), float(sys.argv[6])
-channel = int(sys.argv[7])
-timbre = sys.argv[8] if len(sys.argv) > 8 else ""
+out, root = sys.argv[2], sys.argv[3]
+stimulus = json.load(sys.stdin)
+fields = dict(stimulus["request"], smf=b"")
 if root:
     from corpus import load_corpus
     from wavio import read_wav
-    c = load_corpus(root, timbre)
+    c = load_corpus(root, fields["timbre"])
     def get(n, v):
         x, _ = read_wav(c.renders[(n, v)])
         m = np.asarray(x, dtype=np.float64)
         return (m.mean(axis=1) if m.ndim > 1 else m).astype(np.float32)
 else:
-    from render_model import render_model
+    from boundary import RenderRequest
+    from render_model import render_request
     from smf import Note, write_smf
+    request = RenderRequest(**fields)
     def get(n, v):
-        smf = write_smf([Note(n, v, 0.1, gate_s)], program=program, end_pad=2.0,
-                        channel=channel)
-        a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
+        smf = write_smf([Note(n, v, stimulus["preroll_s"], stimulus["gate_s"])],
+                        program=request.program, bank=request.bank,
+                        channel=request.channel, end_pad=2.0)
+        a = np.asarray(render_request(dataclasses.replace(request, smf=smf)),
+                       dtype=np.float32)
         return a.mean(axis=1) if a.ndim > 1 else a
 np.savez(out, **{f"{n}_{v}": get(n, v) for n, v in pairs})
 """
@@ -81,11 +90,15 @@ np.savez(out, **{f"{n}_{v}": get(n, v) for n, v in pairs})
 class Signals:
     """Renders a (note, velocity) grid, from the capture or from the model.
 
-    `program`, `channel` and `gate_s` come from the capture definition rather
-    than from a default, because a capture that names a GM program is the only
-    statement in the tree about which program the model answers it with. A
-    harness that hardcodes program zero can compare exactly one instrument, and
-    has.
+    `request` is the model side's identity -- program, bank, channel, rig, sample
+    rate and window, as `corpus.fit_request` built them from the capture -- with
+    no SMF, because the note and velocity are the grid's. `gate_s` and `preroll_s`
+    place the note inside it. A capture that names a GM program is the only
+    statement in the tree about which program the model answers it with, and a
+    harness that hardcodes program zero, a capital bank, 48 kHz or the product's
+    rig can compare exactly one instrument, and has. Its fingerprint is in the
+    cache key, so a render at another bank, rate or rig can never be served from
+    a render at this one.
 
     `channel` is the one that cannot be left at its default at all. MIDI channel
     10 is what makes a note number select an instrument instead of a pitch, so a
@@ -107,13 +120,10 @@ class Signals:
     """
 
     corpus_root: Path
-    program: int
+    request: RenderRequest
     gate_s: float
-    seconds: float
-    #: Zero-based MIDI channel the model renders on (9 = the GM drum channel).
-    channel: int = 0
-    #: Which timbre of the capture the reference side reads ("" = the first).
-    timbre: str = ""
+    #: Where the note starts in the render, from the capture's own lead-in.
+    preroll_s: float = 0.0
     lib_path: str = ""
     cache_dir: Path = Path("/tmp/voicematch-shape")
 
@@ -126,6 +136,24 @@ class Signals:
         self._tunable_lock = threading.Lock()
         self._corpus_fp = corpus_fingerprint(self.corpus_root)
 
+    @property
+    def program(self) -> int:
+        return self.request.program
+
+    @property
+    def channel(self) -> int:
+        """Zero-based MIDI channel the model renders on (9 = the GM drum channel)."""
+        return self.request.channel
+
+    @property
+    def seconds(self) -> float:
+        return self.request.seconds
+
+    @property
+    def timbre(self) -> str:
+        """Which timbre of the capture the reference side reads ("" = the first)."""
+        return self.request.timbre
+
     def _key(self, pairs, ov: str, ref: bool) -> str:
         blob = json.dumps(
             [
@@ -134,11 +162,9 @@ class Signals:
                 ref,
                 str(self.corpus_root),
                 self._corpus_fp,
-                self.program,
-                self.channel,
-                self.timbre,
+                self.request.fingerprint(),
                 self.gate_s,
-                self.seconds,
+                self.preroll_s,
                 self.lib_path,
             ]
         )
@@ -164,12 +190,14 @@ class Signals:
                 json.dumps(pairs),
                 str(tmp),
                 str(self.corpus_root) if ref else "",
-                str(self.program),
-                str(self.gate_s),
-                str(self.seconds),
-                str(self.channel),
-                self.timbre,
             ],
+            input=json.dumps(
+                {
+                    "request": {k: v for k, v in asdict(self.request).items() if k != "smf"},
+                    "gate_s": self.gate_s,
+                    "preroll_s": self.preroll_s,
+                }
+            ),
             capture_output=True,
             check=False,
             text=True,

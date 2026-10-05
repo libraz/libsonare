@@ -130,3 +130,18 @@ def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatc
     # The two have to be the same number, which is the whole of the contract.
     assert seen["bounce_rate"] == 44100
     assert seen["frames"] == round(0.4 * 44100)
+
+
+def test_a_request_renders_at_its_own_rig_rate_and_window(monkeypatch):
+    from boundary import RenderRequest
+
+    seen = {}
+
+    def fake_render(smf, seconds, sr, *, rig, preset):
+        seen.update(smf=smf, seconds=seconds, sr=sr, rig=rig, preset=preset)
+        return "audio"
+
+    monkeypatch.setattr(render_model, "render_model", fake_render)
+    request = RenderRequest(program=27, seconds=1.5, smf=b"MThd", rig=False, sample_rate=44100)
+    assert render_model.render_request(request) == "audio"
+    assert seen == {"smf": b"MThd", "seconds": 1.5, "sr": 44100, "rig": False, "preset": ""}

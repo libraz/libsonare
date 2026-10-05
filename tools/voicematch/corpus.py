@@ -27,20 +27,30 @@ rule.
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+from boundary import (
+    EVIDENCE_UNKNOWN,
+    SCOPE_INSTRUMENT,
+    SENDS_DRY,
+    Assessment,
+    Reference,
+    RenderRequest,
+    assess,
+    rig_evidence,
+)
 from capture import (
     RIG_BAKED,
-    RIG_NONE,
     RIG_UNCLASSIFIED,
     RIG_VALUES,
     ROOM_UNCLASSIFIED,
     ROOM_VALUES,
+    model_rig,
     parse_seconds,
-    rig_capable,
 )
 from metrics import sound_onset_s, to_mono
 from patterns import Pattern
@@ -86,6 +96,9 @@ class Corpus:
     #: question from `dry`, which is about a room and cannot see a cabinet.
     #: `check_rig` is what reads it.
     rig: str = RIG_UNCLASSIFIED
+    #: What the rig class rests on (`boundary.EVIDENCE_VALUES`); `unknown` where
+    #: the capture gave none. Asked only of a family that can carry a rig.
+    rig_evidence: str = EVIDENCE_UNKNOWN
     #: One-based MIDI channel saying what this timbre's note numbers MEAN. 10 is
     #: the drum channel, where a note number selects an instrument rather than a
     #: pitch — which decides both the channel the model's probe is written on and
@@ -211,6 +224,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         dry=_dryness(manifest),
         room=_room(manifest),
         rig=_rig(manifest),
+        rig_evidence=_rig_evidence(manifest),
         channel=_note_channel(manifest, entry),
         groups=_groups(manifest),
         slots=slots,
@@ -402,7 +416,74 @@ def _rig(manifest: dict) -> str:
     return RIG_UNCLASSIFIED
 
 
-def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
+def _rig_evidence(manifest: dict) -> str:
+    """What the capture argued its rig class from, from the manifest or its config.
+
+    Same two-step as `_rig`; absent and unrecognised come back `unknown`.
+    """
+    import json
+
+    if "rig_evidence" in manifest:
+        return rig_evidence(manifest)
+    for candidate in _config_paths(manifest.get("config", "")):
+        try:
+            raw = json.loads(candidate.read_text())
+        except (OSError, ValueError):
+            continue
+        if "rig_evidence" in raw:
+            return rig_evidence(raw)
+    return EVIDENCE_UNKNOWN
+
+
+def fit_request(
+    corpus: Corpus,
+    program: int,
+    *,
+    bank: int = 0,
+    seconds: float = 0.0,
+    channel: int = 0,
+    smf: bytes = b"",
+    allow: bool = False,
+) -> RenderRequest:
+    """The request a fit against `corpus` renders its model side from.
+
+    The model stops where the reference did (`model_rig`), at the capture's own
+    sample rate and with the system sends at zero, which is what `write_smf`
+    writes by default. Only the `rig` and `allow_rigged_oracle` choices are the
+    fit's to make; everything else is the capture's.
+    """
+    return RenderRequest(
+        program=program,
+        seconds=seconds,
+        smf=smf,
+        bank=bank,
+        channel=channel,
+        rig=model_rig(corpus.rig),
+        sends=SENDS_DRY,
+        allow_rigged_oracle=allow,
+        sample_rate=corpus.sample_rate,
+        capture=corpus.capture_id,
+        timbre=corpus.timbre,
+    )
+
+
+def reference_of(corpus: Corpus) -> Reference:
+    """The boundary classes this corpus's capture answered."""
+    return Reference(
+        capture=corpus.capture_id,
+        rig=corpus.rig,
+        room=corpus.room,
+        rig_evidence=corpus.rig_evidence,
+    )
+
+
+def check_rig(
+    corpus: Corpus,
+    program: int,
+    *,
+    allow: bool = False,
+    request: RenderRequest | None = None,
+) -> Assessment:
     """Refuse a fit whose reference carries an amplifier, or might.
 
     A rig is nonlinear, so unlike a room there is no inverse to correct with: a
@@ -416,11 +497,25 @@ def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
     all — a piano or a wind is not waiting on anyone — because there the missing
     record is a question nobody has answered rather than a "no".
 
+    The decision is `boundary.assess` in the instrument scope; `request` is the
+    model-side request the fit will render from (`fit_request` when omitted).
+    Returns the assessment, which is `unverified` — usable for a fit, never for
+    adoption — whenever `allow` carried a refused reference through.
+
     Comparing, auditioning and `--diagnose` are unaffected; they read the
     reference rather than moving the voice towards it.
     """
-    if corpus.rig == RIG_NONE:
-        return
+    if request is None:
+        request = fit_request(corpus, program, allow=allow)
+    reference = reference_of(corpus)
+    strict = assess(
+        reference, SCOPE_INSTRUMENT, dataclasses.replace(request, allow_rigged_oracle=False)
+    )
+    flagged = assess(
+        reference, SCOPE_INSTRUMENT, dataclasses.replace(request, allow_rigged_oracle=allow)
+    )
+    if strict.may_fit:
+        return flagged
     what = corpus.label or corpus.timbre
     if corpus.rig == RIG_BAKED:
         why = (
@@ -431,7 +526,7 @@ def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
             f"against a reference captured at the instrument's boundary — a DI for an "
             f"electric string — and keep this one as the acceptance check"
         )
-    elif rig_capable(program):
+    elif corpus.rig == RIG_UNCLASSIFIED:
         why = (
             f"nothing says whether the {what} reference carries a rig, and program "
             f"{program} is a family that can: a cabinet is a filter rather than a space, "
@@ -441,14 +536,14 @@ def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
             f"amplifier, which stays an acceptance target — and re-run"
         )
     else:
-        return
-    if allow:
+        why = f"the {what} reference cannot drive a fit: {strict.reason}"
+    if flagged.may_fit:
         print(
             f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
             f"transfer to nothing once the rig is a stage of its own.",
             file=sys.stderr,
         )
-        return
+        return flagged
     raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
 
 

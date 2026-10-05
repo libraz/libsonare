@@ -339,7 +339,7 @@ from report import _json_safe, broad_budget_warning, report_result
 from room import apply_room, estimate_room, fit_room_ir
 from smf import write_smf
 from staging import SubEvaluator, run_stages, screen_knobs
-from writeback import materialize, restore, write_edits
+from writeback import adoption_refusal, materialize, restore, write_edits
 
 SR = 48000
 
@@ -1708,6 +1708,48 @@ def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> 
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
+def _fold_assessment(out_path: str, args) -> None:
+    """Add the reference assessment to an --out record, where one applied.
+
+    An `unverified` run (`--allow-rigged-oracle`) is exploratory and must read as
+    such from the artifact alone, not only from the terminal it was run in.
+    """
+    assessment = getattr(args, "fit_assessment", None)
+    if assessment is None or not out_path or not Path(out_path).exists():
+        return
+    path = Path(out_path)
+    record = json.loads(path.read_text())
+    record["assessment"] = {
+        "scope": assessment.scope,
+        "boundary": assessment.boundary,
+        "status": assessment.status,
+        "evidence": assessment.evidence,
+        "may_adopt": assessment.may_adopt,
+        "reasons": list(assessment.reasons),
+    }
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+
+
+def gate_adoption(args, evaluator) -> None:
+    """Turn a run whose reference is not adoptable into a report-only one.
+
+    A fit carried through by `--allow-rigged-oracle` is `unverified`: its values
+    are exploratory and are never written into the source. The run is kept as a
+    dry run and the refusal is recorded where every other refusal is.
+    """
+    refusal = adoption_refusal(getattr(args, "fit_assessment", None))
+    if refusal is None:
+        return
+    print(
+        f"\nunverified fit, not adopted ({refusal}); the values are reported and the "
+        f"source is left pristine",
+        file=sys.stderr,
+    )
+    args.dry_run = True
+    if getattr(evaluator, "write_back_refusal", None) is None:
+        evaluator.write_back_refusal = "unverified_reference"
+
+
 def _fold_write_back_verdict(out_path: str, evaluator) -> None:
     """Add why a finished fit kept the defaults, if it did.
 
@@ -1763,6 +1805,12 @@ def run(args, argv: list[str] | None = None) -> int:
         )
 
     resolve_probe(args)
+    if adoption_refusal(getattr(args, "fit_assessment", None)) is not None:
+        print(
+            "this fit is unverified and exploratory: its values will be reported, "
+            "not written into the source",
+            file=sys.stderr,
+        )
     # Resolve the fit axis first: an overlapping hold-out is invalid even without the fit flag.
     validation_partition = check_validation_partition(args)
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
@@ -2069,9 +2117,11 @@ def run(args, argv: list[str] | None = None) -> int:
             "spec_dimension": len(knobs),
             "full_spec_budget_warning": full_spec_budget_warning,
         }
+    gate_adoption(args, evaluator)
     report_result(knobs, pristine, best_values, evaluator, args, extra)
     _fold_tree_provenance(args.out, head_sha, dirty_src)
     _fold_write_back_verdict(args.out, evaluator)
+    _fold_assessment(args.out, args)
     return 0
 
 

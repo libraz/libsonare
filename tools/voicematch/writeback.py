@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 from _repo import REPO_ROOT
+from boundary import Assessment
 from catalogue import DRUM_PATCH_KEY
 from knobs import Knob, format_value
 
@@ -80,6 +81,19 @@ def materialize(
             text = text[: knob.span_start] + format_value(value) + text[knob.span_end :]
         result[path] = text
     return result
+
+
+def adoption_refusal(assessment: Assessment | None) -> str | None:
+    """Why a fit's values may not be written into the source, or None if they may.
+
+    `None` stands for a run with no reference assessment to speak of (a family
+    where no rig is possible, or a probe-only route), which adopts as before. An
+    assessment that is not `may_adopt` — a rigged-oracle run is `unverified` —
+    keeps its values as a report.
+    """
+    if assessment is None or assessment.may_adopt:
+        return None
+    return f"{assessment.status}: {assessment.reason}"
 
 
 def write_edits(edited: dict[Path, str], written: dict[Path, str]) -> None:

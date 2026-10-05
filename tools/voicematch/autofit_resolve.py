@@ -220,13 +220,17 @@ def resolve_probe(args) -> None:
         # moving any of them towards the reference, and is exempt; `--grid`
         # evaluates the same objective a fit would search and is not.
         if not getattr(args, "diagnose", False):
-            check_rig(corpus, args.program, allow=getattr(args, "allow_rigged_oracle", False))
+            args.fit_assessment = check_rig(
+                corpus, args.program, allow=getattr(args, "allow_rigged_oracle", False)
+            )
         args.pattern = "corpus"
     elif not getattr(args, "diagnose", False):
         # No capture, so no record of a rig — and the hazard is the same size.
         # What the route means by carrying no record is not the same for all
         # three of them, which is what `check_oracle_rig` sorts out.
-        check_oracle_rig(args, args.program, allow=getattr(args, "allow_rigged_oracle", False))
+        args.fit_assessment = check_oracle_rig(
+            args, args.program, allow=getattr(args, "allow_rigged_oracle", False)
+        )
     pattern, _, analysis_notes = _score(
         args.program,
         args.pattern,

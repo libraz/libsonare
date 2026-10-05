@@ -25,7 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from profile import PERCUSSION_CHANNEL, is_percussion
 
-from corpus import load_corpus
+from boundary import SCOPE_INSTRUMENT, assess
+from corpus import check_rig, fit_request, load_corpus, reference_of
 
 from . import admittance, attack, probes, purity, struck, takes
 from .bed import Bed
@@ -69,8 +70,16 @@ def _spectrum_tail(value):
     return value
 
 
-def build(args):
-    """A loss, its signal source, and the note grid, all from the capture."""
+def build(args, *, fit: bool = False):
+    """A loss, its signal source, and the note grid, all from the capture.
+
+    The model side renders from the request `corpus.fit_request` builds out of
+    the capture, so program, bank, sample rate, preroll and rig are the ones
+    `autofit` and `profile` use. `fit` is a run whose result is written as
+    overrides: it is refused, before anything renders or reads a cache, against a
+    reference that is not at the instrument's boundary. Anything else is a
+    diagnostic and says so.
+    """
     cap = json.loads((CAPTURE_DIR / f"{args.capture}.json").read_text())
     corpus = load_corpus(args.corpus, args.timbre)
     gate_s = float(cap["gate_ms"]) / 1000.0
@@ -87,13 +96,27 @@ def build(args):
     # the harness's own predicate rather than from a flag here, so one answer
     # serves `profile.py` and this package alike.
     percussion = is_percussion(cap)
+    request = fit_request(
+        corpus,
+        int(cap["program"]),
+        bank=int(cap.get("bank", 0) or 0),
+        seconds=seconds,
+        channel=PERCUSSION_CHANNEL - 1 if percussion else 0,
+    )
+    if fit:
+        try:
+            check_rig(corpus, request.program, request=request)
+        except ValueError as exc:
+            raise SystemExit(f"fit refused: {exc}") from exc
+    else:
+        verdict = assess(reference_of(corpus), SCOPE_INSTRUMENT, request)
+        if not verdict.may_fit:
+            print(f"diagnostic run, not a fit target: {verdict.reason}", file=sys.stderr)
     sigs = Signals(
         corpus_root=Path(args.corpus),
-        program=int(cap["program"]),
-        channel=PERCUSSION_CHANNEL - 1 if percussion else 0,
-        timbre=corpus.timbre,
+        request=request,
         gate_s=gate_s,
-        seconds=seconds,
+        preroll_s=preroll,
         lib_path=args.lib,
     )
     notes = tuple(int(x) for x in args.notes.split(",")) if args.notes else corpus.notes
@@ -313,7 +336,7 @@ def _report_prune(
 
 
 def cmd_fit(args):
-    _cap, _corpus, _sigs, loss, notes = build(args)
+    _cap, _corpus, _sigs, loss, notes = build(args, fit=True)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     deny = set(Path(args.deny).read_text().split()) if args.deny else set()
     partitions, fit_loss, hold_loss, final_loss, fit_notes, hold_notes, final_notes = (
@@ -354,7 +377,7 @@ def cmd_prune(args):
     rule that changes -- or a set assembled by hand from several runs -- can be
     re-priced in minutes rather than in the hour the search cost.
     """
-    _cap, _corpus, _sigs, loss, notes = build(args)
+    _cap, _corpus, _sigs, loss, notes = build(args, fit=True)
     base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     moves = read_overrides(Path(args.overrides).read_text())
     partitions, fit_loss, hold_loss, final_loss, fit_notes, hold_notes, final_notes = (
