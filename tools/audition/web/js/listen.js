@@ -15,13 +15,13 @@ import { takeText } from './take-text.js';
 import {
   activeKey, loadTake, markPlay, markRegion, pause, renderLevels, startAt, stopSources,
 } from './player.js';
-import { loadFeedback } from './feedback.js';
+import { loadFeedback, switchDraft, takeChanged } from './feedback.js';
 import { writeRoute } from './address.js';
 import { buildSetPicker, paletteOpen, renderPickLabel } from './palette.js';
 import {
   buildVersionButtons, renderCaptions, selectComparison, selectVersionByKey,
 } from './versions.js';
-import { applyBlindGate, renderScore, reshuffleBlind } from './blind.js';
+import { applyBlindGate, renderScore, resetBlindReveal, reshuffleBlind } from './blind.js';
 import { renderHeadStage, renderSubject } from './subject.js';
 
 /* ------------------------------------------------------------- selection */
@@ -33,6 +33,11 @@ import { renderHeadStage, renderSubject } from './subject.js';
  * pictures key their caches on; `state.setEpoch` is the per-set half that the
  * feedback replies check. */
 let selectEpoch = 0;
+
+/* True from the moment a set load starts until its first take is being chosen.
+ * The take list on screen is still the previous set's until then, and a click
+ * on it would play one set's take under the other's name. */
+let setLoading = false;
 
 /* Sending is off from the moment a selection starts until its own load lands,
  * because what the note would be attached to is not settled in between. The
@@ -64,11 +69,14 @@ export async function applyRoute(r) {
     await loadSet(r.set, r);
     return;
   }
+  // A set this server does not hold: the address goes back to the page shown.
+  if (r.set && r.set !== state.setId) { writeRoute(); return; }
+  // Comparison, then take, then version: each narrows what the next may name.
+  if (r.cmp) selectComparison(r.cmp);
   if (r.ver) state.wantKey = r.ver;
   const i = r.take ? state.items.findIndex((it) => it.id === r.take) : -1;
   if (i >= 0 && i !== state.itemIndex) await selectTake(i);
-  else if (r.ver) selectVersionByKey(r.ver);
-  if (r.cmp) selectComparison(r.cmp);
+  if (r.ver) selectVersionByKey(r.ver);
 }
 
 /* ------------------------------------------------------------------- set */
@@ -77,6 +85,7 @@ export async function loadSet(id, want) {
   const entry = state.sets.find((s) => s.id === id) || state.sets[0];
   if (!entry) return;
   const epoch = ++selectEpoch;
+  setLoading = true;
   state.setEpoch += 1;
   setSending(false);
   stopSources();
@@ -85,12 +94,28 @@ export async function loadSet(id, want) {
   // Nothing of the previous set may be acted on while this one loads.
   state.take = null;
   $('versions').replaceChildren();
+
+  // The set becomes the current one, and is remembered, only once its manifest
+  // has been read: a set that fails to load leaves the page on the previous one.
+  let m;
+  try {
+    const res = await fetch(`s/${entry.id}/manifest.json`);
+    if (!res.ok) throw new Error(String(res.status));
+    m = await res.json();
+  } catch (err) {
+    if (epoch !== selectEpoch) return;
+    setLoading = false;
+    $('title').textContent = t('set.loadFailed', { msg: err.message });
+    if (state.items.length) await selectTake(state.itemIndex);
+    else setSending(Boolean(state.setId));
+    return;
+  }
+  if (epoch !== selectEpoch) return;
   state.setId = entry.id;
   state.base = `s/${entry.id}/`;
   localStorage.setItem(SET_KEY, entry.id);
-
-  const m = await (await fetch(`${state.base}manifest.json`)).json();
-  if (epoch !== selectEpoch) return;
+  switchDraft(entry.id);
+  resetBlindReveal();
   state.manifest = m;
   state.items = m.items || [];
   // A set whose takes hold one version each has nothing to switch between, so
@@ -101,15 +126,16 @@ export async function loadSet(id, want) {
   if (!state.compare) {
     state.blind = false;
     $('blind').checked = false;
+    document.body.classList.remove('blind-on');
   }
   $('title').textContent = m.title || '';
   $('notes').textContent = m.notes || '';
   $('sharedNote').textContent = m.sources_note || '';
   // Before the picks, which are keyed by the comparison a link names.
   const wanted = want || {};
-  if (wanted.cmp && (m.comparisons || []).some((c) => c && c.id === wanted.cmp)) {
-    state.comparisonId = wanted.cmp;
-  }
+  const named = wanted.cmp && (m.comparisons || []).some((c) => c && c.id === wanted.cmp);
+  state.comparisonId = named ? wanted.cmp : null;
+  state.wantByComparison = {};
   // After the compare check and the comparison a link names, so a set or a
   // comparison that cannot be blind-listened to also ends a run left from before.
   applyBlindGate();
@@ -132,6 +158,7 @@ export async function loadSet(id, want) {
   buildTakeList();
   await loadFeedback();
   if (epoch !== selectEpoch) return;
+  setLoading = false;
   if (state.items.length) await selectTake(state.itemIndex);
   else { $('versions').replaceChildren(); setSending(true); writeRoute(); }
 }
@@ -198,7 +225,7 @@ function markTakeList() {
 }
 
 export async function selectTake(i) {
-  if (i < 0 || i >= state.items.length) return;
+  if (setLoading || i < 0 || i >= state.items.length) return;
   const wasPlaying = state.playing;
   const epoch = ++selectEpoch;
   pause();
@@ -232,6 +259,7 @@ export async function selectTake(i) {
   if (epoch !== selectEpoch) return;
   take.epoch = epoch;
   state.take = take;
+  takeChanged();
   setSending(true);
   cap.className = '';
   reshuffleBlind();

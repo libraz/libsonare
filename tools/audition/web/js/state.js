@@ -134,11 +134,13 @@ export const comparisonKeys = (c) =>
   new Set([...(c.model_sources || []), ...(c.oracle_sources || [])]);
 
 /// Every source a feedback note could be judged against, reference before
-/// comparison, in the order the manifest lists them within each role.
+/// comparison, in the order the manifest lists them within each role. With a
+/// take open, only the ones that take holds.
 export function oracleSources() {
   const sources = (state.manifest && state.manifest.sources) || {};
   return ['reference', 'comparison'].flatMap((role) =>
-    Object.keys(sources).filter((key) => sources[key].role === role)
+    Object.keys(sources)
+      .filter((key) => sources[key].role === role && (!state.take || state.take.keys.includes(key)))
       .map((key) => ({ role, key, label: sourceLabel(key) })));
 }
 

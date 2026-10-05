@@ -14,7 +14,7 @@ import {
   t, applyStatic, initLang, onLang, setLang, currentLang, languages,
 } from './i18n.js';
 import {
-  applyGains, applyRegion, atEnd, markRegion, pause, playhead, renderLevels,
+  activeKey, applyGains, applyRegion, atEnd, markRegion, pause, playhead, renderLevels,
   rewind, seekTo, setLoop, startAt, stop, togglePlay,
 } from './player.js';
 import { drawSpec, drawWave, seekFromEvent } from './scope.js';
@@ -83,6 +83,12 @@ function buildLangToggle() {
 
 /* ------------------------------------------------------------------- keys */
 
+/// Fields a letter is typed into; a checkbox, radio or button holds focus without
+/// owning the keyboard, so the page's shortcuts still run there.
+const TEXT_INPUTS = new Set(['', 'text', 'search', 'number', 'email', 'url', 'tel', 'password']);
+const isTextEntry = (n) => n.tagName === 'TEXTAREA' || n.tagName === 'SELECT'
+  || n.isContentEditable || (n.tagName === 'INPUT' && TEXT_INPUTS.has(n.type));
+
 /* Two key maps, because the two views have different subjects: on the
  * listening surface every shortcut acts on what is sounding, and on the bank
  * nothing is sounding and the rows are what is navigated. */
@@ -96,8 +102,7 @@ function onKey(ev) {
     return;
   }
   if (tag === 'INPUT' && ev.key === 'Escape') { ev.target.blur(); return; }
-  if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT'
-      || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (isTextEntry(ev.target) || ev.metaKey || ev.ctrlKey || ev.altKey) return;
   if (paletteOpen()) {
     if (ev.key === 'Escape') { closePalette(); $('voicePick').focus(); return; }
     paletteKey(ev);
@@ -184,18 +189,30 @@ function wire() {
   $('blindRecord').addEventListener('click', recordBlindResult);
   $('swapBtn').addEventListener('click', swapRole);
   wirePalette((id) => loadSet(id));
+  // A note or an undo moved the counts the palette and the bank show.
+  document.addEventListener('audition:feedback-changed', () => {
+    if (paletteOpen()) buildSetPicker();
+    if (document.body.classList.contains('bank-view')) renderBank();
+  });
 
   $('matchRms').addEventListener('change', () => {
     if (state.take) { applyGains(false); renderLevels(); }
   });
 
   $('blind').addEventListener('change', () => {
+    // `versionIndex` is a position in the draw when blind and an index into the
+    // take otherwise, so the sounding version is read first and re-found after.
+    const sounding = state.take ? activeKey() : null;
     state.blind = $('blind').checked;
     document.body.classList.toggle('blind-on', state.blind);
     // Entering blind mode starts a run, and a run starts with its own result
     // withheld: the tally is what would bias the takes still to come.
     resetBlindReveal();
     reshuffleBlind();
+    if (state.take) {
+      const at = state.take.keys.indexOf(sounding);
+      state.versionIndex = Math.max(0, state.blind ? state.blindOrder.indexOf(at) : at);
+    }
     rebuildVersions();
     renderScore();
     // The reference half of the subject line names the product, which is the

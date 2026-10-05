@@ -59,6 +59,7 @@ $('blind').addEventListener('change', (ev) => {
 /* Another comparison selected: its own gate, its own draw, its own picks —
  * `versions.js` has already loaded them and redraws the switch after this. */
 document.addEventListener('audition:comparison', () => {
+  resetBlindReveal();
   applyBlindGate();
   reshuffleBlind();
   renderScore();
@@ -114,6 +115,8 @@ function answered(id) {
 export function chooseBlind() {
   if (!state.blind || !state.take) return;
   const id = state.items[state.itemIndex].id;
+  // An answer given after a recorded run is the start of the next one.
+  resetBlindReveal();
   state.picks[id] = {
     ...answered(id),
     slot: state.versionIndex,
@@ -129,6 +132,7 @@ export function abstainBlind() {
   // Recorded rather than left absent, because "could not tell them apart" and
   // "has not been listened to" are different results and the tally is read as
   // though every take in it was decided.
+  resetBlindReveal();
   state.picks[id] = { ...answered(id), unseparated: true, revealed: false };
   writePicks();
 }

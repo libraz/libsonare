@@ -557,7 +557,8 @@ console.log(JSON.stringify(a.readRoute()));
     route = listen.split("export async function applyRoute", 1)[1].split("\n}\n", 1)[0]
     assert "selectComparison(r.cmp)" in route
     load = listen.split("export async function loadSet", 1)[1].split("\n}\n", 1)[0]
-    assert load.index("state.comparisonId = wanted.cmp") < load.index("picksKey()")
+    assert load.index("state.comparisonId = named ? wanted.cmp : null") < load.index("picksKey()")
+    assert "state.comparisonId = wanted.cmp" not in load or "named ?" in load
 
 
 def test_the_epoch_also_guards_set_switch_feedback_and_pictures() -> None:
@@ -573,7 +574,7 @@ def test_the_epoch_also_guards_set_switch_feedback_and_pictures() -> None:
     post = feedback.split("async function post(", 1)[1].split("\n}\n", 1)[0]
     assert "const setEpoch = state.setEpoch;" in post
     commit = post.index("fb.entries = got.entries")
-    assert "if (setEpoch !== state.setEpoch) return true;" in post[:commit]
+    assert "if (superseded()) {" in post[:commit]
     load_fb = feedback.split("export async function loadFeedback", 1)[1].split("\n}\n", 1)[0]
     assert load_fb.index("if (setEpoch !== state.setEpoch) return;") < load_fb.index(
         "fb.entries = got.entries"
@@ -581,6 +582,147 @@ def test_the_epoch_also_guards_set_switch_feedback_and_pictures() -> None:
     scope = (JS_DIR / "scope.js").read_text()
     assert scope.count("const sig = `${state.take.epoch}|") == 2
     assert "${state.take.id}|" not in scope
+
+
+def _fn(text: str, head: str) -> str:
+    """The body of the function or handler that starts at `head`."""
+    return text.split(head, 1)[1].split("\n}\n", 1)[0]
+
+
+def test_undo_names_an_entry_this_page_posted() -> None:
+    feedback = (JS_DIR / "feedback.js").read_text()
+    undo = _fn(feedback, "async function undo()")
+    assert "myIds(state.setId)" in undo and "op: 'undo'" in undo and "id: ids[" in undo
+    assert "fb.entries" not in undo, "the last entry in the file is not necessarily ours"
+    post = _fn(feedback, "async function post(")
+    assert "got.entry_id" in post
+    assert "res.status === 404 && payload.op === 'undo'" in post
+    assert "t('fb.undoGone')" in post
+    assert "$('fbUndo').disabled = !myIds(state.setId).length;" in feedback
+
+
+def test_a_superseded_reply_clears_its_sending_line() -> None:
+    post = _fn((JS_DIR / "feedback.js").read_text(), "async function post(")
+    assert "const superseded = () =>" in post
+    assert "textContent === sending" in post
+    assert post.count("superseded()") >= 4, "every reply path checks it"
+    load = _fn((JS_DIR / "feedback.js").read_text(), "export async function loadFeedback")
+    assert "clearStatus();" in load
+
+
+def test_a_draft_belongs_to_its_set_and_a_trail_to_its_ids() -> None:
+    feedback = (JS_DIR / "feedback.js").read_text()
+    assert "export function switchDraft" in feedback
+    assert "switchDraft(entry.id)" in (JS_DIR / "listen.js").read_text()
+    # Labels are resolved when drawn and when sent, never stored.
+    assert "label: phrase(choice)" not in feedback and "label: t('fb.notSure')" not in feedback
+    assert "said: labelOf(s)" in feedback and "labelOf(step)" in feedback
+    # A language change keeps a refused note's reason and its reload button together.
+    refresh = _fn(feedback, "export function refreshFeedback")
+    assert "fb.stale !== null" in refresh
+    assert "fb.stale = null" in _fn(feedback, "export function clearStatus")
+
+
+def test_oracle_choices_are_the_current_takes() -> None:
+    got = _node(
+        """
+const s = await import(`${dir}/state.js`);
+s.state.manifest = { sources: {
+  m: { role: 'model' }, r1: { role: 'reference' }, r2: { role: 'reference' }, c: { role: 'comparison' } } };
+console.log(JSON.stringify(s.oracleSources().map((o) => o.key)));
+s.state.take = { keys: ['m', 'r1', 'c'] };
+console.log(JSON.stringify(s.oracleSources().map((o) => o.key)));
+"""
+    )
+    if got is not None:
+        assert json.loads(got[0]) == ["r1", "r2", "c"], got
+        assert json.loads(got[1]) == ["r1", "c"], got
+    listen = (JS_DIR / "listen.js").read_text()
+    commit = _select_take_source()
+    assert commit.index("state.take = take;") < commit.index("takeChanged();")
+    assert "takeChanged" in listen
+
+
+def test_prefer_is_offered_only_on_a_model_block() -> None:
+    head = _fn((JS_DIR / "versions.js").read_text(), "function fillHead")
+    assert "role === 'reference' || role === 'comparison'" in head
+    assert head.index("role === 'reference' || role === 'comparison'") < head.index("fb.prefer")
+
+
+def test_the_index_is_refreshed_after_a_post_or_an_undo() -> None:
+    post = _fn((JS_DIR / "feedback.js").read_text(), "async function post(")
+    assert "refreshIndex();" in post
+    assert "audition:feedback-changed" in (JS_DIR / "app.js").read_text()
+
+
+def test_the_blind_toggle_keeps_the_sounding_version() -> None:
+    handler = (JS_DIR / "app.js").read_text().split("$('blind').addEventListener('change'", 1)[1]
+    handler = handler.split("\n  });", 1)[0]
+    assert handler.index("activeKey()") < handler.index("state.blind = $('blind').checked")
+    assert "state.blindOrder.indexOf(at)" in handler and "keys.indexOf(sounding)" in handler
+
+
+def test_the_blind_tally_is_withheld_again_when_a_new_run_starts() -> None:
+    blind = (JS_DIR / "blind.js").read_text()
+    for head in ("export function chooseBlind", "export function abstainBlind"):
+        assert "resetBlindReveal();" in _fn(blind, head), head
+    assert "resetBlindReveal();\n  applyBlindGate();" in blind, "a comparison change"
+    assert "resetBlindReveal();" in _fn(
+        (JS_DIR / "listen.js").read_text(), "export async function loadSet"
+    )
+
+
+def test_shortcuts_yield_only_to_text_entry() -> None:
+    app = (JS_DIR / "app.js").read_text()
+    key = _fn(app, "function onKey")
+    assert "isTextEntry(ev.target)" in key
+    assert "tag === 'INPUT' ||" not in key, "a focused checkbox must not swallow Space"
+    node = _node(
+        """
+const src = (await import('node:fs')).readFileSync(`${dir}/app.js`, 'utf8');
+const m = src.match(/const TEXT_INPUTS[\\s\\S]*?\\|\\| \\(n\\.tagName === 'INPUT'[^;]*;/);
+const isTextEntry = new Function(`${m[0]}; return isTextEntry;`)();
+const f = (tagName, type, extra = {}) => isTextEntry({ tagName, type, ...extra });
+console.log([f('INPUT', 'text'), f('INPUT', 'number'), f('TEXTAREA'), f('SELECT'),
+  f('DIV', undefined, { isContentEditable: true }),
+  f('INPUT', 'checkbox'), f('INPUT', 'radio'), f('BUTTON')].join());
+"""
+    )
+    if node is not None:
+        assert node == ["true,true,true,true,true,false,false,false"], node
+
+
+def test_a_digit_beyond_the_list_selects_nothing() -> None:
+    body = _fn((JS_DIR / "versions.js").read_text(), "export function setVersion")
+    assert "Number.isInteger(slot)" in body
+    assert "state.blind ? state.blindOrder.length : state.take.keys.length" in body
+
+
+def test_a_route_applies_comparison_then_take_then_version() -> None:
+    route = _fn((JS_DIR / "listen.js").read_text(), "export async function applyRoute")
+    assert route.index("selectComparison(r.cmp)") < route.index("await selectTake(i)")
+    assert route.index("await selectTake(i)") < route.rindex("selectVersionByKey(r.ver)")
+
+
+def test_a_failed_set_load_is_reported_and_not_remembered() -> None:
+    load = _fn((JS_DIR / "listen.js").read_text(), "export async function loadSet")
+    assert "if (!res.ok) throw" in load and "t('set.loadFailed'" in load
+    assert load.index("t('set.loadFailed'") < load.index("localStorage.setItem(SET_KEY")
+    assert load.index("await fetch(") < load.index("state.setId = entry.id")
+    assert "document.body.classList.remove('blind-on')" in load
+    assert "state.comparisonId = named ? wanted.cmp : null" in load
+
+
+def test_a_take_cannot_be_chosen_while_a_set_loads() -> None:
+    listen = (JS_DIR / "listen.js").read_text()
+    assert "if (setLoading ||" in _select_take_source() or "setLoading" in listen
+    assert "setLoading = true;" in _fn(listen, "export async function loadSet")
+
+
+def test_state_checkboxes_are_not_restored_by_the_browser() -> None:
+    for ident in ("blind", "matchRms", "restartOnSwitch", "fbAttach"):
+        tag = re.search(rf'<input[^>]*id="{ident}"[^>]*>', HTML).group(0)
+        assert 'autocomplete="off"' in tag, ident
 
 
 def _run_all() -> int:

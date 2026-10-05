@@ -18,19 +18,34 @@
 
 import { $, el, state, roleClass, roleOf, sourceLabel, oracleSources } from './state.js';
 import { t, phrase, tree, currentLang } from './i18n.js';
+import { loadFeedbackIndex } from './palette.js';
 import {
   activeKey, comparedAgainst, conditions, evaluation, evidenceClaim,
 } from './player.js';
 
 const fb = {
   node: null,      // the question on screen, or null once an answer is final
-  trail: [],       // [{ node, tag, label }] — every answer given, in order
+  trail: [],       // [{ node, tag, unsure }] — every answer given, in order; labels are resolved at render
   entries: [],     // what has already been sent about this set
   path: '',        // where the server is writing, for the hint under the panel
   busy: false,
+  mine: {},        // set id -> ids of the entries THIS page posted, oldest first
+  drafts: {},      // set id -> composer text not yet sent
+  draftFor: null,  // the set whose text is in the box now
+  stale: null,     // the 409 reason on screen, so a language change can re-say it
 };
 
 const nodeOf = (id) => tree().nodes[id];
+
+/// Resolved in the language in force now, so a trail answered before a switch
+/// reads, and is sent, in the language the note is stamped with.
+function labelOf(step) {
+  if (step.unsure) return t('fb.notSure');
+  const choice = nodeOf(step.node).a.find((c) => c.tag === step.tag);
+  return choice ? phrase(choice) : step.tag;
+}
+
+const myIds = (setId) => fb.mine[setId] || [];
 
 export function resetComposer() {
   fb.node = tree().start;
@@ -39,7 +54,7 @@ export function resetComposer() {
 }
 
 function answer(node, choice) {
-  fb.trail.push({ node, tag: choice.tag, label: phrase(choice) });
+  fb.trail.push({ node, tag: choice.tag });
   fb.node = choice.leaf ? null : (choice.to || null);
   renderComposer();
   // The panel grows as it is answered, and a question that scrolls off under
@@ -49,7 +64,7 @@ function answer(node, choice) {
 
 function unsure(node) {
   const n = nodeOf(node);
-  fb.trail.push({ node, tag: n.unsure, label: t('fb.notSure') });
+  fb.trail.push({ node, tag: n.unsure, unsure: true });
   fb.node = null;
   renderComposer();
 }
@@ -65,7 +80,7 @@ function renderComposer() {
   trail.replaceChildren();
   fb.trail.forEach((step, i) => {
     if (i) trail.append(el('span', 'fb-sep', '›'));
-    trail.append(el('span', 'fb-step', step.label));
+    trail.append(el('span', 'fb-step', labelOf(step)));
   });
   $('fbBack').hidden = !fb.trail.length;
   $('fbRestart').hidden = !fb.trail.length;
@@ -121,7 +136,7 @@ export function renderComparedAgainst() {
   if (sel) sel.value = state.oracleOverride ? state.oracleOverride.key : '';
 }
 
-/// Rebuilt per set, so it only offers this manifest's own oracles.
+/// Rebuilt per set and per take, so it only offers the oracles the take holds.
 function buildComparedAgainstOverride() {
   const sel = $('cmpOverride');
   if (!sel) return;
@@ -135,6 +150,16 @@ function buildComparedAgainstOverride() {
     sel.append(opt);
   }
   // Left at auto; `renderComparedAgainst` applies any override in force.
+}
+
+/// A note may only claim an oracle the take on screen holds: the server refuses
+/// any other, and a reload cannot fix that.
+export function takeChanged() {
+  const held = (o) => !o || state.take.keys.includes(o.key);
+  if (!held(state.lastOracle)) state.lastOracle = null;
+  if (!held(state.oracleOverride)) state.oracleOverride = null;
+  buildComparedAgainstOverride();
+  renderComparedAgainst();
 }
 
 function onOverrideChange(ev) {
@@ -195,6 +220,30 @@ function say(msg, bad) {
   line.classList.toggle('bad', Boolean(bad));
 }
 
+/// The last action's reply belongs to the set and comparison it was about, so
+/// it comes off when either changes.
+export function clearStatus() {
+  say('');
+  $('fbReload').hidden = true;
+  fb.stale = null;
+}
+
+/// The composer's text is per set: what was written about one voice is never
+/// sent as a note on another. Called with the set about to be shown.
+export function switchDraft(setId) {
+  if (fb.draftFor === setId) return;
+  if (fb.draftFor !== null) fb.drafts[fb.draftFor] = $('fbComment').value;
+  $('fbComment').value = fb.drafts[setId] || '';
+  fb.draftFor = setId;
+}
+
+/// The palette and the bank read their counts from the index, so a note or an
+/// undo has to bring it up to date and redraw whatever shows it.
+async function refreshIndex() {
+  await loadFeedbackIndex();
+  document.dispatchEvent(new CustomEvent('audition:feedback-changed'));
+}
+
 /// One way to reach the log, so a note, a blind result and an undo report the
 /// same way and none of them can be sent twice by an impatient second click.
 /// True once the server has written it.
@@ -202,12 +251,24 @@ function say(msg, bad) {
 /// A 409 means the set was re-rendered after this page read it: nothing was
 /// written, the composer keeps its text and the page offers to re-read the set.
 /// A reply arriving after another set was opened is not this set's log, so it
-/// commits nothing to the panel.
+/// commits nothing to the panel; it only takes down the "sending" line if that
+/// is still what the line says.
+///
+/// Every entry this page writes is remembered by the id the server gives it, per
+/// set, and an undo names one of those ids: it never reaches an entry this page
+/// did not post. A 404 means the entry is already gone from the log.
 async function post(payload, done, after) {
   if (fb.busy) return false;
   fb.busy = true;
   const setEpoch = state.setEpoch;
-  say(t('fb.sending'));
+  const setId = state.setId;
+  const sending = t('fb.sending');
+  const superseded = () => {
+    if (setEpoch === state.setEpoch) return false;
+    if ($('fbStatus').textContent === sending) say('');
+    return true;
+  };
+  say(sending);
   try {
     const res = await fetch('feedback', {
       method: 'POST',
@@ -216,14 +277,35 @@ async function post(payload, done, after) {
     });
     if (res.status === 409) {
       const why = await res.json().catch(() => ({}));
-      if (setEpoch !== state.setEpoch) return false;
-      say(t('fb.stale', { reason: why.reason || '409' }), true);
+      if (superseded()) return false;
+      fb.stale = why.reason || '409';
+      say(t('fb.stale', { reason: fb.stale }), true);
       $('fbReload').hidden = false;
+      return false;
+    }
+    if (res.status === 404 && payload.op === 'undo') {
+      fb.mine[setId] = myIds(setId).filter((id) => id !== payload.id);
+      const log = await fetch(`feedback.json?set=${encodeURIComponent(setId || '')}`)
+        .then((r) => r.json()).catch(() => null);
+      if (superseded()) return false;
+      if (log) fb.entries = log.entries || [];
+      renderRecent();
+      say(t('fb.undoGone'), true);
       return false;
     }
     if (!res.ok) throw new Error(String(res.status));
     const got = await res.json();
-    if (setEpoch !== state.setEpoch) return true;
+    if (payload.op === 'undo') {
+      fb.mine[setId] = myIds(setId).filter((id) => id !== payload.id);
+    } else if (got.entry_id !== undefined && got.entry_id !== null) {
+      fb.mine[setId] = [...myIds(setId), got.entry_id];
+    }
+    refreshIndex();
+    if (superseded()) {
+      // The text just sent was parked as that set's draft when it was left.
+      if (after) fb.drafts[setId] = '';
+      return true;
+    }
     fb.entries = got.entries || [];
     fb.path = got.path || fb.path;
     if (after) after();
@@ -231,7 +313,7 @@ async function post(payload, done, after) {
     say(t(done));
     return true;
   } catch (err) {
-    if (setEpoch === state.setEpoch) say(t('fb.failed', { msg: err.message }), true);
+    if (!superseded()) say(t('fb.failed', { msg: err.message }), true);
     return false;
   } finally {
     fb.busy = false;
@@ -248,7 +330,7 @@ async function send() {
     lang: currentLang(),
     grade: grade(),
     tag: finalTag(),
-    answers: fb.trail.map((s) => ({ q: s.node, tag: s.tag, said: s.label })),
+    answers: fb.trail.map((s) => ({ q: s.node, tag: s.tag, said: labelOf(s) })),
     text,
     // Unattached, a note is about the voice rather than about the moment, so
     // it still has to carry which voice: that is what the log is keyed by.
@@ -335,8 +417,9 @@ export async function recordPreference() {
 }
 
 async function undo() {
-  if (!fb.entries.length) return;
-  await post({ op: 'undo', set: state.setId }, 'fb.undone');
+  const ids = myIds(state.setId);
+  if (!ids.length) return;
+  await post({ op: 'undo', set: state.setId, id: ids[ids.length - 1] }, 'fb.undone');
 }
 
 /* ----------------------------------------------------------------- recent */
@@ -414,7 +497,7 @@ function renderRecent() {
   } else {
     for (const entry of [...fb.entries].reverse()) box.append(entryEl(entry));
   }
-  $('fbUndo').disabled = !fb.entries.length;
+  $('fbUndo').disabled = !myIds(state.setId).length;
   $('fbWhere').textContent = fb.path ? t('fb.where', { path: fb.path }) : '';
 }
 
@@ -423,7 +506,7 @@ export async function loadFeedback() {
   const setEpoch = state.setEpoch;
   fb.entries = [];
   fb.path = '';
-  $('fbReload').hidden = true;
+  clearStatus();
   let got = null;
   try {
     got = await (await fetch(
@@ -448,7 +531,9 @@ export async function loadFeedback() {
 /// status line goes with them: it is the last action's reply and it would
 /// otherwise sit there in the language nobody is reading any more.
 export function refreshFeedback() {
-  say('');
+  // A refused note keeps saying why, in the new language, beside its button.
+  if (fb.stale !== null) say(t('fb.stale', { reason: fb.stale }), true);
+  else say('');
   renderComposer();
   renderRecent();
   buildComparedAgainstOverride();
@@ -468,8 +553,7 @@ export function wireFeedback() {
   $('cmpOverride').addEventListener('change', onOverrideChange);
   // `listen.js` re-reads the set; the composer is left as it is.
   $('fbReload').addEventListener('click', () => {
-    $('fbReload').hidden = true;
-    say('');
+    clearStatus();
     document.dispatchEvent(new CustomEvent('audition:reload-set'));
   });
 }

@@ -15,7 +15,7 @@ import {
 } from './state.js';
 import { t, phrase } from './i18n.js';
 import { activeKey, applyGains, renderLevels, span, startAt } from './player.js';
-import { recordPreference, renderComparedAgainst } from './feedback.js';
+import { clearStatus, recordPreference, renderComparedAgainst } from './feedback.js';
 import { renderIdent, writeRoute } from './address.js';
 import { renderSubject } from './subject.js';
 
@@ -191,7 +191,7 @@ function fillHead({ role, scope, head, seg }) {
   const hint = el('span', 'vhint', t(hintKey(role, scope)));
   hint.title = hint.textContent;
   head.append(hint);
-  if (state.blind) return;
+  if (state.blind || role === 'reference' || role === 'comparison') return;
   // Named for the block it stands in, and shown only in the block the sounding
   // version belongs to: "keep this one" records whatever is sounding, so in any
   // other block it would be a button pointing away from itself.
@@ -294,6 +294,7 @@ export function selectComparison(id) {
   state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
   state.lastOracle = null;
   state.oracleOverride = null;
+  clearStatus();
   // `blind.js` re-gates, redraws and rescores on this.
   document.dispatchEvent(new CustomEvent('audition:comparison'));
   const c = selectedComparison();
@@ -398,7 +399,10 @@ export function selectVersionByKey(key) {
  * somebody has not looked at yet.
  */
 export function setVersion(slot, { play = false } = {}) {
-  if (!state.take || slot < 0 || slot >= state.take.keys.length) return;
+  if (!state.take) return;
+  // A slot is a position in the list actually indexed: the draw when blind.
+  const n = state.blind ? state.blindOrder.length : state.take.keys.length;
+  if (!Number.isInteger(slot) || slot < 0 || slot >= n) return;
   state.versionIndex = slot;
   if (!state.blind) {
     state.wantKey = activeKey();

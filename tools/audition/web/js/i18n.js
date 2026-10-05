@@ -211,6 +211,7 @@ const STRINGS = {
     'fb.failed': 'could not send: {msg}',
     'fb.undo': 'undo the last one',
     'fb.undone': 'removed',
+    'fb.undoGone': 'That note was already removed.',
     'fb.recent': 'what has been said about this voice',
     'fb.none': 'Nothing yet.',
     'fb.needSomething': 'Answer something or write a line first.',
@@ -296,6 +297,7 @@ const STRINGS = {
     'empty.noRenders':
       'No renders found. Generate a set with tools/voicematch/make_audition.py — --model-only needs no plugin — then reload.',
     'empty.loadFailed': 'could not load the renders: {msg}',
+    'set.loadFailed': 'could not load this set: {msg}',
   },
 
   ja: {
@@ -497,6 +499,7 @@ const STRINGS = {
     'fb.failed': '送信できませんでした: {msg}',
     'fb.undo': '直前の送信を取り消す',
     'fb.undone': '取り消しました',
+    'fb.undoGone': 'その送信はすでに取り消されています。',
     'fb.recent': 'この音色について送られたこと',
     'fb.none': 'まだありません。',
     'fb.needSomething': 'どれかを選ぶか、ひとこと書いてから送ってください。',
@@ -581,6 +584,7 @@ const STRINGS = {
     'empty.noRenders':
       'レンダー結果が見つかりません。tools/voicematch/make_audition.py で生成してから再読み込みしてください（--model-only ならプラグインは要りません）。',
     'empty.loadFailed': '読み込めませんでした: {msg}',
+    'set.loadFailed': 'この set を読み込めませんでした: {msg}',
   },
 };
 
