@@ -429,7 +429,7 @@ VocalPitchTarget respan_target(const VocalPitchTarget& target, SampleRange range
 }
 
 std::vector<float> split_envelope(const std::vector<float>& envelope, double fraction, bool left) {
-  if (envelope.empty() || envelope.size() == 1) return envelope;
+  if (envelope.empty()) return {};
   const double cut = std::clamp(fraction, 0.0, 1.0);
   const auto value_at = [&](double position_value) {
     const double normalized = std::clamp(position_value, 0.0, 1.0);
@@ -441,7 +441,9 @@ std::vector<float> split_envelope(const std::vector<float>& envelope, double fra
   };
   std::vector<float> result(envelope.size());
   for (size_t index = 0; index < result.size(); ++index) {
-    const double local = static_cast<double>(index) / static_cast<double>(result.size() - 1);
+    const double local = result.size() > 1
+                             ? static_cast<double>(index) / static_cast<double>(result.size() - 1)
+                             : 0.0;
     result[index] = value_at(left ? cut * local : cut + (1.0 - cut) * local);
   }
   return result;
@@ -1064,7 +1066,8 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
     merged.edit.pitch = canonical_merge_pitch(selected, state, merged, analysis, render_settings,
                                               static_cast<uint32_t>(source.sample_rate()));
     if (!merged.edit.amplitude_envelope.empty()) {
-      merged.edit.amplitude_envelope = {merged.edit.amplitude_envelope.front()};
+      auto& envelope = merged.edit.amplitude_envelope;
+      envelope.erase(envelope.begin() + 1, envelope.end());
     }
   }
   validate_note(merged, analysis, source_length, output_length);
