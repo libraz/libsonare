@@ -1000,3 +1000,54 @@ TEST_CASE("Track mixer refuses a self-keyed or cyclic lane sidechain",
   CHECK_FALSE(m.set_lane_sidechain(50, 0, 40));
   CHECK_FALSE(m.set_lane_sidechain(40, 1, 40));
 }
+
+namespace {
+
+Strip quiet_strip() {
+  Strip strip;
+  strip.fader_db = -12.0f;
+  return strip;
+}
+
+}  // namespace
+
+TEST_CASE("Track mixer release_track_strip is not undone by the next set_track_lanes",
+          "[track_mixer_routing][strip-release]") {
+  constexpr int kBlocks = 4;
+  TrackMixerRuntime m;
+  m.prepare(kSampleRate, kBlock);
+  REQUIRE(m.set_track_lanes({TrackLaneConfig{1}}));
+  REQUIRE(m.set_track_strip(1, quiet_strip()));
+  REQUIRE_FALSE(agree(render(m, {1}, 2, kBlocks), dry(1, kBlocks)));
+
+  REQUIRE(m.release_track_strip(1));
+  REQUIRE(agree(render(m, {1}, 2, kBlocks), dry(1, kBlocks)));
+  REQUIRE(m.set_track_lanes({TrackLaneConfig{1}}));
+  REQUIRE(agree(render(m, {1}, 2, kBlocks), dry(1, kBlocks)));
+  // Nothing left to release is still success.
+  REQUIRE(m.release_track_strip(1));
+  REQUIRE(m.release_track_strip(77));
+}
+
+TEST_CASE("Track mixer drops an owned strip when its track leaves the lane set",
+          "[track_mixer_routing][strip-release]") {
+  constexpr int kBlocks = 4;
+  TrackMixerRuntime m;
+  m.prepare(kSampleRate, kBlock);
+  REQUIRE(m.set_track_lanes({TrackLaneConfig{1}, TrackLaneConfig{2}}));
+  REQUIRE(m.set_track_strip(1, quiet_strip()));
+  REQUIRE(m.set_track_lanes({TrackLaneConfig{2}}));
+  REQUIRE(m.set_track_lanes({TrackLaneConfig{1}, TrackLaneConfig{2}}));
+  REQUIRE(agree(render(m, {1}, 2, kBlocks), dry(1, kBlocks)));
+}
+
+TEST_CASE("Track mixer binds a strip for every one of 40 successive tracks",
+          "[track_mixer_routing][strip-release]") {
+  TrackMixerRuntime m;
+  m.prepare(kSampleRate, kBlock);
+  for (uint32_t id = 1; id <= 40; ++id) {
+    INFO("track " << id);
+    REQUIRE(m.set_track_lanes({TrackLaneConfig{id}}));
+    REQUIRE(m.set_track_strip(id, quiet_strip()));
+  }
+}

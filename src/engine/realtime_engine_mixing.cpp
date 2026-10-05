@@ -436,6 +436,14 @@ bool RealtimeEngine::bind_track_strip(uint32_t track_id, mixing::ChannelStrip* s
   return ok;
 }
 
+bool RealtimeEngine::release_track_strip(uint32_t track_id) {
+  const bool ok = track_mixer_runtime_.release_track_strip(track_id);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
 bool RealtimeEngine::set_track_strip(uint32_t track_id, const mixing::api::Strip& strip) {
   const bool ok = track_mixer_runtime_.set_track_strip(track_id, strip);
   if (ok) {

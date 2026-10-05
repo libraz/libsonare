@@ -239,6 +239,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// unassigned; a shorter computed key is zero-padded.
   void deliver_master_sidechains(mixing::ChannelStrip* strip, int num_samples) noexcept;
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
+  /// Unbinds @p track_id's lane and destroys its owned strip, binding record and
+  /// lane sidechain bindings. CONTROL thread only, not concurrent with process().
+  /// True when nothing was bound.
+  bool release_track_strip(uint32_t track_id);
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
                                  bool reset_on_bypass = false) noexcept;
@@ -765,6 +769,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // sidechains_ ends here.
   void publish_sidechains() noexcept { sidechains_published_.store(sidechains_); }
   void prune_lane_sidechains(uint32_t track_id, size_t insert_count) noexcept;
+  // Destroys owned strip @p index and every pointer to it (binding record, lane
+  // states). Control thread, not concurrent with process().
+  void erase_owned_strip(size_t index) noexcept;
   // True when keying @p track_id from @p source_track_id is a self key or closes
   // a cycle over the lane bindings by track id, skipping entry @p skip.
   bool lane_key_closes_cycle(uint32_t track_id, uint32_t source_track_id,

@@ -241,6 +241,16 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   std::array<bool, kMaxTrackLanes> replace_sends{};
   const std::vector<TrackLaneConfig>* previous_lanes = lanes_.control_current().get();
   size_t staged_owned_count = 0;
+  // Owned strips of tracks leaving the snapshot are destroyed at commit, so only the rest count.
+  size_t retained_owned_count = 0;
+  for (const OwnedStrip& owned : owned_strips_) {
+    for (const TrackLaneConfig& config : *snapshot) {
+      if (config.track_id == owned.track_id) {
+        ++retained_owned_count;
+        break;
+      }
+    }
+  }
   try {
     for (size_t lane_index = 0; lane_index < snapshot->size(); ++lane_index) {
       const TrackLaneConfig& config = (*snapshot)[lane_index];
@@ -249,7 +259,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
         candidate_strips[lane_index] = owned_strip_for(config.track_id);
       }
       if (candidate_strips[lane_index] == nullptr && !config.sends.empty()) {
-        if (owned_strips_.size() + staged_owned_count >= kMaxTrackLanes) return false;
+        if (retained_owned_count + staged_owned_count >= kMaxTrackLanes) return false;
         auto strip = std::make_unique<mixing::ChannelStrip>(
             mixing::ChannelStripConfig{0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f,
                                        mixing::EqPosition::PreFader, 0.0f, false});
@@ -327,6 +337,15 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   lanes_.acquire_control_quiescent();
   sidechains_reader_.try_load_into(&audio_sidechains_);
   prepare_lanes_from_snapshot(*snapshot, &candidate_strips);
+  for (size_t index = owned_strips_.size(); index > 0; --index) {
+    const uint32_t track_id = owned_strips_[index - 1].track_id;
+    const bool present =
+        std::any_of(snapshot->begin(), snapshot->end(),
+                    [track_id](const TrackLaneConfig& lane) { return lane.track_id == track_id; });
+    if (present) continue;
+    erase_owned_strip(index - 1);
+    prune_lane_sidechains(track_id, 0);
+  }
   return true;
 }
 
@@ -829,6 +848,50 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     return true;
   }
   return false;
+}
+
+bool TrackMixerRuntime::release_track_strip(uint32_t track_id) {
+  if (track_id == 0) return false;
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+    prepare_lanes_from_snapshot(*lanes);
+  }
+  for (LaneState& lane : lane_states_) {
+    if (lane.track_id != track_id) continue;
+    clear_insert_automation_for_lane(static_cast<size_t>(&lane - lane_states_.data()));
+    lane.strip = nullptr;
+  }
+  for (size_t index = 0; index < owned_strips_.size(); ++index) {
+    if (owned_strips_[index].track_id != track_id) continue;
+    erase_owned_strip(index);
+    break;
+  }
+  track_strip_bindings_.erase(
+      std::remove_if(track_strip_bindings_.begin(), track_strip_bindings_.end(),
+                     [track_id](const TrackStripBinding& b) { return b.track_id == track_id; }),
+      track_strip_bindings_.end());
+  prune_lane_sidechains(track_id, 0);
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+    try {
+      configure_lane_sends(*lanes, track_id);
+    } catch (...) {
+      return false;
+    }
+    if (!recompute_lane_pdc(*lanes)) return false;
+  }
+  return true;
+}
+
+void TrackMixerRuntime::erase_owned_strip(size_t index) noexcept {
+  const mixing::ChannelStrip* raw = owned_strips_[index].strip.get();
+  for (LaneState& lane : lane_states_) {
+    if (lane.strip == raw) lane.strip = nullptr;
+  }
+  track_strip_bindings_.erase(
+      std::remove_if(track_strip_bindings_.begin(), track_strip_bindings_.end(),
+                     [raw](const TrackStripBinding& b) { return b.strip == raw; }),
+      track_strip_bindings_.end());
+  owned_strips_.erase(owned_strips_.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
 bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec) {

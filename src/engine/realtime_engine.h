@@ -716,6 +716,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
                             uint32_t source_id);
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
+  /// Unbinds @p track_id's lane and destroys its owned strip and binding record.
+  /// CONTROL thread only, not concurrent with process(). True when nothing was bound.
+  bool release_track_strip(uint32_t track_id);
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,

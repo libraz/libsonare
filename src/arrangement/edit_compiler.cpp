@@ -1555,18 +1555,18 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
 #endif
 #if defined(SONARE_WITH_MIXING)
     if (options.bind_strips) {
+      for (const CompiledTrackLane& lane : timeline.track_lanes) {
+        if (has_strip_binding(timeline, lane.track_id)) continue;
+        if (!engine.release_track_strip(lane.track_id)) {
+          return apply_cleared(engine, ErrorCode::InvalidState,
+                               "the engine refused to release a track strip");
+        }
+      }
       for (const MixerStripBinding& binding : timeline.mixer.bindings) {
         if (!engine.set_track_strip(binding.track_id,
                                     *find_scene_strip(timeline.mixer, binding.strip_id))) {
           return apply_cleared(engine, ErrorCode::InvalidState,
                                "the engine refused a validated track strip");
-        }
-      }
-      for (const CompiledTrackLane& lane : timeline.track_lanes) {
-        if (has_strip_binding(timeline, lane.track_id)) continue;
-        if (!engine.bind_track_strip(lane.track_id, nullptr)) {
-          return apply_cleared(engine, ErrorCode::InvalidState,
-                               "the engine refused to unbind a track strip");
         }
       }
     }

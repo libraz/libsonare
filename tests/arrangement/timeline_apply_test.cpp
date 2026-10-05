@@ -386,53 +386,35 @@ TEST_CASE("bind_strips binds each 1:1 strip and unbinds lanes without a binding"
   REQUIRE(bound_render != render(unbound));
 }
 
-TEST_CASE("a setter refusal after the first mutation clears every timeline domain",
+TEST_CASE("successive applies with fresh track ids never exhaust the strip table",
           "[arrangement][timeline-apply]") {
-  // The track mixer's owned-strip table holds 32 entries and is never pruned, so a 33rd distinct
-  // bound track is refused by set_track_strip after the lanes were already published.
+  // Each timeline binds 31 strips to track ids no earlier timeline used, so the engine must
+  // release the previous timeline's owned strips instead of accumulating past 32.
   ProjectSpec spec;
   spec.track_count = sonare::engine::TrackMixerRuntime::kMaxTrackLanes;
   spec.later_track_gain = 0.5f;
-  spec.marker_count = 1;
-  spec.fader_automation_db = -6.0f;
-  spec.midi_clip_count = 1;
-  const arr::CompiledTimeline first = make_timeline(spec);
-  REQUIRE(first.track_lanes.size() == 32);
-  REQUIRE(first.mixer.bindings.size() == 31);
+  const arr::CompiledTimeline base = make_timeline(spec);
+  REQUIRE(base.mixer.bindings.size() == 31);
 
-  // 31 bound strips from the timeline; a hand-bound strip on the unbound first track fills the
-  // table.
   arr::ApplyOptions options;
   options.bind_strips = true;
   RealtimeEngine engine;
-  REQUIRE(arr::apply_to_engine(first, *prepared(engine), options).ok());
-  REQUIRE(engine.set_track_strip(first.track_lanes.front().track_id, {}));
-
-  // Second: one new track id bound to its own strip.
-  constexpr uint32_t last_track = 1000;
-  arr::CompiledTimeline second = first;
-  second.track_lanes = {{last_track}};
-  second.mixer.bindings = {{last_track, first.mixer.bindings.back().strip_id}};
-  second.mixer.automation_bindings.clear();
-  second.automation_lanes.clear();
-  REQUIRE(engine.validate_track_lanes({{last_track}}));
-  const arr::ApplyResult result = arr::apply_to_engine(second, engine, options);
-  REQUIRE_FALSE(result.ok());
-  REQUIRE(result.outcome == arr::ApplyOutcome::kCleared);
-  REQUIRE(result.code == ErrorCode::InvalidState);
-  REQUIRE(result.installed_automation.empty());
-
-  const EngineState state = capture(engine);
-  REQUIRE(state.clips == 0);
-  REQUIRE(state.midi_clips == 0);
-  REQUIRE(state.markers == 0);
-  REQUIRE(state.automation_lanes == 0);
-  REQUIRE(state.lane_ids.empty());
-  REQUIRE(state.bpm_start == sonare::constants::kDefaultBpm);
-  REQUIRE(state.numerator == 4);
-  REQUIRE(state.denominator == 4);
-  const std::vector<float> out = render(engine);
-  REQUIRE(out == std::vector<float>(out.size(), 0.0f));
+  prepared(engine);
+  for (uint32_t round = 0; round < 40; ++round) {
+    arr::CompiledTimeline next = base;
+    next.track_lanes.clear();
+    next.mixer.automation_bindings.clear();
+    next.automation_lanes.clear();
+    for (size_t i = 0; i < base.mixer.bindings.size(); ++i) {
+      const uint32_t track_id = 1000 + round * 100 + static_cast<uint32_t>(i);
+      next.track_lanes.push_back({track_id});
+      next.mixer.bindings[i].track_id = track_id;
+    }
+    const arr::ApplyResult result = arr::apply_to_engine(next, engine, options);
+    INFO("round " << round);
+    REQUIRE(result.ok());
+    REQUIRE(result.outcome == arr::ApplyOutcome::kApplied);
+  }
 }
 #else
 TEST_CASE("bind_strips with strip bindings is refused without mixing",
