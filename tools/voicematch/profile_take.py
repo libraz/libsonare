@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -11,8 +10,9 @@ from pathlib import Path
 import numpy as np
 from metrics import _db, _spectrum, to_mono
 from phrases import build_takes
+from render_evidence import archived_records
+from render_evidence import archived_take_ids as archive_take_index
 from room import Room, match_sends, measurable_room
-from wavio import read_wav
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 
@@ -253,29 +253,25 @@ def archived_take_references(archive: Path, capture_id: str, take_id: str, sr: i
     These come from the audition archive rather than from the note corpus,
     because a phrase is not in the note corpus: the corpus is one note at a
     time, which is exactly the condition under which everything measured here
-    is inactive.
+    is inactive. Per timbre, the newest v2 generation whose file still checks
+    out is taken, else the v1 file; a v1 reference records no request or source
+    and is measured as historical. Which one each came from is said on stderr.
     """
-    index = archive / "index.json"
-    if not index.exists():
-        return {}
-    meta = json.loads(index.read_text()).get(capture_id, {}).get(take_id)
-    if not meta:
-        return {}
-    gain = 10.0 ** (float(meta["gain_db"]) / 20.0)
     out = {}
-    for path in sorted((archive / capture_id / take_id).glob("*.wav")):
-        audio, file_sr = read_wav(path)
-        if file_sr == sr:
-            out[path.stem] = np.asarray(audio, dtype=np.float64) / gain
+    for record in archived_records(archive, capture_id, take_id):
+        if record.timbre in out:
+            continue
+        loaded = record.load()
+        if loaded is None or loaded[1] != sr:
+            continue
+        out[record.timbre] = loaded[0]
+        print(f"  {take_id}/{record.timbre}: {record.describe()}", file=sys.stderr)
     return out
 
 
 def archived_take_ids(archive: Path, capture_id: str) -> set[str]:
-    """Which phrases the archive holds a reference for, by take id."""
-    index = archive / "index.json"
-    if not index.exists():
-        return set()
-    return set(json.loads(index.read_text()).get(capture_id, {}))
+    """Which phrases the archive holds a reference for, by take id, in either archive."""
+    return set(archive_take_index(archive, capture_id))
 
 
 def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose: bool) -> int:

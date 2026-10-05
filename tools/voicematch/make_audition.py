@@ -83,6 +83,18 @@ The archive stores each take under a gain computed from its reference renders
 ALONE, so it does not move when a page's candidates get louder, and divides that
 gain back out on the way in. Only a take whose every reference came from the
 plugin in one run is written, so nothing in it has been through 16 bits twice.
+An archived render is adopted only when its request (the reference MIDI as
+written, rate, length, render method) and its source (the resolved plugin or
+font state, key map, key switch, rig and room classes) match what this run
+would render exactly; a caption is in neither. The v1 `index.json` records
+neither, so it is never adopted and is left for reading by hand.
+
+A page is written as one generation: every WAV goes into a directory named by
+the set's digest, and `manifest.json` is replaced only after it is complete, so
+an asset an older manifest (and the feedback against it) points at is never
+overwritten. Each version of each take carries its evidence — request, source,
+build and asset identities and the library's render-path record — see
+`render_evidence.py`.
 
 `--title` is worth setting on any page built to settle a question. The default
 names the voice, which is right until there are two pages of the same voice on
@@ -97,6 +109,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -122,6 +135,7 @@ from boundary import (
     Reference,
     RenderRequest,
     assess,
+    canonical_digest,
 )
 from calibration import Variant
 from capture import (
@@ -138,11 +152,29 @@ from capture import (
 from capture import load_config as capture_load_config
 from metrics import _db
 from phrases import Take, build_takes
-from render_model import render_model
+from render_evidence import (
+    ARCHIVE_GAIN_VERSION,
+    ARCHIVE_INDEX,
+    ARCHIVE_V2_DIR,
+    REFERENCE_UNVERIFIED,
+    REFERENCE_VERIFIED,
+    SOURCE_UNRESOLVED,
+    archived_records,
+    au_source_id,
+    file_digest,
+    module_source_id,
+    publish_generation,
+    read_archive_index,
+    reference_request,
+    set_generation,
+    staging_dir,
+    write_json_atomic,
+)
+from render_model import RenderedAudio, render_model_rendered
 from render_oracle import render_oracle_fluidsynth
 from sf2 import SoundFont
 from smf import Note, write_smf
-from wavio import read_wav, write_wav
+from wavio import write_wav
 
 SR = 48000
 DEFAULT_OUT = CORPUS_ROOT / "audition"
@@ -159,23 +191,29 @@ DEFAULT_PROBE_OUT = CORPUS_ROOT / "probe"
 # every page copying its own was both the bulk of the disk and the reason none
 # of them could be deleted.
 DEFAULT_REFERENCE_ARCHIVE = CORPUS_ROOT / "audition-references"
+#: Under a page, one directory per set generation.
+GENERATIONS_DIR = "generations"
 
 
 #: Renders one SMF in a fresh interpreter. The tuning override table is read
 #: when the library loads, so two settings of the same constant cannot be
 #: rendered by one process -- the second would silently get the first's values.
 _VARIANT_WORKER = r"""
+import json
 import sys
 import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
-from render_model import render_model
-smf, out, seconds, sr = sys.argv[1], sys.argv[2], float(sys.argv[3]), int(sys.argv[4])
-rig = sys.argv[5] != "0"
-preset = sys.argv[6] if len(sys.argv) > 6 else ""
+from render_model import render_model_rendered
+smf, out, evidence_out = sys.argv[1], sys.argv[2], sys.argv[3]
+seconds, sr, rig = float(sys.argv[4]), int(sys.argv[5]), sys.argv[6] != "0"
+preset, request_id = sys.argv[7], sys.argv[8] or None
 with open(smf, "rb") as fh:
-    a = np.asarray(render_model(fh.read(), seconds, sr, rig=rig, preset=preset),
-                   dtype=np.float32)
-np.save(out, a)
+    rendered = render_model_rendered(
+        fh.read(), seconds, sr, rig=rig, preset=preset, request_id=request_id
+    )
+np.save(out, np.asarray(rendered.audio, dtype=np.float32))
+with open(evidence_out, "w", encoding="utf-8") as fh:
+    json.dump(rendered.evidence, fh)
 """
 
 
@@ -188,7 +226,21 @@ def render_variant(
     rig: bool = True,
     preset: str = "",
 ) -> np.ndarray:
-    """One take under one override set, in its own interpreter."""
+    """`render_variant_rendered` for a caller that wants the audio alone."""
+    return render_variant_rendered(smf, seconds, sr, overrides, lib_path, rig, preset).audio
+
+
+def render_variant_rendered(
+    smf: bytes,
+    seconds: float,
+    sr: int,
+    overrides: str,
+    lib_path: str = "",
+    rig: bool = True,
+    preset: str = "",
+    request_id: str | None = None,
+) -> RenderedAudio:
+    """One take under one override set, in its own interpreter, with its evidence."""
     env = dict(os.environ)
     if lib_path:
         env["SONARE_LIB_PATH"] = lib_path
@@ -200,6 +252,7 @@ def render_variant(
         smf_path = Path(tmp) / "take.mid"
         smf_path.write_bytes(smf)
         out_path = Path(tmp) / "render.npy"
+        evidence_path = Path(tmp) / "evidence.json"
         proc = subprocess.run(
             [
                 sys.executable,
@@ -207,10 +260,12 @@ def render_variant(
                 _VARIANT_WORKER,
                 str(smf_path),
                 str(out_path),
+                str(evidence_path),
                 str(seconds),
                 str(sr),
                 "1" if rig else "0",
                 preset,
+                request_id or "",
             ],
             capture_output=True,
             check=False,
@@ -220,7 +275,7 @@ def render_variant(
         )
         if proc.returncode:
             raise RuntimeError(proc.stderr[-4000:])
-        return np.load(out_path)
+        return RenderedAudio(np.load(out_path), json.loads(evidence_path.read_text()))
 
 
 def digest(audio: np.ndarray) -> str:
@@ -247,62 +302,109 @@ def shared_gain(renders: dict[str, np.ndarray], headroom_db: float = -1.0) -> fl
     return float(10.0 ** (headroom_db / 20.0) / peak)
 
 
-def archived_references(
-    archive: Path, capture_id: str, take_id: str, timbres: list[dict]
-) -> dict[str, np.ndarray]:
-    """Reference renders for one take, back at the level the plugin produced.
+def _frames_channels(audio: np.ndarray) -> tuple[int, int]:
+    return int(audio.shape[0]), int(audio.shape[1]) if audio.ndim > 1 else 1
 
-    The archive stores them under a gain of its own so 16 bits are spent on the
-    signal rather than on whatever headroom a particular page needed, and that
-    gain is divided out here. One gain per take rather than one per file, so the
-    level difference BETWEEN timbres -- which is a real property of the three
-    instruments and one of the things a page is read for -- survives the trip.
+
+def archived_references(
+    archive: Path, capture_id: str, take_id: str, wanted: dict[str, tuple[str, str | None]]
+) -> dict[str, tuple[np.ndarray, str]]:
+    """Reference renders for one take, back at the level the plugin produced, with their source_id.
+
+    `wanted` maps a timbre id to the (request_id, source_id) this run would
+    render it from. A v2 render is adopted only when both match and its WAV
+    still has the digest and shape the index recorded. A source_id of None is a
+    source this machine cannot resolve: the request alone is matched then, and
+    only while every stored candidate names the same source. A v1 entry records
+    neither identity and is never adopted.
     """
-    index = archive / "index.json"
-    if not index.exists():
-        return {}
-    meta = json.loads(index.read_text()).get(capture_id, {}).get(take_id)
-    if not meta:
-        return {}
-    gain = 10.0 ** (float(meta["gain_db"]) / 20.0)
-    if gain <= 0.0:
-        return {}
-    out: dict[str, np.ndarray] = {}
-    for timbre in timbres:
-        path = archive / capture_id / take_id / f"{timbre['id']}.wav"
-        if not path.exists():
-            continue
-        audio, sr = read_wav(path)
-        # A rate mismatch is a different capture, not a resampling job: the
-        # analysis windows and the take's own timing are written for one rate.
-        if sr != SR:
+    records = archived_records(archive, capture_id, take_id)
+    out: dict[str, tuple[np.ndarray, str]] = {}
+    for tid, (request_id, source_id) in wanted.items():
+        stored = [r for r in records if r.timbre == tid and not r.historical]
+        matching = [
+            r for r in stored if r.request_id == request_id and source_id in (None, r.source_id)
+        ]
+        if source_id is None and len({r.source_id for r in matching}) > 1:
             print(
-                f"  {timbre['id']}: archived at {sr} Hz, not {SR} — rendering instead",
+                f"  {tid}: the archive holds this request under several sources and this "
+                f"one cannot be resolved here — not adopted",
                 file=sys.stderr,
             )
             continue
-        out[timbre["id"]] = np.asarray(audio, dtype=np.float64) / gain
+        for record in matching:
+            loaded = record.load()
+            if loaded is None:
+                print(f"  {tid}: archived WAV missing or changed since indexed", file=sys.stderr)
+                continue
+            out[tid] = (loaded[0], record.source_id)
+            break
+        if stored and not matching:
+            print(
+                f"  {tid}: archived under a different request or source — rendering instead",
+                file=sys.stderr,
+            )
+    if len(out) < len(wanted) and any(r.historical for r in records):
+        print(
+            f"  {capture_id}/{take_id}: the v1 archive holds this take without a request or "
+            f"source identity, so it is not adopted (read it by hand if it is wanted)",
+            file=sys.stderr,
+        )
     return out
 
 
 def archive_references(
-    archive: Path, capture_id: str, take_id: str, renders: dict[str, np.ndarray]
+    archive: Path,
+    capture_id: str,
+    take_id: str,
+    renders: dict[str, np.ndarray],
+    identities: dict[str, dict],
 ) -> None:
-    """Keep this take's reference renders so no later page needs the plugin."""
+    """Keep this take's reference renders, as one new generation, so no later page needs the plugin.
+
+    `identities` gives each timbre's `request`, `request_id` and `source_id`.
+    The WAVs are complete in their generation directory before the index names it.
+    """
     if not renders:
         return
     gain = shared_gain(renders)
-    directory = archive / capture_id / take_id
-    directory.mkdir(parents=True, exist_ok=True)
+    parent = archive / ARCHIVE_V2_DIR / capture_id / take_id
+    staging = staging_dir(parent)
+    records = {}
     for name, audio in renders.items():
-        write_wav(directory / f"{name}.wav", np.clip(audio * gain, -1.0, 1.0), SR, bits=24)
-    index = archive / "index.json"
-    data = json.loads(index.read_text()) if index.exists() else {}
-    data.setdefault(capture_id, {})[take_id] = {
-        "gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 4),
-        "timbres": sorted(renders),
-    }
-    index.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+        wav = staging / f"{name}.wav"
+        write_wav(wav, np.clip(audio * gain, -1.0, 1.0), SR, bits=24)
+        frames, channels = _frames_channels(audio)
+        request = identities[name]["request"]
+        records[name] = {
+            "request_id": identities[name]["request_id"],
+            "request": {
+                k: request[k] for k in ("method", "method_version", "sample_rate", "frames")
+            },
+            "source_id": identities[name]["source_id"],
+            "asset_id": file_digest(wav),
+            "frames": frames,
+            "channels": channels,
+        }
+    generation = canonical_digest(
+        {"timbres": records, "gain": gain, "gain_version": ARCHIVE_GAIN_VERSION}
+    )
+    target = publish_generation(staging, parent, generation)
+    for name, record in records.items():
+        record["path"] = str((target / f"{name}.wav").relative_to(archive))
+    index = read_archive_index(archive)
+    entries = index.setdefault("takes", {}).setdefault(capture_id, {}).setdefault(take_id, [])
+    if not any(e.get("generation") == generation for e in entries):
+        entries.append(
+            {
+                "generation": generation,
+                "gain": gain,
+                "gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 4),
+                "gain_version": ARCHIVE_GAIN_VERSION,
+                "timbres": records,
+            }
+        )
+    write_json_atomic(archive / ARCHIVE_INDEX, index)
 
 
 #: Prefix every knob that belongs to the rig rather than to the instrument.
@@ -645,6 +747,126 @@ def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto")
     return reference + model_side + path
 
 
+def reference_plan(
+    cfg: Capture,
+    timbre: dict,
+    take: Take,
+    channel: int,
+    total: float,
+    smf: bytes,
+    program: int,
+    bank: int,
+):
+    """How one timbre's reference is rendered: (request, source_id, render, unresolved).
+
+    Resolved before the archive is asked, since a stored render is adopted only
+    for the request and source this run would render now. A plugin source whose
+    preset or state is not on this machine has no source_id, and `unresolved`
+    says why. Raises `ReferenceUnavailable` for a capture naming no plugin, and
+    whatever resolving a module font raises.
+    """
+    ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
+    if cfg.source_class == "module":
+        # Addressed by the overlay's preset name: a family font renumbers the GS map.
+        font, preset = resolve_font(cfg.raw, timbre)
+        played = {n.note for n in take.notes}
+        rows = {
+            n: row
+            for n, row in _module_reference_rows(font, preset, timbre["id"]).items()
+            if n in played
+        }
+        request = reference_request(
+            "module",
+            seconds=total,
+            sample_rate=SR,
+            notes=list(take.notes),
+            cc=list(take.cc_events),
+            channel=ref_channel,
+            tail_s=float(take.tail_s),
+        )
+        return (
+            request,
+            module_source_id(cfg.raw, timbre, font, preset, rows),
+            lambda: render_module_reference(
+                cfg.raw, timbre, take.notes, take.cc_events, ref_channel, take.tail_s, total, SR
+            ),
+            None,
+        )
+    if "plugin" not in cfg.raw:
+        # No other layer may stand in for what a capture cannot supply.
+        raise ReferenceUnavailable(
+            f"{cfg.id}/{timbre['id']} names no plugin and is not a module capture, "
+            f"so no reference can be rendered here, and --reference-from holds none "
+            f"of this take either."
+        )
+    # Built through the same helper the capture path uses, so a timbre
+    # selected by preset reaches the plugin here too.
+    source = source_for(cfg.raw, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=SR)
+    # A slot of a multitimbral rack is NOT selected by the source here,
+    # though: aubounce ignores `--channel` whenever it is given a MIDI file,
+    # because the file supplies its own channels. So the slot that answers is
+    # whichever one sits on the channel the SMF was written on, and every
+    # timbre of a rack renders from that same slot unless the file is
+    # rewritten per timbre. It is silent -- each render has the right length,
+    # the right level and an organ in it, and the two registrations come back
+    # byte-identical.
+    #
+    # The model keeps the take's own channel, which is what makes a note
+    # number a drum rather than a pitch; a reference gets its timbre's,
+    # one-based in the capture definition and zero-based in the file.
+    # A take is written in sounding pitch, so an instrument mapped away from
+    # it needs its own score even when the channel already matches.
+    ref_notes = (
+        [replace(n, note=source.key(n.note)) for n in take.notes]
+        if source.key_offset
+        else take.notes
+    )
+    # A timbre selected from the keyboard needs its own score for the same
+    # reason a rack slot does, and for the same failure: the switch would
+    # simply be absent and every switched timbre would render as the
+    # unswitched instrument, at the right length and level, byte-identical to
+    # its sibling. One switch per onset, since a switch is consumed by the
+    # note it arms rather than latching for the phrase.
+    ref_notes = with_keyswitches(source, ref_notes)
+    # The phrase moves back by the lead, so anything else on its timeline
+    # moves with it. On a take under the sustain pedal, leaving CC64 where it
+    # was would lift the dampers a third of a second early and read as the
+    # variant.
+    lead_s = source.keyswitch_lead_ms / 1000.0
+    ref_cc = tuple((at + lead_s, cc, v) for at, cc, v in take.cc_events)
+    timbre_smf = (
+        smf
+        if (ref_channel == channel and not source.key_offset and not source.keyswitch)
+        else write_smf(
+            ref_notes,
+            program=program,
+            bank=bank,
+            end_pad=take.tail_s,
+            cc_events=ref_cc,
+            channel=ref_channel,
+        )
+    )
+    source_id, unresolved = None, None
+    try:
+        source_id = au_source_id(source, cfg.raw)
+    except (FileNotFoundError, ValueError) as exc:
+        unresolved = str(exc)
+    request = reference_request("au", seconds=total, sample_rate=SR, smf=timbre_smf)
+    return (
+        request,
+        source_id,
+        lambda: render_oracle_au(timbre_smf, total, SR, source=source),
+        unresolved,
+    )
+
+
+def _module_unavailable(cfg: Capture, tid: str, exc: Exception) -> ReferenceUnavailable:
+    return ReferenceUnavailable(
+        f"{cfg.id}/{tid}'s module reference did not render: {exc}. "
+        f"--reference-from holds none of this take either."
+    )
+
+
 def render_reference_timbres(
     cfg: Capture,
     timbres: list[dict],
@@ -656,7 +878,7 @@ def render_reference_timbres(
     bank: int,
     args,
     archive: Path | None,
-) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[str, dict]]:
     """Every timbre of one capture, rendered or read from the archive.
 
     Shared by the page's reference and by each capture `comparison_captures`
@@ -666,100 +888,84 @@ def render_reference_timbres(
     render error, or a capture naming no plugin); a single timbre the plugin
     itself cannot reach is printed and left out instead, since the rest of the
     capture still answers.
+
+    Returns (renders, fresh, identities): `fresh` is what this run rendered,
+    and `identities` gives each timbre's `request`, `request_id`, `source_id`,
+    `origin` (`archive` or `rendered`) and `status`: `unverified` for a stored
+    render adopted while its source could not be resolved here.
     """
-    held = archived_references(archive, cfg.id, take.id, timbres) if archive is not None else {}
+    plans = {}
+    for timbre in timbres:
+        tid = timbre["id"]
+        try:
+            plans[tid] = reference_plan(cfg, timbre, take, channel, total, smf, program, bank)
+        except (ValueError, RuntimeError, FileNotFoundError) as exc:
+            if cfg.source_class != "module":
+                raise
+            raise _module_unavailable(cfg, tid, exc) from exc
+    identities = {
+        tid: {
+            "request": request,
+            "request_id": canonical_digest(request),
+            "source_id": source_id,
+            "status": REFERENCE_VERIFIED,
+            "reason": None,
+        }
+        for tid, (request, source_id, _, _) in plans.items()
+    }
+    wanted = {tid: (i["request_id"], i["source_id"]) for tid, i in identities.items()}
+    held = archived_references(archive, cfg.id, take.id, wanted) if archive is not None else {}
     renders: dict[str, np.ndarray] = {}
     fresh: dict[str, np.ndarray] = {}
-    for timbre in timbres:
-        if timbre["id"] in held:
-            renders[timbre["id"]] = held[timbre["id"]]
-            print(f"  {timbre['id']} (archived)", file=sys.stderr)
-            continue
-        if cfg.source_class == "module":
-            # Addressed by the overlay's preset name: a family font renumbers the GS map.
-            ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
-            try:
-                audio = render_module_reference(
-                    cfg.raw,
-                    timbre,
-                    take.notes,
-                    take.cc_events,
-                    ref_channel,
-                    take.tail_s,
-                    total,
-                    SR,
+    for tid, (_, _, render, unresolved) in plans.items():
+        if tid in held:
+            renders[tid], stored_source = held[tid]
+            identities[tid]["origin"] = "archive"
+            if unresolved:
+                identities[tid].update(
+                    source_id=stored_source, status=REFERENCE_UNVERIFIED, reason=SOURCE_UNRESOLVED
                 )
-            except (ValueError, RuntimeError, FileNotFoundError) as exc:
-                raise ReferenceUnavailable(
-                    f"{cfg.id}/{timbre['id']}'s module reference did not render: {exc}. "
-                    f"--reference-from holds none of this take either."
-                ) from exc
-            fresh[timbre["id"]] = audio
-            renders[timbre["id"]] = audio
-            print(f"  {timbre['id']}", file=sys.stderr)
+                print(f"  {tid} (archived, unverified: {unresolved})", file=sys.stderr)
+            else:
+                print(f"  {tid} (archived)", file=sys.stderr)
             continue
-        if "plugin" not in cfg.raw:
-            # No other layer may stand in for what a capture cannot supply.
-            raise ReferenceUnavailable(
-                f"{cfg.id}/{timbre['id']} names no plugin and is not a module capture, "
-                f"so no reference can be rendered here, and --reference-from holds none "
-                f"of this take either."
-            )
-        # Built through the same helper the capture path uses, so a timbre
-        # selected by preset reaches the plugin here too.
-        source = source_for(cfg.raw, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=SR)
-        # A slot of a multitimbral rack is NOT selected by the source here,
-        # though: aubounce ignores `--channel` whenever it is given a MIDI file,
-        # because the file supplies its own channels. So the slot that answers is
-        # whichever one sits on the channel the SMF was written on, and every
-        # timbre of a rack renders from that same slot unless the file is
-        # rewritten per timbre. It is silent -- each render has the right length,
-        # the right level and an organ in it, and the two registrations come back
-        # byte-identical.
-        #
-        # The model keeps the take's own channel, which is what makes a note
-        # number a drum rather than a pitch; a reference gets its timbre's,
-        # one-based in the capture definition and zero-based in the file.
-        ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
-        # A take is written in sounding pitch, so an instrument mapped away from
-        # it needs its own score even when the channel already matches.
-        ref_notes = (
-            [replace(n, note=source.key(n.note)) for n in take.notes]
-            if source.key_offset
-            else take.notes
-        )
-        # A timbre selected from the keyboard needs its own score for the same
-        # reason a rack slot does, and for the same failure: the switch would
-        # simply be absent and every switched timbre would render as the
-        # unswitched instrument, at the right length and level, byte-identical to
-        # its sibling. One switch per onset, since a switch is consumed by the
-        # note it arms rather than latching for the phrase.
-        ref_notes = with_keyswitches(source, ref_notes)
-        # The phrase moves back by the lead, so anything else on its timeline
-        # moves with it. On a take under the sustain pedal, leaving CC64 where it
-        # was would lift the dampers a third of a second early and read as the
-        # variant.
-        lead_s = source.keyswitch_lead_ms / 1000.0
-        ref_cc = tuple((at + lead_s, cc, v) for at, cc, v in take.cc_events)
-        timbre_smf = (
-            smf
-            if (ref_channel == channel and not source.key_offset and not source.keyswitch)
-            else write_smf(
-                ref_notes,
-                program=program,
-                bank=bank,
-                end_pad=take.tail_s,
-                cc_events=ref_cc,
-                channel=ref_channel,
-            )
-        )
+        if unresolved:
+            print(f"  {tid}: SKIPPED — source identity unavailable: {unresolved}", file=sys.stderr)
+            del identities[tid]
+            continue
         try:
-            fresh[timbre["id"]] = render_oracle_au(timbre_smf, total, SR, source=source)
-            renders[timbre["id"]] = fresh[timbre["id"]]
-            print(f"  {timbre['id']}", file=sys.stderr)
+            audio = render()
         except (AuRenderError, FileNotFoundError) as exc:
-            print(f"  {timbre['id']}: SKIPPED — {exc}", file=sys.stderr)
-    return renders, fresh
+            if cfg.source_class == "module":
+                raise _module_unavailable(cfg, tid, exc) from exc
+            print(f"  {tid}: SKIPPED — {exc}", file=sys.stderr)
+            del identities[tid]
+            continue
+        except (ValueError, RuntimeError) as exc:
+            if cfg.source_class != "module":
+                raise
+            raise _module_unavailable(cfg, tid, exc) from exc
+        fresh[tid] = renders[tid] = audio
+        identities[tid]["origin"] = "rendered"
+        print(f"  {tid}", file=sys.stderr)
+    return renders, fresh, identities
+
+
+def reference_evidence(identities: dict[str, dict]) -> dict[str, dict]:
+    """A reference version's evidence: its identities and whether its source was re-resolved."""
+    return {
+        tid: {
+            "request_id": i["request_id"],
+            "source_id": i["source_id"],
+            "build_id": None,
+            "path": None,
+            "complete": None,
+            "status": i["status"],
+            "reason": i["reason"],
+            "origin": i["origin"],
+        }
+        for tid, i in identities.items()
+    }
 
 
 def render_take(
@@ -833,15 +1039,26 @@ def render_take(
     )
 
     renders: dict[str, np.ndarray] = {}
+    evidence: dict[str, dict] = {}
+
+    def keep(key: str, rendered: RenderedAudio) -> None:
+        renders[key] = rendered.audio
+        evidence[key] = {**rendered.evidence, "source_id": None}
+
     # `--lib` has to reach the unmodified voice as well as the variants.
     # Rendering it in-process instead would take whichever library the loader
     # prefers, so a page meant to compare four settings of one constant would be
     # comparing two builds -- and the difference between two build trees is
     # invisible on a listening page and reads as tuning.
-    renders["model"] = (
-        render_variant(smf, total, SR, "", args.lib, preset=voice.preset)
+    keep(
+        "model",
+        render_variant_rendered(
+            smf, total, SR, "", args.lib, preset=voice.preset, request_id=product.fingerprint()
+        )
         if args.lib
-        else render_model(smf, total, SR, preset=voice.preset)
+        else render_model_rendered(
+            smf, total, SR, preset=voice.preset, request_id=product.fingerprint()
+        ),
     )
     print("  model", file=sys.stderr)
 
@@ -858,14 +1075,15 @@ def render_take(
     # side of the boundary to offer and the probe would render every take twice
     # to prove it.
     if di_state.get("bound") is not False and not voice.preset:
+        probe = replace(product, rig=False).fingerprint()
         di = (
-            render_variant(smf, total, SR, "", args.lib, rig=False)
+            render_variant_rendered(smf, total, SR, "", args.lib, rig=False, request_id=probe)
             if args.lib
-            else render_model(smf, total, SR, rig=False)
+            else render_model_rendered(smf, total, SR, rig=False, request_id=probe)
         )
-        di_state["bound"] = digest(di) != digest(renders["model"])
+        di_state["bound"] = digest(di.audio) != digest(renders["model"])
         if di_state["bound"] and not wet:
-            renders["model-di"] = di
+            keep("model-di", di)
     # The instrument comparison renders dry whatever `--model-sends` gave the
     # product, so a wet page renders its rig-cleared side again from the dry score.
     # An unbound voice needs that only where a direct-input reference awaits it.
@@ -873,10 +1091,21 @@ def render_take(
         di_state.get("bound") is False and wet and bool(di_state.get("instrument_oracle"))
     )
     if direct and "model-di" not in renders:
-        renders["model-di"] = (
-            render_variant(instrument.smf, total, SR, "", args.lib, rig=False)
+        keep(
+            "model-di",
+            render_variant_rendered(
+                instrument.smf,
+                total,
+                SR,
+                "",
+                args.lib,
+                rig=False,
+                request_id=instrument.fingerprint(),
+            )
             if args.lib
-            else render_model(instrument.smf, total, SR, rig=False)
+            else render_model_rendered(
+                instrument.smf, total, SR, rig=False, request_id=instrument.fingerprint()
+            ),
         )
     if direct:
         print("  model-di", file=sys.stderr)
@@ -893,31 +1122,45 @@ def render_take(
     tuned = [v for v in variants if v.overrides]
     digests: set[str] = {digest(renders["model"])} if tuned else set()
     for variant in variants:
-        audio = render_variant(smf, total, SR, variant.overrides, args.lib, preset=voice.preset)
-        renders[variant.name] = audio
+        keep(
+            variant.name,
+            render_variant_rendered(
+                smf,
+                total,
+                SR,
+                variant.overrides,
+                args.lib,
+                preset=voice.preset,
+                request_id=replace(product, overrides=variant.overrides).fingerprint(),
+            ),
+        )
         if variant.overrides:
-            digests.add(digest(audio))
+            digests.add(digest(renders[variant.name]))
         print(f"  {variant.name}", file=sys.stderr)
         # A candidate for a rigged voice gets its direct render too, by the same
         # rule `model-di` is asked by: the amplifier compresses, so it narrows
         # whatever the candidate did to the decay and a listener judging the
         # instrument through it is judging the wrong end of the chain.
         if direct and moves_the_instrument(variant.overrides):
-            renders[f"{variant.name}-di"] = render_variant(
-                instrument.smf,
-                total,
-                SR,
-                variant.overrides,
-                args.lib,
-                rig=False,
-                preset=voice.preset,
+            keep(
+                f"{variant.name}-di",
+                render_variant_rendered(
+                    instrument.smf,
+                    total,
+                    SR,
+                    variant.overrides,
+                    args.lib,
+                    rig=False,
+                    preset=voice.preset,
+                    request_id=replace(instrument, overrides=variant.overrides).fingerprint(),
+                ),
             )
             print(f"  {variant.name}-di", file=sys.stderr)
 
     cfg = voice.capture
     if cfg is not None and timbres:
         try:
-            got, fresh = render_reference_timbres(
+            got, fresh, identities = render_reference_timbres(
                 cfg, timbres, take, channel, total, smf, voice.program, voice.bank, args, archive
             )
         except ReferenceUnavailable as exc:
@@ -927,12 +1170,17 @@ def render_take(
                 f"substitution this page must not make."
             ) from exc
         renders.update(got)
+        evidence.update(reference_evidence(identities))
         # Only a take whose every reference came from the plugin THIS run is
         # written, so the archive never holds a render that has been through
         # 16-bit twice. A partial take is left alone rather than topped up.
         if args.archive_references and len(fresh) == len(timbres):
             archive_references(
-                Path(args.archive_references).expanduser().resolve(), cfg.id, take.id, fresh
+                Path(args.archive_references).expanduser().resolve(),
+                cfg.id,
+                take.id,
+                fresh,
+                identities,
             )
 
     # Every OTHER capture `comparison_captures` found beside the reference,
@@ -945,7 +1193,7 @@ def render_take(
         if not comp_timbres:
             continue
         try:
-            got, comp_fresh = render_reference_timbres(
+            got, comp_fresh, comp_identities = render_reference_timbres(
                 comp,
                 comp_timbres,
                 take,
@@ -961,9 +1209,14 @@ def render_take(
             print(f"  {comp.id}: comparison SKIPPED — {exc}", file=sys.stderr)
             continue
         renders.update(got)
+        evidence.update(reference_evidence(comp_identities))
         if args.archive_references and comp_fresh and len(comp_fresh) == len(comp_timbres):
             archive_references(
-                Path(args.archive_references).expanduser().resolve(), comp.id, take.id, comp_fresh
+                Path(args.archive_references).expanduser().resolve(),
+                comp.id,
+                take.id,
+                comp_fresh,
+                comp_identities,
             )
 
     gain = shared_gain(renders)
@@ -973,6 +1226,7 @@ def render_take(
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         write_wav(out / rel, np.clip(audio * gain, -1.0, 1.0), SR, bits=24)
         tracks[key] = str(rel)
+        evidence[key]["asset_id"] = file_digest(out / rel)
 
     return {
         "id": take.id,
@@ -980,6 +1234,7 @@ def render_take(
         "sub": take.sub,
         "group": take.group,
         "tracks": tracks,
+        "evidence": {key: evidence[key] for key in tracks},
         "_digests": digests,
         "_requests": {SCOPE_PRODUCT: product, SCOPE_INSTRUMENT: instrument},
         "meta": {
@@ -1084,13 +1339,19 @@ def render_set(
         "instrument_oracle": bool(timbres)
         and scoped_references(voice, None)[policy.INSTRUMENT_DI] is not None
     }
-    for take in selected:
-        item = render_take(
-            take, voice, timbres, out, args, variants, archive, comparisons, di_state
-        )
-        variant_digests[take.id] = item.pop("_digests")
-        requests.append(item.pop("_requests"))
-        items.append(item)
+    generations = out / GENERATIONS_DIR
+    staging = staging_dir(generations)
+    try:
+        for take in selected:
+            item = render_take(
+                take, voice, timbres, staging, args, variants, archive, comparisons, di_state
+            )
+            variant_digests[take.id] = item.pop("_digests")
+            requests.append(item.pop("_requests"))
+            items.append(item)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     sources = build_sources(
         voice,
         timbres,
@@ -1099,7 +1360,17 @@ def render_set(
         di=any("model-di" in (i.get("tracks") or {}) for i in items),
     )
 
+    # Display copy only: a reader that needs a verdict re-derives it with
+    # `boundary.assess`. Every take shares the boundary, so the first speaks for all.
+    comparisons_out = build_comparisons(voice, sources, items, requests[0], di_state.get("bound"))
+    generation = set_generation(items, comparisons_out)
+    # Every asset is in place before the manifest that names it is replaced.
+    prefix = publish_generation(staging, generations, generation).relative_to(out)
+    for item in items:
+        item["tracks"] = {key: str(prefix / rel) for key, rel in item["tracks"].items()}
+
     manifest = {
+        "schema_version": 2,
         # The voice names itself, which is the right default and the wrong
         # answer once two pages of the same voice are on the picker at once:
         # they then read identically and the only way to tell the live question
@@ -1116,15 +1387,14 @@ def render_set(
             "Every version of a take is written at one shared gain, so the level "
             "difference between them is real. " + reference_note(voice, timbres, args.model_sends)
         ),
+        # Display only; the identity of what was rendered is `set_generation`.
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "set_generation": generation,
         "sources": sources,
-        # Display copy only: a reader that needs a verdict re-derives it with
-        # `boundary.assess`. Every take shares the boundary, so the first speaks for all.
-        "comparisons": build_comparisons(voice, sources, items, requests[0], di_state.get("bound")),
+        "comparisons": comparisons_out,
         "items": items,
     }
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    write_json_atomic(out / "manifest.json", manifest)
 
     # A page whose settings all render the same looks exactly like a page whose
     # settings are subtly different, and the difference is a build flag nobody

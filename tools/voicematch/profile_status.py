@@ -8,6 +8,7 @@ from pathlib import Path
 
 from capture import load_config
 from phrases import build_takes
+from render_evidence import ARCHIVE_HISTORICAL, archived_take_ids
 
 #: Every committed capture definition lives here. Globbed rather than listed:
 #: the failure worth catching is an instrument added without being added to a
@@ -194,20 +195,29 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
                 f"listed but unchecked, which reads as passing. Re-record the gate"
             )
 
-    index = archive / "index.json"
-    held = set(json.loads(index.read_text()).get(ident, {})) if index.exists() else set()
+    held = archived_take_ids(archive, ident)
     out["takes_archived"] = len(held)
+    out["takes_archived_historical"] = sum(a == ARCHIVE_HISTORICAL for a in held.values())
     if cfg.get("takes"):
         try:
             wanted_takes = {t.id for t in build_takes(cfg["takes"], out["program"])}
         except KeyError:
             wanted_takes = set()
         out["takes_total"] = len(wanted_takes)
-        if wanted_takes - held:
+        if wanted_takes - set(held):
             out["next"].append(
-                f"{len(wanted_takes - held)} of {len(wanted_takes)} phrase takes have no "
+                f"{len(wanted_takes - set(held))} of {len(wanted_takes)} phrase takes have no "
                 f"archived reference, so `profile.py takes` is blind to them: run "
                 f"make_audition.py --archive-references once. Needs the plugin"
+            )
+        historical = sorted(t for t in wanted_takes if held.get(t) == ARCHIVE_HISTORICAL)
+        if historical:
+            out["next"].append(
+                f"{len(historical)} of {len(wanted_takes)} phrase takes are archived only in "
+                f"the v1 index, which records no request or source: `profile.py takes` "
+                f"measures them as historical references. Re-archive with "
+                f"make_audition.py --archive-references for a verified v2 generation. "
+                f"Needs the plugin"
             )
     else:
         out["takes_total"] = 0

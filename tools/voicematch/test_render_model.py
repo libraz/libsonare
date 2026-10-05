@@ -1,4 +1,4 @@
-"""Tests for the model renderer's library-staleness warning.
+"""Tests for the model renderer's library-staleness warning and render evidence.
 
 Every number the harness reports comes out of one dylib, the render carries no
 mark of which, and the default is a build directory nothing keeps current — so
@@ -11,6 +11,8 @@ each reading looking entirely ordinary. These pin the one line that says so.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import sys
 import time
@@ -21,6 +23,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import render_model
+from boundary import canonical_digest
 
 HOUR = 3600.0
 
@@ -145,3 +148,105 @@ def test_a_request_renders_at_its_own_rig_rate_and_window(monkeypatch):
     request = RenderRequest(program=27, seconds=1.5, smf=b"MThd", rig=False, sample_rate=44100)
     assert render_model.render_request(request) == "audio"
     assert seen == {"smf": b"MThd", "seconds": 1.5, "sr": 44100, "rig": False, "preset": ""}
+
+
+def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
+    """A stand-in libsonare whose bounce writes `record` where a tuning build would."""
+    seen: dict[str, list] = {"dump_paths": []}
+
+    class _Project:
+        def set_sample_rate(self, _rate):
+            pass
+
+        def import_smf(self, _data):
+            pass
+
+        def bounce_with_sf2_instrument(self, _cfg, *, total_frames, sample_rate):
+            dump = os.environ.get(render_model.PATH_DUMP_ENV)
+            seen["dump_paths"].append(dump)
+            if record is not None:
+                Path(dump).write_text(json.dumps(record))
+            return [[0.0, 0.0]] * total_frames
+
+        def soundfont_manifest(self):
+            return {}
+
+        def close(self):
+            pass
+
+    fake = type(sys)("libsonare")
+    fake.Project = _Project
+    fake.Sf2InstrumentConfig = lambda **_kw: object()
+    monkeypatch.setitem(sys.modules, "libsonare", fake)
+    monkeypatch.setattr(render_model, "ensure_lib_path", lambda: None)
+    monkeypatch.setattr(render_model, "check_gm_fallback", lambda _m: None)
+    monkeypatch.delenv(render_model.PATH_DUMP_ENV, raising=False)
+    lib = tmp_path / "libsonare.dylib"
+    lib.write_bytes(b"a library binary")
+    monkeypatch.setattr(render_model, "loaded_library_path", lambda: str(lib))
+    return seen, hashlib.sha256(lib.read_bytes()).hexdigest()
+
+
+def test_a_path_record_is_returned_with_the_audio_and_names_the_bank(monkeypatch, tmp_path):
+    record = {
+        "schema": 1,
+        "bank_registry_digest": "ab" * 32,
+        "library_version": "1.8.1",
+        "complete": True,
+        "reason": None,
+        "events": [{"frame": 0, "kind": "topology", "parts": [], "units": []}],
+    }
+    seen, lib_sha = _fake_bounce_library(monkeypatch, tmp_path, record=record)
+
+    rendered = render_model.render_model_rendered(b"MThd", 0.01, 48000, request_id="req")
+    again = render_model.render_model_rendered(b"MThd", 0.01, 48000, request_id="req")
+
+    ev = rendered.evidence
+    assert ev["status"] == "recorded" and ev["reason"] is None
+    assert ev["path"] == record and ev["complete"] is True
+    assert ev["request_id"] == "req"
+    assert ev["build_id"] == canonical_digest(
+        {"library_sha256": lib_sha, "bank_registry_digest": "ab" * 32}
+    )
+    assert again.evidence == ev
+    assert rendered.audio.shape == (480, 2)
+    # One path per render, and the variable does not outlive it.
+    assert len(set(seen["dump_paths"])) == 2 and None not in seen["dump_paths"]
+    assert render_model.PATH_DUMP_ENV not in os.environ
+
+
+def test_no_path_record_leaves_the_evidence_unknown_and_says_why(monkeypatch, tmp_path):
+    _, lib_sha = _fake_bounce_library(monkeypatch, tmp_path, record=None)
+
+    ev = render_model.render_model_rendered(b"MThd", 0.01, 48000).evidence
+
+    assert ev["status"] == "unknown" and ev["path"] is None and ev["complete"] is False
+    assert ev["reason"] == render_model.NO_PATH_RECORD
+    assert ev["build_id"] == canonical_digest(
+        {"library_sha256": lib_sha, "bank_registry_digest": None}
+    )
+    # Without a request, the identity is the arguments actually rendered.
+    other = render_model.render_model_rendered(b"MThd", 0.01, 48000, rig=False).evidence
+    assert ev["request_id"] != other["request_id"]
+
+
+def test_a_record_of_another_schema_is_not_read_as_evidence(monkeypatch, tmp_path):
+    _fake_bounce_library(monkeypatch, tmp_path, record={"schema": 2, "complete": True})
+    ev = render_model.render_model_rendered(b"MThd", 0.01, 48000).evidence
+    assert ev["status"] == "unknown" and ev["path"] is None
+    assert "schema 2" in ev["reason"]
+
+
+def test_a_request_renders_with_its_own_fingerprint_as_request_id(monkeypatch):
+    from boundary import RenderRequest
+
+    seen = {}
+
+    def fake_rendered(smf, seconds, sr, *, rig, preset, request_id):
+        seen.update(rig=rig, request_id=request_id)
+        return "rendered"
+
+    monkeypatch.setattr(render_model, "render_model_rendered", fake_rendered)
+    request = RenderRequest(program=27, seconds=1.5, smf=b"MThd", rig=False, sample_rate=44100)
+    assert render_model.render_request_rendered(request) == "rendered"
+    assert seen == {"rig": False, "request_id": request.fingerprint()}

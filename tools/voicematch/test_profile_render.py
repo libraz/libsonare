@@ -1013,15 +1013,25 @@ def test_model_sends_gs_reaches_a_dry_captured_voice(monkeypatch):
         def duration(self):
             return 2.0
 
-    monkeypatch.setattr(make_audition, "render_variant", lambda *a, **kw: np.zeros((10, 2)))
-    monkeypatch.setattr(make_audition, "render_model", lambda *a, **kw: np.zeros((10, 2)))
+    from render_model import RenderedAudio
+
+    def rendered(*a, **kw):
+        return RenderedAudio(np.zeros((10, 2)), {"status": "unknown", "path": None})
+
+    monkeypatch.setattr(make_audition, "render_variant_rendered", rendered)
+    monkeypatch.setattr(make_audition, "render_model_rendered", rendered)
     monkeypatch.setattr(make_audition, "write_wav", lambda *a, **kw: None)
+    # Nothing is written, so there is no asset to digest.
+    monkeypatch.setattr(make_audition, "file_digest", lambda _path: "")
 
     for mode, want in (("auto", (0, 0, 0)), ("gs", (None, None, None)), ("dry", (0, 0, 0))):
         seen.clear()
         args = SimpleNamespace(model_sends=mode, lib="", archive_references="")
         make_audition.render_take(Take(), Voice(), [], Path("."), args, [], None)
-        assert seen == [want], f"{mode}: {seen}"
+        # The product score comes first; a wet one is followed by the instrument
+        # side's own score, which is always dry.
+        assert seen[0] == want, f"{mode}: {seen}"
+        assert seen[1:] == ([(0, 0, 0)] if want != (0, 0, 0) else []), f"{mode}: {seen}"
 
 
 def test_measure_reads_only_the_timbres_the_capture_declares(tmp_path):

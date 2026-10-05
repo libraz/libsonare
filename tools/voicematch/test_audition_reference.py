@@ -25,8 +25,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bank
 import make_audition
+from render_model import RenderedAudio
 from smf import Note
 from test_smf import events
+
+
+def _evidence(request_id=None) -> dict:
+    """What a model render reports from a library that wrote no path record."""
+    return {
+        "request_id": request_id,
+        "build_id": None,
+        "path": None,
+        "complete": False,
+        "status": "unknown",
+        "reason": "library wrote no path record (not a tuning build?)",
+    }
+
+
+def _fake_identities(timbres) -> dict:
+    return {
+        t["id"]: {
+            "request": {"method": "au", "method_version": 1, "sample_rate": 48000, "frames": 64},
+            "request_id": f"req-{t['id']}",
+            "source_id": f"src-{t['id']}",
+            "origin": "archive",
+            "status": "verified",
+            "reason": None,
+        }
+        for t in timbres
+    }
 
 
 def _args(**overrides) -> SimpleNamespace:
@@ -406,21 +433,29 @@ def _render_take_stubbed(
             seen["sends"] = kw["sends"]
         return b"dry" if tuple(kw["sends"]) == (0, 0, 0) else b"wet"
 
-    def fake_model(smf, seconds, sr, rig=True, preset=""):
-        seen["models"].append({"smf": smf, "rig": rig})
-        return np.full((64, 2), 0.1 if rig or not bound else 0.2, dtype=np.float32)
+    def fake_model(smf, seconds, sr, rig=True, preset="", request_id=None):
+        seen["models"].append({"smf": smf, "rig": rig, "request_id": request_id})
+        audio = np.full((64, 2), 0.1 if rig or not bound else 0.2, dtype=np.float32)
+        return RenderedAudio(audio, _evidence(request_id))
 
-    def fake_variant(smf, seconds, sr, overrides, lib="", rig=True, preset=""):
-        seen["variants"].append({"overrides": overrides, "rig": rig, "preset": preset, "smf": smf})
-        return np.zeros((64, 2), dtype=np.float32)
+    def fake_variant(smf, seconds, sr, overrides, lib="", rig=True, preset="", request_id=None):
+        seen["variants"].append(
+            {
+                "overrides": overrides,
+                "rig": rig,
+                "preset": preset,
+                "smf": smf,
+                "request_id": request_id,
+            }
+        )
+        return RenderedAudio(np.zeros((64, 2), dtype=np.float32), _evidence(request_id))
 
     _render_take_stubbed.seen = seen
 
     monkeypatch.setattr(make_audition, "write_smf", fake_smf)
-    monkeypatch.setattr(make_audition, "render_model", fake_model)
-    monkeypatch.setattr(make_audition, "render_variant", fake_variant)
-    monkeypatch.setattr(make_audition, "render_reference_timbres", lambda *a, **k: ({}, {}))
-    monkeypatch.setattr(make_audition, "write_wav", lambda *a, **k: None)
+    monkeypatch.setattr(make_audition, "render_model_rendered", fake_model)
+    monkeypatch.setattr(make_audition, "render_variant_rendered", fake_variant)
+    monkeypatch.setattr(make_audition, "render_reference_timbres", lambda *a, **k: ({}, {}, {}))
     take = SimpleNamespace(
         id="t",
         label="t",
@@ -596,12 +631,13 @@ def _render_set_stubbed(monkeypatch, tmp_path, voice, *, bound, model_sends="aut
     def fake_smf(notes, **kw):
         return b"dry" if tuple(kw["sends"]) == (0, 0, 0) else b"wet"
 
-    def fake_model(smf, seconds, sr, rig=True, preset=""):
-        return np.full((64, 2), 0.1 if rig or not bound else 0.2, dtype=np.float32)
+    def fake_model(smf, seconds, sr, rig=True, preset="", request_id=None):
+        audio = np.full((64, 2), 0.1 if rig or not bound else 0.2, dtype=np.float32)
+        return RenderedAudio(audio, _evidence(request_id))
 
     def fake_refs(cfg, timbres, *a, **k):
         audio = {t["id"]: np.zeros((64, 2), dtype=np.float32) for t in timbres}
-        return audio, {}
+        return audio, {}, _fake_identities(timbres)
 
     take = SimpleNamespace(
         id="t",
@@ -616,9 +652,8 @@ def _render_set_stubbed(monkeypatch, tmp_path, voice, *, bound, model_sends="aut
     )
     monkeypatch.setattr(make_audition, "build_takes", lambda *a, **k: [take])
     monkeypatch.setattr(make_audition, "write_smf", fake_smf)
-    monkeypatch.setattr(make_audition, "render_model", fake_model)
+    monkeypatch.setattr(make_audition, "render_model_rendered", fake_model)
     monkeypatch.setattr(make_audition, "render_reference_timbres", fake_refs)
-    monkeypatch.setattr(make_audition, "write_wav", lambda *a, **k: None)
     args = _args(
         model_only=False,
         wanted_timbres=(),
@@ -720,3 +755,268 @@ def test_policy_entries_are_keyed_by_program_and_variation_bank():
     shipped = make_audition.policy.load()["references_by_scope"]
     assert shipped["27"] == {"instrument_di": "electric_guitar_di", "gm_gs_product": None}
     assert shipped["33"] == {"instrument_di": "bass_fingered", "gm_gs_product": "bass_fingered"}
+
+
+# --- archive v2: adopt a stored reference only for the same request and source ------
+
+
+_DEFAULT_NOTES = (Note(40, 100, 0.0, 0.5),)
+
+
+def _reference_run(
+    monkeypatch,
+    tmp_path,
+    archive,
+    *,
+    notes=_DEFAULT_NOTES,
+    cc=(),
+    tail=1.0,
+    keyswitch=0,
+    state=b"amp engaged",
+    params=(),
+    sr=48000,
+    label="Direct",
+):
+    """One take's reference through `render_reference_timbres`, archiving what it rendered.
+
+    Returns whether the plugin was asked to render, and the take's reference audio.
+    A `state` of None is a saved state that is not on this machine.
+    """
+    from au_oracle import AuSource
+
+    rendered = []
+    state_file = tmp_path / "state.aupreset"
+    if state is None:
+        state_file.unlink(missing_ok=True)
+    else:
+        state_file.write_bytes(state)
+    monkeypatch.setattr(make_audition, "SR", sr)
+
+    def fake_source_for(raw, timbre, *, tail, sample_rate):
+        return AuSource(
+            plugin=raw["plugin"],
+            state=str(state_file),
+            params=params,
+            tail=tail,
+            sample_rate=sample_rate,
+            keyswitch=keyswitch,
+            keyswitch_lead_ms=50 if keyswitch else 0,
+        )
+
+    def fake_au(smf, total, rate, *, source):
+        rendered.append(smf)
+        return np.full((round(total * rate), 2), 0.25, dtype=np.float32)
+
+    monkeypatch.setattr(make_audition, "source_for", fake_source_for)
+    monkeypatch.setattr(make_audition, "render_oracle_au", fake_au)
+    notes = list(notes)
+    take = SimpleNamespace(id="t", notes=notes, cc_events=tuple(cc), tail_s=tail)
+    smf = make_audition.write_smf(
+        notes, program=27, bank=0, end_pad=tail, cc_events=tuple(cc), channel=0
+    )
+    cfg = SimpleNamespace(
+        id="cap",
+        source_class="library",
+        raw={"id": "cap", "plugin": "aumu abcd efgh", "rig": "none", "room": "none"},
+    )
+    timbres = [{"id": "di", "label": label}]
+    renders, fresh, identities = make_audition.render_reference_timbres(
+        cfg, timbres, take, 0, 0.5 + tail, smf, 27, 0, None, archive
+    )
+    if fresh:
+        make_audition.archive_references(archive, cfg.id, take.id, fresh, identities)
+    _reference_run.identities = identities
+    return bool(rendered), renders.get("di")
+
+
+@pytest.fixture
+def stored(monkeypatch, tmp_path):
+    """An archive already holding the default take, rendered once."""
+    archive = tmp_path / "archive"
+    did_render, _ = _reference_run(monkeypatch, tmp_path, archive)
+    assert did_render
+    return archive
+
+
+def test_an_identical_request_and_source_adopts_the_stored_render(monkeypatch, tmp_path, stored):
+    did_render, audio = _reference_run(monkeypatch, tmp_path, stored)
+    assert not did_render
+    # Back at the plugin's level: the archive's own gain is divided out.
+    assert audio == pytest.approx(np.full_like(audio, 0.25), abs=1e-6)
+
+
+def test_a_caption_change_still_adopts_the_stored_render(monkeypatch, tmp_path, stored):
+    did_render, _ = _reference_run(monkeypatch, tmp_path, stored, label="Renamed timbre")
+    assert not did_render
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"state": b"amp bypassed"},
+        {"params": ("Amp On/Off=0",)},
+        {"keyswitch": 24},
+        {"notes": (Note(41, 100, 0.0, 0.5),)},
+        {"cc": ((0.1, 64, 127),)},
+        {"tail": 2.0},
+        {"sr": 44100},
+    ],
+    ids=["amp-state", "amp-bypass", "keyswitch", "note", "cc", "tail", "rate"],
+)
+def test_any_change_to_the_request_or_source_renders_afresh(monkeypatch, tmp_path, stored, change):
+    did_render, _ = _reference_run(monkeypatch, tmp_path, stored, **change)
+    assert did_render
+
+
+def test_a_changed_archived_wav_is_not_adopted(monkeypatch, tmp_path, stored):
+    index = json.loads((stored / make_audition.ARCHIVE_INDEX).read_text())
+    rel = index["takes"]["cap"]["t"][0]["timbres"]["di"]["path"]
+    wav = stored / rel
+    wav.write_bytes(wav.read_bytes()[:-6] + b"\x00" * 6)
+    did_render, _ = _reference_run(monkeypatch, tmp_path, stored)
+    assert did_render
+
+
+def test_a_v1_archive_entry_is_never_adopted(monkeypatch, tmp_path, capsys):
+    archive = tmp_path / "archive"
+    (archive / "cap" / "t").mkdir(parents=True)
+    make_audition.write_wav(
+        archive / "cap" / "t" / "di.wav", np.full((72000, 2), 0.25), 48000, bits=24
+    )
+    (archive / "index.json").write_text(
+        json.dumps({"cap": {"t": {"gain_db": 0.0, "timbres": ["di"]}}})
+    )
+    did_render, _ = _reference_run(monkeypatch, tmp_path, archive)
+    assert did_render
+    assert "v1 archive" in capsys.readouterr().err
+
+
+def test_archiving_again_never_overwrites_a_stored_generation(monkeypatch, tmp_path, stored):
+    index = json.loads((stored / make_audition.ARCHIVE_INDEX).read_text())
+    first = stored / index["takes"]["cap"]["t"][0]["timbres"]["di"]["path"]
+    before = first.read_bytes()
+    _reference_run(monkeypatch, tmp_path, stored, state=b"another state")
+    entries = json.loads((stored / make_audition.ARCHIVE_INDEX).read_text())["takes"]["cap"]["t"]
+    assert len(entries) == 2
+    assert first.read_bytes() == before
+    assert entries[0]["timbres"]["di"]["path"] != entries[1]["timbres"]["di"]["path"]
+
+
+# --- manifest v2 and the generation it is written as --------------------------------
+
+
+def test_manifest_v2_carries_evidence_for_every_version_of_every_take(monkeypatch, tmp_path):
+    from render_evidence import file_digest
+
+    voice = _capture_voice("electric_guitar_di")
+    manifest = _render_set_stubbed(monkeypatch, tmp_path, voice, bound=True)
+    out = tmp_path / voice.slug
+
+    assert manifest["schema_version"] == 2 and manifest["set_generation"]
+    for item in manifest["items"]:
+        assert set(item["evidence"]) == set(item["tracks"])
+        for key, ev in item["evidence"].items():
+            assert ev["asset_id"] == file_digest(out / item["tracks"][key]), key
+            if manifest["sources"][key]["role"] == "model":
+                assert ev["source_id"] is None and ev["status"] == "unknown"
+                assert ev["request_id"]
+            else:
+                assert ev["source_id"] == f"src-{key}" and ev["request_id"] == f"req-{key}"
+    # The requests are the boundary's: the product keeps its rig, the direct one clears it.
+    model_req = manifest["items"][0]["evidence"]["model"]["request_id"]
+    di_req = manifest["items"][0]["evidence"]["model-di"]["request_id"]
+    assert model_req != di_req
+
+
+def test_a_new_generation_leaves_the_previous_one_intact(monkeypatch, tmp_path):
+    from render_evidence import file_digest
+
+    voice = _capture_voice("electric_guitar_di")
+    out = tmp_path / voice.slug
+    first = _render_set_stubbed(monkeypatch, tmp_path, voice, bound=True)
+    held = {
+        rel: file_digest(out / rel) for item in first["items"] for rel in item["tracks"].values()
+    }
+
+    second = _render_set_stubbed(monkeypatch, tmp_path, voice, bound=False)
+
+    assert second["set_generation"] != first["set_generation"]
+    assert {rel: file_digest(out / rel) for rel in held} == held
+    assert not set(held) & {rel for i in second["items"] for rel in i["tracks"].values()}
+    # The same render again is the same generation, published once.
+    third = _render_set_stubbed(monkeypatch, tmp_path, voice, bound=False)
+    assert third["set_generation"] == second["set_generation"]
+    leftovers = [p for p in (out / "generations").iterdir() if p.name.startswith(".staging-")]
+    assert not leftovers
+
+
+def test_a_subprocess_render_returns_the_workers_evidence(monkeypatch):
+    def fake_run(argv, **kw):
+        smf, out, evidence_out = argv[3], argv[4], argv[5]
+        assert Path(smf).read_bytes() == b"MThd" and argv[-1] == "req-1"
+        np.save(out, np.ones((4, 2), dtype=np.float32))
+        Path(evidence_out).write_text(json.dumps(_evidence("req-1")))
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(make_audition.subprocess, "run", fake_run)
+    rendered = make_audition.render_variant_rendered(b"MThd", 0.1, 48000, "a=1", request_id="req-1")
+    assert rendered.audio.shape == (4, 2)
+    assert rendered.evidence == _evidence("req-1")
+
+
+# --- a source this machine cannot resolve --------------------------------------------
+
+
+def test_an_unresolvable_source_reuses_the_stored_render_as_unverified(
+    monkeypatch, tmp_path, stored
+):
+    index = json.loads((stored / make_audition.ARCHIVE_INDEX).read_text())
+    stored_source = index["takes"]["cap"]["t"][0]["timbres"]["di"]["source_id"]
+
+    did_render, audio = _reference_run(monkeypatch, tmp_path, stored, state=None)
+
+    assert not did_render and audio is not None
+    identity = _reference_run.identities["di"]
+    assert identity["status"] == "unverified"
+    assert identity["reason"] == "source identity could not be re-resolved here"
+    assert identity["source_id"] == stored_source
+    # What the sign-off side reads: the page's evidence for that version.
+    evidence = make_audition.reference_evidence(_reference_run.identities)["di"]
+    assert (evidence["status"], evidence["source_id"]) == ("unverified", stored_source)
+
+
+def test_a_resolved_source_reports_a_verified_reference(monkeypatch, tmp_path, stored):
+    _reference_run(monkeypatch, tmp_path, stored)
+    assert _reference_run.identities["di"]["status"] == "verified"
+
+
+def test_an_unresolvable_source_with_another_request_is_skipped_not_rendered(
+    monkeypatch, tmp_path, stored, capsys
+):
+    did_render, audio = _reference_run(
+        monkeypatch, tmp_path, stored, state=None, notes=(Note(41, 100, 0.0, 0.5),)
+    )
+    assert not did_render and audio is None
+    assert "source identity unavailable" in capsys.readouterr().err
+
+
+def test_an_unresolvable_source_is_not_matched_among_several_stored_sources(
+    monkeypatch, tmp_path, stored
+):
+    _reference_run(monkeypatch, tmp_path, stored, state=b"a second amp state")
+    did_render, audio = _reference_run(monkeypatch, tmp_path, stored, state=None)
+    assert not did_render and audio is None
+
+
+def test_an_unresolvable_source_never_adopts_a_v1_entry(monkeypatch, tmp_path, capsys):
+    archive = tmp_path / "archive"
+    (archive / "cap" / "t").mkdir(parents=True)
+    make_audition.write_wav(
+        archive / "cap" / "t" / "di.wav", np.full((72000, 2), 0.25), 48000, bits=24
+    )
+    (archive / "index.json").write_text(
+        json.dumps({"cap": {"t": {"gain_db": 0.0, "timbres": ["di"]}}})
+    )
+    did_render, audio = _reference_run(monkeypatch, tmp_path, archive, state=None)
+    assert not did_render and audio is None
+    assert "v1 archive" in capsys.readouterr().err
