@@ -65,7 +65,9 @@ inline bool validate_part_rig_chain(const std::vector<sonare::midi::PartRigStage
       auto insert = sonare::mastering::api::make_insert(stage.processor, stage.params_json);
       if (!insert) return false;
       insert->prepare(kValidationSampleRate, kValidationBlockSize);
-      if (insert->latency_samples() > sonare::midi::kMaxPartRigLatencySamples) return false;
+      if (insert->latency_samples_q8() > (sonare::midi::kMaxPartRigLatencySamples << 8)) {
+        return false;
+      }
     } catch (const sonare::SonareException&) {
       return false;
     }

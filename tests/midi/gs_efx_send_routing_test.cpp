@@ -261,6 +261,26 @@ std::array<uint8_t, 11> efx_param_write(uint8_t offset, uint8_t value) {
   return m;
 }
 
+/// A framed GS DT1 write at an arbitrary EFX extension address. The extension
+/// tests need to cross the 40 30/40 31 boundary while keeping one valid frame.
+std::vector<uint8_t> efx_extension_write(uint32_t addr, const std::vector<uint8_t>& values) {
+  std::vector<uint8_t> m = {0xF0, 0x41, 0x10, 0x42, 0x12};
+  uint32_t sum = 0;
+  for (int shift = 16; shift >= 0; shift -= 8) {
+    const uint8_t byte = static_cast<uint8_t>((addr >> shift) & 0x7Fu);
+    m.push_back(byte);
+    sum += byte;
+  }
+  for (const uint8_t value : values) {
+    const uint8_t byte = static_cast<uint8_t>(value & 0x7Fu);
+    m.push_back(byte);
+    sum += byte;
+  }
+  m.push_back(static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu));
+  m.push_back(0xF7);
+  return m;
+}
+
 /// A contiguous EFX block write, used to exercise the parameter+send
 /// transaction at 40 03 16..19.
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
@@ -669,6 +689,27 @@ TEST_CASE("prepared GS EFX caches bounded LSB candidates", "[midi][sf2][gsefx][p
   std::shared_ptr<const sonare::midi::PreparedMidiSysEx> second;
   REQUIRE(player.prepare_sysex(lsb_zero.data(), lsb_zero.size(), second));
   REQUIRE(factory_calls == calls_after_first);
+}
+
+TEST_CASE("prepared GS EFX candidate scan stays inside its unit block",
+          "[midi][sf2][gsefx][prepared]") {
+  int factory_calls = 0;
+  Sf2PlayerConfig cfg;
+  cfg.insert_factory = [&factory_calls](std::string_view, std::string_view) {
+    ++factory_calls;
+    return std::unique_ptr<sonare::rt::ProcessorBase>{};
+  };
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);
+
+  // The start is in unit 0's reserved tail. The following two bytes roll over
+  // to a valid Overdrive TYPE at unit 1's 40 31 00/01, but belong to neither
+  // the addressed block nor its prepared candidate set.
+  const std::vector<uint8_t> spilled = efx_extension_write(0x40307F, {0x00, 0x01, 0x10});
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+  REQUIRE(player.prepare_sysex(spilled.data(), spilled.size(), token));
+  REQUIRE(token != nullptr);
+  REQUIRE(factory_calls == 0);
 }
 
 TEST_CASE("unsupported direct EFX keeps its legacy DSP for parameter edits",
@@ -1576,6 +1617,53 @@ TEST_CASE("direct EFX deltas retain the scheduled audio raw state",
   player.on_control_sysex(kOdDrive, sizeof(kOdDrive));
   player.process(channels, 2, 256);
   REQUIRE(counters->resets == resets_after_reset);
+}
+
+TEST_CASE("prepared GS EFX ignores a rejected boundary token at dispatch",
+          "[midi][sf2][gsefx][prepared]") {
+  const std::vector<std::string> keys = all_efx_binding_keys();
+  auto counters = std::make_shared<EfxCounters>();
+  Sf2PlayerConfig cfg;
+  cfg.insert_factory = [counters, keys](std::string_view, std::string_view) {
+    return std::unique_ptr<sonare::rt::ProcessorBase>(new CountingInsert(counters, keys));
+  };
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);
+
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> type_token;
+  REQUIRE(player.prepare_sysex(kOdType, sizeof(kOdType), type_token));
+  MidiEvent type_event;
+  type_event.ump = sonare::midi::make_sysex_handle(0, 1);
+  type_event.sysex_payload = kOdType;
+  type_event.sysex_payload_size = sizeof(kOdType);
+  type_event.prepared_sysex = type_token.get();
+  player.on_event(0, type_event);
+  std::array<float, 256> left{};
+  std::array<float, 256> right{};
+  float* channels[2] = {left.data(), right.data()};
+  player.process(channels, 2, 256);
+  const int resets_after_type = counters->resets;
+  const int sets_after_type = counters->set_params;
+  REQUIRE(resets_after_type > 0);
+
+  // This token starts in unit 0's reserved tail and rolls into unit 1's TYPE,
+  // so prepare_sysex accepts the frame but has no EFX write to dispatch.
+  const std::vector<uint8_t> rejected = efx_extension_write(0x40307F, {0x00, 0x01, 0x10});
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> rejected_token;
+  REQUIRE(player.prepare_sysex(rejected.data(), rejected.size(), rejected_token));
+  REQUIRE(rejected_token != nullptr);
+  MidiEvent rejected_event;
+  rejected_event.ump = sonare::midi::make_sysex_handle(0, 1);
+  rejected_event.sysex_payload = rejected.data();
+  rejected_event.sysex_payload_size = rejected.size();
+  rejected_event.prepared_sysex = rejected_token.get();
+  player.on_event(0, rejected_event);
+  player.process(channels, 2, 256);
+
+  // A rejected token must not reapply the active node's plan. That would make
+  // a no-op boundary message observable as a parameter publication.
+  REQUIRE(counters->resets == resets_after_type);
+  REQUIRE(counters->set_params == sets_after_type);
 }
 #endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 

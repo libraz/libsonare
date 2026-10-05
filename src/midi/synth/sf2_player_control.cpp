@@ -972,8 +972,12 @@ bool Sf2Player::prepare_sysex(const uint8_t* data, size_t size,
       token->unit = static_cast<uint8_t>(addressed_unit);
       constexpr size_t kMaxWrites = 64;
       std::array<GsWrite, kMaxWrites> writes{};
+      const GsFrame frame = gs_sysex_frame(data, size);
+      const size_t block_length = gs_efx_block_write_count(frame.addr, frame.len);
+      GsFrame bounded_frame = frame;
+      bounded_frame.len = block_length;
       const size_t decoded = std::min(
-          gs_decode_sysex(data, size, writes.data(), writes.size(), nullptr), writes.size());
+          gs_decode_writes(bounded_frame, writes.data(), writes.size(), nullptr), writes.size());
       bool has_msb = false;
       bool has_lsb = false;
       uint8_t message_msb = 0;
@@ -1230,9 +1234,8 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
     if (prepared_base_synced_) rebuild_prepared_routing();
   }
 
-  if (token.efx_block && token.unit < kGsEfxUnitCount) {
-    bool type_changed = false;
-    apply_gs_efx_sysex(prepared_efx_[token.unit], data, size, &type_changed);
+  if (token.efx_block && token.unit < kGsEfxUnitCount &&
+      apply_gs_efx_sysex(prepared_efx_[token.unit], data, size, nullptr)) {
     const bool was_overridden = prepared_unit_overridden_[token.unit];
     PreparedEfxNode* selected = nullptr;
     for (uint8_t i = 0; i < token.candidate_count; ++i) {
@@ -1269,7 +1272,6 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
       }
     }
     if (prepared_base_synced_) rebuild_prepared_routing();
-    (void)type_changed;
   }
 
   if (apply_performance && apply_gs_system_sysex_to(prepared_sys_fx_, prepared_master_eq_,
@@ -1288,7 +1290,7 @@ bool Sf2Player::set_part_rig(uint8_t part, const PartRig& rig) noexcept {
   if (!validate_part_rig(part, rig)) return false;
   try {
     PartFxStage::RigTable previous = part_fx_.rig_table();
-    part_fx_.set_part_rig(part, rig);
+    if (!part_fx_.set_part_rig(part, rig)) return false;
     if (prepared_) {
       try {
         part_fx_.publish();

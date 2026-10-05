@@ -34,10 +34,6 @@ int8_t centred_offset(uint8_t value) noexcept {
   return clamp_offset(static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64));
 }
 
-/// The EFX block is 40 03 00-1F, so a run reaching past its 0x20th byte carries
-/// only addresses outside the block.
-constexpr size_t kGsEfxBlockSize = 0x20;
-
 /// The size the EFX PARAMETER row claims, so the table and GsEfx::params cannot
 /// fall out of step.
 constexpr uint8_t gs_efx_parameter_row_size() noexcept {
@@ -399,9 +395,13 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
   // a run starting anywhere else belongs to another parameter group.
   if (gs_efx_addressed_unit(data, size) < 0) return false;
 
+  const size_t block_length = gs_efx_block_write_count(frame.addr, frame.len);
+  if (block_length == 0) return false;
+  GsFrame bounded_frame = frame;
+  bounded_frame.len = block_length;
   std::array<GsWrite, kGsEfxBlockSize> writes{};
-  const size_t decoded =
-      std::min(gs_decode_writes(frame, writes.data(), writes.size(), nullptr), writes.size());
+  const size_t decoded = std::min(
+      gs_decode_writes(bounded_frame, writes.data(), writes.size(), nullptr), writes.size());
 
   const uint16_t old_type = efx.type;
   bool touched = false;

@@ -19,7 +19,9 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
+#include "midi/synth/gs_efx_processor.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/part_fx_stage.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
@@ -127,11 +129,13 @@ struct Counters {
 class StandIn final : public sonare::rt::ProcessorBase {
  public:
   StandIn(std::shared_ptr<Counters> counters, std::string name, bool writer,
-          std::vector<std::string> keys)
+          std::vector<std::string> keys, int tail_samples = 0, int latency_samples_q8 = 0)
       : counters_(std::move(counters)),
         name_(std::move(name)),
         writer_(writer),
-        keys_(std::move(keys)) {}
+        keys_(std::move(keys)),
+        tail_samples_(tail_samples),
+        latency_samples_q8_(latency_samples_q8) {}
   void prepare(double, int) override { ++counters_->prepares; }
   void process(float* const* ch, int, int n) override {
     ++counters_->processes;
@@ -142,6 +146,8 @@ class StandIn final : public sonare::rt::ProcessorBase {
     counters_->probe.assign(ch[0], ch[0] + n);
   }
   void reset() override { ++counters_->resets; }
+  int latency_samples_q8() const noexcept override { return latency_samples_q8_; }
+  int tail_samples() const noexcept override { return tail_samples_; }
   bool set_parameter_impl(unsigned int id, float value) override {
     ++counters_->parameter_sets;
     if (id < counters_->last_parameter_by_id.size()) {
@@ -164,6 +170,8 @@ class StandIn final : public sonare::rt::ProcessorBase {
   std::string name_;
   bool writer_;
   std::vector<std::string> keys_;
+  int tail_samples_;
+  int latency_samples_q8_;
 };
 
 void render_block(s::Sf2Player& player, std::vector<float>* left = nullptr) {
@@ -194,6 +202,32 @@ uint8_t switchable_slot(uint16_t type) {
   }
   FAIL("no switchable slot on type " << type);
   return 0;
+}
+
+struct TailFactoryPlan {
+  std::shared_ptr<Counters> counters = std::make_shared<Counters>();
+  std::vector<int> tails;
+  std::vector<int> latency_samples_q8;
+  size_t next = 0;
+};
+
+std::shared_ptr<TailFactoryPlan> make_tail_factory_plan(
+    const std::vector<int>& tails, const std::vector<int>& latency_samples_q8 = {}) {
+  auto plan = std::make_shared<TailFactoryPlan>();
+  plan->tails = tails;
+  plan->latency_samples_q8 = latency_samples_q8;
+  if (plan->latency_samples_q8.empty()) plan->latency_samples_q8.assign(plan->tails.size(), 0);
+  REQUIRE(plan->latency_samples_q8.size() == plan->tails.size());
+  return plan;
+}
+
+s::GsEfxStageFactory tail_factory(const std::shared_ptr<TailFactoryPlan>& plan) {
+  return [plan](std::string_view name, std::string_view) {
+    const size_t index = plan->next++;
+    return std::unique_ptr<sonare::rt::ProcessorBase>(
+        new StandIn(plan->counters, std::string(name), false, {}, plan->tails.at(index),
+                    plan->latency_samples_q8.at(index)));
+  };
 }
 
 }  // namespace
@@ -259,6 +293,120 @@ TEST_CASE("an enable switch fades its stage and resets it on return", "[gs-efx-r
   REQUIRE(counters->probe.front() < 0.5f);
   REQUIRE(counters->probe.back() == 1.0f);
   REQUIRE(counters->prepares == prepares);  // never rebuilt
+}
+
+TEST_CASE("queued EFX enable updates survive a unit reset", "[gs-efx-realization]") {
+  const uint8_t slot = switchable_slot(kStereoDelay);
+  s::GsEfxEnable enable{};
+  enable.type = kStereoDelay;
+  enable.slot = slot;
+  enable.mode = s::kGsEfxEnableStages;
+  enable.stages[0] = row_stage("effects.delay.stereo");
+  enable.n_stages = 1;
+  enable.on_mask[2] = enable.on_mask[3] = 0xFFFFFFFFu;
+  const s::GsEfxRowView rows{nullptr, 0, &enable, 1};
+  auto counters = std::make_shared<Counters>();
+  s::PartFxStageConfig cfg;
+  cfg.bank_rig_binding = false;
+  cfg.insert_factory = [counters](std::string_view name, std::string_view) {
+    return std::make_unique<StandIn>(counters, std::string(name), true, std::vector<std::string>{});
+  };
+  s::PartFxStage fx(cfg);
+  fx.set_rows(&rows);
+  fx.prepare(kRate);
+  fx.assign_part(0, 1);
+  const auto type = type_write(kStereoDelay);
+  REQUIRE(fx.apply_unit_sysex(type.data(), type.size()));
+  const auto initial = slot_write(slot, 0x7F);
+  REQUIRE(fx.apply_unit_sysex(initial.data(), initial.size()));
+  fx.publish();
+  fx.acquire();
+  const uint32_t generation = fx.generation();
+  REQUIRE(fx.current() != nullptr);
+  // This test owns the quiescent snapshot; reset mutates only its audio state.
+  auto& unit = const_cast<s::Sf2EfxUnitRt&>(fx.current()->units[0]);
+  const int index = s::sf2_find_efx_stage(unit, "effects.delay.stereo", 0);
+  REQUIRE(index >= 0);
+  auto& stage = unit.stages[static_cast<size_t>(index)];
+  REQUIRE(stage.enabled_target);
+  for (const bool on : {false, true}) {
+    const auto update = slot_write(slot, on ? 0x7F : 0x00);
+    REQUIRE_FALSE(fx.apply_control_sysex(update.data(), update.size()));
+    fx.drain_param_updates();
+    CHECK(fx.generation() == generation);
+    CHECK(stage.enabled_now == on);
+    CHECK(stage.enabled_target == on);
+    s::sf2_reset_efx_unit(unit);
+    CHECK(stage.enabled_now == on);
+    CHECK(stage.fade == (on ? 1.0f : 0.0f));
+  }
+}
+
+TEST_CASE("GS EFX tails follow serial and parallel graph topology", "[gs-efx-realization]") {
+  struct TailCase {
+    uint16_t type;
+    std::vector<int> tails;
+    std::vector<int> latency_samples_q8;
+    int expected;
+  };
+
+  std::vector<int> parallel_fractional_latency(17, 0);
+  parallel_fractional_latency[0] = 0x180;  // 1.5 samples: compensation has a 2-sample support tail.
+  const std::vector<TailCase> cases = {
+      // 8 stages in each half and one common back stage: A sums to 98, B to 72,
+      // and the back is 21, so the graph tail is 119.
+      {0x1103, {3, 5, 7, 11, 13, 17, 19, 23, 2, 4, 6, 8, 10, 12, 14, 16, 21}, {}, 119},
+      // The serial OD graph has five front stages (40) and three back stages (75).
+      {0x0110, {4, 6, 8, 10, 12, 20, 25, 30}, {}, 115},
+      // The same parallel graph also checks that fractional alignment support is
+      // included in both public tail surfaces.
+      {0x1103,
+       {3, 5, 7, 11, 13, 17, 19, 23, 2, 4, 6, 8, 10, 12, 14, 16, 21},
+       parallel_fractional_latency,
+       121},
+  };
+
+  for (const TailCase& test : cases) {
+    INFO("EFX type " << test.type);
+    const s::GsEfx state = efx_holding(test.type);
+    const std::vector<s::GsEfxStage> chain = s::gs_efx_insert_chain(state);
+    REQUIRE(chain.size() == test.tails.size());
+    if (test.type == 0x1103) {
+      REQUIRE(chain.size() == 17);
+      for (size_t i = 0; i < 8; ++i) REQUIRE(chain[i].branch == s::kGsEfxBranchHalfA);
+      for (size_t i = 8; i < 16; ++i) REQUIRE(chain[i].branch == s::kGsEfxBranchHalfB);
+      REQUIRE(chain.back().branch == s::kGsEfxBranchBack);
+    } else {
+      REQUIRE(chain.size() == 8);
+      for (size_t i = 0; i < 5; ++i) REQUIRE(chain[i].branch == s::kGsEfxBranchFront);
+      for (size_t i = 5; i < chain.size(); ++i) REQUIRE(chain[i].branch == s::kGsEfxBranchBack);
+    }
+
+    const std::shared_ptr<TailFactoryPlan> facade_plan =
+        make_tail_factory_plan(test.tails, test.latency_samples_q8);
+    s::GsEfxProcessor facade(state, s::GsEfxRealization::kModern, tail_factory(facade_plan));
+    REQUIRE(facade_plan->next == chain.size());
+    facade.prepare(kRate, kBlock);
+    REQUIRE(facade.tail_samples() == test.expected);
+
+    const std::shared_ptr<TailFactoryPlan> part_plan =
+        make_tail_factory_plan(test.tails, test.latency_samples_q8);
+    s::PartFxStageConfig cfg;
+    cfg.bank_rig_binding = false;
+    cfg.insert_factory = tail_factory(part_plan);
+    s::PartFxStage fx(cfg);
+    fx.prepare(kRate);
+    fx.assign_part(0, 1);  // Part 0 feeds spec unit 0.
+    const auto type = type_write(test.type);
+    REQUIRE(fx.apply_unit_sysex(type.data(), type.size()));
+    fx.publish();
+    fx.acquire();
+    REQUIRE(fx.current() != nullptr);
+    REQUIRE(fx.current()->unit_fed[0]);
+    REQUIRE(part_plan->next == chain.size());
+    REQUIRE(fx.tail_samples() == test.expected);
+    REQUIRE(fx.tail_samples() == facade.tail_samples());
+  }
 }
 
 TEST_CASE("a stage the factory cannot build keeps its position", "[gs-efx-realization]") {

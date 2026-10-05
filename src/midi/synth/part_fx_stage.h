@@ -151,8 +151,9 @@ class PartFxStage {
   void publish();
 
   /// CONTROL thread: store @p rig for @p part (kPartRigAllParts for the
-  /// destination default). Returns false when it fails validate_part_rig. Does
-  /// not publish. May throw on allocation.
+  /// destination default). Returns false when it fails validate_part_rig or a
+  /// built chain stage exceeds 256 samples at the 48 kHz reference rate. A
+  /// factory or processor prepare may throw. Does not publish.
   bool set_part_rig(uint8_t part, const PartRig& rig);
   const RigTable& rig_table() const noexcept { return rigs_; }
   void restore_rig_table(RigTable table) noexcept;

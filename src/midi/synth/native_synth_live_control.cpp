@@ -369,7 +369,7 @@ bool NativeSynth::set_part_rig(uint8_t part, const PartRig& rig) noexcept {
   if (!validate_part_rig(part, rig)) return false;
   try {
     PartFxStage::RigTable previous = part_fx_.rig_table();
-    part_fx_.set_part_rig(part, rig);
+    if (!part_fx_.set_part_rig(part, rig)) return false;
     if (prepared_) {
       try {
         part_fx_.publish();

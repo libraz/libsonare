@@ -458,6 +458,21 @@ struct GsEfx {
 /// The number of insertion units: the spec unit plus the extension's fifteen.
 inline constexpr size_t kGsEfxUnitCount = 16;
 
+/// Every EFX unit owns offsets 00-1F. A DT1 run may cross the Roland 0x80
+/// low-byte boundary, but bytes after this block belong to the next address
+/// block and must not be applied to the unit selected by the run's start.
+inline constexpr size_t kGsEfxBlockSize = 0x20;
+
+/// Number of bytes in a run that belong to the EFX block selected by @p addr.
+/// A start outside offsets 00-1F is refused. Shared by direct application and
+/// prepared candidate discovery so their ownership boundary cannot diverge.
+constexpr size_t gs_efx_block_write_count(uint32_t addr, size_t length) noexcept {
+  const size_t offset = static_cast<size_t>(addr & 0x7Fu);
+  if (offset >= kGsEfxBlockSize) return 0;
+  const size_t remaining = kGsEfxBlockSize - offset;
+  return length < remaining ? length : remaining;
+}
+
 /// The insertion unit a 40 4x 22 PART EFX ASSIGN @p value selects, or -1 for
 /// BYPASS. `00` bypasses, `01` is the spec unit 0, and `02`-`10` are the
 /// libsonare extension's units 1-15 (docs/gs.md). A value the row does not

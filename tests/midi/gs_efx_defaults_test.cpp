@@ -207,6 +207,73 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
     tally.same(is_block_of(efx.params, 0x0150), "an extension unit loaded the type's block");
   }
 
+  // A run applies only to the 00-1F block its start address selects.
+  {
+    const auto same_state = [](const GsEfx& a, const GsEfx& b) {
+      return a.type == b.type && a.type_msb == b.type_msb && a.params == b.params &&
+             a.send_reverb == b.send_reverb && a.send_chorus == b.send_chorus &&
+             a.send_delay == b.send_delay && a.control_source == b.control_source &&
+             a.control_depth == b.control_depth && a.assigned == b.assigned;
+    };
+    GsEfx baseline;
+    baseline.type = 0x0150;
+    baseline.type_msb = 0x01;
+    baseline.params.fill(0x2A);
+    baseline.send_reverb = 0x11;
+    baseline.send_chorus = 0x22;
+    baseline.send_delay = 0x33;
+    baseline.control_source = {0x44, 0x55};
+    baseline.control_depth = {0x66, 0x77};
+    baseline.assigned = false;
+
+    // Starts in unit 0's reserved tail and rolls over into unit 1's TYPE.
+    {
+      GsEfx efx = baseline;
+      const std::vector<uint8_t> msg = dt1(0x40307F, {0x00, 0x01, 0x10});
+      REQUIRE_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+      REQUIRE(same_state(efx, baseline));
+    }
+
+    // A start outside 00-1F refuses the whole run.
+    {
+      std::vector<uint8_t> data(18, 0x00);
+      data[16] = 0x01;
+      data[17] = 0x10;
+      GsEfx efx = baseline;
+      const std::vector<uint8_t> msg = dt1(0x403070, data);
+      REQUIRE_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+      REQUIRE(same_state(efx, baseline));
+    }
+
+    // Bytes through 1F apply; the unit-1 TYPE after them does not.
+    {
+      std::vector<uint8_t> data(0x80 - 0x1E + 2, 0x00);
+      data[0x80 - 0x1E] = 0x01;
+      data[0x80 - 0x1E + 1] = 0x10;
+      GsEfx efx = baseline;
+      const std::vector<uint8_t> msg = dt1(0x40301E, data);
+      REQUIRE_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+      REQUIRE(same_state(efx, baseline));
+    }
+
+    // A long run from 40 03 1E keeps its depth write and drops bytes past 1F.
+    {
+      std::vector<uint8_t> data(0x80 - 0x1E + 2, 0x00);
+      data[0] = 0x12;
+      data[1] = 0x01;  // SEND EQ SWITCH: in-range but intentionally ignored.
+      data[0x80 - 0x1E] = 0x01;
+      data[0x80 - 0x1E + 1] = 0x10;
+      GsEfx efx = baseline;
+      const std::vector<uint8_t> msg = dt1(0x40031E, data);
+      REQUIRE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+      REQUIRE(efx.control_depth[1] == 0x12);
+      REQUIRE(efx.type == baseline.type);
+      REQUIRE(efx.type_msb == baseline.type_msb);
+      REQUIRE(efx.params == baseline.params);
+      REQUIRE(efx.assigned);
+    }
+  }
+
   // A zero byte is the value zero, in the block and in the translation. The
   // second half is what the abolished reading used to intercept: it answered a
   // zero with the insert's own default and emitted no key at all, so a file

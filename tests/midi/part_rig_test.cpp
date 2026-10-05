@@ -9,9 +9,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #if defined(SONARE_WITH_MASTERING)
@@ -19,9 +21,11 @@
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_efx_processor.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "rt/processor_base.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
 
@@ -76,6 +80,53 @@ const PartRigStage kClipper{"saturation.softClipper", "{}"};
 const PartRigStage kTube{"saturation.tube", R"({"driveDb":30})"};
 const PartRigStage kCleanAmp{"saturation.ampSim", R"({"preset":"cleanCombo"})"};
 const PartRigStage kDelay{"effects.delay.stereo", "{}"};
+
+/// A no-op insert whose latency is visible through the same Q8 interface used
+/// by the part-rig guard. The rate-scaled variant models an insert whose delay
+/// is expressed in seconds, so a 256-sample delay at 48 kHz is 512 samples at
+/// 96 kHz while still being the same physical latency.
+class RigLatencyInsert final : public sonare::rt::ProcessorBase {
+ public:
+  RigLatencyInsert(int latency_samples_q8, bool scale_with_rate)
+      : reference_latency_samples_q8_(latency_samples_q8),
+        scale_with_rate_(scale_with_rate),
+        latency_samples_q8_(latency_samples_q8) {}
+
+  void prepare(double sample_rate, int) override {
+    latency_samples_q8_ =
+        scale_with_rate_
+            ? static_cast<int>(std::lround(static_cast<double>(reference_latency_samples_q8_) *
+                                           sample_rate / kOutRate))
+            : reference_latency_samples_q8_;
+  }
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples() const noexcept override { return latency_samples_q8_ >> 8; }
+  int latency_samples_q8() const noexcept override { return latency_samples_q8_; }
+
+ private:
+  int reference_latency_samples_q8_;
+  bool scale_with_rate_;
+  int latency_samples_q8_;
+};
+
+sonare::midi::synth::GsEfxStageFactory rig_latency_factory() {
+  return [](std::string_view name, std::string_view) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+    if (name == "test.latency.256") {
+      return std::make_unique<RigLatencyInsert>(256 << 8, false);
+    }
+    if (name == "test.latency.257") {
+      return std::make_unique<RigLatencyInsert>(257 << 8, false);
+    }
+    if (name == "test.latency.256.5") {
+      return std::make_unique<RigLatencyInsert>((256 << 8) + (1 << 7), false);
+    }
+    if (name == "test.latency.rate") {
+      return std::make_unique<RigLatencyInsert>(256 << 8, true);
+    }
+    return nullptr;
+  };
+}
 
 /// The bank's own default chain for @p program, by stage name.
 Names bank_names(uint8_t program) {
@@ -153,6 +204,79 @@ NativeSynthConfig native_with_factory() {
   return cfg;
 }
 
+Sf2PlayerConfig with_rig_latency_factory() {
+  Sf2PlayerConfig cfg = with_factory();
+  cfg.insert_factory = rig_latency_factory();
+  return cfg;
+}
+
+NativeSynthConfig native_with_rig_latency_factory() {
+  NativeSynthConfig cfg = native_with_factory();
+  cfg.insert_factory = rig_latency_factory();
+  return cfg;
+}
+
+template <typename Player, typename Config>
+void check_rig_latency_limit(const Config& config, bool prepared_before_install) {
+  INFO("player=" << (std::is_same_v<Player, Sf2Player> ? "sf2" : "native"));
+  Player player(config);
+  const PartRig accepted = chain({{"test.latency.256", "{}"}});
+  const PartRig rejected = chain({{"test.latency.257", "{}"}});
+  const PartRig fractional = chain({{"test.latency.256.5", "{}"}});
+  const Names expected_names{accepted.stages.front().processor};
+
+  if (prepared_before_install) {
+    player.prepare(kOutRate, 512);
+    REQUIRE(player.set_part_rig(0, accepted));
+    REQUIRE(player.part_rig_stage_names(0) == expected_names);
+    CHECK_FALSE(player.set_part_rig(0, rejected));
+    CHECK(player.part_rig_stage_names(0) == expected_names);
+    CHECK_FALSE(player.set_part_rig(0, fractional));
+    CHECK(player.part_rig_stage_names(0) == expected_names);
+    return;
+  }
+
+  REQUIRE(player.set_part_rig(0, accepted));
+  REQUIRE(player.part_rig_stage_names(0).empty());
+  CHECK_FALSE(player.set_part_rig(0, rejected));
+  CHECK(player.part_rig_stage_names(0).empty());
+  CHECK_FALSE(player.set_part_rig(0, fractional));
+  CHECK(player.part_rig_stage_names(0).empty());
+  player.prepare(kOutRate, 512);
+  CHECK(player.part_rig_stage_names(0) == expected_names);
+}
+
+template <typename Player, typename Config>
+void check_reference_rate_rig_limit(const Config& config) {
+  Player player(config);
+  player.prepare(96000.0, 512);
+  REQUIRE(player.set_part_rig(0, chain({{"test.latency.rate", "{}"}})));
+  REQUIRE(player.part_rig_stage_names(0) == Names{"test.latency.rate"});
+}
+
+template <typename Player, typename Config>
+void check_gs_unit_tail(const Config& input_config, bool rigged) {
+  INFO("player=" << (std::is_same_v<Player, Sf2Player> ? "sf2" : "native"));
+  Config config = input_config;
+  config.bank_rig_binding = false;
+  Player player(config);
+  if (rigged) REQUIRE(player.set_part_rig(0, chain({kDelay})));
+  player.prepare(kOutRate, 256);
+  const int base_tail = player.tail_samples();
+
+  const auto factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  sonare::midi::synth::GsEfxProcessor reference(
+      0x0110, sonare::midi::synth::GsEfxRealization::kModern, factory);
+  reference.prepare(kOutRate, 256, 2);
+  REQUIRE(reference.tail_samples() > 0);
+
+  route_to_unit(player, 0);
+  settle(player);
+  CHECK(player.tail_samples() == base_tail + reference.tail_samples());
+}
+
 template <typename Player, typename Config>
 StereoRender render_panned_on(const Config& cfg, const PartRig& rig, uint8_t pan) {
   Player player(cfg);
@@ -186,6 +310,33 @@ double relative_rms_difference(const std::vector<float>& reference,
 }
 
 }  // namespace
+
+TEST_CASE("part rig: chain latency is capped at 256 samples at 48 kHz",
+          "[midi][rig][part][latency]") {
+  for (const bool prepared : {false, true}) {
+    INFO("prepared before install=" << prepared);
+    check_rig_latency_limit<Sf2Player>(with_rig_latency_factory(), prepared);
+    check_rig_latency_limit<NativeSynth>(native_with_rig_latency_factory(), prepared);
+  }
+}
+
+TEST_CASE("part rig: latency validation uses the 48 kHz reference rate",
+          "[midi][rig][part][latency]") {
+  check_reference_rate_rig_limit<Sf2Player>(with_rig_latency_factory());
+  check_reference_rate_rig_limit<NativeSynth>(native_with_rig_latency_factory());
+}
+
+TEST_CASE("part rig: routed GS units report their complete graph tail",
+          "[midi][rig][part][latency][gs][efx]") {
+  check_gs_unit_tail<Sf2Player>(with_factory(), false);
+  check_gs_unit_tail<NativeSynth>(native_with_factory(), false);
+}
+
+TEST_CASE("part rig: routed GS units follow an explicit chain tail",
+          "[midi][rig][part][latency][gs][efx]") {
+  check_gs_unit_tail<Sf2Player>(with_factory(), true);
+  check_gs_unit_tail<NativeSynth>(native_with_factory(), true);
+}
 
 TEST_CASE("sf2: with no entry a part gets the bank rig for its program", "[midi][rig][part]") {
   Sf2Player player = make(with_factory());

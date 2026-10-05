@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -62,6 +63,11 @@ constexpr uint8_t kEfxDepthCentre = 0x40;
 /// The stage after which a rig's input stops being the mono pickup.
 constexpr std::string_view kAmpStage = "saturation.ampSim";
 
+/// Part-rig latency is measured against the fixed 48 kHz contract, regardless
+/// of the host rate at which the accepted chain will later be realised.
+constexpr double kPartRigValidationSampleRate = 48000.0;
+constexpr int kPartRigValidationBlockSize = 512;
+
 }  // namespace
 
 uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcept {
@@ -106,26 +112,46 @@ void PartFxStage::publish() {
   std::shared_ptr<PartFxSnapshot> snapshot = build_snapshot();
   snapshot->generation = ++generation_;
   // Series stages ring out one after another; parts and units run side by side.
-  int tail = 0;
-  for (const auto& chain : snapshot->chains) {
-    int sum = 0;
+  int64_t tail = 0;
+  std::array<int64_t, 16> chain_tails{};
+  for (size_t part = 0; part < snapshot->chains.size(); ++part) {
+    const auto& chain = snapshot->chains[part];
+    int64_t sum = 0;
     for (const auto& proc : chain) sum += proc->tail_samples();
+    chain_tails[part] = sum;
     tail = std::max(tail, sum);
+  }
+  std::array<int64_t, kGsEfxUnitCount> unit_input_tails{};
+  for (size_t part = 0; part < snapshot->part_unit.size(); ++part) {
+    const uint8_t unit = snapshot->part_unit[part];
+    if (unit != PartFxSnapshot::kNoUnit) {
+      unit_input_tails[unit] = std::max(unit_input_tails[unit], chain_tails[part]);
+    }
   }
   for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
     if (!snapshot->unit_fed[unit]) continue;
-    int sum = 0;
-    for (const Sf2EfxStageRt& stage : snapshot->units[unit].stages) {
-      if (stage.proc != nullptr) sum += stage.proc->tail_samples();
-    }
+    int64_t sum = sf2_efx_unit_tail_samples(snapshot->units[unit]);
+    // A routed part's own chain runs before the shared unit. Parts feeding the
+    // same unit are parallel inputs, so only the longest input tail extends it.
+    sum += unit_input_tails[unit];
     tail = std::max(tail, sum);
   }
   pub_->publish(std::move(snapshot));
-  tail_samples_ = tail;
+  tail_samples_ = tail > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
+                                                         : static_cast<int>(tail);
 }
 
 bool PartFxStage::set_part_rig(uint8_t part, const PartRig& rig) {
   if (!validate_part_rig(part, rig)) return false;
+  if (rig.mode == PartRigMode::kChain && enabled()) {
+    for (const PartRigStage& stage : rig.stages) {
+      std::unique_ptr<rt::ProcessorBase> proc =
+          config_.insert_factory(stage.processor, stage.params_json);
+      if (proc == nullptr) continue;
+      proc->prepare(kPartRigValidationSampleRate, kPartRigValidationBlockSize);
+      if (proc->latency_samples_q8() > (kMaxPartRigLatencySamples << 8)) return false;
+    }
+  }
   const size_t index = part == kPartRigAllParts ? kDestinationRig : part;
   PartRig copy = rig;
   rigs_.rigs[index] = std::move(copy);
@@ -741,6 +767,7 @@ void PartFxStage::drain_param_updates() noexcept {
       // from the delay lines and phases it froze with.
       if (on && !stage.enabled_now && stage.fade <= 0.0f && proc != nullptr) proc->reset();
       stage.enabled_now = on;
+      stage.enabled_target = on;
       continue;
     }
     if (proc == nullptr) continue;
