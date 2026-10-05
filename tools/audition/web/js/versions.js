@@ -10,32 +10,45 @@
 'use strict';
 
 import {
-  $, el, state, ROLE_ORDER, roleClass, roleOf, pathOf, blockOf, sourceOf, sourceLabel,
+  $, el, state, ROLE_ORDER, roleClass, roleOf, scopeOf, blockOf, sourceOf, sourceLabel,
+  comparisons, selectedComparison, comparisonKeys, picksKey,
 } from './state.js';
 import { t, phrase } from './i18n.js';
 import { activeKey, applyGains, renderLevels, span, startAt } from './player.js';
 import { recordPreference, renderComparedAgainst } from './feedback.js';
 import { renderIdent, writeRoute } from './address.js';
+import { renderSubject } from './subject.js';
 
 /* Slots in the order they are shown, which is the order `1`…`9` count in.
  *
- * A blind run is one question, so it is run on the path that ships. The same
- * candidate rendered again with the rig cleared is the same candidate, and a
- * tally taken across both paths counts a vote for a setting as a vote for a
- * path — the two are not comparable and the result cannot be read back apart.
- * They stay on the page; they are not in the draw.
+ * A blind run is one question, so it is run on one comparison's two sides —
+ * `blind.js` draws them. The same candidate rendered again at the other
+ * boundary is the same candidate, and a tally taken across both counts a vote
+ * for a setting as a vote for a boundary.
+ *
+ * Outside a blind run the selected comparison decides what is shown: its model
+ * side, its oracle, and any capture offered beside them for context.
  */
 function displayOrder() {
-  const slots = state.take.keys.map((_, i) => i);
   if (state.blind) return state.blindOrder.map((_, i) => i);
+  let slots = state.take.keys.map((_, i) => i);
+  const c = selectedComparison();
+  if (c) {
+    const shown = comparisonKeys(c);
+    const kept = slots.filter((s) => {
+      const key = state.take.keys[s];
+      return shown.has(key) || roleOf(key) === 'comparison';
+    });
+    if (kept.length) slots = kept;
+  }
   const rank = (slot) => {
     const key = state.take.keys[slot];
     const at = ROLE_ORDER.indexOf(roleOf(key));
-    // The direct path after the shipped one within a role, so the two blocks of
-    // a role sit together rather than either of them splitting the other —
-    // unless the manifest marks which block is primary (a DI reference).
+    // The instrument scope after the product one within a role, so the two
+    // blocks of a role sit together rather than either of them splitting the
+    // other — unless the manifest marks which block is primary (a DI reference).
     const { block } = sourceOf(key);
-    const sub = block ? (block === 'primary' ? 0 : 1) : (pathOf(key) ? 1 : 0);
+    const sub = block ? (block === 'primary' ? 0 : 1) : (scopeOf(key) === 'instrument' ? 1 : 0);
     return (at < 0 ? ROLE_ORDER.length : at) * 2 + sub;
   };
   // Stable, so a role's own versions keep the order the manifest gave them.
@@ -86,6 +99,12 @@ export function buildVersionButtons() {
   const box = $('versions');
   box.replaceChildren();
   state.display = displayOrder();
+  // A version the selected comparison does not show cannot stay selected.
+  if (!state.blind && state.display.length && !state.display.includes(state.versionIndex)) {
+    state.versionIndex = state.display[0];
+    state.wantKey = activeKey();
+  }
+  buildComparisonRow(box);
 
   /* One block per QUESTION, not one strip per page.
    *
@@ -93,7 +112,7 @@ export function buildVersionButtons() {
    * target, which signal path the library is heard down, and which calibration
    * candidate. On the clean electric guitar that is eighteen buttons, and a
    * pick out of eighteen answers none of the three — so the block is keyed by
-   * role and path together, and a manifest declaring neither still gets the
+   * role and scope together, and a manifest declaring neither still gets the
    * single unlabelled block it always had. */
   const blocks = [];
   let seg = null;
@@ -101,7 +120,7 @@ export function buildVersionButtons() {
   state.display.forEach((slot, pos) => {
     const key = state.blind ? '' : state.take.keys[slot];
     const role = key ? roleOf(key) : '';
-    const path = key ? pathOf(key) : '';
+    const scope = key ? scopeOf(key) : '';
     const block = key ? blockOf(key) : '';
     if (seg === null || block !== segBlock) {
       segBlock = block;
@@ -115,7 +134,7 @@ export function buildVersionButtons() {
       const head = el('div', 'vhead');
       wrap.append(head, seg);
       box.append(wrap);
-      blocks.push({ role, path, head, seg });
+      blocks.push({ role, scope, head, seg });
     }
     const b = el('button');
     b.type = 'button';
@@ -147,7 +166,7 @@ export function buildVersionButtons() {
  * Only a block holding more than one version gets a sentence: one version poses
  * no question, and the role name already says what it is.
  */
-function fillHead({ role, path, head, seg }) {
+function fillHead({ role, scope, head, seg }) {
   // A voice with a set of recorded candidates puts eleven buttons in one row,
   // and equal segments across eleven ellipsise every label into uselessness —
   // `foundati…` beside `mixtures…` names neither. Past the point where a name
@@ -158,15 +177,18 @@ function fillHead({ role, path, head, seg }) {
   if (role) {
     const lab = el('span', 'role');
     lab.append(el('span', 'dot'), el('span', '', t(`role.${role}`)));
-    if (path) lab.append(el('span', 'vpath', t(`path.${path}`)));
-    lab.title = t(path ? `path.${path}.long` : `role.${role}.long`);
+    // Only the instrument scope is tagged: the product is what ships, and
+    // naming it on every block would say nothing.
+    const tagged = scope === 'instrument';
+    if (tagged) lab.append(el('span', 'vpath', t('scope.instrument')));
+    lab.title = t(tagged ? 'scope.instrument.long' : `role.${role}.long`);
     head.append(lab);
   }
   if (seg.childElementCount < 2) return;
   // One line, and it is the first thing given up when the row narrows, so it
   // also carries itself as a title rather than ending in an ellipsis nothing
   // can open.
-  const hint = el('span', 'vhint', t(hintKey(role, path)));
+  const hint = el('span', 'vhint', t(hintKey(role, scope)));
   hint.title = hint.textContent;
   head.append(hint);
   if (state.blind) return;
@@ -175,7 +197,7 @@ function fillHead({ role, path, head, seg }) {
   // other block it would be a button pointing away from itself.
   const pick = el('button', 'ghost', t('fb.prefer'));
   pick.type = 'button';
-  pick.dataset.block = `${role}|${path}`;
+  pick.dataset.block = `${role}|${scope}`;
   pick.title = t('fb.preferTitle');
   pick.addEventListener('click', recordPreference);
   head.append(pick);
@@ -194,24 +216,98 @@ function fillHead({ role, path, head, seg }) {
  * thing could pass for the instrument at all. The second is not a weaker form
  * of the first; it is the only question left when nothing is there to be near.
  *
- * The direct path is an axis, so its block says what it is for rather than
- * asking anything: choosing between two paths is not a judgement about the
- * voice.
+ * On a page without comparisons the instrument scope is an axis, so its block
+ * says what it is for rather than asking anything: choosing between two
+ * boundaries is not a judgement about the voice. Where a comparison is
+ * selected, its model side is the candidate set whichever scope it is.
  *
- * A comparison is neither model nor target, so its block only says what it is.
+ * A comparison capture is neither model nor target, so its block only says
+ * what it is.
  */
-function hintKey(role, path) {
+function hintKey(role, scope) {
   if (state.blind) return 'ver.hintBlind';
-  if (path) return 'ver.hintDirect';
+  if (scope === 'instrument' && !selectedComparison()) return 'ver.hintDirect';
   if (role === 'reference') return 'ver.hintReference';
   if (role === 'comparison') return 'ver.hintComparison';
   if (!role) return 'ver.hint';
   return hasReference() ? 'ver.hintModel' : 'ver.hintModelAlone';
 }
 
-/// Whether this page has anything to be measured against at all.
+/// Whether what is shown has anything to be measured against at all.
 const hasReference = () =>
-  Boolean(state.take) && state.take.keys.some((k) => roleOf(k) === 'reference');
+  Boolean(state.take) && state.display.some((s) => roleOf(state.take.keys[s]) === 'reference');
+
+/* The comparison selector, in the same row as the blocks it decides.
+ *
+ * Each comparison is named and its standing shown beside it, blind or not,
+ * because whether the two sides are comparable at all is not a hint about
+ * which one is which. What it is compared against is the manifest's own label
+ * for the reference, hidden in a blind run like every other name.
+ */
+function buildComparisonRow(box) {
+  const all = comparisons();
+  if (!all.length) return;
+  const cur = selectedComparison();
+  const wrap = el('div', 'vrow');
+  wrap.classList.add(roleClass(''));
+  wrap.style.setProperty('--n', String(all.length));
+  const head = el('div', 'vhead');
+  const lab = el('span', 'role');
+  lab.append(el('span', 'dot'), el('span', '', t('compare.label')));
+  lab.title = t(`compare.${cur.id}.long`);
+  head.append(lab);
+  const refs = (cur.oracle_sources || []).map(sourceLabel).join(', ');
+  const line = !refs ? t('compare.noReference')
+    : state.blind ? t(`compare.status.${cur.status}`)
+      : `${t(`compare.status.${cur.status}`)} · ${t('compare.against', { ref: refs })}`;
+  const hint = el('span', 'vhint', line);
+  hint.title = (cur.reasons || []).join('\n');
+  head.append(hint);
+  const seg = el('div', 'segmented');
+  seg.setAttribute('role', 'group');
+  seg.setAttribute('aria-label', t('compare.label'));
+  for (const c of all) {
+    const b = el('button');
+    b.type = 'button';
+    const text = el('span', 'vtext');
+    text.append(el('span', 'vname', t(`compare.${c.id}`)),
+      el('span', 'vkey', t(`compare.status.${c.status}`)));
+    b.append(text);
+    b.title = [t(`compare.${c.id}.long`), ...(c.reasons || [])].join('\n');
+    b.setAttribute('aria-pressed', String(c === cur));
+    b.addEventListener('click', () => selectComparison(c.id));
+    seg.append(b);
+  }
+  wrap.append(head, seg);
+  box.append(wrap);
+}
+
+/* Move to another comparison. The version chosen in the one being left is
+ * kept for the way back; picks, the blind gate and the draw are the new one's
+ * own, and the judged oracle starts empty rather than pointing at the other
+ * comparison's reference. */
+function selectComparison(id) {
+  const from = selectedComparison();
+  if (!state.take || !from || from.id === id) return;
+  if (!state.blind) state.wantByComparison[from.id] = activeKey();
+  state.comparisonId = id;
+  state.picks = JSON.parse(localStorage.getItem(picksKey()) || '{}');
+  state.lastOracle = null;
+  state.oracleOverride = null;
+  // `blind.js` re-gates, redraws and rescores on this.
+  document.dispatchEvent(new CustomEvent('audition:comparison'));
+  const c = selectedComparison();
+  const keys = comparisonKeys(c);
+  const want = state.wantByComparison[id];
+  let slot = keys.has(want) ? state.take.keys.indexOf(want) : -1;
+  if (slot < 0) slot = state.take.keys.findIndex((k) => (c.model_sources || []).includes(k));
+  if (slot < 0) slot = state.take.keys.findIndex((k) => keys.has(k));
+  state.versionIndex = state.blind || slot < 0 ? 0 : slot;
+  rebuildVersions();
+  renderComparedAgainst();
+  renderSubject();
+  if (!state.blind) setVersion(state.versionIndex);
+}
 
 /// Buttons past which a label stops fitting in a shared row.
 const CROWDED = 6;
@@ -271,7 +367,7 @@ function markSwap() {
 
 function markVersion() {
   const box = $('versions');
-  [...box.querySelectorAll('.segmented button')].forEach((b) =>
+  [...box.querySelectorAll('.segmented button[data-slot]')].forEach((b) =>
     b.setAttribute('aria-pressed', String(+b.dataset.slot === state.versionIndex)));
   // "Keep this one" belongs to the block whose version is sounding, so it moves
   // with the selection rather than standing under all of them at once.

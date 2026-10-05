@@ -4,7 +4,7 @@
 
 'use strict';
 
-import { $, el, state, roleClass } from './state.js';
+import { $, el, state, roleClass, selectedComparison } from './state.js';
 import { t } from './i18n.js';
 import { dotEl, stageBar } from './bank.js';
 
@@ -61,8 +61,13 @@ export function renderSubject() {
   const ref = el('span', 'subj subj-ref');
   ref.classList.add(roleClass('reference'));
   ref.append(el('span', 'dot'), el('span', 'lab', t('subj.reference')));
-  const cap = prov.capture;
-  if (cap) {
+  // The voice's capture answers only the comparisons that list it; a comparison
+  // with no oracle says so rather than naming the other one's reference.
+  const comparison = selectedComparison();
+  const cap = comparison && !(comparison.oracle_sources || []).length ? null : prov.capture;
+  if (comparison && !cap) {
+    ref.append(el('span', 'subj-key dim', t('compare.noReference')));
+  } else if (cap) {
     ref.append(el('span', 'subj-key', t(`src.${cap.source_class || 'unclassified'}`)));
     // The product comes from the untracked overlay, so a clone without one
     // still gets the class above and simply does not get the name.

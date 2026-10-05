@@ -10,7 +10,9 @@
 
 'use strict';
 
-import { $, state, SWITCH_RAMP, FUSED_S, roleOf, sourceLabel } from './state.js';
+import {
+  $, state, SWITCH_RAMP, FUSED_S, roleOf, sourceLabel, selectedComparison,
+} from './state.js';
 import { t } from './i18n.js';
 
 export function audio() {
@@ -361,8 +363,11 @@ export function conditions() {
   const at = playhead();
   const hit = hitAt(at);
   const version = state.blind ? null : (state.take ? activeKey() : null);
+  // Which of the manifest's comparisons the note is about; null on a page without them.
+  const comparison = selectedComparison();
   return {
     set: state.setId,
+    comparison_id: comparison ? comparison.id : null,
     take: item ? item.id : null,
     take_label: (item && item.label) || null,
     version,

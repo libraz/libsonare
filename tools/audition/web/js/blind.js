@@ -4,19 +4,30 @@
 
 'use strict';
 
-import { $, state, pathOf, picksKey, sourceLabel } from './state.js';
+import {
+  $, state, scopeOf, picksKey, sourceLabel, selectedComparison, comparisonKeys,
+} from './state.js';
 import { t } from './i18n.js';
 import { recordBlind } from './feedback.js';
 import { rebuildVersions } from './versions.js';
 
-/* A set whose reference is a direct-input recording has no blind comparison to
- * offer: the draw below takes the shipped path only, and that path is the
- * amplified model, so the run would set it against a bare signal and the ear
- * would be separating the amplifier. The manifest says which kind of reference
- * the set has; anything but a plain `none` keeps blind mode available. */
+/* A blind run is a ranking, so it runs only on a comparison whose two sides
+ * stand at the same boundary — `matched` in the manifest. Anything else would
+ * have the ear separating an amplifier or a room rather than judging the voice.
+ *
+ * A page written before comparisons existed falls back to the rule it had: a
+ * direct-input reference (`rig` `none`) set against the shipped, amplified
+ * path is exactly that mismatch, so its blind mode stays off. */
 export const blindBlocked = () => {
+  const c = selectedComparison();
+  if (c) return c.status !== 'matched';
   const voice = (state.manifest || {}).voice;
   return Boolean(voice) && voice.rig === 'none';
+};
+
+const blockedReason = () => {
+  const c = selectedComparison();
+  return c ? t('blind.unmatched', { status: t(`compare.status.${c.status}`) }) : t('blind.refDi');
 };
 
 /* Brings the control and the run in line with the set just loaded. The reason
@@ -26,7 +37,7 @@ export function applyBlindGate() {
   const box = $('blind');
   const blocked = blindBlocked();
   box.disabled = blocked;
-  box.parentElement.title = blocked ? t('blind.refDi') : '';
+  box.parentElement.title = blocked ? blockedReason() : '';
   if (blocked) {
     state.blind = false;
     box.checked = false;
@@ -44,12 +55,27 @@ $('blind').addEventListener('change', (ev) => {
   renderScore();
 }, true);
 
+/* Another comparison selected: its own gate, its own draw, its own picks —
+ * `versions.js` has already loaded them and redraws the switch after this. */
+document.addEventListener('audition:comparison', () => {
+  applyBlindGate();
+  reshuffleBlind();
+  renderScore();
+});
+
 /* The draw for a blind run: which versions are in it, in an order that says
- * nothing. Only the shipped path is drawn — see `displayOrder` — so a slot in
- * blind mode is a position in this list rather than an index into the take. */
+ * nothing. The selected comparison's two sides and nothing else, so a product
+ * run never holds an instrument render; a page without comparisons draws the
+ * shipped path only. A slot in blind mode is a position in this list rather
+ * than an index into the take. */
 export function reshuffleBlind() {
+  const c = selectedComparison();
+  const drawn = c ? comparisonKeys(c) : null;
   const order = state.take
-    ? state.take.keys.map((_, i) => i).filter((i) => !pathOf(state.take.keys[i]))
+    ? state.take.keys.map((_, i) => i).filter((i) => {
+      const key = state.take.keys[i];
+      return drawn ? drawn.has(key) : scopeOf(key) !== 'instrument';
+    })
     : [];
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -130,7 +156,7 @@ export function renderScore() {
   const choose = $('blindPick');
   const unsure = $('blindUnsure');
   if (!state.blind) {
-    $('blindScore').textContent = blindBlocked() ? t('blind.refDi') : '';
+    $('blindScore').textContent = blindBlocked() ? blockedReason() : '';
     for (const b of [btn, choose, unsure]) b.hidden = true;
     return;
   }

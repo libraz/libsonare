@@ -24,6 +24,12 @@ POLICY_PATH = HERE / "policy.json"
 #: Every other class is a recording of an instrument, whatever product made it.
 MACHINE_SOURCE = "module"
 
+#: The comparison of the voice's direct output against a direct-input recording.
+INSTRUMENT_DI = "instrument_di"
+#: The comparison of the default playback against the slot's GM/GS reference.
+GM_GS_PRODUCT = "gm_gs_product"
+COMPARISON_IDS = (INSTRUMENT_DI, GM_GS_PRODUCT)
+
 
 def load(path: Path | None = None) -> dict:
     """The policy as data, or an empty dict where it cannot be read.
@@ -91,3 +97,46 @@ def answers_layer(source_class: str | None, want: dict) -> bool:
     if timbre == "machine":
         return source_class == MACHINE_SOURCE
     return source_class != MACHINE_SOURCE
+
+
+def references_by_scope(
+    policy: dict,
+    program: int,
+    *,
+    bank: int = 0,
+    kit: bool = False,
+    capture: str | None = None,
+    capture_direct: bool = False,
+    product_rig: bool | None = None,
+) -> dict[str, str | None]:
+    """Which capture id answers each comparison of one voice; None where none does.
+
+    An entry under `references_by_scope` wins: `"<program>"` for bank 0,
+    `"<program>:<bank>"` for a variation, never for a kit. Without one the
+    voice's single `capture` is placed by its rig class. A direct-input capture
+    (`capture_direct`, rig class `none`) answers the instrument comparison, and
+    the product one only where the default playback is known to bind no rig
+    (`product_rig is False`); any other class answers the product comparison,
+    where `boundary.assess` decides how far it may be used.
+    """
+    out: dict[str, str | None] = dict.fromkeys(COMPARISON_IDS)
+    table = policy.get("references_by_scope")
+    entry = None
+    if isinstance(table, dict) and not kit:
+        entry = table.get(f"{program}:{bank}" if bank else str(program))
+        if entry is None and not bank:
+            entry = table.get(f"{program}:0")
+    if isinstance(entry, dict):
+        for cid in COMPARISON_IDS:
+            value = entry.get(cid)
+            out[cid] = value if isinstance(value, str) and value else None
+        return out
+    if not capture:
+        return out
+    if capture_direct:
+        out[INSTRUMENT_DI] = capture
+        if product_rig is False:
+            out[GM_GS_PRODUCT] = capture
+    else:
+        out[GM_GS_PRODUCT] = capture
+    return out

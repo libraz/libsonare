@@ -9,7 +9,7 @@
 
 'use strict';
 
-import { $, state, VIEW_KEY, SET_KEY } from './state.js';
+import { $, state, picksKey, VIEW_KEY, SET_KEY } from './state.js';
 import {
   t, applyStatic, initLang, onLang, setLang, currentLang, languages,
 } from './i18n.js';
@@ -136,7 +136,7 @@ function onKey(ev) {
     const id = state.items[state.itemIndex].id;
     if (state.blind && state.picks[id] && !state.picks[id].revealed) {
       state.picks[id].revealed = true;
-      localStorage.setItem(`audition:picks:${state.setId}`, JSON.stringify(state.picks));
+      localStorage.setItem(picksKey(), JSON.stringify(state.picks));
     } else {
       reshuffleBlind();
     }

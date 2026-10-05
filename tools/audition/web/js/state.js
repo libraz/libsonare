@@ -45,7 +45,9 @@ export const state = {
   blind: false,
   failed: false,       // a load error is on the title and stays there
   blindOrder: [],      // slot -> real version index
-  picks: {},           // itemId -> { slot, key, revealed }
+  picks: {},           // itemId -> { slot, key, revealed }, for the selected comparison
+  comparisonId: null,  // the manifest comparison being listened to, or null for its default
+  wantByComparison: {}, // comparison id -> the version last chosen in it
   oldNotes: {},        // notes this browser holds from before the feedback log
   bank: { voices: [], loaded: false, shown: [], cursor: -1 },
 };
@@ -98,15 +100,37 @@ export function roleOf(key) {
   return ROLE_ORDER.includes(r) ? r : '';
 }
 
-/* Which signal path a render was taken down, and it is an AXIS rather than a
- * choice: `felt-worn` and `felt-worn` with the bank's rig cleared are one
- * setting heard two ways, not two candidates. Interleaved in one strip they
- * made a list of eighteen out of a question with six answers, and a pick out of
- * it could not be attributed to either question. */
-export const pathOf = (key) => (sourceOf(key).path === 'direct' ? 'direct' : '');
+/* Which boundary a model render stops at — `instrument` with the bank's rig
+ * cleared, `product` down the shipped path — and it is an AXIS rather than a
+ * choice: `felt-worn` at both is one setting heard two ways, not two
+ * candidates. Interleaved in one strip they made a list of eighteen out of a
+ * question with six answers. References carry none. */
+export const scopeOf = (key) => sourceOf(key).scope || '';
 
 /// The block a version belongs to: one question, one block.
-export const blockOf = (key) => `${roleOf(key)}|${pathOf(key)}`;
+export const blockOf = (key) => `${roleOf(key)}|${scopeOf(key)}`;
+
+/* The comparisons the manifest defines: the DI against a direct-input
+ * reference, and the product against the GM/GS one. A page written before them
+ * has none, and every reader falls back to the single comparison it had. */
+export const comparisons = () =>
+  ((state.manifest && state.manifest.comparisons) || []).filter((c) => c && c.id);
+
+const STATUS_RANK = { matched: 0, context_only: 1, unverified: 2, unavailable: 3 };
+
+/// The comparison being listened to: the one chosen, else the best-standing
+/// one, the product before the instrument where they stand equal.
+export function selectedComparison() {
+  const all = comparisons();
+  const held = all.find((c) => c.id === state.comparisonId);
+  if (held || !all.length) return held || null;
+  const rank = (c) => (STATUS_RANK[c.status] ?? 4) * 2 + (c.scope === 'product' ? 0 : 1);
+  return all.reduce((best, c) => (rank(c) < rank(best) ? c : best));
+}
+
+/// The versions one comparison sets against each other: its model side and its oracle.
+export const comparisonKeys = (c) =>
+  new Set([...(c.model_sources || []), ...(c.oracle_sources || [])]);
 
 /// Every source a feedback note could be judged against, reference before
 /// comparison, in the order the manifest lists them within each role.
@@ -118,6 +142,10 @@ export function oracleSources() {
 }
 
 export const notesKey = () => `audition:picks-note:${state.setId || 'untitled'}`;
-export const picksKey = () => `audition:picks:${state.setId || 'untitled'}`;
+/// Picks are held per comparison; a page with none keeps the key it always had.
+export const picksKey = () => {
+  const c = selectedComparison();
+  return `audition:picks:${state.setId || 'untitled'}${c ? `:${c.id}` : ''}`;
+};
 export const SET_KEY = 'audition:set';
 export const VIEW_KEY = 'audition:view';

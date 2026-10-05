@@ -296,18 +296,40 @@ def recorded_variants(slug: str) -> dict:
     return {v.name: v for v in table.get(slug, [])}
 
 
-def label_sources(manifest: dict, slug: str) -> bool:
-    """Give every version the words and the axis its button needs.
+def scope_sources(manifest: dict) -> bool:
+    """Give every model render of a manifest written before `scope` its boundary.
 
-    Three things, all resolved per request for the same reason the slot is: they
+    A first-generation page marked a rig-cleared render `path: "direct"`, or only
+    by its `-di` key; that is the `instrument` scope, and every other model
+    render went down the shipped path, which is `product`. The scope is an axis
+    rather than a choice, so the switch needs it to keep the two in separate
+    blocks. References carry none. Read-side only: the file is not rewritten.
+    """
+    sources = manifest.get("sources")
+    if not isinstance(sources, dict):
+        return False
+    changed = False
+    for key, src in sources.items():
+        if not isinstance(src, dict) or src.get("role") != "model":
+            continue
+        legacy = src.pop("path", None)
+        if "scope" not in src:
+            direct = legacy == "direct" or key.endswith("-di")
+            src["scope"] = "instrument" if direct else "product"
+            changed = True
+        changed = changed or legacy is not None
+    return changed
+
+
+def label_sources(manifest: dict, slug: str) -> bool:
+    """Give every version the words its button needs.
+
+    Two things, both resolved per request for the same reason the slot is: they
     are tracked facts that move on their own, and the hundred and eighty-odd
     pages already rendered were written before any of them existed. Re-rendering
     one to read its own button is hours of audio for a sentence.
 
     - `title` and `desc`, in both languages, for a version the registry names.
-    - `path`, for a render taken with the rig cleared. The signal path is an
-      axis and not a choice, so the switch has to be able to put it in its own
-      block instead of interleaving it with the candidates.
     - `detail` with any override string taken off it. A listener shown the knob
       answers about the knob, and every page rendered so far carries it.
 
@@ -326,9 +348,6 @@ def label_sources(manifest: dict, slug: str) -> bool:
         if not isinstance(src, dict):
             continue
         direct = key.endswith("-di")
-        if direct and not src.get("path"):
-            src["path"] = "direct"
-            changed = True
         detail = src.get("detail")
         if isinstance(detail, str) and detail:
             plain = calibration.strip_overrides(detail)
@@ -770,6 +789,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             found = provenance(manifest.get("voice") or {}, slug)
             if found:
                 manifest["provenance"] = found
+            scope_sources(manifest)
             label_sources(manifest, slug)
             self._json(manifest)
             return

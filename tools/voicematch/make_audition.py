@@ -110,17 +110,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
+import policy
 from _repo import REPO_ROOT
 from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
 from bank import Capture, Voice, load_capture, parse_selection, voices, write_index
+from boundary import (
+    SCOPE_INSTRUMENT,
+    SCOPE_PRODUCT,
+    SENDS_DRY,
+    SENDS_POWER_ON,
+    Reference,
+    RenderRequest,
+    assess,
+)
 from calibration import Variant
 from capture import (
     CORPUS_ROOT,
+    RIG_NONE,
     RIG_UNCLASSIFIED,
     ROOM_NONE,
     ROOM_PRESENT,
     ROOM_UNCLASSIFIED,
     resolve_font,
+    rig_capable,
     source_for,
 )
 from capture import load_config as capture_load_config
@@ -412,6 +424,7 @@ def build_sources(
         "model": {
             "label": "libsonare NativeSynth (GM fallback)",
             "role": "model",
+            "scope": SCOPE_PRODUCT,
             "detail": detail,
         }
     }
@@ -419,10 +432,10 @@ def build_sources(
         sources["model-di"] = {
             "label": "libsonare NativeSynth (GM fallback), direct",
             "role": "model",
-            # The signal path is an axis rather than a choice: the same setting
-            # heard down two paths is not two candidates, and a switch that
+            # The boundary is an axis rather than a choice: the same setting
+            # heard at two boundaries is not two candidates, and a switch that
             # interleaves them asks one question where there are two.
-            "path": "direct",
+            "scope": SCOPE_INSTRUMENT,
             "detail": "the same voice with the bank's rig cleared, which is where "
             "the instrument itself stops; " + _rig_explanation(capture_rig(voice)) + ".",
         }
@@ -430,6 +443,7 @@ def build_sources(
         sources[variant.name] = {
             "label": f"libsonare NativeSynth (GM fallback), {variant.name}",
             "role": "model",
+            "scope": SCOPE_PRODUCT,
             # The note first, because the override string says what moved and
             # never says what it was trying to fix, and a page is read weeks
             # after the question that built it.
@@ -440,7 +454,7 @@ def build_sources(
             sources[f"{variant.name}-di"] = {
                 "label": f"libsonare NativeSynth (GM fallback), {variant.name}, direct",
                 "role": "model",
-                "path": "direct",
+                "scope": SCOPE_INSTRUMENT,
                 "detail": "the same candidate with the bank's rig cleared. A setting "
                 "that moves the instrument is judged where the instrument "
                 "ends, since an amplifier in front of it both hides a change "
@@ -474,6 +488,107 @@ def build_sources(
                 "detail": detail,
             }
     return sources
+
+
+def instrument_request(
+    product: RenderRequest, smf: bytes, sends: tuple = SENDS_DRY
+) -> RenderRequest:
+    """The instrument comparison's request: the product's with the rig cleared and the sends off.
+
+    `--model-sends` reaches the product side only. GS sends on the instrument
+    side would put the module's ambience into a comparison with a dry
+    direct-input recording, so asking for them is refused rather than honoured.
+    """
+    if tuple(sends) != SENDS_DRY:
+        raise ValueError(
+            f"the instrument comparison renders with CC91/93/94 at zero, not {tuple(sends)!r}"
+        )
+    return replace(product, smf=smf, rig=False, sends=SENDS_DRY)
+
+
+#: The comparisons a page offers, in the order its selector shows them.
+COMPARISONS = (
+    (
+        policy.INSTRUMENT_DI,
+        SCOPE_INSTRUMENT,
+        (
+            "the voice's direct output, bank rig cleared and GS sends at zero, against a "
+            "direct-input recording of the instrument"
+        ),
+    ),
+    (
+        policy.GM_GS_PRODUCT,
+        SCOPE_PRODUCT,
+        (
+            "the default playback, bank rig and GS effects included, against the slot's "
+            "GM/GS reference"
+        ),
+    ),
+)
+
+
+def scoped_references(voice: Voice, product_rig: bool | None) -> dict[str, str | None]:
+    """Which capture id answers each comparison of this voice, per `policy.json`."""
+    return policy.references_by_scope(
+        policy.load(),
+        voice.program,
+        bank=voice.bank,
+        kit=voice.kit,
+        capture=voice.capture.id if voice.capture else None,
+        capture_direct=capture_rig(voice) == RIG_NONE,
+        product_rig=product_rig,
+    )
+
+
+def build_comparisons(
+    voice: Voice,
+    sources: dict,
+    items: list[dict],
+    requests: dict[str, RenderRequest],
+    product_rig: bool | None,
+) -> list[dict]:
+    """The page's comparisons, each judged by `boundary.assess` for display only.
+
+    A comparison whose scope has no capture on this page is `unavailable` and
+    lists no oracle: another scope's reference never stands in for it. The
+    instrument comparison is offered only for a family that can carry a rig;
+    elsewhere no rig exists to clear, and it would repeat the product one.
+    """
+    played = {key for item in items for key in item.get("tracks") or {}}
+    by_id = {cap.id: cap for cap in voice.captures}
+    model = {k: s for k, s in sources.items() if s.get("role") == "model"}
+    product_keys = [k for k, s in model.items() if s.get("scope") == SCOPE_PRODUCT]
+    instrument_keys = [k for k, s in model.items() if s.get("scope") == SCOPE_INSTRUMENT]
+    # With no rig bound and the product rendered dry, the rig-cleared render is
+    # the product render (the probe compared their digests), so it is not made twice.
+    if not instrument_keys and product_rig is False and requests[SCOPE_PRODUCT].sends == SENDS_DRY:
+        instrument_keys = product_keys
+    scoped = scoped_references(voice, product_rig)
+    out = []
+    for cid, scope, purpose in COMPARISONS:
+        cap_id = scoped[cid]
+        if scope == SCOPE_INSTRUMENT and not rig_capable(voice.program):
+            continue
+        cap = by_id.get(cap_id) if cap_id else None
+        oracle = [t["id"] for t in cap.timbres if t["id"] in played] if cap else []
+        reference = Reference.from_capture(cap.raw) if oracle else None
+        verdict = assess(reference, scope, requests[scope], product_rig=product_rig)
+        reasons = list(verdict.reasons)
+        if cap_id and not oracle:
+            reasons.insert(0, f"{cap_id} is this comparison's reference and is not on this page")
+        out.append(
+            {
+                "id": cid,
+                "scope": scope,
+                "purpose": purpose,
+                "model_sources": instrument_keys if scope == SCOPE_INSTRUMENT else product_keys,
+                "oracle_sources": oracle,
+                "status": verdict.status,
+                "may_sign_off": verdict.may_sign_off,
+                "reasons": reasons,
+            }
+        )
+    return out
 
 
 def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto") -> str:
@@ -686,7 +801,32 @@ def render_take(
         end_pad=take.tail_s,
         cc_events=take.cc_events,
         channel=channel,
-        sends=(None, None, None) if wet else (0, 0, 0),
+        sends=SENDS_POWER_ON if wet else SENDS_DRY,
+    )
+    product = RenderRequest(
+        program=voice.program,
+        seconds=total,
+        smf=smf,
+        bank=voice.bank,
+        channel=channel,
+        preset=voice.preset,
+        sends=SENDS_POWER_ON if wet else SENDS_DRY,
+        sample_rate=SR,
+    )
+    # The instrument side is always dry; a wet product needs its own score for it.
+    instrument = instrument_request(
+        product,
+        write_smf(
+            take.notes,
+            program=voice.program,
+            bank=voice.bank,
+            end_pad=take.tail_s,
+            cc_events=take.cc_events,
+            channel=channel,
+            sends=SENDS_DRY,
+        )
+        if wet
+        else smf,
     )
     print(
         f"== {take.id} ({total:.1f}s){' [GS sends at power-on]' if wet else ''} ==", file=sys.stderr
@@ -724,9 +864,22 @@ def render_take(
             else render_model(smf, total, SR, rig=False)
         )
         di_state["bound"] = digest(di) != digest(renders["model"])
-        if di_state["bound"]:
+        if di_state["bound"] and not wet:
             renders["model-di"] = di
-            print("  model-di", file=sys.stderr)
+    # The instrument comparison renders dry whatever `--model-sends` gave the
+    # product, so a wet page renders its rig-cleared side again from the dry score.
+    # An unbound voice needs that only where a direct-input reference awaits it.
+    direct = bool(di_state.get("bound")) or (
+        di_state.get("bound") is False and wet and bool(di_state.get("instrument_oracle"))
+    )
+    if direct and "model-di" not in renders:
+        renders["model-di"] = (
+            render_variant(instrument.smf, total, SR, "", args.lib, rig=False)
+            if args.lib
+            else render_model(instrument.smf, total, SR, rig=False)
+        )
+    if direct:
+        print("  model-di", file=sys.stderr)
 
     # The BASELINE is in the set, not just the variants. What has to be caught
     # is a library with the override layer compiled out, where nothing an
@@ -749,9 +902,15 @@ def render_take(
         # rule `model-di` is asked by: the amplifier compresses, so it narrows
         # whatever the candidate did to the decay and a listener judging the
         # instrument through it is judging the wrong end of the chain.
-        if di_state.get("bound") and moves_the_instrument(variant.overrides):
+        if direct and moves_the_instrument(variant.overrides):
             renders[f"{variant.name}-di"] = render_variant(
-                smf, total, SR, variant.overrides, args.lib, rig=False, preset=voice.preset
+                instrument.smf,
+                total,
+                SR,
+                variant.overrides,
+                args.lib,
+                rig=False,
+                preset=voice.preset,
             )
             print(f"  {variant.name}-di", file=sys.stderr)
 
@@ -822,6 +981,7 @@ def render_take(
         "group": take.group,
         "tracks": tracks,
         "_digests": digests,
+        "_requests": {SCOPE_PRODUCT: product, SCOPE_INSTRUMENT: instrument},
         "meta": {
             "seconds": round(total, 2),
             "shared_gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 2),
@@ -917,14 +1077,27 @@ def render_set(
     print(f"\n### {voice.label}  ->  {out}", file=sys.stderr)
 
     items = []
+    requests: list[dict[str, RenderRequest]] = []
     variant_digests: dict[str, set[str]] = {}
-    di_state: dict = {}
+    # The instrument reference does not depend on whether the product binds a rig.
+    di_state: dict = {
+        "instrument_oracle": bool(timbres)
+        and scoped_references(voice, None)[policy.INSTRUMENT_DI] is not None
+    }
     for take in selected:
         item = render_take(
             take, voice, timbres, out, args, variants, archive, comparisons, di_state
         )
         variant_digests[take.id] = item.pop("_digests")
+        requests.append(item.pop("_requests"))
         items.append(item)
+    sources = build_sources(
+        voice,
+        timbres,
+        variants,
+        comparisons,
+        di=any("model-di" in (i.get("tracks") or {}) for i in items),
+    )
 
     manifest = {
         # The voice names itself, which is the right default and the wrong
@@ -944,13 +1117,10 @@ def render_set(
             "difference between them is real. " + reference_note(voice, timbres, args.model_sends)
         ),
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "sources": build_sources(
-            voice,
-            timbres,
-            variants,
-            comparisons,
-            di=any("model-di" in (i.get("tracks") or {}) for i in items),
-        ),
+        "sources": sources,
+        # Display copy only: a reader that needs a verdict re-derives it with
+        # `boundary.assess`. Every take shares the boundary, so the first speaks for all.
+        "comparisons": build_comparisons(voice, sources, items, requests[0], di_state.get("bound")),
         "items": items,
     }
     out.mkdir(parents=True, exist_ok=True)

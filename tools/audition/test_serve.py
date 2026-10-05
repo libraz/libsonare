@@ -590,15 +590,10 @@ def test_a_page_rendered_before_the_words_existed_still_gets_them() -> None:
     assert src["mine"]["title"] == {"en": "kept", "ja": "kept"}
 
 
-def test_the_knob_never_reaches_the_page_and_the_signal_path_does() -> None:
-    """Two facts a rendered manifest gets wrong, both fixed where it is served.
-
-    A listener shown `piano.brightness=0.30` reports on brightness, which is the
-    one thing that knob cannot be asked about — and every page rendered so far
-    carries the override string in the field the banner reads. The signal path
-    is the other way round: it is missing, and without it the switch cannot tell
-    a second path from a second candidate.
-    """
+def test_the_knob_never_reaches_the_page() -> None:
+    """A listener shown `piano.brightness=0.30` reports on brightness, which is
+    the one thing that knob cannot be asked about — and every page rendered so
+    far carries the override string in the field the banner reads."""
     manifest = {
         "sources": {
             "felt-worn": {
@@ -613,10 +608,40 @@ def test_the_knob_never_reaches_the_page_and_the_signal_path_does() -> None:
     src = manifest["sources"]
     assert src["felt-worn"]["detail"] == "the felt is flat"
     assert src["felt-worn-di"]["detail"] == "the same, rig cleared"
-    assert src["felt-worn-di"]["path"] == "direct"
-    assert "path" not in src["felt-worn"], src["felt-worn"]
+    assert "scope" not in src["felt-worn-di"], "the boundary is scope_sources' job"
     # A note is prose and prose has dashes in it.
     assert src["prose"]["detail"] == "two references — both of them dark"
+
+
+def test_a_first_generation_manifest_is_read_with_scopes() -> None:
+    """`path: "direct"` and a bare `-di` key are the instrument scope, every
+    other model render the product scope; references take none, and a manifest
+    that already carries scopes keeps them."""
+    manifest = {
+        "sources": {
+            "model": {"role": "model"},
+            "model-di": {"role": "model", "path": "direct"},
+            "felt-di": {"role": "model"},
+            "felt": {"role": "model"},
+            "odd": {"role": "model", "path": "direct"},
+            "ref": {"role": "reference"},
+        }
+    }
+    assert serve.scope_sources(manifest)
+    src = manifest["sources"]
+    assert {k: v.get("scope") for k, v in src.items()} == {
+        "model": "product",
+        "model-di": "instrument",
+        "felt-di": "instrument",
+        "felt": "product",
+        "odd": "instrument",
+        "ref": None,
+    }
+    assert not any("path" in v for v in src.values())
+
+    current = {"sources": {"x-di": {"role": "model", "scope": "product"}}}
+    assert not serve.scope_sources(current)
+    assert current["sources"]["x-di"]["scope"] == "product"
 
 
 def test_a_set_outside_the_bank_is_left_as_it_is() -> None:

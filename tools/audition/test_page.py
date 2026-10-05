@@ -288,6 +288,52 @@ def test_blind_is_refused_for_a_direct_input_reference() -> None:
     assert "t('blind.refDi')" in text
 
 
+def test_blocks_are_keyed_by_role_and_scope() -> None:
+    state = (JS_DIR / "state.js").read_text()
+    assert "export const scopeOf = (key) => sourceOf(key).scope || '';" in state
+    assert "export const blockOf = (key) => `${roleOf(key)}|${scopeOf(key)}`;" in state
+    versions = (JS_DIR / "versions.js").read_text()
+    assert "pick.dataset.block = `${role}|${scope}`;" in versions
+    assert "scopeOf(key) === 'instrument' ? 1 : 0" in versions, "instrument after product"
+    # The signal-path field is gone from every reader.
+    assert "pathOf" not in JS and ".path === 'direct'" not in JS
+
+
+def test_blind_follows_the_selected_comparison() -> None:
+    text = (JS_DIR / "blind.js").read_text()
+    gate = text.split("export const blindBlocked", 1)[1].split("};", 1)[0]
+    assert "if (c) return c.status !== 'matched';" in gate
+    # The legacy rule for a manifest written before comparisons.
+    assert gate.index("c.status") < gate.index("voice.rig === 'none'")
+    draw = text.split("export function reshuffleBlind", 1)[1].split("\n}\n", 1)[0]
+    assert "comparisonKeys(c)" in draw
+    assert "scopeOf(key) !== 'instrument'" in draw, "a legacy draw takes the product scope only"
+    assert "document.addEventListener('audition:comparison'" in text
+    assert "new CustomEvent('audition:comparison')" in (JS_DIR / "versions.js").read_text()
+
+
+def test_the_comparison_selector_and_what_attaches_to_it() -> None:
+    versions = (JS_DIR / "versions.js").read_text()
+    assert "buildComparisonRow(box);" in versions
+    select = versions.split("function selectComparison", 1)[1].split("\n}\n", 1)[0]
+    assert "state.picks = JSON.parse(localStorage.getItem(picksKey())" in select
+    assert "state.lastOracle = null;" in select
+    state = (JS_DIR / "state.js").read_text()
+    assert "${c ? `:${c.id}` : ''}" in state, "picks are held per comparison"
+    player = (JS_DIR / "player.js").read_text()
+    assert "comparison_id: comparison ? comparison.id : null," in player
+    # Keys built at run time from the manifest's ids and statuses.
+    table = _string_table()
+    wanted = {"compare.label", "compare.against", "compare.noReference", "blind.unmatched"}
+    for cid in ("instrument_di", "gm_gs_product"):
+        wanted |= {f"compare.{cid}", f"compare.{cid}.long"}
+    for status in ("matched", "context_only", "unverified", "unavailable"):
+        wanted.add(f"compare.status.{status}")
+    assert wanted <= table["en"], sorted(wanted - table["en"])
+    # The reference is named by the manifest's own label, never by the page.
+    assert "(cur.oracle_sources || []).map(sourceLabel)" in versions
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

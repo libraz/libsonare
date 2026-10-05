@@ -390,20 +390,31 @@ def _classified_voice(room=None, rig=None, *, dry=False, name="electric_guitar_d
     return bank.Voice(program=cap.program, captures=(cap,))
 
 
-def _render_take_stubbed(monkeypatch, tmp_path, voice, *, model_sends="auto", variants=()):
-    """Run `render_take` with every render stubbed; returns (sends, variant calls, item)."""
-    seen = {"sends": None, "variants": []}
+def _render_take_stubbed(
+    monkeypatch, tmp_path, voice, *, model_sends="auto", variants=(), bound=True, di_state=None
+):
+    """Run `render_take` with every render stubbed; returns (sends, variant calls, item).
+
+    `sends` is the product score's; every score written and every model render
+    are kept in `_render_take_stubbed.seen` for the tests that need them.
+    """
+    seen = {"sends": None, "scores": [], "variants": [], "models": []}
 
     def fake_smf(notes, **kw):
-        seen["sends"] = kw["sends"]
-        return b"smf"
+        seen["scores"].append(kw["sends"])
+        if seen["sends"] is None:
+            seen["sends"] = kw["sends"]
+        return b"dry" if tuple(kw["sends"]) == (0, 0, 0) else b"wet"
 
     def fake_model(smf, seconds, sr, rig=True, preset=""):
-        return np.full((64, 2), 0.1 if rig else 0.2, dtype=np.float32)
+        seen["models"].append({"smf": smf, "rig": rig})
+        return np.full((64, 2), 0.1 if rig or not bound else 0.2, dtype=np.float32)
 
     def fake_variant(smf, seconds, sr, overrides, lib="", rig=True, preset=""):
-        seen["variants"].append({"overrides": overrides, "rig": rig, "preset": preset})
+        seen["variants"].append({"overrides": overrides, "rig": rig, "preset": preset, "smf": smf})
         return np.zeros((64, 2), dtype=np.float32)
+
+    _render_take_stubbed.seen = seen
 
     monkeypatch.setattr(make_audition, "write_smf", fake_smf)
     monkeypatch.setattr(make_audition, "render_model", fake_model)
@@ -423,7 +434,9 @@ def _render_take_stubbed(monkeypatch, tmp_path, voice, *, model_sends="auto", va
     )
     args = _args(model_sends=model_sends, archive_references="")
     timbres = list(voice.capture.timbres)
-    item = make_audition.render_take(take, voice, timbres, tmp_path, args, list(variants), None)
+    item = make_audition.render_take(
+        take, voice, timbres, tmp_path, args, list(variants), None, (), di_state
+    )
     return seen["sends"], seen["variants"], item
 
 
@@ -505,7 +518,13 @@ def test_baked_and_unclassified_references_keep_the_rigged_model_primary():
 def test_manifest_voice_carries_the_capture_rig_class(monkeypatch, tmp_path):
     def run(voice):
         take = SimpleNamespace(id="t", duration=lambda: 1.0)
-        item = {"id": "t", "tracks": {"model": "t/model.wav"}, "_digests": set()}
+        request = make_audition.RenderRequest(program=voice.program, seconds=1.0)
+        item = {
+            "id": "t",
+            "tracks": {"model": "t/model.wav"},
+            "_digests": set(),
+            "_requests": {"product": request, "instrument": request},
+        }
         monkeypatch.setattr(make_audition, "build_takes", lambda *a, **k: [take])
         monkeypatch.setattr(make_audition, "render_take", lambda *a, **k: dict(item))
         out = tmp_path / voice.slug
@@ -528,3 +547,176 @@ def test_manifest_voice_carries_the_capture_rig_class(monkeypatch, tmp_path):
     assert run(_classified_voice("none", "baked"))["voice"]["rig"] == "baked"
     assert run(_classified_voice())["voice"]["rig"] == "unclassified"
     assert run(bank.Voice(program=0, captures=()))["voice"]["rig"] is None
+
+
+# --- scope and the two comparisons -------------------------------------------------
+
+
+def test_sources_carry_scope_and_no_signal_path():
+    voice = _classified_voice("none", "none")
+    variants = [make_audition.Variant("v", "a=1")]
+    sources = make_audition.build_sources(voice, list(voice.capture.timbres), variants, [], di=True)
+    assert sources["model"]["scope"] == "product" and sources["v"]["scope"] == "product"
+    assert sources["model-di"]["scope"] == "instrument" and sources["v-di"]["scope"] == "instrument"
+    for t in voice.capture.timbres:
+        assert "scope" not in sources[t["id"]]
+    assert not any("path" in src for src in sources.values())
+
+
+def test_instrument_request_refuses_gs_sends():
+    product = make_audition.RenderRequest(program=27, seconds=1.0, smf=b"wet", sends=(None,) * 3)
+    got = make_audition.instrument_request(product, b"dry")
+    assert (got.rig, got.sends, got.smf) == (False, (0, 0, 0), b"dry")
+    with pytest.raises(ValueError, match="zero"):
+        make_audition.instrument_request(product, b"dry", sends=(None, None, None))
+
+
+def test_instrument_side_renders_dry_whatever_model_sends_says(monkeypatch, tmp_path):
+    voice = _classified_voice("none", "none")
+    variants = [make_audition.Variant("v", "a=1")]
+    _, calls, item = _render_take_stubbed(
+        monkeypatch, tmp_path, voice, model_sends="gs", variants=variants
+    )
+    seen = _render_take_stubbed.seen
+    assert seen["sends"] == (None, None, None)
+    assert (0, 0, 0) in seen["scores"]
+    requests = item["_requests"]
+    assert requests["product"].sends == (None, None, None) and requests["product"].rig
+    assert requests["instrument"].sends == (0, 0, 0) and not requests["instrument"].rig
+    # The rig-cleared renders that reach the page come from the dry score only.
+    direct = [m for m in seen["models"] if not m["rig"]]
+    assert direct and direct[-1]["smf"] == b"dry"
+    assert [c["smf"] for c in calls if not c["rig"]] == [b"dry"]
+    assert "model-di" in item["tracks"] and "v-di" in item["tracks"]
+
+
+def _render_set_stubbed(monkeypatch, tmp_path, voice, *, bound, model_sends="auto"):
+    """`render_set` over one take with every render stubbed; returns the manifest."""
+
+    def fake_smf(notes, **kw):
+        return b"dry" if tuple(kw["sends"]) == (0, 0, 0) else b"wet"
+
+    def fake_model(smf, seconds, sr, rig=True, preset=""):
+        return np.full((64, 2), 0.1 if rig or not bound else 0.2, dtype=np.float32)
+
+    def fake_refs(cfg, timbres, *a, **k):
+        audio = {t["id"]: np.zeros((64, 2), dtype=np.float32) for t in timbres}
+        return audio, {}
+
+    take = SimpleNamespace(
+        id="t",
+        label="t",
+        sub="",
+        group="g",
+        notes=[Note(60, 100, 0.0, 1.0)],
+        tail_s=1.0,
+        cc_events=(),
+        channel=0,
+        duration=lambda: 2.0,
+    )
+    monkeypatch.setattr(make_audition, "build_takes", lambda *a, **k: [take])
+    monkeypatch.setattr(make_audition, "write_smf", fake_smf)
+    monkeypatch.setattr(make_audition, "render_model", fake_model)
+    monkeypatch.setattr(make_audition, "render_reference_timbres", fake_refs)
+    monkeypatch.setattr(make_audition, "write_wav", lambda *a, **k: None)
+    args = _args(
+        model_only=False,
+        wanted_timbres=(),
+        no_comparisons=True,
+        no_music=True,
+        only_takes=(),
+        reference_from="",
+        archive_references="",
+        title="",
+        note="",
+        probe=False,
+        model_sends=model_sends,
+    )
+    out = tmp_path / voice.slug
+    make_audition.render_set(voice, out, args, {}, [])
+    return json.loads((out / "manifest.json").read_text())
+
+
+def _capture_voice(name):
+    cap = bank.load_capture(bank.CAPTURE_DIR / f"{name}.json")
+    return bank.Voice(program=cap.program, captures=(cap,))
+
+
+def _by_id(manifest):
+    return {c["id"]: c for c in manifest["comparisons"]}
+
+
+def test_p027_compares_the_di_and_leaves_the_product_unavailable(monkeypatch, tmp_path):
+    voice = _capture_voice("electric_guitar_di")
+    manifest = _render_set_stubbed(monkeypatch, tmp_path, voice, bound=True)
+    got = _by_id(manifest)
+    assert [c["id"] for c in manifest["comparisons"]] == ["instrument_di", "gm_gs_product"]
+    di_refs = [t["id"] for t in voice.capture.timbres]
+    di = got["instrument_di"]
+    assert (di["scope"], di["status"], di["may_sign_off"]) == ("instrument", "matched", True)
+    assert di["model_sources"] == ["model-di"] and di["oracle_sources"] == di_refs
+    product = got["gm_gs_product"]
+    assert (product["scope"], product["status"]) == ("product", "unavailable")
+    # Never filled with the direct-input reference.
+    assert product["oracle_sources"] == [] and product["model_sources"] == ["model"]
+    assert manifest["sources"]["model"]["scope"] == "product"
+    assert manifest["sources"]["model-di"]["scope"] == "instrument"
+
+
+def test_p029_compares_the_product_and_has_no_instrument_reference(monkeypatch, tmp_path):
+    voice = _capture_voice("overdriven_guitar")
+    got = _by_id(_render_set_stubbed(monkeypatch, tmp_path, voice, bound=True))
+    assert got["instrument_di"]["status"] == "unavailable"
+    assert got["instrument_di"]["oracle_sources"] == []
+    product = got["gm_gs_product"]
+    assert product["status"] == "matched" and product["model_sources"] == ["model"]
+    assert product["oracle_sources"] == [t["id"] for t in voice.capture.timbres]
+
+
+def test_p033_answers_both_comparisons_from_one_unrigged_capture(monkeypatch, tmp_path):
+    voice = _capture_voice("bass_fingered")
+    manifest = _render_set_stubbed(monkeypatch, tmp_path, voice, bound=False)
+    got = _by_id(manifest)
+    refs = [t["id"] for t in voice.capture.timbres]
+    for cid in ("instrument_di", "gm_gs_product"):
+        assert got[cid]["status"] == "matched", got[cid]
+        assert got[cid]["oracle_sources"] == refs
+    # No rig is bound, so the dry product render IS the rig-cleared one.
+    assert got["instrument_di"]["model_sources"] == ["model"]
+    assert "model-di" not in manifest["sources"]
+
+
+def test_a_derived_product_reference_is_never_the_di_capture_of_a_rigged_voice(
+    monkeypatch, tmp_path
+):
+    resolve = make_audition.policy.references_by_scope
+    rigged = resolve({}, 27, capture="di", capture_direct=True, product_rig=True)
+    assert rigged == {"instrument_di": "di", "gm_gs_product": None}
+    unknown = resolve({}, 27, capture="di", capture_direct=True, product_rig=None)
+    assert unknown["gm_gs_product"] is None
+    bare = resolve({}, 33, capture="di", capture_direct=True, product_rig=False)
+    assert bare == {"instrument_di": "di", "gm_gs_product": "di"}
+    baked = resolve({}, 29, capture="amp", capture_direct=False, product_rig=True)
+    assert baked == {"instrument_di": None, "gm_gs_product": "amp"}
+    # Rendered with no policy at all, p027 still shows no product oracle.
+    monkeypatch.setattr(make_audition.policy, "load", lambda path=None: {})
+    got = _by_id(
+        _render_set_stubbed(monkeypatch, tmp_path, _capture_voice("electric_guitar_di"), bound=True)
+    )
+    assert got["gm_gs_product"]["status"] == "unavailable"
+    assert got["gm_gs_product"]["oracle_sources"] == []
+
+
+def test_policy_entries_are_keyed_by_program_and_variation_bank():
+    resolve = make_audition.policy.references_by_scope
+    table = {"references_by_scope": {"27": {"instrument_di": "a"}, "27:8": {"gm_gs_product": "b"}}}
+    assert resolve(table, 27) == {"instrument_di": "a", "gm_gs_product": None}
+    assert resolve(table, 27, bank=8) == {"instrument_di": None, "gm_gs_product": "b"}
+    # A kit shares the number space and never takes a melodic entry.
+    assert resolve(table, 27, kit=True, capture="k") == {
+        "instrument_di": None,
+        "gm_gs_product": "k",
+    }
+    shipped = make_audition.policy.load()["references_by_scope"]
+    assert shipped["27"] == {"instrument_di": "electric_guitar_di", "gm_gs_product": None}
+    assert shipped["33"] == {"instrument_di": "bass_fingered", "gm_gs_product": "bass_fingered"}
