@@ -364,10 +364,10 @@ TEST_CASE("every electric guitar default rig keeps body pickup pan invariant", "
   }
 }
 
-TEST_CASE("a prepared GS route takes the DI in place of the default guitar amp",
+TEST_CASE("a prepared GS route keeps the default guitar amp ahead of the unit",
           "[midi][sf2][rig][prepared]") {
-  // docs/voicing.md: a live GS EFX route outranks the default rig, so the unit
-  // receives the DI with no bank amp in front of it, as the direct path does.
+  // docs/voicing.md: the bank amp runs on the part bus and the unit follows, so
+  // the prepared (live) path renders what the published-snapshot path does.
   for (const uint8_t pan : {uint8_t{64}, uint8_t{0}, uint8_t{127}}) {
     const StereoRender direct = render_program_stereo_through_direct_unit(pan);
     const StereoRender prepared = render_program_stereo_through_prepared_unit(pan);
@@ -381,9 +381,7 @@ TEST_CASE("a prepared GS route takes the DI in place of the default guitar amp",
       REQUIRE(relative_rms_difference(direct.right, prepared.right, 1.0f) < 1.0e-4);
     }
   }
-  // Positive control on the realised part chain: unrouted, program 30 carries
-  // its bank rig; routed, the part carries none, so the unit's own block is the
-  // only one. The direct route stands for the prepared one, which it matches above.
+  // Realised part chain: program 30 carries its bank rig routed or not.
   std::vector<std::string> bank;
   for (const auto& stage : sonare::midi::synth::gm_rig_chain(gm_fallback_rig(0, 30).id)) {
     bank.push_back(stage.name);
@@ -412,7 +410,7 @@ TEST_CASE("a prepared GS route takes the DI in place of the default guitar amp",
     return player.part_rig_stage_names(0);
   };
   CHECK(realised(false) == bank);
-  CHECK(realised(true).empty());
+  CHECK(realised(true) == bank);
 }
 
 TEST_CASE("each bound rig drives its amplifier where the bank's own level puts it",

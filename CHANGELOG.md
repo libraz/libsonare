@@ -22,6 +22,7 @@
 - Programs 29 and 30 (Overdriven and Distortion Guitar) put a drive pedal ahead of the amplifier, with new amplifier presets and levels, on both the SoundFont player and the physical-model synth.
 - Electric guitars on the physical-model synth are no longer the direct signal in hosts that supply an insert factory; `set_part_rig` with part `0xFF` and mode `none` restores it.
 - A chain that contains an amplifier takes a mono input up to its last amplifier, as the default rig does.
+- A part routed into a GS insertion-effect unit keeps the default bank rig ahead of the unit, in series, for every effect type; this reverts the v1.8.1 behaviour in which a routed part dropped it. A guitar multi over a bank-amped part therefore carries both amplifiers.
 - GS overdrive and distortion insertion effects sound different: they gain the pedal stage, and Amp Type now selects the amplifier rather than the cabinet.
 
 ## v1.8.1 (2026-10-03)

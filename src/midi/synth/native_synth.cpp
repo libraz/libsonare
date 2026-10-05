@@ -1450,7 +1450,7 @@ void NativeSynth::process_impl(float* const* channels,
     // to the mix, ahead of the master gain.
     if (any_bussed) {
       if (any_unit) part_fx_.clear_unit_buses();
-      part_fx_.run_part_chains(n, fx->part_bussed, fx->mono_prefix, nullptr, *this);
+      part_fx_.run_part_chains(n, fx->part_bussed, fx->mono_prefix, *this);
       for (int part = 0; part < 16; ++part) {
         if (!fx->part_bussed[static_cast<size_t>(part)]) continue;
         const float* bus_l = part_fx_.bus_l(part);

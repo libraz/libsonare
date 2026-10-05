@@ -94,7 +94,6 @@ void Sf2Player::clear_prepared_audio_state() noexcept {
   prepared_mono_prefix_.fill(0);
   prepared_unit_fed_.fill(false);
   prepared_host_part_bussed_.fill(false);
-  prepared_host_default_bank_rig_.fill(false);
   prepared_host_mono_prefix_.fill(0);
   prepared_host_any_bussed_ = false;
   prepared_any_unit_ = false;
@@ -137,9 +136,6 @@ void Sf2Player::rebuild_prepared_routing() noexcept {
     if (unit < 0 || !prepared_efx_[static_cast<size_t>(unit)].assigned) continue;
     prepared_part_unit_[part] = static_cast<uint8_t>(unit);
     prepared_part_bussed_[part] = true;
-    // A routed part feeds its unit the DI; render_chunk() skips the bank rig. An
-    // explicit chain stays in series and keeps its mono prefix.
-    if (prepared_host_default_bank_rig_[part]) prepared_mono_prefix_[part] = 0;
     prepared_unit_fed_[static_cast<size_t>(unit)] = true;
     prepared_any_unit_ = true;
     prepared_any_bussed_ = true;
@@ -150,14 +146,12 @@ void Sf2Player::sync_prepared_base() noexcept {
   if (!prepared_runtime_active_) return;
   // Recomputed per boundary: a program change can publish a new default rig.
   prepared_host_part_bussed_.fill(false);
-  prepared_host_default_bank_rig_.fill(false);
   prepared_host_mono_prefix_.fill(0);
   prepared_host_any_bussed_ = false;
   const PartFxSnapshot* snapshot = part_fx_.current();
   for (size_t part = 0; part < prepared_host_part_bussed_.size(); ++part) {
     // The snapshot's tags, never gm_rig_chain(), which allocates.
     const bool host_bussed = snapshot != nullptr && snapshot->host_part_bussed[part];
-    prepared_host_default_bank_rig_[part] = snapshot != nullptr && snapshot->default_bank_rig[part];
     if (snapshot != nullptr) prepared_host_mono_prefix_[part] = snapshot->mono_prefix[part];
     prepared_host_part_bussed_[part] = host_bussed;
     prepared_host_any_bussed_ = prepared_host_any_bussed_ || prepared_host_part_bussed_[part];

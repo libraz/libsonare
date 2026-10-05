@@ -358,14 +358,13 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
       out->any_unit = true;
     }
     // The bank's default rig for the program the part is playing
-    // (docs/voicing.md). It gives way to a GS route, which takes the DI. The
+    // (docs/voicing.md). It stays ahead of a GS route's unit, in series. The
     // presets bind the analytic cabinet rather than a generated impulse, so the
     // stage reports no latency and the part stays aligned with every other one.
-    const bool default_bank_rig = mode == PartRigMode::kBank && !routed && enabled() && rig_id != 0;
+    const bool default_bank_rig = mode == PartRigMode::kBank && enabled() && rig_id != 0;
     if (default_bank_rig) {
       for (const GsEfxStage& stage : gm_rig_chain(rig_id)) add_stage(stage.name, stage.params_json);
     }
-    out->default_bank_rig[p] = default_bank_rig && mono_prefix != 0;
     out->mono_prefix[p] = mono_prefix;
     out->host_part_bussed[p] = explicit_chain || !chain.empty();
     // Unaffected parts keep adding straight to the dry mix.
@@ -824,13 +823,12 @@ void PartFxStage::clear_unit_buses() noexcept {
 
 void PartFxStage::run_part_chains(int n, const std::array<bool, 16>& bussed,
                                   const std::array<uint8_t, 16>& mono_prefix,
-                                  const std::array<bool, 16>* skip,
                                   const PartFxHost& host) noexcept {
   const PartFxSnapshot* snapshot = pub_->current();
   if (snapshot == nullptr || part_bus_.empty()) return;
   for (int part = 0; part < 16; ++part) {
     const size_t p = static_cast<size_t>(part);
-    if (!bussed[p] || (skip != nullptr && (*skip)[p])) continue;
+    if (!bussed[p]) continue;
     float* left = bus_l(part);
     float* right = bus_r(part);
     const auto& chain = snapshot->chains[p];

@@ -22,6 +22,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_efx_processor.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
@@ -429,14 +430,15 @@ TEST_CASE("sf2: clear_bank_rig ranks below every entry and above the bank", "[mi
   }
 }
 
-TEST_CASE("sf2: a GS route retires the bank rig but runs in series with a chain",
+TEST_CASE("sf2: a GS route keeps the bank rig and runs in series with it or a chain",
           "[midi][rig][part]") {
   SECTION("bank rig") {
     Sf2Player player = make(with_factory());
     program(player, 0, 29);
     route_to_unit(player, 0);
     settle(player);
-    REQUIRE(player.part_rig_stage_names(0).empty());
+    REQUIRE_FALSE(bank_names(29).empty());
+    REQUIRE(player.part_rig_stage_names(0) == bank_names(29));
   }
   SECTION("explicit chain") {
     Sf2Player player = make(with_factory());
@@ -446,6 +448,29 @@ TEST_CASE("sf2: a GS route retires the bank rig but runs in series with a chain"
     settle(player);
     REQUIRE(player.part_rig_stage_names(0) == Names{kClipper.processor});
   }
+}
+
+TEST_CASE("sf2: a guitar multi over a bank-amped part gives a double amp", "[midi][rig][part]") {
+  // Type 02 00 (Overdrive -> Chorus) carries its own amplifier stage.
+  sonare::midi::synth::GsEfx efx;
+  efx.type = 0x0200;
+  efx.type_msb = 0x02;
+  const auto unit_chain = sonare::midi::synth::gs_efx_insert_chain(efx);
+  const auto amps = [](const auto& names) {
+    return std::count(names.begin(), names.end(), std::string("saturation.ampSim"));
+  };
+  Names unit_names;
+  for (const auto& stage : unit_chain) unit_names.push_back(stage.name);
+  REQUIRE(amps(unit_names) >= 1);
+
+  Sf2Player player = make(with_factory());
+  sysex(player, dt1(0x400300u, {0x02, 0x00}));
+  sysex(player, dt1(0x404022u | (part_block(0) << 8), {0x01}));
+  program(player, 0, 30);
+  settle(player);
+  const Names part = player.part_rig_stage_names(0);
+  REQUIRE(part == bank_names(30));
+  REQUIRE(amps(part) == 1);
 }
 
 TEST_CASE("sf2: a rig belongs to the part slot, not to the channel it listens on",
@@ -590,7 +615,7 @@ TEST_CASE("native: an unbound bank rig ranks below every entry", "[midi][rig][pa
   }
 }
 
-TEST_CASE("native: a GS route retires the bank rig but runs in series with a chain",
+TEST_CASE("native: a GS route keeps the bank rig and runs in series with it or a chain",
           "[midi][rig][part]") {
   SECTION("bank rig") {
     NativeSynth synth(native_with_factory());
@@ -598,7 +623,8 @@ TEST_CASE("native: a GS route retires the bank rig but runs in series with a cha
     program(synth, 0, 29);
     route_to_unit(synth, 0);
     settle(synth);
-    REQUIRE(synth.part_rig_stage_names(0).empty());
+    REQUIRE_FALSE(bank_names(29).empty());
+    REQUIRE(synth.part_rig_stage_names(0) == bank_names(29));
   }
   SECTION("explicit chain") {
     NativeSynth synth(native_with_factory());
@@ -702,7 +728,7 @@ PartRig row_chain(const RigRow& row) {
 }
 
 /// The stage names part 0 must realise, by the resolution order: part entry,
-/// destination default, clear_bank_rig, bank. A GS route retires the bank rig.
+/// destination default, clear_bank_rig, bank. A GS route leaves it in place.
 Names expected_names(const RigRow& row) {
   switch (row.source) {
     case RigSource::kPartChain:
@@ -717,7 +743,7 @@ Names expected_names(const RigRow& row) {
       return {};
     case RigSource::kPartBank:
     case RigSource::kNone:
-      return row.gm_programs && !row.efx_route ? bank_names(row.program) : Names{};
+      return row.gm_programs ? bank_names(row.program) : Names{};
   }
   return {};
 }

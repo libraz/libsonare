@@ -583,8 +583,8 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// the first prepared event. This is a fixed-size audio-thread operation.
   void sync_prepared_base() noexcept;
   /// AUDIO thread: derive the effective routing from the host projection and
-  /// the GS overlay. A part routed into a unit loses the bank's default rig,
-  /// as the published snapshot does, so its DI reaches the unit.
+  /// the GS overlay. A part routed into a unit keeps its own rig, which runs
+  /// ahead of the unit in series.
   void rebuild_prepared_routing() noexcept;
   /// AUDIO thread: apply the two GS EFX CONTROL fan-outs to the selected
   /// prepared unit after its raw state has been adopted.
@@ -1038,7 +1038,6 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   std::array<uint8_t, 16> prepared_mono_prefix_{};
   std::array<bool, kGsEfxUnitCount> prepared_unit_fed_{};
   std::array<bool, 16> prepared_host_part_bussed_{};
-  std::array<bool, 16> prepared_host_default_bank_rig_{};
   std::array<uint8_t, 16> prepared_host_mono_prefix_{};
   bool prepared_host_any_bussed_ = false;
   bool prepared_any_unit_ = false;

@@ -75,7 +75,7 @@ An amplifier is not expressible as a weight — there is no file-controlled "amp
 `gm_fallback_rig(bank, program)` is the table, and `PartFxStage` is where a binding becomes a processor. Three conditions gate it, and each is the answer to a way the rule could be broken:
 
 - **Only where the note plays the model.** On the SoundFont player that means the model floor: a SoundFont's electric guitar is a recording of an amplified one, so a bank rig on top of it would be two amplifiers, which is the bake this page removes. On the physical-model synth it means GM program selection is on; a single patch with no program map has no default rig. The part re-resolves the question at every program, bank and rhythm-part change.
-- **Only where the part carries nothing of its own.** A host-chosen rig or a live GS EFX chain is the host or the file speaking, and either outranks a default.
+- **Only where the part carries nothing of its own.** A host-chosen rig is the host speaking and replaces a default. A GS route into a unit does not: the bank's rig stays on the part bus ahead of the unit, in series.
 - **Only where the host wired an insert factory**, since the rig is built through it. A host that wires none gets the instrument alone, and that is stated in the config rather than left to be discovered.
 
 The six GM electric guitars bind today. Everything else the split would cover is left unbound rather than guessed at: an electric piano and a drawbar organ each want a component that is not an amplifier, and a module's electric bass is close enough to a direct signal that binding one would be a preference rather than a repair.

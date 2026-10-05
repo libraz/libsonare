@@ -521,16 +521,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
                         part_fx_.has_unit_buses();
   if (any_unit) part_fx_.clear_unit_buses();
   if (any_bussed) {
-    // A GS route outranks the bank rig (docs/voicing.md): the unit takes the DI.
-    std::array<bool, 16> bank_rig_retired{};
-    if (prepared) {
-      for (int part = 0; part < 16; ++part) {
-        bank_rig_retired[static_cast<size_t>(part)] =
-            prepared_host_default_bank_rig_[static_cast<size_t>(part)] && unit_for(part) >= 0;
-      }
-    }
-    part_fx_.run_part_chains(n, part_bussed, mono_prefix, prepared ? &bank_rig_retired : nullptr,
-                             *this);
+    part_fx_.run_part_chains(n, part_bussed, mono_prefix, *this);
     for (int part = 0; part < 16; ++part) {
       if (!part_bussed[static_cast<size_t>(part)]) continue;
       float* bus_l = part_fx_.bus_l(part);

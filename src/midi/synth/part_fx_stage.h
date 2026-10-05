@@ -79,9 +79,6 @@ struct PartFxSnapshot {
   std::array<bool, kGsEfxUnitCount> unit_fed{};
   bool any_unit = false;
   bool any_bussed = false;
-  /// A part whose chain is the bank's default rig, which retires in favour of a
-  /// GS unit route rather than running in series with it.
-  std::array<bool, 16> default_bank_rig{};
   /// Stages of the part's chain, through its last amplifier, that take the
   /// mono pickup; 0 for a stereo chain.
   std::array<uint8_t, 16> mono_prefix{};
@@ -242,10 +239,9 @@ class PartFxStage {
 
   /// AUDIO thread: run each bussed part's chain in place on its bus. A part
   /// with a mono prefix runs it on the left leg alone and has its pan restored
-  /// from @p host after it; a part @p skip names runs nothing.
+  /// from @p host after it.
   void run_part_chains(int n, const std::array<bool, 16>& bussed,
-                       const std::array<uint8_t, 16>& mono_prefix, const std::array<bool, 16>* skip,
-                       const PartFxHost& host) noexcept;
+                       const std::array<uint8_t, 16>& mono_prefix, const PartFxHost& host) noexcept;
   /// AUDIO thread: run each fed unit once in place on its bus.
   void run_units(int n, const std::array<bool, kGsEfxUnitCount>& fed,
                  const PartFxUnitOverrides* overrides) noexcept;
