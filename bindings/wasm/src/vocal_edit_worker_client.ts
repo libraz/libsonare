@@ -597,6 +597,7 @@ export class VocalEditWorkerClient {
   private readonly onError = (event: ErrorEvent): void => {
     const error = new Error(event.message || 'Vocal edit Worker failed');
     for (const pending of this.pending.values()) {
+      pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
       pending.reject(error);
     }
     this.pending.clear();

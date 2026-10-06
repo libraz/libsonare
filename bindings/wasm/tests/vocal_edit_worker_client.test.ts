@@ -63,19 +63,34 @@ const capabilities: VocalCapabilities = {
 
 class FakeWorker implements VocalEditWorker {
   private listener: ((event: MessageEvent<VocalWorkerResponseMessage>) => void) | undefined;
+  private errorListener: ((event: ErrorEvent) => void) | undefined;
   constructor(private readonly stalePreview = false) {}
 
   lastMutation: VocalWorkerRequestMessage | undefined;
+  readonly posted: VocalWorkerRequestMessage[] = [];
 
   addEventListener(type: string, listener: EventListener): void {
     if (type === 'message') {
       this.listener = listener as (event: MessageEvent<VocalWorkerResponseMessage>) => void;
+    } else if (type === 'error') {
+      this.errorListener = listener as (event: ErrorEvent) => void;
     }
   }
 
-  removeEventListener(): void {}
+  removeEventListener(type: string): void {
+    if (type === 'message') {
+      this.listener = undefined;
+    } else if (type === 'error') {
+      this.errorListener = undefined;
+    }
+  }
+
+  emitError(message: string): void {
+    this.errorListener?.({ message } as ErrorEvent);
+  }
 
   postMessage(message: VocalWorkerRequestMessage): void {
+    this.posted.push(message);
     let response: VocalWorkerResponseMessage;
     if (message.type === 'sonare:vocal-create') {
       const result: VocalWorkerCreateResult = {
@@ -189,6 +204,30 @@ describe('vocal edit Worker client', () => {
       session.preview({ range: { startSample: 0, endSample: 1 }, requestId: '9' }),
     ).rejects.toMatchObject({ name: 'StaleResultError' });
     await session.dispose();
+    client.dispose();
+  });
+
+  it('removes a preview abort listener when the Worker emits an error', async () => {
+    const worker = new FakeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    const session = await client.create({
+      samples: new Float32Array([0]),
+      sampleRate: 16000,
+    });
+    const controller = new AbortController();
+    const task = session.preview({
+      range: { startSample: 0, endSample: 1 },
+      requestId: '9',
+      signal: controller.signal,
+    });
+
+    worker.emitError('worker crashed');
+    await expect(task).rejects.toThrow('worker crashed');
+    controller.abort();
+
+    expect(worker.posted.filter((message) => message.type === 'sonare:vocal-cancel')).toHaveLength(
+      0,
+    );
     client.dispose();
   });
 });
