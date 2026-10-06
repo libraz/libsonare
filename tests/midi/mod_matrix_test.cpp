@@ -187,7 +187,7 @@ TEST_CASE("legato key tracking routes follow the carried note",
   NativeSynthConfig cfg;
   cfg.patch = sine_patch();
   cfg.patch.mod_matrix.routes[0] = {ModSource::kKeyTrack, ModDestination::kPitchCents, 1200.0f};
-  for (const auto notes : {std::pair<uint8_t, uint8_t>{48, 72}, {72, 48}}) {
+  for (const auto& notes : {std::pair<uint8_t, uint8_t>{48, 72}, {72, 48}}) {
     CAPTURE(notes.first, notes.second);
     NativeSynth held(cfg);
     NativeSynth fresh(cfg);
