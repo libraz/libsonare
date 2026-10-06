@@ -18,7 +18,11 @@ import type {
   SynthPatch,
 } from './project';
 import type { ProjectTimeline } from './project_class';
-import { normalizeSynthInstrument, partRigInsertsJson } from './project_internal';
+import {
+  normalizeSynthInstrument,
+  partRigInsertsJson,
+  projectTimelineNativeId,
+} from './project_internal';
 import type {
   EqBand,
   PanLawInput,
@@ -1187,12 +1191,13 @@ export class RealtimeEngine {
    * {@link ProjectTimeline.dispose} may follow immediately.
    */
   applyProjectTimeline(timeline: ProjectTimeline): void {
-    // Structural check: a value import of the class would pull the whole project
-    // facade into every realtime bundle.
-    if (timeline === null || typeof timeline !== 'object' || !('nativeId' in timeline)) {
+    // Resolve through the identity registry so no raw native handle crosses the
+    // facade boundary and the realtime bundle needs no value class import.
+    const timelineId = projectTimelineNativeId(timeline);
+    if (timelineId === undefined) {
       throw new TypeError('timeline must be a ProjectTimeline instance');
     }
-    this.native.applyProjectTimeline(timeline.nativeId);
+    this.native.applyProjectTimeline(timelineId);
   }
 
   setTrackBuses(buses: EngineBus[]): void {

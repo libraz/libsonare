@@ -19,6 +19,8 @@ import {
   projectModule,
   projectTrackKindValue,
   projectWarpModeValue,
+  registerProjectTimeline,
+  unregisterProjectTimeline,
   type WasmProject,
   type WasmProjectTimeline,
 } from './project_internal';
@@ -205,6 +207,7 @@ export class ProjectTimeline {
   /** @internal */
   constructor(native: WasmProjectTimeline) {
     this.native = native;
+    registerProjectTimeline(this, native);
   }
 
   /**
@@ -224,6 +227,7 @@ export class ProjectTimeline {
     if (this.native === null) {
       return;
     }
+    unregisterProjectTimeline(this);
     this.native.delete();
     this.native = null;
   }

@@ -87,6 +87,26 @@ export interface WasmProjectTimeline {
   delete: () => void;
 }
 
+const projectTimelineHandles = new WeakMap<object, WasmProjectTimeline>();
+
+/** Internal: registers the facade object whose identity may cross to the engine. */
+export function registerProjectTimeline(owner: object, native: WasmProjectTimeline): void {
+  projectTimelineHandles.set(owner, native);
+}
+
+/** Internal: removes a disposed facade from the identity registry. */
+export function unregisterProjectTimeline(owner: object): void {
+  projectTimelineHandles.delete(owner);
+}
+
+/** Internal: resolves only a timeline facade created by this module. */
+export function projectTimelineNativeId(owner: unknown): number | undefined {
+  if (owner === null || (typeof owner !== 'object' && typeof owner !== 'function')) {
+    return undefined;
+  }
+  return projectTimelineHandles.get(owner)?.id;
+}
+
 /** `compileTimeline` as the embind layer returns it, before the facade wraps the handle. */
 export type NativeProjectCompileTimelineResult = ProjectCompileResult & {
   timeline: WasmProjectTimeline | null;

@@ -175,6 +175,35 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       engine.destroy();
     }
   });
+
+  it('rejects forged timeline identities and leaves the engine unchanged', () => {
+    const { project: current } = buildProject();
+    const { project: forgedSource } = buildProject();
+    forgedSource.addMidiClip(0, 1);
+    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    let currentTimeline: ProjectTimeline | null = null;
+    let forgedTimeline: ProjectTimeline | null = null;
+    try {
+      currentTimeline = compileAndApply(engine, current);
+      const compiled = forgedSource.compileTimeline();
+      forgedTimeline = compiled.timeline;
+      expect(forgedTimeline).not.toBeNull();
+      const nativeId = (forgedTimeline as unknown as { nativeId: number }).nativeId;
+      const before = engine.clipCount();
+      const copied = { nativeId } as unknown as ProjectTimeline;
+      const inherited = Object.create({ nativeId }) as ProjectTimeline;
+
+      expect(() => engine.applyProjectTimeline(copied)).toThrow(TypeError);
+      expect(() => engine.applyProjectTimeline(inherited)).toThrow(TypeError);
+      expect(engine.clipCount()).toBe(before);
+    } finally {
+      forgedTimeline?.dispose();
+      currentTimeline?.dispose();
+      engine.destroy();
+      forgedSource.delete();
+      current.delete();
+    }
+  });
 });
 
 describe('RealtimeEngine lane sidechain refusals', () => {
