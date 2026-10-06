@@ -2,7 +2,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/presets.h"
@@ -13,6 +15,43 @@
 #include "util/constants.h"
 
 namespace assistant = sonare::mastering::assistant;
+
+TEST_CASE("Assistant does not suggest denoise for measured silence", "[mastering][assistant]") {
+  constexpr int sample_rate = 48000;
+  const std::vector<float> silence(sample_rate, 0.0f);
+  assistant::AssistantConfig config;
+  config.enable_repair = true;
+  const auto mono = assistant::suggest_chain(silence.data(), silence.size(), sample_rate, config);
+  const std::vector<float> stereo_silence(silence.size() * 2, 0.0f);
+  const auto stereo = assistant::suggest_chain_interleaved(stereo_silence.data(), silence.size(), 2,
+                                                           sample_rate, config);
+  for (const auto* result : {&mono, &stereo}) {
+    REQUIRE(result->profile.defects.measured);
+    REQUIRE(std::isinf(result->profile.loudness.integrated_lufs));
+    REQUIRE(result->profile.loudness.integrated_lufs < 0.0f);
+    CHECK_FALSE(result->config.repair.denoise.enabled);
+    CHECK(std::none_of(result->explanation.begin(), result->explanation.end(),
+                       [](const std::string& text) { return text.find("denoise:") == 0; }));
+  }
+}
+
+TEST_CASE("Assistant refuses a shared declip threshold marked unsafe", "[mastering][assistant]") {
+  assistant::AudioProfile profile;
+  profile.defects.measured = true;
+  profile.defects.clip_flat_run_count = 10;
+  profile.defects.clip_flat_level = 0.25f;
+  profile.defects.declip_threshold_safe = false;
+  assistant::AssistantConfig config;
+  config.enable_repair = true;
+  const auto unsafe = assistant::suggest_chain(profile, config);
+  CHECK_FALSE(unsafe.config.repair.declip.enabled);
+  CHECK(std::any_of(unsafe.explanation.begin(), unsafe.explanation.end(),
+                    [](const std::string& text) { return text.find("declip withheld:") == 0; }));
+  profile.defects.declip_threshold_safe = true;
+  const auto safe = assistant::suggest_chain(profile, config);
+  CHECK(safe.config.repair.declip.enabled);
+  CHECK(safe.config.repair.declip.config.clip_threshold == 0.25f);
+}
 
 namespace {
 
@@ -219,6 +258,127 @@ TEST_CASE("Assistant exposes speech mono-maker amount", "[mastering][assistant]"
   REQUIRE(result.config.dynamics.deesser.enabled);
   REQUIRE(result.config.stereo.mono_maker.enabled);
   REQUIRE(result.config.stereo.mono_maker.config.amount == 0.35f);
+}
+
+namespace {
+
+template <typename Callable>
+void require_invalid_parameter(Callable call) {
+  try {
+    call();
+    FAIL("expected InvalidParameter");
+  } catch (const sonare::SonareException& error) {
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Assistant rejects non-finite suggestion controls at the profile boundary",
+          "[mastering][assistant][validation]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  for (const float value : {nan, inf, -inf}) {
+    assistant::AssistantConfig target;
+    target.target_lufs = value;
+    require_invalid_parameter(
+        [&] { (void)assistant::suggest_chain(assistant::AudioProfile{}, target); });
+
+    assistant::AssistantConfig ceiling;
+    ceiling.ceiling_db = value;
+    require_invalid_parameter(
+        [&] { (void)assistant::suggest_chain(assistant::AudioProfile{}, ceiling); });
+
+    assistant::AssistantConfig speech;
+    speech.preset = sonare::mastering::api::Preset::Speech;
+    speech.speech_mono_amount = value;
+    require_invalid_parameter(
+        [&] { (void)assistant::suggest_chain(assistant::AudioProfile{}, speech); });
+  }
+}
+
+TEST_CASE("Assistant keeps finite loudness values unrestricted and clamps speech amount",
+          "[mastering][assistant][validation]") {
+  assistant::AssistantConfig finite;
+  finite.target_lufs = -100.0f;
+  finite.ceiling_db = -100.0f;
+  const auto finite_result = assistant::suggest_chain(assistant::AudioProfile{}, finite);
+  REQUIRE(finite_result.config.loudness.target_lufs == -100.0f);
+  REQUIRE(finite_result.config.loudness.ceiling_db == -100.0f);
+  REQUIRE_NOTHROW(sonare::mastering::api::MasteringChain{finite_result.config});
+
+  for (const auto& [amount, expected] : {std::pair{-1.0f, 0.0f}, std::pair{2.0f, 1.0f}}) {
+    assistant::AssistantConfig speech;
+    speech.preset = sonare::mastering::api::Preset::Speech;
+    speech.speech_mono_amount = amount;
+    const auto result = assistant::suggest_chain(assistant::AudioProfile{}, speech);
+    REQUIRE(result.config.stereo.mono_maker.config.amount == expected);
+    REQUIRE_NOTHROW(sonare::mastering::api::MasteringChain{result.config});
+  }
+}
+
+TEST_CASE("Assistant validates controls through raw Audio and interleaved entry points",
+          "[mastering][assistant][validation]") {
+  constexpr int sample_rate = 48000;
+  const auto samples = tone(sample_rate, 0.1f, 440.0f);
+  const sonare::Audio audio =
+      sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+  std::vector<float> interleaved(samples.size() * 2);
+  for (std::size_t index = 0; index < samples.size(); ++index) {
+    interleaved[2 * index] = samples[index];
+    interleaved[2 * index + 1] = samples[index];
+  }
+
+  assistant::AssistantConfig raw;
+  raw.target_lufs = std::numeric_limits<float>::quiet_NaN();
+  require_invalid_parameter(
+      [&] { (void)assistant::suggest_chain(samples.data(), samples.size(), sample_rate, raw); });
+
+  assistant::AssistantConfig from_audio;
+  from_audio.ceiling_db = std::numeric_limits<float>::infinity();
+  require_invalid_parameter([&] { (void)assistant::suggest_chain(audio, from_audio); });
+
+  assistant::AssistantConfig from_interleaved;
+  from_interleaved.speech_mono_amount = std::numeric_limits<float>::quiet_NaN();
+  require_invalid_parameter([&] {
+    (void)assistant::suggest_chain_interleaved(interleaved.data(), samples.size(), 2, sample_rate,
+                                               from_interleaved);
+  });
+}
+
+TEST_CASE("Assistant rejects unknown target platforms at the profile boundary",
+          "[mastering][assistant][validation]") {
+  assistant::AudioProfile profile;
+  for (const bool explicit_values : {false, true}) {
+    assistant::AssistantConfig config;
+    config.target_platform = "brodcast";
+    if (explicit_values) {
+      config.target_lufs = -13.0f;
+      config.ceiling_db = -0.8f;
+      config.target_lufs_explicit = true;
+      config.ceiling_db_explicit = true;
+    }
+    require_invalid_parameter([&] { (void)assistant::suggest_chain(profile, config); });
+  }
+
+  assistant::AssistantConfig setter;
+  require_invalid_parameter([&] { assistant::set_target_platform(setter, "brodcast"); });
+
+  for (const std::string& name : assistant::platform_names()) {
+    assistant::AssistantConfig known;
+    known.target_platform = name;
+    REQUIRE_NOTHROW(assistant::suggest_chain(profile, known));
+  }
+}
+
+TEST_CASE("Assistant rejects noncanonical preset enum values",
+          "[mastering][assistant][validation]") {
+  for (const int raw : {-1, 9999}) {
+    assistant::AssistantConfig config;
+    config.preset = static_cast<sonare::mastering::api::Preset>(raw);
+    require_invalid_parameter(
+        [&] { (void)assistant::suggest_chain(assistant::AudioProfile{}, config); });
+  }
 }
 
 TEST_CASE("Assistant target platform and streaming-safe preference affect suggestions",

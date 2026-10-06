@@ -4,9 +4,11 @@
 #include <cstddef>
 #include <random>
 #include <set>
+#include <utility>
 #include <vector>
 
 #include "mastering/assistant/audio_profile.h"
+#include "mastering/assistant/suggester.h"
 #include "support/schema_paths.h"
 #include "util/constants.h"
 #include "util/json.h"
@@ -93,8 +95,40 @@ std::vector<float> with_noise(std::vector<float> samples, float amplitude) {
   return samples;
 }
 
+std::vector<float> with_noise_off_flat(std::vector<float> samples, float amplitude) {
+  std::mt19937 rng(20260917u);
+  std::uniform_real_distribution<float> noise(-amplitude, amplitude);
+  for (float& sample : samples) {
+    if (std::abs(sample) < 0.8f) sample += noise(rng);
+  }
+  return samples;
+}
+
 assistant::DefectProfile profile_of(const std::vector<float>& samples) {
   return assistant::analyze_audio_profile(samples.data(), samples.size(), kSr, detecting_config())
+      .defects;
+}
+
+std::vector<float> negate(const std::vector<float>& samples) {
+  std::vector<float> result = samples;
+  for (float& sample : result) sample = -sample;
+  return result;
+}
+
+std::vector<float> interleave(const std::vector<float>& left, const std::vector<float>& right) {
+  REQUIRE(left.size() == right.size());
+  std::vector<float> result;
+  result.reserve(left.size() * 2);
+  for (size_t i = 0; i < left.size(); ++i) {
+    result.push_back(left[i]);
+    result.push_back(right[i]);
+  }
+  return result;
+}
+
+assistant::DefectProfile interleaved_profile(const std::vector<float>& samples) {
+  return assistant::analyze_audio_profile_interleaved(samples.data(), samples.size() / 2, 2, kSr,
+                                                      detecting_config())
       .defects;
 }
 
@@ -307,6 +341,128 @@ TEST_CASE("Defect profile JSON carries the block whether or not it was measured"
   REQUIRE(measured["defects"]["measured"].as_bool());
   REQUIRE(measured["defects"]["clickCount"].as_int() >= 8);
   REQUIRE(measured["defects"]["noiseBandPeakIndex"].as_int() >= 0);
+}
+
+TEST_CASE("Interleaved anti-phase clipping retains flat evidence for the repair suggestion",
+          "[mastering][assistant][defects]") {
+  const auto left = clipped(1.4f, 1.0f);
+  const auto interleaved = interleave(left, negate(left));
+  const auto profile = interleaved_profile(interleaved);
+
+  CAPTURE(profile.clip_flat_run_count, profile.clip_flat_sample_count, profile.clip_flat_level);
+  REQUIRE(profile.measured);
+  REQUIRE(profile.clip_flat_run_count > 0);
+  REQUIRE(profile.clip_flat_sample_count > 0);
+  REQUIRE(profile.clip_flat_level > 0.9f);
+
+  assistant::AssistantConfig config;
+  config.enable_repair = true;
+  const auto result =
+      assistant::suggest_chain_interleaved(interleaved.data(), left.size(), 2, kSr, config);
+  REQUIRE(result.config.repair.declip.enabled);
+  REQUIRE(result.config.repair.declip.config.clip_threshold > 0.9f);
+}
+
+TEST_CASE("Interleaved flat-top aggregation uses the highest evidenced plateau",
+          "[mastering][assistant][defects]") {
+  auto left = clipped(1.4f, 1.0f);
+  auto right = clipped(1.4f, 1.0f);
+  for (float& sample : left) sample *= 0.25f;
+  for (float& sample : right) sample *= 0.5f;
+
+  const auto left_profile = profile_of(left);
+  const auto right_profile = profile_of(right);
+  const auto interleaved = interleave(left, right);
+  const auto profile = interleaved_profile(interleaved);
+
+  CAPTURE(left_profile.clip_flat_level, right_profile.clip_flat_level, profile.clip_flat_level);
+  REQUIRE(left_profile.clip_flat_level > 0.2f);
+  REQUIRE(right_profile.clip_flat_level > left_profile.clip_flat_level);
+  REQUIRE(std::abs(profile.clip_flat_level - right_profile.clip_flat_level) < 1.0e-6f);
+  REQUIRE(profile.declip_threshold_safe);
+}
+
+TEST_CASE("Interleaved flat evidence is unsafe when a clean channel reaches the threshold",
+          "[mastering][assistant][defects]") {
+  auto clipped_quiet = clipped(1.4f, 1.0f);
+  for (float& sample : clipped_quiet) sample *= 0.25f;
+  const auto clean_loud = tone(220.0f, 0.5f);
+  const auto profile = interleaved_profile(interleave(clipped_quiet, clean_loud));
+
+  CAPTURE(profile.clip_flat_level, profile.declip_threshold_safe);
+  REQUIRE(profile.clip_flat_level > 0.2f);
+  REQUIRE_FALSE(profile.declip_threshold_safe);
+}
+
+TEST_CASE("Interleaved safety clamps an above-unity plateau before checking clean peaks",
+          "[mastering][assistant][defects]") {
+  auto above_unity = clipped(1.4f, 1.0f);
+  for (float& sample : above_unity) sample *= 1.5f;
+  const auto clean_loud = tone(220.0f, 1.2f);
+  const auto profile = interleaved_profile(interleave(above_unity, clean_loud));
+
+  CAPTURE(profile.clip_flat_level, profile.declip_threshold_safe);
+  REQUIRE(profile.clip_flat_level > 1.0f);
+  REQUIRE_FALSE(profile.declip_threshold_safe);
+}
+
+TEST_CASE("Interleaved anti-phase noise survives the noise detector",
+          "[mastering][assistant][defects]") {
+  const auto left = with_noise(tone(220.0f, 0.2f), 0.15f);
+  const auto interleaved = interleave(left, negate(left));
+  const auto profile = interleaved_profile(interleaved);
+
+  CAPTURE(profile.noise_floor_dbfs, profile.noise_band_peak_dbfs, profile.noise_band_peak_index);
+  REQUIRE(profile.noise_floor_dbfs > -80.0f);
+  REQUIRE(profile.noise_band_peak_dbfs > -80.0f);
+  REQUIRE(profile.noise_band_peak_index >= 0);
+}
+
+TEST_CASE("Duplicated mono defects preserve rates and fractions and double noise power",
+          "[mastering][assistant][defects]") {
+  auto source = with_noise_off_flat(clipped(1.4f, 1.0f), 0.05f);
+  source = with_spikes(std::move(source), 2048, 0.9f);
+  const auto mono = profile_of(source);
+  const auto interleaved = interleave(source, source);
+  const auto stereo = interleaved_profile(interleaved);
+  const float duplicate_power_db = 10.0f * std::log10(2.0f);
+
+  CAPTURE(mono.click_count, stereo.click_count, mono.crackle_sample_count,
+          stereo.crackle_sample_count, mono.clip_sample_count, stereo.clip_sample_count,
+          mono.noise_floor_dbfs, stereo.noise_floor_dbfs);
+  REQUIRE(stereo.click_count == mono.click_count * 2);
+  REQUIRE(stereo.click_rejected == mono.click_rejected * 2);
+  REQUIRE(stereo.click_longest_run_samples == mono.click_longest_run_samples);
+  REQUIRE(std::abs(stereo.click_per_second - mono.click_per_second) < 1.0e-6f);
+  REQUIRE(stereo.crackle_sample_count == mono.crackle_sample_count * 2);
+  REQUIRE(std::abs(stereo.crackle_sample_fraction - mono.crackle_sample_fraction) < 1.0e-6f);
+  REQUIRE(std::abs(stereo.crackle_per_second - mono.crackle_per_second) < 1.0e-6f);
+  REQUIRE(stereo.clip_sample_count == mono.clip_sample_count * 2);
+  REQUIRE(stereo.clip_run_count == mono.clip_run_count * 2);
+  REQUIRE(stereo.clip_longest_run_samples == mono.clip_longest_run_samples);
+  REQUIRE(std::abs(stereo.clip_sample_fraction - mono.clip_sample_fraction) < 1.0e-6f);
+  REQUIRE(stereo.clip_flat_run_count == mono.clip_flat_run_count * 2);
+  REQUIRE(stereo.clip_flat_sample_count == mono.clip_flat_sample_count * 2);
+  REQUIRE(stereo.clip_longest_flat_run_samples == mono.clip_longest_flat_run_samples);
+  REQUIRE(std::abs(stereo.clip_flat_level - mono.clip_flat_level) < 1.0e-6f);
+  REQUIRE(std::abs(stereo.noise_floor_dbfs - mono.noise_floor_dbfs - duplicate_power_db) < 0.01f);
+  REQUIRE(std::abs(stereo.noise_band_peak_dbfs - mono.noise_band_peak_dbfs - duplicate_power_db) <
+          0.01f);
+  REQUIRE(stereo.noise_band_peak_index == mono.noise_band_peak_index);
+
+  assistant::AssistantConfig config;
+  config.enable_repair = true;
+  const auto mono_result = assistant::suggest_chain(source.data(), source.size(), kSr, config);
+  const auto stereo_result =
+      assistant::suggest_chain_interleaved(interleaved.data(), source.size(), 2, kSr, config);
+  REQUIRE(stereo_result.config.repair.declick.enabled == mono_result.config.repair.declick.enabled);
+  REQUIRE(stereo_result.config.repair.declip.enabled == mono_result.config.repair.declip.enabled);
+  REQUIRE(stereo_result.config.repair.decrackle.enabled ==
+          mono_result.config.repair.decrackle.enabled);
+  REQUIRE(stereo_result.config.repair.dehum.enabled == mono_result.config.repair.dehum.enabled);
+  REQUIRE(stereo_result.config.repair.dereverb.enabled ==
+          mono_result.config.repair.dereverb.enabled);
+  REQUIRE(stereo_result.config.repair.denoise.enabled == mono_result.config.repair.denoise.enabled);
 }
 
 TEST_CASE("the audio profile schema list matches what the writer emits",

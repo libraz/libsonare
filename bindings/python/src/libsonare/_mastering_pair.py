@@ -691,10 +691,11 @@ def mastering_audio_profile_stereo(
 ) -> str:
     """Return the mastering assistant profile of a stereo pair as shared JSON.
 
-    Only the ``loudness`` block is measured from the two channels; the
+    The ``loudness`` block is measured from the two channels; the
     spectral, dynamics and tempo fields describe shape and timing rather than
     absolute level and are measured on the downmix, which keeps them comparable
-    with :func:`mastering_audio_profile`.
+    with :func:`mastering_audio_profile`. Defect detectors run on each channel
+    and their results are aggregated.
     """
     param_array, param_count = _mastering_params(params)
     return _stereo_analysis_json(

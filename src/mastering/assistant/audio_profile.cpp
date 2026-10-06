@@ -110,6 +110,62 @@ float sustain_ratio(const std::vector<float>& rms) {
   return static_cast<float>(sustained) / static_cast<float>(rms.size());
 }
 
+struct HumCandidate {
+  float fundamental_hz = 0.0f;
+  float prominence = 1.0f;
+  int harmonics = 0;
+  float fundamental_dbfs = 0.0f;
+  float peak_harmonic_dbfs = 0.0f;
+  size_t index = 0;
+};
+
+HumCandidate make_hum_candidate(const repair::HumDetection& detection, size_t index) {
+  HumCandidate candidate;
+  candidate.fundamental_hz = detection.fundamental_hz;
+  candidate.prominence = detection.fundamental_prominence;
+  candidate.harmonics = detection.harmonics;
+  candidate.fundamental_dbfs = detection.harmonic_dbfs[0];
+  candidate.peak_harmonic_dbfs = *std::max_element(
+      detection.harmonic_dbfs, detection.harmonic_dbfs + repair::kDehumMaxHarmonics);
+  candidate.index = index;
+  return candidate;
+}
+
+bool hum_candidate_better(const HumCandidate& candidate, const HumCandidate& current) {
+  if (candidate.prominence != current.prominence) {
+    return candidate.prominence > current.prominence;
+  }
+  if (candidate.peak_harmonic_dbfs != current.peak_harmonic_dbfs) {
+    return candidate.peak_harmonic_dbfs > current.peak_harmonic_dbfs;
+  }
+  return candidate.index < current.index;
+}
+
+void assign_hum_candidate(DefectProfile& defects, const HumCandidate& candidate) {
+  defects.hum_fundamental_hz = candidate.fundamental_hz;
+  defects.hum_fundamental_prominence = candidate.prominence;
+  defects.hum_harmonics = candidate.harmonics;
+  defects.hum_fundamental_dbfs = candidate.fundamental_dbfs;
+  defects.hum_peak_harmonic_dbfs = candidate.peak_harmonic_dbfs;
+}
+
+struct ChannelDefects {
+  DefectProfile profile;
+  std::vector<float> noise_band_dbfs;
+  float peak_abs = 0.0f;
+};
+
+double measured_noise_power(float level_dbfs) {
+  // kFloorDb is the detector's zero-energy sentinel. Treating it as a real
+  // power before summing would turn duplicated silence into a false +3 dB
+  // measurement.
+  return level_dbfs > kMinDb ? db_to_power_scalar(static_cast<double>(level_dbfs)) : 0.0;
+}
+
+float noise_power_to_db(double power) {
+  return power > 0.0 ? std::max(kMinDb, static_cast<float>(power_to_db_scalar(power))) : kMinDb;
+}
+
 }  // namespace
 
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
@@ -126,10 +182,9 @@ AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int
 namespace {
 
 // Runs the six repair detectors over one signal, each with its own default
-// config. Nothing here can throw: the detectors reject only a non-positive
-// sample rate and, for the noise floor, an input shorter than its STFT, and both
-// are settled before the first call.
-DefectProfile measure_defects(const Audio& audio) {
+// config. Only a non-finite sample throws (the clipping detector refuses it); a
+// non-positive rate and an input shorter than the STFT are settled beforehand.
+DefectProfile measure_defects(const Audio& audio, std::vector<float>* noise_band_dbfs = nullptr) {
   DefectProfile defects;
 
   const repair::DenoiseClassicalConfig denoise_config;
@@ -164,6 +219,9 @@ DefectProfile measure_defects(const Audio& audio) {
 
   const auto noise = repair::detect_noise_floor(samples, size, sample_rate, denoise_config);
   defects.noise_floor_dbfs = noise.floor_dbfs;
+  if (noise_band_dbfs != nullptr) {
+    noise_band_dbfs->assign(std::begin(noise.band_floor_dbfs), std::end(noise.band_floor_dbfs));
+  }
   const auto* peak_band = std::max_element(noise.band_floor_dbfs,
                                            noise.band_floor_dbfs + repair::kRepairNoiseBandCount);
   defects.noise_band_peak_dbfs = *peak_band;
@@ -178,13 +236,10 @@ DefectProfile measure_defects(const Audio& audio) {
   hum_60.fundamental_hz = 60.0f;
   const auto at_50 = repair::detect_hum(samples, size, sample_rate, hum_50);
   const auto at_60 = repair::detect_hum(samples, size, sample_rate, hum_60);
-  const auto& hum = at_60.fundamental_prominence > at_50.fundamental_prominence ? at_60 : at_50;
-  defects.hum_fundamental_hz = hum.fundamental_hz;
-  defects.hum_fundamental_prominence = hum.fundamental_prominence;
-  defects.hum_harmonics = hum.harmonics;
-  defects.hum_fundamental_dbfs = hum.harmonic_dbfs[0];
-  defects.hum_peak_harmonic_dbfs =
-      *std::max_element(hum.harmonic_dbfs, hum.harmonic_dbfs + repair::kDehumMaxHarmonics);
+  // Keep the mono search's historical tie behaviour: the 60 Hz candidate only
+  // wins when its prominence is strictly greater, so an equal result keeps 50.
+  const bool use_60 = at_60.fundamental_prominence > at_50.fundamental_prominence;
+  assign_hum_candidate(defects, make_hum_candidate(use_60 ? at_60 : at_50, use_60 ? 1 : 0));
 
   defects.late_decay_ratio_db =
       repair::detect_reverb(samples, size, sample_rate).late_decay_ratio_db;
@@ -193,10 +248,129 @@ DefectProfile measure_defects(const Audio& audio) {
   return defects;
 }
 
-// Everything outside the loudness block: spectral shape, dynamics and tempo.
-// These describe shape and timing rather than absolute level, so the stereo
-// entry point measures them on the downmix and only replaces the loudness
-// block, keeping mono and stereo profiles comparable field by field.
+DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) {
+  DefectProfile defects;
+  if (per_channel.empty()) return defects;
+  for (const ChannelDefects& channel : per_channel) {
+    if (!channel.profile.measured ||
+        channel.noise_band_dbfs.size() != repair::kRepairNoiseBandCount) {
+      return defects;
+    }
+  }
+
+  double click_per_second_sum = 0.0;
+  double crackle_fraction_sum = 0.0;
+  double crackle_per_second_sum = 0.0;
+  double clip_fraction_sum = 0.0;
+  double noise_floor_power = 0.0;
+  std::vector<double> noise_band_power(repair::kRepairNoiseBandCount, 0.0);
+  HumCandidate hum;
+  bool have_hum = false;
+
+  for (size_t index = 0; index < per_channel.size(); ++index) {
+    const DefectProfile& channel = per_channel[index].profile;
+    defects.click_count += channel.click_count;
+    defects.click_rejected += channel.click_rejected;
+    defects.click_longest_run_samples =
+        std::max(defects.click_longest_run_samples, channel.click_longest_run_samples);
+    click_per_second_sum += channel.click_per_second;
+
+    defects.crackle_sample_count += channel.crackle_sample_count;
+    crackle_fraction_sum += channel.crackle_sample_fraction;
+    crackle_per_second_sum += channel.crackle_per_second;
+
+    defects.clip_sample_count += channel.clip_sample_count;
+    defects.clip_run_count += channel.clip_run_count;
+    defects.clip_longest_run_samples =
+        std::max(defects.clip_longest_run_samples, channel.clip_longest_run_samples);
+    clip_fraction_sum += channel.clip_sample_fraction;
+    defects.clip_flat_run_count += channel.clip_flat_run_count;
+    defects.clip_flat_sample_count += channel.clip_flat_sample_count;
+    defects.clip_longest_flat_run_samples =
+        std::max(defects.clip_longest_flat_run_samples, channel.clip_longest_flat_run_samples);
+    if (channel.clip_flat_level > 0.0f &&
+        (defects.clip_flat_level == 0.0f || channel.clip_flat_level > defects.clip_flat_level)) {
+      defects.clip_flat_level = channel.clip_flat_level;
+    }
+
+    noise_floor_power += measured_noise_power(channel.noise_floor_dbfs);
+    for (size_t band = 0; band < noise_band_power.size(); ++band) {
+      noise_band_power[band] += measured_noise_power(per_channel[index].noise_band_dbfs[band]);
+    }
+
+    const HumCandidate channel_hum = {
+        channel.hum_fundamental_hz,   channel.hum_fundamental_prominence, channel.hum_harmonics,
+        channel.hum_fundamental_dbfs, channel.hum_peak_harmonic_dbfs,     index};
+    if (!have_hum || hum_candidate_better(channel_hum, hum)) {
+      hum = channel_hum;
+      have_hum = true;
+    }
+    if (index == 0) {
+      defects.late_decay_ratio_db = channel.late_decay_ratio_db;
+    } else {
+      defects.late_decay_ratio_db =
+          std::max(defects.late_decay_ratio_db, channel.late_decay_ratio_db);
+    }
+  }
+
+  const float channel_count = static_cast<float>(per_channel.size());
+  defects.click_per_second = static_cast<float>(click_per_second_sum / channel_count);
+  defects.crackle_sample_fraction = static_cast<float>(crackle_fraction_sum / channel_count);
+  defects.crackle_per_second = static_cast<float>(crackle_per_second_sum / channel_count);
+  defects.clip_sample_fraction = static_cast<float>(clip_fraction_sum / channel_count);
+  defects.noise_floor_dbfs = noise_power_to_db(noise_floor_power);
+  defects.noise_band_peak_dbfs = kMinDb;
+  defects.noise_band_peak_index = -1;
+  for (size_t band = 0; band < noise_band_power.size(); ++band) {
+    const float level = noise_power_to_db(noise_band_power[band]);
+    if (band == 0 || level > defects.noise_band_peak_dbfs) {
+      defects.noise_band_peak_dbfs = level;
+      defects.noise_band_peak_index = static_cast<int>(band);
+    }
+  }
+  defects.declip_threshold_safe = true;
+  if (defects.clip_flat_level > 0.0f) {
+    const float effective_threshold = std::min(defects.clip_flat_level, 1.0f);
+    for (const ChannelDefects& channel : per_channel) {
+      if (channel.profile.clip_flat_run_count == 0 && channel.peak_abs >= effective_threshold) {
+        defects.declip_threshold_safe = false;
+        break;
+      }
+    }
+  }
+  if (have_hum) assign_hum_candidate(defects, hum);
+  defects.measured = true;
+  return defects;
+}
+
+DefectProfile measure_defects_interleaved(const float* samples, std::size_t frames, int channels,
+                                          int sample_rate) {
+  if (channels == 1) {
+    return measure_defects(Audio::from_buffer(samples, frames, sample_rate));
+  }
+
+  std::vector<ChannelDefects> per_channel;
+  per_channel.reserve(static_cast<size_t>(channels));
+  for (int channel = 0; channel < channels; ++channel) {
+    std::vector<float> plane(frames);
+    for (size_t frame = 0; frame < frames; ++frame) {
+      plane[frame] = samples[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
+    }
+    const Audio channel_audio = Audio::from_vector(std::move(plane), sample_rate);
+    ChannelDefects measured;
+    measured.profile = measure_defects(channel_audio, &measured.noise_band_dbfs);
+    for (float sample : channel_audio) {
+      measured.peak_abs = std::max(measured.peak_abs, std::abs(sample));
+    }
+    per_channel.push_back(std::move(measured));
+  }
+  return aggregate_defects(per_channel);
+}
+
+// Everything outside the loudness and defect blocks: spectral shape, dynamics
+// and tempo. These describe shape and timing rather than absolute level, so the
+// stereo entry point measures them on the downmix and only replaces the
+// loudness block, keeping mono and stereo profiles comparable field by field.
 //
 // `short_term_series`, when given, is the short-term loudness the caller's own
 // loudness pass already measured over this same signal; `spec_out`, when given,
@@ -287,8 +461,6 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
     profile.bpm = 0.0f;
     profile.bpm_confidence = 0.0f;
   }
-
-  if (config.detect_defects) profile.defects = measure_defects(audio);
 }
 
 }  // namespace
@@ -314,6 +486,7 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
   profile.loudness.crest_factor_db = metering::crest_factor_db(audio);
 
   fill_profile_body(audio, config, profile, &short_term, spec_out);
+  if (config.detect_defects) profile.defects = measure_defects(audio);
   return profile;
 }
 
@@ -353,6 +526,9 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
       metering::crest_factor_db_interleaved(samples, frames, channels);
 
   fill_profile_body(audio, config, profile, nullptr, spec_out);
+  if (config.detect_defects) {
+    profile.defects = measure_defects_interleaved(samples, frames, channels, sample_rate);
+  }
   return profile;
 }
 

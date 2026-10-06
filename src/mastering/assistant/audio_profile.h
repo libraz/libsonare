@@ -42,8 +42,9 @@ struct DynamicsProfile {
 };
 
 /// @brief What the six repair detectors measured in the profiled signal.
-/// @details Each field is one detector's own scalar carried unchanged; the
-///          repair headers define what each measures. Filled only when
+/// @details Mono fields carry each detector's own scalar; interleaved fields use
+///          the reductions documented by @ref analyze_audio_profile_interleaved.
+///          The repair headers define what each measures. Filled only when
 ///          @ref AudioProfileConfig::detect_defects asks for it, so @ref measured
 ///          is what separates a clean recording from one nothing looked at --
 ///          the two are the same field values otherwise.
@@ -83,11 +84,19 @@ struct DefectProfile {
   /// of any waveform that reaches it and miss material clipped before it was
   /// attenuated; these survive a gain change and do not fire on a sine.
   /// clip_flat_level is the level the runs sit at, which is the threshold a
-  /// declip pass has to use to reach them.
+  /// declip pass has to use to reach them. Interleaved aggregation keeps the
+  /// highest evidenced plateau; @ref declip_threshold_safe says whether that
+  /// shared threshold is safe for every channel.
   std::size_t clip_flat_run_count = 0;
   std::size_t clip_flat_sample_count = 0;
   std::size_t clip_longest_flat_run_samples = 0;
   float clip_flat_level = 0.0f;
+  /// True when the aggregated flat level is safe to use as a declip threshold.
+  /// A multi-channel profile is unsafe when a channel without flat-top evidence
+  /// reaches min(clip_flat_level, 1), the effective shared repair threshold.
+  /// Defaults to true for profiles constructed directly by the caller. Read by
+  /// the C++ suggester only; not serialized.
+  bool declip_threshold_safe = true;
 
   // repair/denoise_classical.h
   float noise_floor_dbfs = 0.0f;
@@ -158,15 +167,18 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
 /// @}
 
 /// @brief Multi-channel counterpart preserving BS.1770 channel summing.
-/// @details Only the `loudness` block is measured from the channels: integrated
+/// @details The `loudness` block is measured from the channels: integrated
 ///          LUFS and LRA come from the channel-summed program and the true peak
 ///          is the largest across the channels, so decorrelated stereo is not
 ///          read roughly 6 dB low the way a `0.5 * (L + R)` downmix reads it.
-///          The spectral, dynamics, tempo and defect fields describe spectral
-///          shape, timing and damage rather than absolute level and are measured
-///          on the downmix, which keeps them comparable with the mono entry point;
-///          `dynamics.shortTermLufsStd` is a spread rather than a level, so the
-///          downmix's near-constant loudness offset cancels out of it.
+///          The spectral, dynamics and tempo fields describe the downmix. Defect
+///          detectors run independently on every channel: counts sum, rates and
+///          fractions average, longest runs take the maximum, flat evidence keeps
+///          the highest plateau, noise floors sum in power (including every
+///          detector band), the strongest complete hum candidate wins, and late
+///          decay takes the maximum. `dynamics.shortTermLufsStd` is a spread
+///          rather than a level, so the downmix's near-constant loudness offset
+///          cancels out of it.
 /// @param samples Pointer to `frames * channels` interleaved samples.
 /// @param frames Number of sample frames.
 /// @param channels Channel count; must be positive.

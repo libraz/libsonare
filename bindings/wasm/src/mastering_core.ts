@@ -924,11 +924,12 @@ export function masteringAssistantSuggestChainStereo(
 /**
  * Mastering assistant profile of a stereo pair, as shared JSON.
  *
- * Only the `loudness` block is measured from the two channels: integrated LUFS
+ * The `loudness` block is measured from the two channels: integrated LUFS
  * and LRA come from the channel-summed program and the true peak is the larger
  * of the two. The spectral, dynamics and tempo fields describe shape and timing
  * rather than absolute level and are measured on the downmix, which keeps them
- * comparable with {@link masteringAudioProfile}.
+ * comparable with {@link masteringAudioProfile}. Defect detectors run on each
+ * channel and their results are aggregated.
  */
 export function masteringAudioProfileStereo(request: MasteringStereoParamsRequest): string {
   return requireModule().masteringAudioProfileStereo(

@@ -988,7 +988,7 @@ def _add_assistant_control_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--no-streaming-safe",
         action="store_true",
-        help="Let the assistant suggest treatments it withholds for streaming delivery",
+        help="Use whole-signal noise estimation when the assistant suggests denoise",
     )
     parser.add_argument(
         "--speech-mono-amount",

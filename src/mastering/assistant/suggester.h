@@ -23,6 +23,8 @@ struct AssistantConfig {
   float target_lufs = -14.0f;
   float ceiling_db = -1.0f;
   bool enable_repair = false;
+  /// @brief Prefer the recursive SPP noise estimator over whole-signal quantile estimation.
+  /// @details Applies only to denoise; other repair stages may require offline processing.
   bool prefer_streaming_safe = true;
   float speech_mono_amount = 1.0f;
   /// @brief Whether the caller named @ref target_lufs / @ref ceiling_db at all.

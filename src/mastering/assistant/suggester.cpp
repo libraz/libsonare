@@ -53,8 +53,8 @@ bool hum_is_mains(const DefectProfile& defects) {
 ///   than the default, because for those the default would select the stage and
 ///   then give it nothing to act on. Dereverb is absent on purpose: its statistic reads *higher* on
 ///   a sustaining dry signal than on a short reverberant one, so no threshold over it separates the
-///   two, and it stays under caller control until one does. The noise estimator is left at its
-///   default, which outperforms the adaptive trackers on every kind of material measured so far.
+///   two, and it stays under caller control until one does. Declip is withheld when the shared
+///   threshold is unsafe for a channel without flat-top evidence.
 void select_repair_stages(const AudioProfile& profile, const AssistantConfig& config,
                           api::MasteringChainConfig& out, std::vector<std::string>& explanation) {
   const DefectProfile& defects = profile.defects;
@@ -65,7 +65,7 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     return;
   }
 
-  if (defects.clip_flat_run_count > 0) {
+  if (defects.clip_flat_run_count > 0 && defects.declip_threshold_safe) {
     out.repair.declip.enabled = true;
     // The measured plateau, not the default ceiling. Material clipped before it
     // was attenuated has no sample left at the default, so enabling the stage
@@ -73,6 +73,10 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     // says it repaired. Clamped because float audio may sit over unity.
     out.repair.declip.config.clip_threshold = std::min(defects.clip_flat_level, 1.0f);
     explain(explanation, "declip: runs of samples sit pinned at one level");
+  } else if (defects.clip_flat_run_count > 0) {
+    explain(explanation,
+            "declip withheld: a channel without pinned runs reaches the shared "
+            "threshold, so repairing at it would rewrite unclipped audio");
   }
   if (defects.click_count > 0) {
     out.repair.declick.enabled = true;
@@ -92,7 +96,8 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
   // Referred to the programme rather than to full scale, so a quiet recording
   // with an inaudible floor is not treated like a loud one with the same floor.
   const float floor_over_programme = defects.noise_floor_dbfs - profile.loudness.integrated_lufs;
-  if (floor_over_programme > kNoiseFloorOverProgrammeDb) {
+  if (std::isfinite(defects.noise_floor_dbfs) && std::isfinite(profile.loudness.integrated_lufs) &&
+      floor_over_programme > kNoiseFloorOverProgrammeDb) {
     out.repair.denoise.enabled = true;
     if (config.prefer_streaming_safe) {
       // The default estimator ranks every frame of the whole signal by energy, so
@@ -138,6 +143,21 @@ void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs
   if (ceiling_is_default) *ceiling_db = target->ceiling_db;
 }
 
+void validate_suggestion_config(const AssistantConfig& config) {
+  SONARE_CHECK_MSG(std::isfinite(config.target_lufs), ErrorCode::InvalidParameter,
+                   "assistant target_lufs must be finite");
+  SONARE_CHECK_MSG(std::isfinite(config.ceiling_db), ErrorCode::InvalidParameter,
+                   "assistant ceiling_db must be finite");
+  SONARE_CHECK_MSG(std::isfinite(config.speech_mono_amount), ErrorCode::InvalidParameter,
+                   "assistant speech_mono_amount must be finite");
+  SONARE_CHECK_MSG(platform_target_from_name(config.target_platform.c_str()) != nullptr,
+                   ErrorCode::InvalidParameter,
+                   "unknown mastering target platform '" + config.target_platform +
+                       "'; expected one of: " + platform_names_joined());
+  SONARE_CHECK_MSG(std::string(api::preset_to_string(config.preset)) != "unknown",
+                   ErrorCode::InvalidParameter, "unknown assistant preset");
+}
+
 }  // namespace
 
 AssistantResult suggest_chain(const float* samples, std::size_t length, int sample_rate,
@@ -163,6 +183,7 @@ AssistantResult suggest_chain_interleaved(const float* samples, std::size_t fram
 }
 
 AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig& config) {
+  validate_suggestion_config(config);
   AssistantResult result;
   result.profile = profile;
   SONARE_CHECK_MSG(api::preset_kind(config.preset) == api::PresetKind::Mastering,
