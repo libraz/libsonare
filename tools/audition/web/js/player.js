@@ -366,7 +366,7 @@ function lastModelKey() {
 }
 
 /* The oracle a note is judged against: the listener's override, else the
- * last one played, else `null` rather than a guess. */
+ * last one selected, else `null` rather than a guess. */
 export function comparedAgainst() {
   const picked = state.oracleOverride || state.lastOracle;
   if (!picked) return null;
@@ -374,7 +374,7 @@ export function comparedAgainst() {
     role: picked.role,
     version: picked.key,
     label: sourceLabel(picked.key),
-    chosen: state.oracleOverride ? 'manual' : 'last_played',
+    chosen: state.oracleOverride ? 'manual' : 'last_selected',
   };
 }
 

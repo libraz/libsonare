@@ -159,8 +159,9 @@ export async function loadSet(id, want) {
   await loadFeedback();
   if (epoch !== selectEpoch) return;
   setLoading = false;
-  if (state.items.length) await selectTake(state.itemIndex);
-  else { $('versions').replaceChildren(); setSending(true); writeRoute(); }
+  if (state.items.length) {
+    await selectTake(state.itemIndex);
+  } else { $('versions').replaceChildren(); setSending(true); writeRoute(); }
 }
 
 /* Notes taken in this browser before the page could send anything are still
@@ -270,7 +271,10 @@ export async function selectTake(i) {
     ? Math.min(state.versionIndex, state.blindOrder.length - 1)
     : (want >= 0 ? want : Math.min(state.versionIndex, state.take.keys.length - 1));
   buildVersionButtons();
-  if (!state.blind) state.wantKey = activeKey();
+  if (!state.blind) {
+    state.wantKey = activeKey();
+    selectVersionByKey(state.wantKey);
+  }
   const carried = takeOldNote(item.id);
   if (carried && !$('fbComment').value) $('fbComment').value = carried;
   renderLevels();

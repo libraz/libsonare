@@ -126,7 +126,7 @@ test: test-cxx
 # clone in about half a minute. Invoked directly, this reports a missing rye as
 # the error it is; `test` is the target that treats it as a skip.
 test-voicematch:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch -q
+	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch tools/audition -q
 
 # Heavy cases (>~2 s each) are tagged [.][slow] and hidden from the default
 # ctest run; this runs just those. Must run from the repo root (librosa

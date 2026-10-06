@@ -107,7 +107,7 @@ function renderComposer() {
 
 /* --------------------------------------------------------- compared against */
 
-/* Which oracle a note is about: the last reference or comparison played in
+/* Which oracle a note is about: the last reference or comparison selected in
  * this set, which the select beside it can correct. */
 
 export function renderComparedAgainst() {

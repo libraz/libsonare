@@ -102,6 +102,7 @@ EVIDENCE_FIELDS = (
     "request_id",
     "asset_id",
     "build_id",
+    "path_complete",
     "bank_registry_digest",
     "units",
     "counterpart",
@@ -116,6 +117,11 @@ DOC_PREFIX = "_"
 CURRENT = "current"
 STALE = "stale"
 UNVERIFIED = "unverified"
+
+# A reference can be listed on a page while its source could not be resolved
+# on the machine that rendered it. That is useful context, but it is not an
+# oracle identity a listener can sign against.
+ORACLE_VERIFIED = "verified"
 
 
 @dataclass(frozen=True)
@@ -181,10 +187,11 @@ class Music:
 
 @dataclass(frozen=True)
 class Record:
-    """One voice's two claims. Either may be absent."""
+    """One voice's structural claim and its product/DI music claims."""
 
     structure: Structure | None = None
     music: Music | None = None
+    instrument: Music | None = None
 
 
 def _provenance(raw: dict) -> Provenance:
@@ -192,6 +199,16 @@ def _provenance(raw: dict) -> Provenance:
         date=str(raw.get("date", "")).strip(),
         bank_generation=int(raw.get("bank_generation", 0) or 0),
         patch_version=int(raw.get("patch_version", 0) or 0),
+    )
+
+
+def _music(raw: dict) -> Music:
+    """Read one scope's musical claim without collapsing its scope."""
+    evidence = raw.get("evidence")
+    return Music(
+        provenance=_provenance(raw.get("provenance") or {}),
+        take=str(raw.get("take", "")).strip(),
+        evidence=evidence if isinstance(evidence, dict) else None,
     )
 
 
@@ -230,17 +247,10 @@ def load(path: Path | None = None) -> dict[str, Record]:
                 accepted=accepted,
                 note=str(s.get("note", "")).strip(),
             )
-        music = None
-        if entry.get("music"):
-            m = entry["music"]
-            evidence = m.get("evidence")
-            music = Music(
-                provenance=_provenance(m.get("provenance") or {}),
-                take=str(m.get("take", "")).strip(),
-                evidence=evidence if isinstance(evidence, dict) else None,
-            )
-        if structure or music:
-            table[slug] = Record(structure=structure, music=music)
+        music = _music(entry["music"]) if entry.get("music") else None
+        instrument = _music(entry["instrument"]) if entry.get("instrument") else None
+        if structure or music or instrument:
+            table[slug] = Record(structure=structure, music=music, instrument=instrument)
     return table
 
 
@@ -299,6 +309,8 @@ def axis(
     patch_version: int,
     own_generation: int = 0,
     registry: Path | None = None,
+    *,
+    scope: str = SCOPE_PRODUCT,
 ) -> dict | None:
     """One claim as `status.py` records it, or None where nothing is recorded.
 
@@ -313,7 +325,7 @@ def axis(
     state = claim.provenance.state(dating, patch_version, own_generation)
     reasons: list[str] = []
     if isinstance(claim, Music):
-        state, reasons = music_state(claim, state, registry or BANK_VERSIONS)
+        state, reasons = music_state(claim, state, registry or BANK_VERSIONS, scope=scope)
     out: dict = {"state": state, "date": claim.provenance.date}
     if isinstance(claim, Structure):
         out["unreachable"] = list(claim.unreachable)
@@ -326,7 +338,9 @@ def axis(
     return out
 
 
-def music_state(claim: Music, dated: str, registry: Path) -> tuple[str, list[str]]:
+def music_state(
+    claim: Music, dated: str, registry: Path, *, scope: str = SCOPE_PRODUCT
+) -> tuple[str, list[str]]:
     """A musical claim's state: `claim_eligibility` where it carries evidence.
 
     A hand-dated block has nothing to check but its date: the date's own
@@ -338,9 +352,7 @@ def music_state(claim: Music, dated: str, registry: Path) -> tuple[str, list[str
         return UNVERIFIED, [
             "hand-dated claim without recording evidence: re-sign it with heard.py --signoff"
         ]
-    return claim_eligibility(
-        claim.evidence, claim.provenance, scope=SCOPE_PRODUCT, registry=registry
-    )
+    return claim_eligibility(claim.evidence, claim.provenance, scope=scope, registry=registry)
 
 
 def registry_digest(path: Path) -> str | None:
@@ -433,7 +445,7 @@ def bank_state(
     """Whether a recording's bank still stands: `(state, reasons, then)`.
 
     `digest` is the registry digest the rendering library embedded. Equal to
-    the current registry's, the recording is `current`. Otherwise the registry
+    the current registry's, attributable units with matching versions are `current`. Otherwise the registry
     it names -- `then_versions`/`then_generation` where a claim recorded them,
     else found by `registry_at` -- is compared unit by unit: one of `units`
     moving is `stale`, and a shared unit moving after it is `unverified`, the
@@ -460,29 +472,39 @@ def bank_state(
         "bank_generation": int(then_generation or 0),
         "units": {u: then_versions[u] for u in units if u in then_versions},
     }
-    if digest == registry_digest(registry):
-        return CURRENT, [], then
+    same_registry = digest == registry_digest(registry)
     now_versions = _versions(now)
     states, reasons = [], []
     if not units:
         states.append(UNVERIFIED)
-        reasons.append("the registry moved and no versioned unit is attributable to this voice")
+        reasons.append("no versioned unit is attributable to this voice")
     for unit in units:
         before, after = then_versions.get(unit), now_versions.get(unit)
         if before is None or after is None:
             states.append(UNVERIFIED)
             reasons.append(f"{unit} is not in both registries")
         elif before != after:
-            states.append(STALE)
-            reasons.append(f"{unit} moved from v{before} to v{after} since the recording")
+            states.append(UNVERIFIED if same_registry else STALE)
+            reasons.append(
+                f"{unit} recorded v{before} disagrees with the named registry's v{after}"
+                if same_registry
+                else f"{unit} moved from v{before} to v{after} since the recording"
+            )
     shared = _shared_moved(now)
-    if shared > then["bank_generation"]:
+    if not same_registry and shared > then["bank_generation"]:
         states.append(UNVERIFIED)
         reasons.append(
             f"a shared unit moved at generation {shared}, after the recording's "
             f"{then['bank_generation']}"
         )
     return _worst_state(states), reasons, then
+
+
+def capture_digest(raw: dict) -> str:
+    """The canonical identity of the committed capture definition."""
+    from boundary import canonical_digest
+
+    return canonical_digest(raw)
 
 
 def reference_raw(capture_id: str) -> dict | None:
@@ -493,6 +515,130 @@ def reference_raw(capture_id: str) -> dict | None:
         if cap.id == capture_id:
             return cap.raw
     return None
+
+
+def current_reference_source_id(
+    capture_id: str,
+    timbre_id: str,
+    take_id: str,
+    *,
+    program: int = 0,
+) -> tuple[str | None, str | None]:
+    """Resolve the reference source identity for one recorded take.
+
+    ``capture_digest`` proves the tracked definition is unchanged, but a
+    capture's source can change underneath that JSON: an AudioUnit preset or
+    saved state, or a module SoundFont, is a file. The render path already
+    computes a content identity for those files; use the same resolvers here so
+    a claim cannot outlive an edited source at the same path. A capture without
+    a classified source cannot be re-resolved and is therefore unverified.
+    """
+    raw = reference_raw(capture_id)
+    if raw is None:
+        return None, f"reference capture {capture_id} is not in this tree"
+    if not raw.get("source_class"):
+        return None, f"reference capture {capture_id} has no classified source"
+    timbres = [t for t in (raw.get("timbres") or []) if isinstance(t, dict)]
+    timbre = next((t for t in timbres if t.get("id") == timbre_id), None)
+    if timbre is None:
+        return None, f"capture {capture_id} has no timbre {timbre_id}"
+    try:
+        from phrases import build_takes
+
+        take_set = str(raw.get("takes") or "")
+        takes = build_takes(
+            take_set,
+            int(raw.get("program", program)),
+            music=raw.get("music", ""),
+        )
+        take = next((candidate for candidate in takes if candidate.id == take_id), None)
+        if take is None:
+            return None, f"capture {capture_id} has no take {take_id}"
+        if raw.get("source_class") == "module":
+            from capture import resolve_font
+            from make_audition import _module_reference_rows
+            from render_evidence import module_source_id
+
+            font, preset = resolve_font(raw, timbre)
+            rows = _module_reference_rows(font, preset, str(timbre["id"]))
+            played = {note.note for note in take.notes}
+            return module_source_id(
+                raw,
+                timbre,
+                font,
+                preset,
+                {note: row for note, row in rows.items() if note in played},
+            ), None
+        if raw.get("source_class") not in ("library", "dedicated"):
+            return None, f"capture {capture_id} has unknown source class {raw['source_class']!r}"
+        from capture import source_for
+        from render_evidence import au_source_id
+
+        source = source_for(raw, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=48000)
+        return au_source_id(source, raw), None
+    except (
+        FileNotFoundError,
+        ImportError,
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        return None, str(exc)
+
+
+def current_reference_request_id(
+    capture_id: str, timbre_id: str, take_id: str, context: dict
+) -> tuple[str | None, str | None]:
+    """Rebuild the reference stimulus through the audition's render planner."""
+    from types import SimpleNamespace
+
+    raw = reference_raw(capture_id)
+    if raw is None:
+        return None, f"reference capture {capture_id} is not in this tree"
+    try:
+        from boundary import canonical_digest
+        from make_audition import reference_plan
+        from phrases import build_takes
+        from smf import write_smf
+
+        program, bank, channel = (int(context[k]) for k in ("program", "bank", "channel"))
+        sends = tuple(context["sends"])
+        if len(sends) != 3:
+            return None, "reference render context has invalid sends"
+        timbre = next(t for t in raw["timbres"] if t.get("id") == timbre_id)
+        take = next(
+            t
+            for t in build_takes(str(raw.get("takes") or ""), program, music=raw.get("music", ""))
+            if t.id == take_id
+        )
+        smf = write_smf(
+            take.notes,
+            program=program,
+            bank=bank,
+            end_pad=take.tail_s,
+            cc_events=take.cc_events,
+            channel=channel,
+            sends=sends,
+        )
+        cfg = SimpleNamespace(id=capture_id, raw=raw, source_class=raw.get("source_class"))
+        request, _, _, unresolved = reference_plan(
+            cfg, timbre, take, channel, take.duration(), smf, program, bank
+        )
+        if unresolved:
+            return None, unresolved
+        return canonical_digest(request), None
+    except (
+        ImportError,
+        KeyError,
+        OSError,
+        RuntimeError,
+        StopIteration,
+        TypeError,
+        ValueError,
+    ) as exc:
+        return None, str(exc) or "reference stimulus cannot be resolved"
 
 
 def capture_of_timbre(timbre: str, prefer: str = "") -> str | None:
@@ -567,6 +713,8 @@ def claim_eligibility(
     missing = [k for k in EVIDENCE_FIELDS if evidence.get(k) in (None, "", [], {})]
     if missing:
         return UNVERIFIED, [f"no recording evidence: {', '.join(missing)} not recorded"]
+    if evidence.get("path_complete") is not True:
+        return UNVERIFIED, ["render-path evidence is incomplete: complete must be true"]
     if evidence["scope"] != scope:
         return UNVERIFIED, [f"a {evidence['scope']} judgement cannot stand as a {scope} claim"]
     if evidence["judged"] != SHIPPED_SOURCE.get(scope):
@@ -586,13 +734,64 @@ def claim_eligibility(
     reasons += why
 
     recorded = evidence["boundary"] if isinstance(evidence["boundary"], dict) else {}
-    capture = str((evidence["counterpart"] or {}).get("capture") or recorded.get("capture") or "")
+    counterpart = evidence["counterpart"] if isinstance(evidence["counterpart"], dict) else {}
+    capture = str(counterpart.get("capture") or recorded.get("capture") or "")
     raw = reference_raw(capture) if capture else None
     if raw is None:
         return UNVERIFIED, [
             *reasons,
             f"reference capture {capture or '(none)'} is not in this tree",
         ]
+    oracle_required = (
+        "source",
+        "capture",
+        "capture_digest",
+        "request_id",
+        "source_id",
+        "asset_id",
+        "status",
+        "render_context",
+    )
+    oracle_missing = [name for name in oracle_required if counterpart.get(name) in (None, "")]
+    if oracle_missing:
+        states.append(UNVERIFIED)
+        reasons.append("oracle evidence missing: " + ", ".join(oracle_missing))
+    elif counterpart.get("status") != ORACLE_VERIFIED:
+        states.append(UNVERIFIED)
+        reasons.append(
+            f"oracle source {counterpart.get('source')} is {counterpart.get('status')}, not verified"
+        )
+    elif counterpart.get("capture_digest") != capture_digest(raw):
+        states.append(STALE)
+        reasons.append("the reference capture definition changed since the sign-off")
+    elif recorded.get("capture") and counterpart.get("capture") != recorded["capture"]:
+        states.append(STALE)
+        reasons.append("the oracle evidence names a different capture")
+    else:
+        current_source, source_error = current_reference_source_id(
+            capture,
+            str(counterpart.get("source") or ""),
+            str(evidence.get("take") or ""),
+            program=int(evidence["program"]),
+        )
+        if source_error:
+            states.append(UNVERIFIED)
+            reasons.append(f"oracle source could not be re-resolved: {source_error}")
+        elif current_source is not None and current_source != counterpart.get("source_id"):
+            states.append(STALE)
+            reasons.append("the oracle source identity changed since the sign-off")
+        current_request, request_error = current_reference_request_id(
+            capture,
+            str(counterpart["source"]),
+            str(evidence["take"]),
+            counterpart["render_context"],
+        )
+        if request_error:
+            states.append(UNVERIFIED)
+            reasons.append(f"oracle request could not be re-resolved: {request_error}")
+        elif current_request != counterpart["request_id"]:
+            states.append(STALE)
+            reasons.append("the oracle render request changed since the sign-off")
     ref, verdict = assess_boundary(
         scope, int(evidence["program"]), raw, recorded.get("product_rig")
     )
@@ -604,16 +803,23 @@ def claim_eligibility(
     if moved:
         states.append(STALE)
         reasons.append(f"the reference's boundary moved: {', '.join(moved)}")
-    if recorded.get("page_status") != STATUS_MATCHED or not recorded.get("page_may_sign_off"):
+    page_unverified = recorded.get("page_status") != STATUS_MATCHED or not recorded.get(
+        "page_may_sign_off"
+    )
+    if page_unverified:
         states.append(UNVERIFIED)
         reasons.append(
             f"the page found this comparison {recorded.get('page_status') or 'unrecorded'}"
             + ("" if recorded.get("page_may_sign_off") else ", not signable")
         )
-    if not (verdict.status == STATUS_MATCHED and verdict.may_sign_off):
+    comparison_unverified = not (verdict.status == STATUS_MATCHED and verdict.may_sign_off)
+    if comparison_unverified:
         states.append(UNVERIFIED)
         reasons.append(f"comparison {verdict.status}: {verdict.reason}")
-    return _worst_state(states), reasons
+    # An unsignable comparison outranks staleness, so a stale identity cannot hide it.
+    return (
+        UNVERIFIED if page_unverified or comparison_unverified else _worst_state(states)
+    ), reasons
 
 
 def settled(structure: dict | None, music: dict | None) -> bool:

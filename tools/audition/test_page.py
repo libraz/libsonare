@@ -379,6 +379,149 @@ def _node(script: str, **env: str) -> list[str] | None:
     return out.stdout.splitlines()
 
 
+def test_a_fresh_route_restores_a_reference_as_the_compared_oracle() -> None:
+    """A URL naming a reference must carry that choice into feedback state.
+
+    loadSet is the fresh-load path, so this exercises the asynchronous
+    manifest/take load rather than only testing setVersion in isolation.
+    """
+    got = _node(
+        """
+class Node {
+  constructor() {
+    this.children = [];
+    this.style = { setProperty() {} };
+    this.classList = { add() {}, remove() {}, toggle() {} };
+    this.parentElement = { title: '', style: { setProperty() {} } };
+    this.dataset = {};
+    this.hidden = false;
+    this.checked = false;
+    this.disabled = false;
+    this.value = '';
+    this.textContent = '';
+    this.className = '';
+    this._query = new Map();
+  }
+  append(...nodes) {
+    for (const node of nodes) {
+      if (node && typeof node === 'object') node.parentElement = this;
+      this.children.push(node);
+    }
+  }
+  appendChild(node) { this.append(node); }
+  replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
+  addEventListener() {}
+  setAttribute() {}
+  removeAttribute() {}
+  querySelector(selector) {
+    if (!this._query.has(selector)) this._query.set(selector, new Node());
+    return this._query.get(selector);
+  }
+  querySelectorAll() { return []; }
+  scrollIntoView() {}
+  focus() {}
+  contains() { return false; }
+  get childElementCount() { return this.children.length; }
+}
+const nodes = new Map();
+globalThis.document.createElement = () => new Node();
+globalThis.document.getElementById = (id) => {
+  if (!nodes.has(id)) nodes.set(id, new Node());
+  return nodes.get(id);
+};
+globalThis.document.body = new Node();
+globalThis.history = { replaceState() {} };
+globalThis.CustomEvent = class CustomEvent { constructor(type) { this.type = type; } };
+class FakeAudioContext {
+  constructor() { this.currentTime = 0; this.destination = {}; }
+  createGain() {
+    return {
+      gain: {
+        value: 0,
+        cancelScheduledValues() {},
+        setValueAtTime(value) { this.value = value; },
+        linearRampToValueAtTime(value) { this.value = value; },
+      },
+      connect() { return this; },
+    };
+  }
+  createBufferSource() {
+    return { connect() { return this; }, start() {}, stop() {} };
+  }
+  decodeAudioData() {
+    return Promise.resolve({
+      duration: 1,
+      sampleRate: 48000,
+      numberOfChannels: 1,
+      getChannelData: () => new Float32Array([0.1]),
+    });
+  }
+  resume() { return Promise.resolve(); }
+}
+window.AudioContext = FakeAudioContext;
+const manifest = {
+  title: 'route test',
+  items: [{ id: 'take', label: 'take', tracks: {
+    model: 'model.wav', reference: 'reference.wav',
+  } }],
+  sources: {
+    model: { role: 'model', label: 'model' },
+    reference: { role: 'reference', label: 'reference' },
+  },
+  comparisons: [{ id: 'cmp', scope: 'product', status: 'matched',
+    model_sources: ['model'], oracle_sources: ['reference'] }],
+};
+globalThis.fetch = async (url) => {
+  if (url.endsWith('/manifest.json')) return { ok: true, json: async () => manifest };
+  if (url.startsWith('feedback.json')) return { ok: true, json: async () => ({ entries: [] }) };
+  return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) };
+};
+const state = await import(dir + '/state.js');
+state.state.sets = [{ id: 'set', title: 'set' }];
+const listen = await import(dir + '/listen.js');
+const player = await import(dir + '/player.js');
+await listen.loadSet('set', { set: 'set', take: 'take', ver: 'reference', cmp: 'cmp' });
+console.log(JSON.stringify({
+  active: player.activeKey(),
+  compared: player.comparedAgainst(),
+  lastOracle: state.state.lastOracle,
+  lastByRole: state.state.lastByRole,
+  wantKey: state.state.wantKey,
+  playing: state.state.playing,
+}));
+state.state.sets.push({ id: 'old' }, { id: 'new' });
+let releaseOld;
+let startedOld;
+const oldStarted = new Promise((resolve) => { startedOld = resolve; });
+const oldBytes = new Promise((resolve) => { releaseOld = resolve; });
+const normalFetch = globalThis.fetch;
+globalThis.fetch = async (url) => {
+  if (url.startsWith('s/old/') && url.endsWith('.wav')) {
+    startedOld();
+    return { ok: true, arrayBuffer: () => oldBytes };
+  }
+  return normalFetch(url);
+};
+const oldLoad = listen.loadSet('old', { ver: 'reference', cmp: 'cmp' });
+await oldStarted;
+await listen.loadSet('new', { ver: 'model', cmp: 'cmp' });
+releaseOld(new ArrayBuffer(0));
+await oldLoad;
+console.log(JSON.stringify({ set: state.state.setId, active: player.activeKey() }));
+"""
+    )
+    if got is not None:
+        result = json.loads(got[0])
+        assert result["active"] == "reference", result
+        assert result["compared"]["version"] == "reference", result
+        assert result["lastOracle"] == {"role": "reference", "key": "reference"}, result
+        assert result["lastByRole"]["reference"] == 1, result
+        assert result["wantKey"] == "reference", result
+        assert result["playing"] is False, result
+        assert result["compared"]["chosen"] == "last_selected", result
+        assert json.loads(got[1]) == {"set": "new", "active": "model"}
+
+
 def _render_path_source() -> str:
     text = (JS_DIR / "path.js").read_text()
     return text.split("export function renderPath", 1)[1]

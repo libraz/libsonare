@@ -146,6 +146,8 @@ def _page(
             "build_id": "build-1",
             "asset_id": f"asset-{key}",
             "path": record if path else None,
+            "source_id": "oracle-source" if key == "gm041" else None,
+            "status": "verified" if key == "gm041" else None,
         }
         for key in sources
     }
@@ -208,10 +210,24 @@ def _v2(
 def _with_scratch(fn):
     def wrapped() -> None:
         saved = (heard.FEEDBACK_ROOT, heard.AUDITION_ROOT, heard.BANK_VERSIONS)
-        stubs = ("reference_raw", "capture_of_timbre", "registry_at")
+        stubs = (
+            "reference_raw",
+            "capture_of_timbre",
+            "registry_at",
+            "current_reference_source_id",
+            "current_reference_request_id",
+        )
         saved_stubs = {name: getattr(heard.claims, name) for name in stubs}
         heard.claims.reference_raw = lambda capture: dict(_REFERENCE)
         heard.claims.capture_of_timbre = lambda timbre, prefer="": "violin"
+        heard.claims.current_reference_source_id = lambda capture, timbre, take, *, program=0: (
+            "oracle-source",
+            None,
+        )
+        heard.claims.current_reference_request_id = lambda capture, timbre, take, context: (
+            f"req-{timbre}",
+            None,
+        )
         try:
             fn()
         finally:
@@ -405,9 +421,9 @@ def test_the_versions_put_forward_to_keep_are_counted_apart_from_the_verdicts() 
         )
         voice = heard.collect([], "")[0]
         kept = {p["version"]: p for p in voice["preferred"]}
-        assert [p["version"] for p in voice["preferred"]] == ["hall", "chiff-strong"], voice
+        assert [p["version"] for p in voice["preferred"]] == ["hall"], voice
+        assert "chiff-strong" not in kept, voice
         assert kept["hall"]["n"] == 2 and kept["hall"]["sighted"] == 2, kept
-        assert kept["chiff-strong"]["sighted"] == 0, kept
         assert kept["hall"]["takes"] == ["single-long", "music"], kept
         # The verdict stays a verdict: a preference carries no grade and must
         # not become the voice's headline.
@@ -485,6 +501,17 @@ def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> No
         ids = (ev["comparison_id"], ev["request_id"], ev["asset_id"], ev["build_id"])
         assert ids == ("gm_gs_product", "req-model", "asset-model", "build-1"), ev
         assert ev["bank_registry_digest"] == digest and ev["units"] == {"violin": 2}, ev
+        assert ev["path_complete"] is True, ev
+        assert ev["counterpart"] == {
+            "source": "gm041",
+            "capture": "violin",
+            "capture_digest": heard.claims.capture_digest(_REFERENCE),
+            "request_id": "req-gm041",
+            "source_id": "oracle-source",
+            "asset_id": "asset-gm041",
+            "status": "verified",
+            "render_context": {"program": 40, "bank": 0, "channel": 0, "sends": [0, 0, 0]},
+        }, ev
         assert ev["boundary"]["status"] == "matched", ev
         assert ev["boundary"]["page_status"] == "matched", ev
 
@@ -758,8 +785,134 @@ def test_a_signoff_keeps_the_judged_source_and_its_comparison_counterpart() -> N
         _log(heard.FEEDBACK_ROOT, "p040-violin", [_v2("2026-09-19T10:00:00+00:00", "ok")])
         ev = heard.signoff("p040-violin")["music"]["evidence"]
         assert ev["judged"] == "model", ev
-        assert ev["counterpart"] == {"source": "gm041", "capture": "violin"}, ev
+        assert (
+            ev["counterpart"]["source"] == "gm041" and ev["counterpart"]["capture"] == "violin"
+        ), ev
+        assert ev["counterpart"]["status"] == "verified", ev
         assert ev["set"] == "p040-violin" and ev["set_generation"] == "gen-1", ev
+
+
+@_with_scratch
+def test_an_incomplete_render_path_never_counts_as_current() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        manifest_path = root / "audition" / "p040-violin" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["items"][0]["evidence"]["model"]["path"]["complete"] = False
+        manifest_path.write_text(json.dumps(manifest))
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [_v2("2026-09-25T10:00:00+00:00", "ok")],
+        )
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["freshness"] == "unverified", note
+        assert "incomplete" in note["freshness_reasons"][0], note
+
+
+@_with_scratch
+def test_a_blind_result_is_separate_from_sighted_preferences() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        blind = _note("2026-09-25T10:00:00+00:00", "")
+        blind.update(
+            {
+                "schema_version": 2,
+                "tag": "blind",
+                "conditions": {
+                    "set": "p040-violin",
+                    "blind": True,
+                    "comparison_id": "gm_gs_product",
+                    "picks": {"riff": "model"},
+                    "unseparated": ["single-long"],
+                },
+                "evaluation": {
+                    "comparison_id": "gm_gs_product",
+                    "scope": "product",
+                    "blind": True,
+                },
+                "blind_answers": [
+                    {
+                        "take": "riff",
+                        "candidates": ["model", "gm041"],
+                        "picked": "model",
+                        "abstained": False,
+                        "comparison_id": "gm_gs_product",
+                        "set_generation": "gen-1",
+                    },
+                    {
+                        "take": "single-long",
+                        "candidates": ["model", "gm041"],
+                        "picked": None,
+                        "abstained": True,
+                        "comparison_id": "gm_gs_product",
+                        "set_generation": "gen-1",
+                    },
+                ],
+            }
+        )
+        sighted = _note("2026-09-25T10:01:00+00:00", "", "prefer")
+        sighted["conditions"].update({"version": "model", "take": "single-long"})
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [blind, sighted])
+        voice = heard.collect([], "")[0]
+        assert voice["preferred"] == [
+            {"version": "model", "n": 1, "takes": ["single-long"], "sighted": 1}
+        ], voice
+        assert len(voice["blind_runs"]) == 1, voice
+        run = voice["blind_runs"][0]
+        assert run["comparison_id"] == "gm_gs_product" and run["set_generation"] == "gen-1", run
+        assert run["picked"] == {"model": ["riff"]}, run
+        assert run["abstained"] == ["single-long"], run
+        summary = heard.render([voice], full=False)
+        assert "blind gm_gs_product @gen-1: model 1; could not tell 1" in summary, summary
+
+
+@_with_scratch
+def test_a_legacy_blind_result_reads_conditions_picks_and_unseparated() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        blind = _note("2026-09-25T10:00:00+00:00", "")
+        blind.update(
+            tag="blind",
+            conditions={
+                "set": "p040-violin",
+                "blind": True,
+                "comparison_id": "gm_gs_product",
+                "picks": {"single-long": "model"},
+                "unseparated": ["riff"],
+            },
+        )
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [blind])
+        run = heard.collect([], "")[0]["blind_runs"][0]
+        assert run["comparison_id"] == "gm_gs_product" and run["set_generation"] == "", run
+        assert run["picked"] == {"model": ["single-long"]}, run
+        assert run["abstained"] == ["riff"], run
+
+
+@_with_scratch
+def test_computed_notes_keep_their_raw_entry_when_timestamps_collide() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        digest = _bank(root, {"violin": {"2026-09-11": 1}})
+        _page(root / "audition", "p040-violin", digest)
+        for with_ids in (True, False):
+            entries = [_v2("2026-09-19T10:00:00+00:00", "ok") for _ in range(2)]
+            for index, entry in enumerate(entries):
+                entry["text"] = f"entry-{index}"
+                if with_ids:
+                    entry["id"] = f"id-{index}"
+            notes = heard.digest("p040-violin", entries)["notes"]
+            for note in notes:
+                assert heard._entry_for(entries, note)["text"] == note["text"]
 
 
 @_with_scratch

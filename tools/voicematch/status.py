@@ -654,7 +654,22 @@ def build(catalogue) -> list[dict]:
             "coverage": coverage(v, [c.raw for c in v.captures], gates),
             "agreement": merged_agreement(gates),
             "structure": signoff.axis(claim.structure, shared_gen, patch_version, own_gen),
-            "music": signoff.axis(claim.music, shared_gen, patch_version, own_gen, BANK_VERSIONS),
+            "music": signoff.axis(
+                claim.music,
+                shared_gen,
+                patch_version,
+                own_gen,
+                BANK_VERSIONS,
+                scope=signoff.SCOPE_PRODUCT,
+            ),
+            "instrument": signoff.axis(
+                claim.instrument,
+                shared_gen,
+                patch_version,
+                own_gen,
+                BANK_VERSIONS,
+                scope=signoff.SCOPE_INSTRUMENT,
+            ),
         }
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])

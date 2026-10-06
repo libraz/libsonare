@@ -257,6 +257,17 @@ def _digest(reg: Path) -> str:
 
 def _reference(monkeypatch, raw: dict | None = None) -> None:
     monkeypatch.setattr(signoff, "reference_raw", lambda capture: raw or REFERENCE)
+    monkeypatch.setattr(
+        signoff,
+        "current_reference_source_id",
+        lambda capture, timbre, take, *, program=0: ("oracle-source", None),
+    )
+    monkeypatch.setattr(
+        signoff,
+        "current_reference_request_id",
+        lambda capture, timbre, take, context: ("oracle-request", None),
+        raising=False,
+    )
 
 
 def _evidence(reg: Path, **over) -> dict:
@@ -271,9 +282,19 @@ def _evidence(reg: Path, **over) -> dict:
         "request_id": "req",
         "asset_id": "asset",
         "build_id": "build",
+        "path_complete": True,
         "bank_registry_digest": _digest(reg),
-        "units": {"violin": 2},
-        "counterpart": {"source": "gm041", "capture": "violin"},
+        "units": {"violin": json.loads(reg.read_text())["units"]["violin"]["version"]},
+        "counterpart": {
+            "source": "gm041",
+            "capture": "violin",
+            "capture_digest": signoff.capture_digest(REFERENCE),
+            "request_id": "oracle-request",
+            "source_id": "oracle-source",
+            "asset_id": "oracle-asset",
+            "status": signoff.ORACLE_VERIFIED,
+            "render_context": {"program": 40, "bank": 0, "channel": 0, "sends": [0, 0, 0]},
+        },
         "boundary": {
             "capture": "violin",
             "rig": "none",
@@ -286,6 +307,19 @@ def _evidence(reg: Path, **over) -> dict:
     }
     out.update(over)
     return out
+
+
+def test_a_changed_oracle_stimulus_makes_a_claim_stale(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    monkeypatch.setattr(
+        signoff,
+        "current_reference_request_id",
+        lambda capture, timbre, take, context: ("changed-stimulus-request", None),
+        raising=False,
+    )
+    state, why = _check(reg, _evidence(reg))
+    assert state == signoff.STALE and "request" in " ".join(why), why
 
 
 def _check(reg: Path, evidence: dict, generation: int = 20, scope=signoff.SCOPE_PRODUCT):
@@ -334,6 +368,42 @@ def test_load_carries_a_claims_evidence(tmp_path):
     assert signoff.load(path)["v"].music.evidence["request_id"] == "req"
 
 
+def test_load_roundtrips_an_instrument_music_claim(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    evidence = _evidence(reg, scope=signoff.SCOPE_INSTRUMENT, judged="model-di")
+    path = _write(
+        tmp_path,
+        {"v": {"instrument": {"provenance": {"bank_generation": 20}, "evidence": evidence}}},
+    )
+    record = signoff.load(path)["v"]
+    assert record.music is None
+    assert record.instrument is not None
+    assert record.instrument.evidence["scope"] == signoff.SCOPE_INSTRUMENT
+    axis = signoff.axis(
+        record.instrument,
+        10,
+        2,
+        registry=reg,
+        scope=signoff.SCOPE_INSTRUMENT,
+    )
+    assert axis["state"] == signoff.CURRENT, axis
+
+
+def test_a_claim_without_complete_render_path_is_unverified(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    state, why = _check(reg, _evidence(reg, path_complete=None))
+    assert state == signoff.UNVERIFIED and "path" in " ".join(why), why
+
+
+def test_a_claim_with_an_incomplete_render_path_is_unverified(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    state, why = _check(reg, _evidence(reg, path_complete=False))
+    assert state == signoff.UNVERIFIED and "path" in " ".join(why), why
+
+
 def test_an_evidenced_claim_against_the_current_registry_is_current(tmp_path, monkeypatch):
     reg = _registry(tmp_path)
     _reference(monkeypatch)
@@ -347,10 +417,34 @@ def test_a_claim_missing_evidence_is_unverified(tmp_path, monkeypatch):
     assert state == signoff.UNVERIFIED and "asset_id, build_id" in why[0], why
 
 
+def test_a_malformed_oracle_block_is_unverified_not_an_exception(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    state, why = _check(reg, _evidence(reg, counterpart=[]))
+    assert state == signoff.UNVERIFIED and "counterpart" in " ".join(why), why
+
+
 def test_a_library_without_a_bank_digest_is_unverified(tmp_path, monkeypatch):
     reg = _registry(tmp_path)
     state, why, _ = signoff.bank_state(None, ["violin"], reg)
     assert state == signoff.UNVERIFIED and "no bank registry digest" in why[0], why
+
+
+def test_current_registry_requires_attributable_units(tmp_path):
+    reg = _registry(tmp_path)
+    for units in ([], ["not-a-unit"]):
+        state, why, _ = signoff.bank_state(_digest(reg), units, reg)
+        assert state == signoff.UNVERIFIED
+        assert why
+
+
+def test_current_registry_does_not_hide_conflicting_unit_versions(tmp_path):
+    reg = _registry(tmp_path)
+    state, why, _ = signoff.bank_state(
+        _digest(reg), ["violin"], reg, then_versions={"violin": 1}, then_generation=20
+    )
+    assert state == signoff.UNVERIFIED
+    assert "violin recorded v1 disagrees" in why[0]
 
 
 def test_the_voices_own_unit_moving_makes_it_stale(tmp_path, monkeypatch):
@@ -407,6 +501,110 @@ def test_the_reference_boundary_moving_makes_it_stale(tmp_path, monkeypatch):
     _reference(monkeypatch, dict(REFERENCE, room="present"))
     state, why = _check(reg, _evidence(reg))
     assert state == signoff.STALE and "room none -> present" in " ".join(why), why
+
+
+def test_an_oracle_source_identity_change_makes_a_claim_stale(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    monkeypatch.setattr(
+        signoff,
+        "current_reference_source_id",
+        lambda capture, timbre, take, *, program=0: ("new-source", None),
+    )
+    state, why = _check(reg, _evidence(reg))
+    assert state == signoff.STALE and "source identity changed" in " ".join(why), why
+
+
+def test_an_unresolvable_oracle_source_is_unverified(tmp_path, monkeypatch):
+    reg = _registry(tmp_path)
+    _reference(monkeypatch)
+    monkeypatch.setattr(
+        signoff,
+        "current_reference_source_id",
+        lambda capture, timbre, take, *, program=0: (None, "preset is missing"),
+    )
+    state, why = _check(reg, _evidence(reg))
+    assert state == signoff.UNVERIFIED and "re-resolved" in " ".join(why), why
+
+
+def test_a_module_source_file_edit_changes_the_resolved_oracle_identity(tmp_path, monkeypatch):
+    font = tmp_path / "oracle.sf2"
+    font.write_bytes(b"font-v1")
+    raw = {
+        "source_class": "module",
+        "program": 0,
+        "takes": "piano",
+        "soundfont_dir": str(tmp_path),
+        "sf2": font.name,
+        "timbres": [{"id": "t0", "preset": "Piano"}],
+    }
+    monkeypatch.setattr(signoff, "reference_raw", lambda capture: raw)
+    first, why = signoff.current_reference_source_id("oracle", "t0", "single-c4")
+    assert first and why is None
+    font.write_bytes(b"font-v2-with-a-different-length")
+    second, why = signoff.current_reference_source_id("oracle", "t0", "single-c4")
+    assert second and why is None and second != first
+
+
+def test_reference_request_identity_tracks_the_actual_phrase(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    import phrases
+
+    font = tmp_path / "oracle.sf2"
+    font.write_bytes(b"unchanged-font")
+    raw = {
+        "source_class": "module",
+        "program": 0,
+        "takes": "piano",
+        "soundfont_dir": str(tmp_path),
+        "sf2": font.name,
+        "timbres": [{"id": "t0", "preset": "Piano"}],
+    }
+    monkeypatch.setattr(signoff, "reference_raw", lambda capture: raw)
+    context = {"program": 0, "bank": 0, "channel": 0, "sends": [0, 0, 0]}
+    first, why = signoff.current_reference_request_id("oracle", "t0", "single-c4", context)
+    source, source_why = signoff.current_reference_source_id("oracle", "t0", "single-c4")
+    assert first and why is None and source and source_why is None
+    build = phrases.build_takes
+
+    def changed(*args, **kwargs):
+        takes = build(*args, **kwargs)
+        for take in takes:
+            if take.id == "single-c4":
+                take.notes = [replace(note, velocity=note.velocity - 1) for note in take.notes]
+        return takes
+
+    monkeypatch.setattr(phrases, "build_takes", changed)
+    second, why = signoff.current_reference_request_id("oracle", "t0", "single-c4", context)
+    assert second and why is None and second != first
+    assert signoff.current_reference_source_id("oracle", "t0", "single-c4") == (source, None)
+
+
+def test_an_audio_unit_preset_edit_changes_the_resolved_oracle_identity(tmp_path, monkeypatch):
+    preset = tmp_path / "oracle.vstpreset"
+    preset.write_bytes(b"preset-v1")
+    raw = {
+        "source_class": "library",
+        "program": 40,
+        "takes": "sustained",
+        "plugin": "aumu:test:test",
+        "dry": False,
+        "keyswitch_lead_ms": 0,
+        "settle_ms": 0,
+        "realtime": False,
+        "warmup": False,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "sample_rate": 48000,
+        "timbres": [{"id": "gm041", "preset": str(preset)}],
+    }
+    monkeypatch.setattr(signoff, "reference_raw", lambda capture: raw)
+    first, why = signoff.current_reference_source_id("oracle", "gm041", "single-long")
+    assert first and why is None
+    preset.write_bytes(b"preset-v2-with-a-different-length")
+    second, why = signoff.current_reference_source_id("oracle", "gm041", "single-long")
+    assert second and why is None and second != first
 
 
 def test_a_comparison_the_page_did_not_find_signable_is_unverified(tmp_path, monkeypatch):

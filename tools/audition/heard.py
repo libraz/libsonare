@@ -294,6 +294,12 @@ def freshness(
             ["no render-path record: the library was not a tuning build"],
             {},
         )
+    if record.get("complete") is not True:
+        return (
+            claims.UNVERIFIED,
+            ["render-path record is incomplete: the full render was not witnessed"],
+            {},
+        )
     return claims.bank_state(record.get("bank_registry_digest"), units, BANK_VERSIONS)
 
 
@@ -474,7 +480,7 @@ def digest(set_id: str, entries: list[dict]) -> dict:
     roles = roles_of(set_id)
     facts = unit_facts()
     notes = []
-    for entry in entries:
+    for ordinal, entry in enumerate(entries):
         at = str(entry.get("at") or "")
         units = note_units(entry, voice)
         # The latest of them: a fill strikes six toms and a note about it is
@@ -485,6 +491,8 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         state, reasons, bank = freshness(entry, manifest, evaluation, units, moved)
         notes.append(
             {
+                "id": entry.get("id"),
+                "log_ordinal": ordinal,
                 "at": at,
                 "grade": str(entry.get("grade") or ""),
                 "tag": str(entry.get("tag") or ""),
@@ -523,6 +531,7 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         # these should ship — and a list of notes does not answer it however
         # carefully each one is read.
         "preferred": preferred(entries),
+        "blind_runs": blind_runs(entries),
         # A kit has no patch unit of its own — the per-note units on each note
         # below are what it is versioned by — so this is empty for one, and the
         # header says so rather than reporting a voice-wide generation a kit
@@ -558,6 +567,11 @@ def preferred(entries: list[dict]) -> list[dict]:
         if entry.get("tag") != "prefer":
             continue
         cond = entry.get("conditions") or {}
+        # A legacy page used the preference tag for a blind tally. A blind
+        # answer is evidence about what the ear separated, not a sighted act
+        # of choosing which version to ship.
+        if cond.get("blind") or entry.get("blind_answers"):
+            continue
         version = cond.get("version")
         if not version:
             continue
@@ -569,6 +583,122 @@ def preferred(entries: list[dict]) -> list[dict]:
         if take and take not in seen["takes"]:
             seen["takes"].append(take)
     return sorted(tally.values(), key=lambda v: (-v["n"], v["version"]))
+
+
+def _blind_answers(entry: dict) -> list[dict]:
+    """Read a blind result in the current format, with the old tally fallback.
+
+    The page now sends one answer per take in ``blind_answers``. Before that
+    field existed, the log carried only ``conditions.picks`` and
+    ``conditions.unseparated``. Both are results, but neither belongs in the
+    sighted preference tally.
+    """
+    cond = entry.get("conditions") or {}
+    evidence = entry.get("evidence") or {}
+    evaluation = entry.get("evaluation") or {}
+    raw = entry.get("blind_answers")
+    answers: list[dict] = []
+    if isinstance(raw, list):
+        for answer in raw:
+            if not isinstance(answer, dict):
+                continue
+            take = answer.get("take")
+            picked = answer.get("picked")
+            abstained = bool(answer.get("abstained"))
+            if not take or (not picked and not abstained):
+                continue
+            answers.append(
+                {
+                    "take": str(take),
+                    "picked": str(picked) if picked else None,
+                    "abstained": abstained,
+                    "comparison_id": str(
+                        answer.get("comparison_id")
+                        or cond.get("comparison_id")
+                        or evaluation.get("comparison_id")
+                        or ""
+                    ),
+                    "set_generation": str(
+                        answer.get("set_generation")
+                        or evidence.get("set_generation")
+                        or cond.get("set_generation")
+                        or ""
+                    ),
+                }
+            )
+    # A partially migrated log can have an empty or malformed answer list while
+    # retaining the old tally. Fall back only when no usable current answers
+    # survived, so a current run is never counted twice.
+    if answers:
+        return answers
+    picks = cond.get("picks")
+    if isinstance(picks, dict):
+        for take, picked in picks.items():
+            if not take or not picked:
+                continue
+            answers.append(
+                {
+                    "take": str(take),
+                    "picked": str(picked),
+                    "abstained": False,
+                    "comparison_id": str(
+                        cond.get("comparison_id") or evaluation.get("comparison_id") or ""
+                    ),
+                    "set_generation": str(
+                        evidence.get("set_generation") or cond.get("set_generation") or ""
+                    ),
+                }
+            )
+    unseparated = cond.get("unseparated")
+    if isinstance(unseparated, (list, tuple, set)):
+        for take in unseparated:
+            if not take:
+                continue
+            answers.append(
+                {
+                    "take": str(take),
+                    "picked": None,
+                    "abstained": True,
+                    "comparison_id": str(
+                        cond.get("comparison_id") or evaluation.get("comparison_id") or ""
+                    ),
+                    "set_generation": str(
+                        evidence.get("set_generation") or cond.get("set_generation") or ""
+                    ),
+                }
+            )
+    return answers
+
+
+def blind_runs(entries: list[dict]) -> list[dict]:
+    """Group blind results by comparison and set generation.
+
+    Picks and abstentions stay in their own collections. A source picked in a
+    blind run is not a preference made with its label visible, and an abstained
+    take must not disappear merely because it has no source to tally.
+    """
+    groups: dict[tuple[str, str], dict] = {}
+    for entry in entries:
+        answers = _blind_answers(entry)
+        if not answers:
+            continue
+        for answer in answers:
+            key = (answer["comparison_id"], answer["set_generation"])
+            run = groups.setdefault(
+                key,
+                {
+                    "comparison_id": answer["comparison_id"],
+                    "set_generation": answer["set_generation"],
+                    "picked": {},
+                    "abstained": [],
+                },
+            )
+            take = answer["take"]
+            if answer["abstained"]:
+                run["abstained"].append(take)
+            elif answer["picked"]:
+                run["picked"].setdefault(answer["picked"], []).append(take)
+    return [groups[key] for key in sorted(groups)]
 
 
 def _worst(notes: list[dict]) -> str:
@@ -636,6 +766,18 @@ def render(voices: list[dict], full: bool) -> str:
                 for p in voice["preferred"]
             )
             lines.append(f"  put forward to keep:  {kept}")
+        for run in voice.get("blind_runs", []):
+            picked = "   ".join(
+                f"{source} {len(takes)}" for source, takes in sorted(run["picked"].items())
+            )
+            abstained = (
+                f"could not tell {len(run['abstained'])}"
+                if run["abstained"]
+                else "could not tell 0"
+            )
+            comparison = run["comparison_id"] or "legacy"
+            generation = run["set_generation"] or "legacy"
+            lines.append(f"  blind {comparison} @{generation}: {picked or 'picked 0'}; {abstained}")
         shown = voice["notes"] if full else voice["notes"][:4]
         for note in shown:
             mark = (
@@ -664,15 +806,13 @@ def render(voices: list[dict], full: bool) -> str:
 def _entry_for(entries: list[dict], note: dict) -> dict:
     """The raw log line a computed note in `digest`'s output came from.
 
-    `at` is recorded to the second, so two notes in the same second with the
-    same grade are indistinguishable here; the first in log order wins.
+    Server ids identify new entries; log ordinals identify legacy entries.
     """
-    for entry in entries:
-        if (
-            str(entry.get("at") or "") == note["at"]
-            and str(entry.get("grade") or "") == note["grade"]
-        ):
-            return entry
+    if note.get("id"):
+        return next((entry for entry in entries if entry.get("id") == note["id"]), {})
+    ordinal = note.get("log_ordinal")
+    if isinstance(ordinal, int) and 0 <= ordinal < len(entries):
+        return entries[ordinal]
     return {}
 
 
@@ -728,6 +868,21 @@ def _claim(set_id: str, manifest: dict, note: dict, entry: dict) -> tuple[dict |
     evidence = entry.get("evidence") or {}
     item = next(i for i in manifest["items"] if i.get("id") == evidence.get("take"))
     held = item["evidence"][note["judged"]]
+    path = held.get("path") if isinstance(held, dict) else None
+    if not isinstance(path, dict) or path.get("complete") is not True:
+        return None, [f"{cid}: render-path record is incomplete"]
+    oracle_held = item["evidence"].get(note["oracle"])
+    if not isinstance(oracle_held, dict):
+        return None, [f"{cid}: oracle {note['oracle']} has no render evidence"]
+    raw = claims.reference_raw(capture)
+    if raw is None:
+        return None, [f"{cid}: reference capture {capture} is not in this tree"]
+    if oracle_held.get("status") != claims.ORACLE_VERIFIED:
+        return None, [
+            f"{cid}: oracle {note['oracle']} is {oracle_held.get('status') or 'unverified'}"
+        ]
+    if not all(oracle_held.get(k) for k in ("request_id", "source_id", "asset_id")):
+        return None, [f"{cid}: oracle {note['oracle']} has incomplete source identity"]
     bank = note["bank"]
     units = bank.get("units") or {}
     facts = unit_facts()
@@ -749,9 +904,24 @@ def _claim(set_id: str, manifest: dict, note: dict, entry: dict) -> tuple[dict |
         "request_id": held.get("request_id"),
         "asset_id": held.get("asset_id"),
         "build_id": held.get("build_id"),
-        "bank_registry_digest": (held.get("path") or {}).get("bank_registry_digest"),
+        "path_complete": path.get("complete"),
+        "bank_registry_digest": path.get("bank_registry_digest"),
         "units": units,
-        "counterpart": {"source": note["oracle"], "capture": capture},
+        "counterpart": {
+            "source": note["oracle"],
+            "capture": capture,
+            "capture_digest": claims.capture_digest(raw),
+            "request_id": oracle_held.get("request_id"),
+            "source_id": oracle_held.get("source_id"),
+            "asset_id": oracle_held.get("asset_id"),
+            "status": oracle_held.get("status"),
+            "render_context": {
+                "program": program,
+                "bank": (item.get("meta") or {}).get("bank", raw.get("bank", 0)),
+                "channel": (item.get("meta") or {}).get("channel", held.get("channel", 0)),
+                "sends": (item["evidence"].get("model") or {}).get("sends", [0, 0, 0]),
+            },
+        },
         "boundary": boundary,
         "blind": note["blind"],
         "heard": note["at"],
