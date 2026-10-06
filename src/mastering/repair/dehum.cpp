@@ -184,9 +184,10 @@ struct FundamentalSearch {
   std::array<double, kFundamentalSearchSteps + 1> energy = {};
 };
 
-FundamentalSearch search_fundamental(const std::vector<float>& samples, size_t begin, size_t end,
-                                     int sample_rate, const DehumConfig& config,
-                                     float previous_hz) {
+FundamentalSearch search_fundamental(
+    const std::vector<float>& samples, size_t begin, size_t end, int sample_rate,
+    const DehumConfig& config, float previous_hz,
+    const std::vector<const std::vector<float>*>* channels = nullptr) {
   // Anchor the search on the configured fundamental, the same window the PLL
   // clamps its applied frequency to. Centring on the previous estimate alone
   // lets the target walk one search range per frame, so material without a
@@ -207,7 +208,13 @@ FundamentalSearch search_fundamental(const std::vector<float>& samples, size_t b
     const float hz = search.window_low + (search.window_high - search.window_low) *
                                              static_cast<float>(step) /
                                              static_cast<float>(kFundamentalSearchSteps);
-    const double energy = projected_energy(samples, begin, end, hz, sample_rate);
+    double energy = projected_energy(samples, begin, end, hz, sample_rate);
+    if (channels != nullptr) {
+      // The primary vector is also the first entry in the stereo list.
+      for (const std::vector<float>* channel : *channels) {
+        if (channel != &samples) energy += projected_energy(*channel, begin, end, hz, sample_rate);
+      }
+    }
     search.energy[static_cast<size_t>(step)] = energy;
     if (energy > best_energy) {
       best_energy = energy;
@@ -220,9 +227,10 @@ FundamentalSearch search_fundamental(const std::vector<float>& samples, size_t b
 }
 
 float estimate_fundamental(const std::vector<float>& samples, size_t begin, size_t end,
-                           int sample_rate, const DehumConfig& config, float previous_hz) {
+                           int sample_rate, const DehumConfig& config, float previous_hz,
+                           const std::vector<const std::vector<float>*>* channels = nullptr) {
   const FundamentalSearch search =
-      search_fundamental(samples, begin, end, sample_rate, config, previous_hz);
+      search_fundamental(samples, begin, end, sample_rate, config, previous_hz, channels);
   if (search.candidates == 0) return search.best_hz;
   // Smooth from the anchored estimate rather than the raw previous value, so a
   // frame cannot hand the next one a target the PLL is unable to follow.
@@ -360,13 +368,37 @@ PassTrace run_fixed(std::vector<float>& samples, int sample_rate, const DehumCon
   return run_fixed_notch(samples, sample_rate, config);
 }
 
+size_t strongest_tracking_channel(const std::vector<const std::vector<float>*>& channels,
+                                  int sample_rate, const DehumConfig& config) {
+  if (channels.empty()) return 0;
+  const size_t frame = detection_frame(channels.front()->size(), sample_rate);
+  size_t strongest = 0;
+  double strongest_energy = -1.0;
+  for (size_t index = 0; index < channels.size(); ++index) {
+    double channel_energy = 0.0;
+    for (size_t begin = 0; begin < channels[index]->size(); begin += frame) {
+      const size_t end = std::min(channels[index]->size(), begin + frame);
+      const FundamentalSearch search = search_fundamental(*channels[index], begin, end, sample_rate,
+                                                          config, config.fundamental_hz);
+      channel_energy += std::max(0.0, search.best_energy);
+    }
+    if (channel_energy > strongest_energy) {
+      strongest_energy = channel_energy;
+      strongest = index;
+    }
+  }
+  return strongest;
+}
+
 /// Runs the tracking cascade over every channel from one shared frequency.
 /// @p tracking drives the search and the PLL; for a single channel it is that
 /// channel's own unfiltered samples, which is what makes the mono result
-/// identical whichever entrypoint produced it.
+/// identical whichever entrypoint produced it. When @p search_channels is set,
+/// it points to immutable original channels used for the summed stereo search.
 PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
                        const std::vector<float>& tracking, int sample_rate,
-                       const DehumConfig& config) {
+                       const DehumConfig& config,
+                       const std::vector<const std::vector<float>*>* search_channels = nullptr) {
   const size_t channel_count = channels.size();
   const size_t harmonic_count = static_cast<size_t>(config.harmonics);
   const bool subtracting = config.mode == DehumMode::Subtract;
@@ -410,8 +442,13 @@ PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
   trace.applied_fundamental_hz = config.fundamental_hz;
   for (size_t begin = 0; begin < tracking.size(); begin += static_cast<size_t>(config.frame_size)) {
     const size_t end = std::min(tracking.size(), begin + static_cast<size_t>(config.frame_size));
-    target_fundamental =
-        estimate_fundamental(tracking, begin, end, sample_rate, config, target_fundamental);
+    if (search_channels == nullptr) {
+      target_fundamental =
+          estimate_fundamental(tracking, begin, end, sample_rate, config, target_fundamental);
+    } else {
+      target_fundamental = estimate_fundamental(*search_channels->front(), begin, end, sample_rate,
+                                                config, target_fundamental, search_channels);
+    }
     for (size_t i = begin; i < end; ++i) {
       fundamental = tracker.process(tracking[i], target_fundamental, sample_rate, config);
       trace.fundamental_drift_hz =
@@ -595,10 +632,14 @@ DehumStereoResult dehum_stereo(const Audio& left, const Audio& right, const Dehu
   PassTrace left_trace;
   PassTrace right_trace;
   if (config.adaptive) {
-    std::vector<float> tracking(size, 0.0f);
-    for (size_t i = 0; i < size; ++i) tracking[i] = 0.5f * (left_samples[i] + right_samples[i]);
+    const std::vector<float> original_left = left_samples;
+    const std::vector<float> original_right = right_samples;
+    const std::vector<const std::vector<float>*> search_channels = {&original_left,
+                                                                    &original_right};
+    const size_t reference = strongest_tracking_channel(search_channels, sample_rate, config);
+    const std::vector<float> tracking = *search_channels[reference];
     const std::vector<std::vector<float>*> channels = {&left_samples, &right_samples};
-    left_trace = run_adaptive(channels, tracking, sample_rate, validated.get());
+    left_trace = run_adaptive(channels, tracking, sample_rate, validated.get(), &search_channels);
     right_trace = left_trace;
   } else {
     left_trace = run_fixed(left_samples, sample_rate, validated.get());

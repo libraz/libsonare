@@ -119,6 +119,18 @@ std::vector<float> hum60_fixture() {
   return quantize(bed);
 }
 
+constexpr size_t kTrackingHumFrames = 4 * kSampleRate;
+constexpr double kTrackingHumHz = 51.5;
+
+std::vector<float> tone_fixture(size_t frames, double frequency, double amplitude) {
+  std::vector<float> out(frames);
+  for (size_t i = 0; i < frames; ++i) {
+    out[i] = static_cast<float>(amplitude * std::sin(constants::kTwoPiD * frequency *
+                                                     static_cast<double>(i) / kSampleRate));
+  }
+  return out;
+}
+
 /// Every hum harmonic and the 440 Hz bed complete a whole number of cycles in a
 /// one-second frame, so the projection basis is orthogonal to the bed and the
 /// only residue left is the 24-bit grid: -144 dBFS against the weakest planted
@@ -288,6 +300,13 @@ const DehumConfig kHum50Adaptive{50.0f, 4, 20.0f, true, 2.0f, 0.25f, 2048, 0.01f
 const DecrackleConfig kMedian{0.25f, DecrackleMode::Median, 4};
 const DecrackleConfig kWavelet{0.08f, DecrackleMode::WaveletShrinkage, 4};
 const TrimSilenceConfig kTrim{0.001f, 0, TrimSilenceMode::Peak, -60.0f, 400.0f};
+
+DehumConfig tracking_notch_config() {
+  DehumConfig config = kHum50Adaptive;
+  config.harmonics = 1;
+  config.mode = DehumMode::Notch;
+  return config;
+}
 
 }  // namespace
 
@@ -824,6 +843,16 @@ TEST_CASE("Stereo entrypoints with identical channels equal the mono path bit fo
             linked.right_report.applied_fundamental_hz);
   }
 
+  const std::vector<float> tracked_hum = tone_fixture(kTrackingHumFrames, kTrackingHumHz, 0.1);
+  const Audio tracked_audio = view(tracked_hum);
+  const DehumStereoResult tracked_linked =
+      dehum_stereo(tracked_audio, tracked_audio, tracking_notch_config());
+  const uint32_t tracked_mono = digest(dehum(tracked_audio, tracking_notch_config()));
+  REQUIRE(digest(tracked_linked.left) == tracked_mono);
+  REQUIRE(digest(tracked_linked.right) == tracked_mono);
+  REQUIRE(tracked_linked.left_report.applied_fundamental_hz ==
+          tracked_linked.right_report.applied_fundamental_hz);
+
   const std::vector<float> crackle = crackle_fixture(0.0);
   const Audio crackle_audio = view(crackle);
   for (const DecrackleConfig& config : {kMedian, kWavelet}) {
@@ -848,6 +877,99 @@ TEST_CASE("Stereo entrypoints with identical channels equal the mono path bit fo
   REQUIRE_THROWS(dehum_stereo(hum_audio, view(shorter_hum), kHum50Fixed));
   REQUIRE_THROWS(decrackle_stereo(crackle_audio, view(shorter_crackle), kMedian));
   REQUIRE_THROWS(trim_silence_stereo(gated_audio, view(shorter_gated), kTrim));
+}
+
+TEST_CASE("Adaptive stereo dehum tracks hum carried by either channel", "[repair][stereo][hum]") {
+  const DehumConfig config = tracking_notch_config();
+  const std::vector<float> hum = tone_fixture(kTrackingHumFrames, kTrackingHumHz, 0.1);
+  const std::vector<float> silence(kTrackingHumFrames, 0.0f);
+
+  for (const bool hum_on_left : {true, false}) {
+    const Audio left = view(hum_on_left ? hum : silence);
+    const Audio right = view(hum_on_left ? silence : hum);
+    const DehumStereoResult result = dehum_stereo(left, right, config);
+    const Audio& cleaned = hum_on_left ? result.left : result.right;
+
+    CAPTURE(hum_on_left, result.left_report.applied_fundamental_hz,
+            result.right_report.applied_fundamental_hz,
+            tone_dbfs(to_vector(cleaned), kTrackingHumHz));
+    REQUIRE_THAT(result.left_report.applied_fundamental_hz,
+                 WithinAbs(kTrackingHumHz, kSettledFundamentalToleranceHz));
+    REQUIRE(result.left_report.applied_fundamental_hz ==
+            result.right_report.applied_fundamental_hz);
+    REQUIRE(tone_dbfs(to_vector(cleaned), kTrackingHumHz) < -45.0);
+  }
+}
+
+TEST_CASE("Adaptive stereo dehum chooses a reference from the whole pass",
+          "[repair][stereo][hum]") {
+  DehumConfig config = tracking_notch_config();
+  config.pll_bandwidth = 0.1f;
+  constexpr size_t kDelayedFrames = 3 * kSampleRate + kSampleRate / 2;
+  constexpr size_t kDelayedStart = 3 * kSampleRate;
+  const std::vector<float> silence(kDelayedFrames, 0.0f);
+  const std::vector<float> hum = tone_fixture(kDelayedFrames, kTrackingHumHz, 0.1);
+  std::vector<float> delayed_hum = hum;
+  std::fill(delayed_hum.begin(), delayed_hum.begin() + kDelayedStart, 0.0f);
+
+  const DehumStereoResult result = dehum_stereo(view(silence), view(delayed_hum), config);
+  const std::vector<float> original_tail(delayed_hum.begin() + kDelayedStart, delayed_hum.end());
+  const std::vector<float> cleaned_tail(result.right.data() + kDelayedStart,
+                                        result.right.data() + result.right.size());
+  const double untreated_tail_level = tone_dbfs(original_tail, kTrackingHumHz);
+  const double tail_level = tone_dbfs(cleaned_tail, kTrackingHumHz);
+  CAPTURE(result.left_report.applied_fundamental_hz, result.right_report.applied_fundamental_hz,
+          untreated_tail_level, tail_level);
+
+  // Only the final half-second carries hum, so the loop has less than one
+  // second to settle. The lower bound still distinguishes a tracker that was
+  // driven by the silent left channel from one that followed the right.
+  REQUIRE(result.left_report.applied_fundamental_hz > kTrackingHumHz - 0.5);
+  REQUIRE(result.left_report.applied_fundamental_hz == result.right_report.applied_fundamental_hz);
+  REQUIRE(tail_level < untreated_tail_level - 3.0);
+}
+
+TEST_CASE("Adaptive stereo dehum keeps antiphase hum visible to the tracker",
+          "[repair][stereo][hum]") {
+  const DehumConfig config = tracking_notch_config();
+  const std::vector<float> left = tone_fixture(kTrackingHumFrames, kTrackingHumHz, 0.1);
+  std::vector<float> right = left;
+  for (float& sample : right) sample = -sample;
+
+  const DehumStereoResult result = dehum_stereo(view(left), view(right), config);
+  const std::vector<float> cleaned_left = to_vector(result.left);
+  const std::vector<float> cleaned_right = to_vector(result.right);
+  const double left_level = tone_dbfs(cleaned_left, kTrackingHumHz);
+  const double right_level = tone_dbfs(cleaned_right, kTrackingHumHz);
+  CAPTURE(result.left_report.applied_fundamental_hz, result.right_report.applied_fundamental_hz,
+          left_level, right_level);
+
+  REQUIRE_THAT(result.left_report.applied_fundamental_hz,
+               WithinAbs(kTrackingHumHz, kSettledFundamentalToleranceHz));
+  REQUIRE(result.left_report.applied_fundamental_hz == result.right_report.applied_fundamental_hz);
+  REQUIRE(left_level < -45.0);
+  REQUIRE(right_level < -45.0);
+}
+
+TEST_CASE("Adaptive stereo subtraction shares the selected phase reference",
+          "[repair][stereo][hum]") {
+  DehumConfig config = tracking_notch_config();
+  config.mode = DehumMode::Subtract;
+  const std::vector<float> left = tone_fixture(kTrackingHumFrames, kTrackingHumHz, 0.1);
+  std::vector<float> right = left;
+  for (float& sample : right) sample = -sample;
+
+  const DehumStereoResult result = dehum_stereo(view(left), view(right), config);
+  const double left_level = tone_dbfs(to_vector(result.left), kTrackingHumHz);
+  const double right_level = tone_dbfs(to_vector(result.right), kTrackingHumHz);
+  CAPTURE(result.left_report.applied_fundamental_hz, result.right_report.applied_fundamental_hz,
+          left_level, right_level);
+
+  REQUIRE_THAT(result.left_report.applied_fundamental_hz,
+               WithinAbs(kTrackingHumHz, kSettledFundamentalToleranceHz));
+  REQUIRE(result.left_report.applied_fundamental_hz == result.right_report.applied_fundamental_hz);
+  REQUIRE(left_level < -45.0);
+  REQUIRE(right_level < -45.0);
 }
 
 TEST_CASE("A shared tracked fundamental holds a hum pair on one frequency",

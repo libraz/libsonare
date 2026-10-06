@@ -95,16 +95,11 @@ struct DehumStereoResult {
 };
 
 /// @brief Dehums a stereo pair on one shared tracked fundamental.
-/// @details Mains hum is one physical source, so the two channels carry the same
-///   frequency, while tracking them apart lets each channel's programme material
-///   pull its own search and puts the notches at frequencies the hum never
-///   differed by. The tracker therefore reads the channel mean and both cascades
-///   follow it. On material where both channels can be tracked the loop lands
-///   them together anyway, so sharing the frequency is what makes that a
-///   guarantee rather than an outcome, and it is what still holds when one
-///   channel's hum is too masked to track. Only the frequency is shared:
-///   each channel keeps its own filter state, so neither channel's transient
-///   rings through the other.
+/// @details The adaptive search sums each channel's projected energy, so phase
+///   cancellation between channels cannot hide the hum. One original channel
+///   with the strongest hum-band projection drives the shared PLL for the whole
+///   pass. Only the frequency is shared: each channel keeps its own filter
+///   state, so neither channel's transient rings through the other.
 DehumStereoResult dehum_stereo(const Audio& left, const Audio& right,
                                const DehumConfig& config = {});
 
