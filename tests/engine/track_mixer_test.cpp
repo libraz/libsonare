@@ -742,6 +742,108 @@ TEST_CASE("TrackMixerRuntime keeps unknown clip tracks on the main bus", "[engin
   REQUIRE(out_l[0] < 1.51f);
 }
 
+TEST_CASE("TrackMixerRuntime aligns an unknown clip with a latent lane",
+          "[engine][track_mixer][pdc]") {
+  constexpr int kFrames = 32;
+  constexpr int kLatency = 8;
+  std::array<float, kFrames> lane_impulse{};
+  std::array<float, kFrames> direct_impulse{};
+  lane_impulse[0] = 1.0f;
+  direct_impulse[0] = 1.0f;
+  const float* lane_source[] = {lane_impulse.data()};
+  const float* direct_source[] = {direct_impulse.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips({clip_for_track(1, 10, lane_source, 1, kFrames),
+                    clip_for_track(2, 99, direct_source, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip latent;
+  latent.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
+  REQUIRE(mixer.bind_track_strip(10, &latent));
+  mixer.settle_smoothers();
+
+  std::array<float, kFrames> output{};
+  float* output_channels[] = {output.data()};
+  REQUIRE(mixer.render_clips(player, output_channels, 1, kFrames, 0));
+
+  // The unmatched clip is a direct master contribution, so it must traverse
+  // the same common source timebase as the latent lane before both are summed.
+  for (int i = 0; i < kLatency; ++i) {
+    CHECK(output[static_cast<size_t>(i)] == Catch::Approx(0.0f).margin(1.0e-6f));
+  }
+  CHECK(output[static_cast<size_t>(kLatency)] == Catch::Approx(2.0f).margin(1.0e-4f));
+}
+
+TEST_CASE("TrackMixerRuntime aligns an unknown staged source with a latent lane",
+          "[engine][track_mixer][pdc]") {
+  constexpr int kFrames = 32;
+  constexpr int kLatency = 8;
+  std::array<float, kFrames> lane_impulse{};
+  std::array<float, kFrames> direct_impulse{};
+  lane_impulse[0] = 1.0f;
+  direct_impulse[0] = 1.0f;
+  float* lane_source[] = {lane_impulse.data()};
+  float* direct_source[] = {direct_impulse.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip latent;
+  latent.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
+  REQUIRE(mixer.bind_track_strip(10, &latent));
+  mixer.settle_smoothers();
+
+  std::array<float, kFrames> output{};
+  float* output_channels[] = {output.data()};
+  REQUIRE(mixer.begin_source_mix(1, kFrames));
+  bool routed = false;
+  REQUIRE(mixer.mix_source_into_lane(10, lane_source, output_channels, 1, kFrames, routed));
+  REQUIRE(routed);
+  routed = true;
+  REQUIRE(mixer.mix_source_into_lane(99, direct_source, output_channels, 1, kFrames, routed));
+  CHECK_FALSE(routed);
+  mixer.finish_source_mix(output_channels, 1, kFrames);
+
+  for (int i = 0; i < kLatency; ++i) {
+    CHECK(output[static_cast<size_t>(i)] == Catch::Approx(0.0f).margin(1.0e-6f));
+  }
+  CHECK(output[static_cast<size_t>(kLatency)] == Catch::Approx(2.0f).margin(1.0e-4f));
+}
+
+TEST_CASE("TrackMixerRuntime clears direct scratch between convenience source blocks",
+          "[engine][track_mixer][pdc]") {
+  constexpr int kBlock = 16;
+  constexpr int kLatency = 8;
+  std::array<float, kBlock> impulse{};
+  impulse[0] = 1.0f;
+  std::array<float, kBlock> silence{};
+  float* impulse_source[] = {impulse.data()};
+  float* silence_source[] = {silence.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip latent;
+  latent.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
+  REQUIRE(mixer.bind_track_strip(10, &latent));
+  mixer.settle_smoothers();
+
+  std::array<float, kBlock> output{};
+  float* output_channels[] = {output.data()};
+  REQUIRE(mixer.mix_source(99, impulse_source, output_channels, 1, kBlock));
+  CHECK(output[static_cast<size_t>(kLatency)] == Catch::Approx(1.0f).margin(1.0e-4f));
+
+  output.fill(0.5f);
+  REQUIRE(mixer.mix_source(99, silence_source, output_channels, 1, kBlock));
+  for (float sample : output) {
+    CHECK(sample == Catch::Approx(0.5f).margin(1.0e-6f));
+  }
+}
+
 TEST_CASE("TrackMixerRuntime validates lane snapshots", "[engine][track_mixer]") {
   sonare::engine::TrackMixerRuntime mixer;
   mixer.prepare(48000.0, 4);

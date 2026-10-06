@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,9 @@ class BusProcessor : public rt::ProcessorBase {
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;
+  /// Latency from the bus input to the detector tap of an insert. Inserts are
+  /// ordered exactly as the runtime chain; an out-of-range index has no value.
+  std::optional<int> insert_input_latency_samples_q8(unsigned int insert_index) const noexcept;
 
   /// Appends an insert to the chain. When @p stereo_pair_only is true the insert
   /// is a StereoPairOnly processor (catalog channelPolicy): on a surround bus

@@ -10,6 +10,10 @@
 #endif
 #include "mastering/api/insert_factory.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/multiband/multiband_compressor.h"
+#include "mastering/multiband/multiband_expander.h"
+#include "mastering/multiband/multiband_limiter.h"
+#include "mastering/spectral/spectral_shaper.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip_eq.h"
 #include "mixing_test_helpers.h"
@@ -68,6 +72,50 @@ class FixedLatencyStereoProcessor final : public sonare::rt::ProcessorBase {
   int latency_ = 0;
   std::array<sonare::rt::DelayLine, 2> delays_{};
 };
+
+template <typename Processor, typename Reduction>
+void require_channel_strip_insert_reduction(std::unique_ptr<Processor> insert,
+                                            std::vector<float> signal, Reduction reduction) {
+  Processor* raw = insert.get();
+  sonare::mixing::ChannelStripConfig strip_config;
+  strip_config.enable_metering = false;
+  sonare::mixing::ChannelStrip strip(strip_config);
+  strip.add_pre_insert(std::move(insert));
+  strip.prepare(48000.0, static_cast<int>(signal.size()));
+
+  float* channels[] = {signal.data()};
+  strip.process(channels, 1, static_cast<int>(signal.size()));
+
+  const float detailed_reduction = reduction(*raw);
+  REQUIRE(detailed_reduction < -0.01f);
+  std::array<float, 1> per_insert{};
+  REQUIRE(strip.insert_gain_reduction_db(per_insert.data(), per_insert.size()) == 1);
+  REQUIRE_THAT(per_insert[0], WithinAbs(detailed_reduction, 1.0e-5f));
+  REQUIRE_THAT(strip.last_gain_reduction_db(), WithinAbs(detailed_reduction, 1.0e-5f));
+}
+
+std::vector<float> sine_signal(float frequency_hz, float amplitude, int samples) {
+  std::vector<float> signal(static_cast<size_t>(samples));
+  for (int i = 0; i < samples; ++i) {
+    signal[static_cast<size_t>(i)] =
+        amplitude * std::sin(sonare::constants::kTwoPi * frequency_hz * i / 48000.0f);
+  }
+  return signal;
+}
+
+void add_signal(std::vector<float>& destination, const std::vector<float>& source) {
+  REQUIRE(destination.size() == source.size());
+  for (size_t i = 0; i < destination.size(); ++i) destination[i] += source[i];
+}
+
+template <typename Processor>
+auto minimum_band_reduction(const Processor& processor) {
+  float reduction = 0.0f;
+  for (const float band_reduction : processor.last_gain_reductions_db()) {
+    reduction = std::min(reduction, band_reduction);
+  }
+  return reduction;
+}
 
 }  // namespace
 
@@ -2168,5 +2216,73 @@ TEST_CASE("ChannelStrip reports audible gain reduction without embedded meters",
       strip.reset();
       CHECK(strip.last_gain_reduction_db() == 0.0f);
     }
+  }
+}
+
+TEST_CASE("ChannelStrip exposes detailed mastering insert gain reduction",
+          "[mixing][meter][mastering]") {
+  constexpr int kSamples = 16384;
+
+  SECTION("SpectralShaper") {
+    sonare::mastering::spectral::SpectralShaperConfig spectral_config;
+    spectral_config.threshold = 0.01f;
+    spectral_config.amount = 1.0f;
+    spectral_config.frequency_hz = 1000.0f;
+    spectral_config.high_frequency_hz = 6000.0f;
+    spectral_config.attack_ms = 0.0f;
+    spectral_config.release_ms = 0.0f;
+    spectral_config.range_db = 24.0f;
+    require_channel_strip_insert_reduction(
+        std::make_unique<sonare::mastering::spectral::SpectralShaper>(spectral_config),
+        sine_signal(3000.0f, 0.8f, kSamples),
+        [](const auto& processor) { return processor.last_reduction_db(); });
+  }
+
+  SECTION("MultibandCompressor") {
+    sonare::mastering::multiband::MultibandCompressorConfig compressor_config;
+    compressor_config.crossover = {{1000.0f},
+                                   sonare::mastering::multiband::CrossoverSlope::LR2,
+                                   sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+    compressor_config.bands = {
+        {-30.0f, 8.0f, 0.0f, 20.0f, 0.0f, 0.0f, false,
+         sonare::mastering::dynamics::DetectorMode::Peak},
+        {0.0f, 1.0f, 0.0f, 20.0f, 0.0f, 0.0f, false,
+         sonare::mastering::dynamics::DetectorMode::Peak},
+    };
+    auto compressor_signal = sine_signal(100.0f, 0.6f, kSamples);
+    add_signal(compressor_signal, sine_signal(8000.0f, 0.1f, kSamples));
+    require_channel_strip_insert_reduction(
+        std::make_unique<sonare::mastering::multiband::MultibandCompressor>(compressor_config),
+        std::move(compressor_signal),
+        [](const auto& processor) { return minimum_band_reduction(processor); });
+  }
+
+  SECTION("MultibandLimiter") {
+    sonare::mastering::multiband::MultibandLimiterConfig limiter_config;
+    limiter_config.crossover = {{1000.0f},
+                                sonare::mastering::multiband::CrossoverSlope::LR2,
+                                sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+    limiter_config.bands = {{0.0f, 0.0f, 20.0f}, {-18.0f, 0.0f, 20.0f}};
+    auto limiter_signal = sine_signal(100.0f, 0.1f, kSamples);
+    add_signal(limiter_signal, sine_signal(8000.0f, 0.8f, kSamples));
+    require_channel_strip_insert_reduction(
+        std::make_unique<sonare::mastering::multiband::MultibandLimiter>(limiter_config),
+        std::move(limiter_signal),
+        [](const auto& processor) { return minimum_band_reduction(processor); });
+  }
+
+  SECTION("MultibandExpander") {
+    sonare::mastering::multiband::MultibandExpanderConfig expander_config;
+    expander_config.crossover = {{1000.0f},
+                                 sonare::mastering::multiband::CrossoverSlope::LR2,
+                                 sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+    expander_config.bands = {{-20.0f, 3.0f, 0.0f, 20.0f, -50.0f},
+                             {-80.0f, 1.0f, 0.0f, 20.0f, -50.0f}};
+    auto expander_signal = sine_signal(100.0f, 0.02f, kSamples);
+    add_signal(expander_signal, sine_signal(8000.0f, 0.3f, kSamples));
+    require_channel_strip_insert_reduction(
+        std::make_unique<sonare::mastering::multiband::MultibandExpander>(expander_config),
+        std::move(expander_signal),
+        [](const auto& processor) { return minimum_band_reduction(processor); });
   }
 }

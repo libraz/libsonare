@@ -335,6 +335,7 @@ if(BUILD_MIXING)
     mixing/mixing_meter_panner_capi_test.cpp
     mixing/mixing_automation_scene_test.cpp
     mixing/mixing_channel_strip_test.cpp
+    mixing/mixing_wide_send_test.cpp
     mixing/mixing_bus_control_test.cpp
     mixing/mixing_meter_lufs_integration_test.cpp
     mixing/no_alloc_allocators.cpp

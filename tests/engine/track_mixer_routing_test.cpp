@@ -9,7 +9,10 @@
 
 #include "engine/realtime_engine.h"
 #include "engine/track_mixer.h"
+#include "midi/instrument.h"
+#include "midi/midi_event.h"
 #include "mixing/api/scene.h"
+#include "mixing/channel_strip.h"
 #include "mixing/downmix.h"
 #include "rt/command.h"
 #include "support/alloc_guard.h"
@@ -26,6 +29,21 @@ using sonare::mixing::SendTiming;
 using sonare::mixing::api::Bus;
 using sonare::mixing::api::InsertSlot;
 using sonare::mixing::api::Strip;
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+class SilentLatencyInstrument final : public sonare::midi::MidiInstrument {
+ public:
+  explicit SilentLatencyInstrument(int latency_samples) : latency_samples_(latency_samples) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  void on_event(uint32_t, const sonare::midi::MidiEvent&) noexcept override {}
+  int latency_samples() const noexcept override { return latency_samples_; }
+
+ private:
+  int latency_samples_ = 0;
+};
+#endif
 
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlock = 256;
@@ -147,6 +165,18 @@ Bus ducker_bus(uint32_t id, int extra_leading_inserts = 0) {
   bus.inserts.push_back(
       {InsertSlot::PreFader, "dynamics.duckingProcessor",
        R"({"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30})"});
+  return bus;
+}
+
+Bus prefixed_ducker_bus(uint32_t id, float lookahead_ms) {
+  Bus bus;
+  bus.id = std::to_string(id);
+  bus.inserts.push_back(
+      {InsertSlot::PreFader, "dynamics.limiter",
+       R"({"thresholdDb":24,"releaseMs":50,"lookaheadMs":)" + std::to_string(lookahead_ms) + "}"});
+  bus.inserts.push_back(
+      {InsertSlot::PreFader, "dynamics.duckingProcessor",
+       R"({"thresholdDb":-20,"ratio":20,"attackMs":0,"releaseMs":0,"rangeDb":30})"});
   return bus;
 }
 
@@ -540,9 +570,22 @@ Strip ducker_master() {
   return master;
 }
 
+Strip prefixed_ducker_master(float lookahead_ms) {
+  Strip master;
+  master.id = "master";
+  master.inserts.push_back(
+      {InsertSlot::PreFader, "dynamics.limiter",
+       R"({"thresholdDb":24,"releaseMs":50,"lookaheadMs":)" + std::to_string(lookahead_ms) + "}"});
+  master.inserts.push_back(
+      {InsertSlot::PreFader, "dynamics.duckingProcessor",
+       R"({"thresholdDb":-20,"ratio":20,"attackMs":0,"releaseMs":0,"rangeDb":30})"});
+  return master;
+}
+
 // Track 10 (program) is direct; track 20 (key) runs through bus 1 at -30 dB,
 // so the master ducker hears it only through its key.
-void start_engine(sonare::engine::RealtimeEngine& engine, const EngineSources& sources) {
+void start_engine(sonare::engine::RealtimeEngine& engine, const EngineSources& sources,
+                  const Strip& master = ducker_master()) {
   engine.prepare(kSampleRate, kBlock);
   sonare::engine::ClipSchedule program{
       1, {sources.program.data(), 2, kEngineFrames}, 0.0, 0, 0, kEngineFrames, false, 1.0f, 0, 0};
@@ -553,7 +596,7 @@ void start_engine(sonare::engine::RealtimeEngine& engine, const EngineSources& s
   engine.set_clips({program, key});
   REQUIRE(engine.set_track_buses({bus_config(1, -30.0f)}));
   REQUIRE(engine.set_track_lanes({TrackLaneConfig{10}, lane_to(20, 1)}));
-  REQUIRE(engine.set_master_strip(ducker_master()));
+  REQUIRE(engine.set_master_strip(master));
 }
 
 std::vector<float> run_engine(sonare::engine::RealtimeEngine& engine) {
@@ -785,6 +828,66 @@ TEST_CASE("RealtimeEngine keys the master from a latent bus on the master timeba
   CHECK(rms_db(unkeyed, settle) - rms_db(run(true), settle) >= 1.0);
 }
 
+TEST_CASE("RealtimeEngine compensates a master sidechain target insert prefix",
+          "[track_mixer_routing][pdc]") {
+  constexpr int kProgramStart = 1024;
+  constexpr int kProgramLength = 64;
+  constexpr int kKeyLength = 32;
+  constexpr int kMasterPrefix = 48;
+  EngineSources sources;
+  for (int frame = 0; frame < kEngineFrames; ++frame) {
+    const bool program = frame >= kProgramStart && frame < kProgramStart + kProgramLength;
+    const bool key = frame >= kProgramStart && frame < kProgramStart + kKeyLength;
+    for (int channel = 0; channel < 2; ++channel) {
+      sources.planes[static_cast<size_t>(channel)][static_cast<size_t>(frame)] =
+          program ? 0.05f : 0.0f;
+      sources.planes[static_cast<size_t>(channel + 2)][static_cast<size_t>(frame)] =
+          key ? 0.8f : 0.0f;
+    }
+  }
+
+  const auto run = [&](bool prefixed, bool bind) {
+    auto engine = std::make_unique<sonare::engine::RealtimeEngine>();
+    start_engine(*engine, sources, prefixed ? prefixed_ducker_master(1.0f) : ducker_master());
+    if (bind) {
+      REQUIRE(engine->set_master_sidechain(prefixed ? 1u : 0u, SidechainSourceKind::Track, 20));
+    }
+    return run_engine(*engine);
+  };
+  const auto rms_window = [](const std::vector<float>& plane, size_t first, size_t last) {
+    REQUIRE(first < last);
+    REQUIRE(last <= plane.size());
+    double sum = 0.0;
+    for (size_t i = first; i < last; ++i) {
+      sum += static_cast<double>(plane[i]) * plane[i];
+    }
+    return 10.0 * std::log10(std::max(sum / static_cast<double>(last - first), 1.0e-30));
+  };
+
+  // Negative control: insert 0 has no preceding target prefix.
+  const std::vector<float> unprefixed_unkeyed = run(false, false);
+  const std::vector<float> unprefixed_keyed = run(false, true);
+  REQUIRE(rms_window(unprefixed_unkeyed, kProgramStart + kMasterPrefix,
+                     kProgramStart + kMasterPrefix + kProgramLength) > -50.0);
+  CHECK(rms_window(unprefixed_unkeyed, kProgramStart + kMasterPrefix,
+                   kProgramStart + kMasterPrefix + kProgramLength) -
+            rms_window(unprefixed_keyed, kProgramStart + kMasterPrefix,
+                       kProgramStart + kMasterPrefix + kProgramLength) >=
+        1.0);
+
+  const std::vector<float> prefixed_unkeyed = run(true, false);
+  const std::vector<float> prefixed_keyed = run(true, true);
+  REQUIRE(rms_window(prefixed_unkeyed, kProgramStart + kMasterPrefix,
+                     kProgramStart + kMasterPrefix + kProgramLength) > -50.0);
+  // The master target is insert 1, after a 48-sample lookahead. The key must
+  // be delayed by that prefix so it overlaps the delayed program transient.
+  CHECK(rms_window(prefixed_unkeyed, kProgramStart + kMasterPrefix,
+                   kProgramStart + kMasterPrefix + kProgramLength) -
+            rms_window(prefixed_keyed, kProgramStart + kMasterPrefix,
+                       kProgramStart + kMasterPrefix + kProgramLength) >=
+        1.0);
+}
+
 namespace {
 
 constexpr int kMaxOrderBlock = 512;
@@ -887,6 +990,60 @@ size_t argmax_abs(const std::vector<float>& plane) {
 
 }  // namespace
 
+TEST_CASE("Track mixer compensates a bus sidechain target insert prefix",
+          "[track_mixer_routing][pdc]") {
+  constexpr int kFrames = 2048;
+  constexpr int kBlockSize = 64;
+  constexpr float kPrefixMs = 1.0f;
+  constexpr int kPulseStart = 1024;
+  constexpr int kProgramLength = 64;
+  constexpr int kKeyLength = 32;
+  const auto pulse_program = [](uint32_t track, int, int64_t frame) {
+    if (track == 20) {
+      return frame >= kPulseStart && frame < kPulseStart + kKeyLength ? 0.8f : 0.0f;
+    }
+    return frame >= kPulseStart && frame < kPulseStart + kProgramLength ? 0.05f : 0.0f;
+  };
+  const auto run = [&](bool prefixed, bool bind) {
+    TrackMixerRuntime mixer;
+    mixer.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(mixer.set_buses({bus_config(2)}));
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}, lane_to(30, 2)}));
+    REQUIRE(mixer.set_lane_solo_mute(0, false, true));
+    REQUIRE(mixer.set_bus_strip(2, prefixed ? prefixed_ducker_bus(2, kPrefixMs) : ducker_bus(2)));
+    if (bind) {
+      REQUIRE(mixer.set_bus_sidechain(2, prefixed ? 1u : 0u, SidechainSourceKind::Track, 20));
+    }
+    mixer.settle_smoothers();
+    return render_blocks(mixer, {20, 30}, kFrames, kBlockSize, pulse_program);
+  };
+
+  const Planes unprefixed_unkeyed = run(false, false);
+  const Planes unprefixed_keyed = run(false, true);
+  const Planes prefixed_unkeyed = run(true, false);
+  const Planes prefixed_keyed = run(true, true);
+  const size_t first = static_cast<size_t>(kPulseStart + 48);
+  const size_t last = first + static_cast<size_t>(kProgramLength);
+  const auto rms_window = [](const std::vector<float>& plane, size_t first, size_t last) {
+    double sum = 0.0;
+    for (size_t i = first; i < last; ++i) {
+      sum += static_cast<double>(plane[i]) * plane[i];
+    }
+    return 10.0 * std::log10(std::max(sum / static_cast<double>(last - first), 1.0e-30));
+  };
+
+  // Negative control: an insert at index 0 has no preceding target latency.
+  REQUIRE(rms_window(unprefixed_unkeyed[0], first, last) > -50.0);
+  CHECK(rms_window(unprefixed_unkeyed[0], first, last) -
+            rms_window(unprefixed_keyed[0], first, last) >=
+        1.0);
+  // Regression: the key at insert 1 must be shifted through the latent insert
+  // before it reaches the target detector.
+  REQUIRE(rms_window(prefixed_unkeyed[0], first, last) > -50.0);
+  CHECK(rms_window(prefixed_unkeyed[0], first, last) - rms_window(prefixed_keyed[0], first, last) >=
+        1.0);
+}
+
 TEST_CASE("Track mixer lane sidechain is independent of lane order and block size",
           "[track_mixer_routing][lane-sidechain-order]") {
   // Lane 30 ducks from lane 20's burst; lane 20 is muted, so the master holds
@@ -958,6 +1115,106 @@ TEST_CASE("Track mixer lane sidechain key lands on the destination strip input s
     REQUIRE(m.set_lane_sidechain(30, 0, 0));
     CHECK(m.latency_samples() == 48);
   }
+}
+
+TEST_CASE("Track mixer lane sidechain compensates a target insert prefix",
+          "[track_mixer_routing][pdc]") {
+  constexpr int kFrames = 1024;
+  constexpr int kPrefix = 8;
+  constexpr int kImpulse = 300;
+  for (bool prefixed : {false, true}) {
+    INFO("prefixed " << prefixed);
+    TrackMixerRuntime mixer;
+    mixer.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+
+    if (prefixed) {
+      sonare::mixing::ChannelStrip target;
+      auto probe = std::make_unique<TapProbe>();
+      TapProbe* probe_ptr = probe.get();
+      target.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kPrefix));
+      target.add_pre_insert(std::move(probe));
+      REQUIRE(mixer.bind_track_strip(30, &target));
+      REQUIRE(mixer.set_lane_sidechain(30, 1, 20));
+      mixer.settle_smoothers();
+      const Planes out = render_blocks(mixer, {20, 30}, kFrames, 64, late_impulse);
+      (void)out;
+
+      // The target probe is the second insert. Its program input is delayed
+      // by the first insert, so the key must receive the same prefix delay.
+      CHECK(argmax_abs(probe_ptr->input) == static_cast<size_t>(kImpulse + kPrefix));
+      CHECK(argmax_abs(probe_ptr->key) == static_cast<size_t>(kImpulse + kPrefix));
+    } else {
+      sonare::mixing::ChannelStrip target;
+      auto probe = std::make_unique<TapProbe>();
+      TapProbe* probe_ptr = probe.get();
+      target.add_pre_insert(std::move(probe));
+      REQUIRE(mixer.bind_track_strip(30, &target));
+      REQUIRE(mixer.set_lane_sidechain(30, 0, 20));
+      mixer.settle_smoothers();
+      const Planes out = render_blocks(mixer, {20, 30}, kFrames, 64, late_impulse);
+      (void)out;
+
+      // Negative control: an insert at the chain head has no target prefix.
+      CHECK(argmax_abs(probe_ptr->input) == static_cast<size_t>(kImpulse));
+      CHECK(argmax_abs(probe_ptr->key) == static_cast<size_t>(kImpulse));
+    }
+  }
+}
+
+TEST_CASE("Track mixer survives a keyed lane strip losing the keyed insert",
+          "[track_mixer_routing][pdc][lane-sidechain-shrink]") {
+  SECTION("owned strip rebuilt shorter") {
+    TrackMixerRuntime mixer;
+    mixer.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+    Strip two = latent_strip(1.0f);
+    two.inserts.push_back(ducker_strip().inserts.front());
+    REQUIRE(mixer.set_track_strip(30, two));
+    REQUIRE(mixer.set_lane_sidechain(30, 1, 20));
+    REQUIRE(mixer.set_track_strip(30, ducker_strip()));
+    CHECK(mixer.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+    CHECK(mixer.set_lane_sidechain(30, 0, 20));
+  }
+  SECTION("external strip bound shorter") {
+    TrackMixerRuntime mixer;
+    mixer.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+    sonare::mixing::ChannelStrip two;
+    two.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(8));
+    two.add_pre_insert(std::make_unique<TapProbe>());
+    sonare::mixing::ChannelStrip one;
+    one.add_pre_insert(std::make_unique<TapProbe>());
+    REQUIRE(mixer.bind_track_strip(30, &two));
+    REQUIRE(mixer.set_lane_sidechain(30, 1, 20));
+    REQUIRE(mixer.bind_track_strip(30, &one));
+    CHECK(mixer.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+  }
+}
+
+TEST_CASE("Track mixer keeps a bus key's insert prefix across a bus reorder",
+          "[track_mixer_routing][pdc][bus-reorder]") {
+  constexpr int kFrames = 2048;
+  constexpr int kBlockSize = 64;
+  const auto program = [](uint32_t track, int, int64_t frame) {
+    if (track == 20) return frame >= 1024 && frame < 1056 ? 0.8f : 0.0f;
+    return frame >= 1024 && frame < 1088 ? 0.05f : 0.0f;
+  };
+  const auto run = [&](bool reorder) {
+    TrackMixerRuntime mixer;
+    mixer.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(mixer.set_buses({bus_config(2), bus_config(3)}));
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}, lane_to(30, 2)}));
+    REQUIRE(mixer.set_lane_solo_mute(0, false, true));
+    REQUIRE(mixer.set_bus_strip(2, prefixed_ducker_bus(2, 1.0f)));
+    REQUIRE(mixer.set_bus_strip(3, latent_bus(3, 0.5f)));
+    REQUIRE(mixer.set_bus_sidechain(2, 1u, SidechainSourceKind::Track, 20));
+    // Bus 2 moves to index 1, where the old list held the one-insert bus 3.
+    if (reorder) REQUIRE(mixer.set_buses({bus_config(3), bus_config(2)}));
+    mixer.settle_smoothers();
+    return render_blocks(mixer, {20, 30}, kFrames, kBlockSize, program);
+  };
+  CHECK(agree(run(true), run(false)));
 }
 
 TEST_CASE("Track mixer refuses a self-keyed or cyclic lane sidechain",
@@ -1050,4 +1307,174 @@ TEST_CASE("Track mixer binds a strip for every one of 40 successive tracks",
     REQUIRE(m.set_track_lanes({TrackLaneConfig{id}}));
     REQUIRE(m.set_track_strip(id, quiet_strip()));
   }
+}
+
+TEST_CASE("Track mixer sidechains preserve intentional channel offsets",
+          "[track_mixer_routing][pdc]") {
+  for (const auto delays : {std::array<int, 3>{9, 0, 0}, {0, 9, 0}, {0, 9, 7}}) {
+    const int source_delay = delays[0];
+    const int target_delay = delays[1];
+    const int prefix = delays[2];
+    INFO("source " << source_delay << " target " << target_delay << " prefix " << prefix);
+    TrackMixerRuntime mixer;
+    mixer.prepare(kSampleRate, kMaxOrderBlock);
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+    sonare::mixing::ChannelStrip source;
+    sonare::mixing::ChannelStrip target;
+    if (prefix != 0)
+      target.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(prefix));
+    auto probe = std::make_unique<TapProbe>();
+    TapProbe* tap = probe.get();
+    target.add_pre_insert(std::move(probe));
+    REQUIRE(mixer.bind_track_strip(20, &source));
+    REQUIRE(mixer.bind_track_strip(30, &target));
+    REQUIRE(mixer.set_lane_sidechain(30, prefix != 0 ? 1 : 0, 20));
+    REQUIRE(mixer.set_track_channel_delay_samples(20, source_delay));
+    REQUIRE(mixer.set_track_channel_delay_samples(30, target_delay));
+    CHECK(mixer.latency_samples() == prefix);
+    mixer.settle_smoothers();
+    (void)render_blocks(mixer, {20, 30}, 1024, 64, late_impulse);
+    REQUIRE(tap->input.size() == 1024);
+    REQUIRE(tap->key.size() == 1024);
+    CHECK(argmax_abs(tap->input) == static_cast<size_t>(300 + target_delay + prefix));
+    CHECK(argmax_abs(tap->key) == static_cast<size_t>(300 + source_delay + prefix));
+  }
+}
+
+namespace {
+class ReportedLatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit ReportedLatencyProcessor(int samples) : samples_(samples) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples() const noexcept override { return samples_; }
+
+ private:
+  int samples_;
+};
+}  // namespace
+
+TEST_CASE("Track mixer stages master prefixes atomically and prunes removed targets",
+          "[track_mixer_routing][pdc]") {
+  TrackMixerRuntime mixer;
+  mixer.prepare(kSampleRate, kBlock);
+  REQUIRE(mixer.set_track_lanes({TrackLaneConfig{20}}));
+  sonare::mixing::ChannelStrip master;
+  master.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(8));
+  master.add_pre_insert(std::make_unique<TapProbe>());
+  master.prepare(kSampleRate, kBlock);
+  TrackMixerRuntime::PreparedMasterStripUpdate installed;
+  REQUIRE(mixer.prepare_master_strip_update(&master, 2, &installed));
+  mixer.commit_master_strip_update(&master, installed);
+  REQUIRE(mixer.set_master_sidechain(1, SidechainSourceKind::Track, 20));
+  const uint64_t generation = mixer.pdc_storage_generation();
+  sonare::mixing::ChannelStrip excessive;
+  excessive.add_pre_insert(
+      std::make_unique<ReportedLatencyProcessor>(sonare::mixing::kMaxAlignmentDelaySamples + 1));
+  excessive.add_pre_insert(std::make_unique<TapProbe>());
+  excessive.prepare(kSampleRate, kBlock);
+  TrackMixerRuntime::PreparedMasterStripUpdate refused;
+  CHECK_FALSE(mixer.prepare_master_strip_update(&excessive, 2, &refused));
+  CHECK(mixer.pdc_storage_generation() == generation);
+  TrackMixerRuntime::PreparedMasterStripUpdate retained;
+  REQUIRE(mixer.prepare_master_strip_update(&master, 2, &retained));
+  REQUIRE(retained.next_sidechains.count == 1);
+  CHECK(retained.next_sidechains.bindings[0].insert_index == 1);
+  CHECK(retained.pdc.plan.key_q8[retained.next_sidechains.bindings[0].key_slot] == (8 << 8));
+  CHECK(mixer.pdc_storage_generation() == generation);
+  sonare::mixing::ChannelStrip shorter;
+  shorter.add_pre_insert(std::make_unique<TapProbe>());
+  shorter.prepare(kSampleRate, kBlock);
+  TrackMixerRuntime::PreparedMasterStripUpdate removed;
+  REQUIRE(mixer.prepare_master_strip_update(&shorter, 1, &removed));
+  CHECK(removed.next_sidechains.count == 0);
+  mixer.commit_master_strip_update(&shorter, removed);
+  CHECK_FALSE(mixer.set_master_sidechain(1, SidechainSourceKind::Track, 20));
+  CHECK(mixer.set_master_sidechain(0, SidechainSourceKind::Track, 20));
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("RealtimeEngine aligns unmatched clips through instrument and lane PDC",
+          "[engine][track_mixer_routing][pdc]") {
+  constexpr int frames = 32;
+  for (const auto scenario : {std::array<int, 2>{0, 0}, {frames - 1, 0}, {frames - 1, 1}}) {
+    const int offset = scenario[0];
+    const bool stop_before_tail = scenario[1] != 0;
+    INFO("impulse offset " << offset << " stop " << stop_before_tail);
+    std::array<float, frames> impulse_samples{};
+    impulse_samples[static_cast<size_t>(offset)] = 1.0f;
+    const float* clip_planes[] = {impulse_samples.data()};
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(kSampleRate, frames);
+    REQUIRE(engine.set_track_lanes({TrackLaneConfig{20}}));
+    sonare::mixing::ChannelStrip lane;
+    lane.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(8));
+    REQUIRE(engine.bind_track_strip(20, &lane));
+    SilentLatencyInstrument instrument(3);
+    REQUIRE(engine.set_midi_instrument(20, &instrument));
+    sonare::engine::ClipSchedule configured{
+        1, {clip_planes, 1, frames}, 0.0, 0, 0, frames, false, 1.0f, 0, 0};
+    configured.track_id = 20;
+    auto unmatched = configured;
+    unmatched.id = 2;
+    unmatched.track_id = 99;
+    engine.set_clips({configured, unmatched});
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+    std::array<float, frames> output{};
+    float* planes[] = {output.data()};
+    engine.process(planes, 1, frames);
+    for (int i = 0; i < frames; ++i) {
+      INFO("frame " << i);
+      CHECK(std::abs(output[static_cast<size_t>(i)] - (i == offset + 11 ? 2.0f : 0.0f)) < 1.0e-4f);
+    }
+    // Rolling past the clip end drains both PDC banks on zero input. An
+    // explicit stop instead flushes PDC as a playback discontinuity.
+    if (stop_before_tail) {
+      sonare::rt::Command stop{};
+      stop.type = sonare::rt::CommandType::kTransportStop;
+      stop.sample_time = -1;
+      REQUIRE(engine.push_command(stop));
+    }
+    output.fill(0.0f);
+    engine.process(planes, 1, frames);
+    for (int i = 0; i < frames; ++i) {
+      INFO("next-block frame " << i);
+      CHECK(std::abs(output[static_cast<size_t>(i)] -
+                     (!stop_before_tail && i == offset + 11 - frames ? 2.0f : 0.0f)) < 1.0e-4f);
+    }
+  }
+}
+
+#endif
+
+TEST_CASE("RealtimeEngine refuses reprepare when a master key exceeds the PDC cap",
+          "[engine][track_mixer_routing][pdc]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSampleRate, kBlock);
+  REQUIRE(engine.set_track_lanes({TrackLaneConfig{20}, TrackLaneConfig{30}}));
+  sonare::mixing::ChannelStrip lane;
+  lane.add_pre_insert(
+      std::make_unique<ReportedLatencyProcessor>(sonare::mixing::kMaxAlignmentDelaySamples - 64));
+  REQUIRE(engine.bind_track_strip(30, &lane));
+  REQUIRE(engine.set_master_strip(prefixed_ducker_master(1.0f)));
+  REQUIRE(engine.set_master_sidechain(1, SidechainSourceKind::Track, 20));
+  REQUIRE_THROWS(engine.prepare(96000.0, kBlock));
+  CHECK(engine.graph_latency_samples_q8() == 0);
+}
+
+TEST_CASE("RealtimeEngine clears reported latency when the master is unbound",
+          "[engine][track_mixer_routing][pdc]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSampleRate, kBlock);
+  engine.set_mixing_enabled(true);
+  sonare::mixing::ChannelStrip master;
+  master.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(8));
+  REQUIRE(engine.bind_mixing_strip(&master));
+  REQUIRE(engine.graph_latency_samples_q8() == (8 << 8));
+  CHECK_FALSE(engine.bind_mixing_strip(nullptr));
+  CHECK(engine.graph_latency_samples_q8() == 0);
 }

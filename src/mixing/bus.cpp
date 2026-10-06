@@ -1,6 +1,8 @@
 #include "mixing/bus.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <utility>
 
 #include "mixing/tail_utils.h"
@@ -98,6 +100,22 @@ int BusProcessor::latency_samples_q8() const noexcept {
 }
 
 int BusProcessor::tail_samples() const noexcept { return processor_chain_tail_samples(inserts_); }
+
+std::optional<int> BusProcessor::insert_input_latency_samples_q8(
+    unsigned int insert_index) const noexcept {
+  const size_t index = insert_index;
+  if (index >= inserts_.size()) return std::nullopt;
+  int64_t prefix = 0;
+  for (size_t prior = 0; prior < index; ++prior) {
+    if (inserts_[prior] != nullptr) {
+      prefix += static_cast<int64_t>(inserts_[prior]->latency_samples_q8());
+      if (prefix < std::numeric_limits<int>::min() || prefix > std::numeric_limits<int>::max()) {
+        return std::nullopt;
+      }
+    }
+  }
+  return static_cast<int>(prefix);
+}
 
 void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only) {
   if (!processor) {

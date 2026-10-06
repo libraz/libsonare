@@ -489,9 +489,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #if defined(SONARE_WITH_MIXING)
       if (block_open) {
         if (transport_rolling) {
-          track_mixer_runtime_.render_clips_into_lanes(clip_player_, clip_scratch_channels_.data(),
-                                                       channels, num_frames,
-                                                       transport_.sample_position());
+          track_mixer_runtime_.render_clips_into_lanes(
+              clip_player_, clip_scratch_channels_.data(), channels, num_frames,
+              transport_.sample_position(), clip_scratch_channels_.data());
         } else {
           // A stopped transport does not scan clips, but every opened lane
           // still advances its raw clip delay with zeros so stale clip audio
@@ -512,11 +512,22 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       }
 #endif
       clip_pdc_delay_.process(clip_scratch_channels_.data(), channels, num_frames);
-      for (int ch = 0; ch < channels; ++ch) {
-        float* out = sub_channels[static_cast<size_t>(ch)];
-        const float* clip = clip_scratch_channels_[static_cast<size_t>(ch)];
-        if (!out) continue;
-        for (int i = 0; i < num_frames; ++i) out[i] += clip[i];
+#if defined(SONARE_WITH_MIXING)
+      if (block_open) {
+        // Stage the PDC-aligned unmatched clips into the mixer's direct bank.
+        bool routed_through_lane = false;
+        track_mixer_runtime_.mix_source_into_lane(
+            0, clip_scratch_channels_.data(), sub_channels.data(), channels, num_frames,
+            routed_through_lane, &meter_tap_, transport_.render_frame(), &scope_tap_);
+      } else
+#endif
+      {
+        for (int ch = 0; ch < channels; ++ch) {
+          float* out = sub_channels[static_cast<size_t>(ch)];
+          const float* clip = clip_scratch_channels_[static_cast<size_t>(ch)];
+          if (!out) continue;
+          for (int i = 0; i < num_frames; ++i) out[i] += clip[i];
+        }
       }
     } else if (transport_rolling) {
 #if defined(SONARE_WITH_MIXING)

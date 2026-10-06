@@ -52,6 +52,10 @@ bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept 
     // so stateful strip/bus tails advance over zero input.
     source_mix_lane_active_[lane_index] = true;
   }
+  for (int ch = 0; ch < render_channels; ++ch) {
+    float* direct = direct_channel(ch);
+    std::fill(direct, direct + num_samples, 0.0f);
+  }
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
@@ -61,7 +65,8 @@ bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept 
 
 bool TrackMixerRuntime::render_clips_into_lanes(ClipPlayer& player, float* const* channels,
                                                 int num_channels, int num_samples,
-                                                int64_t timeline_sample) noexcept {
+                                                int64_t timeline_sample,
+                                                float* const* direct_output) noexcept {
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (!lanes || lanes->empty()) return false;
   if (!channels || num_channels <= 0 || num_samples <= 0) return true;
@@ -86,10 +91,14 @@ bool TrackMixerRuntime::render_clips_into_lanes(ClipPlayer& player, float* const
     // would freeze a reverb tail or a compressor release mid-decay.
     source_mix_lane_active_[lane_index] = true;
   }
-  // Clips on tracks without a lane sum straight into the master mix; this must
-  // land before any lane output, matching the pre-aggregation order.
-  player.process_excluding_tracks_at(active_track_ids_.data(), lanes->size(), channels,
-                                     render_channels, num_samples, timeline_sample);
+  // Lane-less clips are staged in the direct bank; finish_block() adds them before lane output.
+  for (int ch = 0; ch < render_channels; ++ch) {
+    lane_channel_ptrs_[static_cast<size_t>(ch)] =
+        direct_output != nullptr ? direct_output[static_cast<size_t>(ch)] : direct_channel(ch);
+  }
+  player.process_excluding_tracks_at(active_track_ids_.data(), lanes->size(),
+                                     lane_channel_ptrs_.data(), render_channels, num_samples,
+                                     timeline_sample);
   return true;
 }
 
@@ -102,6 +111,7 @@ void TrackMixerRuntime::finish_block(float* const* channels, int num_channels, i
   if (!lanes) return;
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
+  add_direct_to_mix(channels, master_channels, num_samples);
   const bool any_solo = any_lane_solo(*lanes);
   // Two passes (all strips + sends, then all lane outputs), not one interleaved
   // pass: this is the accumulation order the clip path has always used, so a
@@ -135,13 +145,17 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
 
   // Self-contained single-source mix: clear the buses, mix this one source into
   // its lane, then process the buses once -- exactly begin/into-lane/finish for
-  // one source (kept bit-identical to the historical inline implementation).
+  // one source.
   if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   advance_insert_automations(num_samples);
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     clear_lane(lane_index, render_channels, num_samples);
     source_mix_lane_active_[lane_index] = false;
+  }
+  for (int ch = 0; ch < render_channels; ++ch) {
+    float* direct = direct_channel(ch);
+    std::fill(direct, direct + num_samples, 0.0f);
   }
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
@@ -150,9 +164,8 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   bool routed_through_lane = false;
   mix_source_into_lane(track_id, source, channels, num_channels, num_samples, routed_through_lane,
                        meter_tap, render_frame, scope_tap);
-  if (routed_through_lane) {
-    finish_source_mix(channels, num_channels, num_samples, meter_tap, render_frame, scope_tap);
-  }
+  // Unmatched sources also need finish to advance the direct delay.
+  finish_source_mix(channels, num_channels, num_samples, meter_tap, render_frame, scope_tap);
   return true;
 }
 
@@ -194,7 +207,11 @@ bool TrackMixerRuntime::mix_source_into_lane(uint32_t track_id, float* const* so
   }
 
   // Destination 0 and currently-unconfigured destinations stay on the main bus.
-  add_source_to_mix(source, channels, render_channels, num_samples);
+  // Stage them so they share the lane-stage timebase before the master delay.
+  for (int ch = 0; ch < render_channels; ++ch) {
+    lane_channel_ptrs_[static_cast<size_t>(ch)] = direct_channel(ch);
+  }
+  add_source_to_mix(source, lane_channel_ptrs_.data(), render_channels, num_samples);
   return true;
 }
 
@@ -207,6 +224,7 @@ void TrackMixerRuntime::finish_source_mix(float* const* channels, int num_channe
   if (!lanes) return;
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
+  add_direct_to_mix(channels, master_channels, num_samples);
   const bool any_solo = any_lane_solo(*lanes);
   for (size_t position = 0; position < lanes->size(); ++position) {
     const size_t lane_index = lane_at(position, lanes->size());
@@ -224,6 +242,11 @@ float* TrackMixerRuntime::lane_channel(size_t lane_index, int channel) noexcept 
   const size_t lane_stride = static_cast<size_t>(kMaxLaneChannels) * max_block_size_;
   const size_t offset = lane_index * lane_stride + static_cast<size_t>(channel) * max_block_size_;
   return scratch_.data() + offset;
+}
+
+float* TrackMixerRuntime::direct_channel(int channel) noexcept {
+  return direct_scratch_.data() +
+         static_cast<size_t>(channel) * static_cast<size_t>(max_block_size_);
 }
 
 float* TrackMixerRuntime::key_channel(size_t lane_index, int channel) noexcept {
@@ -286,6 +309,16 @@ void TrackMixerRuntime::add_source_to_mix(float* const* source, float* const* ch
       dst[i] += src[i];
     }
   }
+}
+
+void TrackMixerRuntime::add_direct_to_mix(float* const* channels, int num_channels,
+                                          int num_samples) noexcept {
+  const int direct_channels = std::min(num_channels, kMaxLaneChannels);
+  for (int ch = 0; ch < direct_channels; ++ch) {
+    lane_channel_ptrs_[static_cast<size_t>(ch)] = direct_channel(ch);
+  }
+  direct_pdc_delay_.process(lane_channel_ptrs_.data(), direct_channels, num_samples);
+  add_source_to_mix(lane_channel_ptrs_.data(), channels, direct_channels, num_samples);
 }
 
 bool TrackMixerRuntime::any_lane_solo(const std::vector<TrackLaneConfig>& lanes) const noexcept {

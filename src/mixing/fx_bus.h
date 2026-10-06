@@ -4,6 +4,7 @@
 /// @brief Aux FX bus with an ordered insert chain.
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "mixing/bus.h"
@@ -21,6 +22,9 @@ class FxBus : public rt::ProcessorBase {
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;
+  std::optional<int> insert_input_latency_samples_q8(unsigned int insert_index) const noexcept {
+    return bus_.insert_input_latency_samples_q8(insert_index);
+  }
 
   /// Appends an insert. @p stereo_pair_only forwards the catalog channelPolicy
   /// to BusProcessor so the insert is front-pair-only on a surround bus.

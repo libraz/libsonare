@@ -820,24 +820,6 @@ bool TrackMixerRuntime::commit_keyed_binding(SidechainTargetKind target_kind, ui
   return false;
 }
 
-void TrackMixerRuntime::set_master_insert_count(size_t count) noexcept {
-  master_insert_count_ = count;
-  bool dropped = false;
-  for (size_t i = sidechains_.count; i > 0; --i) {
-    const SidechainBinding& binding = sidechains_.bindings[i - 1];
-    if (binding.target_kind == static_cast<uint8_t>(SidechainTargetKind::Master) &&
-        binding.insert_index >= count) {
-      remove_sidechain_binding(i - 1);
-      dropped = true;
-    }
-  }
-  if (!dropped) return;
-  refresh_bus_graph();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    recompute_lane_pdc(*lanes);
-  }
-}
-
 int TrackMixerRuntime::build_keyed_input(size_t binding_index, int lane_channels, int num_samples,
                                          std::array<const float*, kMaxLaneChannels>& planes,
                                          bool into_slot) noexcept {

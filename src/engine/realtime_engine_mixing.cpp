@@ -238,56 +238,75 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
   if (strip != nullptr && monitor_runtime_.contains(strip)) {
     return false;
   }
+  const bool owned = strip != nullptr && strip == owned_master_strip_.get();
+  const size_t insert_count = owned ? master_strip_spec_.inserts.size() : 0;
+  try {
+    if (strip != nullptr && max_block_size_ > 0) {
+      // Prepare before changing the raw pointer visible to the audio thread.
+      strip->prepare(sample_rate_, max_block_size_);
+    }
+  } catch (...) {
+    return false;
+  }
+  TrackMixerRuntime::PreparedMasterStripUpdate update;
+  if (!track_mixer_runtime_.prepare_master_strip_update(owned ? strip : nullptr, insert_count,
+                                                        &update)) {
+    return false;
+  }
   const bool bound = mixing_runtime_.bind(strip);
-  // Master keys address the owned strip's inserts; another strip has none of them.
-  if (bound && strip != owned_master_strip_.get()) {
-    track_mixer_runtime_.set_master_insert_count(0);
-  }
-  if (bound && max_block_size_ > 0) {
-    // Re-prepare so the freshly bound strip sees the engine's sample rate and
-    // block size. bind() runs on the control thread, so allocation is allowed.
-    mixing_runtime_.prepare(sample_rate_, max_block_size_);
-  }
-  if (bound) {
-    update_reported_graph_latency();
-  }
+  if (strip != nullptr && !bound) return false;
+  // bind(nullptr) reports false yet still clears the pointer, so always commit.
+  track_mixer_runtime_.commit_master_strip_update(owned ? strip : nullptr, update);
+  update_reported_graph_latency();
   return bound;
 }
 
 bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   if (!strip_eq_acceptable(strip_spec.eq, sample_rate_)) return false;
+  mixing::api::Strip next_spec;
+  try {
+    next_spec = strip_spec;
+  } catch (...) {
+    return false;
+  }
   // In-place: an unchanged insert chain keeps the bound strip, and with it the
   // insert state (tails, envelopes), the insert automation and the EQ filter
   // state of every band the new spec leaves alone.
   if (owned_master_strip_ != nullptr && mixing_runtime_.strip() == owned_master_strip_.get() &&
       strip_inserts_equal(master_strip_spec_.inserts, strip_spec.inserts)) {
+    if (!owned_master_strip_->try_set_channel_delay_samples(strip_spec.channel_delay_samples)) {
+      return false;
+    }
     apply_strip_scalars(*owned_master_strip_, strip_spec, master_strip_spec_);
-    master_strip_spec_ = strip_spec;
+    std::swap(master_strip_spec_, next_spec);
+    update_reported_graph_latency();
     set_mixing_enabled(true);
     return true;
   }
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
-    strip = make_channel_strip_from_spec(strip_spec);
+    strip = make_channel_strip_from_spec(next_spec);
+    if (strip == nullptr) return false;
+    if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
   } catch (...) {
     return false;
   }
-  if (!strip) return false;
-  // Control-thread-only, not concurrent with process() (see RealtimeEngine's
-  // thread-safety contract). This std::move destroys the previously bound master
-  // strip immediately -- there is no deferred reclaim -- and rebinds the raw
-  // pointer the audio thread reads, so a concurrent render would use freed
-  // memory. The caller must quiesce process() around this call.
+  TrackMixerRuntime::PreparedMasterStripUpdate update;
+  if (!track_mixer_runtime_.prepare_master_strip_update(strip.get(), next_spec.inserts.size(),
+                                                        &update)) {
+    return false;
+  }
+  // Keys stay on their insert index; an index the new chain lacks is dropped.
+  if (!mixing_runtime_.bind(strip.get())) return false;
+  // Control-thread-only: this std::move destroys the old master immediately (no
+  // deferred reclaim), so the caller must not run process() concurrently.
   clear_master_insert_automations();
   owned_master_strip_ = std::move(strip);
-  master_strip_spec_ = strip_spec;
-  const bool bound = bind_mixing_strip(owned_master_strip_.get());
-  if (bound) {
-    // Keys stay on their insert index; an index the new chain lacks is dropped.
-    track_mixer_runtime_.set_master_insert_count(master_strip_spec_.inserts.size());
-    set_mixing_enabled(true);
-  }
-  return bound;
+  std::swap(master_strip_spec_, next_spec);
+  track_mixer_runtime_.commit_master_strip_update(owned_master_strip_.get(), update);
+  set_mixing_enabled(true);
+  update_reported_graph_latency();
+  return true;
 }
 
 bool RealtimeEngine::validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const {

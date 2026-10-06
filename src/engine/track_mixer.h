@@ -231,15 +231,21 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// Keys insert @p insert_index of the master strip. Same contract as
   /// set_bus_sidechain; the master is processed after every bus, so any
   /// declared source is acyclic. The index must be below the count published
-  /// by set_master_insert_count().
+  /// by commit_master_strip_update().
   bool set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
                             uint32_t source_id) noexcept;
-  /// CONTROL thread: records how many inserts the master strip has, dropping
-  /// master bindings that fall outside it. 0 when no owned master strip is bound.
-  void set_master_insert_count(size_t count) noexcept;
-  /// AUDIO thread: hands this block's master keys (aligned to the master input)
-  /// to @p strip's inserts. A key the mixer did not compute this block is left
-  /// unassigned; a shorter computed key is zero-padded.
+  /// CONTROL thread: stage a master-strip PDC update without changing live
+  /// pointers, delay banks, insert counts, or sidechain bindings.
+  struct PreparedMasterStripUpdate;
+  bool prepare_master_strip_update(const mixing::ChannelStrip* candidate, size_t next_insert_count,
+                                   PreparedMasterStripUpdate* out) const noexcept;
+  /// CONTROL thread: publish a previously staged update. The prepared delay
+  /// objects and fixed-size sidechain table make this operation no-fail.
+  void commit_master_strip_update(const mixing::ChannelStrip* durable,
+                                  PreparedMasterStripUpdate& update) noexcept;
+  /// AUDIO thread: hands this block's master keys (aligned to each target
+  /// insert's input) to @p strip's inserts. A key the mixer did not compute
+  /// this block is left unassigned; a shorter computed key is zero-padded.
   void deliver_master_sidechains(mixing::ChannelStrip* strip, int num_samples) noexcept;
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
   /// Unbinds @p track_id's lane and destroys its owned strip, binding record and
@@ -457,6 +463,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void settle_insert_automations() noexcept;
   void settle_insert_automations(const std::vector<TrackLaneConfig>& next_lanes,
                                  bool preserve_surviving_lanes) noexcept;
+  /// Mixes one source through its lane and the buses. Call once per block: it
+  /// advances the shared direct and master delays.
   bool mix_source(uint32_t track_id, float* const* source, float* const* channels, int num_channels,
                   int num_samples, MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
                   ScopeTelemetryTap* scope_tap = nullptr) noexcept;
@@ -484,10 +492,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // lanes alike; zero input keeps stateful strip/bus tails advancing.
   bool begin_block(int num_channels, int num_samples) noexcept;
   // Accumulates this block's clip audio into the lanes (and sums lane-less
-  // clips straight into @p channels). Does not run any strip, send, or bus.
+  // clips into the runtime's direct scratch). Does not run any strip, send, or
+  // bus. When @p direct_output is supplied, unmatched clips are written there
+  // for an outer source-PDC stage and must later be passed back through
+  // mix_source_into_lane() before finish_block().
   // Returns false when the lane config is empty/invalid.
   bool render_clips_into_lanes(ClipPlayer& player, float* const* channels, int num_channels,
-                               int num_samples, int64_t timeline_sample) noexcept;
+                               int num_samples, int64_t timeline_sample,
+                               float* const* direct_output = nullptr) noexcept;
   // Runs every active lane's strip / sends / fader and every bus insert chain
   // once, summing the result into @p channels. Call once per block, after the
   // last accumulate.
@@ -515,6 +527,67 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void finish_source_mix(float* const* channels, int num_channels, int num_samples,
                          MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
                          ScopeTelemetryTap* scope_tap = nullptr) noexcept;
+
+  enum class SidechainTargetKind : uint8_t { Lane = 0, Bus = 1, Master = 2 };
+  // One table for every keyed insert. target_id is the lane's track id or the
+  // bus id (0 for the master); source_id a track id or a bus id per source_kind.
+  struct SidechainBinding {
+    uint32_t target_id = 0;
+    unsigned int insert_index = 0;
+    uint32_t source_id = 0;
+    uint8_t target_kind = 0;
+    uint8_t source_kind = 0;
+    uint8_t key_slot = 0;  // key delay line / buffer index; travels with the binding on compaction
+  };
+  static constexpr size_t kMaxSidechainBindings = 32;
+  // Crosses to the audio thread as one seqlock snapshot, so compaction is never seen half-applied.
+  struct SidechainTable {
+    std::array<SidechainBinding, kMaxSidechainBindings> bindings{};
+    size_t count = 0;
+  };
+  // One bus edge towards another bus: its output (slot 0) or a send (1 + index).
+  static constexpr size_t kBusEdgesPerBus = 1 + mixing::ChannelStrip::kMaxSends;
+
+  // Every alignment delay (Q8) the mixer applies, indexed like the banks.
+  // These control-thread staging records are public only so the master-strip
+  // transaction token can be constructed by RealtimeEngine; audio code never
+  // observes them.
+  struct PdcPlan {
+    std::array<int, kMaxTrackLanes> lane_q8{};
+    std::array<int, kMaxTrackLanes> lane_pre_q8{};
+    // Pre-strip delay p(L) that puts every lane key on its destination's strip input.
+    std::array<int, kMaxTrackLanes> lane_in_q8{};
+    // Stable topological lane render order over the lane-key edges.
+    std::array<uint8_t, kMaxTrackLanes> lane_order{};
+    size_t lane_order_count = 0;
+    std::array<int, kMaxBusLanes> bus_in_q8{};
+    std::array<int, kMaxBusLanes * kBusEdgesPerBus> edge_q8{};
+    std::array<int, kMaxSidechainBindings> key_q8{};
+    int direct_q8 = 0;
+    int master_q8 = 0;
+    int latency_q8 = 0;
+  };
+  struct PreparedPdc {
+    PdcPlan plan{};
+    std::array<int, kMaxTrackLanes> lane_source{};
+    std::array<bool, kMaxTrackLanes> lane_reset{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_pre_send_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_in_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes> bus_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes * kBusEdgesPerBus>
+        edge_updates{};
+    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxSidechainBindings> key_updates{};
+    mixing::AlignmentDelay::PreparedUpdate direct_update{};
+    mixing::AlignmentDelay::PreparedUpdate master_update{};
+  };
+  struct PreparedMasterStripUpdate {
+    const mixing::ChannelStrip* candidate = nullptr;
+    size_t next_insert_count = 0;
+    SidechainTable next_sidechains{};
+    PreparedPdc pdc{};
+    bool has_pdc = false;
+  };
 
  private:
   struct LaneState {
@@ -624,28 +697,6 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     mixing::ChannelStrip* strip = nullptr;
   };
 
-  enum class SidechainTargetKind : uint8_t { Lane = 0, Bus = 1, Master = 2 };
-  // One table for every keyed insert. target_id is the lane's track id or the
-  // bus id (0 for the master); source_id a track id or a bus id per
-  // source_kind. key_slot indexes the per-binding key delay line and buffer
-  // and travels with the binding when the table is compacted.
-  struct SidechainBinding {
-    uint32_t target_id = 0;
-    unsigned int insert_index = 0;
-    uint32_t source_id = 0;
-    uint8_t target_kind = 0;
-    uint8_t source_kind = 0;
-    uint8_t key_slot = 0;
-  };
-  static constexpr size_t kMaxSidechainBindings = 32;
-  // The table crosses to the audio thread as one seqlock snapshot, so an edit
-  // that rewrites several slots (compaction) is never observed half-applied.
-  struct SidechainTable {
-    std::array<SidechainBinding, kMaxSidechainBindings> bindings{};
-    size_t count = 0;
-  };
-  // One bus edge towards another bus: its output (slot 0) or a send (1 + index).
-  static constexpr size_t kBusEdgesPerBus = 1 + mixing::ChannelStrip::kMaxSends;
   // Resolved routing of one configured bus, rebuilt on the control thread.
   struct BusRoute {
     int output_index = -1;  // -1 = master
@@ -713,50 +764,27 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Routes of @p buses against the binding table, skipping flagged bindings.
   void build_routes(const std::vector<TrackBusConfig>& buses,
                     const std::array<bool, kMaxSidechainBindings>& skip,
-                    std::array<BusRoute, kMaxBusLanes>* routes) const noexcept;
+                    std::array<BusRoute, kMaxBusLanes>* routes,
+                    const SidechainTable* sidechains = nullptr) const noexcept;
   // A bus graph PDC can be planned against: the live one, or a candidate a
   // setter checks before committing.
   struct BusGraphView {
     const std::vector<TrackBusConfig>* buses = nullptr;
     std::array<size_t, kMaxBusLanes> order{};
     std::array<BusRoute, kMaxBusLanes> routes{};
+    // Bus at each index of *buses, which a reorder has not yet moved into bus_states_.
+    std::array<const mixing::FxBus*, kMaxBusLanes> bus{};
     std::array<int, kMaxBusLanes> latency_q8{};
     std::array<bool, kMaxSidechainBindings> skip_binding{};
-  };
-  // Every alignment delay (Q8) the mixer applies, indexed like the banks.
-  struct PdcPlan {
-    std::array<int, kMaxTrackLanes> lane_q8{};
-    std::array<int, kMaxTrackLanes> lane_pre_q8{};
-    // Pre-strip delay p(L) that puts every lane key on its destination's strip input.
-    std::array<int, kMaxTrackLanes> lane_in_q8{};
-    // Stable topological lane render order over the lane-key edges.
-    std::array<uint8_t, kMaxTrackLanes> lane_order{};
-    size_t lane_order_count = 0;
-    std::array<int, kMaxBusLanes> bus_in_q8{};
-    std::array<int, kMaxBusLanes * kBusEdgesPerBus> edge_q8{};
-    std::array<int, kMaxSidechainBindings> key_q8{};
-    int master_q8 = 0;
-    int latency_q8 = 0;
-  };
-  struct PreparedPdc {
-    PdcPlan plan{};
-    std::array<int, kMaxTrackLanes> lane_source{};
-    std::array<bool, kMaxTrackLanes> lane_reset{};
-    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_updates{};
-    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_pre_send_updates{};
-    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxTrackLanes> lane_in_updates{};
-    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes> bus_updates{};
-    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxBusLanes * kBusEdgesPerBus>
-        edge_updates{};
-    std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxSidechainBindings> key_updates{};
-    mixing::AlignmentDelay::PreparedUpdate master_update{};
   };
   BusGraphView current_bus_graph_view() const noexcept;
   // Pure: derives every delay for @p view. False when one exceeds
   // mixing::kMaxAlignmentDelaySamples, which the caller refuses.
   bool plan_pdc(const std::vector<TrackLaneConfig>& lanes, const BusGraphView& view, PdcPlan* plan,
-                const std::array<mixing::ChannelStrip*, kMaxTrackLanes>* candidate_strips =
-                    nullptr) const noexcept;
+                const std::array<mixing::ChannelStrip*, kMaxTrackLanes>* candidate_strips = nullptr,
+                const mixing::ChannelStrip* candidate_master_strip = nullptr,
+                bool use_candidate_master_strip = false,
+                const SidechainTable* candidate_sidechains = nullptr) const noexcept;
   void make_lane_pdc_sources(const std::vector<TrackLaneConfig>& lanes,
                              std::array<int, kMaxTrackLanes>* sources,
                              std::array<bool, kMaxTrackLanes>* reset) const noexcept;
@@ -842,6 +870,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void remap_lane_insert_automations(const std::vector<TrackLaneConfig>& lanes) noexcept;
   float* lane_channel(size_t lane_index, int channel) noexcept;
   float* bus_channel(size_t bus_index, int channel) noexcept;
+  float* direct_channel(int channel) noexcept;
   // Render width of a configured bus. A surround group bus (5.1/7.1 layout)
   // renders at its full layout width (6/8). Every non-surround bus renders at
   // min(master_channels, kMaxLaneChannels) — exactly the historical
@@ -852,6 +881,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void clear_bus(size_t bus_index, int num_channels, int num_samples) noexcept;
   void add_source_to_mix(float* const* source, float* const* channels, int num_channels,
                          int num_samples) noexcept;
+  // Delays the direct/unmatched contribution to the lane-stage timebase and
+  // adds it before lane outputs. With a zero delay this preserves the legacy
+  // accumulation order and leaves caller-provided channel contents intact.
+  void add_direct_to_mix(float* const* channels, int num_channels, int num_samples) noexcept;
   bool any_lane_solo(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   void prepare_lanes_from_snapshot(const std::vector<TrackLaneConfig>& lanes) noexcept;
   void prepare_lanes_from_snapshot(
@@ -933,6 +966,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Two lane-wide banks (post-fader source, then pre-fader source) reused by
   // whichever lane's sends are being mixed.
   std::vector<float> send_source_scratch_;
+  // Direct/unmatched clips and sources use a separate scratch so their delay
+  // history is independent of every lane and can be added before lane output.
+  std::vector<float> direct_scratch_;
   // Sized to the widest buffer it ever addresses (a surround group bus), not the
   // ≤2-wide lane buffers, so it can carry up to kMaxBusChannels plane pointers
   // for bus processing. Lane code fills only the first ≤2 slots.
@@ -956,6 +992,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // output-bus routing and the direct master sum. It rests at zero -- and
   // process() short-circuits -- whenever no strip carries latency.
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pre_send_pdc_delays_;
+  // Common lane-stage delay for direct/unmatched master contributions.
+  mixing::AlignmentDelay direct_pdc_delay_;
   // Bus-stage PDC. A lane can reach the master both directly and through a bus
   // (its output bus, or any bus it sends to), so one per-lane delay cannot
   // align both paths. lane_pdc_delays_ therefore aligns everything as it leaves
@@ -993,6 +1031,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<int, kMaxSidechainBindings> master_key_frames_{};
   std::array<int, kMaxSidechainBindings> master_key_channels_{};
   size_t master_insert_count_ = 0;
+  const mixing::ChannelStrip* master_strip_ = nullptr;
   std::array<bool, kMaxTrackLanes> source_mix_lane_active_{};
   std::array<BusState, kMaxBusLanes> bus_states_{};
   float* const* monitor_bus_ = nullptr;

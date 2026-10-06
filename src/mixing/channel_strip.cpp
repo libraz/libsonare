@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 #include "mixing/tail_utils.h"
@@ -193,6 +194,10 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   pre_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   post_tap_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   send_temp_.assign(tap_rows, std::vector<float>(cols, 0.0f));
+  send_temp_channels_.resize(tap_rows);
+  for (size_t row = 0; row < tap_rows; ++row) {
+    send_temp_channels_[row] = send_temp_[row].data();
+  }
   null_planes_.assign(tap_rows, std::vector<float>(cols, 0.0f));
   stage_channels_.assign(tap_rows, nullptr);
   bypass_scratch_.assign(tap_rows, std::vector<float>(cols, 0.0f));
@@ -728,6 +733,27 @@ int ChannelStrip::post_fader_latency_samples_q8() const noexcept {
   return pre_fader_latency_samples_q8() + total_latency_q8(post_inserts_);
 }
 
+std::optional<int> ChannelStrip::insert_input_latency_samples_q8(
+    unsigned int insert_index) const noexcept {
+  const size_t index = insert_index;
+  const size_t pre_count = pre_inserts_.size();
+  const size_t total = pre_count + post_inserts_.size();
+  if (index >= total) return std::nullopt;
+
+  int64_t prefix = 0;
+  for (size_t prior = 0; prior < index; ++prior) {
+    const auto& chain = prior < pre_count ? pre_inserts_ : post_inserts_;
+    const size_t local = prior < pre_count ? prior : prior - pre_count;
+    if (local < chain.size() && chain[local] != nullptr) {
+      prefix += static_cast<int64_t>(chain[local]->latency_samples_q8());
+      if (prefix < std::numeric_limits<int>::min() || prefix > std::numeric_limits<int>::max()) {
+        return std::nullopt;
+      }
+    }
+  }
+  return static_cast<int>(prefix);
+}
+
 void ChannelStrip::set_polarity_invert(bool left, bool right) noexcept {
   polarity_left_.store(left ? -1.0f : 1.0f, std::memory_order_relaxed);
   polarity_right_.store(right ? -1.0f : 1.0f, std::memory_order_relaxed);
@@ -743,6 +769,11 @@ bool ChannelStrip::polarity_invert_right() const noexcept {
 
 void ChannelStrip::set_channel_delay_samples(int delay_samples) {
   alignment_delay_.set_delay_samples(delay_samples);
+}
+
+bool ChannelStrip::try_set_channel_delay_samples(int delay_samples) noexcept {
+  const int bounded = std::clamp(delay_samples, 0, kMaxAlignmentDelaySamples);
+  return alignment_delay_.try_set_delay_samples_q8(bounded << 8, FractionalDelayMode::None);
 }
 
 void ChannelStrip::set_prepared_channels(int num_channels) {
@@ -761,6 +792,16 @@ void ChannelStrip::set_prepared_channels(int num_channels) {
   for (auto* taps : {&pre_tap_, &post_tap_, &send_temp_}) {
     if (!taps->empty() && taps->size() != tap_rows) {
       taps->resize(tap_rows, std::vector<float>((*taps)[0].size(), 0.0f));
+    }
+  }
+  if (!null_planes_.empty()) {
+    null_planes_.resize(tap_rows, std::vector<float>(null_planes_[0].size(), 0.0f));
+    stage_channels_.resize(tap_rows, nullptr);
+  }
+  if (!send_temp_.empty()) {
+    send_temp_channels_.resize(send_temp_.size());
+    for (size_t row = 0; row < send_temp_.size(); ++row) {
+      send_temp_channels_[row] = send_temp_[row].data();
     }
   }
   if (!bypass_scratch_.empty() && bypass_scratch_.size() != tap_rows) {
@@ -976,8 +1017,8 @@ void ChannelStrip::mix_send_at(size_t index, float* const* dest, int num_channel
 
   const auto& tap = (sends_[index]->timing() == SendTiming::PreFader) ? pre_tap_ : post_tap_;
 
-  const int rows = std::min<int>({num_channels, kMaxStackChannels, static_cast<int>(tap.size()),
-                                  static_cast<int>(send_temp_.size())});
+  const int rows = std::min<int>(
+      {num_channels, static_cast<int>(tap.size()), static_cast<int>(send_temp_.size())});
   const int n = std::min(num_samples, max_block_size_);
 
   for (int ch = 0; ch < rows; ++ch) {
@@ -993,8 +1034,7 @@ void ChannelStrip::mix_send_from_at(size_t index, const float* const* source, fl
     return;
   }
 
-  const int rows =
-      std::min<int>({num_channels, kMaxStackChannels, static_cast<int>(send_temp_.size())});
+  const int rows = std::min<int>(num_channels, static_cast<int>(send_temp_.size()));
   const int n = std::min(num_samples, max_block_size_);
 
   for (int ch = 0; ch < rows; ++ch) {
@@ -1029,9 +1069,9 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
                                         int64_t block_start) {
   SendProcessor& send = *sends_[index];
 
-  float* temp[kMaxStackChannels];
+  // send_temp_channels_ is sized in prepare() / set_prepared_channels(), so no allocation here.
   for (int ch = 0; ch < rows; ++ch) {
-    temp[ch] = send_temp_[ch].data();
+    send_temp_channels_[static_cast<size_t>(ch)] = send_temp_[static_cast<size_t>(ch)].data();
   }
 
   std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> send_events{};
@@ -1042,7 +1082,7 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
 
   if (send_count == 0) {
     // Applies the smoothed send gain in place on the copied tap, leaving dest untouched.
-    send.process(temp, rows, n);
+    send.process(send_temp_channels_.data(), rows, n);
   } else {
     size_t send_event_index = 0;
     int cursor = 0;
@@ -1053,11 +1093,11 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
       const int next_offset = next_event_offset(send_events, send_count, send_event_index, n);
       const int segment_samples = std::max(0, next_offset - cursor);
       if (segment_samples > 0) {
-        float* segment[kMaxStackChannels]{};
         for (int ch = 0; ch < rows; ++ch) {
-          segment[ch] = send_temp_[ch].data() + cursor;
+          send_temp_channels_[static_cast<size_t>(ch)] =
+              send_temp_[static_cast<size_t>(ch)].data() + cursor;
         }
-        send.process(segment, rows, segment_samples);
+        send.process(send_temp_channels_.data(), rows, segment_samples);
         cursor += segment_samples;
       } else {
         ++cursor;

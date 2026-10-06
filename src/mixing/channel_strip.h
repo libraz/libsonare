@@ -112,12 +112,22 @@ class ChannelStrip : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
   int pre_fader_latency_samples_q8() const noexcept;
   int post_fader_latency_samples_q8() const noexcept;
+  /// PDC-compensable delay already incurred from the strip input to the
+  /// detector tap of the combined insert at @p insert_index. Manual channel
+  /// delay is an intentional relative offset and is excluded; only earlier
+  /// pre/post insert latencies in chain order are reported.
+  /// Returns no value when the index is outside the combined chain.
+  std::optional<int> insert_input_latency_samples_q8(unsigned int insert_index) const noexcept;
 
   void set_polarity_invert(bool left, bool right) noexcept;
   bool polarity_invert_left() const noexcept;
   bool polarity_invert_right() const noexcept;
 
   void set_channel_delay_samples(int delay_samples);
+  /// Strong-guarantee channel-delay setter for control transactions. Returns
+  /// false when replacement storage cannot be allocated and leaves the prior
+  /// delay and history intact.
+  bool try_set_channel_delay_samples(int delay_samples) noexcept;
   int channel_delay_samples() const noexcept { return alignment_delay_.delay_samples(); }
 
   /// @brief Widest channel count this strip will be asked to process.
@@ -532,6 +542,9 @@ class ChannelStrip : public rt::ProcessorBase {
   std::vector<std::vector<float>> pre_tap_;    // post-input/pre-insert chain, pre-fader signal
   std::vector<std::vector<float>> post_tap_;   // final output
   std::vector<std::vector<float>> send_temp_;  // per-send work buffer
+  // Pointer table into send_temp_, prepared for wide layouts and reused by
+  // both whole-send and sample-accurate automation segments on the audio thread.
+  std::vector<float*> send_temp_channels_;
   // Silent stand-ins for null rows and the table stage_channels() hands out, sized like the taps.
   std::vector<std::vector<float>> null_planes_;
   std::vector<float*> stage_channels_;
