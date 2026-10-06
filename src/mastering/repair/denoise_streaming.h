@@ -5,21 +5,21 @@
 ///
 /// The offline denoiser sees the whole signal; this one sees one host block at
 /// a time and reaches the same gain math through detail::GainStage. What it
-/// cannot inherit is the offline analysis geometry: framing is uncentred,
-/// because a stream has no centre to pad, and the noise estimator must be
-/// recursive, which is why Quantile is refused rather than substituted.
+/// cannot inherit is the offline analysis geometry: framing stays on a fixed
+/// uncentred grid relative to host samples, with only the internal logical
+/// prefix described below, and the noise estimator must be recursive, which is
+/// why Quantile is refused rather than substituted.
 ///
-/// The uncentred framing is what the minimum-tracking estimators see first. The
-/// offline path's centred padding makes frame 0 mostly zeros, so its floor seeds
-/// low; a stream opened mid-programme seeds it at programme level and holds it
-/// for the half second the minimum window spans, over-suppressing until then.
-/// Prepending that much noise-only audio reproduces the offline result exactly.
-/// Spp tracks no minimum and is unaffected.
+/// The grid starts with a hop-aligned logical zero prefix, so sample zero is not
+/// placed on the window's zero edge. Prefix frames advance overlap-add with a
+/// unity mask but seed neither the tracker nor the gain stage; the prefix
+/// consumes no host samples and adds no latency.
 ///
-/// Prefer Spp past that opening too. Mcra and Imcra over-report the floor for as
-/// long as the programme stays intermittent, because the minimum never reaches
-/// the floor between bursts and the bias compensation then scales an inflated
-/// estimate; on a gated tone they leave the result below the untreated input.
+/// Because the prefix does not seed, a minimum-tracking estimator (Mcra, Imcra)
+/// opened mid-programme seeds at programme level and over-suppresses for the
+/// half second its minimum window spans. Through intermittent programmes they
+/// also over-report the floor, and on a gated tone leave the result below the
+/// untreated input. Prefer Spp, which tracks no minimum.
 
 #include <complex>
 #include <cstddef>
@@ -127,9 +127,12 @@ class StreamingDenoise : public rt::ProcessorBase {
 
   // Analysis input: one n_fft ring per channel, written sample by sample. A
   // frame is taken the moment the ring holds exactly the n_fft samples it spans.
+  // reset() places the write cursor at logical_zero_prefix_, so the first frame
+  // contains that many internal zeros before host sample zero.
   std::vector<float> input_ring_;
   int input_write_ = 0;
   int samples_to_next_frame_ = 0;
+  int logical_zero_prefix_ = 0;
 
   // Per-frame scratch, all sized in prepare().
   std::vector<float> frame_;
@@ -142,6 +145,8 @@ class StreamingDenoise : public rt::ProcessorBase {
   std::vector<double> channel_power_d_;
   std::vector<float> tracker_input_;
   std::vector<double> noise_frame_;
+  std::vector<double> unity_gains_;
+  int prefix_frames_remaining_ = 0;
 
   // Overlap-add: one n_fft ring per channel plus the window sum they share,
   // since the mask is one real number per cell and every channel carries it.

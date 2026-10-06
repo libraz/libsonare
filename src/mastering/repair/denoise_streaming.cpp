@@ -47,6 +47,7 @@ StreamingDenoise::StreamingDenoise(const DenoiseClassicalConfig& config)
       fft_(config_.n_fft) {
   // Built here rather than in prepare() so latency_samples() answers from the
   // configuration alone, which is what a host asks before it prepares anything.
+  logical_zero_prefix_ = ((n_fft_ - 1) / hop_length_) * hop_length_;
   stage_ = std::make_unique<detail::GainStage>(n_bins_, config_);
   mask_latency_frames_ = stage_->latency();
   samples_to_next_frame_ = n_fft_;
@@ -90,6 +91,7 @@ void StreamingDenoise::prepare(double sample_rate, int max_block_size, int max_c
   channel_power_d_.assign(bins, 0.0);
   tracker_input_.assign(bins, 0.0f);
   noise_frame_.assign(bins, 0.0);
+  unity_gains_.assign(bins, 1.0);
   synthesis_ring_.assign(fft * channels, 0.0f);
   window_sum_ring_.assign(fft, 0.0f);
 
@@ -211,6 +213,13 @@ void StreamingDenoise::analyze_frame() {
     }
   }
 
+  // Prefix frames advance OLA only; seeding on their zeros would read as a noise floor.
+  if (prefix_frames_remaining_ > 0) {
+    --prefix_frames_remaining_;
+    emit_frame(unity_gains_.data(), spectra_.data());
+    return;
+  }
+
   for (int b = 0; b < n_bins_; ++b) {
     tracker_input_[static_cast<std::size_t>(b)] =
         std::max(power_f_[static_cast<std::size_t>(b)], 0.0f);
@@ -269,26 +278,31 @@ void StreamingDenoise::finalize_before(std::size_t end) {
   while (ring_base_ < end) {
     const std::size_t pos = ring_base_ % fft;
     const float window_sum = window_sum_ring_[pos];
-    const auto write = static_cast<std::size_t>((queue_read_ + queue_size_) % queue_capacity_);
+    // Walk and clear prefix cells without enqueuing them, so nothing leaks on wrap.
+    const bool enqueue = ring_base_ >= static_cast<std::size_t>(logical_zero_prefix_);
+    const auto write =
+        enqueue ? static_cast<std::size_t>((queue_read_ + queue_size_) % queue_capacity_) : 0;
     for (int ch = 0; ch < active_channels_; ++ch) {
       const std::size_t lane = fft * static_cast<std::size_t>(ch) + pos;
       const float raw = synthesis_ring_[lane];
       // to_audio's select verbatim: the guard is a strict > eps and the divisor
       // is still clamped, so a lane that fails it keeps its un-normalized sample.
-      output_queue_[capacity * static_cast<std::size_t>(ch) + write] =
-          window_sum > kSpectrumEpsilon ? raw / std::max(window_sum, kSpectrumEpsilon) : raw;
+      if (enqueue) {
+        output_queue_[capacity * static_cast<std::size_t>(ch) + write] =
+            window_sum > kSpectrumEpsilon ? raw / std::max(window_sum, kSpectrumEpsilon) : raw;
+      }
       synthesis_ring_[lane] = 0.0f;
     }
     window_sum_ring_[pos] = 0.0f;
     ++ring_base_;
-    ++queue_size_;
+    if (enqueue) ++queue_size_;
   }
 }
 
 void StreamingDenoise::reset() {
   std::fill(input_ring_.begin(), input_ring_.end(), 0.0f);
-  input_write_ = 0;
-  samples_to_next_frame_ = n_fft_;
+  input_write_ = logical_zero_prefix_;
+  samples_to_next_frame_ = n_fft_ - logical_zero_prefix_;
   std::fill(spectra_.begin(), spectra_.end(), std::complex<float>{});
   std::fill(held_spectra_.begin(), held_spectra_.end(), std::complex<float>{});
   std::fill(synthesis_ring_.begin(), synthesis_ring_.end(), 0.0f);
@@ -301,6 +315,7 @@ void StreamingDenoise::reset() {
   // so every block finds a block's worth waiting from the first one onwards.
   queue_size_ = std::min(latency_samples(), queue_capacity_);
   active_channels_ = 0;
+  prefix_frames_remaining_ = logical_zero_prefix_ / hop_length_;
   if (tracker_ != nullptr) tracker_->reset();
   // GainStage carries no reset of its own; rebuilding is what returns the
   // decision-directed recursion and the median smoother to frame zero.

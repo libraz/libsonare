@@ -34,6 +34,18 @@ DenoiseClassicalConfig streaming_default() {
   return config;
 }
 
+/// A recursive estimator with a zero dB reduction is an identity mask.  It is
+/// useful for testing the stream geometry without making the assertions depend
+/// on a noise-tracker's warm-up behaviour.
+DenoiseClassicalConfig identity_streaming(bool smoothing, int hop_length = 256) {
+  DenoiseClassicalConfig config;
+  config.noise_estimator = DenoiseNoiseEstimator::Spp;
+  config.reduction_db = 0.0f;
+  config.gain_smoothing = smoothing;
+  config.hop_length = hop_length;
+  return config;
+}
+
 /// @brief Pushes @p input through @p processor in blocks of @p block samples.
 /// @return The processed signal, which is @p input delayed by latency_samples().
 std::vector<float> run_mono(StreamingDenoise& processor, const std::vector<float>& input,
@@ -178,6 +190,88 @@ TEST_CASE("StreamingDenoise delays an impulse by exactly the latency it reports"
   const std::size_t first = first_above(output, 1.0e-3f);
   REQUIRE(first < output.size());
   REQUIRE(static_cast<int>(first) - static_cast<int>(kImpulseIndex) == processor.latency_samples());
+}
+
+TEST_CASE("StreamingDenoise restores an impulse at sample zero at its reported latency",
+          "[mastering][repair][denoise-streaming]") {
+  // Cover the two mask latencies and host blocks that do and do not divide the
+  // hop.  With reduction_db=0 every gain is one, so the first sample is a
+  // direct probe of the input and synthesis padding rather than denoising.
+  for (const bool smoothing : {false, true}) {
+    for (const int block : {64, 257}) {
+      StreamingDenoise processor(identity_streaming(smoothing));
+      processor.prepare(kSampleRate, block, 1);
+
+      std::vector<float> signal(8192, 0.0f);
+      signal[0] = 1.0f;
+      const auto output = run_mono(processor, signal, block);
+      const auto latency = static_cast<std::size_t>(processor.latency_samples());
+
+      CAPTURE(smoothing, block, latency);
+      REQUIRE(latency < output.size());
+      CHECK(first_above(output, 0.5f) == latency);
+      CHECK(std::abs(output[latency] - 1.0f) < 1.0e-4f);
+    }
+  }
+}
+
+TEST_CASE("StreamingDenoise keeps a non-divisor hop block-invariant from sample zero",
+          "[mastering][repair][denoise-streaming]") {
+  // 80 does not divide the 1024-sample frame.  The identity mask makes any discrepancy a ring
+  // cursor or queue alignment error, including after the first wrap.
+  const auto config = identity_streaming(false, 80);
+  std::vector<float> input(8192, 0.0f);
+  input[0] = 1.0f;
+  input[127] = -0.4f;
+  input[4095] = 0.75f;
+
+  std::vector<std::vector<float>> outputs;
+  for (const int block : {17, 73, 191}) {
+    StreamingDenoise processor(config);
+    processor.prepare(kSampleRate, block, 1);
+    outputs.push_back(run_mono(processor, input, block));
+  }
+
+  const auto latency = static_cast<std::size_t>(StreamingDenoise(config).latency_samples());
+  REQUIRE(latency < input.size());
+  for (const auto& output : outputs) {
+    float max_error = 0.0f;
+    for (std::size_t i = latency; i < output.size(); ++i) {
+      max_error = std::max(max_error, std::abs(output[i] - input[i - latency]));
+    }
+    CHECK(max_error < 1.0e-4f);
+  }
+  CHECK(count_mismatches(outputs[0], outputs[1]) == 0);
+  CHECK(count_mismatches(outputs[0], outputs[2]) == 0);
+}
+
+TEST_CASE("StreamingDenoise restores linked stereo impulses through reset",
+          "[mastering][repair][denoise-streaming]") {
+  const auto config = identity_streaming(true, 80);
+  std::vector<float> left(4096, 0.0f);
+  std::vector<float> right(4096, 0.0f);
+  left[0] = 1.0f;
+  right[0] = -0.5f;
+
+  StreamingDenoise processor(config);
+  processor.prepare(kSampleRate, 73, 2);
+  run_stereo(processor, left, right, 73);
+  const auto latency = static_cast<std::size_t>(processor.latency_samples());
+  CAPTURE(latency);
+  REQUIRE(latency < left.size());
+  CHECK(first_above(left, 0.5f) == latency);
+  CHECK(first_above(right, 0.25f) == latency);
+  CHECK(std::abs(left[latency] - 1.0f) < 1.0e-4f);
+  CHECK(std::abs(right[latency] + 0.5f) < 1.0e-4f);
+
+  std::vector<float> reset_left(4096, 0.0f);
+  std::vector<float> reset_right(4096, 0.0f);
+  reset_left[0] = 1.0f;
+  reset_right[0] = -0.5f;
+  processor.reset();
+  run_stereo(processor, reset_left, reset_right, 73);
+  CHECK(count_mismatches(left, reset_left) == 0);
+  CHECK(count_mismatches(right, reset_right) == 0);
 }
 
 TEST_CASE("StreamingDenoise output does not depend on the block size",
