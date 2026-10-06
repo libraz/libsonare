@@ -469,8 +469,13 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
 
   fader_.process(channels, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
-  if (num_channels <= 2) panner_.process(channels, num_channels, num_samples);
-  if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
+  // The at-rest skip is exact only on a stereo pair; a mono block still takes the pan law.
+  if (num_channels == 1 || (num_channels == 2 && !panner_.at_rest_identity())) {
+    panner_.process(channels, num_channels, num_samples);
+  }
+  if (num_channels == 2 && (width_.width() != 1.0f || width_.current_width() != 1.0f)) {
+    width_.process(channels, num_channels, num_samples);
+  }
 
   staged = stage_channels(channels, num_channels, num_samples);
   if (staged != nullptr) {
@@ -556,8 +561,13 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
 
   fader_.process(segment, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
-  if (num_channels <= 2) panner_.process(segment, num_channels, num_samples);
-  if (num_channels <= 2) width_.process(segment, num_channels, num_samples);
+  // The at-rest skip is exact only on a stereo pair; a mono block still takes the pan law.
+  if (num_channels == 1 || (num_channels == 2 && !panner_.at_rest_identity())) {
+    panner_.process(segment, num_channels, num_samples);
+  }
+  if (num_channels == 2 && (width_.width() != 1.0f || width_.current_width() != 1.0f)) {
+    width_.process(segment, num_channels, num_samples);
+  }
 
   staged = stage_channels(segment, num_channels, num_samples);
   if (staged != nullptr) {

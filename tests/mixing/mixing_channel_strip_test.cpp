@@ -564,6 +564,30 @@ TEST_CASE("ChannelStrip applies fader then pan", "[mixing]") {
   }
 }
 
+TEST_CASE("ChannelStrip at rest passes a stereo block through bit-exactly", "[mixing]") {
+  // Neither a centred Const3dB pan (0.99999994f) nor a mid/side round trip at width 1 is exact.
+  constexpr int kFrames = 64;
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  for (int i = 0; i < kFrames; ++i) {
+    left[i] = 0.013f * static_cast<float>(i + 1) - 0.4f;
+    right[i] = 0.7f - 0.029f * static_cast<float>(i);
+  }
+  const auto expected_left = left;
+  const auto expected_right = right;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({});
+  strip.prepare(48000.0, kFrames);
+  SECTION("unsegmented") { strip.process(channels, 2, kFrames); }
+  SECTION("segmented") {
+    REQUIRE(strip.schedule_fader_automation(110, 0.0f));
+    strip.process_at(channels, 2, kFrames, 100);
+  }
+  REQUIRE(left == expected_left);
+  REQUIRE(right == expected_right);
+}
+
 TEST_CASE("ChannelStrip input trim is independent from fader", "[mixing]") {
   std::array<float, 4> left{1.0f, 1.0f, 1.0f, 1.0f};
   std::array<float, 4> right{1.0f, 1.0f, 1.0f, 1.0f};
