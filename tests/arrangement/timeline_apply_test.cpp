@@ -382,6 +382,24 @@ TEST_CASE("compile rejects project rates outside the supported audio domain",
   }
 }
 
+TEST_CASE("compile reports a bad tempo alongside an out-of-range project rate",
+          "[arrangement][timeline-apply][rate-bounds]") {
+  arr::Project project;
+  project.set_sample_rate(4000.0);
+  project.set_tempo_segments({{0.0, 0.0, 0.0}});
+  const auto result = arr::compile(project, {}, {});
+  REQUIRE_FALSE(result.timeline.has_value());
+  const auto rate = std::find_if(
+      result.diagnostics.begin(), result.diagnostics.end(),
+      [](const auto& diag) { return diag.code == arr::Diagnostic::Code::kInvalidSampleRate; });
+  REQUIRE(rate != result.diagnostics.end());
+  CHECK(rate->message.find("8000") != std::string::npos);
+  CHECK(rate->message.find("384000") != std::string::npos);
+  CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
+    return diag.code == arr::Diagnostic::Code::kInvalidTempo;
+  }));
+}
+
 TEST_CASE("apply refuses an invalid tempo without changing the engine",
           "[arrangement][timeline-apply]") {
   arr::CompiledTimeline bad = timeline_b();

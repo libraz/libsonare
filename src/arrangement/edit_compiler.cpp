@@ -475,13 +475,15 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
   // ---- Global validation --------------------------------------------------
   const double project_sr = project.sample_rate();
+  validate_tempo(project, &result);
   if (!std::isfinite(project_sr) || project_sr < kMinAudioSampleRate ||
       project_sr > kMaxAudioSampleRate) {
     add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError, 0,
-             "project sample rate is outside supported audio bounds");
+             "project sample rate must be finite and within " +
+                 std::to_string(kMinAudioSampleRate) + ".." + std::to_string(kMaxAudioSampleRate) +
+                 " Hz");
     return result;
   }
-  validate_tempo(project, &result);
 
   // The TempoMap is needed for PPQ->sample conversion regardless of clip
   // validity; build it from whatever (validated) segments exist.
