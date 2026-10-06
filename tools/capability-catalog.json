@@ -1075,8 +1075,8 @@
           "choices": null,
           "default": 0,
           "id": 6,
-          "max": null,
-          "min": null,
+          "max": 770.637,
+          "min": -903.09,
           "name": "outputCeilingDb",
           "rtSafe": true,
           "slot": null,
@@ -84592,5 +84592,5 @@
       "tailSamples": 0
     }
   ],
-  "version": "1.8.1"
+  "version": "1.8.2"
 }

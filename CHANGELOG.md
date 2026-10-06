@@ -1,29 +1,95 @@
 # Changelog
 
-## Unreleased
+## v1.8.2 (2026-10-06)
+
+This release adds offline monophonic vocal editing, compilation of a project into a timeline that a stopped realtime engine can play, per-part rigs with new overdrive and distortion pedal inserts, realtime surround pan on track lanes, and per-insert gain-reduction metering. It makes mixing, sidechain and offline bounce timing independent of lane order and block size, tightens validation across mastering, effects and MIDI file import, and changes how several mixing and repair processors sound.
 
 ### Upgrade notes
 
 #### Rebuild
 
 - A project with a part rig entry is written as schema version 5; v1.8.1 refuses it. Documents without part rigs are written as before.
+- No ABI counter moved; the vocal edit API carries its own counters (`SONARE_VOCAL_EDIT_API_VERSION`, `SONARE_VOCAL_PROJECT_API_VERSION`).
+
+#### Now refused
+
+- SMF import refuses a format 0 file whose track count is not one and skips an out-of-range key signature, and SMF export refuses a PPQN above `0x7FFF` (`sonare_project_import_smf`, `sonare_project_export_smf`, `sonare_note_targets_from_smf`).
+- MIDI 2.0 Clip File import refuses a file without the configuration header or without exactly one Start of Clip followed by one End of Clip.
+- A lane sidechain binding that keys its own lane, closes a cycle or needs an alignment past the delay ceiling is refused (`sonare_engine_set_lane_sidechain`, `setLaneSidechain`, `set_lane_sidechain`).
+- A bounce whose non-zero source sample rate differs from the engine's prepared rate is refused.
+- An auto-length project bounce (`total_frames <= 0`) is refused when an instrument reports an unbounded tail.
+- The mixing assistant refuses a non-finite config value, an empty or duplicate profile id, and profiles that do not follow the tracks in order (`sonare_mixing_assistant_suggest` and its binding equivalents).
+- The mastering assistant refuses a non-finite target loudness, ceiling or speech mono amount, and an unknown preset or target platform.
+- The parallel compressor refuses a non-finite threshold, ratio, attack, release, mix or makeup, and an output ceiling that does not give a finite positive gain.
+- Classical denoise and dereverb (offline, linked, streaming and live) refuse a `hop_length` above `n_fft / 2`, an `n_fft` outside the supported power-of-two range, and a Hann overlap that cannot reconstruct every sample.
+- Declip refuses NaN or infinite samples, and the amp simulator and cabinet refuse a NaN or infinite sample rate.
+- The vowel filter refuses a `driveOn` value other than 0 or 1, and the Dattorro reverb refuses a modulation depth above 672 reference-rate samples.
 
 ### New
 
+#### Editing and alignment
+
+- Edit monophonic vocal takes offline: note analysis, pitch plans with note transitions, drafts, undo/redo, unit-wise render jobs and a persisted session state, plus applying edits to a project and rehydrating them after clips are removed, split, duplicated or rebound (C: `sonare_vocal_edit_api_version`, `sonare_project_apply_vocal_edit`, `sonare_project_get_vocal_edit_dependencies`, `sonare_project_rehydrate_vocal_edits`; Node and WASM: `createVocalEditSession`, `restoreVocalEditSession`, `applyVocalEdit`, `getVocalEditDependencies`, `rehydrateVocalEdits`, and on WASM a dedicated worker client at the `./vocal-edit-worker` export; Python: `create_vocal_edit_session`, `restore_vocal_edit_session`, `apply_vocal_edit`, `get_vocal_edit_dependencies`, `rehydrate_vocal_edits`).
+
+#### Realtime engine and project
+
+- Compile a project into a timeline snapshot and install it all-or-nothing into a stopped realtime engine prepared at the project's rate (C: `sonare_project_compile_timeline`, `sonare_project_timeline_destroy`, `sonare_engine_apply_project_timeline`; Node and WASM: `compileTimeline`, `applyProjectTimeline`, `ProjectTimeline`; Python: `compile_timeline`, `apply_project_timeline`, `ProjectTimeline`). On WASM, `applyProjectTimeline` refuses a timeline that did not come from the module's own `ProjectTimeline`.
+- The WASM worklet engine accepts multi-word UMP packets in `pushMidiUmp` and raw UMP input through `pushMidiInputUmp`, which `bindWebMidi` uses for MIDI 2.0 ports.
+
+#### Mixing
+
+- Pan a track lane strip in surround in real time, with a 5 ms constant-power glide when the lane feeds a bus wider than stereo (C: `sonare_engine_set_track_strip_surround_pan`; Node and WASM: `setTrackStripSurroundPan`; Python: `set_track_strip_surround_pan`).
+- Read each insert's gain reduction for a meter target's strip, in pre/post insert order (C: `sonare_engine_meter_target_insert_gain_reduction`, `SONARE_METER_MAX_INSERTS`; Node and WASM: `meterTargetInsertGainReduction`, and on WASM `insertGainReductionDb` on worklet meter snapshots; Python: `meter_target_insert_gain_reduction`).
+
 #### MIDI and synthesizer
 
-- Choose the rig of a part, or of a whole destination, per project and on the realtime engine: the instrument's default (`bank`), nothing (`none`, the direct signal) or an explicit chain of up to eight inserts (`chain`). C: `sonare_project_set_part_rig`, `sonare_project_get_part_rig`, `sonare_project_clear_part_rig`, `sonare_engine_set_part_rig`. Node and WASM: `setPartRig`, `getPartRig`, `clearPartRig` on the project and `setPartRig` on the engine, with `PART_RIG_ALL_PARTS` and `PART_RIG_MODES`. Python: `set_part_rig`, `get_part_rig`, `clear_part_rig` on the project and `set_part_rig` on the engine. Project bounces apply the entries to SoundFont and physical-model destinations; SMF export does not write them.
+- Choose the rig of a part, or of a whole destination, per project and on the realtime engine: the instrument's default (`bank`), nothing (`none`, the direct signal) or an explicit chain of up to eight inserts (`chain`). C: `sonare_project_set_part_rig`, `sonare_project_get_part_rig`, `sonare_project_clear_part_rig`, `sonare_engine_set_part_rig`. Node and WASM: `setPartRig`, `getPartRig`, `clearPartRig` on the project and `setPartRig` on the engine, with `PART_RIG_ALL_PARTS` and `PART_RIG_MODES`. Python: `set_part_rig`, `get_part_rig`, `clear_part_rig` on the project and `set_part_rig` on the engine. Project bounces apply the entries to SoundFont and physical-model destinations; SMF export does not write them. A chain that contains an amplifier takes a mono input up to its last amplifier, as the default rig does.
 - The physical-model synth plays the electric guitars through the default amplifier rig when the host supplies an insert factory, and reads GS insertion-effect messages while GM program selection is on. A live engine applies the messages the host pushes and does not interpret insertion-effect messages scheduled inside a clip.
+- NativeSynth parameter changes reach notes already held, with envelope, LFO and body-resonator settings retuning live.
+- GS part NRPN and Sound Controller CC 71–78, with their SysEx aliases, edit the parts of the native synth, honouring Rx.NRPN.
+
+#### Mastering and repair
+
 - Add the `saturation.overdrive` (`gainDb` 0–41, `toneHz` 500–8000, `levelDb`) and `saturation.distortion` (`gainDb` 0–60, `toneHz` 475–20000, `levelDb`) inserts, each reporting 48 samples of latency.
 - GS overdrive and distortion insertion effects run as a drive pedal into an amplifier: Drive sets the pedal gain, Amp Type selects the amplifier and Amp Sw switches the cabinet on every amplifier stage.
 
 ### Behaviour changes
 
-- Programs 29 and 30 (Overdriven and Distortion Guitar) put a drive pedal ahead of the amplifier, with new amplifier presets and levels, on both the SoundFont player and the physical-model synth.
+- Programs 29 and 30 (Overdriven and Distortion Guitar) put a drive pedal ahead of the amplifier, with new amplifier presets and levels, on the SoundFont player.
 - Electric guitars on the physical-model synth are no longer the direct signal in hosts that supply an insert factory; `set_part_rig` with part `0xFF` and mode `none` restores it.
-- A chain that contains an amplifier takes a mono input up to its last amplifier, as the default rig does.
-- A part routed into a GS insertion-effect unit keeps the default bank rig ahead of the unit, in series, for every effect type; this reverts the v1.8.1 behaviour in which a routed part dropped it. A guitar multi over a bank-amped part therefore carries both amplifiers.
+- A part routed into a GS insertion-effect unit keeps the default bank rig ahead of the unit, in series, for every effect type; this reverts the v1.8.1 behaviour in which a routed part dropped it.
 - GS overdrive and distortion insertion effects sound different: they gain the pedal stage, and Amp Type now selects the amplifier rather than the cabinet.
+- The pipe organ's wind and swell shutter run per part ahead of the part's rig and also apply when GM program selection resolves a pipe organ, and mono legato retunes a voice's body resonator; the physical-model voices other than the acoustic piano are still being tuned and their output will move in 1.8.x patch releases.
+- MPE pressure and timbre combine at full MIDI 2.0 width, a released MPE note's pressure, timbre and bend freeze at its note-off, and a MIDI 2.0 absolute per-note pitch selects the drum piece on the physical-model synth.
+- A MIDI 2.0 note-on of velocity 0 converts to MIDI 1.0 velocity 1, and registered, assignable and relative controller bank and index are masked to 7 bits.
+- Offline engine bounces default to the engine's prepared rate and keep the source rate when no target rate is given, instead of resampling to 48000 Hz.
+- Track lanes render in sidechain-key order with the key delay-compensated to the destination strip, so results no longer depend on lane order or block size, and the reported engine latency includes the compensation.
+- A strip's channel delay shifts only that strip and no longer counts as latency, so delay compensation no longer delays the other lanes.
+- Stereo pan smooths by position, so panned strips and pan automation render differently; a surround panner move keeps unity non-LFE power.
+- A strip's stereo width applies before its post-insert effects instead of after them.
+- The parallel compressor's output limiter applies one gain across all channels and keeps its state across linked-detection switches.
+- The multiband compressor, expander, limiter and spectral shaper report their gain reduction to the strip meters.
+- Dehum tracks stereo hum per channel, removing opposite-polarity and one-sided hum.
+- The mastering assistant measures clicks, clipping, noise and hum per channel of a stereo profile and withholds the declip suggestion when its shared threshold would rewrite a channel without clipped runs.
+- Streaming denoise starts on a hop-aligned zero prefix, so its first output frames differ.
+
+### Fixes
+
+- A stereo channel strip at rest (centred pan, width 1) passes audio bit-exact.
+- Clips on tracks without a lane are delay-compensated against lane latency, and sidechain keys are timed for the latency of the target insert.
+- A failed master strip update leaves the previous strip and its sidechain bindings in place, and a send on a strip wider than eight channels keeps every plane.
+- Project and stem bounces match a plain offline render for processors whose state advances without input.
+- Removing a lane's automation returns its fader to 0 dB and its pan to centre.
+- Repeated `set_track_lanes` calls with new track ids no longer exhaust the engine's 32 owned track strips.
+- Phaser, adaptive-release and spectral-shaper bound automation no longer depends on write order, the phaser keeps its sweep bounds across sample-rate changes, and the adaptive release accepts equal crest bounds.
+- Classical WPE dereverb uses the Hermitian covariance, so its output changes.
+- The phase-align delay search stays within the input length.
+- Bit-depth reduction above 25 bits keeps the top code below full scale.
+- MIDI routing remaps per-note pressure, bend and controllers with their note's channel, as it already did for note-off.
+- A GS EFX DT1 run applies only inside the EFX block its start address selects.
+- SMF2 clip export skips Utility and Stream messages, and SMF export drops SysEx that cannot be written as SysEx7.
+- WASM `bindWebMidi` forwards pitch bend, channel pressure and polyphonic pressure, and accepts one-data-byte messages with running status.
+- The mixing assistant compares masking only between tracks measured at the same sample rate, FFT size and hop.
 
 ## v1.8.1 (2026-10-03)
 
