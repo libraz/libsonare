@@ -1150,6 +1150,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ],
       ['setSurroundPan', 'Needs a mixer strip handle.'],
       ['setSynthInstrument', 'Covered by synth-patch.test.ts and soundfont.test.ts.'],
+      [
+        'setTrackStripSurroundPan',
+        'Needs a prepared engine with a track lane feeding a surround bus; covered by engine-mixing.test.ts.',
+      ],
     ] as const
   ).map(([name, reason]) => [name, reason]),
 );
