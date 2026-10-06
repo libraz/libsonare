@@ -43,7 +43,10 @@ namespace sonare::mixing::assistant {
 ///          cases apart.
 ///
 ///          Tracks need not be the same length. A frame past a track's end
-///          reads as silence and simply fails the floor test.
+///          reads as silence and simply fails the floor test. A pair is
+///          measured only when both envelopes have positive sample rate, hop
+///          length and FFT size, with all three geometry values equal; an
+///          incompatible pair keeps `ratio = 0, valid_frames = 0`.
 ///
 ///          Each track's energy is scaled by its @p gain_db before the shares
 ///          are taken, so the matrix describes the tracks at the level they are

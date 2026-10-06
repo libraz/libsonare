@@ -10,9 +10,13 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "core/spectrum.h"
+#include "mixing/assistant/config_from_params.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace assistant = sonare::mixing::assistant;
 
@@ -67,6 +71,16 @@ assistant::TrackInput stereo_track(const std::string& id, const std::vector<floa
   assistant::TrackInput track = mono_track(id, left);
   track.right = right.data();
   return track;
+}
+
+template <typename Callable>
+void require_invalid_parameter(Callable call) {
+  try {
+    call();
+    FAIL("expected InvalidParameter");
+  } catch (const sonare::SonareException& error) {
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+  }
 }
 
 // Resolves a band by its published identifier so the assertions below do not
@@ -218,6 +232,54 @@ TEST_CASE("Track profile folds the bands out of the profile's own STFT", "[mixin
   REQUIRE(stereo.band_occupancy == mono.band_occupancy);
 }
 
+TEST_CASE("Track profile recovers a complete polarity-inverted stereo signal",
+          "[mixing][assistant]") {
+  assistant::TrackProfileConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+
+  const std::vector<float> left = tone(0.5f, 1000.0f, 0.5f);
+  std::vector<float> right(left.size());
+  for (std::size_t index = 0; index < left.size(); ++index) right[index] = -left[index];
+
+  const assistant::TrackProfile stereo =
+      assistant::analyze_track_profile(stereo_track("flipped", left, right), config);
+  const assistant::TrackProfile representative =
+      assistant::analyze_track_profile(mono_track("left", left), config);
+
+  REQUIRE(stereo.usable);
+  REQUIRE(representative.usable);
+  REQUIRE(std::isfinite(stereo.base.loudness.integrated_lufs));
+  REQUIRE(stereo.base.loudness.integrated_lufs >
+          representative.base.loudness.integrated_lufs + 2.0f);
+  REQUIRE(std::any_of(stereo.bands.energy.begin(), stereo.bands.energy.end(),
+                      [](float energy) { return energy > 0.0f; }));
+  REQUIRE(std::any_of(stereo.spectrum.power.begin(), stereo.spectrum.power.end(),
+                      [](float power) { return power > 0.0f; }));
+
+  // The fallback re-runs the full profile on the representative channel, so
+  // every non-loudness field remains the same as the mono analysis.
+  CHECK(stereo.base.spectral.sub_rms_db == representative.base.spectral.sub_rms_db);
+  CHECK(stereo.base.spectral.low_rms_db == representative.base.spectral.low_rms_db);
+  CHECK(stereo.base.spectral.low_mid_rms_db == representative.base.spectral.low_mid_rms_db);
+  CHECK(stereo.base.spectral.mid_rms_db == representative.base.spectral.mid_rms_db);
+  CHECK(stereo.base.spectral.high_mid_rms_db == representative.base.spectral.high_mid_rms_db);
+  CHECK(stereo.base.spectral.high_rms_db == representative.base.spectral.high_rms_db);
+  CHECK(stereo.base.spectral.air_rms_db == representative.base.spectral.air_rms_db);
+  CHECK(stereo.base.spectral.centroid_hz == representative.base.spectral.centroid_hz);
+  CHECK(stereo.base.spectral.flatness == representative.base.spectral.flatness);
+  CHECK(stereo.base.spectral.rolloff_hz == representative.base.spectral.rolloff_hz);
+  CHECK(stereo.base.dynamics.short_term_lufs_std ==
+        representative.base.dynamics.short_term_lufs_std);
+  CHECK(stereo.base.dynamics.attack_density == representative.base.dynamics.attack_density);
+  CHECK(stereo.base.dynamics.sustain_ratio == representative.base.dynamics.sustain_ratio);
+  CHECK(stereo.base.bpm == representative.base.bpm);
+  CHECK(stereo.base.bpm_confidence == representative.base.bpm_confidence);
+  CHECK(stereo.bands.energy == representative.bands.energy);
+  CHECK(stereo.spectrum.power == representative.spectrum.power);
+  CHECK(stereo.band_occupancy == representative.band_occupancy);
+}
+
 TEST_CASE("Track profile excludes a silent track", "[mixing][assistant]") {
   const std::vector<float> quiet = silence(0.5f);
   const assistant::TrackProfile profile =
@@ -243,6 +305,82 @@ TEST_CASE("Track profile excludes a track shorter than the measurable minimum",
   CHECK_FALSE(profile.usable);
   CHECK_FALSE(profile.exclusion_reason.empty());
   CHECK(profile.duration_sec > 0.0f);
+}
+
+TEST_CASE("Track profile validates minimum duration at both analysis entry points",
+          "[mixing][assistant]") {
+  const std::vector<float> samples = tone(0.5f, 440.0f);
+  const std::vector<assistant::TrackInput> tracks = {mono_track("tone", samples)};
+
+  for (const float value :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity(), -1.0f}) {
+    assistant::TrackProfileConfig config;
+    config.min_duration_sec = value;
+    require_invalid_parameter(
+        [&] { (void)assistant::analyze_track_profile(tracks.front(), config); });
+    require_invalid_parameter([&] { (void)assistant::analyze_track_profiles(tracks, config); });
+    require_invalid_parameter([&] { (void)assistant::analyze_track_profiles({}, config); });
+  }
+}
+
+TEST_CASE("Track profile validates STFT geometry before input shortcuts", "[mixing][assistant]") {
+  const std::vector<float> samples = tone(0.5f, 440.0f);
+  const assistant::TrackInput valid = mono_track("valid", samples);
+  assistant::TrackInput null_track;
+  null_track.id = "null";
+  null_track.frame_count = samples.size();
+  null_track.sample_rate = kSampleRate;
+
+  const std::vector<std::pair<int, int>> invalid_geometry = {
+      {0, 512}, {-1, 512}, {sonare::kMaxStftNFft + 1, 512}, {2048, 0}, {2048, -1},
+  };
+  for (const auto& [n_fft, hop_length] : invalid_geometry) {
+    CAPTURE(n_fft, hop_length);
+    assistant::TrackProfileConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    require_invalid_parameter([&] { (void)assistant::analyze_track_profile(valid, config); });
+    require_invalid_parameter([&] { (void)assistant::analyze_track_profile(null_track, config); });
+    require_invalid_parameter([&] { (void)assistant::analyze_track_profiles({}, config); });
+  }
+
+  REQUIRE_NOTHROW(assistant::analyze_track_profiles({}));
+  REQUIRE_NOTHROW(assistant::analyze_track_profile(null_track));
+}
+
+TEST_CASE("Track profile accepts zero and positive minimum duration controls",
+          "[mixing][assistant]") {
+  const std::vector<float> samples = tone(0.1f, 440.0f);
+  const assistant::TrackInput track = mono_track("brief", samples);
+
+  assistant::TrackProfileConfig zero;
+  zero.min_duration_sec = 0.0f;
+  REQUIRE(assistant::analyze_track_profile(track, zero).usable);
+
+  assistant::TrackProfileConfig positive;
+  positive.min_duration_sec = 0.05f;
+  REQUIRE(assistant::analyze_track_profile(track, positive).usable);
+
+  REQUIRE(assistant::analyze_track_profile(track).usable == false);
+}
+
+TEST_CASE("Track profile params reject negative or non-finite minimum duration",
+          "[mixing][assistant]") {
+  namespace api = sonare::mastering::api;
+  for (const double value :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(), -1.0}) {
+    const api::Param params[] = {{"minDurationSec", value}};
+    require_invalid_parameter(
+        [&] { (void)assistant::track_profile_config_from_params(params, 1); });
+  }
+
+  const api::Param zero[] = {{"minDurationSec", 0.0}};
+  CHECK(assistant::track_profile_config_from_params(zero, 1).min_duration_sec == 0.0f);
+  const api::Param positive[] = {{"min_duration_sec", 0.25}};
+  CHECK(assistant::track_profile_config_from_params(positive, 1).min_duration_sec == 0.25f);
+  CHECK(assistant::track_profile_config_from_params(nullptr, 0).min_duration_sec > 0.0f);
 }
 
 TEST_CASE("Track profile reports degenerate input without throwing", "[mixing][assistant]") {

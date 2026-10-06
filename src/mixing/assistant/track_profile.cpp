@@ -1,9 +1,12 @@
 /// @file track_profile.cpp
 /// @brief Per-track profiling for the mixing assistant.
-/// @details Offline only. One STFT per track — the one the audio profile measures
-///          its spectral block from — folded straight into the band envelope the
-///          cross-track phase reads and into the time-averaged spectrum; the raw
-///          spectrogram is never retained.
+/// @details Offline only. One STFT per track in the normal path — the one the
+///          audio profile measures its spectral block from — is folded straight
+///          into the band envelope the cross-track phase reads and into the
+///          time-averaged spectrum; the raw spectrogram is never retained. A
+///          complete polarity-cancelled stereo pair is the one exception: its
+///          higher-power channel is reprofiled so that cancellation does not
+///          erase a measurable source.
 
 #include "mixing/assistant/track_profile.h"
 
@@ -12,12 +15,14 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "core/spectrum.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mixing/assistant/source_classifier.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mixing::assistant {
 
@@ -187,6 +192,23 @@ float peak_band_amplitude(const BandTotals& totals, int n_frames, int n_fft) {
   return static_cast<float>(std::sqrt(peak / static_cast<double>(n_frames)) / window_gain);
 }
 
+double sum_square_energy(const float* samples, std::size_t frames) noexcept {
+  double energy = 0.0;
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    const double sample = static_cast<double>(samples[frame]);
+    energy += sample * sample;
+  }
+  return energy;
+}
+
+void validate_track_profile_config(const TrackProfileConfig& config) {
+  // Analysis-only STFT geometry does not require reconstruction COLA constraints.
+  sonare::validate_config(sonare::make_stft_config(config.n_fft, config.hop_length));
+  SONARE_CHECK_MSG(std::isfinite(config.min_duration_sec) && config.min_duration_sec >= 0.0f,
+                   ErrorCode::InvalidParameter,
+                   "TrackProfileConfig.minDurationSec must be finite and non-negative");
+}
+
 }  // namespace
 
 float MeanPowerSpectrum::energy_share_below(float frequency_hz) const noexcept {
@@ -229,6 +251,8 @@ float MeanPowerSpectrum::energy_share_below(float frequency_hz) const noexcept {
 }
 
 TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileConfig& config) {
+  validate_track_profile_config(config);
+
   TrackProfile profile;
   profile.strip_id = track.id;
   profile.name = track.name;
@@ -287,13 +311,40 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   profile.bands = fold_bands(spec, track.sample_rate);
   profile.spectrum = mean_power_spectrum(spec, track.sample_rate);
 
-  const BandTotals totals = band_totals(profile.bands);
+  BandTotals totals = band_totals(profile.bands);
   profile.band_occupancy = band_occupancy(totals);
 
   if (profile.duration_sec < config.min_duration_sec) {
     profile.exclusion_reason = "track is shorter than the minimum measurable duration";
     return profile;
   }
+
+  // Recover whole-band downmix cancellation from one channel, preserving channel-summed loudness.
+  if (stereo && std::isfinite(profile.base.loudness.integrated_lufs) &&
+      profile.base.loudness.integrated_lufs > kSilenceLufsThreshold &&
+      peak_band_amplitude(totals, profile.bands.n_frames, profile.bands.n_fft) <
+          kMinBandAmplitude) {
+    const double left_energy = sum_square_energy(track.left, frames);
+    const double right_energy = sum_square_energy(track.right, frames);
+    const float* representative = left_energy >= right_energy ? track.left : track.right;
+
+    const mastering::assistant::LoudnessProfile summed_loudness = profile.base.loudness;
+    Spectrogram representative_spec;
+    mastering::assistant::AudioProfile representative_profile =
+        mastering::assistant::analyze_audio_profile(representative, frames, track.sample_rate,
+                                                    base_config, &representative_spec);
+    profile.base = std::move(representative_profile);
+    profile.base.loudness = summed_loudness;
+    spec = std::move(representative_spec);
+
+    validate_reused_geometry(spec, make_stft_config(config.n_fft, config.hop_length),
+                             track.sample_rate, frames);
+    profile.bands = fold_bands(spec, track.sample_rate);
+    profile.spectrum = mean_power_spectrum(spec, track.sample_rate);
+    totals = band_totals(profile.bands);
+    profile.band_occupancy = band_occupancy(totals);
+  }
+
   // Negated rather than written as `<=` so a non-finite measurement is excluded
   // too: silence gates out of the integrated loudness entirely and reads -inf.
   // A pure DC offset lands here as well, since K-weighting removes it.
@@ -322,10 +373,9 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
 
 std::vector<TrackProfile> analyze_track_profiles(const std::vector<TrackInput>& tracks,
                                                  const TrackProfileConfig& config) {
-  // One config for every track: the cross-track phase compares frame indices
-  // directly, which only holds while the STFT geometry is shared. Track lengths
-  // are left alone — a short track keeps its own frame count and reads as
-  // silent past its end.
+  validate_track_profile_config(config);
+
+  // Frames require matching sample rate, FFT, and hop; short tracks read as silent past their end.
   std::vector<TrackProfile> profiles;
   profiles.reserve(tracks.size());
   for (const TrackInput& track : tracks) {

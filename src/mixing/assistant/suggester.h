@@ -35,6 +35,10 @@ namespace sonare::mixing::assistant {
 /// @brief Tunables for @ref suggest_scene.
 /// @details Flat by design: every field marshals to one scalar or string, which
 ///          keeps the binding surfaces mechanical.
+/// @details Every floating-point scalar is required to be finite at each public
+///          pipeline entry. Range handling remains the responsibility of the
+///          individual decision stage, but NaN and infinities are rejected
+///          before they can become a plausible-looking scene value.
 struct MixAssistantConfig {
   /// @brief Absolute integrated-loudness target each track is staged towards, in LUFS.
   /// @details A fixed absolute target, not an average taken over the tracks
@@ -195,6 +199,9 @@ struct MixAssistantResult {
 ///        The time-alignment pass reads their sample buffers directly.
 /// @param profiles Per-track profiles from @ref analyze_track_profiles.
 /// @param config Assistant configuration; the per-domain switches are read.
+/// @throws SonareException with @ref ErrorCode::InvalidParameter when the two
+///         lists differ in size, a profile id is empty or duplicated, a track
+///         id does not match its profile id, or a config scalar is non-finite.
 MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
                                const std::vector<TrackProfile>& profiles,
                                const MixAssistantConfig& config = {});
@@ -210,14 +217,24 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
 /// @param tracks Tracks to mix, planar, mono or stereo. Ids must be nonempty and unique.
 /// @param config Assistant configuration.
 /// @throws SonareException with @ref ErrorCode::InvalidParameter when two
-///         tracks share an id or a track id is empty.
+///         tracks share an id or a track id is empty, or a config scalar is
+///         non-finite.
 MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
                                  const MixAssistantConfig& config = {});
 
 /// @brief Suggests a scene from measurements that have already been taken.
 /// @details The decision half on its own. Given the profiles and mix profile
 ///          that @ref suggest_scene would have computed, this returns the same
-///          scene without re-analysing anything.
+///          scene without re-reading source audio.
+///
+///          A measured @ref MixProfile carries non-serialized provenance and
+///          raw image energy. If the new gain settings change the recorded
+///          trims, dominance is swept again from the cached profile envelopes
+///          and image occupancy is projected from that raw energy; alignment
+///          and mono-risk measurements are reused. Hand-built profiles without
+///          provenance keep their supplied cross-track values.
+///          A domain disabled during the original analysis has no cached
+///          measurement to restore when a later call enables it.
 ///
 ///          "That @ref suggest_scene would have computed" is load-bearing.
 ///          Profiles assembled by hand carry only what the caller filled in, and
@@ -234,6 +251,10 @@ MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
 ///          already carries the channel count, so a stereo track reaches the
 ///          BS.1770 channel-summed loudness measurement without a separate
 ///          entry point.
+/// @throws SonareException with @ref ErrorCode::InvalidParameter when a profile
+///         id is empty or duplicated, a measured mix profile's provenance does
+///         not match the supplied profile order, or a config scalar is
+///         non-finite.
 MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, const MixProfile& mix,
                                  const MixAssistantConfig& config = {});
 

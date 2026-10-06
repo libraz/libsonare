@@ -19,31 +19,12 @@
 ///          expensive part and running it twice over the same track measures
 ///          the same thing twice.
 
-#include <array>
 #include <vector>
 
 #include "mixing/assistant/mix_profile.h"
 #include "mixing/assistant/track_profile.h"
 
 namespace sonare::mixing::assistant {
-
-/// @brief One track's per-band linear power, split by channel and by mid/side.
-/// @details @ref TrackProfile::bands is a single per-track envelope with no
-///          channel split, so it cannot answer where in the image a band sits;
-///          this is the split the image passes need and the profile does not
-///          carry. It keeps seven numbers per plane and no time axis, which is
-///          why it can be held for every track at once when the spectrogram it
-///          came from cannot.
-struct TrackChannelEnergy {
-  std::array<double, kBandCount> left{};
-  std::array<double, kBandCount> right{};
-  std::array<double, kBandCount> mid{};
-  std::array<double, kBandCount> side{};
-  /// @brief False when the track could not be measured at all.
-  bool valid = false;
-  /// @brief True only when both channels were transformed.
-  bool stereo = false;
-};
 
 /// @brief Measures every usable track's per-band channel energy, once.
 /// @details A track with no usable profile, no buffer, no samples or a

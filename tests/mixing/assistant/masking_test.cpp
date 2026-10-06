@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mixing/assistant/image_occupancy.h"
@@ -129,6 +130,23 @@ TrackInput make_input(const std::string& id, const std::vector<float>& samples) 
   input.frame_count = samples.size();
   input.sample_rate = kTestSampleRate;
   return input;
+}
+
+TrackInput make_input(const std::string& id, const std::vector<float>& samples, int sample_rate) {
+  TrackInput input = make_input(id, samples);
+  input.sample_rate = sample_rate;
+  return input;
+}
+
+std::vector<float> burst_tone(std::size_t frame_count, int sample_rate, int first_frame,
+                              int last_frame, float frequency_hz) {
+  std::vector<float> samples(frame_count, 0.0f);
+  for (int frame = first_frame; frame < last_frame && frame < static_cast<int>(frame_count);
+       ++frame) {
+    const float time = static_cast<float>(frame) / static_cast<float>(sample_rate);
+    samples[static_cast<std::size_t>(frame)] = 0.8f * std::sin(kTwoPi * frequency_hz * time);
+  }
+  return samples;
 }
 
 }  // namespace
@@ -292,6 +310,107 @@ TEST_CASE("analyze_band_dominance compares tracks of different lengths", "[mixin
   CHECK(mix.dominance_at(0, 1, kMidBand).valid_frames == kShortFrames);
   CHECK(mix.dominance_at(1, 0, kMidBand).valid_frames == kShortFrames);
   CHECK_THAT(mix.dominance_at(0, 1, kMidBand).ratio, WithinAbs(0.5, 1e-5));
+}
+
+TEST_CASE("analyze_band_dominance requires one shared frame clock per pair",
+          "[mixing][assistant]") {
+  constexpr int kFrames = 32;
+  constexpr float kEnergy = 2.0f;
+
+  const auto measured_pair = [&](int sample_rate, int n_fft, int hop_length) {
+    std::vector<TrackProfile> profiles{make_track("first", kFrames), make_track("second", kFrames)};
+    set_band_energy(profiles[0], kMidBand, 0, kFrames - 1, kEnergy);
+    set_band_energy(profiles[1], kMidBand, 0, kFrames - 1, kEnergy);
+    profiles[1].bands.sample_rate = sample_rate;
+    profiles[1].bands.n_fft = n_fft;
+    profiles[1].bands.hop_length = hop_length;
+    return measure(profiles);
+  };
+
+  const MixProfile compatible = measured_pair(kTestSampleRate, kTestNfft, kTestHop);
+  CHECK(compatible.dominance_at(0, 1, kMidBand).valid_frames == kFrames);
+  CHECK(compatible.dominance_at(0, 1, kMidBand).ratio > 0.0f);
+
+  SECTION("sample rate mismatch") {
+    const MixProfile incompatible = measured_pair(kTestSampleRate / 2, kTestNfft, kTestHop);
+    CHECK(incompatible.dominance_at(0, 1, kMidBand).valid_frames == 0);
+    CHECK(incompatible.dominance_at(1, 0, kMidBand).valid_frames == 0);
+  }
+  SECTION("hop mismatch") {
+    const MixProfile incompatible = measured_pair(kTestSampleRate, kTestNfft, kTestHop / 2);
+    CHECK(incompatible.dominance_at(0, 1, kMidBand).valid_frames == 0);
+    CHECK(incompatible.dominance_at(1, 0, kMidBand).valid_frames == 0);
+  }
+  SECTION("FFT size mismatch") {
+    const MixProfile incompatible = measured_pair(kTestSampleRate, kTestNfft / 2, kTestHop);
+    CHECK(incompatible.dominance_at(0, 1, kMidBand).valid_frames == 0);
+    CHECK(incompatible.dominance_at(1, 0, kMidBand).valid_frames == 0);
+  }
+}
+
+TEST_CASE("analyze_band_dominance leaves only compatible pairs in a three-track mix",
+          "[mixing][assistant]") {
+  constexpr int kFrames = 24;
+  constexpr float kEnergy = 3.0f;
+
+  std::vector<TrackProfile> profiles{make_track("first", kFrames), make_track("second", kFrames),
+                                     make_track("different-clock", kFrames)};
+  for (TrackProfile& profile : profiles) {
+    set_band_energy(profile, kMidBand, 0, kFrames - 1, kEnergy);
+  }
+  profiles[2].bands.sample_rate /= 2;
+
+  const MixProfile mix = measure(profiles);
+  CHECK(mix.dominance_at(0, 1, kMidBand).valid_frames == kFrames);
+  CHECK(mix.dominance_at(1, 0, kMidBand).valid_frames == kFrames);
+  for (const auto& [masker, maskee] :
+       {std::pair{0, 2}, std::pair{2, 0}, std::pair{1, 2}, std::pair{2, 1}}) {
+    INFO("masker " << masker << " maskee " << maskee);
+    CHECK(mix.dominance_at(masker, maskee, kMidBand).valid_frames == 0);
+    CHECK(mix.dominance_at(masker, maskee, kMidBand).ratio == 0.0f);
+  }
+}
+
+TEST_CASE("analyze_track_profiles does not mask bursts from different sample clocks",
+          "[mixing][assistant]") {
+  constexpr int kFirstSampleRate = 48000;
+  constexpr int kSecondSampleRate = 24000;
+  constexpr float kDurationSec = 0.55f;
+  constexpr int kBurstFirstFrame = 10000;
+  constexpr int kBurstLastFrame = 12000;
+
+  const auto first = burst_tone(static_cast<std::size_t>(kFirstSampleRate * kDurationSec),
+                                kFirstSampleRate, kBurstFirstFrame, kBurstLastFrame, 1000.0f);
+  const auto second = burst_tone(static_cast<std::size_t>(kSecondSampleRate * kDurationSec),
+                                 kSecondSampleRate, kBurstFirstFrame, kBurstLastFrame, 1000.0f);
+  const std::vector<TrackInput> inputs{make_input("wide", first, kFirstSampleRate),
+                                       make_input("fast-clock", second, kSecondSampleRate)};
+  TrackProfileConfig config;
+  config.n_fft = kTestNfft;
+  config.hop_length = kTestHop;
+
+  const std::vector<TrackProfile> profiles = analyze_track_profiles(inputs, config);
+  REQUIRE(profiles.size() == 2);
+  REQUIRE(profiles[0].usable);
+  REQUIRE(profiles[1].usable);
+  REQUIRE(profiles[0].bands.sample_rate == kFirstSampleRate);
+  REQUIRE(profiles[1].bands.sample_rate == kSecondSampleRate);
+
+  // The bursts share sample indices but occur at different physical times
+  // (about 0.21-0.25 s versus 0.42-0.50 s), so they overlap by frame index only.
+  int frame_index_overlap = 0;
+  const int shared_frames = std::min(profiles[0].bands.n_frames, profiles[1].bands.n_frames);
+  for (int frame = 0; frame < shared_frames; ++frame) {
+    if (profiles[0].bands.at(kMidBand, frame) > 0.0f &&
+        profiles[1].bands.at(kMidBand, frame) > 0.0f) {
+      ++frame_index_overlap;
+    }
+  }
+  REQUIRE(frame_index_overlap > 0);
+
+  const MixProfile mix = measure(profiles);
+  CHECK(mix.dominance_at(0, 1, kMidBand).valid_frames == 0);
+  CHECK(mix.dominance_at(1, 0, kMidBand).valid_frames == 0);
 }
 
 TEST_CASE("analyze_band_dominance leaves the diagonal default-constructed", "[mixing][assistant]") {

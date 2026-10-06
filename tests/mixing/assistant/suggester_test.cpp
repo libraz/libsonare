@@ -23,6 +23,7 @@
 #include "mixing/assistant/source_classifier.h"
 #include "mixing/assistant/track_profile.h"
 #include "support/schema_paths.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -43,6 +44,114 @@ MixAssistantConfig all_domains_off() {
   config.enable_dynamics = false;
   config.enable_image = false;
   return config;
+}
+
+struct CacheTracks {
+  std::vector<std::vector<float>> left;
+  std::vector<std::vector<float>> right;
+
+  std::vector<TrackInput> inputs() const {
+    std::vector<TrackInput> tracks;
+    tracks.reserve(left.size());
+    for (std::size_t index = 0; index < left.size(); ++index) {
+      TrackInput track;
+      track.id = index == 0 ? "cache-left" : "cache-right";
+      track.left = left[index].data();
+      track.right = right[index].data();
+      track.frame_count = left[index].size();
+      track.sample_rate = 48000;
+      tracks.push_back(track);
+    }
+    return tracks;
+  }
+};
+
+CacheTracks make_cache_tracks() {
+  constexpr std::size_t kFrames = 24000;
+  constexpr float kSampleRate = 48000.0f;
+  CacheTracks fixture;
+  fixture.left.assign(2, std::vector<float>(kFrames, 0.0f));
+  fixture.right.assign(2, std::vector<float>(kFrames, 0.0f));
+  for (std::size_t frame = 0; frame < kFrames; ++frame) {
+    const float time = static_cast<float>(frame) / kSampleRate;
+    const float tone = std::sin(sonare::constants::kTwoPi * 440.0f * time);
+    fixture.left[0][frame] = 0.80f * tone;
+    fixture.right[0][frame] = 0.10f * tone;
+    fixture.left[1][frame] = 0.05f * tone;
+    fixture.right[1][frame] = 0.35f * tone;
+  }
+  return fixture;
+}
+
+struct ToggleTracks {
+  std::vector<float> wide_left;
+  std::vector<float> wide_right;
+  std::vector<float> reference_left;
+  std::vector<float> reference_right;
+
+  std::vector<TrackInput> inputs() const {
+    return {
+        {"toggle-wide", {}, wide_left.data(), wide_right.data(), wide_left.size(), 48000},
+        {"toggle-reference",
+         {},
+         reference_left.data(),
+         reference_right.data(),
+         reference_left.size(),
+         48000},
+    };
+  }
+};
+
+ToggleTracks make_toggle_tracks() {
+  constexpr std::size_t kFrames = 48000;
+  constexpr float kSampleRate = 48000.0f;
+  ToggleTracks fixture;
+  fixture.wide_left.resize(kFrames);
+  fixture.wide_right.resize(kFrames);
+  fixture.reference_left.resize(kFrames);
+  fixture.reference_right.resize(kFrames);
+  for (std::size_t frame = 0; frame < kFrames; ++frame) {
+    const float time = static_cast<float>(frame) / kSampleRate;
+    const float low = 0.70f * std::sin(sonare::constants::kTwoPi * 120.0f * time);
+    const float high = 0.35f * std::sin(sonare::constants::kTwoPi * 440.0f * time);
+    fixture.wide_left[frame] = low + high;
+    fixture.wide_right[frame] = -low + high;
+    fixture.reference_left[frame] = high;
+    fixture.reference_right[frame] = high;
+  }
+  return fixture;
+}
+
+bool mix_measurements_differ(const sonare::mixing::assistant::MixProfile& lhs,
+                             const sonare::mixing::assistant::MixProfile& rhs) {
+  if (lhs.track_count != rhs.track_count || lhs.dominance.size() != rhs.dominance.size() ||
+      lhs.image.histogram.size() != rhs.image.histogram.size()) {
+    return true;
+  }
+  for (std::size_t index = 0; index < lhs.dominance.size(); ++index) {
+    if (lhs.dominance[index].valid_frames != rhs.dominance[index].valid_frames ||
+        std::abs(lhs.dominance[index].ratio - rhs.dominance[index].ratio) > 1.0e-5f) {
+      return true;
+    }
+  }
+  for (std::size_t index = 0; index < lhs.image.histogram.size(); ++index) {
+    if (std::abs(lhs.image.histogram[index] - rhs.image.histogram[index]) > 1.0e-5f) return true;
+  }
+  return false;
+}
+
+template <typename Function>
+void require_invalid_parameter(Function&& function) {
+  try {
+    function();
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    return;
+  } catch (...) {
+    FAIL("expected SonareException with InvalidParameter");
+    return;
+  }
+  FAIL("expected InvalidParameter");
 }
 
 }  // namespace
@@ -84,6 +193,253 @@ TEST_CASE("the pre-analysed overload returns the same scene as the full pipeline
   REQUIRE(sonare::mixing::api::scene_to_json(staged.scene) ==
           sonare::mixing::api::scene_to_json(full.scene));
   REQUIRE(staged.explanation == full.explanation);
+}
+
+TEST_CASE("a cached mix profile is reprojected for changed suggestion settings",
+          "[mixing][assistant]") {
+  const auto fixture = make_cache_tracks();
+  const auto tracks = fixture.inputs();
+  MixAssistantConfig measured_config;
+  measured_config.suggestion_strength = 0.25f;
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks);
+  REQUIRE(profiles.size() == tracks.size());
+  REQUIRE(std::all_of(profiles.begin(), profiles.end(),
+                      [](const TrackProfile& profile) { return profile.usable; }));
+
+  const auto cached =
+      sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, measured_config);
+  REQUIRE_FALSE(cached.dominance.empty());
+  REQUIRE_FALSE(cached.image.histogram.empty());
+
+  MixAssistantConfig changed_strength = measured_config;
+  changed_strength.suggestion_strength = 1.0f;
+  MixAssistantConfig gain_disabled = measured_config;
+  gain_disabled.enable_gain = false;
+  MixAssistantConfig changed_target = measured_config;
+  changed_target.target_track_lufs = -12.0f;
+  const MixAssistantConfig variants[] = {changed_strength, gain_disabled, changed_target};
+
+  bool saw_changed_measurement = false;
+  for (const MixAssistantConfig& config : variants) {
+    const auto fresh = sonare::mixing::assistant::suggest_scene(tracks, config);
+    const auto staged = sonare::mixing::assistant::suggest_scene(profiles, cached, config);
+    saw_changed_measurement |= mix_measurements_differ(cached, fresh.mix);
+    CHECK(sonare::mixing::api::scene_to_json(staged.scene) ==
+          sonare::mixing::api::scene_to_json(fresh.scene));
+    CHECK(staged.explanation == fresh.explanation);
+    CHECK(sonare::mixing::assistant::mix_assistant_result_to_json(staged) ==
+          sonare::mixing::assistant::mix_assistant_result_to_json(fresh));
+  }
+
+  // The returned effective profile is itself a valid cache. Reusing it for A
+  // after projecting to B must restore A's fresh scene and measurements rather
+  // than comparing B's trim metadata against the original cache forever.
+  const auto fresh_b = sonare::mixing::assistant::suggest_scene(tracks, changed_strength);
+  const auto projected_b =
+      sonare::mixing::assistant::suggest_scene(profiles, cached, changed_strength);
+  CHECK(projected_b.mix.analysis_input_trim_db == fresh_b.mix.analysis_input_trim_db);
+  const auto fresh_a = sonare::mixing::assistant::suggest_scene(tracks, measured_config);
+  const auto projected_a =
+      sonare::mixing::assistant::suggest_scene(profiles, projected_b.mix, measured_config);
+  CHECK(sonare::mixing::api::scene_to_json(projected_a.scene) ==
+        sonare::mixing::api::scene_to_json(fresh_a.scene));
+  CHECK(projected_a.explanation == fresh_a.explanation);
+  CHECK(sonare::mixing::assistant::mix_assistant_result_to_json(projected_a) ==
+        sonare::mixing::assistant::mix_assistant_result_to_json(fresh_a));
+  CHECK(projected_a.mix.analysis_input_trim_db == fresh_a.mix.analysis_input_trim_db);
+
+  // This positive control proves the fixture exercises the reprojection rather
+  // than passing because every cached cross-track value is scale-invariant.
+  REQUIRE(saw_changed_measurement);
+
+  const auto json = sonare::mixing::assistant::mix_assistant_result_to_json(
+      sonare::mixing::assistant::suggest_scene(tracks, changed_strength));
+  for (const char* cache_key :
+       {"sourceStripIds", "dominanceMeasured", "channelEnergy", "analysisInputTrimDb"}) {
+    CHECK(json.find(cache_key) == std::string::npos);
+  }
+}
+
+TEST_CASE("a cached mix profile rejects reordered profile identities", "[mixing][assistant]") {
+  const auto fixture = make_cache_tracks();
+  const auto tracks = fixture.inputs();
+  const MixAssistantConfig config;
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks);
+  const auto mix = sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, config);
+
+  auto swapped = profiles;
+  std::swap(swapped[0].strip_id, swapped[1].strip_id);
+  REQUIRE_THROWS_AS(sonare::mixing::assistant::suggest_scene(swapped, mix, config),
+                    sonare::SonareException);
+}
+
+TEST_CASE("image measurements survive an on-off-on cached suggestion toggle",
+          "[mixing][assistant]") {
+  const auto fixture = make_toggle_tracks();
+  const auto tracks = fixture.inputs();
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks);
+  REQUIRE(profiles.size() == tracks.size());
+  REQUIRE(std::all_of(profiles.begin(), profiles.end(),
+                      [](const TrackProfile& profile) { return profile.usable; }));
+
+  MixAssistantConfig on_config;
+  const auto fresh_on = sonare::mixing::assistant::suggest_scene(tracks, on_config);
+  const auto cached_on =
+      sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, on_config);
+  REQUIRE_FALSE(cached_on.alignment.empty());
+  REQUIRE_FALSE(cached_on.mono_risks.empty());
+  REQUIRE_FALSE(cached_on.image.histogram.empty());
+
+  const auto on_result = sonare::mixing::assistant::suggest_scene(profiles, cached_on, on_config);
+  REQUIRE_FALSE(on_result.mix.alignment.empty());
+  REQUIRE_FALSE(on_result.mix.mono_risks.empty());
+  CHECK(on_result.mix.cached_alignment.empty());
+  CHECK(on_result.mix.cached_mono_risks.empty());
+
+  MixAssistantConfig off_config = on_config;
+  off_config.enable_image = false;
+  const auto fresh_off = sonare::mixing::assistant::suggest_scene(tracks, off_config);
+  const auto off_result =
+      sonare::mixing::assistant::suggest_scene(profiles, on_result.mix, off_config);
+  CHECK(off_result.mix.alignment.empty());
+  CHECK(off_result.mix.image.histogram.empty());
+  CHECK(off_result.mix.mono_risks.empty());
+  REQUIRE_FALSE(off_result.mix.cached_alignment.empty());
+  REQUIRE_FALSE(off_result.mix.cached_mono_risks.empty());
+  CHECK(sonare::mixing::assistant::mix_assistant_result_to_json(off_result) ==
+        sonare::mixing::assistant::mix_assistant_result_to_json(fresh_off));
+
+  const auto off_again =
+      sonare::mixing::assistant::suggest_scene(profiles, off_result.mix, off_config);
+  CHECK(off_again.mix.alignment.empty());
+  CHECK(off_again.mix.mono_risks.empty());
+  CHECK_FALSE(off_again.mix.cached_alignment.empty());
+  CHECK_FALSE(off_again.mix.cached_mono_risks.empty());
+
+  const auto on_again =
+      sonare::mixing::assistant::suggest_scene(profiles, off_again.mix, on_config);
+  CHECK(sonare::mixing::api::scene_to_json(on_again.scene) ==
+        sonare::mixing::api::scene_to_json(fresh_on.scene));
+  CHECK(on_again.explanation == fresh_on.explanation);
+  CHECK(sonare::mixing::assistant::mix_assistant_result_to_json(on_again) ==
+        sonare::mixing::assistant::mix_assistant_result_to_json(fresh_on));
+  CHECK_FALSE(on_again.mix.alignment.empty());
+  CHECK_FALSE(on_again.mix.mono_risks.empty());
+  CHECK(on_again.mix.cached_alignment.empty());
+  CHECK(on_again.mix.cached_mono_risks.empty());
+
+  const std::string json = sonare::mixing::assistant::mix_assistant_result_to_json(off_result);
+  for (const char* cache_key : {"cachedAlignment", "cachedMonoRisks"}) {
+    CHECK(json.find(cache_key) == std::string::npos);
+  }
+}
+
+TEST_CASE("mix analysis requires track and profile identities to stay aligned",
+          "[mixing][assistant]") {
+  const auto fixture = make_cache_tracks();
+  const auto tracks = fixture.inputs();
+  const MixAssistantConfig config;
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks);
+
+  auto missing = profiles;
+  missing.pop_back();
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::analyze_mix_profile(tracks, missing, config); });
+
+  auto reordered = profiles;
+  std::swap(reordered[0], reordered[1]);
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::analyze_mix_profile(tracks, reordered, config); });
+
+  auto duplicate = profiles;
+  duplicate[1].strip_id = duplicate[0].strip_id;
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::analyze_mix_profile(tracks, duplicate, config); });
+
+  auto empty = profiles;
+  empty[0].strip_id.clear();
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::analyze_mix_profile(tracks, empty, config); });
+
+  auto mismatched_tracks = tracks;
+  mismatched_tracks[0].id = "different-source";
+  require_invalid_parameter([&] {
+    (void)sonare::mixing::assistant::analyze_mix_profile(mismatched_tracks, profiles, config);
+  });
+}
+
+TEST_CASE("the split suggestion entry validates empty and duplicate ids before usability",
+          "[mixing][assistant]") {
+  const auto fixture = make_cache_tracks();
+  const auto tracks = fixture.inputs();
+  const MixAssistantConfig config;
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks);
+  const auto mix = sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, config);
+
+  auto empty = profiles;
+  empty[0].usable = false;
+  empty[0].strip_id.clear();
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::suggest_scene(empty, mix, config); });
+
+  auto duplicate = profiles;
+  duplicate[1].usable = false;
+  duplicate[1].strip_id = duplicate[0].strip_id;
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::suggest_scene(duplicate, mix, config); });
+}
+
+TEST_CASE("all assistant entry points reject non-finite scalar configuration",
+          "[mixing][assistant]") {
+  const auto fixture = make_cache_tracks();
+  const auto tracks = fixture.inputs();
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks);
+  const auto mix = sonare::mixing::assistant::analyze_mix_profile(tracks, profiles);
+  struct Setting {
+    const char* name;
+    float MixAssistantConfig::*field;
+  };
+  const Setting settings[] = {
+      {"target_track_lufs", &MixAssistantConfig::target_track_lufs},
+      {"suggestion_strength", &MixAssistantConfig::suggestion_strength},
+      {"eq_max_cut_db", &MixAssistantConfig::eq_max_cut_db},
+      {"mix_bus_headroom_dbtp", &MixAssistantConfig::mix_bus_headroom_dbtp},
+      {"tempo_bpm", &MixAssistantConfig::tempo_bpm},
+  };
+  const float invalid[] = {std::numeric_limits<float>::quiet_NaN(),
+                           std::numeric_limits<float>::infinity(),
+                           -std::numeric_limits<float>::infinity()};
+
+  for (const Setting& setting : settings) {
+    for (const float value : invalid) {
+      MixAssistantConfig config;
+      config.*setting.field = value;
+      INFO(setting.name << " = " << value);
+      require_invalid_parameter(
+          [&] { (void)sonare::mixing::assistant::suggest_scene(profiles, mix, config); });
+    }
+  }
+
+  MixAssistantConfig raw_invalid;
+  raw_invalid.eq_max_cut_db = std::numeric_limits<float>::quiet_NaN();
+  require_invalid_parameter(
+      [&] { (void)sonare::mixing::assistant::suggest_scene(tracks, raw_invalid); });
+
+  MixAssistantConfig analysis_invalid;
+  analysis_invalid.mix_bus_headroom_dbtp = std::numeric_limits<float>::infinity();
+  require_invalid_parameter([&] {
+    (void)sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, analysis_invalid);
+  });
+
+  MixAssistantConfig finite;
+  finite.target_track_lufs = -16.0f;
+  finite.suggestion_strength = 0.5f;
+  finite.eq_max_cut_db = 2.0f;
+  finite.mix_bus_headroom_dbtp = -3.0f;
+  finite.tempo_bpm = 120.0f;
+  REQUIRE_NOTHROW(sonare::mixing::assistant::suggest_scene(tracks, finite));
+  REQUIRE_NOTHROW(sonare::mixing::assistant::suggest_scene(profiles, mix, finite));
+  REQUIRE_NOTHROW(sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, finite));
 }
 
 TEST_CASE("profiling resolves the source class without a separate call", "[mixing][assistant]") {
@@ -380,6 +736,69 @@ TEST_CASE("the result document is well-formed JSON with the expected shape",
   REQUIRE(document["scene"].is_object());
   REQUIRE(document["tracks"].is_array());
   REQUIRE(document["explanation"].is_array());
+}
+
+TEST_CASE("result serialization skips dominance rows without profile identities",
+          "[mixing][assistant]") {
+  MixAssistantResult result;
+  TrackProfile profile;
+  profile.strip_id = "only";
+  result.tracks = {profile};
+  result.mix.track_count = 2;
+  result.mix.dominance.assign(2 * 2 * sonare::mixing::assistant::kBandCount,
+                              sonare::mixing::assistant::BandDominance{});
+  result.mix.dominance[sonare::mixing::assistant::kBandCount].ratio = 0.75f;
+  result.mix.dominance[sonare::mixing::assistant::kBandCount].valid_frames = 1;
+
+  const auto document =
+      sonare::util::json::parse(sonare::mixing::assistant::mix_assistant_result_to_json(result));
+  REQUIRE(document["mix"]["trackCount"].as_int() == 2);
+  REQUIRE(document["mix"]["bandDominance"].as_array().empty());
+}
+
+TEST_CASE("result serialization skips alignment pairs with invalid profile identities",
+          "[mixing][assistant]") {
+  MixAssistantResult result;
+  TrackProfile profile;
+  profile.strip_id = "only";
+  result.tracks = {profile};
+  result.mix.track_count = 1;
+  sonare::mixing::assistant::PairAlignment invalid;
+  invalid.reference_index = -1;
+  invalid.target_index = 99;
+  invalid.related = true;
+  result.mix.alignment.push_back(invalid);
+
+  const auto document =
+      sonare::util::json::parse(sonare::mixing::assistant::mix_assistant_result_to_json(result));
+  REQUIRE(document["mix"]["trackCount"].as_int() == 1);
+  REQUIRE(document["mix"]["alignment"].as_array().empty());
+}
+
+TEST_CASE("result serialization keeps valid dominance and alignment rows", "[mixing][assistant]") {
+  MixAssistantResult result;
+  TrackProfile first;
+  first.strip_id = "first";
+  TrackProfile second;
+  second.strip_id = "second";
+  result.tracks = {first, second};
+  result.mix.track_count = 2;
+  result.mix.dominance.assign(2 * 2 * sonare::mixing::assistant::kBandCount,
+                              sonare::mixing::assistant::BandDominance{});
+  result.mix.dominance[sonare::mixing::assistant::kBandCount].ratio = 0.75f;
+  result.mix.dominance[sonare::mixing::assistant::kBandCount].valid_frames = 4;
+  sonare::mixing::assistant::PairAlignment aligned;
+  aligned.reference_index = 0;
+  aligned.target_index = 1;
+  aligned.related = true;
+  result.mix.alignment.push_back(aligned);
+
+  const auto document =
+      sonare::util::json::parse(sonare::mixing::assistant::mix_assistant_result_to_json(result));
+  REQUIRE(document["mix"]["bandDominance"].as_array().size() == 1);
+  REQUIRE(document["mix"]["alignment"].as_array().size() == 1);
+  CHECK(document["mix"]["bandDominance"][0]["masker"].as_string() == "first");
+  CHECK(document["mix"]["alignment"][0]["target"].as_string() == "second");
 }
 
 TEST_CASE("explanation lines follow the fixed application order", "[mixing][assistant]") {

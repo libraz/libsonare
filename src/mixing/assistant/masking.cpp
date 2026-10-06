@@ -71,6 +71,16 @@ bool envelope_is_well_formed(const BandEnergyEnvelope& bands) noexcept {
   return bands.energy.size() >= required;
 }
 
+bool frame_geometry_matches(const BandEnergyEnvelope& first,
+                            const BandEnergyEnvelope& second) noexcept {
+  if (first.sample_rate <= 0 || first.hop_length <= 0 || first.n_fft <= 0 ||
+      second.sample_rate <= 0 || second.hop_length <= 0 || second.n_fft <= 0) {
+    return false;
+  }
+  return first.sample_rate == second.sample_rate && first.hop_length == second.hop_length &&
+         first.n_fft == second.n_fft;
+}
+
 }  // namespace
 
 std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile>& profiles,
@@ -147,6 +157,8 @@ std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile
       for (std::size_t second = first + 1; second < track_count; ++second) {
         if (!measurable[second]) continue;
         const BandEnergyEnvelope& second_bands = profiles[second].bands;
+        // Incompatible sample clocks or frame geometry cannot compare the same moments.
+        if (!frame_geometry_matches(first_bands, second_bands)) continue;
         const float second_floor = floors[floor_index(second, band)];
         if (second_floor <= 0.0f) continue;
 

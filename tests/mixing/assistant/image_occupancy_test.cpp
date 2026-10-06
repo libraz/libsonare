@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "mixing/assistant/suggester.h"
 #include "mixing/meter.h"
 #include "util/constants.h"
 
@@ -226,6 +227,29 @@ TEST_CASE("A polarity-inverted track is reported as a mono risk", "[mixing][assi
   // The tone sits in the mid band: the low-end flag is a separate detection and
   // must not ride along with a broadband verdict.
   REQUIRE_FALSE(risks[0].wide_low_end);
+}
+
+TEST_CASE("Raw suggest_scene keeps a complete polarity-inverted stereo track measurable",
+          "[mixing][assistant]") {
+  const std::vector<float> left = tone(kMidToneHz, 0.5f);
+  const std::vector<float> right = tone(kMidToneHz, -0.5f);
+  const std::vector<TrackInput> tracks = {make_track("flipped", left, &right)};
+
+  sonare::mixing::assistant::MixAssistantConfig config;
+  config.enable_structure = false;
+  config.enable_gain = false;
+  config.enable_balance = false;
+  config.enable_eq = false;
+  config.enable_dynamics = false;
+  config.enable_image = true;
+
+  const auto result = sonare::mixing::assistant::suggest_scene(tracks, config);
+
+  REQUIRE(result.tracks.size() == 1);
+  REQUIRE(result.tracks[0].usable);
+  REQUIRE(result.mix.mono_risks.size() == 1);
+  CHECK(result.mix.mono_risks[0].strip_id == "flipped");
+  CHECK_THAT(result.mix.mono_risks[0].correlation, WithinAbs(-1.0f, 1e-3f));
 }
 
 TEST_CASE("A track that is wide only in the low end raises the low-end flag",

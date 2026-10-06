@@ -10,6 +10,7 @@
 /// @details @ref MixProfile holds only what cannot be measured from one track
 ///          in isolation. Anything single-track lives in @ref TrackProfile.
 
+#include <array>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -98,6 +99,24 @@ struct ImageOccupancy {
   }
 };
 
+/// @brief One track's per-band linear power, split by channel and by mid/side.
+/// @details @ref TrackProfile::bands is a single per-track envelope with no
+///          channel split, so it cannot answer where in the image a band sits;
+///          this is the split the image passes need and the profile does not
+///          carry. It keeps seven numbers per plane and no time axis, which is
+///          why it can be held for every track at once when the spectrogram it
+///          came from cannot.
+struct TrackChannelEnergy {
+  std::array<double, kBandCount> left{};
+  std::array<double, kBandCount> right{};
+  std::array<double, kBandCount> mid{};
+  std::array<double, kBandCount> side{};
+  /// @brief False when the track could not be measured at all.
+  bool valid = false;
+  /// @brief True only when both channels were transformed.
+  bool stereo = false;
+};
+
 /// @brief A track whose own stereo image collapses when summed to mono.
 struct MonoRisk {
   int track_index = 0;
@@ -113,6 +132,33 @@ struct MonoRisk {
 struct MixProfile {
   int track_count = 0;
 
+  /// @brief Track identities used for the cross-track measurements.
+  /// @details Empty means this is a hand-built profile, whose existing values
+  ///          are respected by the decision overload. A measured profile keeps
+  ///          this provenance out of JSON while using it to reject a profile
+  ///          list that was reordered or replaced before suggestion.
+  std::vector<std::string> source_strip_ids;
+
+  /// @brief True when the dominance pass actually ran during analysis.
+  /// @details A disabled EQ and dynamics pair intentionally leaves dominance
+  ///          unmeasured; a later profile-only call must not invent it from a
+  ///          cache that was built with that domain off.
+  bool dominance_measured = false;
+
+  /// @brief Raw per-track channel energies from the image analysis pass.
+  /// @details Kept in linear power and deliberately omitted from serialization.
+  ///          A later suggestion can apply a different input trim and project
+  ///          the image again without rerunning each track's STFT.
+  std::vector<TrackChannelEnergy> channel_energy;
+
+  /// @brief Input trims applied while the cached cross-track measurements ran.
+  /// @details The vector is index-parallel to @ref source_strip_ids and is kept
+  ///          out of JSON. It lets a later decision tell whether its current
+  ///          gain settings require a reprojection. A changed trim requires a
+  ///          fresh sweep of band dominance from the cached track envelopes;
+  ///          image occupancy is projected from @ref channel_energy.
+  std::vector<float> analysis_input_trim_db;
+
   /// @brief Pairwise band dominance, `[(masker * track_count + maskee) *
   ///        kBandCount + band]`.
   /// @details Both `(i, j)` and `(j, i)` are filled. The diagonal is left at its
@@ -124,11 +170,23 @@ struct MixProfile {
   /// @brief One entry per unordered track pair, reference index first.
   std::vector<PairAlignment> alignment;
 
+  /// @brief Alignment measurements retained while the image domain is disabled.
+  /// @details Non-serialized cache. The image-domain public field and this
+  ///          cache are mutually exclusive: toggling the domain off moves the
+  ///          measured rows here so a later profile-only suggestion can move
+  ///          them back without rerunning the source pass.
+  std::vector<PairAlignment> cached_alignment;
+
   /// @brief Stereo image histogram over the summed mix.
   ImageOccupancy image;
 
   /// @brief Tracks whose stereo image is at risk under a mono fold.
   std::vector<MonoRisk> mono_risks;
+
+  /// @brief Mono-risk measurements retained while the image domain is disabled.
+  /// @details Non-serialized cache. The public and cached vectors are mutually
+  ///          exclusive, just like @ref cached_alignment and @ref alignment.
+  std::vector<MonoRisk> cached_mono_risks;
 
   /// @brief Band-major dominance accessor. Returns a default entry when out of
   ///        range or on the diagonal.

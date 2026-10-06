@@ -90,6 +90,7 @@ inline TrackProfileConfig track_profile_config_from_params(const mastering::api:
     } else if (key == "hopLength" || key == "hop_length") {
       mastering::api::assign_int_param(key, value, config.hop_length);
     } else if (key == "minDurationSec" || key == "min_duration_sec") {
+      SONARE_CHECK_MSG(value >= 0.0, ErrorCode::InvalidParameter, key + " must be non-negative");
       config.min_duration_sec = static_cast<float>(value);
     } else {
       throw SonareException(

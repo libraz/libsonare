@@ -137,11 +137,10 @@ struct TrackInput {
 ///          not amplitude.
 ///
 ///          Frame `f` covers the analysis window centred at
-///          `frames_to_time(f, sample_rate, hop_length)` seconds. Use that
-///          helper rather than `f * hop / sr`: STFT analysis is centred, so the
-///          naive form is off by half a window. Every track in one call shares
-///          @ref n_fft and @ref hop_length, so frame indices are directly
-///          comparable across tracks.
+///          `frames_to_time(f, sample_rate, hop_length)` seconds, which for the
+///          centred STFT is `f * hop_length / sample_rate`.
+///          Cross-track frame comparisons require matching sample rates,
+///          @ref n_fft, and @ref hop_length; masking skips incompatible pairs.
 struct BandEnergyEnvelope {
   int n_frames = 0;
   int n_fft = 0;
@@ -238,12 +237,16 @@ struct TrackProfile {
 
 /// @brief Tunables for @ref analyze_track_profiles.
 struct TrackProfileConfig {
-  /// @brief Shared across every track in one call. Mismatched geometry would
-  ///        make frame indices incomparable in the cross-track phase.
+  /// @brief Shared across every track in one call. The values are checked by
+  ///        the core analysis-only STFT validator before any input shortcut;
+  ///        no stricter reconstruction geometry is imposed here. Mismatched
+  ///        geometry would make frame indices incomparable in the cross-track
+  ///        phase.
   int n_fft = 2048;
   int hop_length = 512;
   /// @brief Tracks shorter than this cannot produce a meaningful gated
-  ///        integrated loudness, so they are marked unusable.
+  ///        integrated loudness, so they are marked unusable. Must be finite
+  ///        and non-negative; zero disables the minimum-duration gate.
   float min_duration_sec = 0.4f;
 };
 
@@ -259,14 +262,22 @@ struct TrackProfileConfig {
 ///       rather than a frequency-domain copy.
 
 /// @brief Profiles every track with one shared STFT geometry.
-/// @details Degenerate input never throws: a null buffer, a zero frame count, a
-///          non-positive sample rate or a non-finite sample yields a
-///          default-constructed profile with @ref TrackProfile::usable false and
-///          an @ref TrackProfile::exclusion_reason naming which, so callers need
+/// @details Invalid shared configuration throws
+///          `SonareException(InvalidParameter)` before any input shortcut.
+///          Degenerate audio input otherwise never throws: a null buffer, a
+///          zero frame count, a non-positive sample rate or a non-finite sample
+///          yields a default-constructed profile with
+///          @ref TrackProfile::usable false and an
+///          @ref TrackProfile::exclusion_reason naming which, so callers need
 ///          no error handling. A NaN is reported as its own reason rather than
 ///          being allowed to reach the loudness measurement, where it would come
 ///          back as "track is silent" — a statement about the material instead
 ///          of about the buffer.
+/// @details A complete polarity-inverted stereo pair whose channel-summed
+///          loudness is finite and non-silent but whose downmix has no energy in
+///          any analysis band is reprofiled from the higher-power channel (left
+///          on a tie). Partial band cancellation keeps the downmix-derived
+///          fields.
 /// @details A returned profile is complete, @ref TrackProfile::source and
 ///          @ref TrackProfile::source_confidence included. Classification runs
 ///          here rather than as a step the caller has to know to take: every

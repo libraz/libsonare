@@ -4,6 +4,7 @@
 #include "mixing/assistant/suggester.h"
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <string>
 #include <utility>
@@ -73,6 +74,97 @@ void require_unique_ids(const std::vector<TrackInput>& tracks) {
   }
 }
 
+void require_unique_profile_ids(const std::vector<TrackProfile>& profiles) {
+  std::set<std::string> seen;
+  for (const TrackProfile& profile : profiles) {
+    SONARE_CHECK_MSG(!profile.strip_id.empty(), ErrorCode::InvalidParameter,
+                     "mixing assistant profile id must not be empty");
+    SONARE_CHECK_MSG(seen.insert(profile.strip_id).second, ErrorCode::InvalidParameter,
+                     "duplicate mixing assistant profile id '" + profile.strip_id + "'");
+  }
+}
+
+void require_finite_config(const MixAssistantConfig& config) {
+  struct Scalar {
+    const char* name;
+    float MixAssistantConfig::*member;
+  };
+  constexpr Scalar scalars[] = {
+      {"target_track_lufs", &MixAssistantConfig::target_track_lufs},
+      {"suggestion_strength", &MixAssistantConfig::suggestion_strength},
+      {"eq_max_cut_db", &MixAssistantConfig::eq_max_cut_db},
+      {"mix_bus_headroom_dbtp", &MixAssistantConfig::mix_bus_headroom_dbtp},
+      {"tempo_bpm", &MixAssistantConfig::tempo_bpm},
+  };
+  for (const Scalar& scalar : scalars) {
+    SONARE_CHECK_MSG(std::isfinite(config.*scalar.member), ErrorCode::InvalidParameter,
+                     std::string("mixing assistant ") + scalar.name + " must be finite");
+  }
+}
+
+void validate_analysis_inputs(const std::vector<TrackInput>& tracks,
+                              const std::vector<TrackProfile>& profiles) {
+  SONARE_CHECK_MSG(tracks.size() == profiles.size(), ErrorCode::InvalidParameter,
+                   "mixing assistant tracks and profiles must have the same size");
+  require_unique_ids(tracks);
+  require_unique_profile_ids(profiles);
+  for (std::size_t index = 0; index < tracks.size(); ++index) {
+    SONARE_CHECK_MSG(tracks[index].id == profiles[index].strip_id, ErrorCode::InvalidParameter,
+                     "mixing assistant track and profile ids must match in order");
+  }
+}
+
+bool trims_differ(const std::vector<float>& recorded, const std::vector<float>& current) {
+  if (recorded.size() != current.size()) return true;
+  for (std::size_t index = 0; index < recorded.size(); ++index) {
+    if (recorded[index] != current[index]) return true;
+  }
+  return false;
+}
+
+std::vector<TrackChannelEnergy> project_channel_energy(const std::vector<TrackChannelEnergy>& raw,
+                                                       const std::vector<float>& trims) {
+  if (raw.size() != trims.size()) return {};
+  std::vector<TrackChannelEnergy> projected = raw;
+  for (std::size_t index = 0; index < projected.size(); ++index) {
+    const double gain = static_cast<double>(db_to_power_scalar(trims[index]));
+    for (auto* plane : {&projected[index].left, &projected[index].right, &projected[index].mid,
+                        &projected[index].side}) {
+      for (double& value : *plane) value *= gain;
+    }
+  }
+  return projected;
+}
+
+void cache_image_measurements(MixProfile& mix) {
+  if (mix.cached_alignment.empty()) {
+    mix.cached_alignment = std::move(mix.alignment);
+  }
+  mix.alignment.clear();
+  if (mix.cached_mono_risks.empty()) {
+    mix.cached_mono_risks = std::move(mix.mono_risks);
+  }
+  mix.mono_risks.clear();
+}
+
+void restore_image_measurements(MixProfile& mix) {
+  if (mix.alignment.empty()) {
+    mix.alignment = std::move(mix.cached_alignment);
+  }
+  mix.cached_alignment.clear();
+  if (mix.mono_risks.empty()) {
+    mix.mono_risks = std::move(mix.cached_mono_risks);
+  }
+  mix.cached_mono_risks.clear();
+}
+
+void clear_image_measurements(MixProfile& mix) {
+  mix.alignment.clear();
+  mix.cached_alignment.clear();
+  mix.mono_risks.clear();
+  mix.cached_mono_risks.clear();
+}
+
 bool any_usable(const std::vector<TrackProfile>& profiles) {
   return std::any_of(profiles.begin(), profiles.end(),
                      [](const TrackProfile& profile) { return profile.usable; });
@@ -115,8 +207,11 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
   // The dominance matrix is emitted only where it is actually informative:
   // a full N^2 x 7 dump is mostly zeros and mostly noise for a reader.
   util::json::Array dominance;
-  for (int masker = 0; masker < mix.track_count; ++masker) {
-    for (int maskee = 0; maskee < mix.track_count; ++maskee) {
+  const int safe_track_count = std::max(mix.track_count, 0);
+  const int serializable_track_count =
+      std::min(safe_track_count, static_cast<int>(profiles.size()));
+  for (int masker = 0; masker < serializable_track_count; ++masker) {
+    for (int maskee = 0; maskee < serializable_track_count; ++maskee) {
       if (masker == maskee) continue;
       for (int band = 0; band < kBandCount; ++band) {
         const BandDominance entry = mix.dominance_at(masker, maskee, band);
@@ -138,6 +233,11 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
   util::json::Array alignment;
   for (const auto& pair : mix.alignment) {
     if (!pair.related) continue;
+    if (pair.reference_index < 0 || pair.target_index < 0 ||
+        pair.reference_index >= serializable_track_count ||
+        pair.target_index >= serializable_track_count) {
+      continue;
+    }
     util::json::Object row;
     row.emplace(
         "reference",
@@ -181,8 +281,15 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
 MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
                                const std::vector<TrackProfile>& profiles,
                                const MixAssistantConfig& config) {
+  require_finite_config(config);
+  validate_analysis_inputs(tracks, profiles);
+
   MixProfile mix;
   mix.track_count = static_cast<int>(profiles.size());
+  mix.source_strip_ids.reserve(profiles.size());
+  for (const TrackProfile& profile : profiles) {
+    mix.source_strip_ids.push_back(profile.strip_id);
+  }
   if (profiles.empty()) return mix;
 
   // Each pass is run only for the domains that read its result, because
@@ -195,6 +302,8 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
   const std::vector<float> trims =
       staged_input_trims(profiles, config.enable_gain ? decide_gain_staging(profiles, config)
                                                       : std::vector<SceneDelta>{});
+  mix.analysis_input_trim_db = trims;
+  mix.dominance_measured = config.enable_eq || config.enable_dynamics;
   if (config.enable_eq || config.enable_dynamics) {
     mix.dominance = analyze_band_dominance(profiles, trims);
   }
@@ -203,14 +312,8 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
     // Both image passes read the same per-channel band energies, so they are
     // measured once and handed to each rather than transformed twice.
     const std::vector<TrackChannelEnergy> energy = measure_track_channel_energy(tracks, profiles);
-    std::vector<TrackChannelEnergy> staged = energy;
-    for (std::size_t index = 0; index < staged.size() && index < trims.size(); ++index) {
-      const double gain = static_cast<double>(db_to_power_scalar(trims[index]));
-      for (auto* plane :
-           {&staged[index].left, &staged[index].right, &staged[index].mid, &staged[index].side}) {
-        for (double& value : *plane) value *= gain;
-      }
-    }
+    mix.channel_energy = energy;
+    std::vector<TrackChannelEnergy> staged = project_channel_energy(energy, trims);
     mix.image = analyze_image_occupancy(staged);
     // Mono risk reads each track's own channel ratios, which a gain does not move.
     mix.mono_risks = analyze_mono_risks(tracks, profiles, energy);
@@ -220,6 +323,7 @@ MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
 
 MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
                                  const MixAssistantConfig& config) {
+  require_finite_config(config);
   require_unique_ids(tracks);
 
   TrackProfileConfig profile_config;
@@ -242,9 +346,61 @@ MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
 
 MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, const MixProfile& mix,
                                  const MixAssistantConfig& config) {
+  require_finite_config(config);
+  require_unique_profile_ids(profiles);
+
+  MixProfile effective_mix = mix;
+  if (!mix.source_strip_ids.empty()) {
+    SONARE_CHECK_MSG(mix.track_count == static_cast<int>(profiles.size()),
+                     ErrorCode::InvalidParameter,
+                     "mixing assistant cached track count does not match profiles");
+    SONARE_CHECK_MSG(mix.source_strip_ids.size() == profiles.size(), ErrorCode::InvalidParameter,
+                     "mixing assistant cached profile identity count does not match profiles");
+    for (std::size_t index = 0; index < profiles.size(); ++index) {
+      SONARE_CHECK_MSG(mix.source_strip_ids[index] == profiles[index].strip_id,
+                       ErrorCode::InvalidParameter,
+                       "mixing assistant cached profile identities must match in order");
+    }
+    SONARE_CHECK_MSG(mix.analysis_input_trim_db.size() == profiles.size(),
+                     ErrorCode::InvalidParameter,
+                     "mixing assistant cached input trim count does not match profiles");
+
+    const std::vector<float> current_trims =
+        staged_input_trims(profiles, config.enable_gain ? decide_gain_staging(profiles, config)
+                                                        : std::vector<SceneDelta>{});
+    const bool input_trims_changed = trims_differ(mix.analysis_input_trim_db, current_trims);
+    effective_mix.analysis_input_trim_db = current_trims;
+
+    // Re-sweep dominance from cached envelopes only when it was measured.
+    if (config.enable_eq || config.enable_dynamics) {
+      if (!mix.dominance_measured) {
+        effective_mix.dominance.clear();
+      } else if (input_trims_changed || effective_mix.dominance.empty()) {
+        effective_mix.dominance = analyze_band_dominance(profiles, current_trims);
+      }
+    } else {
+      effective_mix.dominance.clear();
+    }
+
+    // Reproject image occupancy; alignment and mono risks are level-invariant.
+    if (!config.enable_image) {
+      cache_image_measurements(effective_mix);
+      effective_mix.image = ImageOccupancy{};
+    } else if (mix.channel_energy.size() != profiles.size()) {
+      clear_image_measurements(effective_mix);
+      effective_mix.image = ImageOccupancy{};
+    } else {
+      restore_image_measurements(effective_mix);
+      if (input_trims_changed || effective_mix.image.histogram.empty()) {
+        effective_mix.image =
+            analyze_image_occupancy(project_channel_energy(mix.channel_energy, current_trims));
+      }
+    }
+  }
+
   MixAssistantResult result;
   result.tracks = profiles;
-  result.mix = mix;
+  result.mix = effective_mix;
   if (profiles.empty() || !any_usable(profiles)) {
     return result;
   }
@@ -252,14 +408,15 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
   // A disabled domain is skipped rather than evaluated and discarded: the
   // reason to switch one off is usually that it is the expensive one.
   std::vector<SceneDelta> deltas;
-  if (config.enable_structure) append(deltas, decide_structure(profiles, mix, config));
+  if (config.enable_structure) append(deltas, decide_structure(profiles, effective_mix, config));
   if (config.enable_gain) append(deltas, decide_gain_staging(profiles, config));
   if (config.enable_balance) append(deltas, decide_balance(profiles, config));
-  if (config.enable_eq) append(deltas, decide_eq(profiles, mix, config));
+  if (config.enable_eq) append(deltas, decide_eq(profiles, effective_mix, config));
   if (config.enable_dynamics) {
-    append(deltas, decide_dynamics(profiles, mix, config, staged_input_trims(profiles, deltas)));
+    append(deltas,
+           decide_dynamics(profiles, effective_mix, config, staged_input_trims(profiles, deltas)));
   }
-  if (config.enable_image) append(deltas, decide_image(profiles, mix, config));
+  if (config.enable_image) append(deltas, decide_image(profiles, effective_mix, config));
 
   api::Scene base = empty_scene_for(profiles);
   std::vector<std::string> notes;
