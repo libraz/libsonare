@@ -250,6 +250,22 @@ TEST_CASE("OutputChain applies dither then quantization", "[mastering][final]") 
   REQUIRE_THAT(result[1] * 2048.0f, WithinAbs(-205.0f, 0.001f));
 }
 
+TEST_CASE("Final quantization preserves the positive PCM ceiling at every width",
+          "[mastering][final]") {
+  const int bits = GENERATE(16, 24, 25, 26, 28, 32);
+  const bool clamp = GENERATE(false, true);
+  const auto input = make_audio({2.0f, 1.0f, std::nextafter(1.0f, 0.0f), -1.0f, -2.0f});
+  const float ceiling = std::min(1.0f - std::ldexp(1.0f, 1 - bits), std::nextafter(1.0f, 0.0f));
+  const auto encoded = bit_depth(input, {bits, clamp});
+  const auto delivered = output_chain(input, {bits, DitherType::None, clamp});
+  for (size_t i = 0; i < 3; ++i) {
+    CHECK(encoded[i] == ceiling);
+    CHECK(delivered[i] == ceiling);
+  }
+  CHECK(encoded[3] == -1.0f);
+  CHECK(encoded[4] == -1.0f);
+}
+
 namespace {
 
 // Every assertion below is on a value or on a count. Finiteness is satisfied by

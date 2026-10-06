@@ -19,7 +19,8 @@ Audio bit_depth(const Audio& audio, const BitDepthConfig& config, size_t* non_fi
   }
   const float scale = static_cast<float>(int64_t{1} << (config.target_bits - 1));
   const float min_code = -scale;
-  const float max_code = scale - 1.0f;
+  // Above 25 bits, scale - 1 rounds back to scale in binary32.
+  const float max_code = std::min(scale - 1.0f, std::nextafter(1.0f, 0.0f) * scale);
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   size_t non_finite = 0;
   for (auto& sample : samples) {
