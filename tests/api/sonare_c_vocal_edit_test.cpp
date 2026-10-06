@@ -99,6 +99,23 @@ struct VocalFixture {
 };
 }  // namespace
 
+TEST_CASE("vocal C empty commit returns null range storage", "[vocal_c_api][vocal_empty_ranges]") {
+  VocalFixture f;
+  auto session = f.create();
+  SonareVocalEditDraft* raw = nullptr;
+  REQUIRE(sonare_vocal_session_begin_edit(session.get(), 0, &raw) == SONARE_OK);
+  std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+      raw, sonare_vocal_draft_destroy);
+  SonareVocalEditResult result;
+  sonare_vocal_edit_result_init(&result);
+  REQUIRE(sonare_vocal_draft_commit(raw, 0, &result) == SONARE_OK);
+  CHECK(result.dirty_range_count == 0);
+  CHECK(result.dirty_ranges == nullptr);
+  CHECK(result.id_change_count == 0);
+  CHECK(result.id_changes == nullptr);
+  sonare_vocal_free_edit_result(&result);
+}
+
 TEST_CASE("vocal C draft exposes provisional notes and stale errors without publication",
           "[vocal_c_api]") {
   VocalFixture f;
@@ -125,6 +142,8 @@ TEST_CASE("vocal C draft exposes provisional notes and stale errors without publ
   REQUIRE(sonare_vocal_draft_apply(raw, before.generation, &operation, 1, &result) == SONARE_OK);
   CHECK(result.token.generation == before.generation + 1);
   CHECK(result.dirty_range_count > 0);
+  CHECK(result.id_change_count == 0);
+  CHECK(result.id_changes == nullptr);
   sonare_vocal_free_edit_result(&result);
   CHECK(sonare_vocal_draft_apply(raw, before.generation, &operation, 1, &result) ==
         SONARE_ERROR_INVALID_STATE);

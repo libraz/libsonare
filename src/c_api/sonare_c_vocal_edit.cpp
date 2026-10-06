@@ -439,6 +439,11 @@ void map_notes(const Owner& owner, SonareVocalNotesResult* out) {
 }
 void map_ranges(const std::vector<vocal::SampleRange>& ranges, SonareVocalRange*& data,
                 uint64_t& count) {
+  if (ranges.empty()) {
+    data = nullptr;
+    count = 0;
+    return;
+  }
   auto out = std::make_unique<SonareVocalRange[]>(ranges.size());
   for (size_t i = 0; i < ranges.size(); ++i) out[i] = {ranges[i].start, ranges[i].end};
   data = out.release();
@@ -450,7 +455,9 @@ void map_change(const Change& change, SonareVocalEditResult* out) {
   map_ranges(change.dirty_ranges, out->dirty_ranges, out->dirty_range_count);
 }
 void map_apply(const vocal::DraftApplyResult& change, SonareVocalEditResult* out) {
-  auto ids = std::make_unique<SonareVocalIdChange[]>(change.id_changes.size());
+  auto ids = change.id_changes.empty()
+                 ? nullptr
+                 : std::make_unique<SonareVocalIdChange[]>(change.id_changes.size());
   for (size_t i = 0; i < change.id_changes.size(); ++i) {
     const auto& id = change.id_changes[i];
     ids[i] = {id.operation_index, id.retired_id, id.new_ids.empty() ? 0 : id.new_ids[0],
