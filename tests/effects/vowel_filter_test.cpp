@@ -16,6 +16,16 @@
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 
+TEST_CASE("vowel drive switch accepts only boolean automation values", "[effects][vowel][switch]") {
+  sonare::effects::filter::VowelFilter filter;
+  CHECK(filter.set_parameter(3, 0.0f));
+  CHECK(filter.set_parameter(3, 1.0f));
+  for (float value : {-1.0f, 0.5f, 2.0f}) {
+    INFO("driveOn=" << value);
+    CHECK_FALSE(filter.set_parameter(3, value));
+  }
+}
+
 namespace {
 
 using sonare::constants::kPiD;

@@ -202,7 +202,8 @@ bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
       drive_gain_ = std::pow(10.0f, config_.drive * kDriveMaxDb / kDbPerAmplitudeDecade);
       return true;
     case 3:
-      config_.drive_on = value != 0.0f;
+      if (value != 0.0f && value != 1.0f) return false;
+      config_.drive_on = value == 1.0f;
       return true;
     case 4:
       config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
