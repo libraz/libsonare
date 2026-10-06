@@ -55,6 +55,9 @@ enum class LiveOpenResult : uint8_t {
   kAudioOutputUnavailable,
   /// The device opened but would not start streaming.
   kAudioStartFailed,
+  /// The engine refused the format the device negotiated, e.g. a sample rate other
+  /// than the one an installed project timeline is locked to.
+  kEngineRefusedFormat,
 };
 
 class LiveSession final {
@@ -154,6 +157,8 @@ class LiveSession final {
   AudioStreamConfig negotiated_{};
   std::atomic<uint64_t> render_calls_{0};
   bool open_ = false;
+  /// Set by Pump::open() when the engine, not the device, refused the format.
+  bool engine_refused_format_ = false;
 };
 
 }  // namespace sonare::host

@@ -146,6 +146,27 @@ TEST_CASE("LiveSession opens an audio output with no MIDI input", "[host][live][
   REQUIRE(session.actual_block_size() == 0);
 }
 
+TEST_CASE("LiveSession names an engine that refuses the negotiated rate", "[host][live][.]") {
+  RealtimeEngine engine;
+  LiveSession probe;
+  LiveSession::Config config;
+  config.use_midi_input = false;
+  const LiveOpenResult first = probe.open(&engine, config);
+  if (first == LiveOpenResult::kAudioOutputUnavailable) {
+    SKIP("no audio output device available; skipping");
+  }
+  REQUIRE(first == LiveOpenResult::kOk);
+  const double negotiated = probe.actual_sample_rate();
+  probe.close();
+
+  // An installed timeline locks the engine to a rate the device will not negotiate.
+  engine.set_applied_timeline_sample_rate(negotiated == 44100.0 ? 48000.0 : 44100.0);
+  config.sample_rate = negotiated;
+  LiveSession session;
+  REQUIRE(session.open(&engine, config) == LiveOpenResult::kEngineRefusedFormat);
+  REQUIRE_FALSE(session.is_running());
+}
+
 TEST_CASE("LiveSession's reported latency tracks the block size it negotiated", "[host][live][.]") {
   // The reported figure is the driver's device latency plus its safety offset
   // plus the buffer, and only the last of those moves with the block size. Two

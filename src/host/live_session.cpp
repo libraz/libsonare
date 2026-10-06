@@ -64,9 +64,11 @@ LiveOpenResult LiveSession::open(engine::RealtimeEngine* engine, const Config& c
     engine_ = nullptr;
     return LiveOpenResult::kInvalidArgument;
   }
+  engine_refused_format_ = false;
   if (!audio->open_device(device_id, stream, &pump_)) {
     engine_ = nullptr;
-    return LiveOpenResult::kAudioOutputUnavailable;
+    return engine_refused_format_ ? LiveOpenResult::kEngineRefusedFormat
+                                  : LiveOpenResult::kAudioOutputUnavailable;
   }
 
   audio_ = std::move(audio);
@@ -132,6 +134,7 @@ bool LiveSession::Pump::open(const AudioStreamConfig& config) {
   try {
     session.engine_->prepare(config.sample_rate, config.max_block_size);
   } catch (...) {
+    session.engine_refused_format_ = true;
     return false;
   }
   session.negotiated_ = config;
