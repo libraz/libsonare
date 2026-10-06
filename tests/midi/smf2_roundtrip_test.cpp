@@ -958,8 +958,8 @@ TEST_CASE("SMF2 exports ClipName with the canonical metadata status", "[midi][sm
 }
 
 TEST_CASE("SMF2 imports canonical and legacy ClipName metadata", "[midi][smf2]") {
-  for (const auto [status, expected] : {std::pair<uint8_t, const char*>{0x03u, "Canonical"},
-                                        std::pair<uint8_t, const char*>{0x02u, "Legacy"}}) {
+  for (const auto& [status, expected] : {std::pair<uint8_t, const char*>{0x03u, "Canonical"},
+                                         std::pair<uint8_t, const char*>{0x02u, "Legacy"}}) {
     CAPTURE(status, expected);
     std::vector<uint8_t> bytes = smf2_structural_header();
     push_dcs(&bytes, 0);
@@ -1499,7 +1499,7 @@ TEST_CASE("SMF2 limits configuration tempo and meter but not sequence changes", 
 
 TEST_CASE("SMF2 skips non-complete or non-group Flex tempo and meter packets", "[midi][smf2]") {
   const std::pair<uint8_t, uint8_t> invalid_shapes[] = {{1, 1}, {0, 0}};
-  for (const auto [format, address] : invalid_shapes) {
+  for (const auto& [format, address] : invalid_shapes) {
     CAPTURE(format, address);
     std::vector<uint8_t> bytes = smf2_structural_header();
     push_dcs(&bytes, 0);

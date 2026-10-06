@@ -563,7 +563,7 @@ TEST_CASE("SMF export rejects a PPQN outside the positive 15-bit header field", 
 }
 
 TEST_CASE("SMF export writes valid and default PPQN values to the header", "[midi]") {
-  for (const auto [requested, expected] :
+  for (const auto& [requested, expected] :
        {std::pair<uint16_t, uint16_t>{0x7FFFu, 0x7FFFu}, std::pair<uint16_t, uint16_t>{0u, 480u}}) {
     CAPTURE(requested, expected);
     SmfExportOptions options;
