@@ -508,6 +508,23 @@ bool TrackMixerRuntime::set_track_dual_pan(uint32_t track_id, float left_pan,
   return true;
 }
 
+bool TrackMixerRuntime::set_track_surround_pan(uint32_t track_id,
+                                               const mixing::SurroundPanParams& params) noexcept {
+  if (!std::isfinite(params.azimuth) || !std::isfinite(params.elevation) ||
+      !std::isfinite(params.divergence) || !std::isfinite(params.lfe) ||
+      !std::isfinite(params.distance)) {
+    return false;
+  }
+  mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
+  if (!strip) return false;
+  mixing::SurroundPanParams stored = params;
+  // Same "keep default" sentinel as sonare_strip_set_surround_pan, applied here so
+  // the WASM facade, which calls this method directly, agrees with the C ABI.
+  if (stored.distance <= 0.0f) stored.distance = 1.0f;
+  strip->set_surround_pan_params(stored);
+  return true;
+}
+
 bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
                                                         int delay_samples) noexcept {
   // Both bounds are enforced here rather than only at the C ABI. The WASM

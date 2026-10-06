@@ -1249,6 +1249,54 @@ TEST_CASE("TrackMixerRuntime lane pan honors the strip's configured pan law",
   REQUIRE(ratio < 0.47f);
 }
 
+TEST_CASE("TrackMixerRuntime lane pan glide settles on the position that was set",
+          "[engine][track_mixer]") {
+  // A one-pole glide toward a non-zero pan stalls a few ulps short of it once the
+  // step rounds to zero; the glide is finished at the target so the settled
+  // output equals the output of a lane that never glided.
+  constexpr int kBlock = 256;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  for (int i = 0; i < kBlock; ++i) {
+    src_l[static_cast<size_t>(i)] = 0.5f + 0.001f * static_cast<float>(i);
+    src_r[static_cast<size_t>(i)] = -0.25f + 0.002f * static_cast<float>(i);
+  }
+
+  enum class Start { kUnpanned, kSnapped, kGlided };
+  const auto render = [&](Start start) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_track_lanes({{10}}));
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    const auto block = [&] {
+      out_l.fill(0.0f);
+      out_r.fill(0.0f);
+      std::array<float, kBlock> l = src_l;
+      std::array<float, kBlock> r = src_r;
+      float* in[] = {l.data(), r.data()};
+      REQUIRE(mixer.mix_source(10, in, out, 2, kBlock));
+    };
+    if (start != Start::kUnpanned) {
+      REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kPan, 0.5f));
+    }
+    if (start == Start::kSnapped) mixer.settle_smoothers();
+    if (start == Start::kGlided) {
+      for (int i = 0; i < 64; ++i) block();
+    }
+    block();
+    return std::make_pair(out_l, out_r);
+  };
+
+  const auto unpanned = render(Start::kUnpanned);
+  const auto snapped = render(Start::kSnapped);
+  const auto glided = render(Start::kGlided);
+  REQUIRE(snapped.first != unpanned.first);  // the pan reaches the output
+  REQUIRE(glided.first == snapped.first);
+  REQUIRE(glided.second == snapped.second);
+}
+
 TEST_CASE("TrackMixerRuntime applies scene EQ insert for a track lane", "[engine][track_mixer]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 4;
@@ -1403,6 +1451,50 @@ TEST_CASE("TrackMixerRuntime scatters a lane across a surround master",
   for (int c : {0, 1, 2, 3, 5}) {
     REQUIRE(std::abs(planes[static_cast<size_t>(c)].back()) < 1e-4f);
   }
+}
+
+TEST_CASE("TrackMixerRuntime surround pan glide keeps unit power across a move",
+          "[engine][track_mixer][surround]") {
+  // Per-plane gain smoothing dips -3 dB halfway between disjoint placements; the
+  // lane glides the azimuth instead, so every instant of a live move is unit power.
+  constexpr int kTotal = 1024;
+  std::array<float, kTotal> src_l{};
+  std::array<float, kTotal> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kTotal);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip spec;
+  spec.id = "vox";
+  spec.surround_pan.azimuth = -110.0f;
+  REQUIRE(mixer.set_track_strip(10, spec));
+  mixer.settle_smoothers();
+
+  std::array<std::array<float, kTotal>, 6> planes{};
+  std::array<float*, 6> out{};
+  for (int c = 0; c < 6; ++c) out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  float* src[] = {src_l.data(), src_r.data()};
+  REQUIRE(mixer.mix_source(10, src, out.data(), 6, 64));  // snap to Ls
+  for (auto& plane : planes) plane.fill(0.0f);
+
+  sonare::mixing::SurroundPanParams moved;
+  moved.azimuth = 110.0f;
+  REQUIRE(mixer.set_track_surround_pan(10, moved));
+  REQUIRE(mixer.mix_source(10, src, out.data(), 6, kTotal));
+
+  bool crossed = false;
+  for (int i = 0; i < kTotal; ++i) {
+    const auto at = [&](int c) { return planes[static_cast<size_t>(c)][static_cast<size_t>(i)]; };
+    const float power =
+        at(0) * at(0) + at(1) * at(1) + at(2) * at(2) + at(4) * at(4) + at(5) * at(5);
+    INFO("sample " << i);
+    REQUIRE(std::abs(power - 1.0f) < 1e-4f);
+    if (at(4) > 0.5f && at(5) > 0.5f) crossed = true;
+  }
+  REQUIRE(crossed);
+  REQUIRE(planes[5][kTotal - 1] > 0.999f);
 }
 
 TEST_CASE("TrackMixerRuntime surround pan glide is independent of sub-block partitioning",

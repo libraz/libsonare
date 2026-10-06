@@ -250,3 +250,92 @@ TEST_CASE("surround panner snaps rather than glides across a layout change", "[m
   }
   CHECK(differ);
 }
+
+TEST_CASE("surround panner keeps unit power while gliding between disjoint placements",
+          "[mixing][surround]") {
+  // Gains smoothed one plane at a time sit near 0.5 each halfway from Ls to Rs,
+  // halving the summed power (-3 dB). Gliding the azimuth keeps every instant a
+  // unit-power placement; LFE stays outside that sum.
+  constexpr int n = 1024;
+  SurroundPanParams p;
+  p.azimuth = -110.0f;
+  p.lfe = 0.5f;
+  SurroundPannerProcessor panner(ChannelLayout::FivePointOne, p);
+  panner.prepare(48000.0, n);
+  panner.reset();
+
+  std::vector<float> mono(n, 1.0f);
+  const float* mono_ptr = mono.data();
+  std::array<std::vector<float>, 6> planes;
+  std::array<float*, 6> out{};
+  for (int c = 0; c < 6; ++c) {
+    planes[static_cast<size_t>(c)].assign(n, 0.0f);
+    out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  }
+  panner.process_add(&mono_ptr, 1, out.data(), 6, 64);  // settle at Ls
+  for (auto& plane : planes) std::fill(plane.begin(), plane.end(), 0.0f);
+
+  p.azimuth = 110.0f;
+  panner.set_params(p);
+  panner.process_add(&mono_ptr, 1, out.data(), 6, n);
+
+  bool crossed = false;
+  for (int i = 0; i < n; ++i) {
+    const auto at = [&](int c) { return planes[static_cast<size_t>(c)][static_cast<size_t>(i)]; };
+    const float power =
+        at(0) * at(0) + at(1) * at(1) + at(2) * at(2) + at(4) * at(4) + at(5) * at(5);
+    INFO("sample " << i);
+    REQUIRE_THAT(power, WithinAbs(1.0f, 1e-4f));
+    REQUIRE_THAT(at(3), WithinAbs(0.5f, 1e-4f));
+    // The shorter arc runs behind the listener, so the front stays silent.
+    REQUIRE(std::abs(at(0)) + std::abs(at(1)) + std::abs(at(2)) < 1e-6f);
+    // Non-vacuity: the window has to contain the crossfade itself.
+    if (at(4) > 0.5f && at(5) > 0.5f) crossed = true;
+  }
+  REQUIRE(crossed);
+  REQUIRE(planes[5].back() > 0.999f);
+}
+
+TEST_CASE("surround panner glides an exactly opposite move behind the listener",
+          "[mixing][surround]") {
+  // -90 -> +90 on 7.1 is Lss -> Rss with both arcs 180 degrees long. The tie
+  // goes through the rear, so the move crosses Ls and Rs and never the front.
+  constexpr int n = 1024;
+  SurroundPanParams p;
+  p.azimuth = -90.0f;
+  SurroundPannerProcessor panner(ChannelLayout::SevenPointOne, p);
+  panner.prepare(48000.0, n);
+  panner.reset();
+
+  std::vector<float> mono(n, 1.0f);
+  const float* mono_ptr = mono.data();
+  std::array<std::vector<float>, 8> planes;
+  std::array<float*, 8> out{};
+  for (int c = 0; c < 8; ++c) {
+    planes[static_cast<size_t>(c)].assign(n, 0.0f);
+    out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  }
+  panner.process_add(&mono_ptr, 1, out.data(), 8, 64);
+  for (auto& plane : planes) std::fill(plane.begin(), plane.end(), 0.0f);
+
+  p.azimuth = 90.0f;
+  panner.set_params(p);
+  panner.process_add(&mono_ptr, 1, out.data(), 8, n);
+
+  float ls_peak = 0.0f;
+  float rs_peak = 0.0f;
+  for (int i = 0; i < n; ++i) {
+    const auto at = [&](int c) { return planes[static_cast<size_t>(c)][static_cast<size_t>(i)]; };
+    INFO("sample " << i);
+    REQUIRE(std::abs(at(0)) + std::abs(at(1)) + std::abs(at(2)) < 1e-6f);  // L R C
+    float power = 0.0f;
+    for (int c : {0, 1, 2, 4, 5, 6, 7}) power += at(c) * at(c);
+    REQUIRE_THAT(power, WithinAbs(1.0f, 1e-4f));
+    ls_peak = std::max(ls_peak, at(4));
+    rs_peak = std::max(rs_peak, at(5));
+  }
+  REQUIRE(ls_peak > 0.9f);
+  REQUIRE(rs_peak > 0.9f);
+  // A 180-degree arc is still a few degrees short of Rss after 1024 samples.
+  REQUIRE(planes[7].back() > 0.99f);  // Rss
+}

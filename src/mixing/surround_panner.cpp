@@ -142,27 +142,86 @@ SurroundPannerProcessor::SurroundPannerProcessor(ChannelLayout layout, SurroundP
       lfe_(params.lfe),
       distance_(params.distance) {}
 
+namespace {
+
+// Wraps degrees into [-180, 180].
+float wrap_degrees(float deg) noexcept { return deg - 360.0f * std::round(deg / 360.0f); }
+
+}  // namespace
+
+void SurroundPanGlide::prepare(double sample_rate, float time_ms) noexcept {
+  azimuth_.prepare(sample_rate, time_ms);
+  divergence_.prepare(sample_rate, time_ms);
+  lfe_.prepare(sample_rate, time_ms);
+}
+
+void SurroundPanGlide::snap(const SurroundPanParams& params, ChannelLayout layout) noexcept {
+  layout_ = layout;
+  azimuth_.reset(params.azimuth);
+  divergence_.reset(params.divergence);
+  lfe_.reset(params.lfe);
+  elevation_ = params.elevation;
+  distance_ = params.distance;
+  evaluated_valid_ = false;
+}
+
+void SurroundPanGlide::set_target(const SurroundPanParams& params) noexcept {
+  // Re-anchor the unwrapped azimuth at its wrapped equivalent (the one-pole's only
+  // state is its current value, so this is seamless), then aim along the shorter arc.
+  const float from = wrap_degrees(azimuth_.current());
+  float arc = wrap_degrees(params.azimuth - from);
+  if (std::abs(arc) == 180.0f) {
+    // Exactly opposite: both arcs are equal, so go the way whose midpoint is behind.
+    arc = std::abs(wrap_degrees(from + 90.0f)) >= std::abs(wrap_degrees(from - 90.0f)) ? 180.0f
+                                                                                       : -180.0f;
+  }
+  azimuth_.reset(from);
+  azimuth_.set_target(from + arc);
+  divergence_.set_target(params.divergence);
+  lfe_.set_target(params.lfe);
+  elevation_ = params.elevation;
+  distance_ = params.distance;
+}
+
+void SurroundPanGlide::settle() noexcept {
+  azimuth_.reset(azimuth_.target());
+  divergence_.reset(divergence_.target());
+  lfe_.reset(lfe_.target());
+}
+
+const SurroundPanGains& SurroundPanGlide::next() noexcept {
+  const float azimuth = azimuth_.process_settling();
+  const float divergence = divergence_.process_settling();
+  const float lfe = lfe_.process_settling();
+  if (!evaluated_valid_ || evaluated_[0] != azimuth || evaluated_[1] != divergence ||
+      evaluated_[2] != lfe) {
+    evaluate(azimuth, divergence, lfe);
+  }
+  return gains_;
+}
+
+void SurroundPanGlide::evaluate(float azimuth, float divergence, float lfe) noexcept {
+  SurroundPanParams p;
+  p.azimuth = wrap_degrees(azimuth);
+  p.elevation = elevation_;
+  p.divergence = divergence;
+  p.lfe = lfe;
+  p.distance = distance_;
+  if (!try_compute_surround_pan_gains(p, layout_, &gains_)) gains_ = SurroundPanGains{};
+  evaluated_ = {azimuth, divergence, lfe};
+  evaluated_valid_ = true;
+}
+
 void SurroundPannerProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  for (auto& s : smoothers_) s.prepare(sample_rate_, smoothing_ms_);
+  glide_.prepare(sample_rate_, smoothing_ms_);
   reset();
 }
 
-void SurroundPannerProcessor::load_target_gains(SurroundPanGains& out) const {
-  SurroundPanParams p;
-  p.azimuth = azimuth_.load(std::memory_order_relaxed);
-  p.elevation = elevation_.load(std::memory_order_relaxed);
-  p.divergence = divergence_.load(std::memory_order_relaxed);
-  p.lfe = lfe_.load(std::memory_order_relaxed);
-  p.distance = distance_.load(std::memory_order_relaxed);
-  out = compute_surround_pan_gains(p, layout());
-}
-
 void SurroundPannerProcessor::reset() {
-  // Snapping on the next block, rather than seeding the smoothers here, takes
-  // the gains from the parameters that block actually renders with.
+  // Snapping on the next block, rather than here, takes the placement from the
+  // parameters that block actually renders with.
   rendered_layout_ = kUnprimed;
-  for (auto& s : smoothers_) s.reset(0.0f);
 }
 
 void SurroundPannerProcessor::set_params(const SurroundPanParams& params) noexcept {
@@ -203,21 +262,16 @@ void SurroundPannerProcessor::process_add(const float* const* in, int num_in_cha
     return;
   }
 
-  SurroundPanGains gains;
-  load_target_gains(gains);
-  const int planes = std::min(gains.count, num_out_planes);
+  const int planes = std::min(layout_count, num_out_planes);
   // The first block after prepare()/reset(), and a layout change, start at
-  // placement: carried gains from another layout are a different quantity.
+  // placement rather than gliding from a position on another layout.
   const uint8_t active = static_cast<uint8_t>(layout());
-  const bool relaid_out = active != rendered_layout_;
-  rendered_layout_ = active;
-  for (int p = 0; p < planes; ++p) {
-    if (relaid_out) {
-      smoothers_[p].reset(gains.gain[p]);
-    } else {
-      smoothers_[p].set_target(gains.gain[p]);
-    }
+  if (active != rendered_layout_) {
+    glide_.snap(params(), layout());
+  } else {
+    glide_.set_target(params());
   }
+  rendered_layout_ = active;
 
   // Collapse the source to a point: mono passes through, stereo is summed at
   // -6 dB so a correlated centre image stays at unity.
@@ -228,9 +282,9 @@ void SurroundPannerProcessor::process_add(const float* const* in, int num_in_cha
 
   for (int i = 0; i < num_samples; ++i) {
     const float src = stereo_in ? 0.5f * (in0[i] + in1[i]) : in0[i];
+    const SurroundPanGains& g = glide_.next();
     for (int p = 0; p < planes; ++p) {
-      const float g = smoothers_[p].process();
-      if (out[p] != nullptr) out[p][i] += g * src;
+      if (out[p] != nullptr) out[p][i] += g.gain[p] * src;
     }
   }
 }

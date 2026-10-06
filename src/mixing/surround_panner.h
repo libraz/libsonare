@@ -102,13 +102,46 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
 bool try_compute_surround_pan_gains(const SurroundPanParams& params, ChannelLayout layout,
                                     SurroundPanGains* out) noexcept;
 
-/// Realtime surround panner: smooths each output-plane gain with a one-pole and
+/// @brief Glides a surround placement by smoothing its parameters, not its gains.
+/// @details azimuth, divergence and lfe each follow a one-pole and the gains are
+///          evaluated from the smoothed values every sample, so every instant of a
+///          move is a placement the law describes (unit non-LFE power included) and
+///          the result does not depend on block partitioning. Azimuth takes the
+///          shorter arc; an exactly opposite move passes behind the listener.
+class SurroundPanGlide {
+ public:
+  void prepare(double sample_rate, float time_ms) noexcept;
+  /// Opens at @p params on @p layout with no glide.
+  void snap(const SurroundPanParams& params, ChannelLayout layout) noexcept;
+  /// Glides toward @p params on the layout the last snap() named.
+  void set_target(const SurroundPanParams& params) noexcept;
+  /// Jumps to the current target.
+  void settle() noexcept;
+  /// Advances one sample and returns its gains (all zero on a non-surround layout).
+  const SurroundPanGains& next() noexcept;
+
+ private:
+  void evaluate(float azimuth, float divergence, float lfe) noexcept;
+
+  ChannelLayout layout_ = ChannelLayout::FivePointOne;
+  rt::ParamSmoother azimuth_;  // unwrapped; wrapped when evaluated
+  rt::ParamSmoother divergence_;
+  rt::ParamSmoother lfe_;
+  float elevation_ = 0.0f;
+  float distance_ = 1.0f;
+  // The smoothed values gains_ was evaluated from; a settled glide reuses it.
+  std::array<float, 3> evaluated_{};
+  bool evaluated_valid_ = false;
+  SurroundPanGains gains_{};
+};
+
+/// Realtime surround panner: glides the placement with a @ref SurroundPanGlide and
 /// scatters a (mono-summed) lane signal additively across the destination planes.
 ///
-/// Numerically the same scatter as TrackMixerRuntime's lane path: gains from
-/// @ref try_compute_surround_pan_gains, a 0.5(L+R) point source, a 5 ms one-pole
-/// per plane, and a snap to the target on the first block after prepare()/reset()
-/// and on a layout change. The standalone mixer graph scatters strips with it.
+/// Numerically the same scatter as TrackMixerRuntime's lane path: a 0.5(L+R) point
+/// source, a 5 ms parameter glide, and a snap to the target on the first block after
+/// prepare()/reset() and on a layout change. The standalone mixer graph scatters
+/// strips with it.
 class SurroundPannerProcessor {
  public:
   explicit SurroundPannerProcessor(ChannelLayout layout = ChannelLayout::FivePointOne,
@@ -138,15 +171,12 @@ class SurroundPannerProcessor {
                    int num_out_planes, int num_samples);
 
  private:
-  void load_target_gains(SurroundPanGains& out) const;
-
   double sample_rate_ = 48000.0;
   float smoothing_ms_ = 5.0f;
-  std::array<rt::ParamSmoother, kMaxSurroundPlanes> smoothers_{};
-  // The layout the smoothers currently hold gains for, or kUnprimed after
-  // prepare()/reset(). Gains are computed against a layout, so carried across a
-  // change they are a different quantity and the next block snaps instead of
-  // gliding from them. Audio thread only.
+  SurroundPanGlide glide_;
+  // The layout the glide was last snapped on, or kUnprimed after prepare()/reset().
+  // A placement on one layout is not a position on another, so a layout change
+  // snaps instead of gliding. Audio thread only.
   static constexpr uint8_t kUnprimed = 0xFF;
   uint8_t rendered_layout_{kUnprimed};
   std::atomic<uint8_t> layout_{static_cast<uint8_t>(ChannelLayout::FivePointOne)};

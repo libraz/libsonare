@@ -6,6 +6,7 @@
 #include "engine/track_mixer.h"
 #include "engine/track_mixer_internal.h"
 #include "mixing/downmix.h"
+#include "mixing/surround_panner.h"
 
 namespace sonare::engine {
 
@@ -781,7 +782,7 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     // stage and the lane's sends on exactly the same per-sample gain.
     const float* lane_fader_gate = lane_gain(lane_index);
     for (int i = 0; i < num_samples; ++i) {
-      const float pan = lane.pan.process();
+      const float pan = lane.pan.process_settling();
       float left_gain = lane_fader_gate[i];
       float right_gain = left_gain;
       // A centered lane is left at unity (no pan processing) so an unpanned lane
@@ -830,22 +831,19 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   if (lane.strip != nullptr) {
     params = lane.strip->surround_pan_params();
   }
-  mixing::SurroundPanGains target;
-  if (!mixing::try_compute_surround_pan_gains(params, dest_layout, &target)) return;
+  const int layout_planes = channel_count(dest_layout);
+  if (layout_planes <= 2 || layout_planes > mixing::kMaxSurroundPlanes) return;
   const int planes = std::min(dest_channels, mixing::kMaxSurroundPlanes);
-  // First surround block at this destination width: snap the carried scatter
-  // gains to the target so the block starts at full placement instead of fading
-  // in from silence, or from gains a different layout computed. This makes an
-  // offline bounce deterministic (no dependence on a pre-roll settle pass) and
-  // avoids a first-block click live.
+  // First surround block at this destination width: snap the placement to the
+  // target so the block starts at full placement instead of gliding from a
+  // position another layout described. This makes an offline bounce
+  // deterministic (no dependence on a pre-roll settle pass) and avoids a
+  // first-block click live.
   if (lane.surround_primed_channels != dest_channels) {
-    for (int p = 0; p < planes; ++p) {
-      lane.surround_gain[static_cast<size_t>(p)].reset(target.gain[static_cast<size_t>(p)]);
-    }
+    lane.surround_glide.snap(params, dest_layout);
     lane.surround_primed_channels = dest_channels;
-  }
-  for (int p = 0; p < planes; ++p) {
-    lane.surround_gain[static_cast<size_t>(p)].set_target(target.gain[static_cast<size_t>(p)]);
+  } else {
+    lane.surround_glide.set_target(params);
   }
   // Block-invariant, so it is resolved once instead of per sample per plane.
   const bool afl = lane.monitor_mode == TrackMonitorMode::kAfl && monitor_bus_ != nullptr;
@@ -854,7 +852,7 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   for (int i = 0; i < num_samples; ++i) {
     // Keep the stereo pan smoother advancing so a later stereo render resumes
     // from the right phase; surround placement comes from the panner, not pan.
-    (void)lane.pan.process();
+    (void)lane.pan.process_settling();
     const float fg = lane_fader_gate[i];
     float left = lane_channel(lane_index, 0)[i] * fg;
     lane_channel(lane_index, 0)[i] = left;
@@ -865,11 +863,11 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
       // -6 dB stereo fold to a point source keeps a correlated centre at unity.
       src = 0.5f * (left + right);
     }
-    // One smoother step per plane per sample: the glide is a sample-rate-derived
-    // time constant, so it is identical however process() split the block.
+    // One glide step per sample: the time constant is sample-rate-derived, so the
+    // placement is identical however process() split the block.
+    const mixing::SurroundPanGains& g = lane.surround_glide.next();
     for (int p = 0; p < planes; ++p) {
-      const float g = lane.surround_gain[static_cast<size_t>(p)].process();
-      const float sample = g * src;
+      const float sample = g.gain[static_cast<size_t>(p)] * src;
       if (dest[p] != nullptr) dest[p][i] += sample;
       if (p < afl_planes && monitor_bus_[p] != nullptr) {
         monitor_bus_[p][i] += sample;

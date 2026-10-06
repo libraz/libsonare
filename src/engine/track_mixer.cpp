@@ -1057,10 +1057,8 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     lane.clip_pdc_delay.prepare(sample_rate_, max_block_size_);
     // Same time constant as the stereo pan smoother, so a surround placement
     // glides over the same interval a stereo pan does.
-    for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
-      plane_gain.prepare(sample_rate_, 5.0f);
-      plane_gain.reset(0.0f);
-    }
+    lane.surround_glide.prepare(sample_rate_, 5.0f);
+    lane.surround_primed_channels = -1;
     lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
@@ -1243,12 +1241,10 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     lane.fader_gain.reset(lane.fader_gain.target());
     lane.pan.reset(lane.pan.target());
     lane.gate.reset(lane.gate.target());
-    // The surround scatter gains are smoothers too now, so a pre-roll settle
-    // has to quiesce them for the same reason it quiesces the fader: otherwise
-    // the first audible block glides into placement instead of opening at it.
-    for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
-      plane_gain.reset(plane_gain.target());
-    }
+    // The surround placement glides too, so a pre-roll settle quiesces it for
+    // the same reason it quiesces the fader: otherwise the first audible block
+    // glides into placement instead of opening at it.
+    lane.surround_glide.settle();
     // Quiesce the lane's channel-strip gain stages too so the first rendered
     // block opens without an insert/fader ramp-in.
     if (lane.strip != nullptr) lane.strip->settle();
@@ -1586,9 +1582,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
     lane.gate.prepare(sample_rate_, 10.0f);
-    for (rt::ParamSmoother& plane_gain : lane.surround_gain) {
-      plane_gain.prepare(sample_rate_, 5.0f);
-    }
+    lane.surround_glide.prepare(sample_rate_, 5.0f);
     lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
@@ -1598,7 +1592,6 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.strip = nullptr;
     // A new track identity must not inherit the previous occupant's clip delay audio.
     lane.clip_pdc_delay.reset();
-    for (rt::ParamSmoother& plane_gain : lane.surround_gain) plane_gain.reset(0.0f);
     lane.surround_primed_channels = -1;
   };
 

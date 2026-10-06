@@ -390,6 +390,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
   bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
   bool set_track_dual_pan(uint32_t track_id, float left_pan, float right_pan) noexcept;
+  // Surround placement used when the lane feeds a >2-channel destination. False
+  // for a non-finite field; distance <= 0 stores the default 1.
+  bool set_track_surround_pan(uint32_t track_id, const mixing::SurroundPanParams& params) noexcept;
   bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
   bool set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept;
   bool set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept;
@@ -612,22 +615,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // needed to report both sides of the dynamics stage.
     std::array<float, mixing::kMaxMeterChannels> input_peak_db =
         mixing::detail::meter_floor_array();
-    // Per-output-plane scatter gains carried block-to-block so a moving surround
-    // pan ramps click-free. Unused on the stereo path.
-    //
-    // Smoothers, not a linear per-block ramp: a ramp completes within whatever
-    // sub-block length process() happened to split at, so the same automation
-    // gesture glided over 0.67 ms at a 32-frame split and over 10 ms at a 512
-    // one. These carry the stereo pan smoother's 5 ms time constant, which is
-    // derived from the sample rate, so the gain at an absolute sample position
-    // no longer depends on the block partitioning. NOTE the consequence: a
-    // one-pole asymptotes rather than arriving, so a block can now END mid-glide
-    // and `surround_gain[p] == target.gain[p]` at a block boundary — true of the
-    // old ramp — no longer holds.
-    std::array<rt::ParamSmoother, kMaxBusChannels> surround_gain{};
+    // Surround placement carried block-to-block so a moving surround pan glides
+    // click-free. Unused on the stereo path. Like the stereo lane pan it smooths
+    // the parameters with the 5 ms sample-rate time constant and evaluates the
+    // law per sample, so the gain at an absolute sample position does not depend
+    // on the block partitioning, and a block can end mid-glide.
+    mixing::SurroundPanGlide surround_glide;
     // The destination width this lane last rendered at, or -1 before its first
-    // block. A surround block whose width differs snaps the scatter gains to
-    // their target (no fade-in from silence) so a bounce is deterministic
+    // block. A surround block whose width differs snaps the placement to its
+    // target (no fade-in from silence) so a bounce is deterministic
     // regardless of the pre-roll settle pass and a live first block does not
     // click; consecutive surround blocks at one width ramp from the carried
     // value. The width is the condition rather than a bare "has run" flag
