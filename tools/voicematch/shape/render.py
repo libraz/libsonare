@@ -21,7 +21,7 @@ import re
 import subprocess
 import sys
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -193,7 +193,11 @@ class Signals:
             ],
             input=json.dumps(
                 {
-                    "request": {k: v for k, v in asdict(self.request).items() if k != "smf"},
+                    "request": {
+                        k: v
+                        for k, v in asdict(replace(self.request, overrides=ov)).items()
+                        if k != "smf"
+                    },
                     "gate_s": self.gate_s,
                     "preroll_s": self.preroll_s,
                 }

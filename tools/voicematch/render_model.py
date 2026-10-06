@@ -275,6 +275,11 @@ def _bounce(libsonare, smf_bytes: bytes, total_seconds: float, sr: int, *, rig: 
     return audio, manifest
 
 
+def _validate_request_environment(request: RenderRequest) -> None:
+    if request.overrides != os.environ.get("SONARE_TUNING_OVERRIDES", ""):
+        raise ValueError("request overrides disagree with SONARE_TUNING_OVERRIDES")
+
+
 def render_request(request: RenderRequest) -> np.ndarray:
     """Render the SMF a `RenderRequest` carries, at its rig, preset and sample rate.
 
@@ -282,6 +287,7 @@ def render_request(request: RenderRequest) -> np.ndarray:
     library reads when it loads, so they are the caller's to set before this
     process starts; they are not applied here.
     """
+    _validate_request_environment(request)
     return render_model(
         request.smf, request.seconds, request.sample_rate, rig=request.rig, preset=request.preset
     )
@@ -289,6 +295,7 @@ def render_request(request: RenderRequest) -> np.ndarray:
 
 def render_request_rendered(request: RenderRequest) -> RenderedAudio:
     """`render_request` with its evidence, the request's fingerprint as `request_id`."""
+    _validate_request_environment(request)
     return render_model_rendered(
         request.smf,
         request.seconds,

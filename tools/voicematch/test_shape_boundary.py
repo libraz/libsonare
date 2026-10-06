@@ -129,3 +129,10 @@ def test_the_cache_key_follows_bank_rate_and_rig(tmp_path, worker_calls):
     for change in ({"bank": 8}, {"sample_rate": 48000}, {"rig": not sigs.request.rig}):
         other = dataclasses.replace(sigs, request=dataclasses.replace(sigs.request, **change))
         assert other._key(pairs, "", False) != base, change
+
+
+def test_candidate_overrides_are_recorded_in_the_worker_request(tmp_path, worker_calls):
+    sigs = _build(tmp_path, "mandolin", fit=True)[2]
+    override = "Mandolin.FilterCutoffHz=3200"
+    sigs._render([(60, 100)], override, False, tmp_path / "candidate.npz")
+    assert worker_calls[0]["request"]["overrides"] == override

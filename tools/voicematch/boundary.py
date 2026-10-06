@@ -150,6 +150,8 @@ class RenderRequest:
         set_(self, "channel", int(self.channel))
         set_(self, "sample_rate", int(self.sample_rate))
         set_(self, "keyswitch", int(self.keyswitch))
+        set_(self, "rig", bool(self.rig))
+        set_(self, "allow_rigged_oracle", bool(self.allow_rigged_oracle))
         if len(self.sends) != 3:
             raise ValueError(f"sends is (reverb, chorus, delay), not {self.sends!r}")
         set_(self, "sends", tuple(None if s is None else int(s) for s in self.sends))

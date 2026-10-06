@@ -150,6 +150,19 @@ def test_a_request_renders_at_its_own_rig_rate_and_window(monkeypatch):
     assert seen == {"smf": b"MThd", "seconds": 1.5, "sr": 44100, "rig": False, "preset": ""}
 
 
+def test_request_rejects_overrides_that_disagree_with_the_render_environment(monkeypatch):
+    from boundary import RenderRequest
+    from smf import write_smf
+
+    monkeypatch.setenv("SONARE_TUNING_OVERRIDES", "voice.knob=1")
+    request = RenderRequest(
+        program=27, seconds=0.01, smf=write_smf([], program=27), overrides="voice.knob=2"
+    )
+    for render in (render_model.render_request, render_model.render_request_rendered):
+        with pytest.raises(ValueError, match="SONARE_TUNING_OVERRIDES"):
+            render(request)
+
+
 def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
     """A stand-in libsonare whose bounce writes `record` where a tuning build would."""
     seen: dict[str, list] = {"dump_paths": []}

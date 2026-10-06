@@ -55,6 +55,15 @@ from capture import (
 
 CAPTURE_DIR = Path(__file__).resolve().parent / "capture"
 MISSING = object()
+
+
+def test_request_normalizes_boolean_flags_before_fingerprinting():
+    for field in ("rig", "allow_rigged_oracle"):
+        numeric = RenderRequest(program=27, seconds=1, **{field: 1})
+        boolean = RenderRequest(program=27, seconds=1, **{field: True})
+        assert numeric.fingerprint() == boolean.fingerprint()
+
+
 #: One program on each side of `rig_capable`.
 CAPABLE_PROGRAM, PLAIN_PROGRAM = 27, 0
 SENDS_OVERRIDE = (40, 0, 0)
