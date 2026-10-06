@@ -796,6 +796,11 @@ bool RealtimeEngine::set_track_dual_pan(uint32_t track_id, float left_pan,
   return track_mixer_runtime_.set_track_dual_pan(track_id, left_pan, right_pan);
 }
 
+bool RealtimeEngine::set_track_surround_pan(uint32_t track_id,
+                                            const mixing::SurroundPanParams& params) noexcept {
+  return track_mixer_runtime_.set_track_surround_pan(track_id, params);
+}
+
 bool RealtimeEngine::set_bus_pan(uint32_t bus_id, float pan) noexcept {
   return track_mixer_runtime_.set_bus_pan(bus_id, pan);
 }

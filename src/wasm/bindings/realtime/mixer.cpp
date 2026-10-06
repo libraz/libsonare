@@ -712,6 +712,40 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
 #endif
 }
 
+// Sets a lane strip's surround pan from {azimuth, elevation, divergence, lfe,
+// distance}; absent fields take the centered point-source defaults, a present
+// non-number is refused by name, and the core refuses non-finite values.
+void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const val& pan_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  if (pan_val.isNull() || pan_val.typeOf().as<std::string>() != "object") {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pan must be an object");
+  }
+  const auto field = [&](const char* key, float fallback) {
+    const val v = pan_val[key];
+    if (v.isUndefined() || v.isNull()) return fallback;
+    if (v.typeOf().as<std::string>() != "number") {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    std::string(key) + " must be a number");
+    }
+    return checkedFloatFromVal(v, key);
+  };
+#if defined(SONARE_WITH_MIXING)
+  sonare::mixing::SurroundPanParams params;
+  params.azimuth = field("azimuth", 0.0f);
+  params.elevation = field("elevation", 0.0f);
+  params.divergence = field("divergence", 0.0f);
+  params.lfe = field("lfe", 0.0f);
+  params.distance = field("distance", 1.0f);
+  requireMixingTarget(engine_.set_track_surround_pan(track_id, params),
+                      "invalid track strip surround-pan target");
+#else
+  (void)track_id;
+  (void)field;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void RealtimeEngineWasm::setBusStripPan(const val& bus_id_val, const val& pan_val) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const float pan = checkedFloatFromVal(pan_val, "pan");
@@ -855,6 +889,7 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("setTrackStripPanLaw", &RealtimeEngineWasm::setTrackStripPanLaw)
       .function("setTrackStripPanMode", &RealtimeEngineWasm::setTrackStripPanMode)
       .function("setTrackStripDualPan", &RealtimeEngineWasm::setTrackStripDualPan)
+      .function("setTrackStripSurroundPan", &RealtimeEngineWasm::setTrackStripSurroundPan)
       .function("setBusStripPan", &RealtimeEngineWasm::setBusStripPan)
       .function("setBusStripPanLaw", &RealtimeEngineWasm::setBusStripPanLaw)
       .function("setBusStripPanMode", &RealtimeEngineWasm::setBusStripPanMode)

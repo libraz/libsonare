@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 from ._engine_conversions import _band_json_arg
+from ._ffi import SonareSurroundPan
 from ._runtime import (
     _UINT32_MAX,
     PanLawInput,
@@ -350,6 +351,37 @@ class _EngineMixingMixin:
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_float(left_pan, "left_pan"),
                 _to_c_float(right_pan, "right_pan"),
+            )
+        )
+
+    def set_track_strip_surround_pan(
+        self,
+        track_id: int,
+        *,
+        azimuth: float = 0.0,
+        elevation: float = 0.0,
+        divergence: float = 0.0,
+        lfe: float = 0.0,
+        distance: float = 1.0,
+    ) -> None:
+        """Set a track strip's surround pan position without a graph rebuild.
+
+        Fields as in :meth:`Mixer.set_surround_pan`; a ``distance`` of 0 or less
+        means the default of 1. Applied when the lane feeds a bus with more than
+        two channels; non-finite fields are rejected.
+        """
+        pan = SonareSurroundPan(
+            azimuth=_to_c_float(azimuth, "azimuth"),
+            elevation=_to_c_float(elevation, "elevation"),
+            divergence=_to_c_float(divergence, "divergence"),
+            lfe=_to_c_float(lfe, "lfe"),
+            distance=_to_c_float(distance, "distance"),
+        )
+        _check(
+            _get_lib().sonare_engine_set_track_strip_surround_pan(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                ctypes.byref(pan),
             )
         )
 

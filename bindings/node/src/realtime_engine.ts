@@ -43,6 +43,7 @@ import type {
   RenderOfflineRequest,
   Sf2InstrumentConfig,
   SidechainSourceKind,
+  SurroundPan,
   SynthPatch,
   UmpWords,
 } from './types.js';
@@ -770,6 +771,19 @@ export class RealtimeEngine {
    */
   setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
     this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a track lane strip's surround pan in realtime. Applied at the next
+   * block head with a short 5 ms placement glide, so a live move is glitch-free; it
+   * takes effect when the lane feeds a destination wider than stereo (a 5.1/7.1
+   * group bus or master). Requires a lane with a bound strip.
+   *
+   * @param trackId Lane the strip belongs to.
+   * @param pan Surround position; omitted fields default to a centered point source.
+   */
+  setTrackStripSurroundPan(trackId: number, pan: SurroundPan): void {
+    this.native.setTrackStripSurroundPan(trackId, pan);
   }
 
   /**

@@ -771,6 +771,16 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.setTrackStripSurroundPan',
+    missingRequired: [],
+    badArguments: [
+      {
+        argument: 'azimuth',
+        call: (e) => e.setTrackStripSurroundPan(TRACK_ID, { azimuth: '0.5' }),
+      },
+    ],
+  },
+  {
     name: 'RealtimeEngine.setBusStripPan',
     missingRequired: [],
     badArguments: [{ argument: 'pan', call: (e) => e.setBusStripPan(BUS_ID, '0.5') }],

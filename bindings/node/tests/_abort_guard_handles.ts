@@ -281,6 +281,7 @@ export interface NativeEngine {
   setTrackStripPan(trackId: unknown, pan: unknown): void;
   setTrackStripPanLaw(trackId: unknown, panLaw: unknown): void;
   setTrackStripPanMode(trackId: unknown, panMode: unknown): void;
+  setTrackStripSurroundPan(trackId: unknown, pan: unknown): void;
   setTrackStripDualPan(trackId: unknown, leftPan: unknown, rightPan: unknown): void;
   setBusStripPan(busId: unknown, pan: unknown): void;
   setBusStripPanLaw(busId: unknown, panLaw: unknown): void;

@@ -307,6 +307,13 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.c_float,
         ]
+    if hasattr(lib, "sonare_engine_set_track_strip_surround_pan"):
+        lib.sonare_engine_set_track_strip_surround_pan.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_surround_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareSurroundPan),
+        ]
     if hasattr(lib, "sonare_engine_set_track_strip_channel_delay_samples"):
         lib.sonare_engine_set_track_strip_channel_delay_samples.restype = ctypes.c_int32
         lib.sonare_engine_set_track_strip_channel_delay_samples.argtypes = [

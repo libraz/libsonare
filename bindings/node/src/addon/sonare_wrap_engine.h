@@ -83,6 +83,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTrackStripPanLaw(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanMode(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripDualPan(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripSurroundPan(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripPan(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripPanLaw(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripPanMode(const Napi::CallbackInfo& info);

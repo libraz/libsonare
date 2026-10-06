@@ -685,6 +685,9 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncTrackStripDualPan':
         this.engine.setTrackStripDualPan(message.trackId, message.leftPan, message.rightPan);
         break;
+      case 'syncTrackStripSurroundPan':
+        this.engine.setTrackStripSurroundPan(message.trackId, message.pan);
+        break;
       case 'syncBusStripPan':
         this.engine.setBusStripPan(message.busId, message.pan);
         break;

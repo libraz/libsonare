@@ -1518,6 +1518,7 @@ export interface WasmRealtimeEngine {
   setTrackStripPanLaw: (trackId: number, panLaw: number) => void;
   setTrackStripPanMode: (trackId: number, panMode: number) => void;
   setTrackStripDualPan: (trackId: number, leftPan: number, rightPan: number) => void;
+  setTrackStripSurroundPan: (trackId: number, pan: SurroundPan) => void;
   setBusStripPan: (busId: number, pan: number) => void;
   setBusStripPanLaw: (busId: number, panLaw: number) => void;
   setBusStripPanMode: (busId: number, panMode: number) => void;

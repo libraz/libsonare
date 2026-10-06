@@ -1,5 +1,6 @@
 import { panLawCode, panModeCode } from '../codes';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index';
+import type { SurroundPan } from '../public_types';
 import type { InsertParamOverrideMap } from './engine-mixer-facade';
 import {
   emptyStripJson,
@@ -203,6 +204,26 @@ export function setTrackStripDualPan(
     entry.dualPanRight = rightPan;
   });
   ctx.postSync({ type: 'syncTrackStripDualPan', trackId, leftPan, rightPan });
+}
+
+export function setTrackStripSurroundPan(
+  ctx: EngineStripContext,
+  target: string | number,
+  pan: SurroundPan,
+): void {
+  const trackId = trackIdFor(ctx, target);
+  ctx.offlineEngine.setTrackStripSurroundPan(trackId, pan);
+  const resolved = {
+    azimuth: pan.azimuth ?? 0,
+    elevation: pan.elevation ?? 0,
+    divergence: pan.divergence ?? 0,
+    lfe: pan.lfe ?? 0,
+    distance: pan.distance === undefined || pan.distance <= 0 ? 1 : pan.distance,
+  };
+  mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
+    entry.surroundPan = resolved;
+  });
+  ctx.postSync({ type: 'syncTrackStripSurroundPan', trackId, pan: resolved });
 }
 
 export function setTrackStripChannelDelaySamples(

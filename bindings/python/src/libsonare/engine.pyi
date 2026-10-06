@@ -170,6 +170,16 @@ class RealtimeEngine:
     def set_track_strip_dual_pan(
         self, track_id: int, left_pan: float, right_pan: float
     ) -> None: ...
+    def set_track_strip_surround_pan(
+        self,
+        track_id: int,
+        *,
+        azimuth: float = ...,
+        elevation: float = ...,
+        divergence: float = ...,
+        lfe: float = ...,
+        distance: float = ...,
+    ) -> None: ...
     def set_track_strip_channel_delay_samples(self, track_id: int, delay_samples: int) -> None: ...
     def set_master_strip_json(self, scene_json: str) -> None: ...
     def set_master_strip_eq_band(

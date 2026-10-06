@@ -260,6 +260,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanLaw>("setTrackStripPanLaw"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanMode>("setTrackStripPanMode"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripDualPan>("setTrackStripDualPan"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripSurroundPan>("setTrackStripSurroundPan"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripPan>("setBusStripPan"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripPanLaw>("setBusStripPanLaw"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripPanMode>("setBusStripPanMode"),

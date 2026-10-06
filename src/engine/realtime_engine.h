@@ -812,6 +812,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
   bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
   bool set_track_dual_pan(uint32_t track_id, float left_pan, float right_pan) noexcept;
+  // Surround placement for the lane on a >2-channel destination; glitch-free
+  // (strip atomics, 5 ms parameter glide). False for a non-finite field.
+  bool set_track_surround_pan(uint32_t track_id, const mixing::SurroundPanParams& params) noexcept;
   bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
   // Bus output pan and dedicated EQ (see the TrackMixerRuntime setters). The pan
   // setters are glitch-free atomic writes, safe during playback, and return

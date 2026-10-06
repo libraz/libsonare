@@ -503,6 +503,30 @@ Napi::Value RealtimeEngineWrap::SetTrackStripDualPan(const Napi::CallbackInfo& i
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) {
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "Expected (trackId, pan: SurroundPan)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const Napi::Object obj = info[1].As<Napi::Object>();
+  SonareSurroundPan pan{};
+  pan.azimuth = FloatProperty(obj, "azimuth", 0.0f);
+  pan.elevation = FloatProperty(obj, "elevation", 0.0f);
+  pan.divergence = FloatProperty(obj, "divergence", 0.0f);
+  pan.lfe = FloatProperty(obj, "lfe", 0.0f);
+  pan.distance = FloatProperty(obj, "distance", 1.0f);
+  if (env.IsExceptionPending()) return env.Undefined();
+  ThrowIfError(env, sonare_engine_set_track_strip_surround_pan(engine_, track_id, &pan));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::SetBusStripPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

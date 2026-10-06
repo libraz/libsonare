@@ -29,6 +29,7 @@ import type {
   PanMode,
   SendTiming,
   SidechainSourceKind,
+  SurroundPan,
   UmpWords,
 } from './public_types';
 import type {
@@ -1527,6 +1528,17 @@ export class RealtimeEngine {
   /** Sets a track lane strip's dual-pan left/right positions in realtime. */
   setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
     this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a track lane strip's surround placement in realtime (glitch-free; a
+   * constant-power 5 ms one-pole glide). Used when the destination has more than
+   * two channels. Omitted fields default to a centered point source
+   * (`distance` 1); a `distance` of 0 or less is treated as 1. Throws for an
+   * unknown track, a track without a lane strip, or a non-finite field.
+   */
+  setTrackStripSurroundPan(trackId: number, pan: SurroundPan): void {
+    this.native.setTrackStripSurroundPan(trackId, pan);
   }
 
   /**

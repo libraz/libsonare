@@ -75,6 +75,111 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
 
 namespace {
 
+// Renders the engine to a 5.1 bounce and returns the per-plane energy.
+std::array<double, 6> bounce_surround_energy(SonareRealtimeEngine* engine, int frames, int block) {
+  // A bounce leaves the transport at its end; rewind so every call renders the clip.
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = frames;
+  options.block_size = block;
+  options.num_channels = 6;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+  options.normalize_lufs = 0;
+  options.dither = 0;
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.num_channels == 6);
+  std::array<double, 6> energy{};
+  for (int64_t f = 0; f < result.frames; ++f) {
+    for (int ch = 0; ch < 6; ++ch) {
+      const float v = result.interleaved[f * 6 + ch];
+      energy[static_cast<size_t>(ch)] += static_cast<double>(v) * v;
+    }
+  }
+  sonare_free_bounce_result(&result);
+  return energy;
+}
+
+}  // namespace
+
+TEST_CASE("sonare_engine_set_track_strip_surround_pan moves a lane across the 5.1 bed",
+          "[c_api][engine][surround]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 8;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+
+  std::array<float, kFrames> clip_l{};
+  std::array<float, kFrames> clip_r{};
+  clip_l.fill(1.0f);
+  clip_r.fill(1.0f);
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  // A strip with no surroundPan: the setter alone has to place the lane.
+  const char* strip_json = R"({"version":1,"buses":[{"id":"master","role":"master"}],)"
+                           R"("strips":[{"id":"s"}]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
+
+  // A zero-initialized struct (distance 0) is accepted as the default distance.
+  SonareSurroundPan pan{};
+  pan.azimuth = -110.0f;
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &pan) == SONARE_OK);
+  const std::array<double, 6> left = bounce_surround_energy(engine, kFrames, kBlock);
+  REQUIRE(left[4] > 1.0);             // Ls
+  REQUIRE(left[5] < left[4] * 1e-3);  // Rs
+  REQUIRE(left[2] < left[4] * 1e-3);  // C
+  REQUIRE(left[3] == 0.0);            // LFE
+
+  pan.azimuth = 110.0f;
+  pan.lfe = 0.5f;
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &pan) == SONARE_OK);
+  const std::array<double, 6> right = bounce_surround_energy(engine, kFrames, kBlock);
+  // The move glides instead of jumping, so Ls keeps a short tail, and the glide is
+  // constant-power: Ls + Rs carry the unit-power DC source for every frame.
+  REQUIRE(right[5] > right[4] * 5.0);  // Rs
+  REQUIRE(right[4] > 0.0);             // Ls glide tail
+  REQUIRE(std::abs(right[4] + right[5] - kFrames) < kFrames * 1e-4);
+  REQUIRE(right[3] > 0.0);  // LFE send now on
+
+  // Rejected requests leave the placement alone.
+  SonareSurroundPan bad = pan;
+  bad.azimuth = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &bad) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  bad = pan;
+  bad.distance = std::numeric_limits<float>::infinity();
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, &bad) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 10, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 99, &pan) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(engine, 0, &pan) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_surround_pan(nullptr, 10, &pan) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const std::array<double, 6> kept = bounce_surround_energy(engine, kFrames, kBlock);
+  REQUIRE(kept[5] > 1.0);
+  REQUIRE(kept[4] < kept[5] * 1e-3);
+
+  sonare_engine_destroy(engine);
+}
+
+namespace {
+
 constexpr int kPreRollBlock = 128;
 constexpr int kPreRollFrames = kPreRollBlock * 48;
 

@@ -17,7 +17,7 @@ import type {
   RealtimeVoiceChangerPodConfig,
   UmpWords,
 } from '../index';
-import type { AutomationCurve } from '../public_types';
+import type { AutomationCurve, SurroundPan } from '../public_types';
 import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
@@ -46,6 +46,18 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   initialCommands?: SonareEngineCommandRecord[];
   sampleRate?: number;
   blockSize?: number;
+  /**
+   * Output plane count (default 2). Planes follow the canonical order
+   * L R C LFE Ls Rs [Lss Rss] for 6 (5.1) and 8 (7.1) planes.
+   *
+   * The Web Audio default destination is 2-channel `'speakers'`, so a wider
+   * output is mixed down to stereo unless the app raises
+   * `audioContext.destination.channelCount` (up to its `maxChannelCount`) to
+   * match. Interpretation matters only while the counts differ: `'speakers'`
+   * applies the spec's down-mix for mono, stereo, quad and 5.1 sources only,
+   * and `'discrete'` copies the first planes and drops the rest. With equal
+   * counts the planes pass through unchanged in either mode.
+   */
   channelCount?: number;
   meterIntervalFrames?: number;
   commandSharedBuffer?: SharedArrayBuffer;
@@ -635,6 +647,12 @@ export interface SonareEngineSyncTrackStripDualPanMessage {
   rightPan: number;
 }
 
+export interface SonareEngineSyncTrackStripSurroundPanMessage {
+  type: 'syncTrackStripSurroundPan';
+  trackId: number;
+  pan: Required<SurroundPan>;
+}
+
 export interface SonareEngineSyncBusStripPanMessage {
   type: 'syncBusStripPan';
   busId: number;
@@ -860,6 +878,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncTrackStripPanLawMessage
   | SonareEngineSyncTrackStripPanModeMessage
   | SonareEngineSyncTrackStripDualPanMessage
+  | SonareEngineSyncTrackStripSurroundPanMessage
   | SonareEngineSyncBusStripPanMessage
   | SonareEngineSyncBusStripPanLawMessage
   | SonareEngineSyncBusStripPanModeMessage

@@ -109,6 +109,7 @@ export const ENGINE_SYNC_MESSAGE_TYPES: Record<SonareEngineSyncMessage['type'], 
   syncTrackStripPan: true,
   syncTrackStripPanLaw: true,
   syncTrackStripPanMode: true,
+  syncTrackStripSurroundPan: true,
   syncWarpVoiceCapacity: true,
 };
 

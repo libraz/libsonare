@@ -27,6 +27,7 @@ import type {
 } from '../index';
 import { RealtimeEngine } from '../index';
 import { createOpfsClipPageProvider, type OpfsClipPageProviderBinding } from '../opfs_clip_pages';
+import type { SurroundPan } from '../public_types';
 import type { ClipPageProvider } from '../realtime_engine';
 import type { EngineAutomationContext } from './engine-automation';
 import * as automation from './engine-automation';
@@ -612,6 +613,15 @@ export class SonareEngine {
 
   setTrackStripDualPan(target: string | number, leftPan: number, rightPan: number): void {
     strips.setTrackStripDualPan(this.stripContext, target, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a track lane strip's surround placement (glitch-free, 5 ms placement
+   * glide). Takes effect on a destination wider than stereo, so set `channelCount`
+   * to the layout's plane count. Omitted fields default to a centered point source.
+   */
+  setTrackStripSurroundPan(target: string | number, pan: SurroundPan): void {
+    strips.setTrackStripSurroundPan(this.stripContext, target, pan);
   }
 
   setTrackStripChannelDelaySamples(target: string | number, delaySamples: number): void {

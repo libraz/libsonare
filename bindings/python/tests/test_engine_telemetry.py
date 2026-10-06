@@ -60,6 +60,87 @@ def test_engine_drain_meter_telemetry_wide_surround_bus() -> None:
         assert bus_meter.peak_db[4] > bus_meter.peak_db[0] + 10.0
 
 
+def _plane_powers(planes: list[list[float]]) -> list[float]:
+    return [sum(x * x for x in plane) / len(plane) for plane in planes]
+
+
+def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None:
+    block = 256
+    blocks = 24
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[0.5] * (block * blocks * 4)],
+                    start_ppq=0.0,
+                    length_samples=block * blocks * 4,
+                )
+            ]
+        )
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        engine.set_track_strip_json(
+            10, '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}'
+        )
+        engine.set_track_strip_surround_pan(10, azimuth=-110.0)
+        engine.play()
+
+        def run_blocks() -> list[list[float]]:
+            out = [[] for _ in range(6)]
+            for _ in range(blocks):
+                planes = engine.process([[0.0] * block for _ in range(6)])
+                for dst, src in zip(out, planes, strict=True):
+                    dst.extend(src)
+            return out
+
+        settled = run_blocks()
+        before = _plane_powers(settled)
+        total_before = sum(before)
+        assert total_before > 1e-4
+        # Planes: 0 L, 1 R, 2 C, 3 LFE, 4 Ls, 5 Rs.
+        assert before[4] > 0.1 * total_before
+        assert before[5] < 1e-3 * before[4]
+        assert before[2] < 1e-3 * before[4]
+
+        steady_power = sum(plane[-1] ** 2 for plane in settled)
+        assert steady_power > 1e-4
+
+        engine.set_track_strip_surround_pan(10, azimuth=110.0)
+        # The first blocks carry the glide; check every frame of the move.
+        moving = run_blocks()
+        ratios = [
+            sum(plane[i] ** 2 for plane in moving) / steady_power for i in range(len(moving[0]))
+        ]
+        crossfade_frames = sum(
+            1
+            for ls, rs in zip(moving[4], moving[5], strict=True)
+            if abs(ls) > 0.25 and abs(rs) > 0.25
+        )
+        # Non-vacuity: the window contains frames where both planes carry signal.
+        assert crossfade_frames > 0
+        # The gain vector is renormalized every sample, so the total power holds
+        # the steady value through the move (float32 scale).
+        assert min(ratios) >= 1 - 1e-5
+        assert max(ratios) <= 1 + 1e-5
+        after = _plane_powers(run_blocks())
+        assert after[5] > 0.1 * sum(after)
+        assert after[4] < 1e-3 * after[5]
+        assert after[2] < 1e-3 * after[5]
+        # A constant-power pan keeps the summed plane power through the move.
+        assert sum(after) == pytest.approx(total_before, rel=0.05)
+
+        with pytest.raises(SonareError) as nan_error:
+            engine.set_track_strip_surround_pan(10, azimuth=math.nan)
+        assert nan_error.value.code == 4
+        with pytest.raises(SonareError):
+            engine.set_track_strip_surround_pan(10, lfe=math.inf)
+        with pytest.raises(SonareError) as unknown_error:
+            engine.set_track_strip_surround_pan(99, azimuth=0.0)
+        assert unknown_error.value.code == 4
+
+
 def test_realtime_engine_process_and_telemetry() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_tempo(60.0)

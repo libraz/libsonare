@@ -775,6 +775,24 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine,
 #endif
 }
 
+SonareError sonare_engine_set_track_strip_surround_pan(SonareRealtimeEngine* engine,
+                                                       uint32_t track_id,
+                                                       const SonareSurroundPan* pan) {
+  SONARE_C_API_ENTRY;
+  if (!engine || track_id == 0 || !pan) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const sonare::mixing::SurroundPanParams params{pan->azimuth, pan->elevation, pan->divergence,
+                                                 pan->lfe, pan->distance};
+  return engine->engine.set_track_surround_pan(track_id, params) ? SONARE_OK
+                                                                 : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_bus_strip_pan(SonareRealtimeEngine* engine, uint32_t bus_id,
                                             float pan) {
   SONARE_C_API_ENTRY;

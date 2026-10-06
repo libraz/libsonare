@@ -230,6 +230,94 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('moves a lane across surround planes live with setTrackStripSurroundPan', () => {
+    const frames = 256;
+    const blocks = 16;
+    const engine = new RealtimeEngine(48000, frames);
+    engine.setClips([
+      {
+        id: 1,
+        trackId: 10,
+        channels: [new Float32Array(frames * blocks).fill(0.5)],
+        startPpq: 0,
+        lengthSamples: frames * blocks,
+      },
+    ]);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]);
+    engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+    engine.setTrackStripJson(
+      10,
+      '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}',
+    );
+    const run = (): Float32Array[] =>
+      engine.process(Array.from({ length: 6 }, () => new Float32Array(frames)));
+    const tailPower = (out: Float32Array[]): number[] =>
+      out.map((plane) => {
+        let sum = 0;
+        for (let i = frames / 2; i < frames; i++) {
+          sum += plane[i] * plane[i];
+        }
+        return sum / (frames / 2);
+      });
+    const Ls = 4;
+    const Rs = 5;
+    const C = 2;
+
+    engine.play();
+    engine.setTrackStripSurroundPan(10, { azimuth: -110 });
+    let left = tailPower(run());
+    // 5 ms glide: after 5 blocks (~27 ms) the move has settled.
+    for (let b = 0; b < 5; b++) {
+      left = tailPower(run());
+    }
+    const leftTotal = left.reduce((a, b) => a + b, 0);
+    expect(leftTotal).toBeGreaterThan(0.01);
+    expect(left[Ls]).toBeGreaterThan(0.3 * leftTotal);
+    expect(left[Rs]).toBeLessThan(0.01 * leftTotal);
+    expect(left[C]).toBeLessThan(0.05 * leftTotal);
+
+    // Steady total power of the settled left placement, taken from the last frame.
+    const framePower = (out: Float32Array[], i: number): number =>
+      out.reduce((sum, plane) => sum + plane[i] * plane[i], 0);
+    const settled = run();
+    const steadyPower = framePower(settled, frames - 1);
+    expect(steadyPower).toBeGreaterThan(0.01);
+
+    engine.setTrackStripSurroundPan(10, { azimuth: 110 });
+    let minRatio = Number.POSITIVE_INFINITY;
+    let maxRatio = 0;
+    let crossfadeFrames = 0;
+    let right: number[] = [];
+    for (let b = 0; b < 6; b++) {
+      const out = run();
+      right = tailPower(out);
+      for (let i = 0; i < frames; i++) {
+        const ratio = framePower(out, i) / steadyPower;
+        minRatio = Math.min(minRatio, ratio);
+        maxRatio = Math.max(maxRatio, ratio);
+        if (Math.abs(out[Ls][i]) > 0.25 && Math.abs(out[Rs][i]) > 0.25) {
+          crossfadeFrames++;
+        }
+      }
+    }
+    // Non-vacuity: the window contains frames where both planes carry signal.
+    expect(crossfadeFrames).toBeGreaterThan(0);
+    // The gain vector is renormalized every sample: per-frame total power holds
+    // the steady value through the move (float32 scale).
+    expect(minRatio).toBeGreaterThanOrEqual(1 - 1e-5);
+    expect(maxRatio).toBeLessThanOrEqual(1 + 1e-5);
+    const rightTotal = right.reduce((a, b) => a + b, 0);
+    expect(right[Rs]).toBeGreaterThan(0.3 * rightTotal);
+    expect(right[Ls]).toBeLessThan(0.01 * rightTotal);
+    expect(right[C]).toBeLessThan(0.05 * rightTotal);
+    // A power-preserving pan keeps the summed plane power through the move.
+    expect(Math.abs(rightTotal - leftTotal)).toBeLessThan(0.05 * leftTotal);
+
+    expect(() => engine.setTrackStripSurroundPan(10, { azimuth: Number.NaN })).toThrow();
+    expect(() => engine.setTrackStripSurroundPan(999, { azimuth: 0 })).toThrow();
+    engine.destroy();
+  });
+
   it('applies track strip JSON to a lane', () => {
     const engine = new RealtimeEngine(48000, 256);
     const frames = 256 * 4;

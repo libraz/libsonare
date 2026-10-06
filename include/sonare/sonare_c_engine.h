@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "sonare_c_mixing.h"
 #include "sonare_c_sample_bank.h"
 #include "sonare_c_types.h"
 // Realtime tempo / time-signature ramps reuse the shared segment descriptors
@@ -544,6 +545,17 @@ SonareError sonare_engine_set_track_strip_pan_mode(SonareRealtimeEngine* engine,
 ///   if the track has no bound lane strip or a position is not finite.
 SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t track_id,
                                                    float left_pan, float right_pan);
+/// @brief Realtime change of a track lane strip's surround pan position.
+/// @details Applies when the lane feeds a destination wider than two channels
+///   (5.1 / 7.1 bus or master); a stereo destination ignores it. Fields follow
+///   @ref SonareSurroundPan: azimuth and divergence and lfe are clamped, distance
+///   <= 0 keeps the default 1, and elevation / distance are reserved. Control-thread
+///   mutation; glitch-free (atomic; a constant-power 5 ms one-pole glide). Returns
+///   SONARE_ERROR_INVALID_PARAMETER if @p track_id has no bound lane strip,
+///   @p pan is NULL, or a field is not finite.
+SonareError sonare_engine_set_track_strip_surround_pan(SonareRealtimeEngine* engine,
+                                                       uint32_t track_id,
+                                                       const SonareSurroundPan* pan);
 /// @brief Realtime change of a bus strip's pan position.
 /// @details Control-thread mutation; glitch-free (atomic). Returns
 ///   SONARE_ERROR_INVALID_PARAMETER if @p bus_id is unknown, the bus carries

@@ -375,8 +375,9 @@ export interface EngineBus {
   gainDb?: number;
   /**
    * Channel layout of this bus. Absent defaults to stereo. The master bus
-   * carries the project output layout. Stored but inert until the surround DSP
-   * path lands.
+   * carries the project output layout. A surround layout (5.1/7.1) makes this a
+   * surround group bus: lanes routed to it are surround-panned and its insert
+   * chain runs at the bus width.
    */
   channelLayout?: ChannelLayout;
   /**

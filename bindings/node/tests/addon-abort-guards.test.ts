@@ -885,6 +885,7 @@ describe('the hostile-input matrix leaves the process alive', () => {
         swallow(() => e.setTrackStripPanLaw(10, '3'));
         swallow(() => e.setTrackStripPanMode(10, '2'));
         swallow(() => e.setTrackStripDualPan(10, '0.5', '0.5'));
+        swallow(() => e.setTrackStripSurroundPan(10, { azimuth: '0.5' }));
         swallow(() => e.setTrackStripChannelDelaySamples(10, '64'));
         swallow(() => e.createClipPageProvider('1', '1024', '256'));
         swallow(() => e.supplyClipPage('1', '0', 'x'));
