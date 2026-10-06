@@ -56,6 +56,13 @@ float ParamSmoother::process() {
   return current_;
 }
 
+float ParamSmoother::process_settling() {
+  const float target = target_.load(std::memory_order_acquire);
+  const float next = current_ + coefficient_ * (target - current_);
+  current_ = next == current_ ? target : next;
+  return current_;
+}
+
 float ParamSmoother::advance(int n) {
   if (n <= 0) return current_;
   // Closed form of n iterations of current += coeff * (target - current):

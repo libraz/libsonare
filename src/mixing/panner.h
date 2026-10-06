@@ -60,8 +60,8 @@ class PannerProcessor : public rt::ProcessorBase {
   ///          generic @c ProcessorBase metadata such as bypass and detector state.
   void copy_state_from(const PannerProcessor& other) noexcept;
 
-  /// @brief True when Balance mode, pan 0, and the gain smoothers already sit at
-  ///        the centre gains -- a no-op the caller can skip.
+  /// @brief True when Balance mode, pan 0, and the position smoother already sits
+  ///        at centre -- a no-op the caller can skip.
   /// @details Skipping here is exact where running the panner is not: Const3dB's
   ///          NearUnity gain at dead centre is 0.99999994f, not 1.0f (see
   ///          pan_law.h), so this checks configuration and settle state rather
@@ -69,17 +69,37 @@ class PannerProcessor : public rt::ProcessorBase {
   bool at_rest_identity() const noexcept;
 
  private:
+  /// Last gain pair evaluated for one position, keyed by everything it depends on, so a
+  /// settled position costs a compare per sample instead of a law evaluation.
+  struct GainCache {
+    float position = 0.0f;
+    PanLaw law = PanLaw::Const3dB;
+    PanNormalization normalization = PanNormalization::Raw;
+    PanGains gains{};
+    bool valid = false;
+
+    PanGains get(float pos, PanLaw pan_law, PanNormalization norm) noexcept {
+      if (!valid || pos != position || pan_law != law || norm != normalization) {
+        gains = compute_pan_gains(pos, pan_law, norm);
+        position = pos;
+        law = pan_law;
+        normalization = norm;
+        valid = true;
+      }
+      return gains;
+    }
+  };
+
   double sample_rate_ = 48000.0;
   float smoothing_ms_ = 5.0f;
-  rt::ParamSmoother left_{1.0f, 5.0f, 48000.0};
-  rt::ParamSmoother right_{1.0f, 5.0f, 48000.0};
-  // Dual-pan 2x2 routing matrix coefficients (input -> output):
-  // dual_ll_ = left in -> left out, dual_lr_ = left in -> right out,
-  // dual_rl_ = right in -> left out, dual_rr_ = right in -> right out.
-  rt::ParamSmoother dual_ll_{1.0f, 5.0f, 48000.0};
-  rt::ParamSmoother dual_lr_{1.0f, 5.0f, 48000.0};
-  rt::ParamSmoother dual_rl_{1.0f, 5.0f, 48000.0};
-  rt::ParamSmoother dual_rr_{1.0f, 5.0f, 48000.0};
+  // Glides act on the pan positions and the law is evaluated per sample from the
+  // smoothed position, so every instant of a glide is a valid static placement.
+  rt::ParamSmoother pan_smoother_{0.0f, 5.0f, 48000.0};
+  rt::ParamSmoother dual_left_smoother_{-1.0f, 5.0f, 48000.0};
+  rt::ParamSmoother dual_right_smoother_{1.0f, 5.0f, 48000.0};
+  GainCache pan_cache_;
+  GainCache dual_left_cache_;
+  GainCache dual_right_cache_;
   std::atomic<float> pan_{0.0f};
   std::atomic<float> dual_pan_left_{-1.0f};
   std::atomic<float> dual_pan_right_{1.0f};

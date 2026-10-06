@@ -15,12 +15,9 @@ PannerProcessor::PannerProcessor(PannerConfig config)
 
 void PannerProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  left_.prepare(sample_rate_, smoothing_ms_);
-  right_.prepare(sample_rate_, smoothing_ms_);
-  dual_ll_.prepare(sample_rate_, smoothing_ms_);
-  dual_lr_.prepare(sample_rate_, smoothing_ms_);
-  dual_rl_.prepare(sample_rate_, smoothing_ms_);
-  dual_rr_.prepare(sample_rate_, smoothing_ms_);
+  pan_smoother_.prepare(sample_rate_, smoothing_ms_);
+  dual_left_smoother_.prepare(sample_rate_, smoothing_ms_);
+  dual_right_smoother_.prepare(sample_rate_, smoothing_ms_);
   reset();
 }
 
@@ -29,13 +26,11 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     return;
   }
 
-  // One load per block: the law is read again below to normalize the smoothed
-  // pair, and both reads must describe the same law for the whole block.
+  // One load per block: the law applies to the whole block. A law or mode change
+  // takes effect at the next block as a step, like the engine lane pan.
   const PanLaw law = pan_law_.load(std::memory_order_relaxed);
-  const PanGains gains = compute_pan_gains(pan_.load(std::memory_order_relaxed), law);
-  left_.set_target(gains.left);
-  right_.set_target(gains.right);
   const PanMode mode = pan_mode_.load(std::memory_order_relaxed);
+  pan_smoother_.set_target(pan_.load(std::memory_order_relaxed));
 
   // Every branch below writes to channels[0]; the stereo branches also write to
   // channels[1]. An unbound plane is a supported state in this layer -- the
@@ -57,12 +52,10 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     // centered stereo strip agree only under the constant-power default. That
     // difference is intentional: a mono strip conveys the pan law's energy
     // directly rather than re-balancing a stereo image it does not have.
-    // Advance each smoother exactly once per sample to stay in sync with the
-    // stereo path.
     for (int i = 0; i < num_samples; ++i) {
-      const float l = left_.process();
-      const float r = right_.process();
-      channels[0][i] *= std::sqrt(l * l + r * r);
+      const PanGains g =
+          pan_cache_.get(pan_smoother_.process_settling(), law, PanNormalization::Raw);
+      channels[0][i] *= std::sqrt(g.left * g.left + g.right * g.right);
     }
     return;
   }
@@ -73,35 +66,30 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
 
   if (mode == PanMode::StereoPan) {
     for (int i = 0; i < num_samples; ++i) {
+      const PanGains g =
+          pan_cache_.get(pan_smoother_.process_settling(), law, PanNormalization::Raw);
       const float mono = 0.5f * (channels[0][i] + channels[1][i]);
-      channels[0][i] = mono * left_.process();
-      channels[1][i] = mono * right_.process();
+      channels[0][i] = mono * g.left;
+      channels[1][i] = mono * g.right;
     }
     return;
   }
 
   if (mode == PanMode::DualPan) {
-    const PanGains left_gains =
-        compute_pan_gains(dual_pan_left_.load(std::memory_order_relaxed), law);
-    const PanGains right_gains =
-        compute_pan_gains(dual_pan_right_.load(std::memory_order_relaxed), law);
-    dual_ll_.set_target(left_gains.left);
-    dual_lr_.set_target(left_gains.right);
-    dual_rl_.set_target(right_gains.left);
-    dual_rr_.set_target(right_gains.right);
-    // Apply the dual-pan gains sample-accurately as a smoothed routing matrix while
-    // keeping the main smoothers advancing once per sample for continuous mode switches.
+    dual_left_smoother_.set_target(dual_pan_left_.load(std::memory_order_relaxed));
+    dual_right_smoother_.set_target(dual_pan_right_.load(std::memory_order_relaxed));
+    // The main pan smoother keeps advancing once per sample so a switch back to
+    // Balance or StereoPan continues from the same position.
     for (int i = 0; i < num_samples; ++i) {
-      (void)left_.process();
-      (void)right_.process();
-      const float ll = dual_ll_.process();
-      const float lr = dual_lr_.process();
-      const float rl = dual_rl_.process();
-      const float rr = dual_rr_.process();
+      (void)pan_smoother_.process_settling();
+      const PanGains a =
+          dual_left_cache_.get(dual_left_smoother_.process_settling(), law, PanNormalization::Raw);
+      const PanGains b = dual_right_cache_.get(dual_right_smoother_.process_settling(), law,
+                                               PanNormalization::Raw);
       const float in_l = channels[0][i];
       const float in_r = channels[1][i];
-      channels[0][i] = in_l * ll + in_r * rl;
-      channels[1][i] = in_l * lr + in_r * rr;
+      channels[0][i] = in_l * a.left + in_r * b.left;
+      channels[1][i] = in_l * a.right + in_r * b.right;
     }
     return;
   }
@@ -110,34 +98,19 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
   // intact and is unity at center, attenuating only the channel away from the
   // pan direction — PanNormalization::NearUnity. Multiplying each channel by its
   // raw pan gain would instead attenuate a centered signal by ~3 dB under the
-  // constant-power default law (both gains = cos(pi/4) = 0.707). The smoothers
-  // interpolate the raw law gains, so the normalization is applied to the
-  // interpolated pair rather than to the targets. This matches the mono path's
-  // "centered signal stays at unity" intent.
+  // constant-power default law (both gains = cos(pi/4) = 0.707).
   for (int i = 0; i < num_samples; ++i) {
-    const float l = left_.process();
-    const float r = right_.process();
-    const PanGains g = normalize_pan_gains({l, r}, law, PanNormalization::NearUnity);
+    const PanGains g =
+        pan_cache_.get(pan_smoother_.process_settling(), law, PanNormalization::NearUnity);
     channels[0][i] *= g.left;
     channels[1][i] *= g.right;
   }
 }
 
 void PannerProcessor::reset() {
-  const PanGains gains = compute_pan_gains(pan_.load(std::memory_order_relaxed),
-                                           pan_law_.load(std::memory_order_relaxed));
-  left_.reset(gains.left);
-  right_.reset(gains.right);
-
-  const PanLaw law = pan_law_.load(std::memory_order_relaxed);
-  const PanGains left_gains =
-      compute_pan_gains(dual_pan_left_.load(std::memory_order_relaxed), law);
-  const PanGains right_gains =
-      compute_pan_gains(dual_pan_right_.load(std::memory_order_relaxed), law);
-  dual_ll_.reset(left_gains.left);
-  dual_lr_.reset(left_gains.right);
-  dual_rl_.reset(right_gains.left);
-  dual_rr_.reset(right_gains.right);
+  pan_smoother_.reset(pan_.load(std::memory_order_relaxed));
+  dual_left_smoother_.reset(dual_pan_left_.load(std::memory_order_relaxed));
+  dual_right_smoother_.reset(dual_pan_right_.load(std::memory_order_relaxed));
 }
 
 void PannerProcessor::set_pan(float pan) noexcept {
@@ -155,12 +128,9 @@ void PannerProcessor::copy_state_from(const PannerProcessor& other) noexcept {
   if (this == &other) return;
   sample_rate_ = other.sample_rate_;
   smoothing_ms_ = other.smoothing_ms_;
-  left_ = other.left_;
-  right_ = other.right_;
-  dual_ll_ = other.dual_ll_;
-  dual_lr_ = other.dual_lr_;
-  dual_rl_ = other.dual_rl_;
-  dual_rr_ = other.dual_rr_;
+  pan_smoother_ = other.pan_smoother_;
+  dual_left_smoother_ = other.dual_left_smoother_;
+  dual_right_smoother_ = other.dual_right_smoother_;
   pan_.store(other.pan_.load(std::memory_order_relaxed), std::memory_order_relaxed);
   dual_pan_left_.store(other.dual_pan_left_.load(std::memory_order_relaxed),
                        std::memory_order_relaxed);
@@ -175,9 +145,8 @@ bool PannerProcessor::at_rest_identity() const noexcept {
       pan_.load(std::memory_order_relaxed) != 0.0f) {
     return false;
   }
-  // Compare against the centre gains: the smoothers' targets only move inside process().
-  const PanGains centre = compute_pan_gains(0.0f, pan_law_.load(std::memory_order_relaxed));
-  return left_.current() == centre.left && right_.current() == centre.right;
+  // The smoother's target only moves inside process(), so settle state is the current position.
+  return pan_smoother_.current() == 0.0f;
 }
 
 }  // namespace sonare::mixing

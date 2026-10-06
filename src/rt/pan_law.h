@@ -130,8 +130,8 @@ inline float center_unity_scale(PanLaw law) noexcept {
 
 /// @brief Rescales an already-evaluated gain pair.
 ///
-/// Split out of compute_pan_gains() for the smoothed paths: they interpolate the
-/// raw pair per sample and can only normalize the interpolated result.
+/// The normalization step of compute_pan_gains(); smoothed paths smooth the pan
+/// position and call compute_pan_gains() rather than interpolating gain pairs.
 /// @param gains Raw pair produced by @p law.
 /// @param law Law that produced @p gains; needed for the centre reference.
 inline PanGains normalize_pan_gains(PanGains gains, PanLaw law,

@@ -3,13 +3,16 @@
 
 #include "mixing/pan_law.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "mixing/panner.h"
+#include "rt/param_smoother.h"
 
 using Catch::Matchers::WithinAbs;
 using sonare::mixing::compute_pan_gains;
@@ -235,4 +238,192 @@ TEST_CASE("panner at-rest identity reflects mode, pan target, and settle state",
   settled.reset();
   settled.set_pan(0.0f);
   REQUIRE_FALSE(settled.at_rest_identity());
+}
+
+namespace {
+
+// Panner paths exercised by the glide tests. Mono is the single-plane path of the
+// same processor, so it is listed beside the three stereo modes.
+enum class GlidePath { Balance, StereoPan, DualPan, Mono };
+
+constexpr std::array<GlidePath, 4> kGlidePaths = {GlidePath::Balance, GlidePath::StereoPan,
+                                                  GlidePath::DualPan, GlidePath::Mono};
+
+constexpr double kGlideRate = 48000.0;
+constexpr float kGlideSmoothingMs = 5.0f;
+constexpr float kGlideInputLeft = 1.0f;
+constexpr float kGlideInputRight = 0.5f;
+
+PanMode glide_mode(GlidePath path) {
+  switch (path) {
+    case GlidePath::StereoPan:
+      return PanMode::StereoPan;
+    case GlidePath::DualPan:
+      return PanMode::DualPan;
+    default:
+      return PanMode::Balance;
+  }
+}
+
+struct GlideOutput {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+// Hard-left to hard-right jump (dual pan: the two positions swap) rendered in
+// blocks of @p block samples. The panner is settled at the start position by
+// prepare(), then the new position is set once.
+GlideOutput render_glide(GlidePath path, PanLaw law, int num_samples, int block) {
+  PannerProcessor panner(PannerConfig{-1.0f, law, kGlideSmoothingMs, glide_mode(path)});
+  panner.prepare(kGlideRate, block);
+  if (path == GlidePath::DualPan) {
+    panner.set_dual_pan(1.0f, -1.0f);
+  } else {
+    panner.set_pan(1.0f);
+  }
+  const bool mono = path == GlidePath::Mono;
+  GlideOutput out{std::vector<float>(static_cast<size_t>(num_samples), kGlideInputLeft),
+                  std::vector<float>(static_cast<size_t>(num_samples), kGlideInputRight)};
+  for (int offset = 0; offset < num_samples; offset += block) {
+    float* planes[2] = {out.left.data() + offset, out.right.data() + offset};
+    panner.process(planes, mono ? 1 : 2, std::min(block, num_samples - offset));
+  }
+  return out;
+}
+
+// Output a static placement at the given positions produces, from the law's own
+// evaluator. @p pan drives Balance / StereoPan / Mono; the dual positions drive
+// DualPan.
+std::pair<float, float> static_output(GlidePath path, PanLaw law, float pan, float dual_left,
+                                      float dual_right) {
+  const float in_l = kGlideInputLeft;
+  const float in_r = kGlideInputRight;
+  switch (path) {
+    case GlidePath::Balance: {
+      const PanGains g = compute_pan_gains(pan, law, PanNormalization::NearUnity);
+      return {in_l * g.left, in_r * g.right};
+    }
+    case GlidePath::StereoPan: {
+      const PanGains g = compute_pan_gains(pan, law);
+      const float mono = 0.5f * (in_l + in_r);
+      return {mono * g.left, mono * g.right};
+    }
+    case GlidePath::DualPan: {
+      const PanGains a = compute_pan_gains(dual_left, law);
+      const PanGains b = compute_pan_gains(dual_right, law);
+      return {in_l * a.left + in_r * b.left, in_l * a.right + in_r * b.right};
+    }
+    case GlidePath::Mono: {
+      const PanGains g = compute_pan_gains(pan, law);
+      return {in_l * std::sqrt(g.left * g.left + g.right * g.right), in_r};
+    }
+  }
+  return {0.0f, 0.0f};
+}
+
+}  // namespace
+
+TEST_CASE("panner glide stays on the active pan law at every sample", "[mixing][pan]") {
+  constexpr int kSamples = 2400;
+  for (const GlidePath path : kGlidePaths) {
+    for (const PanLaw law : kAllLaws) {
+      CAPTURE(static_cast<int>(path));
+      CAPTURE(static_cast<int>(law));
+      const GlideOutput out = render_glide(path, law, kSamples, kSamples);
+
+      // The position the panner is entitled to be at: the same one-pole the
+      // engine lane pan uses, driven from the old position to the new one.
+      sonare::rt::ParamSmoother pan_ref(-1.0f, kGlideSmoothingMs, kGlideRate);
+      sonare::rt::ParamSmoother dual_left_ref(-1.0f, kGlideSmoothingMs, kGlideRate);
+      sonare::rt::ParamSmoother dual_right_ref(1.0f, kGlideSmoothingMs, kGlideRate);
+      pan_ref.set_target(1.0f);
+      dual_left_ref.set_target(1.0f);
+      dual_right_ref.set_target(-1.0f);
+
+      float worst = 0.0f;
+      for (int i = 0; i < kSamples; ++i) {
+        const auto expected = static_output(path, law, pan_ref.process(), dual_left_ref.process(),
+                                            dual_right_ref.process());
+        const size_t k = static_cast<size_t>(i);
+        worst = std::max(worst, std::abs(out.left[k] - expected.first));
+        if (path != GlidePath::Mono) {
+          worst = std::max(worst, std::abs(out.right[k] - expected.second));
+        }
+      }
+      REQUIRE(worst < 1e-5f);
+
+      // The jump really travelled (a constant-power mono gain is flat by design).
+      if (path != GlidePath::Mono || law != PanLaw::Const3dB) {
+        REQUIRE(out.left.front() != out.left.back());
+      }
+    }
+  }
+}
+
+TEST_CASE("panner constant-power glide holds the law's loudness invariant", "[mixing][pan]") {
+  constexpr int kSamples = 2400;
+
+  // -3 dB law: L^2 + R^2 stays at the static constant through a full jump, for
+  // both the stereo-pan and the mono path (the mono gain is sqrt(L^2 + R^2)).
+  const GlideOutput stereo = render_glide(GlidePath::StereoPan, PanLaw::Const3dB, kSamples, 64);
+  const GlideOutput mono = render_glide(GlidePath::Mono, PanLaw::Const3dB, kSamples, 64);
+  const float mono_in = 0.5f * (kGlideInputLeft + kGlideInputRight);
+  for (int i = 0; i < kSamples; ++i) {
+    const size_t k = static_cast<size_t>(i);
+    const float l = stereo.left[k] / mono_in;
+    const float r = stereo.right[k] / mono_in;
+    REQUIRE_THAT(l * l + r * r, WithinAbs(1.0f, 1e-5f));
+    REQUIRE_THAT(mono.left[k] / kGlideInputLeft, WithinAbs(1.0f, 1e-5f));
+  }
+
+  // -6 dB law: L + R stays at the static constant.
+  const GlideOutput linear = render_glide(GlidePath::StereoPan, PanLaw::Const6dB, kSamples, 64);
+  for (int i = 0; i < kSamples; ++i) {
+    const size_t k = static_cast<size_t>(i);
+    REQUIRE_THAT((linear.left[k] + linear.right[k]) / mono_in, WithinAbs(1.0f, 1e-5f));
+  }
+}
+
+TEST_CASE("panner glide output does not depend on block partitioning", "[mixing][pan]") {
+  constexpr int kSamples = 64;
+  for (const GlidePath path : kGlidePaths) {
+    for (const PanLaw law : kAllLaws) {
+      CAPTURE(static_cast<int>(path));
+      CAPTURE(static_cast<int>(law));
+      const GlideOutput whole = render_glide(path, law, kSamples, 64);
+      const GlideOutput split = render_glide(path, law, kSamples, 16);
+      REQUIRE(whole.left == split.left);
+      REQUIRE(whole.right == split.right);
+    }
+  }
+}
+
+TEST_CASE("panner settles on the static law output after a glide", "[mixing][pan]") {
+  // Long enough for the smoother to run out of float resolution, which is where
+  // an unfinished one-pole would leave a residual against the static placement.
+  constexpr int kSamples = 96000;
+  for (const GlidePath path : kGlidePaths) {
+    for (const PanLaw law : kAllLaws) {
+      CAPTURE(static_cast<int>(path));
+      CAPTURE(static_cast<int>(law));
+      const GlideOutput out = render_glide(path, law, kSamples, 480);
+      const auto expected = static_output(path, law, 1.0f, 1.0f, -1.0f);
+      REQUIRE_THAT(out.left.back(), WithinAbs(expected.first, 1e-7f));
+      if (path != GlidePath::Mono) {
+        REQUIRE_THAT(out.right.back(), WithinAbs(expected.second, 1e-7f));
+      }
+    }
+  }
+}
+
+TEST_CASE("panner is the at-rest identity again once a glide back to centre has run",
+          "[mixing][pan]") {
+  PannerProcessor panner(PannerConfig{0.7f, PanLaw::Const3dB, kGlideSmoothingMs});
+  panner.prepare(kGlideRate, 480);
+  panner.set_pan(0.0f);
+  std::vector<float> left(96000, 1.0f);
+  std::vector<float> right(96000, 1.0f);
+  float* planes[2] = {left.data(), right.data()};
+  panner.process(planes, 2, 96000);
+  REQUIRE(panner.at_rest_identity());
 }

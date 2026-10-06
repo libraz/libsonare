@@ -122,8 +122,10 @@ TEST_CASE("Panner DualPan ramps coefficient changes without a single-sample step
   // (DualPan defaults to dual_pan_left = -1, dual_pan_right = +1). Feed a DC
   // signal only on the left input so the left output reflects the left->left
   // coefficient (ll) directly.
+  // The -6 dB law's left gain starts falling the moment the position leaves the
+  // hard-left end; Linear0dB holds it at unity until the position crosses centre.
   sonare::mixing::PannerProcessor panner(
-      {0.0f, sonare::mixing::PanLaw::Linear0dB, 5.0f, sonare::mixing::PanMode::DualPan});
+      {0.0f, sonare::mixing::PanLaw::Const6dB, 5.0f, sonare::mixing::PanMode::DualPan});
   panner.prepare(kSr, kBlock);
 
   std::vector<float> left(kBlock, 1.0f);
