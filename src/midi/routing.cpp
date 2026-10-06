@@ -11,6 +11,14 @@ bool is_channel_voice(const Ump& ump) noexcept {
   return type == UmpMessageType::kMidi1ChannelVoice || type == UmpMessageType::kMidi2ChannelVoice;
 }
 
+bool is_note_addressed_control(const Ump& ump) noexcept {
+  if (!is_channel_voice(ump)) return false;
+  const uint8_t status = ump.status_nibble();
+  if (status == static_cast<uint8_t>(UmpStatus::kPolyPressure)) return true;
+  if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) return false;
+  return status == 0x0u || status == 0x1u || status == 0x6u || status == 0xFu;
+}
+
 // Messages the per-group filter must never drop, for two separate reasons:
 //   - Utility (MT 0x0) and UMP Stream (MT 0xF) have no group field at all (see
 //     ump_message_type_has_group), so they always read as group 0 and a route
@@ -28,7 +36,7 @@ bool is_group_filter_exempt(const Ump& ump) noexcept {
 
 bool MidiRouter::passes_filter(const Ump& ump) const noexcept {
   if (config_.filter_group != kRouteAnyGroup && !is_group_filter_exempt(ump) &&
-      ump.group != config_.filter_group) {
+      ump_group_from_word0(ump.words[0]) != config_.filter_group) {
     return false;
   }
   if (config_.filter_channel != kRouteAnyChannel && is_channel_voice(ump) &&
@@ -63,12 +71,19 @@ Ump MidiRouter::apply_remap(const Ump& ump) noexcept {
     return ump;
   }
   const uint8_t src_channel = ump.channel();
+  const uint8_t group = ump_group_from_word0(ump.words[0]);
+
+  // Per-note expression follows its note's remap, as Note Off does, without ending it.
+  if (is_note_addressed_control(ump)) {
+    const size_t idx = find_active_remap(group, src_channel, ump.note_number());
+    if (idx != kMaxActiveRemaps) return with_channel(ump, active_remaps_[idx].out_channel);
+  }
 
   // A note-off must follow its note-on onto the SAME remapped channel, even if
   // the remap config changed mid-note. Look the sounding note up by its original
   // identity and reuse the channel chosen at note-on time.
   if (ump.is_note_off()) {
-    const size_t idx = find_active_remap(ump.group, src_channel, ump.note_number());
+    const size_t idx = find_active_remap(group, src_channel, ump.note_number());
     if (idx != kMaxActiveRemaps) {
       const uint8_t out_channel = active_remaps_[idx].out_channel;
       // Swap-remove; order of sounding notes is not significant.
@@ -86,11 +101,11 @@ Ump MidiRouter::apply_remap(const Ump& ump) noexcept {
   // Record the chosen channel for a note-on so the matching note-off is stable.
   if (ump.is_note_on()) {
     const uint8_t note = ump.note_number();
-    const size_t existing = find_active_remap(ump.group, src_channel, note);
+    const size_t existing = find_active_remap(group, src_channel, note);
     if (existing != kMaxActiveRemaps) {
       active_remaps_[existing].out_channel = out_channel;
     } else if (active_count_ < kMaxActiveRemaps) {
-      active_remaps_[active_count_++] = ActiveRemap{ump.group, src_channel, note, out_channel};
+      active_remaps_[active_count_++] = ActiveRemap{group, src_channel, note, out_channel};
     }
     // On table overflow the note is still remapped with the current config; only
     // the stable-pair guarantee is dropped for the surplus note.
@@ -129,6 +144,7 @@ size_t MidiRouter::process(const MidiEvent* input, size_t count, MidiRouteOutput
     // drop the next one the same way.
     MidiEvent routed = ev;
     routed.ump = apply_remap(ev.ump);
+    routed.ump.group = ump_group_from_word0(routed.ump.words[0]);
     out->events[out->size++] = routed;
   }
   return out->size;

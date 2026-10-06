@@ -183,6 +183,69 @@ TEST_CASE("MidiRouter thru toggle suppresses all output", "[midi]") {
   REQUIRE(router.overflow_count() == 0);  // suppression is not overflow
 }
 
+TEST_CASE("MidiRouter keeps per-note expression on its note's original remapped channel",
+          "[midi][routing]") {
+  using namespace sonare::midi;
+  const std::array<Ump, 6> controls = {
+      make_midi1_poly_pressure(3, 0, 60, 80),
+      make_midi2_poly_pressure(3, 0, 60, 0x12345678u),
+      make_midi2_per_note_controller(3, 0, 60, 3, 0x12345678u),
+      make_midi2_assignable_per_note_controller(3, 0, 60, 74, 0x12345678u),
+      make_midi2_per_note_pitch_bend(3, 0, 60, 0x91234567u),
+      make_midi2_per_note_management(3, 0, 60, true, true),
+  };
+  for (const bool midi2_notes : {false, true}) {
+    for (const Ump& control : controls) {
+      CAPTURE(midi2_notes);
+      CAPTURE(control.words[0]);
+      MidiRouter router;
+      MidiRouteConfig config;
+      config.remap_channel = 2;
+      router.set_config(config);
+      MidiRouteOutput output;
+      MidiEvent input = note_on_event(0, 3, 0, 60);
+      if (midi2_notes) input.ump = make_midi2_note_on(3, 0, 60, 0xC123u);
+      REQUIRE(router.process(&input, 1, &output) == 1);
+      REQUIRE(output.events[0].ump.channel() == 2);
+      config.remap_channel = 7;
+      router.set_config(config);
+      input.ump = control;
+      REQUIRE(router.process(&input, 1, &output) == 1);
+      CHECK(output.events[0].ump.channel() == 2);
+      CHECK(output.events[0].ump.words[1] == control.words[1]);
+
+      // A different group must not borrow this note's retained mapping.
+      input.ump.words[0] = (control.words[0] & ~(0xFu << 24u)) | (4u << 24u);
+      REQUIRE(router.process(&input, 1, &output) == 1);
+      CHECK(output.events[0].ump.channel() == 7);
+      CHECK(output.events[0].ump.group == 4);
+
+      input.ump = midi2_notes ? make_midi2_note_off(3, 0, 60, 0) : make_midi1_note_off(3, 0, 60, 0);
+      REQUIRE(router.process(&input, 1, &output) == 1);
+      CHECK(output.events[0].ump.channel() == 2);
+      // Expression did not consume the mapping; Note Off does.
+      input.ump = control;
+      REQUIRE(router.process(&input, 1, &output) == 1);
+      CHECK(output.events[0].ump.channel() == 7);
+    }
+  }
+}
+
+TEST_CASE("MidiRouter filters the group encoded in the UMP word", "[midi][routing]") {
+  MidiRouter router;
+  MidiRouteConfig config;
+  config.filter_group = 3;
+  router.set_config(config);
+  MidiEvent input = note_on_event(0, 3, 0, 60);
+  input.ump.group = 4;
+  MidiRouteOutput output;
+  REQUIRE(router.process(&input, 1, &output) == 1);
+  CHECK(output.events[0].ump.group == 3);
+  input.ump.words[0] = (input.ump.words[0] & ~(0xFu << 24u)) | (4u << 24u);
+  input.ump.group = 3;
+  CHECK(router.process(&input, 1, &output) == 0);
+}
+
 TEST_CASE("MidiRouter overflow telemetry counts dropped events", "[midi]") {
   MidiRouter router;
   router.set_config(MidiRouteConfig{});  // pass everything
