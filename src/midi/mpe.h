@@ -177,6 +177,23 @@ class MpeState {
   float pressure(uint8_t channel) const noexcept;
   float timbre(uint8_t channel) const noexcept;
 
+  /// Combined controller at MIDI 2.0 width. A sole source is returned without
+  /// re-encoding, so a member-only full-width value survives the profile fold
+  /// exactly; when both sources are present their semantic 0..127 values add
+  /// and saturate before being encoded at MIDI 2.0 width.
+  Control32 pressure_control(uint8_t channel) const noexcept;
+  Control32 timbre_control(uint8_t channel) const noexcept;
+
+  /// Returns the value written on @p channel itself, without the manager fold.
+  /// False means that the dimension has never been written on that channel.
+  bool own_control(uint8_t channel, MpeDimension dimension, Control32* out) const noexcept;
+
+  /// Combines two optional full-width sources in the MPE pressure/timbre
+  /// semantic domain. A sole source remains bit-exact; two sources add their
+  /// f7 values and saturate before being encoded back at MIDI 2.0 width.
+  static Control32 combine_control(Control32 own, bool own_present, Control32 manager,
+                                   bool manager_present) noexcept;
+
   /// The same combinations in the 7-bit domain, for a caller that re-emits them as MIDI 1.0
   /// messages: each value is truncated to 7 bits before the add and clamp.
   uint8_t pressure_u7(uint8_t channel) const noexcept;
@@ -222,6 +239,7 @@ class MpeState {
   /// integer one.
   float combined_f7(uint8_t channel, MpeDimension dimension) const noexcept;
   uint8_t combined_u7(uint8_t channel, MpeDimension dimension) const noexcept;
+  Control32 combined_control(uint8_t channel, MpeDimension dimension) const noexcept;
 
   Zone zones_[kMpeZoneCount]{};
   Channel channels_[16]{};

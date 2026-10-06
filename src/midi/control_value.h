@@ -75,6 +75,18 @@ struct Control32 {
   uint32_t raw;
 
   static Control32 from7(uint8_t v7) noexcept { return {scale_cc_7_to_32(v7)}; }
+  /// Encodes a 0..127 controller value at MIDI 2.0 width. Integer values land
+  /// on the protocol's upscale points; fractional values are rounded between
+  /// the neighbouring points so a folded MPE value keeps its extra resolution.
+  static Control32 from_f7(double f) noexcept {
+    const double x = !(f > 0.0) ? 0.0 : (f >= 127.0 ? 127.0 : f);
+    const auto v = static_cast<uint32_t>(x);
+    if (v >= 127u) return {scale_cc_7_to_32(127)};
+    const uint32_t lo = scale_cc_7_to_32(static_cast<uint8_t>(v));
+    const uint32_t hi = scale_cc_7_to_32(static_cast<uint8_t>(v + 1u));
+    const double offset = (x - static_cast<double>(v)) * static_cast<double>(hi - lo);
+    return {static_cast<uint32_t>(lo + static_cast<uint32_t>(offset + 0.5))};
+  }
   static Control32 from14_mcm(uint16_t v14) noexcept { return {scale_cc_14_to_32(v14)}; }
   static Control32 from14_zero_ext(uint16_t v14) noexcept {
     return {scale_rpn_14_to_32_zero_extend(v14)};
@@ -84,9 +96,13 @@ struct Control32 {
   constexpr uint8_t u7() const noexcept { return static_cast<uint8_t>(raw >> 25); }
   constexpr uint16_t u14() const noexcept { return static_cast<uint16_t>(raw >> 18); }
 
-  float f7() const noexcept {
-    return static_cast<float>(control_value_detail::inverse_upscale(
-        raw, 25u, 127u, [](uint32_t v) { return scale_cc_7_to_32(static_cast<uint8_t>(v)); }));
+  float f7() const noexcept { return static_cast<float>(f7_double()); }
+
+  /// Full-width semantic value for controller arithmetic before a float DSP
+  /// consumer reads it. A float cannot distinguish neighbouring 32-bit inputs.
+  double f7_double() const noexcept {
+    return control_value_detail::inverse_upscale(
+        raw, 25u, 127u, [](uint32_t v) { return scale_cc_7_to_32(static_cast<uint8_t>(v)); });
   }
 
   /// Q7.25 fixed point in semitones. Double, because a float cannot hold all 32 raw bits.

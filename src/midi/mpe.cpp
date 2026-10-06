@@ -316,6 +316,45 @@ uint8_t MpeState::timbre_u7(uint8_t channel) const noexcept {
   return combined_u7(channel, MpeDimension::kTimbre);
 }
 
+Control32 MpeState::combine_control(Control32 own, bool own_present, Control32 manager,
+                                    bool manager_present) noexcept {
+  if (!manager_present) return own_present ? own : Control32::from_raw(0);
+  if (!own_present) return manager;
+  const double combined =
+      std::min(own.f7_double() + manager.f7_double(), static_cast<double>(kMaxCcValue));
+  return Control32::from_f7(combined);
+}
+
+bool MpeState::own_control(uint8_t channel, MpeDimension dimension, Control32* out) const noexcept {
+  if (out == nullptr || dimension == MpeDimension::kBend) return false;
+  const Channel& own = channels_[channel & 0x0Fu];
+  const uint8_t bit = present_bit(dimension);
+  if ((own.present & bit) == 0) return false;
+  *out = dimension == MpeDimension::kPressure ? own.pressure : own.timbre;
+  return true;
+}
+
+Control32 MpeState::combined_control(uint8_t channel, MpeDimension dimension) const noexcept {
+  const MpeChannelRole channel_role = role(channel);
+  if (channel_role == MpeChannelRole::kUnassigned) return Control32::from_raw(0);
+  Control32 own_value = Control32::from_raw(0);
+  const bool own_present = own_control(channel, dimension, &own_value);
+  if (channel_role == MpeChannelRole::kManager) {
+    return own_present ? own_value : Control32::from_raw(0);
+  }
+  Control32 manager_value = Control32::from_raw(0);
+  const bool manager_present = own_control(manager_of(channel), dimension, &manager_value);
+  return combine_control(own_value, own_present, manager_value, manager_present);
+}
+
+Control32 MpeState::pressure_control(uint8_t channel) const noexcept {
+  return combined_control(channel, MpeDimension::kPressure);
+}
+
+Control32 MpeState::timbre_control(uint8_t channel) const noexcept {
+  return combined_control(channel, MpeDimension::kTimbre);
+}
+
 bool MpeState::has(uint8_t channel, MpeDimension dimension) const noexcept {
   const MpeChannelRole channel_role = role(channel);
   if (channel_role == MpeChannelRole::kUnassigned) return false;

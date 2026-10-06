@@ -5,7 +5,9 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -108,6 +110,25 @@ TEST_CASE("control_value Control32 7-bit min-center-max", "[midi][midi2]") {
   REQUIRE(Control32::from7(64).raw == 0x80000000u);
   REQUIRE(Control32::from7(127).raw == 0xFFFFFFFFu);
   REQUIRE(Control32::from_raw(0xDEADBEEFu).raw == 0xDEADBEEFu);
+}
+
+TEST_CASE("control_value Control32 fractional encoding preserves MIDI1 points", "[midi][midi2]") {
+  for (int value = 0; value <= 127; ++value) {
+    REQUIRE(Control32::from_f7(static_cast<float>(value)).raw ==
+            Control32::from7(static_cast<uint8_t>(value)).raw);
+    if (value == 127) continue;
+    for (float fraction : {0.25f, 0.5f, 0.75f}) {
+      const float expected = static_cast<float>(value) + fraction;
+      const Control32 encoded = Control32::from_f7(expected);
+      REQUIRE(encoded.raw > Control32::from7(static_cast<uint8_t>(value)).raw);
+      REQUIRE(encoded.raw < Control32::from7(static_cast<uint8_t>(value + 1)).raw);
+      REQUIRE(std::abs(encoded.f7() - expected) < 0.00001f);
+    }
+  }
+  REQUIRE(Control32::from_f7(-1.0f).raw == 0u);
+  REQUIRE(Control32::from_f7(128.0f).raw == 0xFFFFFFFFu);
+  REQUIRE(Control32::from_f7(std::numeric_limits<float>::quiet_NaN()).raw == 0u);
+  REQUIRE(Control32::from_f7(std::numeric_limits<float>::infinity()).raw == 0xFFFFFFFFu);
 }
 
 TEST_CASE("control_value Control32 monotone f7", "[midi][midi2]") {

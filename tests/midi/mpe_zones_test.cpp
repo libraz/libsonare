@@ -14,6 +14,7 @@
 /// MCM arrives there are no zones, and an instrument holding one of these must
 /// behave exactly as it did without it.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -307,6 +308,75 @@ TEST_CASE("a MIDI 2.0 value between two MIDI 1.0 steps reads back between them",
   state.track_pressure(0, control_mid(126));
   REQUIRE(state.pressure(2) == 127.0f);
   REQUIRE(state.pressure_u7(2) == 127);
+}
+
+TEST_CASE("MPE combined controls retain single-source bits and fractional sums",
+          "[midi][mpe][midi2]") {
+  for (const MpeDimension dimension : {MpeDimension::kPressure, MpeDimension::kTimbre}) {
+    MpeState state = lower_zone(2);
+    const auto track = [&](uint8_t channel, Control32 value) {
+      if (dimension == MpeDimension::kPressure)
+        state.track_pressure(channel, value);
+      else
+        state.track_timbre(channel, value);
+    };
+    const auto read = [&](uint8_t channel) {
+      return dimension == MpeDimension::kPressure ? state.pressure_control(channel)
+                                                  : state.timbre_control(channel);
+    };
+    const Control32 exact = Control32::from_raw(0x12345678u);
+    track(1, exact);
+    REQUIRE(read(1).raw == exact.raw);
+    REQUIRE(read(2).raw == 0u);
+    state.reset_controls(1u << 1);
+    track(0, exact);
+    REQUIRE(read(0).raw == exact.raw);
+    REQUIRE(read(1).raw == exact.raw);
+    REQUIRE(read(2).raw == exact.raw);
+    track(0, Control32::from_f7(20.25f));
+    track(1, Control32::from_f7(30.5f));
+    REQUIRE(std::abs(read(1).f7() - 50.75f) < 0.00001f);
+    track(0, Control32::from_f7(100.5f));
+    REQUIRE(read(1).raw == 0xFFFFFFFFu);
+    state.reset_controls(1u << 0);
+    REQUIRE(read(1).raw == Control32::from_f7(30.5f).raw);
+  }
+}
+
+TEST_CASE("MPE own controls distinguish member state from its manager bias", "[midi][mpe][midi2]") {
+  MpeState state = lower_zone(2);
+  const Control32 own = Control32::from_raw(0x12345678u);
+  state.track_pressure(1, own);
+  state.track_pressure(0, Control32::from7(50));
+  Control32 value = Control32::from_raw(0);
+  REQUIRE(state.own_control(1, MpeDimension::kPressure, &value));
+  REQUIRE(value.raw == own.raw);
+  REQUIRE_FALSE(state.own_control(2, MpeDimension::kPressure, &value));
+  REQUIRE_FALSE(state.own_control(1, MpeDimension::kTimbre, &value));
+  REQUIRE_FALSE(state.own_control(1, MpeDimension::kPressure, nullptr));
+  state.track_bend(1, Bend32::from_raw(0xA0000000u));
+  REQUIRE_FALSE(state.own_control(1, MpeDimension::kBend, &value));
+  state.reset_controls(1u << 1);
+  REQUIRE_FALSE(state.own_control(1, MpeDimension::kPressure, &value));
+  REQUIRE(state.pressure_control(1).raw == Control32::from7(50).raw);
+}
+
+TEST_CASE("MPE combination retains MIDI2 bits below float resolution", "[midi][mpe][midi2]") {
+  const uint32_t center = Control32::from7(64).raw;
+  const Control32 manager = Control32::from7(1);
+  const Control32 first =
+      MpeState::combine_control(Control32::from_raw(center + 1u), true, manager, true);
+  const Control32 second =
+      MpeState::combine_control(Control32::from_raw(center + 2u), true, manager, true);
+  REQUIRE(first.raw < second.raw);
+  REQUIRE(first.raw > Control32::from7(65).raw);
+  for (uint8_t own = 0; own <= 127; ++own) {
+    for (uint8_t bias = 0; bias <= 127; ++bias) {
+      const uint8_t expected = static_cast<uint8_t>(std::min<int>(own + bias, 127));
+      REQUIRE(MpeState::combine_control(Control32::from7(own), true, Control32::from7(bias), true)
+                  .raw == Control32::from7(expected).raw);
+    }
+  }
 }
 
 TEST_CASE("the zone model refuses what its channel roles prohibit", "[midi][mpe]") {
