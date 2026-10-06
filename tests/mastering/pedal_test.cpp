@@ -20,6 +20,20 @@
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
+#include "util/exception.h"
+
+TEST_CASE("guitar pedals reject non-finite processing rates",
+          "[mastering][pedal][rate-validation]") {
+  for (const char* name : {"saturation.overdrive", "saturation.distortion"}) {
+    for (double rate :
+         {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+          -std::numeric_limits<double>::infinity()}) {
+      INFO("processor=" << name << " rate=" << rate);
+      auto pedal = sonare::mastering::api::make_insert(name, "{}");
+      CHECK_THROWS_AS(pedal->prepare(rate, 64), sonare::SonareException);
+    }
+  }
+}
 
 namespace {
 

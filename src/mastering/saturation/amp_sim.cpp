@@ -314,7 +314,7 @@ void AmpSim::prepare(double sample_rate, int max_block_size) {
 }
 
 void AmpSim::prepare(double sample_rate, int max_block_size, int max_channels) {
-  if (sample_rate <= 0.0) {
+  if (!std::isfinite(sample_rate) || sample_rate <= 0.0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {

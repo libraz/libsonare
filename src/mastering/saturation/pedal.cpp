@@ -183,7 +183,7 @@ void Pedal<Core>::prepare(double sample_rate, int max_block_size) {
 
 template <typename Core>
 void Pedal<Core>::prepare(double sample_rate, int max_block_size, int max_channels) {
-  if (!(sample_rate > 0.0))
+  if (!std::isfinite(sample_rate) || !(sample_rate > 0.0))
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");

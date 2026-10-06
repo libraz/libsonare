@@ -89,7 +89,7 @@ float piston_minus3db_argument() noexcept {
 }
 
 std::vector<float> generate_cab_ir(const CabIrSpec& spec, double sample_rate) {
-  if (!(sample_rate > 0.0)) {
+  if (!std::isfinite(sample_rate) || !(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "generate_cab_ir: invalid sample rate");
   }
   const CabGeometry geometry = cab_geometry(spec.cab_model);

@@ -25,6 +25,20 @@
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
+
+TEST_CASE("amp and generated cabinet reject non-finite processing rates",
+          "[mastering][saturation][amp][rate-validation]") {
+  using sonare::mastering::saturation::generate_cab_ir;
+  for (double rate :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity()}) {
+    INFO("rate=" << rate);
+    sonare::mastering::saturation::AmpSim amp;
+    CHECK_THROWS_AS(amp.prepare(rate, 64), sonare::SonareException);
+    CHECK_THROWS_AS(generate_cab_ir({}, rate), sonare::SonareException);
+  }
+}
 
 namespace {
 
