@@ -36,6 +36,15 @@ class MultibandExpander : public rt::ProcessorBase {
   void set_config(const MultibandExpanderConfig& config);
   const MultibandExpanderConfig& config() const { return config_; }
   const std::vector<float>& last_gain_reductions_db() const { return last_gain_reductions_db_; }
+  /// @brief Most-negative current-block reduction across all configured bands.
+  ///        An empty processor has no active band and reports 0 dB.
+  float last_gain_reduction_db() const noexcept override {
+    float reduction = 0.0f;
+    for (const float band_reduction : last_gain_reductions_db_) {
+      if (band_reduction < reduction) reduction = band_reduction;
+    }
+    return reduction;
+  }
 
   // Automatable parameters (RT-safe, no allocation, no audio-state reset).
   // Per-band block layout with kBandStride params per band: band b occupies

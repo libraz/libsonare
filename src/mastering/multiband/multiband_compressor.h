@@ -36,6 +36,15 @@ class MultibandCompressor : public rt::ProcessorBase {
   void set_config(const MultibandCompressorConfig& config);
   const MultibandCompressorConfig& config() const { return config_; }
   const std::vector<float>& last_gain_reductions_db() const { return last_gain_reductions_db_; }
+  /// @brief Most-negative current-block reduction across all configured bands.
+  ///        An empty processor has no active band and reports 0 dB.
+  float last_gain_reduction_db() const noexcept override {
+    float reduction = 0.0f;
+    for (const float band_reduction : last_gain_reductions_db_) {
+      if (band_reduction < reduction) reduction = band_reduction;
+    }
+    return reduction;
+  }
   /// @brief Per-band most-negative gain reduction since the last
   ///        prepare()/reset(), mirroring @ref last_gain_reductions_db but each
   ///        entry sourced from that band's own

@@ -25,6 +25,7 @@ class SpectralShaper : public rt::ProcessorBase {
   void reset() override;
   void set_config(const SpectralShaperConfig& config);
   float last_reduction_db() const { return last_reduction_db_; }
+  float last_gain_reduction_db() const noexcept override { return last_reduction_db_; }
 
   // Automatable parameters (RT-safe: updates config in place; per-block
   // coefficients are derived in process(), and attack/release re-prepare the
