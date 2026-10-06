@@ -7,6 +7,7 @@
 #include <complex>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <random>
 #include <utility>
 #include <vector>
@@ -170,6 +171,51 @@ TEST_CASE("Clip detection does not read an unclipped peak as a flat top", "[mast
   REQUIRE(detected.flat_sample_count == 0);
   REQUIRE(detected.longest_flat_run_samples == 0);
   REQUIRE(detected.flat_level == 0.0f);
+}
+
+TEST_CASE("Declip rejects non-finite samples at every offline entrypoint",
+          "[mastering][repair][validation]") {
+  constexpr int kSampleRate = 48000;
+  constexpr float kThreshold = 0.8f;
+  const DeclipConfig config{kThreshold, 8, 1, 0.0f};
+
+  // Preserve null/empty compatibility and the inclusive finite threshold boundary.
+  const std::vector<float> finite = {0.2f, kThreshold, -kThreshold, 0.1f};
+  const ClipDetection control = detect_clipping(finite.data(), finite.size(), kSampleRate, config);
+  REQUIRE(control.sample_count == 2);
+  REQUIRE(control.run_count == 1);
+  REQUIRE(detect_clipping(nullptr, 0, kSampleRate, config).sample_count == 0);
+  REQUIRE(detect_clipping(nullptr, finite.size(), kSampleRate, config).sample_count == 0);
+  REQUIRE(detect_clipping(finite.data(), 0, kSampleRate, config).sample_count == 0);
+
+  const std::array<float, 3> non_finite_values = {std::numeric_limits<float>::quiet_NaN(),
+                                                  std::numeric_limits<float>::infinity(),
+                                                  -std::numeric_limits<float>::infinity()};
+  const auto require_invalid = [](const auto& operation) {
+    bool threw = false;
+    try {
+      operation();
+    } catch (const SonareException& error) {
+      threw = true;
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+    REQUIRE(threw);
+  };
+  for (const float poison : non_finite_values) {
+    CAPTURE(poison);
+
+    std::vector<float> mono = {0.2f, poison, -0.2f};
+    require_invalid([&] { detect_clipping(mono.data(), mono.size(), kSampleRate, config); });
+    require_invalid([&] { declip(make_audio(mono), config); });
+    DeclipReport report;
+    require_invalid([&] { declip(make_audio(mono), config, &report); });
+
+    // Both stereo planes are validated independently; one finite side cannot hide a poison.
+    const Audio finite_channel = make_audio({0.2f, 0.3f, -0.2f});
+    const Audio poison_channel = make_audio({0.1f, poison, -0.1f});
+    require_invalid([&] { declip_stereo(finite_channel, poison_channel, config); });
+    require_invalid([&] { declip_stereo(poison_channel, finite_channel, config); });
+  }
 }
 
 TEST_CASE("Declip reconstructs clipped samples from neighbors", "[mastering][repair]") {

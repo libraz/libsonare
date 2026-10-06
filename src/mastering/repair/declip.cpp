@@ -172,6 +172,8 @@ ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (samples == nullptr || size == 0) return {};
+  // Keep null/empty compatibility; reject non-finite values before scan_clipped_runs.
+  validate_offline_audio_input(samples, size, sample_rate);
 
   const std::vector<float> buffer(samples, samples + size);
   return to_detection(buffer, scan_clipped_runs(buffer, validated->clip_threshold));
@@ -184,6 +186,7 @@ Audio declip(const Audio& audio, const DeclipConfig& config) {
 Audio declip(const Audio& audio, const DeclipConfig& config, DeclipReport* report) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   const auto validated = Validated<DeclipConfig>::make(config);
+  validate_offline_audio_input(audio.data(), audio.size(), audio.sample_rate());
 
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   const std::vector<ClipRun> runs = scan_clipped_runs(samples, validated->clip_threshold);
@@ -203,6 +206,8 @@ DeclipStereoResult declip_stereo(const Audio& left, const Audio& right,
   require_stereo_pair(left, right);
   const auto validated = Validated<DeclipConfig>::make(config);
   const int sample_rate = left.sample_rate();
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
   std::vector<float> left_samples(left.data(), left.data() + left.size());
   std::vector<float> right_samples(right.data(), right.data() + right.size());
