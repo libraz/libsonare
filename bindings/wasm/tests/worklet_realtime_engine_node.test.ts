@@ -386,6 +386,63 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('mirrors scalar and multiword UMP plus raw input without aliasing caller buffers', async () => {
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        128,
+      ) as unknown as OfflineEngineOption;
+      const destinationUmp = vi.spyOn(offline, 'pushMidiUmp').mockImplementation(() => undefined);
+      const inputUmp = vi.spyOn(offline, 'pushMidiInputUmp').mockImplementation(() => undefined);
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      try {
+        const words = new Uint32Array([0x41923c00, 0x12345678]);
+        engine.pushMidiUmp(3, 0x20903c64, 128);
+        engine.pushMidiUmp(3, words, 256);
+        words[1] = 0;
+
+        engine.setMidiInputSource(3);
+        const inputWords = new Uint32Array([0x41923c00, 0x87654321]);
+        engine.pushMidiInputUmp(inputWords, 512);
+        inputWords[1] = 0;
+
+        expect(destinationUmp).toHaveBeenCalledWith(3, 0x20903c64, 128);
+        expect(destinationUmp).toHaveBeenCalledWith(
+          3,
+          Uint32Array.from([0x41923c00, 0x12345678]),
+          256,
+        );
+        expect(inputUmp).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x87654321]), 512);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            { type: 'syncMidiUmp', destinationId: 3, word0: 0x20903c64, renderFrame: 128 },
+            {
+              type: 'syncMidiUmp',
+              destinationId: 3,
+              words: Uint32Array.from([0x41923c00, 0x12345678]),
+              renderFrame: 256,
+            },
+            { type: 'syncMidiInputSource', destinationId: 3 },
+            {
+              type: 'syncMidiInputUmp',
+              words: Uint32Array.from([0x41923c00, 0x87654321]),
+              portTimeSamples: 512,
+            },
+          ]),
+        );
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('creates the scope ring only when scope telemetry is requested', async () => {
       const makeNode = (scopeIntervalFrames?: number) =>
         SonareRealtimeEngineNode.create(fakeContext(), {

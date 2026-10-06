@@ -23,6 +23,7 @@ import type {
   PanLaw,
   PanMode,
   SidechainSourceKind,
+  UmpWords,
 } from '../index';
 import { RealtimeEngine } from '../index';
 import { createOpfsClipPageProvider, type OpfsClipPageProviderBinding } from '../opfs_clip_pages';
@@ -1033,8 +1034,8 @@ export class SonareEngine {
     );
   }
 
-  pushMidiUmp(trackId: string | number, word0: number, renderFrame = -1): void {
-    strips.pushMidiUmp(this.stripContext, trackId, word0, renderFrame);
+  pushMidiUmp(trackId: string | number, words: number | UmpWords, renderFrame = -1): void {
+    strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame);
   }
 
   pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame = -1): void {
@@ -1167,6 +1168,12 @@ export class SonareEngine {
       data1: pressure,
       portTimeSamples,
     });
+  }
+
+  pushMidiInputUmp(words: UmpWords, portTimeSamples = 0): void {
+    const copiedWords = words instanceof Uint32Array ? new Uint32Array(words) : words.slice();
+    this.offlineEngine.pushMidiInputUmp(copiedWords, portTimeSamples);
+    this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, portTimeSamples });
   }
 
   pushMidiPanic(renderFrame = -1): void {

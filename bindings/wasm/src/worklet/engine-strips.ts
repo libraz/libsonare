@@ -1,5 +1,5 @@
 import { panLawCode, panModeCode } from '../codes';
-import type { EqBand, PanLawInput, PanMode, RealtimeEngine } from '../index';
+import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index';
 import type { InsertParamOverrideMap } from './engine-mixer-facade';
 import {
   emptyStripJson,
@@ -499,12 +499,18 @@ export function pushMidiPolyPressure(
 export function pushMidiUmp(
   ctx: EngineStripContext,
   trackId: string | number,
-  word0: number,
+  word0: number | UmpWords,
   renderFrame: number,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
-  ctx.offlineEngine.pushMidiUmp(destinationId, [word0], renderFrame);
-  ctx.postSync({ type: 'syncMidiUmp', destinationId, word0, renderFrame });
+  if (typeof word0 === 'number') {
+    ctx.offlineEngine.pushMidiUmp(destinationId, word0, renderFrame);
+    ctx.postSync({ type: 'syncMidiUmp', destinationId, word0, renderFrame });
+    return;
+  }
+  const words = word0 instanceof Uint32Array ? new Uint32Array(word0) : word0.slice();
+  ctx.offlineEngine.pushMidiUmp(destinationId, words, renderFrame);
+  ctx.postSync({ type: 'syncMidiUmp', destinationId, words, renderFrame });
 }
 
 export function setBuiltinInstrument(

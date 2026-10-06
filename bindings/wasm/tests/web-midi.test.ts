@@ -1,14 +1,37 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { bindWebMidi, isWebMidiAvailable } from '../dist/index.js';
 
-type MidiMessage = {
-  kind: 'on' | 'off' | 'cc';
-  group: number;
-  channel: number;
-  a: number;
-  b: number;
-  time: number;
-};
+type MidiMessage =
+  | {
+      kind: 'on' | 'off' | 'cc';
+      group: number;
+      channel: number;
+      a: number;
+      b: number;
+      time: number;
+    }
+  | {
+      kind: 'poly-pressure';
+      group: number;
+      channel: number;
+      note: number;
+      pressure: number;
+      time: number;
+    }
+  | {
+      kind: 'channel-pressure';
+      group: number;
+      channel: number;
+      pressure: number;
+      time: number;
+    }
+  | {
+      kind: 'pitch-bend';
+      group: number;
+      channel: number;
+      bend14: number;
+      time: number;
+    };
 
 class FakeInput {
   id: string;
@@ -109,6 +132,44 @@ class FakeEngine {
 
   pushMidiInputCc(group: number, channel: number, controller: number, value: number, time = 0) {
     this.messages.push({ kind: 'cc', group, channel, a: controller, b: value, time });
+  }
+
+  pushMidiInputPolyPressure(
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    time = 0,
+  ) {
+    this.messages.push({ kind: 'poly-pressure', group, channel, note, pressure, time });
+  }
+
+  pushMidiInputChannelPressure(group: number, channel: number, pressure: number, time = 0) {
+    this.messages.push({ kind: 'channel-pressure', group, channel, pressure, time });
+  }
+
+  pushMidiInputPitchBend(group: number, channel: number, bend14: number, time = 0) {
+    this.messages.push({ kind: 'pitch-bend', group, channel, bend14, time });
+  }
+}
+
+class RawUmpEngine extends FakeEngine {
+  rawUmp: Array<{ words: Uint32Array; time: number }> = [];
+
+  pushMidiInputUmp(words: Uint32Array | readonly number[], time = 0) {
+    this.rawUmp.push({ words: Uint32Array.from(words), time });
+  }
+}
+
+class ThrowingRawUmpEngine extends RawUmpEngine {
+  override pushMidiInputUmp(words: Uint32Array | readonly number[], time = 0) {
+    const packet = Uint32Array.from(words);
+    const messageType = packet[0] >>> 28;
+    const wordCount = [1, 1, 1, 2, 2, 4, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4][messageType];
+    if (packet.length !== wordCount || messageType === 0x3 || messageType === 0x5) {
+      throw new Error('malformed UMP packet');
+    }
+    super.pushMidiInputUmp(packet, time);
   }
 }
 
@@ -218,6 +279,34 @@ describe('Web MIDI helper', () => {
     binding.close();
   });
 
+  it('routes MIDI 1 pressure and pitch bend, including one-byte running-status messages', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('expression');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never, {
+      timestampToSamples: (ms) => Math.round(ms * 48),
+    });
+
+    input.emit([0xa2, 60, 70], 1);
+    input.emit([0xd2, 64], 2);
+    input.emit([65], 2.5);
+    input.emit([0xf8], 3);
+    input.emit([66], 3.5);
+    input.emit([0xe2, 1, 64], 4);
+    input.emit([0xc2, 10], 5); // A valid one-data-byte program change is ignored.
+
+    expect(engine.messages).toEqual([
+      { kind: 'poly-pressure', group: 0, channel: 2, note: 60, pressure: 70, time: 48 },
+      { kind: 'channel-pressure', group: 0, channel: 2, pressure: 64, time: 96 },
+      { kind: 'channel-pressure', group: 0, channel: 2, pressure: 65, time: 120 },
+      { kind: 'channel-pressure', group: 0, channel: 2, pressure: 66, time: 168 },
+      { kind: 'pitch-bend', group: 0, channel: 2, bend14: 8193, time: 192 },
+    ]);
+    binding.close();
+  });
+
   it('keeps MIDI running status isolated per bound input', async () => {
     const access = new FakeAccess();
     const inputA = new FakeInput('a');
@@ -276,6 +365,72 @@ describe('Web MIDI helper', () => {
       { kind: 'on', group: 1, channel: 0, a: 60, b: 100, time: 0 },
       { kind: 'on', group: 3, channel: 2, a: 65, b: 100, time: 0 },
       { kind: 'cc', group: 3, channel: 2, a: 74, b: 127, time: 0 },
+    ]);
+    binding.close();
+  });
+
+  it('falls back to optional pressure and bend methods for MIDI 2.0 UMP', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('ump-expression');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never, {
+      timestampToSamples: (ms) => Math.round(ms * 48),
+    });
+
+    input.emit([(0x2 << 28) | (4 << 24) | (0xd << 20) | (3 << 16) | (64 << 8)], 0.5);
+    input.emit([(0x4 << 28) | (4 << 24) | (0xa << 20) | (3 << 16) | (60 << 8), 70 << 25], 1);
+    input.emit([(0x4 << 28) | (4 << 24) | (0xd << 20) | (3 << 16), 64 << 25], 2);
+    input.emit([(0x4 << 28) | (4 << 24) | (0xe << 20) | (3 << 16), 0x12345678], 3);
+
+    expect(engine.messages).toEqual([
+      { kind: 'channel-pressure', group: 4, channel: 3, pressure: 64, time: 24 },
+      { kind: 'poly-pressure', group: 4, channel: 3, note: 60, pressure: 70, time: 48 },
+      { kind: 'channel-pressure', group: 4, channel: 3, pressure: 64, time: 96 },
+      { kind: 'pitch-bend', group: 4, channel: 3, bend14: 0x12345678 >>> 18, time: 144 },
+    ]);
+    binding.close();
+  });
+
+  it('routes each framed UMP packet losslessly when raw input is supported', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('raw-ump');
+    access.inputs.set(input.id, input);
+    const engine = new RawUmpEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never, {
+      timestampToSamples: (ms) => Math.round(ms * 48),
+    });
+
+    const midi1NoteOn = 0x21903c64;
+    const midi2Cc = [(0x4 << 28) | (3 << 24) | (0xb << 20) | (2 << 16) | (74 << 8), 0x12345678];
+    input.emit([midi1NoteOn, ...midi2Cc], 1.5);
+
+    expect(engine.messages).toEqual([]);
+    expect(engine.rawUmp).toHaveLength(2);
+    expect(engine.rawUmp[0]).toEqual({ words: Uint32Array.from([midi1NoteOn]), time: 72 });
+    expect(engine.rawUmp[1]).toEqual({ words: Uint32Array.from(midi2Cc), time: 72 });
+    binding.close();
+  });
+
+  it('does not pass malformed, truncated, or engine-refused UMP packets to raw input', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('raw-ump-validation');
+    access.inputs.set(input.id, input);
+    const engine = new ThrowingRawUmpEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    const midi2CcWord0 = (0x4 << 28) | (1 << 24) | (0xb << 20) | (1 << 16) | (7 << 8);
+    const data64Word0 = (0x3 << 28) | (1 << 24) | (0x16 << 16);
+    const data128Word0 = (0x5 << 28) | (1 << 24);
+    expect(() => input.emit([midi2CcWord0])).not.toThrow();
+    expect(() => input.emit([data64Word0, 0, midi2CcWord0, 0x12345678])).not.toThrow();
+    expect(() => input.emit([data128Word0, 0, 0])).not.toThrow();
+
+    expect(engine.rawUmp).toEqual([
+      { words: Uint32Array.from([midi2CcWord0, 0x12345678]), time: 0 },
     ]);
     binding.close();
   });

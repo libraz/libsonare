@@ -15,6 +15,7 @@ import type {
   PlaybackRendererConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
+  UmpWords,
 } from '../index';
 import type { AutomationCurve } from '../public_types';
 import type {
@@ -722,12 +723,25 @@ export interface SonareEngineSyncMidiCcMessage {
   renderFrame: number;
 }
 
-export interface SonareEngineSyncMidiUmpMessage {
+export interface SonareEngineSyncMidiUmpWordMessage {
   type: 'syncMidiUmp';
   destinationId: number;
   word0: number;
+  words?: never;
   renderFrame: number;
 }
+
+export interface SonareEngineSyncMidiUmpWordsMessage {
+  type: 'syncMidiUmp';
+  destinationId: number;
+  word0?: never;
+  words: UmpWords;
+  renderFrame: number;
+}
+
+export type SonareEngineSyncMidiUmpMessage =
+  | SonareEngineSyncMidiUmpWordMessage
+  | SonareEngineSyncMidiUmpWordsMessage;
 
 /**
  * One of the three per-note expression dimensions, addressed to a destination.
@@ -797,6 +811,12 @@ export interface SonareEngineSyncMidiInputEventMessage {
   portTimeSamples: number;
 }
 
+export interface SonareEngineSyncMidiInputUmpMessage {
+  type: 'syncMidiInputUmp';
+  words: UmpWords;
+  portTimeSamples: number;
+}
+
 /** Releases the realtime engine and all worklet-owned clip buffers. */
 export interface SonareEngineDestroyMessage {
   type: 'destroy';
@@ -861,6 +881,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiInputSourceMessage
   | SonareEngineSyncMidiCcBindingMessage
   | SonareEngineSyncMidiInputEventMessage
+  | SonareEngineSyncMidiInputUmpMessage
   | SonareEngineDestroyMessage;
 
 export interface WorkletPort {

@@ -593,6 +593,74 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('applies raw MIDI input UMP sync with every word and its port timestamp', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: { pushMidiInputUmp: (words: Uint32Array, portTimeSamples: number) => void };
+          }
+        ).engine;
+        const rawInput = vi.spyOn(engine, 'pushMidiInputUmp').mockImplementation(() => undefined);
+        const words = new Uint32Array([0x41923c00, 0x12345678]);
+        processor.receiveSync({ type: 'syncMidiInputSource', destinationId: 9 });
+        processor.receiveSync({ type: 'syncMidiInputUmp', words, portTimeSamples: 768 });
+
+        expect(rawInput).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x12345678]), 768);
+        expect(rawInput.mock.calls[0]?.[0]).toEqual(Uint32Array.from([0x41923c00, 0x12345678]));
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('applies multiword destination UMP and preserves legacy one-word sync', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              pushMidiUmp: (
+                destinationId: number,
+                words: Uint32Array | number[],
+                renderFrame: number,
+              ) => void;
+            };
+          }
+        ).engine;
+        const destinationUmp = vi.spyOn(engine, 'pushMidiUmp').mockImplementation(() => undefined);
+        processor.receiveSync({
+          type: 'syncMidiUmp',
+          destinationId: 4,
+          words: Uint32Array.from([0x41923c00, 0x12345678]),
+          renderFrame: 256,
+        });
+        processor.receiveSync({
+          type: 'syncMidiUmp',
+          destinationId: 4,
+          word0: 0x20903c64,
+          renderFrame: 512,
+        });
+
+        expect(destinationUmp).toHaveBeenNthCalledWith(
+          1,
+          4,
+          Uint32Array.from([0x41923c00, 0x12345678]),
+          256,
+        );
+        expect(destinationUmp).toHaveBeenNthCalledWith(2, 4, [0x20903c64], 512);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('contains an invalid SAB command and continues rendering later blocks', () => {
       const blockSize = 128;
       const commandRing = createSonareEngineCommandRingBuffer(8);
@@ -1860,6 +1928,11 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         portTimeSamples: 0,
       },
       syncMidiInputSource: { type: 'syncMidiInputSource', destinationId: 4 },
+      syncMidiInputUmp: {
+        type: 'syncMidiInputUmp',
+        words: Uint32Array.from([0x41923c00, 0x12345678]),
+        portTimeSamples: 768,
+      },
       syncMidiNoteOff: {
         type: 'syncMidiNoteOff',
         destinationId: 4,
@@ -1906,7 +1979,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       syncMidiUmp: {
         type: 'syncMidiUmp',
         destinationId: 4,
-        word0: midi1Word(0x9, 0, 60, 100),
+        words: Uint32Array.from([0x41923c00, 0x12345678]),
         renderFrame: 0,
       },
       syncMixer: {
@@ -2046,6 +2119,26 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           }
           await new Promise((resolve) => setTimeout(resolve, 5));
         }
+        const workletEngine = (
+          instance as unknown as {
+            bridge: {
+              engine: {
+                pushMidiUmp: (
+                  destinationId: number,
+                  words: Uint32Array | number[],
+                  renderFrame: number,
+                ) => void;
+                pushMidiInputUmp: (words: Uint32Array, portTimeSamples: number) => void;
+              };
+            };
+          }
+        ).bridge.engine;
+        const destinationUmp = vi
+          .spyOn(workletEngine, 'pushMidiUmp')
+          .mockImplementation(() => undefined);
+        const rawInput = vi
+          .spyOn(workletEngine, 'pushMidiInputUmp')
+          .mockImplementation(() => undefined);
         // Give the track, bus and master strips a real insert so the strip
         // syncs resolve a live target instead of throwing; this also drives
         // syncMixer through the same guarded path.
@@ -2113,6 +2206,12 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             .filter((message) => (message as { type?: string }).type === 'syncError')
             .map((message) => (message as { syncType: string }).syncType),
         ).toEqual(['syncLoadSoundFont']);
+        expect(destinationUmp).toHaveBeenCalledWith(
+          4,
+          Uint32Array.from([0x41923c00, 0x12345678]),
+          0,
+        );
+        expect(rawInput).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x12345678]), 768);
         // A string-typed message the guard does not know must stay dropped.
         port.onmessage?.({ data: { type: 'totallyUnknownSync' } });
         // A sync-prefixed one the guard does not know must not vanish: it is a

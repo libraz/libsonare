@@ -31,6 +31,21 @@ export interface WebMidiEngine {
     value: number,
     time?: number,
   ): void;
+  pushMidiInputPitchBend?(group: number, channel: number, bend14: number, time?: number): void;
+  pushMidiInputChannelPressure?(
+    group: number,
+    channel: number,
+    pressure: number,
+    time?: number,
+  ): void;
+  pushMidiInputPolyPressure?(
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    time?: number,
+  ): void;
+  pushMidiInputUmp?(words: Uint32Array | readonly number[], time?: number): void;
 }
 
 type MidiInputState = 'connected' | 'disconnected';
@@ -285,8 +300,8 @@ function dispatchMidiMessage(
     return 0;
   }
   const first = data[0];
-  if (first > 0xff) {
-    dispatchUmpMessage(
+  if (first > 0xff || data instanceof Uint32Array) {
+    dispatchUmpMessages(
       engine,
       data,
       timestampToSamples?.(event.receivedTime ?? event.timeStamp ?? 0) ?? 0,
@@ -312,8 +327,12 @@ function dispatchMidiMessage(
   }
 
   const a = readU7(data, offset);
-  const b = readU7(data, offset + 1);
-  if (a < 0 || b < 0) {
+  if (a < 0) {
+    return status;
+  }
+  const oneDataByteMessage = message === 0xc0 || message === 0xd0;
+  const b = oneDataByteMessage ? -1 : readU7(data, offset + 1);
+  if (!oneDataByteMessage && b < 0) {
     return status;
   }
 
@@ -331,19 +350,55 @@ function dispatchMidiMessage(
     }
   } else if (message === 0xb0 && b >= 0) {
     engine.pushMidiInputCc(group, channel, a, b, portTimeSamples);
+  } else if (message === 0xa0 && b >= 0) {
+    engine.pushMidiInputPolyPressure?.(group, channel, a, b, portTimeSamples);
+  } else if (message === 0xd0) {
+    engine.pushMidiInputChannelPressure?.(group, channel, a, portTimeSamples);
+  } else if (message === 0xe0 && b >= 0) {
+    engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), portTimeSamples);
   }
 
   return status;
 }
 
-function dispatchUmpMessage(
+function dispatchUmpMessages(
   engine: WebMidiEngine,
   words: ArrayLike<number>,
+  portTimeSamples: number,
+): void {
+  let offset = 0;
+  while (offset < words.length) {
+    const word0 = words[offset] >>> 0;
+    const wordCount = umpWordCount(word0 >>> 28);
+    if (words.length - offset < wordCount) {
+      return;
+    }
+    const packet = new Uint32Array(wordCount);
+    for (let index = 0; index < wordCount; index++) {
+      packet[index] = words[offset + index] >>> 0;
+    }
+    dispatchUmpMessage(engine, packet, portTimeSamples);
+    offset += wordCount;
+  }
+}
+
+function dispatchUmpMessage(
+  engine: WebMidiEngine,
+  words: Uint32Array,
   portTimeSamples: number,
 ): void {
   const word0 = words[0] >>> 0;
   const messageType = word0 >>> 28;
   const group = (word0 >>> 24) & 0x0f;
+
+  // Data packets (MT 0x3/0x5) need the owned SysEx path; raw input refuses them.
+  if (messageType === 0x3 || messageType === 0x5) {
+    return;
+  }
+  if (engine.pushMidiInputUmp) {
+    engine.pushMidiInputUmp(words, portTimeSamples);
+    return;
+  }
 
   if (messageType === 0x2) {
     const status = (word0 >>> 16) & 0xff;
@@ -361,6 +416,12 @@ function dispatchUmpMessage(
       }
     } else if (message === 0xb0) {
       engine.pushMidiInputCc(group, channel, a, b, portTimeSamples);
+    } else if (message === 0xa0) {
+      engine.pushMidiInputPolyPressure?.(group, channel, a, b, portTimeSamples);
+    } else if (message === 0xd0) {
+      engine.pushMidiInputChannelPressure?.(group, channel, a, portTimeSamples);
+    } else if (message === 0xe0) {
+      engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), portTimeSamples);
     }
     return;
   }
@@ -380,7 +441,41 @@ function dispatchUmpMessage(
       engine.pushMidiInputNoteOn(group, channel, data1, velocity, portTimeSamples);
     } else if (status === 0xb) {
       engine.pushMidiInputCc(group, channel, data1, (word1 >>> 25) & 0x7f, portTimeSamples);
+    } else if (status === 0xa) {
+      engine.pushMidiInputPolyPressure?.(
+        group,
+        channel,
+        data1,
+        (word1 >>> 25) & 0x7f,
+        portTimeSamples,
+      );
+    } else if (status === 0xd) {
+      engine.pushMidiInputChannelPressure?.(group, channel, (word1 >>> 25) & 0x7f, portTimeSamples);
+    } else if (status === 0xe) {
+      engine.pushMidiInputPitchBend?.(group, channel, word1 >>> 18, portTimeSamples);
     }
+  }
+}
+
+function umpWordCount(messageType: number): number {
+  switch (messageType & 0x0f) {
+    case 0x0:
+    case 0x1:
+    case 0x2:
+    case 0x6:
+    case 0x7:
+      return 1;
+    case 0x3:
+    case 0x4:
+    case 0x8:
+    case 0x9:
+    case 0xa:
+      return 2;
+    case 0xb:
+    case 0xc:
+      return 3;
+    default:
+      return 4;
   }
 }
 
