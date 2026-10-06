@@ -1,3 +1,4 @@
+#include <Eigen/Dense>
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
@@ -971,11 +972,37 @@ std::vector<std::complex<float>> oracle_solve_linear_system(
   return solution;
 }
 
+/// @brief Solves the WPE normal equations with Eigen's independent QR factorization.
+/// @details The production path and the storage regression use Gauss-Jordan elimination. This
+///          oracle deliberately takes a separate numerical route while retaining the same
+///          regularized normal-equation matrix.
+std::vector<std::complex<float>> oracle_solve_qr(
+    const std::vector<std::vector<std::complex<double>>>& matrix,
+    const std::vector<std::complex<double>>& rhs) {
+  const Eigen::Index n = static_cast<Eigen::Index>(rhs.size());
+  Eigen::MatrixXcd system(n, n);
+  Eigen::VectorXcd target(n);
+  for (Eigen::Index row = 0; row < n; ++row) {
+    target[row] = rhs[static_cast<size_t>(row)];
+    for (Eigen::Index column = 0; column < n; ++column) {
+      system(row, column) = matrix[static_cast<size_t>(row)][static_cast<size_t>(column)];
+    }
+  }
+
+  const Eigen::VectorXcd solution = system.colPivHouseholderQr().solve(target);
+  std::vector<std::complex<float>> result(static_cast<size_t>(n));
+  for (Eigen::Index index = 0; index < n; ++index) {
+    result[static_cast<size_t>(index)] = static_cast<std::complex<float>>(solution[index]);
+  }
+  return result;
+}
+
 /// @brief dereverb_classical with the WPE covariance and cross buffers allocated inside the
 ///        bin loop, as they were before they were hoisted out of it.
 /// @details The short-input padding branch is not mirrored; the caller keeps the input longer
 ///          than n_fft.
-Audio oracle_dereverb(const Audio& audio, const DereverbClassicalConfig& config) {
+Audio oracle_dereverb(const Audio& audio, const DereverbClassicalConfig& config,
+                      bool independent_qr = false) {
   constexpr double kRegularization = static_cast<double>(sonare::constants::kSpectrumEpsilon);
 
   StftConfig stft_config;
@@ -1039,7 +1066,8 @@ Audio oracle_dereverb(const Audio& audio, const DereverbClassicalConfig& config)
             for (int j = 0; j < taps; ++j) {
               const auto xj = static_cast<std::complex<double>>(
                   dereverbed[static_cast<size_t>(b * frames + t - delay_frames - j)]);
-              covariance[static_cast<size_t>(i)][static_cast<size_t>(j)] += xi * std::conj(xj);
+              // Normal equations of y_hat = sum_j g_j x_j: sum_j conj(x_i) x_j g_j = conj(x_i) y.
+              covariance[static_cast<size_t>(i)][static_cast<size_t>(j)] += std::conj(xi) * xj;
             }
           }
         }
@@ -1047,7 +1075,9 @@ Audio oracle_dereverb(const Audio& audio, const DereverbClassicalConfig& config)
           covariance[static_cast<size_t>(i)][static_cast<size_t>(i)] +=
               std::complex<double>{kRegularization, 0.0};
         }
-        auto predictors = oracle_solve_linear_system(std::move(covariance), std::move(cross));
+        auto predictors = independent_qr
+                              ? oracle_solve_qr(covariance, cross)
+                              : oracle_solve_linear_system(std::move(covariance), std::move(cross));
         double predictor_norm = 0.0;
         for (const auto& predictor : predictors) predictor_norm += std::abs(predictor);
         if (predictor_norm > 0.98) {
@@ -1282,6 +1312,45 @@ TEST_CASE("DereverbClassical WPE does not depend on where its working buffers li
     }
     REQUIRE(rms(want) > 0.0f);
   }
+}
+
+TEST_CASE("DereverbClassical WPE agrees with an independent QR oracle on a broad fixture",
+          "[mastering][repair][dereverb]") {
+  constexpr int sr = 48000;
+  std::vector<float> samples(32000, 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(sr);
+    const double direct = 0.21 * std::sin(sonare::constants::kTwoPiD * 173.0 * t) +
+                          0.17 * std::cos(sonare::constants::kTwoPiD * 911.0 * t) +
+                          0.13 * std::sin(sonare::constants::kTwoPiD * 1800.0 * t) +
+                          0.09 * std::cos(sonare::constants::kTwoPiD * 3200.0 * t) +
+                          0.05 * std::sin(sonare::constants::kTwoPiD * 6500.0 * t);
+    const float late = i >= 960 ? 0.19f * samples[i - 960] : 0.0f;
+    samples[i] = static_cast<float>(direct) + late;
+  }
+  const Audio input = Audio::from_vector(std::move(samples), sr);
+
+  DereverbClassicalConfig config{};
+  config.n_fft = 256;
+  config.hop_length = 64;
+  config.t60_sec = 0.4f;
+  config.late_delay_ms = 20.0f;
+  config.wpe_enabled = true;
+  config.wpe_iterations = 2;
+  config.wpe_taps = 4;
+  config.wpe_strength = 0.5f;
+
+  const Audio got = dereverb_classical(input, config);
+  const Audio want = oracle_dereverb(input, config, true);
+  REQUIRE(got.size() == want.size());
+  REQUIRE(got.size() == input.size());
+
+  float max_difference = 0.0f;
+  for (size_t i = 0; i < got.size(); ++i) {
+    max_difference = std::max(max_difference, std::abs(got[i] - want[i]));
+  }
+  CAPTURE(max_difference);
+  REQUIRE(max_difference < 2.0e-5f);
 }
 
 namespace {

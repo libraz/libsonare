@@ -212,7 +212,7 @@ TEST_CASE("mono denoise and dereverb are unchanged", "[.][repair][stereo][denois
   CHECK(hash_samples(repair::denoise_classical(audio, berouti)) == 0x1b736c89a790d94bull);
   CHECK(hash_samples(repair::denoise_classical(audio, mcra)) == 0xdcbbe46d44350ed7ull);
   CHECK(hash_samples(repair::dereverb_classical(audio)) == 0xaa8454d236697b37ull);
-  CHECK(hash_samples(repair::dereverb_classical(audio, wpe)) == 0x3fa27970fd263f44ull);
+  CHECK(hash_samples(repair::dereverb_classical(audio, wpe)) == 0x4d324a78b4a4a204ull);
 }
 
 // ------------------------------------------------------------------ rejection

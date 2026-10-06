@@ -143,7 +143,7 @@ PredictorNorms fit_wpe(std::vector<std::vector<std::complex<float>>>& channels, 
           for (int j = 0; j < taps; ++j) {
             const auto xj = static_cast<std::complex<double>>(
                 channel[static_cast<size_t>(b * frames + t - delay_frames - j)]);
-            covariance[static_cast<size_t>(i)][static_cast<size_t>(j)] += xi * std::conj(xj);
+            covariance[static_cast<size_t>(i)][static_cast<size_t>(j)] += std::conj(xi) * xj;
           }
         }
       }
