@@ -1365,3 +1365,87 @@ TEST_CASE("AdaptiveRelease single bound change keeps the pair ordered",
                              render_adaptive_release_after(ordered, {})) <= kTolerance);
   }
 }
+
+TEST_CASE("AdaptiveRelease crossing endpoint automation keeps config round-trippable",
+          "[mastering][maximizer][adaptive_release]") {
+  SECTION("minimum release crosses maximum") {
+    AdaptiveRelease processor;
+    REQUIRE(processor.set_parameter(1, 300.0f));
+    const auto normalized = processor.config();
+    CHECK(normalized.min_release_ms == 250.0f);
+    CHECK(normalized.max_release_ms == 300.0f);
+    CHECK(normalized.min_release_ms <= normalized.max_release_ms);
+    CHECK_NOTHROW(processor.set_config(normalized));
+  }
+
+  SECTION("maximum release crosses minimum") {
+    AdaptiveRelease processor;
+    REQUIRE(processor.set_parameter(2, 5.0f));
+    const auto normalized = processor.config();
+    CHECK(normalized.min_release_ms == 5.0f);
+    CHECK(normalized.max_release_ms == 20.0f);
+    CHECK(normalized.min_release_ms <= normalized.max_release_ms);
+    CHECK_NOTHROW(processor.set_config(normalized));
+  }
+
+  SECTION("low crest crosses high crest") {
+    AdaptiveRelease processor;
+    REQUIRE(processor.set_parameter(4, 15.0f));
+    const auto normalized = processor.config();
+    CHECK(normalized.crest_low == 10.0f);
+    CHECK(normalized.crest_high == 15.0f);
+    CHECK(normalized.crest_low <= normalized.crest_high);
+    CHECK_NOTHROW(processor.set_config(normalized));
+  }
+
+  SECTION("high crest crosses low crest") {
+    AdaptiveRelease processor;
+    REQUIRE(processor.set_parameter(5, 1.0f));
+    const auto normalized = processor.config();
+    CHECK(normalized.crest_low == 1.0f);
+    CHECK(normalized.crest_high == 2.0f);
+    CHECK(normalized.crest_low <= normalized.crest_high);
+    CHECK_NOTHROW(processor.set_config(normalized));
+  }
+
+  SECTION("low crest written equal to high crest") {
+    AdaptiveRelease processor;
+    REQUIRE(processor.set_parameter(4, 10.0f));
+    const auto normalized = processor.config();
+    CHECK(normalized.crest_low == 10.0f);
+    CHECK(normalized.crest_high == 10.0f);
+    CHECK_NOTHROW(processor.set_config(normalized));
+  }
+
+  SECTION("both crests clamped to the same minimum") {
+    AdaptiveRelease processor;
+    REQUIRE(processor.set_parameter(4, 0.0f));
+    REQUIRE(processor.set_parameter(5, 0.0f));
+    const auto normalized = processor.config();
+    CHECK(normalized.crest_low == normalized.crest_high);
+    CHECK_NOTHROW(processor.set_config(normalized));
+  }
+
+  SECTION("authored endpoints survive a second crossing write") {
+    AdaptiveReleaseConfig start;
+    start.min_release_ms = 10.0f;
+    start.max_release_ms = 100.0f;
+    start.crest_low = 2.0f;
+    start.crest_high = 10.0f;
+    AdaptiveRelease processor(start);
+
+    REQUIRE(processor.set_parameter(1, 300.0f));
+    REQUIRE(processor.set_parameter(2, 50.0f));
+    const auto release_config = processor.config();
+    CHECK(release_config.min_release_ms == 50.0f);
+    CHECK(release_config.max_release_ms == 300.0f);
+    CHECK_NOTHROW(processor.set_config(release_config));
+
+    REQUIRE(processor.set_parameter(4, 15.0f));
+    REQUIRE(processor.set_parameter(5, 5.0f));
+    const auto crest_config = processor.config();
+    CHECK(crest_config.crest_low == 5.0f);
+    CHECK(crest_config.crest_high == 15.0f);
+    CHECK_NOTHROW(processor.set_config(crest_config));
+  }
+}

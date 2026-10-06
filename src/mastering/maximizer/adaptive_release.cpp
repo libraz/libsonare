@@ -29,8 +29,14 @@ constexpr float kRmsFloor = 1.0e-9f;
 
 }  // namespace
 
-AdaptiveRelease::AdaptiveRelease(AdaptiveReleaseConfig config) : config_(config) {
+AdaptiveRelease::AdaptiveRelease(AdaptiveReleaseConfig config)
+    : config_(config),
+      authored_min_release_ms_(config.min_release_ms),
+      authored_max_release_ms_(config.max_release_ms),
+      authored_crest_low_(config.crest_low),
+      authored_crest_high_(config.crest_high) {
   validate_config(config_);
+  normalize_bound_pairs();
 }
 
 void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
@@ -116,6 +122,11 @@ void AdaptiveRelease::reset() {
 void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
   validate_config(config);
   config_ = config;
+  authored_min_release_ms_ = config.min_release_ms;
+  authored_max_release_ms_ = config.max_release_ms;
+  authored_crest_low_ = config.crest_low;
+  authored_crest_high_ = config.crest_high;
+  normalize_bound_pairs();
   if (prepared_) prepare(sample_rate_, max_block_size_);
 }
 
@@ -129,21 +140,24 @@ bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 1:
       // Read directly by the per-sample release mapping; no recompute needed.
-      // Stored as written; the pair is ordered where it is read.
-      config_.min_release_ms = std::max(0.0f, value);
+      authored_min_release_ms_ = std::max(0.0f, value);
+      normalize_bound_pairs();
       return true;
     case 2:
-      config_.max_release_ms = std::max(0.0f, value);
+      authored_max_release_ms_ = std::max(0.0f, value);
+      normalize_bound_pairs();
       return true;
     case 3:
       config_.crest_window_ms = std::max(kMinPositiveCrest, value);
       update_envelope_coefficients();
       return true;
     case 4:
-      config_.crest_low = std::max(kMinPositiveCrest, value);
+      authored_crest_low_ = std::max(kMinPositiveCrest, value);
+      normalize_bound_pairs();
       return true;
     case 5:
-      config_.crest_high = std::max(kMinPositiveCrest, value);
+      authored_crest_high_ = std::max(kMinPositiveCrest, value);
+      normalize_bound_pairs();
       return true;
     case 6:
       config_.release_smoothing_ms = std::max(0.0f, value);
@@ -166,7 +180,7 @@ bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const no
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
   if (config.lookahead_ms < 0.0f || config.min_release_ms < 0.0f ||
       config.max_release_ms < config.min_release_ms || config.crest_window_ms <= 0.0f ||
-      config.crest_low <= 0.0f || config.crest_high <= config.crest_low ||
+      config.crest_low <= 0.0f || config.crest_high < config.crest_low ||
       config.release_smoothing_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid adaptive release configuration");
   }
@@ -174,6 +188,13 @@ void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
 
 void AdaptiveRelease::configure_limiter() {
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, current_release_ms_, 4});
+}
+
+void AdaptiveRelease::normalize_bound_pairs() noexcept {
+  config_.min_release_ms = std::min(authored_min_release_ms_, authored_max_release_ms_);
+  config_.max_release_ms = std::max(authored_min_release_ms_, authored_max_release_ms_);
+  config_.crest_low = std::min(authored_crest_low_, authored_crest_high_);
+  config_.crest_high = std::max(authored_crest_low_, authored_crest_high_);
 }
 
 float AdaptiveRelease::lowest_release_ms() const noexcept {
