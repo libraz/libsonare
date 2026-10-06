@@ -186,14 +186,20 @@ class Sf2Lfo {
   }
 
   /// Retunes the LFO under a held note without touching the phase. @p freq_hz
-  /// <= 0 keeps the current increment until the phase reaches an output-zero
-  /// point (0 or 0.5), then freezes there so the output rests at 0.
+  /// <= 0 freezes it at once during the delay or at an exact zero crossing, and
+  /// otherwise runs on to the next output-zero point (0 or 0.5) before resting.
   void set_frequency(double sample_rate, float freq_hz) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
     if (freq_hz > 0.0f) {
       inc_ = static_cast<float>(freq_hz / sr);
       settling_ = false;
     } else if (inc_ > 0.0f) {
+      // The output is pinned at zero during the delay and at a zero crossing, so freeze now.
+      if (delay_samples_ > 0 || phase_ == 0.0f || phase_ == 0.5f) {
+        inc_ = 0.0f;
+        settling_ = false;
+        return;
+      }
       settling_ = true;
       settle_phase_ = phase_ < 0.5f ? 0.5f : 1.0f;
     }

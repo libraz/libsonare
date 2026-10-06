@@ -23,11 +23,14 @@
 #include "engine/realtime_engine.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_effects.h"
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
+#include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
 #include "rt/processor_base.h"
 #include "support/midi_render.h"
@@ -305,6 +308,311 @@ std::array<uint8_t, 12> efx_type_write(uint8_t msb, uint8_t lsb) {
 }  // namespace
 
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
+TEST_CASE("fallback physical-model body sends preserve stereo through every GS effect",
+          "[midi][sf2][gsefx][fallback][body]") {
+  using sonare::midi::synth::gm_fallback_sends;
+  using sonare::midi::synth::GmFallbackSends;
+  using sonare::midi::synth::gs_effects_config_from;
+  using sonare::midi::synth::GsEffectBus;
+  using sonare::midi::synth::GsEffectsConfig;
+  using sonare::midi::synth::GsSystemEffects;
+  using sonare::midi::synth::kCcSendDepth;
+
+  enum class Effect { kReverb, kChorus, kDelay };
+  struct Render {
+    std::vector<float> left;
+    std::vector<float> right;
+  };
+  constexpr int kSamples = 24000;
+  constexpr int kBlock = GsEffectBus::kBlockFrames;
+
+  const auto render_fallback = [](uint8_t program, Effect effect, bool wet) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.dc_block = false;
+    cfg.effects = gs_effects_config_from(GsSystemEffects{});
+    cfg.effects.enable_reverb = wet && effect == Effect::kReverb;
+    cfg.effects.enable_chorus = wet && effect == Effect::kChorus;
+    cfg.effects.enable_delay = wet && effect == Effect::kDelay;
+
+    Sf2Player player(cfg);
+    player.prepare(kOutRate, kBlock);
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, program)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(
+                           0, 0, 91, wet && effect == Effect::kReverb ? 127 : 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(
+                           0, 0, 93, wet && effect == Effect::kChorus ? 127 : 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(
+                           0, 0, 94, wet && effect == Effect::kDelay ? 127 : 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+
+    Render output{std::vector<float>(kSamples, 0.0f), std::vector<float>(kSamples, 0.0f)};
+    float* channels[2] = {output.left.data(), output.right.data()};
+    player.process(channels, 2, kSamples);
+    return output;
+  };
+
+  const auto render_oracle = [kBlock](uint8_t program, Effect effect, const Render& dry) {
+    const GsEffectsConfig base = gs_effects_config_from(GsSystemEffects{});
+    GsEffectsConfig config = base;
+    config.enable_reverb = effect == Effect::kReverb;
+    config.enable_chorus = effect == Effect::kChorus;
+    config.enable_delay = effect == Effect::kDelay;
+    GsEffectBus bus(config);
+    bus.prepare(kOutRate);
+
+    const GmFallbackSends sends = gm_fallback_sends(0, program);
+    float send = kCcSendDepth;
+    if (effect == Effect::kReverb) send *= sends.reverb_scale;
+    if (effect == Effect::kChorus) send *= sends.chorus_scale;
+
+    Render output{std::vector<float>(dry.left.size(), 0.0f),
+                  std::vector<float>(dry.right.size(), 0.0f)};
+    for (size_t offset = 0; offset < dry.left.size(); offset += kBlock) {
+      const int n = std::min<int>(kBlock, static_cast<int>(dry.left.size() - offset));
+      bus.begin_chunk();
+      float* in_l = effect == Effect::kReverb   ? bus.reverb_in(0)
+                    : effect == Effect::kChorus ? bus.chorus_in(0)
+                                                : bus.delay_in(0);
+      float* in_r = effect == Effect::kReverb   ? bus.reverb_in(1)
+                    : effect == Effect::kChorus ? bus.chorus_in(1)
+                                                : bus.delay_in(1);
+      for (int i = 0; i < n; ++i) {
+        in_l[i] = dry.left[offset + static_cast<size_t>(i)] * send;
+        in_r[i] = dry.right[offset + static_cast<size_t>(i)] * send;
+      }
+      bus.render_returns(output.left.data() + offset, output.right.data() + offset, n);
+    }
+    return output;
+  };
+
+  const auto check_case = [&](uint8_t program, Effect effect, const char* label) {
+    const Render dry = render_fallback(program, effect, false);
+    const Render wet = render_fallback(program, effect, true);
+    const Render expected = render_oracle(program, effect, dry);
+    double dry_energy = 0.0;
+    double return_energy = 0.0;
+    double expected_energy = 0.0;
+    double error = 0.0;
+    double reference = 0.0;
+    for (size_t i = 0; i < dry.left.size(); ++i) {
+      const float actual_l = wet.left[i] - dry.left[i];
+      const float actual_r = wet.right[i] - dry.right[i];
+      const float expected_l = expected.left[i];
+      const float expected_r = expected.right[i];
+      REQUIRE(std::isfinite(dry.left[i]));
+      REQUIRE(std::isfinite(dry.right[i]));
+      REQUIRE(std::isfinite(actual_l));
+      REQUIRE(std::isfinite(actual_r));
+      REQUIRE(std::isfinite(expected_l));
+      REQUIRE(std::isfinite(expected_r));
+      dry_energy += static_cast<double>(dry.left[i]) * dry.left[i] +
+                    static_cast<double>(dry.right[i]) * dry.right[i];
+      return_energy +=
+          static_cast<double>(actual_l) * actual_l + static_cast<double>(actual_r) * actual_r;
+      expected_energy += static_cast<double>(expected_l) * expected_l +
+                         static_cast<double>(expected_r) * expected_r;
+      const double dl = static_cast<double>(actual_l) - expected_l;
+      const double dr = static_cast<double>(actual_r) - expected_r;
+      error += dl * dl + dr * dr;
+      reference += static_cast<double>(expected_l) * expected_l +
+                   static_cast<double>(expected_r) * expected_r;
+    }
+    INFO(label << " dry_energy=" << dry_energy << " return_energy=" << return_energy
+               << " expected_energy=" << expected_energy << " error=" << error
+               << " reference=" << reference);
+    CHECK(dry_energy > 1e-8);
+    CHECK(return_energy > 1e-12);
+    CHECK(expected_energy > 1e-12);
+    CHECK(reference > 1e-12);
+    CHECK(std::sqrt(error / reference) < 1e-4);
+  };
+
+  // Acoustic piano exercises the soundboard's opposite-phase stereo side on
+  // reverb and chorus. Steel guitar exercises the plucked halo through delay,
+  // whose first repeat is late enough to expose an omitted body contribution.
+  check_case(0, Effect::kReverb, "piano reverb");
+  check_case(0, Effect::kChorus, "piano chorus");
+  check_case(25, Effect::kDelay, "steel guitar delay");
+  // Electric piano has no shared fallback body; its direct send remains the
+  // control proving the effect path itself is unchanged.
+  check_case(4, Effect::kReverb, "electric piano reverb control");
+}
+
+TEST_CASE("fallback organ wind does not reach a retained non-organ voice on the same part",
+          "[midi][sf2][fallback][organ]") {
+  constexpr int kSamples = 12000;
+  const auto lead_lane = [](bool organ) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.dc_block = false;
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+    Sf2Player player(cfg);
+    player.prepare(kOutRate, 256);
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, organ ? 19 : 80)));
+    MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 0, 48, 100));
+    first.source_track_id = 1;
+    player.on_event(0, first);
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 80)));
+    MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 0, 67, 100));
+    second.source_track_id = 2;
+    player.on_event(0, second);
+    std::array<std::vector<float>, 6> lanes;
+    for (auto& lane : lanes) lane.assign(kSamples, 0.0f);
+    float* fallback[] = {lanes[0].data(), lanes[1].data()};
+    float* first_out[] = {lanes[2].data(), lanes[3].data()};
+    float* lead_out[] = {lanes[4].data(), lanes[5].data()};
+    const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, first_out}, {2, lead_out}};
+    REQUIRE(player.process_source_tracks(outputs, 3, 2, kSamples));
+    double first_energy = 0.0;
+    double lead_energy = 0.0;
+    for (int i = 0; i < kSamples; ++i) {
+      first_energy += static_cast<double>(lanes[2][i]) * lanes[2][i];
+      lead_energy += static_cast<double>(lanes[4][i]) * lanes[4][i];
+    }
+    REQUIRE(first_energy > 1e-6);
+    REQUIRE(lead_energy > 1e-6);
+    return std::array<std::vector<float>, 2>{std::move(lanes[4]), std::move(lanes[5])};
+  };
+  // Both runs allocate the same two slots and ages. Only the first voice's
+  // engine changes, so seeded oscillator phase on the lead remains identical.
+  const auto reference = lead_lane(false);
+  const auto actual = lead_lane(true);
+  float worst = 0.0f;
+  for (size_t ch = 0; ch < 2; ++ch) {
+    for (int i = 0; i < kSamples; ++i) {
+      worst = std::max(worst, std::fabs(reference[ch][i] - actual[ch][i]));
+    }
+  }
+  INFO("non-organ lane maximum difference: " << worst);
+  CHECK(worst < 1e-6f);
+}
+
+TEST_CASE("fallback body-only tails keep their source through rig and EFX assignment changes",
+          "[midi][sf2][gsefx][fallback][gs-physical-review]") {
+  for (const bool unit : {false, true}) {
+    for (const bool start_bussed : {false, true}) {
+      CAPTURE(unit, start_bussed);
+      Sf2PlayerConfig cfg;
+      cfg.gain = 1.0f;
+      cfg.dc_block = false;
+      cfg.realize_efx_inline = true;
+      cfg.effects.enable_reverb = false;
+      cfg.effects.enable_chorus = false;
+      cfg.effects.enable_delay = false;
+      cfg.insert_factory = [](std::string_view name, std::string_view json) {
+        return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+      };
+      Sf2Player player(cfg);
+      sonare::midi::PartRig identity;
+      identity.mode = sonare::midi::PartRigMode::kChain;
+      identity.stages = {{"utility.gain", R"({"levelDb":0})"}};
+      sonare::midi::PartRig direct;
+      direct.mode = sonare::midi::PartRigMode::kNone;
+      const auto route = [&](bool bussed) {
+        if (unit) {
+          auto assignment = std::array<uint8_t, sizeof(kPartOn)>{};
+          std::copy(std::begin(kPartOn), std::end(kPartOn), assignment.begin());
+          if (!bussed) {
+            assignment[8] = 0;
+            assignment[9] = 0x5D;
+          }
+          player.on_control_sysex(assignment.data(), assignment.size());
+        } else {
+          REQUIRE(player.set_part_rig(0, bussed ? identity : direct));
+        }
+      };
+      player.prepare(kOutRate, 256);
+      if (unit) player.on_control_sysex(kOdType, sizeof(kOdType));
+      route(start_bussed);
+      MidiEvent note = event(sonare::midi::make_midi1_note_on(0, 0, 48, 110));
+      note.source_track_id = 1;
+      player.on_event(0, note);
+      const auto render_lanes = [&](int frames) {
+        std::array<std::vector<float>, 4> lanes;
+        for (auto& lane : lanes) lane.assign(frames, 0.0f);
+        float* fallback[] = {lanes[0].data(), lanes[1].data()};
+        float* source[] = {lanes[2].data(), lanes[3].data()};
+        const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, source}};
+        REQUIRE(player.process_source_tracks(outputs, 2, 2, frames));
+        return lanes;
+      };
+      render_lanes(4096);
+      note.ump = sonare::midi::make_midi1_note_off(0, 0, 48, 0);
+      player.on_event(0, note);
+      for (int i = 0; i < 4096 && player.active_voice_count() != 0; ++i) render_lanes(256);
+      REQUIRE(player.active_voice_count() == 0);
+      route(!start_bussed);
+      const auto tail = render_lanes(4096);
+      double source_energy = 0.0, fallback_energy = 0.0;
+      for (size_t i = 0; i < tail[0].size(); ++i) {
+        source_energy += static_cast<double>(tail[2][i]) * tail[2][i] +
+                         static_cast<double>(tail[3][i]) * tail[3][i];
+        fallback_energy += static_cast<double>(tail[0][i]) * tail[0][i] +
+                           static_cast<double>(tail[1][i]) * tail[1][i];
+      }
+      CAPTURE(source_energy, fallback_energy);
+      CHECK(source_energy > 1e-16);
+      CHECK(fallback_energy < source_energy * 1e-6);
+    }
+  }
+}
+
+TEST_CASE("fallback body-only system sends retain their source when enabled after release",
+          "[midi][sf2][gsefx][fallback][gs-physical-review]") {
+  for (const uint8_t send_cc : {uint8_t{91}, uint8_t{93}, uint8_t{94}}) {
+    CAPTURE(send_cc);
+    const auto play = [send_cc](bool wet) {
+      Sf2PlayerConfig cfg;
+      cfg.gain = 1.0f;
+      cfg.dc_block = false;
+      cfg.effects.enable_reverb = wet && send_cc == 91;
+      cfg.effects.enable_chorus = wet && send_cc == 93;
+      cfg.effects.enable_delay = wet && send_cc == 94;
+      Sf2Player player(cfg);
+      player.prepare(kOutRate, 256);
+      for (const uint8_t cc : {uint8_t{91}, uint8_t{93}, uint8_t{94}}) {
+        player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, cc, 0)));
+      }
+      MidiEvent note = event(sonare::midi::make_midi1_note_on(0, 0, 48, 110));
+      note.source_track_id = 1;
+      player.on_event(0, note);
+      const auto render_lanes = [&](int frames) {
+        std::array<std::vector<float>, 4> audio;
+        for (auto& leg : audio) leg.assign(frames, 0.0f);
+        float* fallback[] = {audio[0].data(), audio[1].data()};
+        float* source[] = {audio[2].data(), audio[3].data()};
+        const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, source}};
+        REQUIRE(player.process_source_tracks(outputs, 2, 2, frames));
+        return audio;
+      };
+      render_lanes(4096);
+      note.ump = sonare::midi::make_midi1_note_off(0, 0, 48, 0);
+      player.on_event(0, note);
+      for (int i = 0; i < 4096 && player.active_voice_count() != 0; ++i) render_lanes(256);
+      REQUIRE(player.active_voice_count() == 0);
+      player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, send_cc, 127)));
+      return render_lanes(24000);
+    };
+    const auto dry = play(false);
+    const auto wet = play(true);
+    double returned = 0.0, fallback = 0.0;
+    for (size_t i = 0; i < dry[0].size(); ++i) {
+      for (size_t leg = 0; leg < 2; ++leg) {
+        const double total =
+            static_cast<double>(wet[leg][i]) + wet[leg + 2][i] - dry[leg][i] - dry[leg + 2][i];
+        returned += total * total;
+        fallback += static_cast<double>(wet[leg][i]) * wet[leg][i];
+      }
+    }
+    CAPTURE(returned, fallback);
+    REQUIRE(returned > 1e-20);
+    CHECK(fallback < returned * 1e-6);
+  }
+}
+
 TEST_CASE("a GS EFX part sends its post-effect signal to reverb", "[midi][sf2][gsefx]") {
   // The insertion-effect (Overdrive) stage must actually build for the part to
   // be bussed. This is an integration case, so an unavailable stock factory is

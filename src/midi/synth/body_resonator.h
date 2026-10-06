@@ -76,16 +76,7 @@ class BodyResonator {
       const Spec& spec = specs[static_cast<size_t>(k)];
       if (spec.freq_hz <= 0.0f || spec.freq_hz >= 0.45f * static_cast<float>(sr)) continue;
       Mode& mode = modes_[static_cast<size_t>(num_modes_)];
-      const float w = sonare::constants::kTwoPi * spec.freq_hz / static_cast<float>(sr);
-      const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * spec.t60_s));
-      mode.a1 = 2.0f * r * std::cos(w);
-      mode.a2 = -r * r;
-      // Bandpass form (zeros at z = +-1): phase-aligned with the dry path at
-      // resonance, so the mix is a clean magnitude peak rather than a phasey
-      // quadrature sum. Normalized to peak gain = weight.
-      const float re = 1.0f - r * std::cos(2.0f * w);
-      const float im = r * std::sin(2.0f * w);
-      mode.gain = spec.weight * (1.0f - r) * std::sqrt(re * re + im * im) / (2.0f * std::sin(w));
+      configure_mode(mode, spec, static_cast<float>(sr));
       mode.y1 = 0.0f;
       mode.y2 = 0.0f;
       ++num_modes_;
@@ -120,13 +111,12 @@ class BodyResonator {
       case BodyType::kViolin:
         count = fill_from_modal(specs, kViolinBank, kViolinLevel, corpus_scale);
         break;
-      case BodyType::kWoodTube:
-        specs = {{{std::max(20.0f, note_hz), 0.08f, 1.2f},
-                  {std::max(20.0f, note_hz) * 4.0f, 0.04f, 0.3f},
-                  {0.0f, 0.0f, 0.0f},
-                  {0.0f, 0.0f, 0.0f}}};
+      case BodyType::kWoodTube: {
+        const std::array<Spec, 2> wood = wood_tube_specs(std::max(20.0f, note_hz));
+        specs = {{wood[0], wood[1], {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}};
         count = 2;
         break;
+      }
       case BodyType::kBrassBell:
         // Broad radiation formants of the bell; short t60 = wide bandwidth so
         // the mix lifts a region, not a pitch. Note-independent (bell geometry).
@@ -150,6 +140,29 @@ class BodyResonator {
     }
 
     start_specs(specs.data(), count, sample_rate, mix, corpus_tilt_hz);
+  }
+
+  /// Retunes an active note-tracked bank without clearing its resonator state.
+  /// This is used by legato voices, where restarting the bank would erase the
+  /// body tail and make a carried note sound like a new strike.
+  void retune(BodyType type, double sample_rate, float note_hz) noexcept {
+    if (type != BodyType::kWoodTube || (num_modes_ <= 0 && mix_ <= 0.0f)) return;
+    const float sr = static_cast<float>(sample_rate > 0.0 ? sample_rate : 48000.0);
+    const float fundamental = std::max(20.0f, note_hz);
+    const std::array<Spec, 2> specs = wood_tube_specs(fundamental);
+    const int old_count = num_modes_;
+    int new_count = 0;
+    for (const Spec& spec : specs) {
+      if (spec.freq_hz <= 0.0f || spec.freq_hz >= 0.45f * sr) continue;
+      Mode& mode = modes_[static_cast<size_t>(new_count)];
+      if (new_count >= old_count) {
+        mode.y1 = 0.0f;
+        mode.y2 = 0.0f;
+      }
+      configure_mode(mode, spec, sr);
+      ++new_count;
+    }
+    num_modes_ = new_count;
   }
 
   bool active() const noexcept { return num_modes_ > 0; }
@@ -217,6 +230,11 @@ class BodyResonator {
 
   static float q_to_t60(float freq_hz, float q) noexcept { return kT60SecPerQHz * q / freq_hz; }
 
+  /// Wood-tube modes: the fundamental and its 4x partial.
+  static std::array<Spec, 2> wood_tube_specs(float fundamental) noexcept {
+    return {{{fundamental, 0.08f, 1.2f}, {fundamental * 4.0f, 0.04f, 0.3f}}};
+  }
+
   /// Expands a literature modal table (freq/Q/weight) into resonator Specs:
   /// weights scaled by @p level, centre frequencies by @p scale (a dimension
   /// ratio that can only place A0), Q held so t60 follows the scaled
@@ -263,6 +281,18 @@ class BodyResonator {
     float y1 = 0.0f;
     float y2 = 0.0f;
   };
+  static void configure_mode(Mode& mode, const Spec& spec, float sample_rate) noexcept {
+    const float w = sonare::constants::kTwoPi * spec.freq_hz / sample_rate;
+    const float r = std::exp(-6.907755279f / (sample_rate * spec.t60_s));
+    mode.a1 = 2.0f * r * std::cos(w);
+    mode.a2 = -r * r;
+    // Bandpass form (zeros at z = +-1): phase-aligned with the dry path at
+    // resonance, so the mix is a clean magnitude peak rather than a phasey
+    // quadrature sum. Normalized to peak gain = weight.
+    const float re = 1.0f - r * std::cos(2.0f * w);
+    const float im = r * std::sin(2.0f * w);
+    mode.gain = spec.weight * (1.0f - r) * std::sqrt(re * re + im * im) / (2.0f * std::sin(w));
+  }
   std::array<Mode, kMaxModes> modes_{};
   // Shared bandpass input history (the zeros are common to every mode).
   float x1_ = 0.0f;

@@ -319,6 +319,13 @@ struct NativeSynthVoice : VoiceState {
   /// Piano string core; like KS, the host attach()es its delay slab before
   /// start().
   PianoVoiceCore piano;
+  /// A factory-backed NativeSynth routes piano bodies through a per-part bank.
+  /// These are captured after start() and consumed by the host on the first
+  /// render sample, once the published routing snapshot is known. Deferring
+  /// the strike avoids exciting the shared no-EFX board for a note whose EFX
+  /// assignment was still dirty at note-on.
+  float piano_case_strike_pending = 0.0f;
+  float piano_board_strike_pending = 0.0f;
   /// Flue-pipe core; like KS, the host attach()es its delay span before
   /// start().
   PipeOrganVoiceCore pipe_organ;
@@ -964,6 +971,17 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// A bussed part's chain output, and a unit's, follow only the voices that
   /// fed that bus.
   std::array<SourceResidualSplitter, 16> part_bus_splitters_;
+  /// Per-part piano bodies used whenever a factory is present. Keeping one
+  /// bank per part lets a bussed return enter its rig before it can reach any
+  /// other part, and lets an assignment change move the existing tail without
+  /// migrating or mixing state.
+  std::array<SourceResidualSplitter, 16> part_piano_splitters_;
+  /// Per-part organ swell residuals use the same source attribution boundary
+  /// as their raw organ voices. A global splitter would let an unrelated part
+  /// absorb a channel's CC11 change.
+  std::array<SourceResidualSplitter, 16> part_organ_splitters_;
+  /// The same source boundary for a factory-backed per-part guitar halo.
+  std::array<SourceResidualSplitter, 16> part_guitar_splitters_;
   std::array<SourceResidualSplitter, kGsEfxUnitCount> unit_splitters_;
   static_assert(kResidualChunk == kPartFxChunkFrames,
                 "the residual staging is flushed once per bus chunk");
@@ -975,10 +993,17 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::array<float, kPartFxChunkFrames> chunk_piano_r_{};
   std::array<float, kPartFxChunkFrames> chunk_guitar_l_{};
   std::array<float, kPartFxChunkFrames> chunk_guitar_r_{};
-  /// Piano voices on a bussed part: their direct share rides the part's bus,
-  /// and this drives the shared board on their behalf.
-  std::array<float, kPartFxChunkFrames> chunk_board_l_{};
-  std::array<float, kPartFxChunkFrames> chunk_board_r_{};
+  /// Raw piano legs for each part when the factory-backed per-part bodies are
+  /// active. The entries are replaced with that part's body residual after it
+  /// has been fed, so no second scratch slab is needed.
+  std::array<std::array<float, kPartFxChunkFrames>, 16> chunk_part_piano_l_{};
+  std::array<std::array<float, kPartFxChunkFrames>, 16> chunk_part_piano_r_{};
+  /// Raw organ legs for each part. They are replaced with the pre-rig swell
+  /// residual after the part has been filtered.
+  std::array<std::array<float, kPartFxChunkFrames>, 16> chunk_part_organ_l_{};
+  std::array<std::array<float, kPartFxChunkFrames>, 16> chunk_part_organ_r_{};
+  std::array<std::array<float, kPartFxChunkFrames>, 16> chunk_part_guitar_l_{};
+  std::array<std::array<float, kPartFxChunkFrames>, 16> chunk_part_guitar_r_{};
   /// Part buses, rig chains and GS insertion units.
   PartFxStage part_fx_;
   /// Attached for one offline render only.
@@ -988,6 +1013,17 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// does. Armed at the first qualifying note-on on the part.
   std::array<PianoResonanceBank, 16> part_halo_;
   std::array<bool, 16> part_halo_armed_{};
+  struct PianoPartState {
+    bool prepared = false;
+    float soundboard_mix = -1.0f;
+  };
+  /// Factory-backed piano bodies are per-part for the same reason as the GS
+  /// fallback bodies: a return must follow the part's current EFX assignment.
+  /// These banks are allocated in prepare() only when an insert factory is
+  /// wired, keeping the common no-EFX NativeSynth object small on the stack.
+  std::vector<PianoSoundboard> part_soundboards_;
+  std::vector<PianoResonanceBank> part_resonance_;
+  std::array<PianoPartState, 16> part_piano_state_{};
   VoicePool<NativeSynthVoice> pool_;
   /// Host sample bank for the kSample engine. The raw pointer is what the audio
   /// thread reads; the share below is held only when the caller handed one over.
@@ -1073,14 +1109,22 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   int harpsichord_capacity_ = 0;  // speaking-string span
   int harpsichord_stride_ = 0;    // whole registration slab, per voice slot
   bool harpsichord_mode_ = false;
-  /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
-  OrganWindSupply wind_;
-  /// Swell box: a bus-level shutter lowpass driven by the expression pedal
-  /// (CC11). swell_depth_ == 0 disables it; the one-pole state is per leg.
-  float swell_depth_ = 0.0f;
-  float swell_coeff_ = 1.0f;  // recomputed per block from the shutter position
-  float swell_lp_l_ = 0.0f;
-  float swell_lp_r_ = 0.0f;
+  /// Per-part organ wind supply parameters (tremulant / wind sag), armed at the
+  /// note-on that resolves a pipe-organ patch on that part.
+  struct OrganPartParams {
+    float tremulant_rate_hz = -1.0f;
+    float tremulant_depth = -1.0f;
+    float wind_sag = -1.0f;
+    bool armed = false;
+  };
+  /// One wind chest and swell box per MIDI part. GM resolves the pipe patch at
+  /// note-on, so construction-time patch mode cannot own these states.
+  std::array<OrganWindSupply, 16> part_wind_;
+  std::array<OrganPartParams, 16> organ_part_params_{};
+  std::array<float, 16> part_swell_depth_{};
+  std::array<float, 16> part_swell_coeff_{};
+  std::array<float, 16> part_swell_lp_l_{};
+  std::array<float, 16> part_swell_lp_r_{};
 };
 
 /// Patch-clamp helpers. Named rather than local because `clamp_synth_patch`

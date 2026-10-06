@@ -51,6 +51,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -1546,6 +1547,193 @@ TEST_CASE("live params: a held-note change does not click", "[midi][synth][synth
   }
 }
 
+TEST_CASE("live params: zero-sustain envelopes stay editable on the sounding path",
+          "[midi][synth][synth-live]") {
+  SECTION("filter envelope remains alive for a later sustain edit") {
+    NativeSynthConfig cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSine);
+    cfg.patch.waveform = VaWaveform::kSaw;
+    cfg.patch.cutoff_hz = 500.0f;
+    cfg.patch.env_to_cutoff_cents = 4800.0f;
+    cfg.patch.filter_env.attack_ms = 1.0f;
+    cfg.patch.filter_env.decay_ms = 40.0f;
+    cfg.patch.filter_env.sustain = 0.0f;
+
+    NativeSynth held(cfg);
+    NativeSynth control(cfg);
+    NativeSynthConfig fresh_cfg = cfg;
+    fresh_cfg.patch.filter_env.sustain = 1.0f;
+    NativeSynth fresh(fresh_cfg);
+    for (NativeSynth* s : {&held, &control, &fresh}) s->prepare(kRate, kBlock);
+    note_on(held, 69);
+    note_on(control, 69);
+    note_on(fresh, 69);
+
+    Stereo pre_held, pre_control, pre_fresh;
+    render(held, pre_held, kSettle);
+    render(control, pre_control, kSettle);
+    render(fresh, pre_fresh, kSettle);
+
+    REQUIRE(held.apply_parameter(pid(P::kFilterSustain), 1.0f));
+    Stereo post_held, post_control, post_fresh;
+    render(held, post_held, kBlock + kWindow);
+    render(control, post_control, kBlock + kWindow);
+    render(fresh, post_fresh, kBlock + kWindow);
+
+    const auto h = avg_spectrum(post_held.l, kBlock, kWindow);
+    const auto c = avg_spectrum(post_control.l, kBlock, kWindow);
+    const auto f = avg_spectrum(post_fresh.l, kBlock, kWindow);
+    INFO("filter sustain live: held/ref " << spectral_diff_db(f, h) << ", control/ref "
+                                          << spectral_diff_db(f, c));
+    REQUIRE(held.active_voice_count() == 1);
+    CHECK(spectral_diff_db(f, h) < kSpectrumTolDb);
+    CHECK(spectral_diff_db(f, c) > kContrast * kSpectrumTolDb);
+  }
+
+  SECTION("amp envelope clears its percussive latch when sustain rises") {
+    NativeSynthConfig cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSine);
+    cfg.patch.amp_env.attack_ms = 1.0f;
+    cfg.patch.amp_env.decay_ms = 20.0f;
+    cfg.patch.amp_env.sustain = 0.0f;
+
+    NativeSynth held(cfg);
+    NativeSynth control(cfg);
+    NativeSynthConfig fresh_cfg = cfg;
+    fresh_cfg.patch.amp_env.sustain = 0.5f;
+    NativeSynth fresh(fresh_cfg);
+    for (NativeSynth* s : {&held, &control, &fresh}) s->prepare(kRate, kBlock);
+    note_on(held, 69);
+    note_on(control, 69);
+    note_on(fresh, 69);
+    Stereo pre_held, pre_control, pre_fresh;
+    render(held, pre_held, 256);
+    render(control, pre_control, 256);
+    render(fresh, pre_fresh, 256);
+
+    REQUIRE(held.apply_parameter(pid(P::kAmpSustain), 0.5f));
+    Stereo post_held, post_control, post_fresh;
+    render(held, post_held, kBlock + kWindow);
+    render(control, post_control, kBlock + kWindow);
+    render(fresh, post_fresh, kBlock + kWindow);
+
+    const auto h = avg_spectrum(post_held.l, kBlock, kWindow);
+    const auto c = avg_spectrum(post_control.l, kBlock, kWindow);
+    const auto f = avg_spectrum(post_fresh.l, kBlock, kWindow);
+    INFO("amp sustain live: held/ref " << spectral_diff_db(f, h) << ", control/ref "
+                                       << spectral_diff_db(f, c));
+    REQUIRE(held.active_voice_count() == 1);
+    CHECK(spectral_diff_db(f, h) < kSpectrumTolDb);
+    CHECK(spectral_diff_db(f, c) > kContrast * kSpectrumTolDb);
+  }
+}
+
+TEST_CASE("legato retune updates key tracking and live body tuning", "[midi][synth][synth-live]") {
+  SECTION("key tracking follows the carried note") {
+    NativeSynthConfig cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSaw);
+    cfg.patch.cutoff_hz = 1000.0f;
+    cfg.patch.key_track = 1.0f;
+    cfg.patch.env_to_cutoff_cents = 0.0f;
+
+    NativeSynth held(cfg);
+    NativeSynth fresh(cfg);
+    NativeSynth control(cfg);
+    for (NativeSynth* s : {&held, &fresh, &control}) s->prepare(kRate, kBlock);
+    held.set_articulation(0, ArticulationMode::kMonoLegato);
+    note_on(held, 48);
+    Stereo held_pre;
+    render(held, held_pre, kSettle);
+    note_on(held, 72);
+    Stereo held_out;
+    render(held, held_out, kSettle + kWindow);
+
+    note_on(fresh, 72);
+    Stereo fresh_out;
+    render(fresh, fresh_out, kSettle + kWindow);
+    note_on(control, 48);
+    Stereo control_out;
+    render(control, control_out, kSettle + kWindow);
+
+    const auto h = avg_spectrum(held_out.l, kSettle, kWindow);
+    const auto f = avg_spectrum(fresh_out.l, kSettle, kWindow);
+    const auto c = avg_spectrum(control_out.l, kSettle, kWindow);
+    INFO("legato key tracking: held/ref " << spectral_diff_db(f, h) << ", control/ref "
+                                          << spectral_diff_db(f, c));
+    CHECK(spectral_diff_db(f, h) < kSpectrumTolDb);
+    CHECK(spectral_diff_db(f, c) > kContrast * kSpectrumTolDb);
+  }
+
+  SECTION("a body enabled after legato uses the retuned note") {
+    NativeSynthConfig cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSine);
+    cfg.patch.body = BodyType::kWoodTube;
+    cfg.patch.body_mix = 0.0f;
+    NativeSynthConfig fresh_cfg = cfg;
+    fresh_cfg.patch.body_mix = 1.0f;
+
+    NativeSynth held(cfg);
+    NativeSynth fresh(fresh_cfg);
+    NativeSynth control(cfg);
+    for (NativeSynth* s : {&held, &fresh, &control}) s->prepare(kRate, kBlock);
+    held.set_articulation(0, ArticulationMode::kMonoLegato);
+    note_on(held, 48);
+    Stereo pre;
+    render(held, pre, kSettle);
+    note_on(held, 72);
+    render(held, pre, kWindow);
+    REQUIRE(held.apply_parameter(pid(P::kBodyMix), 1.0f));
+    Stereo held_out;
+    render(held, held_out, kBlock + kWindow);
+
+    note_on(fresh, 72);
+    Stereo fresh_out;
+    render(fresh, fresh_out, kSettle + kWindow);
+
+    note_on(control, 72);
+    Stereo control_out;
+    render(control, control_out, kSettle + kWindow);
+
+    const auto h = avg_spectrum(held_out.l, kBlock, kWindow);
+    const auto f = avg_spectrum(fresh_out.l, kSettle, kWindow);
+    const auto c = avg_spectrum(control_out.l, kSettle, kWindow);
+    INFO("legato body tuning: held/ref " << spectral_diff_db(f, h) << ", control/ref "
+                                         << spectral_diff_db(f, c));
+    CHECK(spectral_diff_db(f, h) < kSpectrumTolDb);
+    CHECK(spectral_diff_db(f, c) > kContrast * kSpectrumTolDb);
+  }
+
+  SECTION("an active note-tracked body retunes with the carried note") {
+    NativeSynthConfig cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSine);
+    cfg.patch.body = BodyType::kWoodTube;
+    cfg.patch.body_mix = 1.0f;
+
+    NativeSynth held(cfg);
+    NativeSynth fresh(cfg);
+    NativeSynth control(cfg);
+    for (NativeSynth* s : {&held, &fresh, &control}) s->prepare(kRate, kBlock);
+    held.set_articulation(0, ArticulationMode::kMonoLegato);
+    note_on(held, 48);
+    Stereo held_pre;
+    render(held, held_pre, kSettle);
+    note_on(held, 72);
+    Stereo held_out;
+    render(held, held_out, kSettle + kWindow);
+
+    note_on(fresh, 72);
+    Stereo fresh_out;
+    render(fresh, fresh_out, kSettle + kWindow);
+
+    note_on(control, 48);
+    Stereo control_out;
+    render(control, control_out, kSettle + kWindow);
+
+    const auto h = avg_spectrum(held_out.l, kSettle, kWindow);
+    const auto f = avg_spectrum(fresh_out.l, kSettle, kWindow);
+    const auto c = avg_spectrum(control_out.l, kSettle, kWindow);
+    INFO("active legato body tuning: held/ref " << spectral_diff_db(f, h) << ", control/ref "
+                                                << spectral_diff_db(f, c));
+    CHECK(spectral_diff_db(f, h) < kSpectrumTolDb);
+    CHECK(spectral_diff_db(f, c) > kContrast * kSpectrumTolDb);
+  }
+}
+
 // --- SC5 -------------------------------------------------------------------
 
 #if defined(SONARE_WITH_MIXING)
@@ -1554,16 +1742,14 @@ TEST_CASE("live params: automating every id on a held chord does not allocate",
   using sonare::test::AllocationGuard;
   // Positive control: the counting hooks are linked and armed.
   {
-    volatile float sink = 0.0f;
+    void* probe = nullptr;
     size_t probe_allocations = 0;
     {
       AllocationGuard guard;
-      std::vector<float> probe(1024);
-      probe[7] = 1.0f;
-      sink = probe[7];
+      probe = ::operator new(1);
       probe_allocations = guard.count();
     }
-    REQUIRE(sink == 1.0f);
+    ::operator delete(probe);
     REQUIRE(probe_allocations >= 1);
   }
 

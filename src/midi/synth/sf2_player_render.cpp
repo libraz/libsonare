@@ -187,16 +187,16 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
 
   // Organ wind demand per part (sounding pipe-organ fallback voices): the
   // shared wind chest advances once per sample per part, not per voice.
-  int organ_demand[16] = {0};
+  std::array<bool, 16> wind_active{};
   bool any_wind = false;
+  for (size_t part = 0; part < wind_active.size(); ++part) {
+    wind_active[part] = fallback_wind_params_[part].rate >= 0.0f && fallback_wind_[part].active();
+    any_wind = any_wind || wind_active[part];
+  }
   bool body_has_voice[16][kFallbackBodyKinds] = {};
   for (const NativeSynthVoice& v : fallback_pool_) {
     if (!v.active || v.patch == nullptr) continue;
     const uint8_t part = v.channel & 0x0Fu;
-    if (v.patch->mode == SynthEngineMode::kPipeOrgan) {
-      ++organ_demand[part];
-      any_wind = any_wind || fallback_wind_[part].active();
-    }
     FallbackBodyKind kind{};
     if (fallback_body_kind(*v.patch, &kind)) {
       body_has_voice[part][static_cast<size_t>(kind)] = true;
@@ -216,6 +216,9 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         body.ringout = std::max<int64_t>(0, body.ringout - n);
       }
       body_active[part][k] = body_has_voice[part][k] || body.ringout > 0;
+      if (!body_active[part][k]) {
+        body_residual_splitters_[static_cast<size_t>(part) * kFallbackBodyKinds + k].reset();
+      }
       any_body = any_body || body_active[part][k];
     }
   }
@@ -223,8 +226,14 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   for (int i = 0; i < n; ++i) {
     OrganWindSupply::State wind_state[16];
     if (any_wind) {
+      int organ_demand[16] = {};
+      for (const NativeSynthVoice& v : fallback_pool_) {
+        if (v.active && v.patch != nullptr && v.patch->mode == SynthEngineMode::kPipeOrgan) {
+          ++organ_demand[v.channel & 0x0Fu];
+        }
+      }
       for (int part = 0; part < 16; ++part) {
-        if (organ_demand[part] > 0 && fallback_wind_[static_cast<size_t>(part)].active()) {
+        if (wind_active[static_cast<size_t>(part)]) {
           wind_state[part] = fallback_wind_[static_cast<size_t>(part)].process(organ_demand[part]);
         }
       }
@@ -321,7 +330,8 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
       const Sf2ChannelMod& mod = mods[part];
-      const OrganWindSupply::State& wind = wind_state[part];
+      const bool pipe = v.patch != nullptr && v.patch->mode == SynthEngineMode::kPipeOrgan;
+      const OrganWindSupply::State wind = pipe ? wind_state[part] : OrganWindSupply::State{};
       // Scrub any non-finite voice sample before it reaches a shared IIR state:
       // a single NaN/Inf would persist in the part's body resonators, the
       // insert bus and the reverb/chorus tanks and poison every later sample
@@ -355,8 +365,8 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         } else {
           body_dry[part][k] += 0.5f * (l + r);
         }
-        // A bussed part's body return rides its bus and that bus's weight.
-        if (source_render && !part_bussed[part]) {
+        // Keep body ownership independent of its current bus assignment.
+        if (source_render) {
           body_residual_splitters_[static_cast<size_t>(part) * kFallbackBodyKinds + k].accumulate(
               v.source_track_id, l * out_gain_l, r * out_gain_r);
         }
@@ -462,7 +472,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
             add = fallback_halo_[static_cast<size_t>(part)].process(
                 dry, channels_[static_cast<size_t>(part)].sustain);
           }
-          if (source_render && !part_bussed[part]) {
+          if (source_render) {
             float* staged = body_residual_.data() +
                             (static_cast<size_t>(part) * kFallbackBodyKinds + k) * 2 * kChunkFrames;
             staged[i] = add + side;
@@ -489,12 +499,16 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           if (rev_l != nullptr && !efx_routed[part]) {
             const Sf2ChannelMod& mod = mods[part];
             if (mod.fallback_reverb_send > 0.0f) {
-              rev_l[i] += add * mod.fallback_reverb_send;
-              rev_r[i] += add * mod.fallback_reverb_send;
+              rev_l[i] += (add + side) * mod.fallback_reverb_send;
+              rev_r[i] += (add - side) * mod.fallback_reverb_send;
             }
             if (mod.fallback_chorus_send > 0.0f) {
-              cho_l[i] += add * mod.fallback_chorus_send;
-              cho_r[i] += add * mod.fallback_chorus_send;
+              cho_l[i] += (add + side) * mod.fallback_chorus_send;
+              cho_r[i] += (add - side) * mod.fallback_chorus_send;
+            }
+            if (mod.delay_send > 0.0f) {
+              dly_l[i] += (add + side) * mod.delay_send;
+              dly_r[i] += (add - side) * mod.delay_send;
             }
           }
 #endif
@@ -503,14 +517,54 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     }
   }
   if (source_render && any_body) {
-    // A non-bussed part's board/halo return follows the voices feeding it.
+    // Learn body owners once per chunk, then carry their energy across the
+    // current routing boundary. This also covers a body-only tail reassigned
+    // after its last voice has finished.
     for (int part = 0; part < 16; ++part) {
-      if (part_bussed[static_cast<size_t>(part)]) continue;
       for (size_t k = 0; k < kFallbackBodyKinds; ++k) {
         if (!body_active[part][k]) continue;
         const size_t body = static_cast<size_t>(part) * kFallbackBodyKinds + k;
         const float* staged = body_residual_.data() + body * 2 * kChunkFrames;
-        flush_component(body_residual_splitters_[body], staged, staged + kChunkFrames);
+        SourceResidualSplitter& owners = body_residual_splitters_[body];
+        float energy = 0.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+        float send_energy = 0.0f;
+#endif
+        for (int i = 0; i < n; ++i) {
+          const float l = staged[i] * out_gain_l;
+          const float r = staged[kChunkFrames + i] * out_gain_r;
+          energy += l * l + r * r;
+#if defined(SONARE_MIDI_WITH_FX)
+          send_energy +=
+              staged[i] * staged[i] + staged[kChunkFrames + i] * staged[kChunkFrames + i];
+#endif
+        }
+        if (part_bussed[static_cast<size_t>(part)]) {
+          owners.flush(source_outputs, source_output_count, n, staged, staged + kChunkFrames,
+                       output_offset, [](float* const*, int, float, float) {});
+          const int unit = unit_for(part);
+          SourceResidualSplitter& destination =
+              unit >= 0 ? unit_splitters_[static_cast<size_t>(unit)] : part_bus_splitters_[part];
+          destination.accumulate_residual_energy(owners, energy);
+        } else {
+          flush_component(owners, staged, staged + kChunkFrames);
+        }
+#if defined(SONARE_MIDI_WITH_FX)
+        if (rev_l != nullptr) {
+          float rs = mods[part].fallback_reverb_send;
+          float cs = mods[part].fallback_chorus_send;
+          float ds = mods[part].delay_send;
+          if (efx_routed[part]) {
+            const int unit = unit_for(part);
+            if (unit < 0) continue;
+            rs = unit_send_reverb[static_cast<size_t>(unit)];
+            cs = unit_send_chorus[static_cast<size_t>(unit)];
+            ds = unit_send_delay[static_cast<size_t>(unit)];
+          }
+          send_residual_splitter_.accumulate_residual_energy(
+              owners, send_energy * (rs * rs + cs * cs + ds * ds));
+        }
+#endif
       }
     }
   }
@@ -622,6 +676,26 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         }
       }
       if (source_render) flush_component(unit_splitters_[unit], unit_l, unit_r);
+    }
+  }
+
+  // Advance unused bus ownership too: routing changes must not freeze the
+  // weights of an old source until a different source reuses that bus.
+  if (source_render) {
+    static constexpr std::array<float, kChunkFrames> silence{};
+    const auto age = [&](SourceResidualSplitter& splitter) {
+      splitter.flush(source_outputs, source_output_count, n, silence.data(), silence.data(),
+                     output_offset, [](float* const*, int, float, float) {});
+    };
+    for (size_t part = 0; part < 16; ++part) {
+      const bool flushed =
+          any_bussed && part_bussed[part] && (!any_unit || unit_for(static_cast<int>(part)) < 0);
+      if (!flushed) age(part_bus_splitters_[part]);
+    }
+    for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+      const bool fed =
+          prepared ? prepared_unit_fed_[unit] : (efx != nullptr && efx->unit_fed[unit]);
+      if (!any_unit || !fed) age(unit_splitters_[unit]);
     }
   }
 

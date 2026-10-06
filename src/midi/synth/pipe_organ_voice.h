@@ -154,10 +154,9 @@ struct PipeOrganPatchParams {
   /// regulator recovers — the breathing of a real wind chest.
   float wind_sag = 0.0f;
   /// Swell-box depth in [0,1] (0 = no swell box). A division behind a swell
-  /// shutter: as the expression pedal (CC11) closes, a bus-level shutter darkens
-  /// the organ (a lowpass), the way the closing louvres muffle the pipes. The
-  /// level side of the swell is the expression's existing gain; this is the
-  /// timbral shutter on top. Read by the host into a bus filter.
+  /// shutter: as the expression pedal (CC11) closes, a per-part lowpass applied
+  /// before the part's rig darkens the organ, the way closing louvres muffle
+  /// the pipes. The level side is the expression's existing gain.
   float swell = 0.0f;
 };
 

@@ -16,6 +16,7 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/interpolation.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pitch.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_pool.h"
@@ -32,6 +33,7 @@ using sonare::midi::synth::DahdsrConfig;
 using sonare::midi::synth::DahdsrEnvelope;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::NativeSynthVoice;
+using sonare::midi::synth::note_to_hz;
 using sonare::midi::synth::Sf2ChannelMod;
 using sonare::midi::synth::Sf2Lfo;
 using sonare::midi::synth::Sf2Voice;
@@ -521,6 +523,21 @@ TEST_CASE("Sf2Lfo set_frequency to zero stops the output at zero", "[midi][synth
   }
 }
 
+TEST_CASE("Sf2Lfo set_frequency to zero during its delay freezes immediately",
+          "[midi][synth][lfo-live]") {
+  Sf2Lfo lfo;
+  lfo.start(kSampleRate, 0.1f, 100.0f);
+  for (int i = 0; i < 100; ++i) {
+    REQUIRE(lfo.next() == 0.0f);
+  }
+  lfo.set_frequency(kSampleRate, 0.0f);
+  // Stopping a delayed LFO must not resurrect its old increment when the
+  // delay expires. A live-rate edit can happen at any point in the delay.
+  for (int i = 0; i < 10000; ++i) {
+    REQUIRE(lfo.next() == 0.0f);
+  }
+}
+
 TEST_CASE("BodyResonator set_mix rescales the body path and stop() bypasses the bank",
           "[midi][synth][body-live]") {
   BodyResonator a;
@@ -555,6 +572,16 @@ TEST_CASE("BodyResonator set_mix rescales the body path and stop() bypasses the 
   // A stopped bank can be started again.
   a.start(BodyType::kGuitar, kSampleRate, 110.0f, 0.5f);
   REQUIRE(a.active());
+}
+
+TEST_CASE("BodyResonator revives a note-tracked bank after an out-of-band note",
+          "[midi][synth][body-live]") {
+  BodyResonator body;
+  body.start(BodyType::kWoodTube, 8000.0, note_to_hz(uint8_t{127}), 1.0f);
+  REQUIRE_FALSE(body.active());
+
+  body.retune(BodyType::kWoodTube, 8000.0, note_to_hz(uint8_t{60}));
+  REQUIRE(body.active());
 }
 
 TEST_CASE("synth toolkit audio path performs no heap allocation", "[midi][synth][rt]") {

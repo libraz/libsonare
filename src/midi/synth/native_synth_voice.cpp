@@ -381,6 +381,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
                                                 part_mod.decay_scale, part_mod.release_scale));
   amp_env.note_on();
   filter_env.configure(sample_rate, p.filter_env);
+  filter_env.set_percussive_auto_idle(false);
   filter_env.note_on();
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
@@ -762,6 +763,12 @@ void NativeSynthVoice::retune(uint8_t new_note, double sample_rate) noexcept {
   const float sounding = retune_cents + glide_cents;
   retune_cents = target;
   note = new_note;
+  note_offset_semitones = static_cast<float>(new_note & 0x7Fu) - 60.0f;
+  key_track_octaves = note_offset_semitones / 12.0f;
+  static_cutoff_cents =
+      static_cutoff_offset_cents(*patch, velocity01, note_offset_semitones, part_cutoff_cents);
+  const float retuned_freq_hz = base_freq_hz * std::exp2(target * (1.0f / 1200.0f));
+  if (patch->body_mix > 0.0f) body.retune(patch->body, sample_rate, retuned_freq_hz);
   // The bore of every waveguide follows the pitch factor on its own; the brass
   // lip resonance is a filter tuned at note-on and has to be moved with it, or
   // it pulls the sounding pitch back toward the note that is over.
@@ -846,7 +853,8 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
       begin_law_fade(body_fade, sample_rate);
     } else if (want) {
       const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
-      body.start(p.body, sample_rate, base_freq_hz, p.body_mix,
+      const float current_freq_hz = base_freq_hz * std::exp2(retune_cents * (1.0f / 1200.0f));
+      body.start(p.body, sample_rate, current_freq_hz, p.body_mix,
                  bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
                  bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
       // A body type with no modes has nothing to fade in, as on a new note.

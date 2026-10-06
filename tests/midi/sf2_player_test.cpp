@@ -1088,6 +1088,267 @@ TEST_CASE("Sf2Player picks the sample zone by the integer part of an absolute pi
   REQUIRE(std::fabs(cents - expect) < 5.0);
 }
 
+TEST_CASE("Sf2Player starts a fallback physical voice at an absolute pitch key",
+          "[midi][sf2][synth][midi2]") {
+  // The physical model must be voiced at the integer absolute pitch, then receive only the
+  // fractional remainder through its render-time pitch offset. This keeps the excitation,
+  // key-dependent calibration and body response of an ordinary note at that target key.
+  constexpr uint32_t kPitch725_72 = 72u << 25;
+  constexpr uint16_t kPitch79_72 = 72u * 512u;
+  constexpr uint32_t kPitch725_72_5 = (72u << 25) | (1u << 24);
+  constexpr uint16_t kPitch79_72_5 = 72u * 512u + 256u;
+  const auto render_target = [&](bool fractional) {
+    Sf2Player player = make_fallback_player();
+    if (fractional) {
+      send(player, sonare::midi::make_midi2_note_on(0, 0, 72, 0xC000, 3, kPitch79_72_5));
+    } else {
+      send(player, sonare::midi::make_midi2_note_on(0, 0, 72, 0xC000));
+    }
+    return render_one_second(player);
+  };
+  const auto render_absolute = [&](bool attribute, bool fractional) {
+    Sf2Player player = make_fallback_player();
+    if (attribute) {
+      send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000, 3,
+                                                    fractional ? kPitch79_72_5 : kPitch79_72));
+    } else {
+      send(player, sonare::midi::make_midi2_per_note_controller(
+                       0, 0, 60, 3, fractional ? kPitch725_72_5 : kPitch725_72));
+      send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+    }
+    return render_one_second(player);
+  };
+
+  for (const bool fractional : {false, true}) {
+    const std::vector<float> target = render_target(fractional);
+    REQUIRE(peak(target) > kSilenceFloor);
+    for (const bool attribute : {false, true}) {
+      const std::vector<float> absolute = render_absolute(attribute, fractional);
+      REQUIRE(peak(absolute) > kSilenceFloor);
+      float worst = 0.0f;
+      for (size_t i = 0; i < target.size(); ++i) {
+        worst = std::max(worst, std::fabs(absolute[i] - target[i]));
+      }
+      CAPTURE(attribute, fractional, worst);
+      REQUIRE(worst < 1.0e-5f);
+    }
+  }
+
+  // The key used to bind the per-note state remains the struck key, so its original note-off
+  // releases the voice even though the physical model was started at key 72.
+  Sf2Player released = make_fallback_player();
+  send(released, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 72u << 25));
+  send(released, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+  REQUIRE(released.active_voice_count() == 1);
+  send(released, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  render(released, released.tail_samples() + 1024);
+  REQUIRE(released.active_voice_count() == 0);
+}
+
+TEST_CASE("Sf2Player absolute pitch selects the fallback drum target key",
+          "[midi][sf2][synth][midi2][gs]") {
+  // A drum key is a patch selection as well as a pitch. Key 60 redirected to 42 must therefore
+  // match a direct key-42 strike, including the target kit piece's onset and damping.
+  const auto render_drum = [](uint8_t note, bool absolute) {
+    Sf2Player player = make_fallback_player();
+    if (absolute) {
+      send(player, sonare::midi::make_midi2_per_note_controller(0, 9, 60, 3, 42u << 25));
+    }
+    send(player, sonare::midi::make_midi2_note_on(0, 9, note, 0xC000));
+    return render(player, 8192);
+  };
+
+  const StereoRender target = render_drum(42, false);
+  const StereoRender absolute = render_drum(60, true);
+  REQUIRE(peak(target.left) > kSilenceFloor);
+  REQUIRE(peak(absolute.left) > kSilenceFloor);
+  float worst = 0.0f;
+  for (size_t i = 0; i < target.left.size(); ++i) {
+    worst = std::max(worst, std::fabs(absolute.left[i] - target.left[i]));
+    worst = std::max(worst, std::fabs(absolute.right[i] - target.right[i]));
+  }
+  CAPTURE(worst);
+  REQUIRE(worst < 1.0e-5f);
+}
+
+TEST_CASE("Sf2Player fallback absolute pitch keeps its struck-key binding",
+          "[midi][sf2][synth][midi2]") {
+  constexpr uint32_t kPitch725_72 = 72u << 25;
+  const double kSourceHz = 440.0 * 0.5 * std::pow(2.0, 3.0 / 12.0);
+  const double kTargetHz = kSourceHz * 2.0;
+  const auto started = [](bool detach) {
+    Sf2Player player = make_fallback_player();
+    send(player, sonare::midi::make_midi1_program_change(0, 0, 40));
+    send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, kPitch725_72));
+    send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+    const std::vector<float> before = render_one_second(player);
+    if (detach) {
+      send(player, sonare::midi::make_midi2_per_note_management(0, 0, 60, true, false));
+    }
+    send(player, sonare::midi::make_midi2_per_note_management(0, 0, 60, false, true));
+    const std::vector<float> after = render(player, 8192).left;
+    return std::pair{before, after};
+  };
+
+  const auto [attached_before, attached_after] = started(false);
+  const auto [detached_before, detached_after] = started(true);
+  const auto frequency = [](const std::vector<float>& audio, double hint) {
+    return sonare::test::fft_fundamental(audio, 4096, hint);
+  };
+  CAPTURE(frequency(attached_before, kTargetHz), frequency(attached_after, kSourceHz),
+          frequency(detached_before, kTargetHz), frequency(detached_after, kTargetHz));
+  REQUIRE(frequency(attached_before, kTargetHz) == Approx(kTargetHz).epsilon(0.03));
+  REQUIRE(frequency(attached_after, kSourceHz) == Approx(kSourceHz).epsilon(0.03));
+  REQUIRE(frequency(detached_before, kTargetHz) == Approx(kTargetHz).epsilon(0.03));
+  REQUIRE(frequency(detached_after, kTargetHz) == Approx(kTargetHz).epsilon(0.03));
+}
+
+TEST_CASE("Sf2Player All Sound Off forgets the old body source",
+          "[midi][sf2][fallback][gs-physical-review]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  Sf2Player player(cfg);
+  player.prepare(48000.0, 256);
+  const auto strike = [&](uint32_t source, uint8_t note) {
+    MidiEvent e = event(sonare::midi::make_midi1_note_on(0, 0, note, 110));
+    e.source_track_id = source;
+    player.on_event(0, e);
+  };
+  const auto lanes = [&]() {
+    std::array<std::vector<float>, 6> audio;
+    for (auto& leg : audio) leg.assign(4096, 0.0f);
+    float* fallback[] = {audio[0].data(), audio[1].data()};
+    float* old_source[] = {audio[2].data(), audio[3].data()};
+    float* new_source[] = {audio[4].data(), audio[5].data()};
+    const sonare::midi::MidiInstrumentSourceOutput outputs[] = {
+        {0, fallback}, {1, old_source}, {2, new_source}};
+    REQUIRE(player.process_source_tracks(outputs, 3, 2, 4096));
+    return audio;
+  };
+  strike(1, 48);
+  REQUIRE(peak(lanes()[2]) > kSilenceFloor);
+  send(player, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  strike(2, 67);
+  const auto audio = lanes();
+  REQUIRE(peak(audio[4]) > kSilenceFloor);
+  CHECK(peak(audio[2]) < 1e-7f);
+  CHECK(peak(audio[3]) < 1e-7f);
+}
+
+TEST_CASE("Sf2Player expires body source ownership after its ring-out window",
+          "[midi][sf2][fallback][gs-physical-review]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  Sf2Player player(cfg);
+  player.prepare(48000.0, 256);
+  const auto strike = [&](uint32_t source, uint8_t note) {
+    MidiEvent e = event(sonare::midi::make_midi1_note_on(0, 0, note, 110));
+    e.source_track_id = source;
+    player.on_event(0, e);
+  };
+  const auto lanes = [&]() {
+    std::array<std::vector<float>, 6> audio;
+    for (auto& leg : audio) leg.assign(4096, 0.0f);
+    float* fallback[] = {audio[0].data(), audio[1].data()};
+    float* old_source[] = {audio[2].data(), audio[3].data()};
+    float* new_source[] = {audio[4].data(), audio[5].data()};
+    const sonare::midi::MidiInstrumentSourceOutput outputs[] = {
+        {0, fallback}, {1, old_source}, {2, new_source}};
+    REQUIRE(player.process_source_tracks(outputs, 3, 2, 4096));
+    return audio;
+  };
+  strike(1, 48);
+  REQUIRE(peak(lanes()[2]) > kSilenceFloor);
+  MidiEvent release = event(sonare::midi::make_midi1_note_off(0, 0, 48, 0));
+  release.source_track_id = 1;
+  player.on_event(0, release);
+  for (int i = 0; i < 4096 && player.active_voice_count() != 0; ++i) render(player, 256);
+  REQUIRE(player.active_voice_count() == 0);
+  render(player, static_cast<int>(sonare::midi::synth::kPianoBodyRingS * 48000.0) + 256);
+  strike(2, 67);
+  const auto audio = lanes();
+  REQUIRE(peak(audio[4]) > kSilenceFloor);
+  CHECK(peak(audio[2]) < 1e-7f);
+  CHECK(peak(audio[3]) < 1e-7f);
+}
+
+TEST_CASE("Sf2Player All Sound Off preserves another part's body-only tail and DC state",
+          "[midi][sf2][fallback][gs-physical-review]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = true;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  Sf2Player reference(cfg), changed(cfg);
+  for (Sf2Player* player : {&reference, &changed}) {
+    player->prepare(48000.0, 256);
+    send(*player, sonare::midi::make_midi1_note_on(0, 1, 48, 110));
+    render(*player, 4096);
+    send(*player, sonare::midi::make_midi1_note_off(0, 1, 48, 0));
+    for (int i = 0; i < 4096 && player->active_voice_count() != 0; ++i) render(*player, 256);
+    REQUIRE(player->active_voice_count() == 0);
+  }
+  send(changed, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  const auto expected = render(reference, 4096);
+  const auto actual = render(changed, 4096);
+  REQUIRE(peak(expected.left) > 1e-9f);
+  CHECK(static_cast<bool>(actual.left == expected.left));
+  CHECK(static_cast<bool>(actual.right == expected.right));
+}
+
+TEST_CASE("Sf2Player organ wind follows release completion independently of block size",
+          "[midi][sf2][fallback][organ][gs-physical-review]") {
+  const auto play = [](int block) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.dc_block = false;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    Sf2Player player(cfg);
+    player.prepare(48000.0, 256);
+    send(player, sonare::midi::make_midi1_program_change(0, 0, 19));
+    send(player, sonare::midi::make_midi1_note_on(0, 0, 60, 110));
+    send(player, sonare::midi::make_midi1_note_on(0, 0, 67, 110));
+    render(player, 4096);
+    send(player, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+    StereoRender audio{std::vector<float>(96000, 0.0f), std::vector<float>(96000, 0.0f)};
+    for (int offset = 0; offset < 96000; offset += block) {
+      float* channels[] = {audio.left.data() + offset, audio.right.data() + offset};
+      player.process(channels, 2, std::min(block, 96000 - offset));
+    }
+    REQUIRE(player.active_voice_count() == 1);
+    return audio;
+  };
+  const auto single = play(1);
+  const auto chunked = play(256);
+  REQUIRE(peak(single.left) > kSilenceFloor);
+  float worst = 0.0f;
+  for (size_t i = 0; i < single.left.size(); ++i) {
+    worst = std::max(worst, std::fabs(single.left[i] - chunked.left[i]));
+    worst = std::max(worst, std::fabs(single.right[i] - chunked.right[i]));
+  }
+  CAPTURE(worst);
+  CHECK(worst < 1e-7f);
+}
+
 TEST_CASE("Sf2Player scales per-note bend by RC 0/7, absolute and relative", "[midi][sf2][midi2]") {
   const double absolute = note_60_cents([](Sf2Player& p) {
     send(p, sonare::midi::make_midi2_registered_controller(0, 0, 0, 7, 12u << 25));

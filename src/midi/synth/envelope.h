@@ -48,6 +48,10 @@ class DahdsrEnvelope {
 
   /// Start (or retrigger) the envelope from its current level (click-free).
   void note_on() noexcept;
+  /// Select whether a zero-sustain note ends automatically at the decay
+  /// landing. Amplitude envelopes keep the default; a live filter envelope
+  /// stays in Sustain so a later sustain edit can make it audible again.
+  void set_percussive_auto_idle(bool enabled) noexcept { percussive_auto_idle_ = enabled; }
   /// Enter the release stage from the current level.
   void note_off() noexcept;
   /// Immediately silence (All Sound Off / steal-kill).
@@ -71,6 +75,8 @@ class DahdsrEnvelope {
   float sustain_ = 0.7f;
   // Sustain was ~0 at note_on: the decay landing ends the note (percussive).
   bool percussive_ = false;
+  // Filter envelopes remain in Sustain at zero so a live edit can revive them.
+  bool percussive_auto_idle_ = true;
   // One-pole "new sample weight" rates per stage.
   float attack_rate_ = 1.0f;
   float decay_rate_ = 1.0f;

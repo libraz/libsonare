@@ -20,6 +20,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "core/fft.h"
@@ -50,6 +51,7 @@ using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrumentSourceOutput;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
+using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
@@ -899,6 +901,117 @@ TEST_CASE("a filter sweep is audible on a held note", "[midi][synth]") {
       static_cast<unsigned int>(sonare::midi::synth::NativeSynthParamId::kCutoffHz), 20000.0f));
   const StereoRender reopened = render(synth, 8192);
   REQUIRE(rms(reopened.left, 4096) > 0.8f * open_rms);
+}
+
+TEST_CASE("NativeSynth GM church organ keeps the configured wind response",
+          "[midi][synth][organ]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  const NativeSynthPatch& church_organ = gm_fallback_patch(0, 19);
+  REQUIRE(church_organ.mode == SynthEngineMode::kPipeOrgan);
+
+  const auto play = [&](bool gm) {
+    NativeSynthConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.dc_block = false;
+    cfg.use_gm_programs = gm;
+    if (!gm) cfg.patch = church_organ;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    if (gm) {
+      synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 19)));
+    }
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    return render(synth, 24000);
+  };
+
+  const StereoRender gm = play(true);
+  const StereoRender configured = play(false);
+  REQUIRE(rms(gm.left, 4096) > 0.001f);
+  REQUIRE(rms(configured.left, 4096) > 0.001f);
+  REQUIRE(gm.left == configured.left);
+  REQUIRE(gm.right == configured.right);
+}
+
+TEST_CASE("NativeSynth organ swell is isolated per channel", "[midi][synth][organ]") {
+  NativeSynthConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  cfg.patch.mode = SynthEngineMode::kPipeOrgan;
+  cfg.patch.pipe_organ.swell = 0.7f;
+  cfg.patch.pipe_organ.tremulant_rate_hz = 0.0f;
+  cfg.patch.pipe_organ.wind_sag = 0.0f;
+  cfg.patch.amp_env.attack_ms = 2.0f;
+  cfg.patch.amp_env.sustain = 1.0f;
+
+  const auto render_parts = [&](uint8_t other_expression) {
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 11, 127)));
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 11, other_expression)));
+    MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 0, 60, 110));
+    MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 1, 67, 110));
+    first.source_track_id = 1;
+    second.source_track_id = 2;
+    synth.on_event(0, first);
+    synth.on_event(0, second);
+    std::vector<float> fallback_l(8192, 0.0f), fallback_r(8192, 0.0f);
+    std::vector<float> first_l(8192, 0.0f), first_r(8192, 0.0f);
+    std::vector<float> second_l(8192, 0.0f), second_r(8192, 0.0f);
+    float* fallback[] = {fallback_l.data(), fallback_r.data()};
+    float* first_lane[] = {first_l.data(), first_r.data()};
+    float* second_lane[] = {second_l.data(), second_r.data()};
+    const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, first_lane}, {2, second_lane}};
+    REQUIRE(synth.process_source_tracks(outputs, 3, 2, 8192));
+    return std::pair<std::vector<float>, std::vector<float>>{std::move(first_l),
+                                                             std::move(first_r)};
+  };
+
+  const auto open = render_parts(127);
+  const auto unrelated_closed = render_parts(0);
+  REQUIRE(open.first == unrelated_closed.first);
+  REQUIRE(open.second == unrelated_closed.second);
+}
+
+TEST_CASE("NativeSynth organ pressure recovers while its part is silent",
+          "[midi][synth][organ][gs-physical-review]") {
+  NativeSynthConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  cfg.patch = sonare::midi::synth::gm_fallback_patch(0, 19);
+  cfg.patch.retrigger = sonare::midi::synth::SynthRetrigger::kNote;
+  cfg.patch.amp_env.release_ms = 1.0f;
+  cfg.patch.pipe_organ.wind_sag = 0.9f;
+  cfg.patch.pipe_organ.tremulant_rate_hz = 0.0f;
+  const auto onset = [&](bool chord, int pause) {
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    if (chord) {
+      for (const uint8_t note : {uint8_t{48}, uint8_t{52}, uint8_t{55}, uint8_t{60}}) {
+        synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 110)));
+      }
+      render(synth, 4096);
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
+      for (int i = 0; i < 4096 && synth.active_voice_count() != 0; ++i) render(synth, 256);
+      REQUIRE(synth.active_voice_count() == 0);
+      render(synth, pause);
+    }
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 67, 110)));
+    return render(synth, 2048);
+  };
+  const auto fresh = onset(false, 0);
+  const auto immediate = onset(true, 0);
+  const auto recovered = onset(true, 96000);
+  REQUIRE(rms(fresh.left, 0) > 1e-6f);
+  double immediate_error = 0.0, recovered_error = 0.0;
+  for (size_t i = 0; i < fresh.left.size(); ++i) {
+    const double a = immediate.left[i] - fresh.left[i];
+    const double b = recovered.left[i] - fresh.left[i];
+    immediate_error += a * a;
+    recovered_error += b * b;
+  }
+  CAPTURE(immediate_error, recovered_error);
+  REQUIRE(immediate_error > 1e-8);
+  CHECK(recovered_error < immediate_error * 0.1);
 }
 
 TEST_CASE("All Sound Off silences the piano bus resonators too", "[midi][synth][sf2]") {
@@ -2214,6 +2327,34 @@ TEST_CASE("SourceResidualSplitter gives a source with no target its share on the
     REQUIRE(fallback_l[i] == 0.5f);
     REQUIRE(lane_l[i] == 0.5f);
   }
+}
+
+TEST_CASE("SourceResidualSplitter carries energy shares across a routing boundary",
+          "[midi][synth][gs-physical-review]") {
+  sonare::midi::SourceResidualSplitter owners, downstream;
+  owners.configure(48000.0, 0.5f);
+  downstream.configure(48000.0, 0.5f);
+  float fallback_l = 0.0f, fallback_r = 0.0f;
+  float first_l = 0.0f, first_r = 0.0f;
+  float second_l = 0.0f, second_r = 0.0f;
+  float* fallback[] = {&fallback_l, &fallback_r};
+  float* first[] = {&first_l, &first_r};
+  float* second[] = {&second_l, &second_r};
+  const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, first}, {2, second}};
+  const float zero = 0.0f, one = 1.0f;
+  owners.accumulate(1, 2.0f, 0.0f);
+  owners.accumulate(2, 1.0f, 0.0f);
+  owners.flush(outputs, 3, 1, &zero, &zero, 0, [](float* const*, int, float, float) {});
+  downstream.accumulate_residual_energy(owners, 10.0f);
+  downstream.flush(outputs, 3, 1, &one, &one, 0, [](float* const* target, int, float l, float r) {
+    target[0][0] += l;
+    target[1][0] += r;
+  });
+  REQUIRE(std::fabs(first_l - 0.8f) < 1e-6f);
+  REQUIRE(std::fabs(first_r - 0.8f) < 1e-6f);
+  REQUIRE(std::fabs(second_l - 0.2f) < 1e-6f);
+  REQUIRE(std::fabs(second_r - 0.2f) < 1e-6f);
+  REQUIRE(fallback_l == 0.0f);
 }
 
 TEST_CASE("SourceResidualSplitter reuses decayed slots across many track ids", "[midi][synth]") {

@@ -89,10 +89,31 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     s.configure(sample_rate_, kResidualTauSeconds);
     s.reset();
   }
+  for (SourceResidualSplitter& s : part_piano_splitters_) {
+    s.configure(sample_rate_, kResidualTauSeconds);
+    s.reset();
+  }
+  for (SourceResidualSplitter& s : part_organ_splitters_) {
+    s.configure(sample_rate_, kResidualTauSeconds);
+    s.reset();
+  }
+  for (SourceResidualSplitter& s : part_guitar_splitters_) {
+    s.configure(sample_rate_, kResidualTauSeconds);
+    s.reset();
+  }
   part_fx_.clear_mirror();
   part_fx_.prepare(sample_rate_);
   for (PianoResonanceBank& halo : part_halo_) halo.reset();
   part_halo_armed_.fill(false);
+  part_soundboards_.clear();
+  part_resonance_.clear();
+  if (part_fx_.enabled()) {
+    part_soundboards_.resize(16);
+    part_resonance_.resize(16);
+  }
+  for (PianoSoundboard& board : part_soundboards_) board.reset();
+  for (PianoResonanceBank& bank : part_resonance_) bank.reset();
+  for (PianoPartState& state : part_piano_state_) state = {};
   pool_.prepare(config_.polyphony);
   // One entry per voice bounds the notes one channel can be sounding, and this
   // is the only place the attribution scratch is sized.
@@ -158,15 +179,13 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     pipe_organ_buffers_.clear();
   }
-  // Wind chest and swell box are bus-level (shared by every sounding pipe), so
-  // they stay tied to the configured patch.
-  if (pipe_organ_mode_) {
-    wind_.prepare(sample_rate_, config_.patch.pipe_organ.tremulant_rate_hz,
-                  config_.patch.pipe_organ.tremulant_depth, config_.patch.pipe_organ.wind_sag);
-    swell_depth_ = config_.patch.pipe_organ.swell;
-  } else {
-    swell_depth_ = 0.0f;
-  }
+  // Organ wind and swell arm per part at note-on, since GM programs resolve after prepare().
+  for (OrganWindSupply& wind : part_wind_) wind.reset();
+  for (OrganPartParams& params : organ_part_params_) params = {};
+  part_swell_depth_.fill(0.0f);
+  part_swell_coeff_.fill(1.0f);
+  part_swell_lp_l_.fill(0.0f);
+  part_swell_lp_r_.fill(0.0f);
   // Bowed string: one delay slab per voice slot (two delay-line spans, the neck
   // and bridge). The only allocation site; voices attach their slab at note-on.
   bowed_string_capacity_ = bowed_string_buffer_capacity(sample_rate_);
@@ -225,8 +244,6 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     harpsichord_buffers_.clear();
   }
-  swell_lp_l_ = 0.0f;
-  swell_lp_r_ = 0.0f;
   channels_ = {};
   // GM power-on: channel 10 is the rhythm part (no SysEx needed). MPE mode is
   // off until an MCM turns it on, which is what a power-on default of "no zone
@@ -288,12 +305,18 @@ void NativeSynth::reset() {
   guitar_residual_splitter_.reset();
   for (SourceResidualSplitter& s : part_bus_splitters_) s.reset();
   for (SourceResidualSplitter& s : unit_splitters_) s.reset();
+  for (SourceResidualSplitter& s : part_piano_splitters_) s.reset();
+  for (SourceResidualSplitter& s : part_organ_splitters_) s.reset();
+  for (SourceResidualSplitter& s : part_guitar_splitters_) s.reset();
   part_fx_.clear_mirror();
   resonance_.reset();
   soundboard_.reset();
   guitar_halo_.reset();
   for (PianoResonanceBank& halo : part_halo_) halo.reset();
   part_halo_armed_.fill(false);
+  for (PianoSoundboard& board : part_soundboards_) board.reset();
+  for (PianoResonanceBank& bank : part_resonance_) bank.reset();
+  for (PianoPartState& state : part_piano_state_) state = {};
   // A GM-mode body was tuned by a note-on, so it goes back to untuned; a
   // configured piano keeps the tuning prepare() gave it.
   piano_body_active_ = piano_mode_;
@@ -302,9 +325,12 @@ void NativeSynth::reset() {
   // configured Karplus-Strong sympathetic patch keeps the arming prepare() gave it.
   guitar_halo_active_ =
       config_.patch.mode == SynthEngineMode::kKarplusStrong && config_.patch.ks.sympathetic;
-  wind_.reset();
-  swell_lp_l_ = 0.0f;
-  swell_lp_r_ = 0.0f;
+  for (OrganWindSupply& wind : part_wind_) wind.reset();
+  for (OrganPartParams& params : organ_part_params_) params = {};
+  part_swell_depth_.fill(0.0f);
+  part_swell_coeff_.fill(1.0f);
+  part_swell_lp_l_.fill(0.0f);
+  part_swell_lp_r_.fill(0.0f);
   channels_ = {};
   // GM power-on: channel 10 is the rhythm part (no SysEx needed). MPE mode is
   // off until an MCM turns it on, which is what a power-on default of "no zone
@@ -431,19 +457,29 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // touched: the exclusive-group choke below reads the resolved patch, and a
   // voice allocated first would still carry the previous note's patch pointer.
   const ChannelState& st = channels_[ch];
+  // Compose the per-note pitch first: an absolute pitch picks the drum piece at the target key.
+  Sf2PerNoteVoice per_note;
+  bind_per_note(per_note, ch, note, attribute_type, attribute_data, note);
+  const ComposedPitch note_pitch = compose_per_note(per_note);
+  uint8_t drum_lookup_note = note;
+  if (note_pitch.absolute) {
+    drum_lookup_note = static_cast<uint8_t>(std::clamp(
+        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
+        127));
+  }
   const NativeSynthPatch* patch = &config_.patch;
   uint8_t drum_kit = 0;
   if (config_.use_gm_programs) {
     const uint16_t bank = gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
     const GsToneMap map = gs_effective_tone_map(st.bank_msb, st.bank_lsb);
     if (bank == kDrumBank) {
-      patch = &gm_fallback_drum_patch(note);
+      patch = &gm_fallback_drum_patch(drum_lookup_note);
       drum_kit = gm_fallback_drum_kit(st.program, map);
     } else {
       patch = &gm_fallback_patch(bank, st.program, map);
     }
   } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
-    patch = &gm_fallback_drum_patch(note);
+    patch = &gm_fallback_drum_patch(drum_lookup_note);
     drum_kit = gm_fallback_drum_kit(st.program);
   }
   // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo
@@ -544,9 +580,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // Per-note pitch (M2-104-UM §7.4.15). An absolute pitch starts the engine on the key of its
   // integer part, so a sample zone and a delay line are chosen for the pitch that sounds; the
   // struck note stays the voice's own, which is what a note-off matches.
-  Sf2PerNoteVoice per_note;
-  bind_per_note(per_note, ch, note, attribute_type, attribute_data, note);
-  const ComposedPitch note_pitch = compose_per_note(per_note);
   DrumVoiceMod voice_mod{};
   if (note_pitch.absolute) {
     per_note.zone_key = static_cast<uint8_t>(std::clamp(
@@ -557,6 +590,8 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   per_note.cents = per_note_cents(per_note, note_pitch);
   voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit,
                voice_mod, organ_percussion);
+  voice->piano_case_strike_pending = 0.0f;
+  voice->piano_board_strike_pending = 0.0f;
   per_note_[voice_index] = per_note;
   // Seed the engine's excitation axes at the channel's current controllers (no
   // glide on the first sample) so a note struck mid-phrase starts at the live
@@ -574,25 +609,60 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // the return level, since other notes may still be ringing through the bank.
   // Allocation-free, like the lazy per-part prepare on the Sf2Player fallback path.
   if (patch->mode == SynthEngineMode::kPiano) {
-    if (piano_body_soundboard_ < 0.0f) {
-      soundboard_.prepare(sample_rate_, patch->piano.soundboard);
-      resonance_.prepare(sample_rate_);
-    } else if (piano_body_soundboard_ != patch->piano.soundboard) {
-      soundboard_.set_mix(patch->piano.soundboard);
+    if (part_fx_.enabled()) {
+      PianoPartState& state = part_piano_state_[ch];
+      if (!state.prepared) {
+        part_soundboards_[ch].prepare(sample_rate_, patch->piano.soundboard);
+        part_resonance_[ch].prepare(sample_rate_);
+        state.prepared = true;
+      } else if (state.soundboard_mix != patch->piano.soundboard) {
+        part_soundboards_[ch].set_mix(patch->piano.soundboard);
+      }
+      state.soundboard_mix = patch->piano.soundboard;
+      // The current routing snapshot may still be dirty. Queue the strike for
+      // the first process() sample, where the part-owned board is known to be
+      // the destination regardless of whether the part is bussed today.
+      voice->piano_case_strike_pending = voice->piano.case_strike();
+      voice->piano_board_strike_pending = voice->piano.board_strike();
+    } else {
+      if (piano_body_soundboard_ < 0.0f) {
+        soundboard_.prepare(sample_rate_, patch->piano.soundboard);
+        resonance_.prepare(sample_rate_);
+      } else if (piano_body_soundboard_ != patch->piano.soundboard) {
+        soundboard_.set_mix(patch->piano.soundboard);
+      }
+      piano_body_soundboard_ = patch->piano.soundboard;
+      // The blow into the structure, which the board is struck with once rather
+      // than driven by. After any prepare() above, which clears the network.
+      soundboard_.strike(voice->piano.case_strike());
+      soundboard_.strike_board(voice->piano.board_strike());
     }
-    piano_body_soundboard_ = patch->piano.soundboard;
     piano_body_active_ = true;
-    // The blow into the structure, which the board is struck with once rather
-    // than driven by. After any prepare() above, which clears the network.
-    soundboard_.strike(voice->piano.case_strike());
-    soundboard_.strike_board(voice->piano.board_strike());
+  }
+  // GM resolution can select a pipe organ even when the configured patch is
+  // subtractive. Prepare wind and swell from the resolved patch on this part;
+  // non-organ voices receive unity wind in process_impl().
+  if (patch->mode == SynthEngineMode::kPipeOrgan) {
+    OrganPartParams& params = organ_part_params_[ch];
+    const float trem_rate = patch->pipe_organ.tremulant_rate_hz;
+    const float trem_depth = patch->pipe_organ.tremulant_depth;
+    const float sag = patch->pipe_organ.wind_sag;
+    if (!params.armed || params.tremulant_rate_hz != trem_rate ||
+        params.tremulant_depth != trem_depth || params.wind_sag != sag) {
+      part_wind_[ch].prepare(sample_rate_, trem_rate, trem_depth, sag);
+      params.tremulant_rate_hz = trem_rate;
+      params.tremulant_depth = trem_depth;
+      params.wind_sag = sag;
+      params.armed = true;
+    }
+    part_swell_depth_[ch] = patch->pipe_organ.swell;
   }
   // Bus-level open-string halo, the same lazy-arming rule as the piano body
   // above but for a Karplus-Strong voice that asks for it. Guarded so an
   // already-armed bank (configured, or armed by an earlier note-on) is never
   // re-prepared, which would clear its ringing state.
   if (patch->mode == SynthEngineMode::kKarplusStrong && patch->ks.sympathetic &&
-      !guitar_halo_active_) {
+      !part_fx_.enabled() && !guitar_halo_active_) {
     guitar_halo_.prepare_guitar_sympathetic(sample_rate_);
     guitar_halo_active_ = true;
   }
@@ -753,6 +823,26 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
     if (v.active && v.channel == ch) v.kill();
   }
   recharge_percussion(ch);
+  // A part's factory-backed physical-model state belongs to the channel that
+  // was silenced. Clear it even when another part still has voices, so an
+  // All Sound Off on one part cannot leave a board, swell filter, or wind
+  // chest tail audible on a later note.
+  if (part_fx_.enabled()) {
+    part_soundboards_[ch].reset();
+    part_resonance_[ch].reset();
+  }
+  part_piano_splitters_[ch].reset();
+  part_organ_splitters_[ch].reset();
+  part_guitar_splitters_[ch].reset();
+  part_piano_state_[ch] = {};
+  part_halo_[ch].reset();
+  part_halo_armed_[ch] = false;
+  part_wind_[ch].reset();
+  organ_part_params_[ch] = {};
+  part_swell_depth_[ch] = 0.0f;
+  part_swell_coeff_[ch] = 1.0f;
+  part_swell_lp_l_[ch] = 0.0f;
+  part_swell_lp_r_[ch] = 0.0f;
   if (pool_.active_count() == 0) {
     // All Sound Off means silence NOW, and the instrument's bus resonators are
     // part of its output: the piano soundboard, the sympathetic bank and the
@@ -764,11 +854,18 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
     resonance_.reset();
     soundboard_.reset();
     guitar_halo_.reset();
-    for (PianoResonanceBank& halo : part_halo_) halo.reset();
-    swell_lp_l_ = 0.0f;
-    swell_lp_r_ = 0.0f;
-    dc_x1_ = {};
-    dc_y1_ = {};
+    // An inactive voice does not imply its part's body is silent. Preserve
+    // other parts' body state and the shared DC filter while they can ring.
+    bool other_body = false;
+    for (size_t part = 0; part < 16; ++part) {
+      if (part == ch) continue;
+      other_body = other_body || (part_fx_.enabled() && part_piano_state_[part].prepared) ||
+                   part_halo_armed_[part] || organ_part_params_[part].armed;
+    }
+    if (!other_body) {
+      dc_x1_ = {};
+      dc_y1_ = {};
+    }
   }
 }
 
@@ -1294,20 +1391,40 @@ void NativeSynth::process_impl(float* const* channels,
     }
   }
 
-  // Swell box: the expression pedal (CC11) sets the shutter. The most-closed
-  // pedal across channels darkens the whole division (a bus lowpass). Expression
-  // is fixed for the block, so the cutoff is computed once here. Above ~19 kHz
-  // the shutter is effectively open, so the one-pole is bypassed (swell_active).
-  bool swell_active = false;
-  if (pipe_organ_mode_ && swell_depth_ > 0.0f) {
-    uint32_t closed = Control32::from7(127).raw;
-    for (const ChannelState& ch : channels_) closed = std::min(closed, ch.expression.raw);
-    const float shut = (1.0f - Control32::from_raw(closed).f7() / 127.0f) * swell_depth_;
+  // Swell boxes are per organ part. A GM organ may share the host with another
+  // engine, and each part's CC11 must affect only the pipe leg it owns.
+  std::array<bool, 16> part_swell_active{};
+  for (size_t part = 0; part < part_swell_active.size(); ++part) {
+    const float depth = part_swell_depth_[part];
+    if (!organ_part_params_[part].armed || depth <= 0.0f) {
+      part_swell_coeff_[part] = 1.0f;
+      continue;
+    }
+    const float expression = channels_[part].expression.f7();
+    const float shut = (1.0f - expression / 127.0f) * depth;
     const float fc = std::exp(std::log(20000.0f) + shut * (std::log(300.0f) - std::log(20000.0f)));
+    // Above ~19 kHz the shutter is effectively open.
     if (fc < 19000.0f) {
-      swell_active = true;
-      swell_coeff_ = std::clamp(
+      part_swell_active[part] = true;
+      part_swell_coeff_[part] = std::clamp(
           1.0f - std::exp(-constants::kTwoPi * fc / static_cast<float>(sample_rate_)), 0.0f, 1.0f);
+    }
+  }
+
+  // The per-part board is independent of routing, so a queued strike can be
+  // committed once the audio block begins. The board return itself is routed
+  // from the same current snapshot as the dry part below.
+  if (part_fx_.enabled()) {
+    for (NativeSynthVoice& v : pool_) {
+      if (!v.active || v.patch == nullptr || v.patch->mode != SynthEngineMode::kPiano ||
+          (v.piano_case_strike_pending == 0.0f && v.piano_board_strike_pending == 0.0f)) {
+        continue;
+      }
+      const size_t part = static_cast<size_t>(v.channel & 0x0Fu);
+      part_soundboards_[part].strike(v.piano_case_strike_pending);
+      part_soundboards_[part].strike_board(v.piano_board_strike_pending);
+      v.piano_case_strike_pending = 0.0f;
+      v.piano_board_strike_pending = 0.0f;
     }
   }
 
@@ -1324,14 +1441,28 @@ void NativeSynth::process_impl(float* const* channels,
       const int i = offset + c;
       float mix_l = 0.0f;
       float mix_r = 0.0f;
-      // Shared wind chest: the tremulant / wind-sag modulation common to every
-      // sounding pipe. Demand is the count of active pipe voices (order-
-      // independent), so the sag is deterministic across bounces.
-      OrganWindSupply::State wind;
-      if (pipe_organ_mode_ && wind_.active()) {
-        int demand = 0;
-        for (const NativeSynthVoice& v : pool_) demand += v.active ? 1 : 0;
-        wind = wind_.process(demand);
+      // Each organ part advances its own wind chest. Count the voices at this
+      // sample rather than once per process() call: render() can finish a
+      // release inside a long block, and the next sample must not keep a
+      // phantom load on that part's regulator.
+      std::array<int, 16> organ_demand{};
+      for (const NativeSynthVoice& active_voice : pool_) {
+        if (!active_voice.active || active_voice.patch == nullptr ||
+            active_voice.patch->mode != SynthEngineMode::kPipeOrgan) {
+          continue;
+        }
+        const size_t organ_part = static_cast<size_t>(active_voice.channel & 0x0Fu);
+        // Demand is a per-part voice count (order-independent), so the sag is deterministic.
+        ++organ_demand[organ_part];
+      }
+      // The default state is unity, so non-organ voices never inherit an organ's wind.
+      std::array<OrganWindSupply::State, 16> wind_state{};
+      const OrganWindSupply::State unity_wind{};
+      for (size_t part = 0; part < wind_state.size(); ++part) {
+        if (organ_part_params_[part].armed && part_wind_[part].active()) {
+          // Zero demand lets pressure recover while this part is silent.
+          wind_state[part] = part_wind_[part].process(organ_demand[part]);
+        }
       }
       // Piano voices are summed apart from the rest: the body below attenuates
       // and re-radiates only them, so in GM mode — where one bus carries many
@@ -1346,10 +1477,14 @@ void NativeSynth::process_impl(float* const* channels,
       // halo is additive to the dry KS voice rather than replacing it.
       float guitar_l = 0.0f;
       float guitar_r = 0.0f;
-      float board_l = 0.0f;
-      float board_r = 0.0f;
-      std::array<float, 16> halo_dry;
-      if (any_bussed) halo_dry.fill(0.0f);
+      for (size_t part = 0; part < 16; ++part) {
+        chunk_part_piano_l_[part][static_cast<size_t>(c)] = 0.0f;
+        chunk_part_piano_r_[part][static_cast<size_t>(c)] = 0.0f;
+        chunk_part_organ_l_[part][static_cast<size_t>(c)] = 0.0f;
+        chunk_part_organ_r_[part][static_cast<size_t>(c)] = 0.0f;
+        chunk_part_guitar_l_[part][static_cast<size_t>(c)] = 0.0f;
+        chunk_part_guitar_r_[part][static_cast<size_t>(c)] = 0.0f;
+      }
       for (NativeSynthVoice& v : pool_) {
         if (!v.active) continue;
         // The channel's, except on a member channel sounding more than one note,
@@ -1357,16 +1492,20 @@ void NativeSynth::process_impl(float* const* channels,
         // attributed (M1-100-UM v1.1 section 2.2.4.1).
         const Sf2ChannelMod& channel_mod =
             v.mpe_mod_active ? v.mpe_mod : channel_mods_[v.channel & 0x0Fu];
+        const size_t part_index = static_cast<size_t>(v.channel & 0x0Fu);
+        const bool organ_voice = v.patch != nullptr && v.patch->mode == SynthEngineMode::kPipeOrgan;
+        const OrganWindSupply::State& voice_wind =
+            organ_voice ? wind_state[part_index] : unity_wind;
         // A key carrying per-note pitch renders through a copy of that mod with its offset
         // added; every other voice reads the mod itself.
         const float per_note_offset = per_note_[static_cast<size_t>(&v - pool_.data())].cents;
         float s = 0.0f;
         if (per_note_offset == 0.0f) {
-          s = v.render(channel_mod, wind.pitch_ratio, wind.gain);
+          s = v.render(channel_mod, voice_wind.pitch_ratio, voice_wind.gain);
         } else {
           Sf2ChannelMod tuned = channel_mod;
           tuned.pitch_cents += per_note_offset;
-          s = v.render(tuned, wind.pitch_ratio, wind.gain);
+          s = v.render(tuned, voice_wind.pitch_ratio, voice_wind.gain);
         }
         const bool piano_voice =
             piano_body_active_ && v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano;
@@ -1380,27 +1519,79 @@ void NativeSynth::process_impl(float* const* channels,
           const float bus_l = s * v.gain_left;
           const float bus_r = s * v.gain_right;
           const bool mono_rig = fx->mono_prefix[static_cast<size_t>(part)] != 0;
-          // A piano's direct share rides the bus; its board stays the shared one.
-          const float direct = piano_voice ? kPianoDirectGain : 1.0f;
-          if (mono_rig) {
-            // A mono pickup feeds the rig's amp, so CC10 cannot move its drive.
-            part_fx_.add_mono(part, c, direct * constants::kInvSqrt2 * s);
+          if (organ_voice) {
+            // Organ swell is a part stage before the rig, so retain its stereo
+            // legs until the per-part filter pass below.
+            if (mono_rig) {
+              const float raw = constants::kInvSqrt2 * s;
+              chunk_part_organ_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
+              chunk_part_organ_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
+            } else {
+              chunk_part_organ_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_l;
+              chunk_part_organ_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_r;
+            }
+          } else if (part_fx_.enabled() && piano_voice) {
+            // Factory-backed piano bodies are also part stages. A mono pickup
+            // feeds the board with the same common leg the rig receives.
+            const float raw = constants::kInvSqrt2 * s;
+            if (mono_rig) {
+              chunk_part_piano_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
+              chunk_part_piano_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
+            } else {
+              chunk_part_piano_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_l;
+              chunk_part_piano_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_r;
+            }
+          } else if (part_fx_.enabled() && halo_voice &&
+                     part_halo_armed_[static_cast<size_t>(part)]) {
+            if (mono_rig) {
+              const float raw = constants::kInvSqrt2 * s;
+              chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
+              chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
+            } else {
+              chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_l;
+              chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_r;
+            }
           } else {
-            part_fx_.add_stereo(part, c, direct * bus_l, direct * bus_r);
-          }
-          if (piano_voice) {
-            board_l += bus_l;
-            board_r += bus_r;
-          }
-          if (halo_voice && part_halo_armed_[static_cast<size_t>(part)]) {
-            halo_dry[static_cast<size_t>(part)] +=
-                mono_rig ? constants::kInvSqrt2 * s : 0.5f * (bus_l + bus_r);
+            // Remaining voices feed the part bus directly (pianos at their direct gain).
+            const float direct = piano_voice ? kPianoDirectGain : 1.0f;
+            if (mono_rig) {
+              // A mono pickup feeds the rig's amp, so CC10 cannot move its drive.
+              part_fx_.add_mono(part, c, direct * constants::kInvSqrt2 * s);
+            } else {
+              part_fx_.add_stereo(part, c, direct * bus_l, direct * bus_r);
+            }
+            if (halo_voice && part_halo_armed_[static_cast<size_t>(part)]) {
+              // Without per-part FX the halo leg is driven from the bussed dry signal.
+              if (any_bussed) {
+                const float dry = mono_rig ? constants::kInvSqrt2 * s : 0.5f * (bus_l + bus_r);
+                chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += dry;
+                chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += dry;
+              }
+            }
           }
           if (source_render) {
             const float src_l = bus_l * config_.gain;
             const float src_r = bus_r * config_.gain;
             residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
-            if (piano_voice) piano_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+            if (piano_voice && !part_fx_.enabled()) {
+              piano_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+            }
+            // Keep a body owner's source weights independent of the current
+            // EFX assignment. If a held note moves from a bussed part to a
+            // dry part, its ringing return must follow its original source
+            // lane instead of falling back to lane 0.
+            if (piano_voice) {
+              part_piano_splitters_[static_cast<size_t>(part)].accumulate(v.source_track_id, src_l,
+                                                                          src_r);
+            }
+            if (organ_voice) {
+              part_organ_splitters_[static_cast<size_t>(part)].accumulate(v.source_track_id, src_l,
+                                                                          src_r);
+            }
+            if (halo_voice && part_halo_armed_[static_cast<size_t>(part)]) {
+              part_guitar_splitters_[static_cast<size_t>(part)].accumulate(v.source_track_id, src_l,
+                                                                           src_r);
+            }
             const uint8_t unit = fx->part_unit[static_cast<size_t>(part)];
             SourceResidualSplitter& bus_splitter =
                 unit != PartFxSnapshot::kNoUnit && any_unit
@@ -1412,7 +1603,26 @@ void NativeSynth::process_impl(float* const* channels,
         }
         const float voice_l = s * v.gain_left;
         const float voice_r = s * v.gain_right;
-        if (piano_voice) {
+        if (organ_voice) {
+          // Keep the unbussed dry leg in the mix and on its source lane; the
+          // pre-rig swell residual is added and attributed per part below.
+          mix_l += voice_l;
+          mix_r += voice_r;
+          chunk_part_organ_l_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_l;
+          chunk_part_organ_r_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_r;
+        } else if (part_fx_.enabled() && piano_voice) {
+          // Keep the raw string contribution in the per-part stage. The full
+          // body return is added below in one operation, matching the legacy
+          // unbussed piano arithmetic while still giving a bussed part a
+          // complete pre-rig return.
+          chunk_part_piano_l_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_l;
+          chunk_part_piano_r_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_r;
+        } else if (part_fx_.enabled() && halo_voice && part_halo_armed_[part_index]) {
+          mix_l += voice_l;
+          mix_r += voice_r;
+          chunk_part_guitar_l_[part_index][static_cast<size_t>(c)] += voice_l;
+          chunk_part_guitar_r_[part_index][static_cast<size_t>(c)] += voice_r;
+        } else if (piano_voice) {
           piano_l += voice_l;
           piano_r += voice_r;
         } else {
@@ -1430,33 +1640,147 @@ void NativeSynth::process_impl(float* const* channels,
           // The remainder follows every source; the piano body and guitar halo
           // only the voices that drive them.
           residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
-          if (piano_voice) piano_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
-          if (guitar_halo_active_ && halo_voice) {
+          if (piano_voice && !part_fx_.enabled()) {
+            piano_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+          }
+          if (guitar_halo_active_ && halo_voice && !part_fx_.enabled()) {
             guitar_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+          }
+          if (part_fx_.enabled() && piano_voice) {
+            part_piano_splitters_[part_index].accumulate(v.source_track_id, src_l, src_r);
+          }
+          if (organ_voice) {
+            part_organ_splitters_[part_index].accumulate(v.source_track_id, src_l, src_r);
+          }
+          if (part_fx_.enabled() && halo_voice && part_halo_armed_[part_index]) {
+            part_guitar_splitters_[part_index].accumulate(v.source_track_id, src_l, src_r);
           }
         }
       }
+      // Part-owned body returns form before the part chain; unbussed parts add only the residual.
+      for (size_t part = 0; part < 16; ++part) {
+        const bool bussed_part = any_bussed && fx->part_bussed[part];
+
+        // A swell box is a part pre-rig stage even when the factory is absent.
+        // This keeps a configured pipe-organ render on its historical path,
+        // while its source residual remains isolated from other parts.
+        const float organ_raw_l = chunk_part_organ_l_[part][static_cast<size_t>(c)];
+        const float organ_raw_r = chunk_part_organ_r_[part][static_cast<size_t>(c)];
+        float organ_out_l = organ_raw_l;
+        float organ_out_r = organ_raw_r;
+        if (organ_part_params_[part].armed && part_swell_depth_[part] > 0.0f) {
+          if (part_swell_active[part]) {
+            part_swell_lp_l_[part] +=
+                part_swell_coeff_[part] * (organ_raw_l - part_swell_lp_l_[part]);
+            part_swell_lp_r_[part] +=
+                part_swell_coeff_[part] * (organ_raw_r - part_swell_lp_r_[part]);
+            organ_out_l = part_swell_lp_l_[part];
+            organ_out_r = part_swell_lp_r_[part];
+          } else {
+            // Track the live input while the shutter is effectively open. If
+            // CC11 closes on a held note, the lowpass therefore starts at the
+            // current sample instead of a stale zero and cannot click down.
+            part_swell_lp_l_[part] = organ_raw_l;
+            part_swell_lp_r_[part] = organ_raw_r;
+          }
+        }
+        const float organ_res_l = organ_out_l - organ_raw_l;
+        const float organ_res_r = organ_out_r - organ_raw_r;
+        chunk_part_organ_l_[part][static_cast<size_t>(c)] = organ_res_l;
+        chunk_part_organ_r_[part][static_cast<size_t>(c)] = organ_res_r;
+        if (bussed_part) {
+          if (fx->mono_prefix[part] != 0) {
+            part_fx_.add_mono(static_cast<int>(part), c, 0.5f * (organ_out_l + organ_out_r));
+          } else {
+            part_fx_.add_stereo(static_cast<int>(part), c, organ_out_l, organ_out_r);
+          }
+        } else {
+          mix_l += organ_res_l;
+          mix_r += organ_res_r;
+        }
+
+        if (part_fx_.enabled() && part_piano_state_[part].prepared) {
+          const float piano_raw_l = chunk_part_piano_l_[part][static_cast<size_t>(c)];
+          const float piano_raw_r = chunk_part_piano_r_[part][static_cast<size_t>(c)];
+          PianoSoundboard& board = part_soundboards_[part];
+          PianoResonanceBank& resonance = part_resonance_[part];
+          const float body = board.process(0.5f * (piano_raw_l + piano_raw_r));
+          const float side = board.last_side();
+          const float symp = resonance.process(board.last_diffused(), channels_[part].sustain);
+          const float piano_out_l = kPianoDirectGain * piano_raw_l + body + side + symp;
+          const float piano_out_r = kPianoDirectGain * piano_raw_r + body - side + symp;
+          const float piano_res_l = piano_out_l - piano_raw_l;
+          const float piano_res_r = piano_out_r - piano_raw_r;
+          chunk_part_piano_l_[part][static_cast<size_t>(c)] = piano_res_l;
+          chunk_part_piano_r_[part][static_cast<size_t>(c)] = piano_res_r;
+          if (bussed_part) {
+            if (fx->mono_prefix[part] != 0) {
+              part_fx_.add_mono(static_cast<int>(part), c, 0.5f * (piano_out_l + piano_out_r));
+            } else {
+              part_fx_.add_stereo(static_cast<int>(part), c, piano_out_l, piano_out_r);
+            }
+          } else {
+            mix_l += piano_out_l;
+            mix_r += piano_out_r;
+          }
+        }
+
+        if (part_fx_.enabled() && part_halo_armed_[part]) {
+          const float guitar_raw_l = chunk_part_guitar_l_[part][static_cast<size_t>(c)];
+          const float guitar_raw_r = chunk_part_guitar_r_[part][static_cast<size_t>(c)];
+          const float halo = part_halo_[part].process(0.5f * (guitar_raw_l + guitar_raw_r),
+                                                      channels_[part].sustain);
+          chunk_part_guitar_l_[part][static_cast<size_t>(c)] = halo;
+          chunk_part_guitar_r_[part][static_cast<size_t>(c)] = halo;
+          if (bussed_part) {
+            if (fx->mono_prefix[part] != 0) {
+              part_fx_.add_mono(static_cast<int>(part), c,
+                                0.5f * (guitar_raw_l + guitar_raw_r) + halo);
+            } else {
+              part_fx_.add_stereo(static_cast<int>(part), c, guitar_raw_l + halo,
+                                  guitar_raw_r + halo);
+            }
+          } else {
+            mix_l += halo;
+            mix_r += halo;
+          }
+        }
+      }
+
       chunk_mix_l_[static_cast<size_t>(c)] = mix_l;
       chunk_mix_r_[static_cast<size_t>(c)] = mix_r;
       chunk_piano_l_[static_cast<size_t>(c)] = piano_l;
       chunk_piano_r_[static_cast<size_t>(c)] = piano_r;
       chunk_guitar_l_[static_cast<size_t>(c)] = guitar_l;
       chunk_guitar_r_[static_cast<size_t>(c)] = guitar_r;
-      if (any_bussed) {
-        chunk_board_l_[static_cast<size_t>(c)] = board_l;
-        chunk_board_r_[static_cast<size_t>(c)] = board_r;
-        // A bussed part's open strings ring into its own bus, gated by its own
-        // pedal, so the halo goes through the part's rig with the voice.
-        for (size_t part = 0; part < 16; ++part) {
-          if (!part_halo_armed_[part] || !fx->part_bussed[part]) continue;
-          const float add = part_halo_[part].process(halo_dry[part], channels_[part].sustain);
-          if (add == 0.0f) continue;
-          if (fx->mono_prefix[part] != 0) {
-            part_fx_.add_mono(static_cast<int>(part), c, add);
-          } else {
-            part_fx_.add_stereo(static_cast<int>(part), c, add, add);
+    }
+
+    if (source_render && any_bussed) {
+      for (size_t part = 0; part < 16; ++part) {
+        if (!fx->part_bussed[part]) continue;
+        const uint8_t unit = fx->part_unit[part];
+        SourceResidualSplitter& destination = unit != PartFxSnapshot::kNoUnit && any_unit
+                                                  ? unit_splitters_[unit]
+                                                  : part_bus_splitters_[part];
+        const auto bridge = [&](SourceResidualSplitter& owners, const float* l, const float* r) {
+          float energy = 0.0f;
+          for (int c = 0; c < n; ++c) {
+            const float scaled_l = l[c] * config_.gain;
+            const float scaled_r = r[c] * config_.gain;
+            energy += scaled_l * scaled_l + scaled_r * scaled_r;
           }
-        }
+          // Learn/decay once even while bussed. Only the downstream bus writes
+          // audio; this pass transfers the body's source ownership.
+          owners.flush(source_outputs, source_output_count, n, l, r, offset,
+                       [](float* const*, int, float, float) {});
+          destination.accumulate_residual_energy(owners, energy);
+        };
+        bridge(part_piano_splitters_[part], chunk_part_piano_l_[part].data(),
+               chunk_part_piano_r_[part].data());
+        bridge(part_organ_splitters_[part], chunk_part_organ_l_[part].data(),
+               chunk_part_organ_r_[part].data());
+        bridge(part_guitar_splitters_[part], chunk_part_guitar_l_[part].data(),
+               chunk_part_guitar_r_[part].data());
       }
     }
 
@@ -1503,25 +1827,76 @@ void NativeSynth::process_impl(float* const* channels,
       }
     }
 
+    // Routing can leave a bus unused for many chunks. Keep its ownership
+    // clock running so a later source does not inherit frozen old weights.
+    if (source_render) {
+      static constexpr std::array<float, kPartFxChunkFrames> silence{};
+      const auto age = [&](SourceResidualSplitter& splitter) {
+        splitter.flush(source_outputs, source_output_count, n, silence.data(), silence.data(),
+                       offset, [](float* const*, int, float, float) {});
+      };
+      for (size_t part = 0; part < 16; ++part) {
+        const bool flushed = any_bussed && fx->part_bussed[part] &&
+                             (!any_unit || fx->part_unit[part] == PartFxSnapshot::kNoUnit);
+        if (!flushed) age(part_bus_splitters_[part]);
+      }
+      for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+        if (!any_unit || !fx->unit_fed[unit]) age(unit_splitters_[unit]);
+      }
+    }
+
     // Second pass: the bus-level post stages, in the order they always ran.
     for (int c = 0; c < n; ++c) {
       const int i = offset + c;
       const size_t at = static_cast<size_t>(c);
       float mix_l = chunk_mix_l_[at] * config_.gain;
       float mix_r = chunk_mix_r_[at] * config_.gain;
-      const float piano_l = chunk_piano_l_[at] * config_.gain;
-      const float piano_r = chunk_piano_r_[at] * config_.gain;
-      const float guitar_l = chunk_guitar_l_[at] * config_.gain;
-      const float guitar_r = chunk_guitar_r_[at] * config_.gain;
-      const float dry_l = mix_l + piano_l;
-      const float dry_r = mix_r + piano_r;
-      // Swell box shutter: a one-pole lowpass on the bus as the louvres close.
-      if (swell_active) {
-        swell_lp_l_ += swell_coeff_ * (mix_l - swell_lp_l_);
-        swell_lp_r_ += swell_coeff_ * (mix_r - swell_lp_r_);
-        mix_l = swell_lp_l_;
-        mix_r = swell_lp_r_;
+      const float piano_raw_l = chunk_piano_l_[at];
+      const float piano_raw_r = chunk_piano_r_[at];
+      const float piano_l = piano_raw_l * config_.gain;
+      const float piano_r = piano_raw_r * config_.gain;
+      const float guitar_raw_l = chunk_guitar_l_[at];
+      const float guitar_raw_r = chunk_guitar_r_[at];
+      // Per-part residuals are already in the mix; flush each through its own source splitter.
+      float part_piano_res_l = 0.0f;
+      float part_piano_res_r = 0.0f;
+      float part_organ_res_l = 0.0f;
+      float part_organ_res_r = 0.0f;
+      float part_guitar_res_l = 0.0f;
+      float part_guitar_res_r = 0.0f;
+      for (size_t part = 0; part < 16; ++part) {
+        if (any_bussed && fx->part_bussed[part]) {
+          chunk_part_piano_l_[part][at] = 0.0f;
+          chunk_part_piano_r_[part][at] = 0.0f;
+          chunk_part_organ_l_[part][at] = 0.0f;
+          chunk_part_organ_r_[part][at] = 0.0f;
+          chunk_part_guitar_l_[part][at] = 0.0f;
+          chunk_part_guitar_r_[part][at] = 0.0f;
+          continue;
+        }
+        const float piano_component_l = chunk_part_piano_l_[part][at] * config_.gain;
+        const float piano_component_r = chunk_part_piano_r_[part][at] * config_.gain;
+        const float organ_component_l = chunk_part_organ_l_[part][at] * config_.gain;
+        const float organ_component_r = chunk_part_organ_r_[part][at] * config_.gain;
+        const float guitar_component_l = chunk_part_guitar_l_[part][at] * config_.gain;
+        const float guitar_component_r = chunk_part_guitar_r_[part][at] * config_.gain;
+        part_piano_res_l += piano_component_l;
+        part_piano_res_r += piano_component_r;
+        part_organ_res_l += organ_component_l;
+        part_organ_res_r += organ_component_r;
+        part_guitar_res_l += guitar_component_l;
+        part_guitar_res_r += guitar_component_r;
+        if (source_render) {
+          chunk_part_piano_l_[part][at] = piano_component_l;
+          chunk_part_piano_r_[part][at] = piano_component_r;
+          chunk_part_organ_l_[part][at] = organ_component_l;
+          chunk_part_organ_r_[part][at] = organ_component_r;
+          chunk_part_guitar_l_[part][at] = guitar_component_l;
+          chunk_part_guitar_r_[part][at] = guitar_component_r;
+        }
       }
+      const float dry_l = mix_l + piano_l - part_piano_res_l - part_organ_res_l - part_guitar_res_l;
+      const float dry_r = mix_r + piano_r - part_piano_res_r - part_organ_res_r - part_guitar_res_r;
       // Shared modal soundboard plus pedal-gated sympathetic resonance, both
       // driven by the summed dry piano mix. The sympathetic bank returns to the
       // centre; the board does not, because its two radiation paths differ. Runs
@@ -1532,13 +1907,9 @@ void NativeSynth::process_impl(float* const* channels,
       float piano_res_r = 0.0f;
       float guitar_res_l = 0.0f;
       float guitar_res_r = 0.0f;
-      if (piano_body_active_) {
-        float drive_l = piano_l;
-        float drive_r = piano_r;
-        if (any_bussed) {
-          drive_l += chunk_board_l_[at] * config_.gain;
-          drive_r += chunk_board_r_[at] * config_.gain;
-        }
+      if (piano_body_active_ && !part_fx_.enabled()) {
+        const float drive_l = piano_raw_l;
+        const float drive_r = piano_raw_r;
         // Radiation split: the board returns the phase-diffused complement of
         // the direct share (plus the modal colour), so most of the note reaches
         // the mix through the board rather than as the raw string waveform.
@@ -1548,14 +1919,16 @@ void NativeSynth::process_impl(float* const* channels,
         // the same signal on both legs. Zero at a zero board width.
         const float side = soundboard_.last_side();
         const float symp = resonance_.process(soundboard_.last_diffused(), damper_open);
-        const float piano_out_l = kPianoDirectGain * piano_l + body + side + symp;
-        const float piano_out_r = kPianoDirectGain * piano_r + body - side + symp;
+        const float piano_out_l =
+            config_.gain * (kPianoDirectGain * piano_raw_l + body + side + symp);
+        const float piano_out_r =
+            config_.gain * (kPianoDirectGain * piano_raw_r + body - side + symp);
         piano_res_l = piano_out_l - piano_l;
         piano_res_r = piano_out_r - piano_r;
         mix_l += piano_out_l;
         mix_r += piano_out_r;
       }
-      if (guitar_halo_active_) {
+      if (guitar_halo_active_ && !part_fx_.enabled()) {
         // Plucked-string sound halo: the open strings ring behind the note,
         // gated by damper_open exactly as the piano board is above -- a guitar's
         // open strings are damped unless the sustain pedal is holding them open.
@@ -1563,8 +1936,8 @@ void NativeSynth::process_impl(float* const* channels,
         // mix), never by the rest of the GM bus. Skipped entirely when no
         // eligible voice has ever sounded, so every existing KS voicing with no
         // halo renders bit-identically.
-        const float dry_mono = 0.5f * (guitar_l + guitar_r);
-        const float symp = guitar_halo_.process(dry_mono, damper_open);
+        const float dry_mono = 0.5f * (guitar_raw_l + guitar_raw_r);
+        const float symp = config_.gain * guitar_halo_.process(dry_mono, damper_open);
         guitar_res_l = symp;
         guitar_res_r = symp;
         mix_l += symp;
@@ -1607,8 +1980,10 @@ void NativeSynth::process_impl(float* const* channels,
         piano_residual_r_[at] = piano_res_r;
         guitar_residual_l_[at] = guitar_res_l;
         guitar_residual_r_[at] = guitar_res_r;
-        residual_l_[at] = (mix_l - dry_l) - piano_res_l - guitar_res_l;
-        residual_r_[at] = (mix_r - dry_r) - piano_res_r - guitar_res_r;
+        residual_l_[at] = (mix_l - dry_l) - piano_res_l - guitar_res_l - part_piano_res_l -
+                          part_organ_res_l - part_guitar_res_l;
+        residual_r_[at] = (mix_r - dry_r) - piano_res_r - guitar_res_r - part_piano_res_r -
+                          part_organ_res_r - part_guitar_res_r;
       } else {
         if (left != nullptr) {
           // Mono host: fold both pan legs so centre-panned voices keep level.
@@ -1632,6 +2007,22 @@ void NativeSynth::process_impl(float* const* channels,
       guitar_residual_splitter_.flush(source_outputs, source_output_count, n,
                                       guitar_residual_l_.data(), guitar_residual_r_.data(), offset,
                                       add_output);
+      // A factory-backed body's unbussed return was added to the common mix
+      // after its dry source write. Attribute that return to the same part's
+      // sources, while bussed returns have already been flushed through the
+      // part or unit splitter above.
+      for (size_t part = 0; part < 16; ++part) {
+        if (any_bussed && fx->part_bussed[part]) continue;
+        part_piano_splitters_[part].flush(source_outputs, source_output_count, n,
+                                          chunk_part_piano_l_[part].data(),
+                                          chunk_part_piano_r_[part].data(), offset, add_output);
+        part_organ_splitters_[part].flush(source_outputs, source_output_count, n,
+                                          chunk_part_organ_l_[part].data(),
+                                          chunk_part_organ_r_[part].data(), offset, add_output);
+        part_guitar_splitters_[part].flush(source_outputs, source_output_count, n,
+                                           chunk_part_guitar_l_[part].data(),
+                                           chunk_part_guitar_r_[part].data(), offset, add_output);
+      }
     }
   }
   if (any_bussed && part_fx_.discard_sum(nullptr) != fx_discards_before) discarded = true;

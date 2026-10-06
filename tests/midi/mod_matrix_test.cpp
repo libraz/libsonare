@@ -182,6 +182,33 @@ TEST_CASE("key tracking -> pitch routing transposes by octave distance", "[midi]
   REQUIRE(freq < expected * 1.02);
 }
 
+TEST_CASE("legato key tracking routes follow the carried note",
+          "[midi][synth][gs-physical-review]") {
+  NativeSynthConfig cfg;
+  cfg.patch = sine_patch();
+  cfg.patch.mod_matrix.routes[0] = {ModSource::kKeyTrack, ModDestination::kPitchCents, 1200.0f};
+  for (const auto notes : {std::pair<uint8_t, uint8_t>{48, 72}, {72, 48}}) {
+    CAPTURE(notes.first, notes.second);
+    NativeSynth held(cfg);
+    NativeSynth fresh(cfg);
+    held.prepare(kRate, 256);
+    fresh.prepare(kRate, 256);
+    held.set_articulation(0, sonare::midi::ArticulationMode::kMonoLegato);
+    held.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, notes.first, 110)));
+    render(held, 4800);
+    held.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, notes.second, 110)));
+    fresh.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, notes.second, 110)));
+    const auto carried = render(held, 9600);
+    const auto struck = render(fresh, 9600);
+    const double reference = estimate_frequency(struck.left, 4800, 9600);
+    const double actual = estimate_frequency(carried.left, 4800, 9600);
+    REQUIRE(held.active_voice_count() == 1);
+    REQUIRE(reference > 20.0);
+    CHECK(actual > reference * 0.98);
+    CHECK(actual < reference * 1.02);
+  }
+}
+
 TEST_CASE("mod wheel -> cutoff routing brightens with CC1", "[midi][synth]") {
   NativeSynthConfig cfg;
   cfg.patch = sine_patch();

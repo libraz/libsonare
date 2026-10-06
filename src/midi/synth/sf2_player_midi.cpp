@@ -449,6 +449,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   const uint16_t bank = effective_bank(channel);
   const GsToneMap tone_map = gs_effective_tone_map(ch.bank_msb, ch.bank_lsb);
   const bool is_drum = bank == kDrumBank;
+  // Compose first: an absolute MIDI 2.0 pitch picks the key the physical model starts from.
+  Sf2PerNoteVoice per_note;
+  bind_per_note(per_note, channel, note, attribute_type, attribute_data);
+  const ComposedPitch note_pitch = compose_per_note(per_note);
   // The per-note GS edits, read before the patch: PLAY NOTE NUMBER picks which
   // kit piece answers and ASSIGN GROUP which group it belongs to, and both are
   // needed before the choke below, let alone the voice.
@@ -458,6 +462,14 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   const GsUserDrumSource* us = user_drum_source(ch, is_drum, note);
   uint8_t sound_note = gs_user_drum_sound_note(us, note);
   if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
+  // An absolute pitch overrides PLAY NOTE NUMBER / user-set substitution.
+  if (note_pitch.absolute) {
+    sound_note = static_cast<uint8_t>(std::clamp(
+        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
+        127));
+    per_note.zone_key = sound_note;
+  }
+  per_note.cents = per_note_cents(per_note, note_pitch);
   const NativeSynthPatch& patch =
       is_drum ? gm_fallback_drum_patch(sound_note) : gm_fallback_patch(bank, ch.program, tone_map);
   uint8_t exclusive_class = is_drum ? patch.percussion.exclusive_class : 0;
@@ -561,11 +573,8 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
     // Resolved above, beside the choke that had to read it first.
     drum_mod.exclusive_class = static_cast<int16_t>(exclusive_class);
   }
-  // The note the voice is STARTED at. Both PLAY NOTE NUMBER and a user set's
-  // source note move it, and the patch above is already chosen by it, so it is
-  // carried from the resolved note rather than from either of them: leaving it
-  // on the struck note gives the right kit piece at the wrong pitch, which
-  // renders plausibly and is not the note that was asked for.
+  // The note the voice is STARTED at: PLAY NOTE NUMBER, a user set's source note and an
+  // absolute pitch move it; the patch above is chosen by it, so carry the resolved note.
   if (sound_note != (note & 0x7Fu)) {
     drum_mod.play_note = static_cast<int16_t>(sound_note);
   }
@@ -581,10 +590,6 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   // SCALE TUNING and PITCH OFFSET FINE are per note where the other eight are
   // per part, so they are set on the way past rather than built with them; the
   // struck key indexes both, as it does on the SoundFont bank.
-  Sf2PerNoteVoice per_note;
-  bind_per_note(per_note, channel, note, attribute_type, attribute_data);
-  const ComposedPitch note_pitch = compose_per_note(per_note);
-  per_note.cents = per_note_cents(per_note, note_pitch);
   // An absolute pitch overrides tuning tables (M2-104-UM §7.4.15.2).
   part_mod.pitch_cents = note_pitch.absolute
                              ? 0.0f
@@ -823,11 +828,23 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   fallback_reso_[part].reset();
   fallback_halo_[part].reset();
   fallback_wind_[part].reset();
+  fallback_wind_params_[part] = {};
   for (FallbackBody& body : fallback_body_[part].bodies) body.ringout = 0;
+  for (size_t k = 0; k < kFallbackBodyKinds; ++k) {
+    body_residual_splitters_[part * kFallbackBodyKinds + k].reset();
+  }
   if (pool_.active_count() == 0 && fallback_pool_.active_count() == 0) {
-    // Bus-wide (every part feeds one mix), so only once nothing is sounding.
-    dc_x1_ = {};
-    dc_y1_ = {};
+    bool other_body = false;
+    for (size_t other = 0; other < fallback_body_.size(); ++other) {
+      if (other == part) continue;
+      for (const FallbackBody& body : fallback_body_[other].bodies) {
+        other_body = other_body || body.ringout > 0;
+      }
+    }
+    if (!other_body) {
+      dc_x1_ = {};
+      dc_y1_ = {};
+    }
   }
 }
 

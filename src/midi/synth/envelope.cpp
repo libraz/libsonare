@@ -34,6 +34,8 @@ int32_t stage_samples(double sample_rate, float time_ms) noexcept {
 
 void DahdsrEnvelope::configure(double sample_rate, const DahdsrConfig& config) noexcept {
   sustain_ = std::clamp(config.sustain, 0.0f, 1.0f);
+  // A live sustain raise un-latches percussive mode; a later lowering does not relatch it.
+  if (sustain_ > kSilenceLevel) percussive_ = false;
   attack_rate_ = stage_rate(sample_rate, config.attack_ms, kAttackTauScale);
   decay_rate_ = stage_rate(sample_rate, config.decay_ms, kDecayTauScale);
   release_rate_ = stage_rate(sample_rate, config.release_ms, kDecayTauScale);
@@ -94,7 +96,7 @@ float DahdsrEnvelope::next() noexcept {
           stage_ = Stage::kSustain;
         }
       }
-      if (stage_ == Stage::kSustain && percussive_) {
+      if (stage_ == Stage::kSustain && percussive_ && percussive_auto_idle_) {
         // A note started with zero sustain (percussive) ends at the decay floor.
         kill();
       }

@@ -3,8 +3,10 @@
 ///        the only GS it reads, only under GM program resolution, offline from
 ///        the event stream and live from the host's pushed SysEx alone.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -20,6 +22,7 @@
 #include "midi/part_rig.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/command.h"
 #include "support/midi_render.h"
@@ -30,6 +33,7 @@ using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrumentSourceOutput;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
+using sonare::midi::synth::SynthEngineMode;
 using sonare::test::event;
 
 constexpr double kRate = 48000.0;
@@ -210,6 +214,274 @@ TEST_CASE("native: a GS insertion effect reaches the part it is assigned to and 
   REQUIRE(wet.other_l == dry.other_l);
   REQUIRE(wet.other_r == dry.other_r);
   REQUIRE(wet.fallback_l == dry.fallback_l);
+}
+
+TEST_CASE("native: a bussed piano's board return is silenced by its part rig",
+          "[midi][native][gsfx][piano]") {
+  NativeSynthConfig dry_cfg = offline_config();
+  dry_cfg.use_gm_programs = false;
+  dry_cfg.patch.mode = SynthEngineMode::kPiano;
+
+  NativeSynth dry(dry_cfg);
+  dry.prepare(kRate, 256);
+  dry.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+  std::vector<float> dry_l(kSamples, 0.0f), dry_r(kSamples, 0.0f);
+  float* dry_channels[] = {dry_l.data(), dry_r.data()};
+  dry.process(dry_channels, 2, kSamples);
+
+  NativeSynthConfig bussed_cfg = dry_cfg;
+  NativeSynth bussed(bussed_cfg);
+  sonare::midi::PartRig mute_rig;
+  mute_rig.mode = sonare::midi::PartRigMode::kChain;
+  mute_rig.stages = {{"utility.gain", R"({"levelDb":-1000})"}};
+  REQUIRE(bussed.set_part_rig(0, mute_rig));
+  bussed.prepare(kRate, 256);
+  bussed.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+  std::vector<float> bussed_l(kSamples, 0.0f), bussed_r(kSamples, 0.0f);
+  float* bussed_channels[] = {bussed_l.data(), bussed_r.data()};
+  bussed.process(bussed_channels, 2, kSamples);
+
+  REQUIRE(energy(dry_l) > 1.0e-6);
+  REQUIRE(energy(dry_r) > 1.0e-6);
+  REQUIRE(energy(bussed_l) == 0.0);
+  REQUIRE(energy(bussed_r) == 0.0);
+}
+
+TEST_CASE("native: physical bodies follow a held note through rig changes",
+          "[midi][native][gsfx][gs-physical-review]") {
+  for (const uint8_t program : {uint8_t{0}, uint8_t{25}}) {
+    CAPTURE(program);
+    NativeSynthConfig cfg = offline_config();
+    cfg.use_gm_programs = false;
+    cfg.patch = sonare::midi::synth::gm_fallback_patch(0, program);
+    NativeSynth reference(cfg), changed(cfg);
+    for (NativeSynth* synth : {&reference, &changed}) {
+      synth->prepare(kRate, 256);
+      synth->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+      sonare::test::render_stereo(*synth, 2048);
+    }
+    sonare::midi::PartRig mute;
+    mute.mode = sonare::midi::PartRigMode::kChain;
+    mute.stages = {{"utility.gain", R"({"levelDb":-1000})"}};
+    REQUIRE(changed.set_part_rig(0, mute));
+    const auto muted = sonare::test::render_stereo(changed, 4096);
+    sonare::test::render_stereo(reference, 4096);
+    REQUIRE(energy(muted.left) == 0.0);
+    REQUIRE(energy(muted.right) == 0.0);
+    sonare::midi::PartRig direct;
+    direct.mode = sonare::midi::PartRigMode::kNone;
+    REQUIRE(changed.set_part_rig(0, direct));
+    const auto expected = sonare::test::render_stereo(reference, 4096);
+    const auto resumed = sonare::test::render_stereo(changed, 4096);
+    REQUIRE(energy(expected.left) > 1e-6);
+    REQUIRE(static_cast<bool>(resumed.left == expected.left));
+    REQUIRE(static_cast<bool>(resumed.right == expected.right));
+  }
+}
+
+TEST_CASE("native: output gain scales the entire piano body",
+          "[midi][native][piano][gs-physical-review]") {
+  for (const bool factory : {false, true}) {
+    CAPTURE(factory);
+    const auto play = [factory](float gain) {
+      NativeSynthConfig cfg = offline_config();
+      cfg.use_gm_programs = false;
+      cfg.patch = sonare::midi::synth::gm_fallback_patch(0, 0);
+      cfg.gain = gain;
+      if (!factory) cfg.insert_factory = nullptr;
+      NativeSynth synth(cfg);
+      synth.prepare(kRate, 256);
+      synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+      return sonare::test::render_stereo(synth, 12000);
+    };
+    const auto full = play(1.0f);
+    const auto half = play(0.5f);
+    const auto zero = play(0.0f);
+    REQUIRE(energy(full.left) > 1e-6);
+    float worst = 0.0f;
+    for (size_t i = 0; i < full.left.size(); ++i) {
+      worst = std::max(worst, std::fabs(half.left[i] - 0.5f * full.left[i]));
+      worst = std::max(worst, std::fabs(half.right[i] - 0.5f * full.right[i]));
+    }
+    CAPTURE(worst);
+    CHECK(worst < 1e-7f);
+    CHECK(energy(zero.left) == 0.0);
+    CHECK(energy(zero.right) == 0.0);
+  }
+}
+
+TEST_CASE("native: All Sound Off preserves another part's body-only tail",
+          "[midi][native][piano][gs-physical-review]") {
+  for (const bool dc_block : {false, true}) {
+    CAPTURE(dc_block);
+    NativeSynthConfig cfg = offline_config();
+    cfg.use_gm_programs = false;
+    cfg.dc_block = dc_block;
+    cfg.patch = sonare::midi::synth::gm_fallback_patch(0, 0);
+    cfg.patch.amp_env.release_ms = 1.0f;
+    NativeSynth reference(cfg), changed(cfg);
+    for (NativeSynth* synth : {&reference, &changed}) {
+      synth->prepare(kRate, 256);
+      synth->on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 48, 110)));
+      sonare::test::render_stereo(*synth, 4096);
+      synth->on_event(0, event(sonare::midi::make_midi1_note_off(0, 1, 48, 0)));
+      sonare::test::render_stereo(*synth, 4096);
+      REQUIRE(synth->active_voice_count() == 0);
+    }
+    changed.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+    const auto expected = sonare::test::render_stereo(reference, 4096);
+    const auto actual = sonare::test::render_stereo(changed, 4096);
+    REQUIRE(energy(expected.left) > 1e-6);
+    CHECK(static_cast<bool>(actual.left == expected.left));
+    CHECK(static_cast<bool>(actual.right == expected.right));
+    changed.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 120, 0)));
+    const auto silenced = sonare::test::render_stereo(changed, 4096);
+    CHECK(energy(silenced.left) == 0.0);
+    CHECK(energy(silenced.right) == 0.0);
+  }
+}
+
+TEST_CASE("native: a body-only tail keeps its source when its rig changes",
+          "[midi][native][gsfx][gs-physical-review]") {
+  for (const bool start_bussed : {false, true}) {
+    CAPTURE(start_bussed);
+    NativeSynthConfig cfg = offline_config();
+    cfg.use_gm_programs = false;
+    cfg.patch = sonare::midi::synth::gm_fallback_patch(0, 0);
+    cfg.patch.amp_env.release_ms = 1.0f;
+    NativeSynth synth(cfg);
+    sonare::midi::PartRig identity;
+    identity.mode = sonare::midi::PartRigMode::kChain;
+    identity.stages = {{"utility.gain", R"({"levelDb":0})"}};
+    sonare::midi::PartRig direct;
+    direct.mode = sonare::midi::PartRigMode::kNone;
+    REQUIRE(synth.set_part_rig(0, start_bussed ? identity : direct));
+    synth.prepare(kRate, 256);
+    MidiEvent strike = event(sonare::midi::make_midi1_note_on(0, 0, 48, 110));
+    strike.source_track_id = 1;
+    synth.on_event(0, strike);
+    const auto render_lanes = [&]() {
+      std::array<std::vector<float>, 4> lanes;
+      for (auto& lane : lanes) lane.assign(4096, 0.0f);
+      float* fallback[] = {lanes[0].data(), lanes[1].data()};
+      float* source[] = {lanes[2].data(), lanes[3].data()};
+      const MidiInstrumentSourceOutput outputs[] = {{0, fallback}, {1, source}};
+      REQUIRE(synth.process_source_tracks(outputs, 2, 2, 4096));
+      return lanes;
+    };
+    render_lanes();
+    MidiEvent release = event(sonare::midi::make_midi1_note_off(0, 0, 48, 0));
+    release.source_track_id = 1;
+    synth.on_event(0, release);
+    render_lanes();
+    REQUIRE(synth.active_voice_count() == 0);
+    REQUIRE(synth.set_part_rig(0, start_bussed ? direct : identity));
+    const auto tail = render_lanes();
+    REQUIRE(energy(tail[2]) > 1e-6);
+    CHECK(energy(tail[0]) < 1e-12);
+    CHECK(energy(tail[1]) < 1e-12);
+  }
+}
+
+TEST_CASE("native: absolute pitch selects the GM drum target piece",
+          "[midi][native][midi2][gs-physical-review]") {
+  for (const bool gm : {false, true}) {
+    CAPTURE(gm);
+    const auto play = [gm](uint8_t note, bool absolute) {
+      NativeSynthConfig cfg = offline_config();
+      cfg.use_gm_programs = gm;
+      cfg.patch.mode = SynthEngineMode::kPercussion;
+      cfg.patch.percussion.gm_kit = true;
+      NativeSynth synth(cfg);
+      synth.prepare(kRate, 256);
+      if (absolute) {
+        synth.on_event(0,
+                       event(sonare::midi::make_midi2_per_note_controller(0, 9, 60, 3, 42u << 25)));
+      }
+      synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 9, note, 0xC000)));
+      return sonare::test::render_stereo(synth, 8192);
+    };
+    const auto direct = play(42, false);
+    const auto absolute = play(60, true);
+    REQUIRE(energy(direct.left) > 1e-6);
+    CHECK(static_cast<bool>(absolute.left == direct.left));
+    CHECK(static_cast<bool>(absolute.right == direct.right));
+  }
+}
+
+TEST_CASE("physical hosts: inactive EFX buses age source ownership before reuse",
+          "[midi][native][sf2][gsfx][gs-physical-review]") {
+  const auto exercise = [](auto& synth, bool unit, int idle_frames) {
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, kLead)));
+    sonare::midi::PartRig identity;
+    identity.mode = sonare::midi::PartRigMode::kChain;
+    identity.stages = {{"utility.gain", R"({"levelDb":0})"}};
+    sonare::midi::PartRig direct;
+    direct.mode = sonare::midi::PartRigMode::kNone;
+    if (unit) synth.on_event(0, sysex_event(kDistortion));
+    const auto route = [&](bool enabled) {
+      if (unit) {
+        const auto msg = dt1(0x404122u, {static_cast<uint8_t>(enabled)});
+        synth.on_event(0, sysex_event(msg));
+      } else {
+        REQUIRE(synth.set_part_rig(0, enabled ? identity : direct));
+      }
+    };
+    const auto render = [&](int frames) {
+      std::array<std::vector<float>, 6> lanes;
+      for (auto& lane : lanes) lane.assign(frames, 0.0f);
+      float* fallback[] = {lanes[0].data(), lanes[1].data()};
+      float* old_source[] = {lanes[2].data(), lanes[3].data()};
+      float* new_source[] = {lanes[4].data(), lanes[5].data()};
+      const MidiInstrumentSourceOutput outputs[] = {
+          {0, fallback}, {1, old_source}, {2, new_source}};
+      REQUIRE(synth.process_source_tracks(outputs, 3, 2, frames));
+      return lanes;
+    };
+    route(true);
+    auto note = event(sonare::midi::make_midi1_note_on(0, 0, 48, 110));
+    note.source_track_id = 1;
+    synth.on_event(0, note);
+    render(4096);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+    route(false);
+    for (int i = 0; i < idle_frames; i += 256) render(256);
+    route(true);
+    note = event(sonare::midi::make_midi1_note_on(0, 0, 67, 110));
+    note.source_track_id = 2;
+    synth.on_event(0, note);
+    const auto result = render(4096);
+    REQUIRE(energy(result[4]) > 1e-6);
+    return energy(result[2]);
+  };
+  for (const bool sf2 : {false, true}) {
+    for (const bool unit : {false, true}) {
+      CAPTURE(sf2, unit);
+      const auto run = [&](int idle_frames) {
+        if (sf2) {
+          sonare::midi::synth::Sf2PlayerConfig cfg;
+          cfg.gain = 1.0f;
+          cfg.dc_block = false;
+          cfg.realize_efx_inline = true;
+          cfg.insert_factory = offline_config().insert_factory;
+#if defined(SONARE_MIDI_WITH_FX)
+          cfg.effects.enable_reverb = false;
+          cfg.effects.enable_chorus = false;
+          cfg.effects.enable_delay = false;
+#endif
+          sonare::midi::synth::Sf2Player synth(cfg);
+          return exercise(synth, unit, idle_frames);
+        }
+        NativeSynth synth(offline_config());
+        return exercise(synth, unit, idle_frames);
+      };
+      const double immediate = run(0);
+      const double aged = run(96000);
+      REQUIRE(immediate > 1e-8);
+      CHECK(aged < immediate * 0.1);
+    }
+  }
 }
 
 TEST_CASE("native: a GS reset clears the insertion effect", "[midi][native][gsfx]") {

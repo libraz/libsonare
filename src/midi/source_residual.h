@@ -78,6 +78,23 @@ class SourceResidualSplitter {
     chunk_energy_[slot] += l * l + r * r;
   }
 
+  /// Attribute a component's energy using an upstream splitter's learned
+  /// owners. Advance that splitter with flush() first. Shares apply to energy,
+  /// rather than amplitude, so chaining splitters does not square the shares.
+  void accumulate_residual_energy(const SourceResidualSplitter& owners, float energy) noexcept {
+    if (energy <= 0.0f) return;
+    float sum = 0.0f;
+    for (size_t s = 0; s < owners.slot_count_; ++s) sum += owners.weights_[s];
+    if (sum <= 0.0f) {
+      chunk_energy_[slot_for(0)] += energy;
+      return;
+    }
+    for (size_t s = 0; s < owners.slot_count_; ++s) {
+      if (owners.weights_[s] <= 0.0f) continue;
+      chunk_energy_[slot_for(owners.track_ids_[s])] += energy * (owners.weights_[s] / sum);
+    }
+  }
+
   /// AUDIO thread: folds the in-flight chunk's energy into each source's
   /// smoothed weight, then splits @p residual_l / @p residual_r (n samples,
   /// n <= kResidualChunk, indexed 0..n-1) across @p outputs in proportion to
