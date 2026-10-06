@@ -7,24 +7,8 @@ namespace sonare::midi::synth {
 
 namespace {
 
-uint32_t excitation_axis_mask(ControllerAxis axis) noexcept {
-  switch (axis) {
-    case ControllerAxis::kExcitation:
-      return kAxisForce;
-    case ControllerAxis::kPosition:
-      return kAxisPosition;
-    case ControllerAxis::kBrightness:
-      return kAxisBrightness;
-    case ControllerAxis::kMorph:
-      return kAxisMorph;
-    case ControllerAxis::kNone:
-    case ControllerAxis::kLoudness:
-    case ControllerAxis::kPitchCents:
-    case ControllerAxis::kVibratoDepth:
-      return kAxisNone;
-  }
-  return kAxisNone;
-}
+using native_synth_detail::excitation_axis_mask;
+using native_synth_detail::excitation_value;
 
 void store_excitation_value(ExcitationAxes& out, ControllerAxis axis, float value) noexcept {
   switch (axis) {
@@ -71,24 +55,68 @@ ExcitationAxes NativeSynth::channel_excitation(const ControllerAxisState& axes,
   return out;
 }
 
-void NativeSynth::push_excitation_control(uint8_t channel, uint32_t changed_mask) noexcept {
+void NativeSynth::push_excitation_control(uint8_t channel, uint32_t changed_mask,
+                                          bool mpe_dimension, MpeDimension dimension) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   uint32_t present = kAxisNone;
   const ExcitationAxes base = channel_excitation(st.axes, present);
   present &= changed_mask;
   for (NativeSynthVoice& v : pool_) {
-    if (!v.active || v.channel != ch || v.patch == nullptr) continue;
+    if (!v.active || (mpe_dimension && !v.key_down) || v.channel != ch || v.patch == nullptr) {
+      continue;
+    }
     // The axes override the preset only once a controller has reached them, so
     // a channel nothing has bound leaves every voice on its own voicing.
-    if (present != kAxisNone) v.push_excitation(base, present);
+    if (present == kAxisNone) continue;
+    for (size_t i = 0; i < kControllerAxisCount; ++i) {
+      const ControllerAxis axis = static_cast<ControllerAxis>(i);
+      const uint32_t engine_bit = excitation_axis_mask(axis);
+      if ((present & engine_bit) == 0u) continue;
+      const uint32_t bit = 1u << static_cast<uint32_t>(i);
+      v.live_excitation_axes.set(axis, excitation_value(base, axis));
+      if (!mpe_dimension) {
+        v.live_mpe_pressure_axes &= ~bit;
+        v.live_mpe_timbre_axes &= ~bit;
+        v.live_mpe_bend_axes &= ~bit;
+        continue;
+      }
+      switch (dimension) {
+        case MpeDimension::kPressure:
+          v.live_mpe_pressure_axes |= bit;
+          v.live_mpe_timbre_axes &= ~bit;
+          v.live_mpe_bend_axes &= ~bit;
+          break;
+        case MpeDimension::kTimbre:
+          v.live_mpe_timbre_axes |= bit;
+          v.live_mpe_pressure_axes &= ~bit;
+          v.live_mpe_bend_axes &= ~bit;
+          break;
+        case MpeDimension::kBend:
+          v.live_mpe_bend_axes |= bit;
+          v.live_mpe_pressure_axes &= ~bit;
+          v.live_mpe_timbre_axes &= ~bit;
+          break;
+      }
+    }
+    v.push_excitation(base, present);
   }
 }
 
-void NativeSynth::restore_excitation_control(uint8_t channel) noexcept {
+void NativeSynth::restore_excitation_control(uint8_t channel, bool mpe_dimension) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   for (NativeSynthVoice& v : pool_) {
-    if (v.active && v.channel == ch && v.patch != nullptr) v.restore_excitation_base();
+    if (v.active && (!mpe_dimension || v.key_down) && v.channel == ch && v.patch != nullptr) {
+      v.restore_excitation_base();
+      v.live_excitation_axes.reset();
+      v.live_mpe_pressure_axes = kAxisNone;
+      v.live_mpe_timbre_axes = kAxisNone;
+      v.live_mpe_bend_axes = kAxisNone;
+      v.mpe_member_pressure = Control32::from_raw(0);
+      v.mpe_member_timbre = Control32::from_raw(0);
+      v.mpe_member_pressure_present = false;
+      v.mpe_member_timbre_present = false;
+    }
   }
 }
 
@@ -96,6 +124,9 @@ bool NativeSynth::set_controller_profile(const ControllerProfile& profile) noexc
   controller_profile_ = profile;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].axes.reset();
+    channels_[ch].mpe_pressure_axes = kAxisNone;
+    channels_[ch].mpe_timbre_axes = kAxisNone;
+    channels_[ch].mpe_bend_axes = kAxisNone;
     refresh_channel_mod(ch);
     restore_excitation_control(ch);
   }
@@ -180,23 +211,33 @@ void NativeSynth::refresh_mpe_note_mods(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   const uint8_t bend_note = mpe_attributed_note(ch, MpeDimension::kBend);
   const uint8_t pressure_note = mpe_attributed_note(ch, MpeDimension::kPressure);
-  if (bend_note == kControllerAnyNote && pressure_note == kControllerAnyNote) {
-    for (NativeSynthVoice& v : pool_) {
-      if (v.channel == ch) v.mpe_mod_active = false;
+  const Sf2ChannelMod& mod = channel_mods_[ch];
+  const float member_bend_cents =
+      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * 100.0f;
+  const uint8_t manager = mpe_.role(ch) == MpeChannelRole::kMember
+                              ? (mpe_.zone_of(ch) == MpeZone::kLower ? kMpeLowerManagerChannel
+                                                                     : kMpeUpperManagerChannel)
+                              : ch;
+  const float manager_pressure01 = mpe_.pressure(manager) / 127.0f;
+
+  for (NativeSynthVoice& v : pool_) {
+    if (!v.active || v.channel != ch) continue;
+    if (v.mpe_release_frozen) {
+      refresh_frozen_mpe_voice(v, ch);
+      continue;
     }
+    if (bend_note == kControllerAnyNote && pressure_note == kControllerAnyNote) {
+      v.mpe_mod_active = false;
+    }
+  }
+  if (bend_note == kControllerAnyNote && pressure_note == kControllerAnyNote) {
     return;
   }
   // What a note the value was not attributed to keeps: the manager's
   // contribution, which reaches every note in the zone whatever the tracking
   // rule says about the member's own.
-  const Sf2ChannelMod& mod = channel_mods_[ch];
-  const float member_bend_cents =
-      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * 100.0f;
-  const uint8_t manager =
-      mpe_.zone_of(ch) == MpeZone::kLower ? kMpeLowerManagerChannel : kMpeUpperManagerChannel;
-  const float manager_pressure01 = mpe_.pressure(manager) / 127.0f;
   for (NativeSynthVoice& v : pool_) {
-    if (!v.active || v.channel != ch) continue;
+    if (!v.active || !v.key_down || v.channel != ch || v.mpe_release_frozen) continue;
     const bool takes_bend = bend_note == kControllerAnyNote || v.note == bend_note;
     const bool takes_pressure = pressure_note == kControllerAnyNote || v.note == pressure_note;
     v.mpe_mod_active = !takes_bend || !takes_pressure;
@@ -207,24 +248,259 @@ void NativeSynth::refresh_mpe_note_mods(uint8_t channel) noexcept {
   }
 }
 
-Ump NativeSynth::mpe_controller_message(uint8_t channel, MpeDimension dimension) const noexcept {
-  return dimension == MpeDimension::kPressure
-             ? make_midi1_channel_pressure(0, channel, mpe_.pressure_u7(channel))
-             : make_midi1_control_change(0, channel, kMpeTimbreCc, mpe_.timbre_u7(channel));
+uint32_t NativeSynth::mpe_profile_axis_mask(MpeDimension dimension) const noexcept {
+  uint32_t mask = kAxisNone;
+  for (size_t i = 0; i < controller_profile_.binding_count(); ++i) {
+    const ControllerBinding& binding = controller_profile_.binding_at(i);
+    const bool bend =
+        dimension == MpeDimension::kBend && binding.input == ControllerInput::kPitchBend;
+    const bool pressure =
+        dimension == MpeDimension::kPressure && binding.input == ControllerInput::kChannelPressure;
+    const bool timbre = dimension == MpeDimension::kTimbre &&
+                        binding.input == ControllerInput::kControlChange &&
+                        binding.index == kMpeTimbreCc;
+    if (bend || pressure || timbre) mask |= 1u << static_cast<uint32_t>(binding.axis);
+  }
+  return mask;
+}
+
+void NativeSynth::freeze_mpe_voice(NativeSynthVoice& voice, uint8_t channel) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  if (mpe_.role(ch) != MpeChannelRole::kMember) return;
+
+  const Sf2ChannelMod& current = channel_mods_[ch];
+  const Sf2ChannelMod effective = voice.mpe_mod_active ? voice.mpe_mod : current;
+  voice.mpe_mod = effective;
+  voice.mpe_mod_active = true;
+  voice.mpe_release_frozen = true;
+  voice.mpe_frozen_axis_mask = mpe_profile_axis_mask(MpeDimension::kBend) |
+                               mpe_profile_axis_mask(MpeDimension::kPressure) |
+                               mpe_profile_axis_mask(MpeDimension::kTimbre);
+  voice.mpe_frozen_axis_present = channels_[ch].axes.present & voice.mpe_frozen_axis_mask;
+  voice.mpe_frozen_source_mask = (channels_[ch].mpe_pressure_axes | channels_[ch].mpe_timbre_axes |
+                                  channels_[ch].mpe_bend_axes) &
+                                 voice.mpe_frozen_axis_mask;
+  voice.mpe_frozen_axis_values = {};
+  for (size_t i = 0; i < kControllerAxisCount; ++i) {
+    const uint32_t bit = 1u << static_cast<uint32_t>(i);
+    const ControllerAxis axis = static_cast<ControllerAxis>(i);
+    if (excitation_axis_mask(axis) != kAxisNone) {
+      // Attributed engine axes live on the voice, not its channel template.
+      voice.mpe_frozen_axis_present &= ~bit;
+      voice.mpe_frozen_source_mask &= ~bit;
+      if (voice.live_excitation_axes.has(axis)) {
+        voice.mpe_frozen_axis_present |= bit;
+        voice.mpe_frozen_axis_values[i] = voice.live_excitation_axes.values[i];
+      }
+      if (((voice.live_mpe_pressure_axes | voice.live_mpe_timbre_axes | voice.live_mpe_bend_axes) &
+           bit) != 0u) {
+        voice.mpe_frozen_source_mask |= bit;
+      }
+      continue;
+    }
+    if ((voice.mpe_frozen_axis_present & bit) != 0u) {
+      voice.mpe_frozen_axis_values[i] = channels_[ch].axes.values[i];
+    }
+  }
+  voice.mpe_frozen_aftertouch01 = effective.aftertouch01;
+  // The member's own bend: the effective pitch less the channel's other bend and the manager's.
+  voice.mpe_frozen_member_bend_cents = effective.pitch_cents -
+                                       (current.pitch_cents - mpe_.bend_semitones(ch) * 100.0f) -
+                                       mpe_.manager_bend_semitones(ch) * 100.0f;
+}
+
+void NativeSynth::refresh_frozen_mpe_voice(NativeSynthVoice& voice, uint8_t channel) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& state = channels_[ch];
+  const Sf2ChannelMod& current = channel_mods_[ch];
+  const float frozen_bend01 = voice.mpe_mod.pitch_bend01;
+  voice.mpe_mod = current;
+  voice.mpe_mod.pitch_bend01 = frozen_bend01;
+
+  const auto axis_has = [&](ControllerAxis axis) noexcept {
+    return (voice.mpe_frozen_axis_mask & (1u << static_cast<uint32_t>(axis))) != 0u;
+  };
+  const auto axis_present = [&](ControllerAxis axis) noexcept {
+    return (voice.mpe_frozen_axis_present & (1u << static_cast<uint32_t>(axis))) != 0u;
+  };
+  if (axis_has(ControllerAxis::kLoudness)) {
+    const float axis =
+        axis_present(ControllerAxis::kLoudness)
+            ? voice.mpe_frozen_axis_values[static_cast<size_t>(ControllerAxis::kLoudness)]
+            : 1.0f;
+    voice.mpe_mod.gain = sf2_cc_gain(state.volume) * sf2_cc_gain(state.expression) * axis;
+  }
+  if (axis_has(ControllerAxis::kPitchCents)) {
+    const float current_axis =
+        state.axes.has(ControllerAxis::kPitchCents)
+            ? state.axes.values[static_cast<size_t>(ControllerAxis::kPitchCents)]
+            : 0.0f;
+    const float frozen_axis =
+        axis_present(ControllerAxis::kPitchCents)
+            ? voice.mpe_frozen_axis_values[static_cast<size_t>(ControllerAxis::kPitchCents)]
+            : 0.0f;
+    voice.mpe_mod.pitch_cents += frozen_axis - current_axis;
+  }
+  if (axis_has(ControllerAxis::kVibratoDepth)) {
+    const float current_axis =
+        state.axes.has(ControllerAxis::kVibratoDepth)
+            ? state.axes.values[static_cast<size_t>(ControllerAxis::kVibratoDepth)]
+            : 0.0f;
+    const float frozen_axis =
+        axis_present(ControllerAxis::kVibratoDepth)
+            ? voice.mpe_frozen_axis_values[static_cast<size_t>(ControllerAxis::kVibratoDepth)]
+            : 0.0f;
+    voice.mpe_mod.extra_vibrato_cents += frozen_axis - current_axis;
+  }
+
+  const float current_member_bend_cents =
+      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * 100.0f;
+  voice.mpe_mod.pitch_cents += voice.mpe_frozen_member_bend_cents - current_member_bend_cents;
+  voice.mpe_mod.aftertouch01 = voice.mpe_frozen_aftertouch01;
+  voice.mpe_mod_active = true;
+}
+
+void NativeSynth::update_frozen_mpe_axis(uint8_t channel, ControllerAxis axis,
+                                         float value) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const uint32_t bit = 1u << static_cast<uint32_t>(axis);
+  for (NativeSynthVoice& voice : pool_) {
+    if (!voice.active || !voice.mpe_release_frozen || voice.channel != ch ||
+        (voice.mpe_frozen_axis_mask & bit) == 0u) {
+      continue;
+    }
+    voice.mpe_frozen_axis_present |= bit;
+    voice.mpe_frozen_axis_values[static_cast<size_t>(axis)] = value;
+    voice.mpe_frozen_source_mask &= ~bit;
+  }
+}
+
+void NativeSynth::apply_mpe_channel_axes(uint8_t channel, MpeDimension dimension,
+                                         Control32 combined) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const Ump message = dimension == MpeDimension::kPressure
+                          ? make_midi2_channel_pressure(0, ch, combined.raw)
+                          : make_midi2_control_change(0, ch, kMpeTimbreCc, combined.raw);
+  std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
+  const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+  ChannelState& state = channels_[ch];
+  for (size_t i = 0; i < count; ++i) {
+    const ControllerAxisValue& value = resolved[i];
+    state.axes.set(value.axis, value.value);
+    const uint32_t bit = 1u << static_cast<uint32_t>(value.axis);
+    switch (dimension) {
+      case MpeDimension::kPressure:
+        state.mpe_pressure_axes |= bit;
+        state.mpe_timbre_axes &= ~bit;
+        state.mpe_bend_axes &= ~bit;
+        break;
+      case MpeDimension::kTimbre:
+        state.mpe_timbre_axes |= bit;
+        state.mpe_pressure_axes &= ~bit;
+        state.mpe_bend_axes &= ~bit;
+        break;
+      case MpeDimension::kBend:
+        state.mpe_bend_axes |= bit;
+        state.mpe_pressure_axes &= ~bit;
+        state.mpe_timbre_axes &= ~bit;
+        break;
+    }
+  }
+  if (count != 0) refresh_channel_mod(ch);
+}
+
+void NativeSynth::apply_mpe_voice_axes(NativeSynthVoice& voice, uint8_t channel,
+                                       MpeDimension dimension, Control32 combined,
+                                       bool update_member_raw, Control32 member_raw,
+                                       bool member_present) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  if (update_member_raw) {
+    if (dimension == MpeDimension::kPressure) {
+      voice.mpe_member_pressure = member_raw;
+      voice.mpe_member_pressure_present = member_present;
+    } else if (dimension == MpeDimension::kTimbre) {
+      voice.mpe_member_timbre = member_raw;
+      voice.mpe_member_timbre_present = member_present;
+    }
+  }
+  const Ump message = dimension == MpeDimension::kPressure
+                          ? make_midi2_channel_pressure(0, ch, combined.raw)
+                          : make_midi2_control_change(0, ch, kMpeTimbreCc, combined.raw);
+  std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
+  const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+  uint32_t present = kAxisNone;
+  ExcitationAxes axes{};
+  for (size_t i = 0; i < count; ++i) {
+    const ControllerAxisValue& value = resolved[i];
+    const uint32_t engine_bit = excitation_axis_mask(value.axis);
+    if (engine_bit == kAxisNone) continue;
+    const uint32_t axis_bit = 1u << static_cast<uint32_t>(value.axis);
+    store_excitation_value(axes, value.axis, value.value);
+    present |= engine_bit;
+    voice.live_excitation_axes.set(value.axis, value.value);
+    if (dimension == MpeDimension::kPressure) {
+      voice.live_mpe_pressure_axes |= axis_bit;
+      voice.live_mpe_timbre_axes &= ~axis_bit;
+      voice.live_mpe_bend_axes &= ~axis_bit;
+    } else {
+      voice.live_mpe_timbre_axes |= axis_bit;
+      voice.live_mpe_pressure_axes &= ~axis_bit;
+      voice.live_mpe_bend_axes &= ~axis_bit;
+    }
+  }
+  if (present != kAxisNone) voice.push_excitation(axes, present);
 }
 
 void NativeSynth::push_mpe_controller_axis(uint8_t channel, MpeDimension dimension) noexcept {
   const MpeChannelRole channel_role = mpe_.role(channel);
   if (channel_role == MpeChannelRole::kUnassigned) return;
-  apply_resolved_input(mpe_controller_message(channel, dimension));
-  if (channel_role != MpeChannelRole::kManager) return;
-  // A member's combined value is its own plus the manager's bias, not the bias
-  // alone, so each member is resolved from its own channel rather than handed
-  // the manager's message (2.2.7, 2.2.8).
+  Control32 own = Control32::from_raw(0);
+  const bool own_present = mpe_.own_control(channel, dimension, &own);
+  if (channel_role == MpeChannelRole::kMember) {
+    const Control32 combined = dimension == MpeDimension::kPressure ? mpe_.pressure_control(channel)
+                                                                    : mpe_.timbre_control(channel);
+    apply_mpe_channel_axes(channel, dimension, combined);
+    const uint8_t target = mpe_attributed_note(channel, dimension);
+    for (NativeSynthVoice& voice : pool_) {
+      if (!voice.active || !voice.key_down || voice.channel != (channel & 0x0Fu) ||
+          (target != kControllerAnyNote && voice.note != target)) {
+        continue;
+      }
+      apply_mpe_voice_axes(voice, channel, dimension, combined, true, own, own_present);
+    }
+    return;
+  }
+
+  // The manager biases every member voice, each combined with its own value (2.2.7, 2.2.8).
+  const Control32 manager = own;
+  apply_mpe_channel_axes(channel, dimension, manager);
+  for (NativeSynthVoice& voice : pool_) {
+    if (!voice.active || voice.channel != (channel & 0x0Fu)) continue;
+    apply_mpe_voice_axes(voice, channel, dimension, manager, false, {}, false);
+  }
   const MpeZone zone = mpe_.zone_of(channel);
   for (uint8_t member = 0; member < 16; ++member) {
     if (mpe_.role(member) != MpeChannelRole::kMember || mpe_.zone_of(member) != zone) continue;
-    apply_resolved_input(mpe_controller_message(member, dimension));
+    Control32 member_own = Control32::from_raw(0);
+    const bool member_own_present = mpe_.own_control(member, dimension, &member_own);
+    const Control32 combined =
+        MpeState::combine_control(member_own, member_own_present, manager, own_present);
+    apply_mpe_channel_axes(member, dimension, combined);
+    for (NativeSynthVoice& voice : pool_) {
+      if (!voice.active || !voice.key_down || voice.channel != member) continue;
+      Control32 voice_own = member_own;
+      bool voice_own_present = member_own_present;
+      if (dimension == MpeDimension::kPressure) {
+        voice_own = voice.mpe_member_pressure;
+        voice_own_present = voice.mpe_member_pressure_present;
+      } else {
+        voice_own = voice.mpe_member_timbre;
+        voice_own_present = voice.mpe_member_timbre_present;
+      }
+      const Control32 voice_combined =
+          MpeState::combine_control(voice_own, voice_own_present, manager, own_present);
+      apply_mpe_voice_axes(voice, member, dimension, voice_combined, false, {}, false);
+    }
   }
 }
 
@@ -234,6 +510,7 @@ void NativeSynth::track_mpe_input(const Ump& ump) noexcept {
   if (!mpe_dimension_of(ump, &dimension) || dimension == MpeDimension::kBend) return;
   const bool midi1 = ump.message_type() == UmpMessageType::kMidi1ChannelVoice;
   const uint8_t ch = ump.channel() & 0x0Fu;
+  channels_[ch].last_mpe_controller = dimension;
   if (dimension == MpeDimension::kPressure) {
     mpe_.track_pressure(
         ch, midi1 ? Control32::from7(ump.note_number()) : Control32::from_raw(ump.words[1]));
@@ -258,6 +535,37 @@ void NativeSynth::apply_controller_input(const Ump& ump) noexcept {
   push_mpe_controller_axis(ch, dimension);
 }
 
+ExcitationAxes NativeSynth::apply_note_on_controller_input(const Ump& ump,
+                                                           uint32_t* out_mask) noexcept {
+  ExcitationAxes velocity_axes{};
+  if (out_mask == nullptr) return velocity_axes;
+  *out_mask = kAxisNone;
+
+  std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
+  const size_t count = controller_profile_.resolve(ump, resolved.data(), resolved.size());
+  if (count == 0) return velocity_axes;
+  const uint8_t ch = ump.channel() & 0x0Fu;
+  bool channel_moved = false;
+  for (size_t i = 0; i < count; ++i) {
+    const ControllerAxisValue& value = resolved[i];
+    const uint32_t excitation = excitation_axis_mask(value.axis);
+    if (excitation != kAxisNone) {
+      store_excitation_value(velocity_axes, value.axis, value.value);
+      *out_mask |= excitation;
+      continue;
+    }
+    channels_[ch].axes.set(value.axis, value.value);
+    const uint32_t bit = 1u << static_cast<uint32_t>(value.axis);
+    channels_[ch].mpe_pressure_axes &= ~bit;
+    channels_[ch].mpe_timbre_axes &= ~bit;
+    channels_[ch].mpe_bend_axes &= ~bit;
+    update_frozen_mpe_axis(ch, value.axis, value.value);
+    channel_moved = true;
+  }
+  if (channel_moved) refresh_channel_mod(ch);
+  return velocity_axes;
+}
+
 void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
   std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
   const size_t count = controller_profile_.resolve(ump, resolved.data(), resolved.size());
@@ -269,8 +577,10 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
   // state here, which is the same reason bind() refuses a per-note binding for
   // them, so they stay channel-wide rather than being narrowed and dropped.
   MpeDimension dimension = MpeDimension::kPressure;
+  const bool has_mpe_dimension = mpe_dimension_of(ump, &dimension);
+  const bool mpe_dimension = mpe_.role(ch) == MpeChannelRole::kMember && has_mpe_dimension;
   const uint8_t attributed =
-      mpe_dimension_of(ump, &dimension) ? mpe_attributed_note(ch, dimension) : kControllerAnyNote;
+      has_mpe_dimension ? mpe_attributed_note(ch, dimension) : kControllerAnyNote;
   bool channel_moved = false;
   uint32_t channel_changed_mask = kAxisNone;
   for (size_t i = 0; i < count; ++i) {
@@ -281,6 +591,31 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
     }
     if (value.note == kControllerAnyNote) {
       channels_[ch].axes.set(value.axis, value.value);
+      const uint32_t bit = 1u << static_cast<uint32_t>(value.axis);
+      if (mpe_dimension) {
+        switch (dimension) {
+          case MpeDimension::kBend:
+            channels_[ch].mpe_bend_axes |= bit;
+            channels_[ch].mpe_pressure_axes &= ~bit;
+            channels_[ch].mpe_timbre_axes &= ~bit;
+            break;
+          case MpeDimension::kPressure:
+            channels_[ch].mpe_pressure_axes |= bit;
+            channels_[ch].mpe_bend_axes &= ~bit;
+            channels_[ch].mpe_timbre_axes &= ~bit;
+            break;
+          case MpeDimension::kTimbre:
+            channels_[ch].mpe_timbre_axes |= bit;
+            channels_[ch].mpe_pressure_axes &= ~bit;
+            channels_[ch].mpe_bend_axes &= ~bit;
+            break;
+        }
+      } else {
+        channels_[ch].mpe_pressure_axes &= ~bit;
+        channels_[ch].mpe_timbre_axes &= ~bit;
+        channels_[ch].mpe_bend_axes &= ~bit;
+        update_frozen_mpe_axis(ch, value.axis, value.value);
+      }
       channel_moved = true;
       channel_changed_mask |= excitation_axis_mask(value.axis);
       continue;
@@ -290,18 +625,44 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
     // overwrites it in those voices: per-voice controller state is what MPE
     // adds, and until then the precedence is simply last writer wins.
     const uint32_t present = excitation_axis_mask(value.axis);
+    const uint32_t axis_bit = 1u << static_cast<uint32_t>(value.axis);
     ExcitationAxes axes{};
     store_excitation_value(axes, value.axis, value.value);
     if (present == kAxisNone) continue;
     for (NativeSynthVoice& v : pool_) {
-      if (v.active && v.note == value.note && v.channel == ch && v.patch != nullptr) {
+      if (v.active && (!mpe_dimension || v.key_down) && v.note == value.note && v.channel == ch &&
+          v.patch != nullptr) {
+        v.live_excitation_axes.set(value.axis, value.value);
+        if (!mpe_dimension) {
+          v.live_mpe_pressure_axes &= ~axis_bit;
+          v.live_mpe_timbre_axes &= ~axis_bit;
+          v.live_mpe_bend_axes &= ~axis_bit;
+        } else {
+          switch (dimension) {
+            case MpeDimension::kBend:
+              v.live_mpe_bend_axes |= axis_bit;
+              v.live_mpe_pressure_axes &= ~axis_bit;
+              v.live_mpe_timbre_axes &= ~axis_bit;
+              break;
+            case MpeDimension::kPressure:
+              v.live_mpe_pressure_axes |= axis_bit;
+              v.live_mpe_timbre_axes &= ~axis_bit;
+              v.live_mpe_bend_axes &= ~axis_bit;
+              break;
+            case MpeDimension::kTimbre:
+              v.live_mpe_timbre_axes |= axis_bit;
+              v.live_mpe_pressure_axes &= ~axis_bit;
+              v.live_mpe_bend_axes &= ~axis_bit;
+              break;
+          }
+        }
         v.push_excitation(axes, present);
       }
     }
   }
   if (!channel_moved) return;
   refresh_channel_mod(ch);
-  push_excitation_control(ch, channel_changed_mask);
+  push_excitation_control(ch, channel_changed_mask, mpe_dimension, dimension);
 }
 
 float NativeSynth::part_controller_position(int part, uint8_t source) const noexcept {

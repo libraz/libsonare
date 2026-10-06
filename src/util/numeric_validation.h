@@ -136,6 +136,17 @@ inline Int saturating_add(Int lhs, Int rhs) noexcept {
   return rhs >= 0 ? std::numeric_limits<Int>::max() : std::numeric_limits<Int>::lowest();
 }
 
+/// Rounds a frame count up to a whole sample for a tail or duration bound, so a
+/// fraction never shortens it. NaN and non-positive values give 0; a value past
+/// INT64_MAX (infinity included) saturates there.
+inline int64_t ceil_sample_count(double frames) noexcept {
+  if (!(frames > 0.0)) return 0;
+  constexpr double kMax = static_cast<double>(std::numeric_limits<int64_t>::max());
+  const double rounded_up = std::ceil(frames);
+  if (!(rounded_up < kMax)) return std::numeric_limits<int64_t>::max();
+  return static_cast<int64_t>(rounded_up);
+}
+
 /// Saturating integral subtraction for timeline/sample arithmetic.
 template <typename Int>
 inline Int saturating_sub(Int lhs, Int rhs) noexcept {

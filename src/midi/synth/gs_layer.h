@@ -26,6 +26,7 @@
 /// more than one direction, and the extensions on top. It is a specification
 /// rather than a guide.
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -137,6 +138,10 @@ static_assert(gs_rx_switch_bit(0x401012u) == gs_rx_switch_bit(GsRxSwitch::kSoft)
 static_assert(gs_rx_switch_bit(0x401023u) == gs_rx_switch_bit(GsRxSwitch::kBankSelect));
 static_assert(gs_rx_switch_bit(0x401024u) == gs_rx_switch_bit(GsRxSwitch::kBankSelectLsb));
 
+/// Range of a GS part offset (data byte - 64): 00 reads -64 and 7F reads +63.
+inline constexpr int8_t kGsPartOffsetMin = -64;
+inline constexpr int8_t kGsPartOffsetMax = 63;
+
 /// GS NRPN part parameters, stored as signed offsets from centre (data - 64).
 /// All-zero means "no edit" (the SoundFont patch plays unmodified).
 struct GsPartParams {
@@ -157,6 +162,19 @@ struct GsPartParams {
 
 /// @p gs as voice-applicable quantities (GsPartMod, channel_param_state.h).
 GsPartMod gs_part_mod(const GsPartParams& gs) noexcept;
+
+/// The GS EG time multipliers a tail bound is taken at; all 1 for parts no
+/// envelope-time edit has lengthened.
+struct EnvelopeTimeScales {
+  float attack = 1.0f;
+  float decay = 1.0f;
+  float release = 1.0f;
+};
+
+/// Whether @p a and @p b differ in an EG time, the three edits a tail reads.
+inline bool gs_eg_times_differ(const GsPartParams& a, const GsPartParams& b) noexcept {
+  return a.eg_attack != b.eg_attack || a.eg_decay != b.eg_decay || a.eg_release != b.eg_release;
+}
 
 /// The six controller sources of the controller-destination block (40 2x xx),
 /// in address order: the low byte is the source in its high nibble and the
@@ -329,6 +347,15 @@ inline constexpr uint8_t kGsToneModifyCount = 8;
 /// (docs/gs.md). @p value is the raw 0-127 byte, centred on 64. An index past
 /// the block is ignored.
 void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexcept;
+
+/// Applies a GS part NRPN (01/08, 09, 0A, 20, 21, 63, 64 or 66) to the same
+/// storage as its TONE MODIFY alias. Returns true when the address is one of
+/// those eight parameters.
+bool gs_apply_part_nrpn(GsPartParams& gs, uint8_t msb, uint8_t lsb, uint8_t value) noexcept;
+
+/// Applies Sound Controller CC#71-78 to the same storage as its TONE MODIFY
+/// alias. Returns true when @p controller is one of the eight.
+bool gs_apply_tone_modify_cc(GsPartParams& gs, uint8_t controller, uint8_t value) noexcept;
 
 /// Per-note drum overrides (GS NRPN msb 18/1A/1C/1D/1E/1F with the drum note as
 /// the lsb, and the drum setup addresses 41 m1/m2/m3/m4/m5/m6/m9 rr — PLAY NOTE
@@ -609,6 +636,22 @@ float gs_cutoff_offset_cents(int8_t offset) noexcept;
 float gs_resonance_gain(int8_t offset) noexcept;
 /// TVA envelope time: ~75 timecents per step -> time multiplier.
 float gs_time_scale(int8_t offset) noexcept;
+
+/// The multipliers of the slowest lengthening EG offsets among @p parts, each
+/// part's edits read through @p gs_of.
+template <typename Parts, typename GsOf>
+EnvelopeTimeScales gs_slowest_eg_time_scales(const Parts& parts, GsOf gs_of) noexcept {
+  int8_t attack = 0;
+  int8_t decay = 0;
+  int8_t release = 0;
+  for (const auto& part : parts) {
+    const GsPartParams& gs = gs_of(part);
+    attack = std::max(attack, gs.eg_attack);
+    decay = std::max(decay, gs.eg_decay);
+    release = std::max(release, gs.eg_release);
+  }
+  return {gs_time_scale(attack), gs_time_scale(decay), gs_time_scale(release)};
+}
 /// Vibrato rate: ~25 cents of LFO frequency per step -> frequency multiplier.
 float gs_vib_rate_scale(int8_t offset) noexcept;
 /// Vibrato depth: ~3 cents of added pitch depth per step.

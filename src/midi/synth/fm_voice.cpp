@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
@@ -30,6 +31,32 @@ constexpr FmAlgorithmSpec kFmAlgorithms[] = {
 };
 
 }  // namespace
+
+int64_t fm_one_shot_tail_samples(const FmPatchParams& params, double sample_rate) noexcept {
+  if (!(sample_rate > 0.0)) return 0;
+
+  const size_t algo = static_cast<size_t>(
+      std::clamp(static_cast<int>(params.algorithm), 0,
+                 static_cast<int>(sizeof(kFmAlgorithms) / sizeof(kFmAlgorithms[0])) - 1));
+  const FmAlgorithmSpec& spec = kFmAlgorithms[algo];
+  int64_t longest = 0;
+  for (int i = 0; i < kMaxFmOperators; ++i) {
+    const FmOperatorParams& op = params.ops[static_cast<size_t>(i)];
+    if ((spec.carrier_mask & (1u << i)) == 0 || !(op.level > 0.0f)) continue;
+    if (op.env.sustain > DahdsrEnvelope::kSilenceLevel) {
+      return std::numeric_limits<int64_t>::max();
+    }
+
+    // Key-rate scaling is exp2(-krs * octaves above middle C); note 0, five below, is slowest.
+    const float krs =
+        std::isfinite(op.key_rate_scale) ? std::clamp(op.key_rate_scale, 0.0f, 1.0f) : 0.0f;
+    DahdsrConfig env = op.env;
+    if (krs > 0.0f) env.decay_ms = std::max(1.0f, env.decay_ms * std::exp2(5.0f * krs));
+    longest =
+        std::max(longest, DahdsrEnvelope::one_shot_tail_samples(sample_rate, env, 1.0f, 1.0f));
+  }
+  return longest;
+}
 
 void FmVoiceCore::start(const FmPatchParams& params, double sample_rate, uint8_t note,
                         Velocity16 velocity) noexcept {
@@ -100,6 +127,16 @@ float FmVoiceCore::render(float pitch_ratio) noexcept {
     if (carrier_mask_ & (1u << i)) mix += y;
   }
   return mix * carrier_norm_;
+}
+
+bool FmVoiceCore::finished() const noexcept {
+  for (int i = 0; i < kMaxFmOperators; ++i) {
+    if ((carrier_mask_ & (1u << i)) != 0 && ops_[static_cast<size_t>(i)].level > 0.0f &&
+        ops_[static_cast<size_t>(i)].env.active()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void FmVoiceCore::release() noexcept {

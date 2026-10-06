@@ -128,13 +128,6 @@ float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) n
   return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * kCentsPerSemitone);
 }
 
-/// RPN Null (7F 7F): leaves nothing selected, so later data entry is discarded.
-/// Selecting an RPN already dropped a selected NRPN — this makes the neutral
-/// state explicit rather than an RPN number nothing happens to answer.
-void deselect_on_rpn_null(ChannelParamState& params) noexcept {
-  if (params.rpn_msb == 0x7Fu && params.rpn_lsb == 0x7Fu) params.reset();
-}
-
 }  // namespace
 
 void Sf2Player::bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note,
@@ -851,39 +844,12 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
 void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
-  const int8_t offset = static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64);
-  if (st.params.nrpn_msb == 0x01) {
-    // GS part parameters (relative offsets onto the SoundFont generators).
-    switch (st.params.nrpn_lsb) {
-      case 0x08:
-        st.gs.vibrato_rate = offset;
-        break;
-      case 0x09:
-        st.gs.vibrato_depth = offset;
-        break;
-      case 0x0A:
-        st.gs.vibrato_delay = offset;
-        break;
-      case 0x20:
-        st.gs.tvf_cutoff = offset;
-        break;
-      case 0x21:
-        st.gs.tvf_resonance = offset;
-        break;
-      case 0x63:
-        st.gs.eg_attack = offset;
-        break;
-      case 0x64:
-        st.gs.eg_decay = offset;
-        break;
-      case 0x66:
-        st.gs.eg_release = offset;
-        break;
-      default:
-        break;
-    }
+  const GsPartParams before = st.gs;
+  if (gs_apply_part_nrpn(st.gs, st.params.nrpn_msb, st.params.nrpn_lsb, value)) {
+    if (gs_eg_times_differ(before, st.gs)) raise_tail();
     return;
   }
+  const int8_t offset = static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64);
   // A melodic part has no map for the edit to land in, so the write is dropped
   // here rather than reaching a slab — the same guard as before the re-key.
   const bool is_drum = effective_bank(ch) == kDrumBank;
@@ -1089,9 +1055,9 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
     case 76:
     case 77:
     case 78: {
-      // The eight controllers are contiguous but not in address order.
-      static constexpr uint8_t kToneModifyIndex[8] = {3, 6, 4, 2, 5, 0, 1, 7};
-      gs_apply_tone_modify(st.gs, kToneModifyIndex[controller - 71u], value);
+      const GsPartParams before = st.gs;
+      gs_apply_tone_modify_cc(st.gs, controller, value);
+      if (gs_eg_times_differ(before, st.gs)) raise_tail();
       break;
     }
     case 98:  // NRPN LSB
@@ -1102,11 +1068,11 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       break;
     case 100:  // RPN LSB
       st.params.select_rpn_lsb(value);
-      deselect_on_rpn_null(st.params);
+      st.params.deselect_on_rpn_null();
       break;
     case 101:  // RPN MSB
       st.params.select_rpn_msb(value);
-      deselect_on_rpn_null(st.params);
+      st.params.deselect_on_rpn_null();
       break;
     case 64:
       sustain_cc(ch, value);

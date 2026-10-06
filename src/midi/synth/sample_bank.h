@@ -110,6 +110,17 @@ class SampleBank {
   /// than blended.
   SampleZoneMix find_mix(int32_t set, uint8_t key, Velocity16 velocity) const noexcept;
 
+  /// Zones of @p set in lookup order; 0 for a set the bank does not have.
+  size_t zone_count(int32_t set) const noexcept {
+    return set >= 0 && static_cast<size_t>(set) < sets_.size()
+               ? sets_[static_cast<size_t>(set)].size()
+               : 0;
+  }
+  /// Zone @p index of @p set; @p index must be below zone_count(@p set).
+  const SampleZone& zone_at(int32_t set, size_t index) const noexcept {
+    return sets_[static_cast<size_t>(set)][index];
+  }
+
  private:
   /// Pool region and header of one added sample.
   struct Sample {

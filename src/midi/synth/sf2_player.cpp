@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -13,6 +14,7 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/ump.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -24,6 +26,46 @@ constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 /// share of the bus-wide residual (part insert/body/reverb tail after its dry
 /// voice stops) decays toward the other live sources.
 constexpr float kResidualTauSeconds = 0.5f;
+
+bool ranges_overlap(const Sf2Zone& lhs, const Sf2Zone& rhs) noexcept {
+  return std::max(lhs.key_lo, rhs.key_lo) <= std::min(lhs.key_hi, rhs.key_hi) &&
+         std::max(lhs.vel_lo, rhs.vel_lo) <= std::min(lhs.vel_hi, rhs.vel_hi);
+}
+
+int64_t instrument_release_timecents(const Sf2Zone* global, const Sf2Zone& local) noexcept {
+  int64_t release = -12000;
+  const auto apply = [&release](const Sf2Zone& zone) noexcept {
+    for (const Sf2Gen& gen : zone.gens) {
+      if (gen.oper == kGenReleaseVolEnv) release = gen.amount;
+    }
+  };
+  if (global != nullptr) apply(*global);
+  apply(local);
+  return release;
+}
+
+int64_t preset_release_delta(const Sf2Zone* global, const Sf2Zone& local) noexcept {
+  int64_t delta = 0;
+  const auto add = [&delta](const Sf2Zone* zone) noexcept {
+    if (zone == nullptr) return;
+    for (const Sf2Gen& gen : zone->gens) {
+      if (gen.oper == kGenReleaseVolEnv) {
+        delta = numeric::saturating_add(delta, static_cast<int64_t>(gen.amount));
+      }
+    }
+  };
+  add(global);
+  add(&local);
+  return delta;
+}
+
+bool renderable_sample(const Sf2File& soundfont, const Sf2Zone& zone) noexcept {
+  if (zone.sample < 0 || static_cast<size_t>(zone.sample) >= soundfont.samples().size())
+    return false;
+  const Sf2Sample& sample = soundfont.samples()[static_cast<size_t>(zone.sample)];
+  return !sample.is_rom() && valid_sf2_sample_rate(sample.sample_rate) &&
+         sample.end > sample.start && sample.end <= soundfont.sample_pool().size();
+}
 
 }  // namespace
 
@@ -162,24 +204,39 @@ void Sf2Player::sync_prepared_base() noexcept {
 
 void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   soundfont_ = std::move(soundfont);
-  // Scan for the longest volume-envelope release so tail_samples() covers the
-  // slowest patch (instrument-level absolute + preset-level relative).
+  // Longest release over reachable (preset zone, instrument zone) pairs, not independent maxima.
   max_release_timecents_ = -12000;
   if (soundfont_ != nullptr) {
-    for (const Sf2Instrument& inst : soundfont_->instruments()) {
-      for (const Sf2Zone& zone : inst.zones) {
-        if (const Sf2Gen* g = zone.find_gen(kGenReleaseVolEnv)) {
-          max_release_timecents_ =
-              std::max(max_release_timecents_, static_cast<int32_t>(g->amount));
-        }
+    for (size_t preset_index = 0; preset_index < soundfont_->presets().size(); ++preset_index) {
+      const Sf2Preset& preset = soundfont_->presets()[preset_index];
+      // Only the first exact (bank, program) record can play; a duplicate cannot lengthen the tail.
+      if (soundfont_->find_preset(preset.bank, preset.program) != static_cast<int>(preset_index)) {
+        continue;
       }
-    }
-    for (const Sf2Preset& preset : soundfont_->presets()) {
-      for (const Sf2Zone& zone : preset.zones) {
-        if (const Sf2Gen* g = zone.find_gen(kGenReleaseVolEnv)) {
-          // Preset release gens are relative; bound with the worst case sum.
-          max_release_timecents_ =
-              std::max(max_release_timecents_, -12000 + static_cast<int32_t>(g->amount));
+      const Sf2Zone* preset_global =
+          !preset.zones.empty() && preset.zones[0].is_global() ? &preset.zones[0] : nullptr;
+      for (const Sf2Zone& pzone : preset.zones) {
+        if (pzone.is_global() || pzone.instrument < 0 ||
+            static_cast<size_t>(pzone.instrument) >= soundfont_->instruments().size()) {
+          continue;
+        }
+        const Sf2Instrument& instrument =
+            soundfont_->instruments()[static_cast<size_t>(pzone.instrument)];
+        const Sf2Zone* instrument_global =
+            !instrument.zones.empty() && instrument.zones[0].is_global() ? &instrument.zones[0]
+                                                                         : nullptr;
+        for (const Sf2Zone& izone : instrument.zones) {
+          if (izone.is_global() || !ranges_overlap(pzone, izone) ||
+              !renderable_sample(*soundfont_, izone)) {
+            continue;
+          }
+          const int64_t instrument_tc = instrument_release_timecents(instrument_global, izone);
+          const int64_t preset_tc = preset_release_delta(preset_global, pzone);
+          const int64_t release_tc = numeric::saturating_add(instrument_tc, preset_tc);
+          max_release_timecents_ = static_cast<int32_t>(
+              std::clamp(std::max<int64_t>(max_release_timecents_, release_tc),
+                         static_cast<int64_t>(std::numeric_limits<int32_t>::lowest()),
+                         static_cast<int64_t>(std::numeric_limits<int32_t>::max())));
         }
       }
     }
@@ -200,19 +257,40 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
 }
 
 void Sf2Player::recompute_tail() noexcept {
-  const float release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_));
-  tail_samples_ = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
+  tail_samples_->store(tail_bound(), std::memory_order_relaxed);
+}
+
+void Sf2Player::raise_tail() noexcept {
+  if (!prepared_) return;
+  const int64_t tail = tail_bound();
+  int64_t current = tail_samples_->load(std::memory_order_relaxed);
+  while (tail > current &&
+         !tail_samples_->compare_exchange_weak(current, tail, std::memory_order_relaxed)) {
+  }
+}
+
+int64_t Sf2Player::tail_bound() const noexcept {
+  const EnvelopeTimeScales scales = gs_slowest_eg_time_scales(
+      channels_, [](const ChannelState& st) -> const GsPartParams& { return st.gs; });
+  const float release_ms =
+      std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_)) * scales.release;
+  int64_t tail = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
   if (config_.synth_fallback) {
-    tail_samples_ = std::max(tail_samples_, DahdsrEnvelope::release_tail_samples(
-                                                sample_rate_, gm_fallback_max_release_ms()));
+    tail = std::max(tail, gm_fallback_max_tail_samples(sample_rate_, scales.attack, scales.decay,
+                                                       scales.release));
     // The shared body resonators (piano soundboard / sympathetic banks) ring
     // past the last voice; bound their tail like the NativeSynth host does.
-    tail_samples_ += static_cast<int64_t>(kPianoBodyRingS * sample_rate_);
+    tail =
+        numeric::saturating_add(tail, numeric::ceil_sample_count(kPianoBodyRingS * sample_rate_));
   }
 #if defined(SONARE_MIDI_WITH_FX)
   // The note tail rings first, the effect tail decays after it.
-  if (effects_ != nullptr) tail_samples_ += effects_->tail_samples(sample_rate_);
+  if (effects_ != nullptr) {
+    tail =
+        numeric::saturating_add(tail, std::max<int64_t>(0, effects_->tail_samples(sample_rate_)));
+  }
 #endif
+  return tail;
 }
 
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
@@ -355,6 +433,8 @@ void Sf2Player::reset() {
   for (SourceResidualSplitter& s : body_residual_splitters_) s.reset();
   clear_control_owned_gs_state();
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
+  // A raised tail covered voices the reset has just silenced.
+  if (prepared_) recompute_tail();
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the
   // old snapshot is retired/freed by the control thread, never the audio thread.

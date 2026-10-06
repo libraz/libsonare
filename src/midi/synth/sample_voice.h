@@ -37,6 +37,13 @@ struct SamplePatchParams {
   bool key_track = true;
 };
 
+/// Longest a one-shot voice of @p params can play once its key is up, in output
+/// samples: the longest zone at the slowest rate its keys reach, with no pitch
+/// modulation (a voice bent down plays proportionally longer). INT64_MAX when a
+/// zone loops continuously; 0 with no bank, which leaves the voice silent.
+int64_t sample_one_shot_tail_samples(const SampleBank* bank, const SamplePatchParams& params,
+                                     double sample_rate) noexcept;
+
 /// One voice's sample source.
 class SampleVoiceCore {
  public:

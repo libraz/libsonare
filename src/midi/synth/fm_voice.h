@@ -68,6 +68,11 @@ struct FmPatchParams {
   std::array<FmOperatorParams, kMaxFmOperators> ops{};
 };
 
+/// Upper bound for a one-shot FM voice's carrier tail at the slowest playable
+/// note. A sustaining audible carrier returns INT64_MAX; silent carriers and
+/// non-carrier modulators do not contribute to the bound.
+int64_t fm_one_shot_tail_samples(const FmPatchParams& params, double sample_rate) noexcept;
+
 /// Per-voice FM state, embedded in NativeSynthVoice. The voice's global
 /// amplitude envelope / filter / mod matrix wrap around this core; render()
 /// returns the raw operator-stack sample.
@@ -79,6 +84,9 @@ class FmVoiceCore {
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / glide), 1 = on pitch.
   float render(float pitch_ratio) noexcept;
+  /// True when every active-level carrier envelope has finished. Modulators
+  /// and operators with no level do not keep a one-shot voice alive.
+  bool finished() const noexcept;
   /// Note-off: release every operator envelope.
   void release() noexcept;
   /// Immediate silence.

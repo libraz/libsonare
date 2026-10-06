@@ -420,6 +420,10 @@ class PercussionVoiceCore {
   /// rather than the envelope set the ring) has nothing else that can end the
   /// voice. Read per sample alongside render().
   bool silent() const noexcept;
+  /// Upper bound, in seconds from the strike, on when silent() turns true for
+  /// @p params: the slowest layer the patch enables, rung through the plate and
+  /// shell after it, carried from above full scale down to the silence floor.
+  static float ring_bound_s(const PercussionPatchParams& params) noexcept;
   /// Immediate silence.
   void kill() noexcept;
 

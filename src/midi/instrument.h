@@ -116,6 +116,12 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
     return true;
   }
 
+  /// CONTROL thread: true when an event this instrument receives can lengthen
+  /// tail_samples() (a GS envelope-time edit), so an offline host sizing a
+  /// render from the tail feeds the schedule's events to a prepared instance
+  /// first, then prepares it again before rendering. Default: it cannot.
+  virtual bool tail_follows_events() const noexcept { return false; }
+
   /// CONTROL thread: adopts a device's spelling of the expression axes, so a
   /// breath gesture reaches an exciter by what it means rather than by the
   /// controller number that carried it. Returns false when the instrument has

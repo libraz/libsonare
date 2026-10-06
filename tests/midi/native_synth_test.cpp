@@ -374,9 +374,9 @@ TEST_CASE("NativeSynth GM mode tail covers the slowest fallback release", "[midi
   cfg.gain = 1.0f;
   NativeSynth synth(cfg);
   synth.prepare(kOutRate, 256);
-  const int expected = static_cast<int>(sonare::midi::synth::DahdsrEnvelope::release_tail_samples(
-      kOutRate, sonare::midi::synth::gm_fallback_max_release_ms()));
-  REQUIRE(synth.tail_samples() >= expected);
+  const int64_t expected =
+      sonare::midi::synth::gm_fallback_max_tail_samples(kOutRate, 1.0f, 1.0f, 1.0f);
+  REQUIRE(static_cast<int64_t>(synth.tail_samples()) >= expected);
 
   // Behaviourally: the pad (GM 88) carries the slowest fallback release, and it
   // has to fade out inside the reported tail.
@@ -1082,6 +1082,72 @@ TEST_CASE("tail_samples covers the stage that actually ends the voice", "[midi][
   REQUIRE(peak(out.left, out.left.size() - 256) < 1.0e-3f);
 }
 
+TEST_CASE("custom sustained one-shot tails are bounded by what ends the voice",
+          "[midi][synth][tail-physical]") {
+  auto check_sustained = [](NativeSynthConfig cfg) {
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    const StereoRender onset = render(synth, 32768);
+    CHECK(peak(onset.left) > 1.0e-4f);
+    REQUIRE(synth.active_voice_count() == 1);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    const StereoRender after_note_off = render(synth, 256);
+    CHECK(peak(after_note_off.left) > 1.0e-4f);
+    CHECK(synth.active_voice_count() == 1);
+    return static_cast<int64_t>(synth.tail_samples());
+  };
+
+  SECTION("bowed string") {
+    NativeSynthConfig cfg;
+    cfg.patch = sonare::midi::synth::gm_fallback_patch(0, 40);
+    cfg.patch.one_shot = true;
+    cfg.patch.amp_env.attack_ms = 1.0f;
+    cfg.patch.amp_env.sustain = 1.0f;
+    cfg.patch.amp_env.release_ms = 1.0f;
+    // Nothing in a bowed string ends a held envelope.
+    CHECK(check_sustained(cfg) == std::numeric_limits<int>::max());
+  }
+
+  SECTION("percussion") {
+    NativeSynthConfig cfg;
+    cfg.patch.mode = SynthEngineMode::kPercussion;
+    cfg.patch.one_shot = true;
+    cfg.patch.amp_env = {0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+    cfg.patch.percussion.gm_kit = false;
+    cfg.patch.percussion.num_modes = 1;
+    cfg.patch.percussion.base_freq_hz = 220.0f;
+    cfg.patch.percussion.mode_decay_s = 30.0f;
+    cfg.patch.percussion.tone_gain = 1.0f;
+    // The piece ends when it falls silent: a 30 s t60 reaches the -100 dB floor at 50 s.
+    const int64_t tail = check_sustained(cfg);
+    CHECK(tail < std::numeric_limits<int>::max());
+    CHECK(tail >= static_cast<int64_t>(kOutRate * 30.0 * 100.0 / 60.0));
+  }
+}
+
+TEST_CASE("custom FM and GM fallback physical tails remain finite",
+          "[midi][synth][tail-physical]") {
+  NativeSynthConfig fm_cfg;
+  fm_cfg.patch.mode = SynthEngineMode::kFm;
+  fm_cfg.patch.one_shot = true;
+  fm_cfg.patch.amp_env.sustain = 1.0f;
+  fm_cfg.patch.amp_env.release_ms = 1.0f;
+  NativeSynth fm(fm_cfg);
+  fm.prepare(kOutRate, 256);
+  CHECK(fm.tail_samples() < std::numeric_limits<int>::max());
+
+  NativeSynthConfig gm_cfg;
+  gm_cfg.use_gm_programs = true;
+  gm_cfg.patch.mode = SynthEngineMode::kBowedString;
+  gm_cfg.patch.one_shot = true;
+  gm_cfg.patch.amp_env.sustain = 1.0f;
+  gm_cfg.patch.amp_env.release_ms = 1.0f;
+  NativeSynth gm(gm_cfg);
+  gm.prepare(kOutRate, 256);
+  CHECK(gm.tail_samples() < std::numeric_limits<int>::max());
+}
+
 TEST_CASE("both hosts report a tail that covers the piano body", "[midi][synth][sf2]") {
   // The piano body rings far past the ~120 ms voice release; a tail that
   // covers only the release cuts the bloom off the last chord of a bounce.
@@ -1301,10 +1367,11 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
 
 #endif  // SONARE_TUNING
 
-TEST_CASE("gm_fallback_max_release_ms bounds every fallback patch table", "[midi][synth]") {
-  const float bound = sonare::midi::synth::gm_fallback_max_release_ms();
+TEST_CASE("gm_fallback_max_tail_samples bounds every fallback patch table", "[midi][synth]") {
+  const int64_t bound =
+      sonare::midi::synth::gm_fallback_max_tail_samples(kOutRate, 1.0f, 1.0f, 1.0f);
   const auto covered = [bound](const sonare::midi::synth::NativeSynthPatch& p) {
-    return bound >= p.amp_env.release_ms && bound >= p.amp_env.decay_ms;
+    return bound >= sonare::midi::synth::native_patch_tail_samples(p, kOutRate, {}, nullptr);
   };
   for (const auto& p : sonare::midi::synth::detail::family_patches()) {
     REQUIRE(covered(p));

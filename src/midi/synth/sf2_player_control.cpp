@@ -228,6 +228,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
   uint16_t dirty = 0;
   uint16_t rig_dirty = 0;
   bool rx_dirty = false;
+  bool eg_moved = false;
   for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
     const GsWrite& w = writes[i];
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
@@ -343,9 +344,12 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
                 ? static_cast<uint8_t>(((w.value & 0x0Fu) << 4) | (st.pitch_offset_fine & 0x0Fu))
                 : static_cast<uint8_t>((st.pitch_offset_fine & 0xF0u) | (w.value & 0x0Fu));
         break;
-      case GsParam::kPartToneModify:
+      case GsParam::kPartToneModify: {
+        const GsPartParams before = st.gs;
         gs_apply_tone_modify(st.gs, w.index, w.value);
+        eg_moved |= gs_eg_times_differ(before, st.gs);
         break;
+      }
       case GsParam::kPartCtrlSourceNumber:
         st.assignable_cc[w.index & 1u] = w.value;
         break;
@@ -389,6 +393,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
     if ((rig_dirty & (1u << ch)) != 0) refresh_part_rig(ch);
   }
   if (rx_dirty) refresh_rx_channels();
+  if (eg_moved) raise_tail();
   return dirty != 0;
 }
 

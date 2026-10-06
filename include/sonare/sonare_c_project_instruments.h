@@ -46,7 +46,8 @@ typedef struct {
   void (*render)(void* user_data, float* const* channels, int num_channels, int num_frames);
   /// Reported instrument latency in samples (PDC). 0 = no latency.
   int latency_samples;
-  /// Reported release / effect tail in samples for auto-length bounces. 0 = no tail.
+  /// Reported release / effect tail in samples for auto-length bounces. 0 = no tail;
+  /// INT_MAX = unbounded, which makes an auto-length bounce fail.
   int tail_samples;
 } SonareInstrumentCallbacks;
 
@@ -156,9 +157,10 @@ typedef struct {
 ///        supplying its own instrument callbacks. @p instruments points to
 ///        @p instrument_count bindings (may be NULL / 0 for a silent bounce).
 ///        When @p options->total_frames <= 0 the render length is auto-derived
-///        from the arrangement (musical end + the synth's release tail).
-///        A positive total_frames is used as-is and does not auto-extend for
-///        mixer FX / instrument tails.
+///        from the arrangement (musical end + the synth's release tail);
+///        an instrument reporting an unbounded tail makes that fail with
+///        SONARE_ERROR_INVALID_PARAMETER. A positive total_frames is used as-is
+///        and does not auto-extend for mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
 /// @note Free @p out_interleaved with @ref sonare_free_floats.
 SonareError sonare_project_bounce_with_builtin_instruments(
@@ -282,9 +284,10 @@ typedef struct {
 ///        the preset catalog + field overrides; an invalid struct_version or
 ///        unknown preset name fails with SONARE_ERROR_INVALID_PARAMETER.
 ///        When @p options->total_frames <= 0 the render length is auto-derived
-///        from the arrangement (musical end + the patch's release tail).
-///        A positive total_frames is used as-is and does not auto-extend for
-///        mixer FX / instrument tails.
+///        from the arrangement (musical end + the patch's release tail);
+///        an instrument reporting an unbounded tail makes that fail with
+///        SONARE_ERROR_INVALID_PARAMETER. A positive total_frames is used as-is
+///        and does not auto-extend for mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
 /// @note Free @p out_interleaved with @ref sonare_free_floats.
 SonareError sonare_project_bounce_with_synth_instruments(

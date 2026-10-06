@@ -169,7 +169,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_bell.modal.vel_to_brightness = 0.6f;
   // The ring-down is deliberately held to the tubular bell's: this table's
   // longest release is the tail every fallback bounce is padded by
-  // (gm_fallback_max_release_ms), so a tower bell's true ring would make every
+  // (gm_fallback_max_tail_samples), so a tower bell's true ring would make every
   // render longer for one tone. The partial series, not the tail, is the
   // variation.
   o.church_bell.modal.release_damp_s = 8.0f;

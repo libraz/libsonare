@@ -12,6 +12,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -39,9 +41,12 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
+using sonare::midi::synth::VaWaveform;
 
 constexpr double kOutRate = 48000.0;
 constexpr uint8_t kDrumChannel = 9;
+const float kMaxGsTimeScale =
+    sonare::midi::synth::gs_time_scale(sonare::midi::synth::kGsPartOffsetMax);
 
 using sonare::test::event;
 
@@ -85,6 +90,25 @@ Sf2Player make_fallback_player() {
   Sf2Player player(cfg);
   player.prepare(kOutRate, 256);
   return player;
+}
+
+float fallback_stage_tail_ms(const NativeSynthPatch& patch) {
+  return patch.amp_env.sustain <= sonare::midi::synth::DahdsrEnvelope::kSilenceLevel
+             ? std::max(patch.amp_env.decay_ms, patch.amp_env.release_ms)
+             : patch.amp_env.release_ms;
+}
+
+float scanned_fallback_tail_ms() {
+  float max_ms = 0.0f;
+  for (int program = 0; program < 128; ++program) {
+    max_ms = std::max(max_ms,
+                      fallback_stage_tail_ms(sonare::midi::synth::gm_fallback_patch(0, program)));
+  }
+  for (int note = 0; note < 128; ++note) {
+    max_ms =
+        std::max(max_ms, fallback_stage_tail_ms(sonare::midi::synth::gm_fallback_drum_patch(note)));
+  }
+  return max_ms;
 }
 
 /// Selects (bank_msb, bank_lsb, program) on @p channel, sounds note 60 and
@@ -154,6 +178,62 @@ constexpr BankForm kBankForms[] = {
     {0x79, 3, 6, 3, "GM2 melodic bank MSB, harpsichord key-off variation"},
     {0x79, 2, 6, 2, "GM2 melodic bank MSB, harpsichord wide variation"},
 };
+
+struct NativeGsRender {
+  std::vector<float> onset;
+  std::vector<float> tail;
+};
+
+NativeSynthConfig native_gs_probe_config() {
+  NativeSynthConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.patch.waveform = VaWaveform::kSine;
+  cfg.patch.gain = 0.8f;
+  cfg.patch.amp_env.attack_ms = 40.0f;
+  cfg.patch.amp_env.decay_ms = 180.0f;
+  cfg.patch.amp_env.sustain = 0.55f;
+  cfg.patch.amp_env.release_ms = 90.0f;
+  cfg.patch.cutoff_hz = 2200.0f;
+  cfg.patch.resonance_q = 0.9f;
+  cfg.patch.lfo_rate_hz = 4.0f;
+  cfg.patch.lfo_to_pitch_cents = 240.0f;
+  return cfg;
+}
+
+void native_send_cc(NativeSynth& synth, uint8_t controller, uint8_t value) {
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, controller, value)));
+}
+
+void native_send_nrpn(NativeSynth& synth, uint8_t lsb, uint8_t value = 96) {
+  native_send_cc(synth, 99, 0x01);
+  native_send_cc(synth, 98, lsb);
+  native_send_cc(synth, 6, value);
+}
+
+float max_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  const size_t count = std::min(a.size(), b.size());
+  float result = 0.0f;
+  for (size_t i = 0; i < count; ++i) result = std::max(result, std::fabs(a[i] - b[i]));
+  return result;
+}
+
+template <typename Setup>
+NativeGsRender render_native_gs_probe(Setup setup) {
+  NativeSynth synth(native_gs_probe_config());
+  synth.prepare(kOutRate, 256);
+  setup(synth);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+
+  NativeGsRender result;
+  result.onset = render(synth, 8192);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  result.tail = render(synth, 32768);
+  return result;
+}
+
+NativeGsRender render_native_gs_nrpn(uint8_t lsb, uint8_t value = 96) {
+  return render_native_gs_probe([=](NativeSynth& synth) { native_send_nrpn(synth, lsb, value); });
+}
 
 }  // namespace
 
@@ -825,14 +905,314 @@ TEST_CASE("NativeSynth sostenuto captures only the keys held at the press", "[mi
   REQUIRE(synth.active_voice_count() == 0);
 }
 
+TEST_CASE("NativeSynth tail covers configured release and one-shot decay", "[midi][synth]") {
+  using sonare::midi::synth::DahdsrEnvelope;
+  for (const double rate : {44100.0, 96000.0}) {
+    NativeSynthConfig sustained_cfg;
+    sustained_cfg.gain = 1.0f;
+    sustained_cfg.patch.amp_env.release_ms = 100.0f;
+    sustained_cfg.patch.amp_env.sustain = 0.7f;
+    NativeSynth sustained(sustained_cfg);
+    sustained.prepare(rate, 256);
+    INFO("sample rate " << rate << " sustained release");
+    CHECK(static_cast<int64_t>(sustained.tail_samples()) ==
+          DahdsrEnvelope::release_tail_samples(rate, 100.0f));
+
+    NativeSynthConfig one_shot_cfg;
+    one_shot_cfg.gain = 1.0f;
+    one_shot_cfg.patch.one_shot = true;
+    one_shot_cfg.patch.amp_env.decay_ms = 400.0f;
+    one_shot_cfg.patch.amp_env.release_ms = 20.0f;
+    one_shot_cfg.patch.amp_env.sustain = 0.0f;
+    NativeSynth one_shot(one_shot_cfg);
+    one_shot.prepare(rate, 256);
+    INFO("sample rate " << rate << " zero-sustain decay");
+    CHECK(static_cast<int64_t>(one_shot.tail_samples()) >=
+          DahdsrEnvelope::release_tail_samples(rate, 400.0f));
+
+    NativeSynthConfig delayed_cfg;
+    delayed_cfg.gain = 1.0f;
+    delayed_cfg.patch.one_shot = true;
+    delayed_cfg.patch.amp_env.delay_ms = 100.0f;
+    delayed_cfg.patch.amp_env.attack_ms = 200.0f;
+    delayed_cfg.patch.amp_env.hold_ms = 100.0f;
+    delayed_cfg.patch.amp_env.decay_ms = 1.0f;
+    delayed_cfg.patch.amp_env.release_ms = 5.0f;
+    delayed_cfg.patch.amp_env.sustain = 0.0f;
+    NativeSynth delayed(delayed_cfg);
+    delayed.prepare(rate, 256);
+    const int64_t leading = static_cast<int64_t>(std::ceil(rate * 0.001 * (100.0 + 200.0 + 100.0)));
+    INFO("sample rate " << rate << " one-shot leading stages");
+    CHECK(static_cast<int64_t>(delayed.tail_samples()) >=
+          leading + DahdsrEnvelope::release_tail_samples(rate, 1.0f));
+  }
+}
+
+TEST_CASE("NativeSynth GS maximum release remains active beyond the unscaled tail",
+          "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.patch.amp_env.release_ms = 100.0f;
+  cfg.patch.amp_env.sustain = 0.7f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+
+  // NRPN 01 66, value 127: EG release offset +63, the slowest GS time scale.
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 99, 1)));
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 98, 0x66)));
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, 127)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  render(synth, 8192);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+
+  const int64_t old_tail =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, 100.0f);
+  for (int64_t left = old_tail; left > 0;) {
+    const int chunk = static_cast<int>(std::min<int64_t>(left, 2048));
+    render(synth, chunk);
+    left -= chunk;
+  }
+  REQUIRE(synth.active_voice_count() > 0);
+
+  const int64_t scaled_tail =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, 100.0f * kMaxGsTimeScale);
+  REQUIRE(static_cast<int64_t>(synth.tail_samples()) >= scaled_tail);
+  for (int64_t left = scaled_tail; left > 0 && synth.active_voice_count() > 0;) {
+    const int chunk = static_cast<int>(std::min<int64_t>(left, 2048));
+    render(synth, chunk);
+    left -= chunk;
+  }
+  REQUIRE(synth.active_voice_count() == 0);
+}
+
 TEST_CASE("both instruments report a tail that covers the GM fallback releases",
           "[midi][synth][sf2][gm]") {
   // The bounce derives its auto render length from MidiInstrument::tail_samples,
   // so both GM paths have to bound the slowest fallback release.
-  const int64_t fallback_bound = sonare::midi::synth::DahdsrEnvelope::release_tail_samples(
-      kOutRate, sonare::midi::synth::gm_fallback_max_release_ms());
+  const int64_t fallback_bound =
+      sonare::midi::synth::gm_fallback_max_tail_samples(kOutRate, 1.0f, 1.0f, 1.0f);
   NativeSynth gm = make_gm_synth();
   Sf2Player fallback = make_fallback_player();
   REQUIRE(static_cast<int64_t>(gm.tail_samples()) >= fallback_bound);
   REQUIRE(static_cast<int64_t>(fallback.tail_samples()) >= fallback_bound);
+}
+
+TEST_CASE("GM fallback tail covers every scanned envelope", "[midi][synth][sf2][gm]") {
+  const float scanned_ms = scanned_fallback_tail_ms();
+  REQUIRE(scanned_ms > 0.0f);
+  const int64_t expected =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, scanned_ms);
+  NativeSynth gm = make_gm_synth();
+  Sf2Player fallback = make_fallback_player();
+  CHECK(static_cast<int64_t>(gm.tail_samples()) >= expected);
+  CHECK(static_cast<int64_t>(fallback.tail_samples()) >= expected);
+}
+
+TEST_CASE("GM tail covers reachable variations and transformed drum kits",
+          "[midi][synth][sf2][gm][tail-derived]") {
+  using namespace sonare::midi::synth;
+  constexpr GsToneMap maps[] = {GsToneMap::kModuleDefault, GsToneMap::kSc55, GsToneMap::kSc88,
+                                GsToneMap::kSc88Pro, GsToneMap::kSc8850};
+  std::set<const NativeSynthPatch*> melodic;
+  std::set<uint8_t> kits;
+  // Enumerate the lookup domain so newly registered banks and map-specific
+  // overrides enter this check without a second hand-maintained tone list.
+  for (GsToneMap map : maps) {
+    for (int program = 0; program < 128; ++program) {
+      kits.insert(gm_fallback_drum_kit(static_cast<uint8_t>(program), map));
+      for (int bank = 0; bank < 128; ++bank) {
+        melodic.insert(
+            &gm_fallback_patch(static_cast<uint16_t>(bank), static_cast<uint8_t>(program), map));
+      }
+    }
+  }
+  REQUIRE(kits.size() == kGsDrumKits.size());
+  // Preserve the existing 127 capital identities and 30 voiced variations;
+  // newly added variations enter this check without changing the lower bound.
+  REQUIRE(melodic.size() >= 127 + 30);
+  for (const float scale : {1.0f, kMaxGsTimeScale}) {
+    INFO("GS EG time scale " << scale);
+    const EnvelopeTimeScales scales{scale, scale, scale};
+    const int64_t bound = gm_fallback_max_tail_samples(kOutRate, scale, scale, scale);
+    REQUIRE(bound > 0);
+    REQUIRE(bound < std::numeric_limits<int64_t>::max());
+    const auto check_envelope = [&](const NativeSynthPatch& patch) {
+      CHECK(bound >= native_patch_tail_samples(patch, kOutRate, scales, nullptr));
+    };
+    for (const NativeSynthPatch* patch : melodic) check_envelope(*patch);
+    for (uint8_t kit : kits) {
+      for (int note = 0; note < 128; ++note) {
+        INFO("kit=" << static_cast<int>(kit) << ", note=" << note);
+        NativeSynthPatch patch = gm_fallback_drum_patch(static_cast<uint8_t>(note));
+        apply_gs_drum_kit(patch.percussion, patch.amp_env, kit, static_cast<uint8_t>(note));
+        check_envelope(patch);
+      }
+    }
+  }
+}
+
+TEST_CASE("sustained one-shot kit pieces end within the tail both NativeSynth paths report",
+          "[midi][synth][gm][tail-derived]") {
+  using sonare::midi::synth::DahdsrEnvelope;
+  NativeSynth gm = make_gm_synth();
+  const int64_t gm_tail = gm.tail_samples();
+  int checked = 0;
+  for (int note = 0; note < 128; ++note) {
+    const NativeSynthPatch& piece =
+        sonare::midi::synth::gm_fallback_drum_patch(static_cast<uint8_t>(note));
+    if (!piece.one_shot || piece.amp_env.sustain <= DahdsrEnvelope::kSilenceLevel) continue;
+    INFO("drum note " << note);
+    ++checked;
+    NativeSynthConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.patch = piece;
+    NativeSynth custom(cfg);
+    custom.prepare(kOutRate, 256);
+    const int64_t tail = custom.tail_samples();
+    REQUIRE(tail < std::numeric_limits<int>::max());
+    CHECK(gm_tail >= tail);
+    custom.on_event(0,
+                    event(sonare::midi::make_midi1_note_on(0, 0, static_cast<uint8_t>(note), 127)));
+    custom.on_event(0,
+                    event(sonare::midi::make_midi1_note_off(0, 0, static_cast<uint8_t>(note), 0)));
+    int64_t rendered = 0;
+    while (custom.active_voice_count() > 0 && rendered <= tail) {
+      render(custom, 4096);
+      rendered += 4096;
+    }
+    CHECK(custom.active_voice_count() == 0);
+  }
+  REQUIRE(checked > 0);
+}
+
+TEST_CASE("NativeSynth makes every GS part NRPN audible", "[midi][synth][native-gs]") {
+  const NativeGsRender baseline = render_native_gs_probe([](NativeSynth&) {});
+  REQUIRE(peak(baseline.onset) > 1.0e-3f);
+
+  struct Parameter {
+    uint8_t lsb;
+    const char* name;
+  };
+  constexpr Parameter kParameters[] = {
+      {0x08, "vibrato rate"}, {0x09, "vibrato depth"}, {0x0A, "vibrato delay"},
+      {0x20, "TVF cutoff"},   {0x21, "TVF resonance"}, {0x63, "EG attack"},
+      {0x64, "EG decay"},     {0x66, "EG release"},
+  };
+
+  for (const Parameter& parameter : kParameters) {
+    INFO(parameter.name << " (NRPN 01 " << static_cast<int>(parameter.lsb) << ")");
+    const NativeGsRender changed = render_native_gs_nrpn(parameter.lsb);
+    const bool changed_audio = max_difference(changed.onset, baseline.onset) > 1.0e-5f ||
+                               max_difference(changed.tail, baseline.tail) > 1.0e-5f;
+    CHECK(changed_audio);
+  }
+}
+
+TEST_CASE("NativeSynth combines GS part NRPN edits before note-on", "[midi][synth][native-gs]") {
+  const NativeGsRender baseline = render_native_gs_probe([](NativeSynth&) {});
+  const NativeGsRender attack = render_native_gs_nrpn(0x63);
+  const NativeGsRender attack_and_release = render_native_gs_probe([](NativeSynth& synth) {
+    native_send_nrpn(synth, 0x63);
+    native_send_nrpn(synth, 0x66);
+  });
+
+  REQUIRE(max_difference(attack.onset, baseline.onset) > 1.0e-5f);
+  CHECK(max_difference(attack.onset, attack_and_release.onset) < 1.0e-7f);
+  CHECK(max_difference(attack_and_release.tail, baseline.tail) > 1.0e-5f);
+}
+
+TEST_CASE("NativeSynth keeps GS part edits across selection and channel changes",
+          "[midi][synth][native-gs]") {
+  const NativeGsRender baseline = render_native_gs_probe([](NativeSynth&) {});
+  const NativeGsRender direct = render_native_gs_nrpn(0x20);
+  REQUIRE(max_difference(direct.onset, baseline.onset) > 1.0e-5f);
+
+  const NativeGsRender after_rpn_null = render_native_gs_probe([](NativeSynth& synth) {
+    native_send_nrpn(synth, 0x20);
+    native_send_cc(synth, 100, 127);
+    native_send_cc(synth, 101, 127);
+  });
+  CHECK(after_rpn_null.onset == direct.onset);
+  CHECK(after_rpn_null.tail == direct.tail);
+
+  const NativeGsRender after_reset_controllers = render_native_gs_probe([](NativeSynth& synth) {
+    native_send_nrpn(synth, 0x20);
+    native_send_cc(synth, 121, 0);
+  });
+  CHECK(after_reset_controllers.onset == direct.onset);
+  CHECK(after_reset_controllers.tail == direct.tail);
+
+  const NativeGsRender after_bank_program = render_native_gs_probe([](NativeSynth& synth) {
+    native_send_nrpn(synth, 0x20);
+    native_send_cc(synth, 0, 8);
+    native_send_cc(synth, 32, 2);
+    synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 82)));
+  });
+  CHECK(after_bank_program.onset == direct.onset);
+  CHECK(after_bank_program.tail == direct.tail);
+}
+
+TEST_CASE("NativeSynth clears GS part state only on full reset", "[midi][synth][native-gs]") {
+  const NativeGsRender baseline = render_native_gs_probe([](NativeSynth&) {});
+
+  NativeSynth synth(native_gs_probe_config());
+  synth.prepare(kOutRate, 256);
+  native_send_nrpn(synth, 0x20);
+  synth.reset();
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const std::vector<float> onset = render(synth, 8192);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const std::vector<float> tail = render(synth, 32768);
+
+  CHECK(onset == baseline.onset);
+  CHECK(tail == baseline.tail);
+}
+
+TEST_CASE("NativeSynth rejects data entry after RPN Null", "[midi][synth][native-gs]") {
+  const NativeGsRender baseline = render_native_gs_probe([](NativeSynth&) {});
+
+  const NativeGsRender stray_data_entry = render_native_gs_probe([](NativeSynth& synth) {
+    native_send_cc(synth, 99, 0x01);
+    native_send_cc(synth, 98, 0x20);
+    native_send_cc(synth, 100, 127);
+    native_send_cc(synth, 101, 127);
+    native_send_cc(synth, 6, 96);
+  });
+  CHECK(stray_data_entry.onset == baseline.onset);
+  CHECK(stray_data_entry.tail == baseline.tail);
+
+  const NativeGsRender lone_nrpn_lsb = render_native_gs_probe([](NativeSynth& synth) {
+    native_send_cc(synth, 99, 0x01);
+    native_send_cc(synth, 98, 0x20);
+    native_send_cc(synth, 100, 127);
+    native_send_cc(synth, 101, 127);
+    native_send_cc(synth, 98, 0x20);
+    native_send_cc(synth, 6, 96);
+  });
+  CHECK(lone_nrpn_lsb.onset == baseline.onset);
+  CHECK(lone_nrpn_lsb.tail == baseline.tail);
+}
+
+TEST_CASE("NativeSynth MIDI 1 and MIDI 2 absolute GS AC render alike", "[midi][synth][native-gs]") {
+  const NativeGsRender baseline = render_native_gs_probe([](NativeSynth&) {});
+  const NativeGsRender midi1 = render_native_gs_nrpn(0x20);
+  REQUIRE(max_difference(midi1.onset, baseline.onset) > 1.0e-5f);
+
+  const NativeGsRender midi2 = render_native_gs_probe([](NativeSynth& synth) {
+    const auto value = sonare::midi::Control32::from7(96).raw;
+    synth.on_event(0, event(sonare::midi::make_midi2_assignable_controller(0, 0, 1, 0x20, value)));
+  });
+  CHECK(midi2.onset == midi1.onset);
+  CHECK(midi2.tail == midi1.tail);
+}
+
+TEST_CASE("NativeSynth public tail saturates extreme sample-rate bounds", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch.amp_env.release_ms = std::numeric_limits<float>::infinity();
+  NativeSynth synth(cfg);
+  // The default subtractive patch needs no delay slabs, so this large but
+  // finite rate exercises the tail arithmetic without allocating a giant
+  // waveguide. The non-finite envelope input is sanitized at construction.
+  synth.prepare(1.0e10, 256);
+  CHECK(synth.tail_samples() == std::numeric_limits<int>::max());
 }

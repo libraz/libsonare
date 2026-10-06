@@ -1,10 +1,12 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <limits>
 
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/voice_random.h"
+#include "util/numeric_validation.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
@@ -627,6 +629,12 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   float contact = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
     sample = fm.render(common);
+    // A one-shot takes no note-off, so the slot ends when every audible carrier has.
+    if (patch->one_shot && fm.finished()) {
+      active = false;
+      amp_env.kill();
+      return 0.0f;
+    }
   } else if (patch->mode == SynthEngineMode::kKarplusStrong) {
     sample = ks.render(common);
   } else if (patch->mode == SynthEngineMode::kModal) {
@@ -965,6 +973,41 @@ void NativeSynthVoice::choke() noexcept {
   releasing = true;
   choked = true;
   amp_env.note_off();
+}
+
+int64_t sustained_one_shot_tail_samples(const NativeSynthPatch& patch, double sample_rate,
+                                        const SampleBank* bank) noexcept {
+  switch (patch.mode) {
+    case SynthEngineMode::kFm:
+      return fm_one_shot_tail_samples(patch.fm, sample_rate);
+    case SynthEngineMode::kPercussion:
+      return numeric::ceil_sample_count(
+          static_cast<double>(PercussionVoiceCore::ring_bound_s(patch.percussion)) * sample_rate);
+    case SynthEngineMode::kSample:
+      return sample_one_shot_tail_samples(bank, patch.sample, sample_rate);
+    default:
+      return std::numeric_limits<int64_t>::max();
+  }
+}
+
+int64_t native_patch_tail_samples(const NativeSynthPatch& patch, double sample_rate,
+                                  const EnvelopeTimeScales& scales,
+                                  const SampleBank* bank) noexcept {
+  const DahdsrConfig& amp = patch.amp_env;
+  const bool zero_sustain = amp.sustain <= DahdsrEnvelope::kSilenceLevel;
+  if (patch.one_shot && !zero_sustain) {
+    return sustained_one_shot_tail_samples(patch, sample_rate, bank);
+  }
+  // A zero-sustain envelope ends at its decay floor; release alone would cut it mid-decay.
+  const float release_ms = amp.release_ms * scales.release;
+  const float stage_ms =
+      zero_sustain ? std::max(release_ms, amp.decay_ms * scales.decay) : release_ms;
+  int64_t tail = DahdsrEnvelope::release_tail_samples(sample_rate, stage_ms);
+  if (patch.one_shot) {
+    tail = std::max(
+        tail, DahdsrEnvelope::one_shot_tail_samples(sample_rate, amp, scales.attack, scales.decay));
+  }
+  return tail;
 }
 
 }  // namespace sonare::midi::synth

@@ -12,12 +12,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "midi/control_value.h"
 #include "midi/midi_event.h"
+#include "midi/synth/envelope.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
@@ -111,6 +114,81 @@ std::shared_ptr<Sf2File> make_fixture() {
   auto sf2 = std::make_shared<Sf2File>();
   std::string error;
   REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+  return sf2;
+}
+
+/// A looped sample whose instrument release is 0 tc and whose preset carries
+/// a global +1200 tc release delta. With @p local_delta, the preset zone adds
+/// another +1200 tc, proving that the two preset-level deltas compose at the
+/// same level as the runtime voice resolver.
+std::shared_ptr<Sf2File> make_release_tail_fixture(bool local_delta, int16_t instrument_release = 0,
+                                                   int16_t preset_release = 1200) {
+  Sf2Builder b;
+  std::vector<float> sine(96);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sample = b.add_sample("release-sine", sine, 32000, 60, 32, 96);
+
+  Sf2Builder::ZoneSpec inst_global;
+  inst_global.gens.push_back({38 /*releaseVolEnv*/, instrument_release});
+  Sf2Builder::ZoneSpec inst_zone;
+  inst_zone.gens.push_back({54 /*sampleModes*/, 1});
+  inst_zone.target = sample;
+  const int instrument = b.add_instrument("release-instrument", {inst_global, inst_zone});
+
+  Sf2Builder::ZoneSpec preset_global;
+  preset_global.gens.push_back({38 /*releaseVolEnv*/, preset_release});
+  Sf2Builder::ZoneSpec preset_zone;
+  if (local_delta) preset_zone.gens.push_back({38 /*releaseVolEnv*/, preset_release});
+  preset_zone.target = instrument;
+  b.add_preset("release-preset", 0, 0, {preset_global, preset_zone});
+
+  const auto bytes = b.build();
+  auto sf2 = std::make_shared<Sf2File>();
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), nullptr));
+  return sf2;
+}
+
+/// Two presets link their release deltas to different instruments. The long
+/// instrument has no preset delta, while the short instrument has the largest
+/// preset delta. A Cartesian max would combine both unrelated maxima.
+std::shared_ptr<Sf2File> make_disconnected_release_tail_fixture() {
+  Sf2Builder b;
+  std::vector<float> sine(96);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sample = b.add_sample("disconnected-release-sine", sine, 32000, 60, 32, 96);
+
+  Sf2Builder::ZoneSpec long_instrument_zone;
+  long_instrument_zone.gens.push_back({38 /*releaseVolEnv*/, 2400});
+  long_instrument_zone.gens.push_back({54 /*sampleModes*/, 1});
+  long_instrument_zone.target = sample;
+  const int long_instrument = b.add_instrument("long-release-instrument", {long_instrument_zone});
+
+  Sf2Builder::ZoneSpec short_instrument_zone;
+  short_instrument_zone.gens.push_back({38 /*releaseVolEnv*/, -2400});
+  short_instrument_zone.gens.push_back({54 /*sampleModes*/, 1});
+  short_instrument_zone.target = sample;
+  const int short_instrument =
+      b.add_instrument("short-release-instrument", {short_instrument_zone});
+
+  Sf2Builder::ZoneSpec long_preset_zone;
+  long_preset_zone.target = long_instrument;
+  b.add_preset("linked-long-release", 0, 0, {long_preset_zone});
+
+  Sf2Builder::ZoneSpec short_preset_global;
+  short_preset_global.gens.push_back({38 /*releaseVolEnv*/, 2400});
+  Sf2Builder::ZoneSpec short_preset_zone;
+  short_preset_zone.target = short_instrument;
+  b.add_preset("linked-short-release", 0, 1, {short_preset_global, short_preset_zone});
+
+  const auto bytes = b.build();
+  auto sf2 = std::make_shared<Sf2File>();
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), nullptr));
   return sf2;
 }
 
@@ -328,6 +406,97 @@ TEST_CASE("Sf2Player note-off releases through tail_samples", "[midi][sf2]") {
   const StereoRender after = render(player, 256);
   REQUIRE(peak(after.left) < kSilenceFloor);
   REQUIRE(player.active_voice_count() == 0);
+}
+
+TEST_CASE("Sf2Player tail composes instrument and preset release generators", "[midi][sf2]") {
+  for (const auto& [local_delta, release_ms] :
+       {std::pair{false, 2000.0f}, std::pair{true, 4000.0f}}) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.synth_fallback = false;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    Sf2Player player(cfg);
+    player.set_soundfont(make_release_tail_fixture(local_delta));
+    player.prepare(kOutRate, 256);
+
+    const int64_t expected =
+        sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, release_ms);
+    INFO("preset local delta " << local_delta);
+    CHECK(static_cast<int64_t>(player.tail_samples()) >= expected);
+  }
+}
+
+TEST_CASE("Sf2Player tail scans only reachable preset and instrument zone pairs", "[midi][sf2]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.synth_fallback = false;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  Sf2Player player(cfg);
+  player.set_soundfont(make_disconnected_release_tail_fixture());
+  player.prepare(kOutRate, 256);
+
+  const int64_t expected =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, 4000.0f);
+  CHECK(static_cast<int64_t>(player.tail_samples()) == expected);
+}
+
+TEST_CASE("Sf2Player tail clamps extreme SoundFont release generators", "[midi][sf2]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.synth_fallback = false;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  Sf2Player player(cfg);
+  // The parser accepts the complete signed SF2 generator range. Three
+  // relative/absolute values therefore exceed every finite audio-frame count
+  // once they are composed, and the public int API must remain bounded.
+  player.set_soundfont(make_release_tail_fixture(true, 32767, 32767));
+  player.prepare(kOutRate, 256);
+  CHECK(player.tail_samples() == std::numeric_limits<int>::max());
+}
+
+TEST_CASE("Dahdsr one-shot tail saturates nonfinite and overflowing stages", "[midi][sf2]") {
+  using sonare::midi::synth::DahdsrConfig;
+  using sonare::midi::synth::DahdsrEnvelope;
+  const int64_t max_samples = std::numeric_limits<int64_t>::max();
+
+  CHECK(DahdsrEnvelope::release_tail_samples(kOutRate, std::numeric_limits<float>::quiet_NaN()) ==
+        0);
+  CHECK(DahdsrEnvelope::release_tail_samples(kOutRate, std::numeric_limits<float>::infinity()) ==
+        max_samples);
+  CHECK(DahdsrEnvelope::release_tail_samples(kOutRate, 1.0e30f) == max_samples);
+
+  DahdsrConfig cfg;
+  cfg.delay_ms = std::numeric_limits<float>::infinity();
+  CHECK(DahdsrEnvelope::one_shot_tail_samples(kOutRate, cfg, 1.0f, 1.0f) == max_samples);
+
+  cfg = {};
+  cfg.attack_ms = std::numeric_limits<float>::infinity();
+  CHECK(DahdsrEnvelope::one_shot_tail_samples(kOutRate, cfg, 1.0f, 1.0f) == max_samples);
+
+  cfg = {};
+  cfg.hold_ms = std::numeric_limits<float>::infinity();
+  CHECK(DahdsrEnvelope::one_shot_tail_samples(kOutRate, cfg, 1.0f, 1.0f) == max_samples);
+
+  cfg = {};
+  cfg.decay_ms = std::numeric_limits<float>::infinity();
+  CHECK(DahdsrEnvelope::one_shot_tail_samples(kOutRate, cfg, 1.0f, 1.0f) == max_samples);
+
+  cfg = {};
+  cfg.delay_ms = 1.0e17f;
+  cfg.hold_ms = 1.0e17f;
+  CHECK(DahdsrEnvelope::one_shot_tail_samples(kOutRate, cfg, 1.0f, 1.0f) == max_samples);
 }
 
 TEST_CASE("Sf2Player velocity scales loudness", "[midi][sf2]") {

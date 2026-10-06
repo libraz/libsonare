@@ -144,6 +144,8 @@ class ProcessorBase {
   }
   // Optional decay length after input becomes silent, in samples. Hosts use
   // this to keep offline bounces from truncating reverb/delay/plugin tails.
+  // INT_MAX means unbounded: nothing ends the sound, so a host sizing a render
+  // from the tail has to be given a length instead.
   virtual int tail_samples() const noexcept { return 0; }
   virtual float last_gain_reduction_db() const { return 0.0f; }
 

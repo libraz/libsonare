@@ -50,6 +50,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <new>
 #include <string>
@@ -1783,3 +1784,115 @@ TEST_CASE("live params: automating every id on a held chord does not allocate",
   CHECK(allocations == 0);
 }
 #endif
+
+TEST_CASE("live amp release extends the reported tail and outlives the old bound",
+          "[midi][synth][tail-live]") {
+  NativeSynthConfig cfg;
+  cfg.patch.amp_env = {0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  note_on(synth, 60);
+  Stereo held;
+  render(synth, held, 4096);
+  REQUIRE(synth.active_voice_count() == 1);
+
+  const int64_t old_tail = synth.tail_samples();
+  REQUIRE(old_tail > 0);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpReleaseMs), 20000.0f));
+  const int64_t expected =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kRate, 20000.0f);
+  CHECK(static_cast<int64_t>(synth.tail_samples()) >= expected);
+
+  // Let the pending live refresh land before entering Release.
+  Stereo refresh;
+  render(synth, refresh, kBlock);
+  note_off(synth, 60);
+  Stereo after_old_bound;
+  render(synth, after_old_bound, static_cast<size_t>(old_tail));
+  CHECK(synth.active_voice_count() > 0);
+}
+
+TEST_CASE("live one-shot tail follows attack, decay and sustain transitions",
+          "[midi][synth][tail-live]") {
+  NativeSynthConfig cfg;
+  cfg.patch.one_shot = true;
+  cfg.patch.amp_env = {0.0f, 0.0f, 0.0f, 100.0f, 0.0f, 1.0f};
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  const int initial = synth.tail_samples();
+
+  REQUIRE(synth.apply_parameter(pid(P::kAmpAttackMs), 200.0f));
+  const int after_attack = synth.tail_samples();
+  CHECK(after_attack > initial);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpDecayMs), 2000.0f));
+  const int after_decay = synth.tail_samples();
+  CHECK(after_decay > after_attack);
+
+  note_on(synth, 60);
+  Stereo onset;
+  render(synth, onset, kBlock);
+  REQUIRE(synth.active_voice_count() == 1);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpSustain), 1.0f));
+  Stereo raised;
+  render(synth, raised, kBlock);
+  REQUIRE(synth.active_voice_count() == 1);
+  CHECK(synth.tail_samples() == std::numeric_limits<int>::max());
+
+  // Lowering sustain does not relatch an already-running envelope. The
+  // sentinel therefore remains until the old voice is cleared by reset().
+  REQUIRE(synth.apply_parameter(pid(P::kAmpSustain), 0.0f));
+  Stereo lowered;
+  render(synth, lowered, kBlock);
+  CHECK(synth.active_voice_count() == 1);
+  CHECK(synth.tail_samples() == std::numeric_limits<int>::max());
+  synth.reset();
+  CHECK(synth.tail_samples() < std::numeric_limits<int>::max());
+}
+
+TEST_CASE("live amp tail clamps nonfinite values and stays monotonic after a choke",
+          "[midi][synth][tail-live]") {
+  NativeSynthConfig cfg;
+  cfg.patch.amp_env.sustain = 1.0f;
+  cfg.patch.amp_env.release_ms = 1.0f;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  synth.set_articulation(0, ArticulationMode::kMonoRetrigger);
+  note_on(synth, 60);
+  Stereo first;
+  render(synth, first, kBlock);
+
+  // Choke with the original short release; the subsequent live write must
+  // refresh the held voice without extending the predecessor's cut.
+  note_on(synth, 64);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpReleaseMs), 20000.0f));
+  Stereo long_refresh;
+  render(synth, long_refresh, kBlock);
+  const int long_tail = synth.tail_samples();
+  const int64_t expected =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kRate, 20000.0f);
+  REQUIRE(static_cast<int64_t>(long_tail) >= expected);
+
+  Stereo choked;
+  render(synth, choked, 8192);
+  REQUIRE(synth.active_voice_count() == 1);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpReleaseMs), 1.0f));
+  CHECK(synth.tail_samples() >= long_tail);
+
+  const int after_long = synth.tail_samples();
+  REQUIRE(synth.apply_parameter(pid(P::kAmpReleaseMs), std::numeric_limits<float>::quiet_NaN()));
+  CHECK(synth.tail_samples() == after_long);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpReleaseMs), std::numeric_limits<float>::infinity()));
+  CHECK(synth.tail_samples() == after_long);
+}
+
+TEST_CASE("GM fallback tail ignores custom amp automation", "[midi][synth][tail-live]") {
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.patch.amp_env.release_ms = 1.0f;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  const int fallback_tail = synth.tail_samples();
+  REQUIRE(fallback_tail > 0);
+  REQUIRE(synth.apply_parameter(pid(P::kAmpReleaseMs), 20000.0f));
+  CHECK(synth.tail_samples() == fallback_tail);
+}

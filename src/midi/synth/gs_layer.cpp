@@ -23,7 +23,9 @@ using ::sonare::constants::kCentsPerSemitone;
 
 namespace {
 
-int8_t clamp_offset(int8_t v) noexcept { return static_cast<int8_t>(std::clamp<int>(v, -64, 63)); }
+int8_t clamp_offset(int8_t v) noexcept {
+  return static_cast<int8_t>(std::clamp<int>(v, kGsPartOffsetMin, kGsPartOffsetMax));
+}
 
 /// Vibrato rate, in cents of LFO frequency per step. Named because the static
 /// edit and the wheel-scaled one both spend it and must not part company.
@@ -208,6 +210,46 @@ void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexce
       break;
     default:
       break;
+  }
+}
+
+bool gs_apply_tone_modify_cc(GsPartParams& gs, uint8_t controller, uint8_t value) noexcept {
+  if (controller < 71 || controller > 78) return false;
+  // The eight controllers are contiguous but not in address order.
+  static constexpr uint8_t kToneModifyIndex[8] = {3, 6, 4, 2, 5, 0, 1, 7};
+  gs_apply_tone_modify(gs, kToneModifyIndex[controller - 71u], value);
+  return true;
+}
+
+bool gs_apply_part_nrpn(GsPartParams& gs, uint8_t msb, uint8_t lsb, uint8_t value) noexcept {
+  if ((msb & 0x7Fu) != 0x01u) return false;
+  switch (lsb & 0x7Fu) {
+    case 0x08:
+      gs_apply_tone_modify(gs, 0, value);
+      return true;
+    case 0x09:
+      gs_apply_tone_modify(gs, 1, value);
+      return true;
+    case 0x0A:
+      gs_apply_tone_modify(gs, 7, value);
+      return true;
+    case 0x20:
+      gs_apply_tone_modify(gs, 2, value);
+      return true;
+    case 0x21:
+      gs_apply_tone_modify(gs, 3, value);
+      return true;
+    case 0x63:
+      gs_apply_tone_modify(gs, 4, value);
+      return true;
+    case 0x64:
+      gs_apply_tone_modify(gs, 5, value);
+      return true;
+    case 0x66:
+      gs_apply_tone_modify(gs, 6, value);
+      return true;
+    default:
+      return false;
   }
 }
 

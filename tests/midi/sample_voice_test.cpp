@@ -12,6 +12,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -83,6 +84,76 @@ SampleBank one_shot_bank(size_t n_frames, uint8_t root_key = 60) {
 }
 
 }  // namespace
+
+TEST_CASE("Native sample loop tail follows the one-shot release contract",
+          "[midi][synth][sample][tail-physical]") {
+  SampleBank bank;
+  const auto data = sine(600.0, kOutRate, 80);
+  SampleDesc desc;
+  desc.loop_mode = 1;
+  desc.loop_end = static_cast<uint32_t>(data.size());
+  uint32_t index = 0;
+  REQUIRE(bank.add_sample(data.data(), data.size(), desc, &index));
+  SampleZoneDesc zone;
+  zone.sample_index = index;
+  REQUIRE(bank.add_zone(0, zone));
+
+  const auto check = [&bank](bool one_shot) {
+    NativeSynthConfig cfg;
+    cfg.patch.mode = SynthEngineMode::kSample;
+    cfg.patch.one_shot = one_shot;
+    cfg.patch.amp_env = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f};
+    NativeSynth synth(cfg);
+    synth.set_sample_bank(&bank);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    sonare::test::render_left(synth, 512);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    // Fixed-size rendering witnesses the sustained loop without attempting to
+    // render a potentially unbounded advertised tail.
+    const auto after_release = sonare::test::render_left(synth, 8192);
+    float peak = 0.0f;
+    for (float sample : after_release) peak = std::max(peak, std::fabs(sample));
+    if (one_shot) {
+      REQUIRE(peak > 1.0e-3f);
+      REQUIRE(synth.active_voice_count() == 1);
+      CHECK(synth.tail_samples() == std::numeric_limits<int>::max());
+    } else {
+      CHECK(synth.active_voice_count() == 0);
+      CHECK(synth.tail_samples() < std::numeric_limits<int>::max());
+    }
+  };
+  SECTION("one-shot ignores note-off and keeps looping") { check(true); }
+  SECTION("ordinary voices release despite continuous sample looping") { check(false); }
+}
+
+TEST_CASE("an unlooped one-shot sample is bounded by the sample it plays",
+          "[midi][synth][sample][tail-physical]") {
+  constexpr size_t kFrames = 4800;
+  const SampleBank bank = one_shot_bank(kFrames);
+  NativeSynthConfig cfg;
+  cfg.patch.mode = SynthEngineMode::kSample;
+  cfg.patch.one_shot = true;
+  cfg.patch.amp_env = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f};
+
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  // The bank arrives after prepare(), as a host binding may hand it over.
+  synth.set_sample_bank(&bank);
+  const int64_t tail = synth.tail_samples();
+  CHECK(tail < std::numeric_limits<int>::max());
+  CHECK(tail >= static_cast<int64_t>(kFrames));
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  sonare::test::render_left(synth, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  int64_t rendered = 256;
+  while (synth.active_voice_count() > 0 && rendered <= tail) {
+    sonare::test::render_left(synth, 256);
+    rendered += 256;
+  }
+  CHECK(synth.active_voice_count() == 0);
+}
 
 TEST_CASE("SampleBank rejects data and zones it cannot play", "[midi][sample]") {
   SampleBank bank;

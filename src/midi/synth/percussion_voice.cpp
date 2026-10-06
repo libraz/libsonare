@@ -54,6 +54,11 @@ constexpr float kSilenceFloor = 1.0e-5f;
 /// that a dead slot is reclaimed promptly, long enough that the gap between two
 /// collisions of a shaker does not read as the end of the shake.
 constexpr float kSilenceFollowerMs = 40.0f;
+/// How far above full scale a strike's radiated peak is allowed when the ring
+/// bound is taken: in-phase modes and a resonant plate can sum past 1.
+constexpr float kRingPeakHeadroomDb = 20.0f;
+/// t60 per exponential time constant, ln(1000).
+constexpr float kT60PerTau = 6.907755279f;
 
 float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
@@ -540,6 +545,53 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
 
 bool PercussionVoiceCore::silent() const noexcept {
   return burst_remaining_ == 0 && silence_env_ < kSilenceFloor;
+}
+
+float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params) noexcept {
+  const auto tau_t60 = [](float tau_ms) noexcept { return kT60PerTau * 0.001f * tau_ms; };
+  float source_t60 = 0.0f;
+  float schedule_s = 0.0f;
+  if (params.num_modes > 0) {
+    const float decay_exp = params.mode_decay_exp > 0.0f ? params.mode_decay_exp : 1.0f;
+    float mode_t60 = 0.0f;
+    const int count = std::min(params.num_modes, kMaxPercussionModes);
+    for (int k = 0; k < count; ++k) {
+      const float ratio = params.mode_ratios[static_cast<size_t>(k)];
+      if (ratio <= 0.0f) continue;
+      const float damping = std::pow(std::max(0.01f, ratio), decay_exp);
+      mode_t60 = std::max(
+          mode_t60, std::min(kMaxModeDecayS, std::max(0.005f, params.mode_decay_s) / damping));
+    }
+    // The wires ring on their own damping once the head stops opening the gate.
+    if (params.wire_buzz > 0.0f && params.wire_decay_ms > 0.0f) {
+      mode_t60 += tau_t60(params.wire_decay_ms);
+    }
+    source_t60 = std::max(source_t60, mode_t60);
+  }
+  if (params.noise_gain > 0.0f) {
+    source_t60 = std::max(source_t60, tau_t60(std::max(1.0f, params.noise_decay_ms)));
+    if (params.noise_burst_count > 0) {
+      schedule_s = static_cast<float>(params.noise_burst_count) * 0.001f *
+                   std::max(0.1f, params.noise_burst_interval_ms);
+      source_t60 = std::max(source_t60, tau_t60(std::max(1.0f, params.noise_burst_decay_ms)));
+    }
+  }
+  if (params.phisem_beans > 0.0f) {
+    source_t60 = std::max(source_t60, tau_t60(std::max(1.0f, params.phisem_energy_ms) +
+                                              std::max(0.2f, params.phisem_sound_ms)));
+  }
+  float chain_t60 = source_t60;
+  if (params.plate_gain > 0.0f) chain_t60 += std::max(0.01f, params.plate_t60_s);
+  float shell_t60 = 0.0f;
+  const int shells = std::clamp(params.shell_num_modes, 0, kMaxShellModes);
+  for (int k = 0; k < shells; ++k) {
+    shell_t60 = std::max(shell_t60, std::max(0.005f, params.shell_t60_s[static_cast<size_t>(k)]));
+  }
+  chain_t60 += shell_t60;
+  const float span_db = -20.0f * std::log10(kSilenceFloor) + kRingPeakHeadroomDb;
+  // The follower needs its own fall once the output is already below the floor.
+  const float follower_s = 0.001f * kSilenceFollowerMs * span_db * std::log(10.0f) / 20.0f;
+  return schedule_s + chain_t60 * span_db / 60.0f + follower_s;
 }
 
 void PercussionVoiceCore::kill() noexcept {

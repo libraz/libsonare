@@ -229,15 +229,19 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
       return true;
     case NativeSynthParamId::kAmpAttackMs:
       p.amp_env.attack_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.attack_ms);
+      raise_tail();
       return true;
     case NativeSynthParamId::kAmpDecayMs:
       p.amp_env.decay_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.decay_ms);
+      raise_tail();
       return true;
     case NativeSynthParamId::kAmpSustain:
       p.amp_env.sustain = clamp_finite(value, entry->min, entry->max, p.amp_env.sustain);
+      raise_tail();
       return true;
     case NativeSynthParamId::kAmpReleaseMs:
       p.amp_env.release_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.release_ms);
+      raise_tail();
       return true;
     case NativeSynthParamId::kFilterAttackMs:
       p.filter_env.attack_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.attack_ms);

@@ -7,9 +7,11 @@
 
 #include "midi/synth/fm_voice.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <set>
 #include <vector>
 
@@ -25,6 +27,7 @@ namespace {
 
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::FmAlgorithm;
+using sonare::midi::synth::FmOperatorParams;
 using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
@@ -44,6 +47,33 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
     ++n;
   }
   return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
+}
+
+float absolute_peak(const std::vector<float>& buf) {
+  float peak = 0.0f;
+  for (float sample : buf) peak = std::max(peak, std::fabs(sample));
+  return peak;
+}
+
+NativeSynthPatch fm_base_patch();
+
+void set_fm_operator(FmOperatorParams& op, float level, float delay_ms, float decay_ms,
+                     float sustain) {
+  op.ratio = 1.0f;
+  op.level = level;
+  op.env = {delay_ms, 0.0f, 0.0f, decay_ms, sustain, 50.0f};
+}
+
+NativeSynthConfig fm_lifecycle_config(FmAlgorithm algorithm) {
+  NativeSynthConfig cfg;
+  cfg.patch = fm_base_patch();
+  cfg.patch.one_shot = true;
+  // Keep the wrapper VCA alive so the FM carriers, rather than the shared TVA,
+  // determine when a one-shot voice can release its pool slot.
+  cfg.patch.amp_env = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 50.0f};
+  cfg.patch.fm.algorithm = algorithm;
+  for (FmOperatorParams& op : cfg.patch.fm.ops) set_fm_operator(op, 0.0f, 0.0f, 0.0f, 0.0f);
+  return cfg;
 }
 
 using sonare::test::power_spectrum;
@@ -185,4 +215,175 @@ TEST_CASE("key-rate scaling shortens decay up the keyboard", "[midi][synth][fm]"
   const std::vector<float> high_note = render_patch(ep, 96, 110, 148800);
   // The high note must have decayed appreciably further by then.
   REQUIRE(decay_ratio(high_note) < 0.6f * decay_ratio(low_note));
+}
+
+TEST_CASE("FM one-shots start audibly, ignore note-off, and retire after the carrier decays",
+          "[midi][synth][fm]") {
+  // Stack2 deliberately leaves its modulator alive at sustain. It is not a
+  // carrier, so it must not keep the one-shot slot open after op0 has ended.
+  NativeSynthConfig cfg = fm_lifecycle_config(FmAlgorithm::kStack2);
+  set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 0.0f, 20.0f, 0.0f);
+  // An incorrectly forwarded note-off would replace the short natural decay
+  // with this long release and leave the carrier active at the final check.
+  cfg.patch.fm.ops[0].env.release_ms = 2000.0f;
+  set_fm_operator(cfg.patch.fm.ops[1], 1.0f, 0.0f, 0.0f, 1.0f);
+
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const std::vector<float> onset = render_left(synth, 256);
+  REQUIRE(absolute_peak(onset) > 0.01f);
+  REQUIRE(synth.active_voice_count() == 1);
+
+  // One-shot release ignores note-off. The carrier is still in its decay here,
+  // so the voice must remain active after the event.
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  render_left(synth, 256);
+  REQUIRE(synth.active_voice_count() == 1);
+
+  render_left(synth, static_cast<int>(kRate));
+  CHECK(synth.active_voice_count() == 0);
+}
+
+TEST_CASE("FM one-shot lifetime follows both carriers in additive algorithms",
+          "[midi][synth][fm]") {
+  auto check_algorithm = [](FmAlgorithm algorithm, int delayed_carrier) {
+    NativeSynthConfig cfg = fm_lifecycle_config(algorithm);
+    set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 0.0f, 1.0f, 0.0f);
+    set_fm_operator(cfg.patch.fm.ops[delayed_carrier], 1.0f, 50.0f, 200.0f, 0.0f);
+
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+
+    // op0 is already over, while the second carrier is still in its delay.
+    render_left(synth, 2048);
+    REQUIRE(synth.active_voice_count() == 1);
+    render_left(synth, 4800);
+    REQUIRE(synth.active_voice_count() == 1);
+
+    render_left(synth, static_cast<int>(kRate));
+    CHECK(synth.active_voice_count() == 0);
+  };
+
+  SECTION("kAdd2") { check_algorithm(FmAlgorithm::kAdd2, 1); }
+  SECTION("kPair2x2") { check_algorithm(FmAlgorithm::kPair2x2, 2); }
+}
+
+TEST_CASE("FM one-shot does not retire on a zero crossing while a carrier sustains",
+          "[midi][synth][fm]") {
+  NativeSynthConfig cfg = fm_lifecycle_config(FmAlgorithm::kStack2);
+  set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 0.0f, 0.0f, 1.0f);
+
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const std::vector<float> first = render_left(synth, 1);
+  // The carrier starts at phase zero, so this first sample is a zero crossing.
+  REQUIRE(first.size() == 1);
+  CHECK(std::fabs(first.front()) < 1.0e-7f);
+  REQUIRE(synth.active_voice_count() == 1);
+
+  const std::vector<float> sustained = render_left(synth, 4096);
+  CHECK(absolute_peak(sustained) > 0.01f);
+  CHECK(synth.active_voice_count() == 1);
+}
+
+TEST_CASE("silent FM carriers do not keep one-shot slots alive", "[midi][synth][fm]") {
+  NativeSynthConfig cfg = fm_lifecycle_config(FmAlgorithm::kAdd2);
+  set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 0.0f, 20.0f, 0.0f);
+  set_fm_operator(cfg.patch.fm.ops[1], 0.0f, 0.0f, 0.0f, 1.0f);
+  set_fm_operator(cfg.patch.fm.ops[2], 1.0f, 0.0f, 0.0f, 1.0f);
+
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  REQUIRE(absolute_peak(render_left(synth, 256)) > 0.01f);
+  REQUIRE(synth.active_voice_count() == 1);
+  render_left(synth, static_cast<int>(kRate));
+  CHECK(synth.active_voice_count() == 0);
+}
+
+TEST_CASE("FM one-shot tail includes a delayed finite carrier at note zero",
+          "[midi][synth][fm][fm-tail]") {
+  NativeSynthConfig cfg = fm_lifecycle_config(FmAlgorithm::kStack2);
+  cfg.patch.amp_env.release_ms = 1.0f;
+  set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 100.0f, 100.0f, 0.0f);
+  cfg.patch.fm.ops[0].key_rate_scale = 1.0f;
+  // The modulator sustains, but it is not audible by itself and must not make
+  // the tail infinite.
+  set_fm_operator(cfg.patch.fm.ops[1], 1.0f, 0.0f, 0.0f, 1.0f);
+
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  const int64_t wrapper_tail = sonare::midi::synth::DahdsrEnvelope::release_tail_samples(
+      kRate, cfg.patch.amp_env.release_ms);
+  const int64_t note_zero_carrier_tail = sonare::midi::synth::DahdsrEnvelope::one_shot_tail_samples(
+      kRate, cfg.patch.fm.ops[0].env, 1.0f, std::exp2(5.0f));
+
+  CHECK(static_cast<int64_t>(synth.tail_samples()) > wrapper_tail);
+  CHECK(static_cast<int64_t>(synth.tail_samples()) >= note_zero_carrier_tail);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 0, 127)));
+  const int64_t probe_samples = wrapper_tail + 256;
+  render_left(synth, static_cast<int>(probe_samples));
+  // The wrapper envelope's own tail has elapsed, but the carrier is still in its
+  // 100 ms delay, so the one-shot slot must remain live.
+  REQUIRE(synth.active_voice_count() == 1);
+
+  const std::vector<float> delayed_onset = render_left(synth, static_cast<int>(kRate * 0.12));
+  REQUIRE(absolute_peak(delayed_onset) > 1.0e-3f);
+  REQUIRE(synth.active_voice_count() == 1);
+
+  int64_t remaining = static_cast<int64_t>(synth.tail_samples()) - probe_samples -
+                      static_cast<int64_t>(delayed_onset.size());
+  while (remaining > 0 && synth.active_voice_count() > 0) {
+    const int chunk = static_cast<int>(std::min<int64_t>(remaining, 4096));
+    render_left(synth, chunk);
+    remaining -= chunk;
+  }
+  CHECK(synth.active_voice_count() == 0);
+}
+
+TEST_CASE("FM one-shot tail is infinite only for audible sustaining carriers",
+          "[midi][synth][fm][fm-tail]") {
+  NativeSynthConfig cfg = fm_lifecycle_config(FmAlgorithm::kStack2);
+  // A silent carrier with a sustaining envelope must be ignored.
+  set_fm_operator(cfg.patch.fm.ops[0], 0.0f, 0.0f, 100.0f, 1.0f);
+  // A sustaining modulator is not part of the lifetime bound either.
+  set_fm_operator(cfg.patch.fm.ops[1], 1.0f, 0.0f, 100.0f, 1.0f);
+
+  NativeSynth finite(cfg);
+  finite.prepare(kRate, 256);
+  CHECK(finite.tail_samples() < std::numeric_limits<int>::max());
+
+  set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 0.0f, 100.0f, 1.0f);
+  NativeSynth infinite(cfg);
+  infinite.prepare(kRate, 256);
+  CHECK(infinite.tail_samples() == std::numeric_limits<int>::max());
+
+  NativeSynthConfig gm_cfg = fm_lifecycle_config(FmAlgorithm::kStack2);
+  gm_cfg.use_gm_programs = true;
+  set_fm_operator(gm_cfg.patch.fm.ops[0], 1.0f, 0.0f, 100.0f, 1.0f);
+  NativeSynth gm(gm_cfg);
+  gm.prepare(kRate, 256);
+  CHECK(gm.tail_samples() < std::numeric_limits<int>::max());
+}
+
+TEST_CASE("FM one-shot tail covers the key-rate minimum decay", "[midi][synth][fm][fm-tail]") {
+  NativeSynthConfig cfg = fm_lifecycle_config(FmAlgorithm::kStack2);
+  cfg.patch.amp_env.release_ms = 0.0f;
+  set_fm_operator(cfg.patch.fm.ops[0], 1.0f, 0.0f, 0.0f, 0.0f);
+  cfg.patch.fm.ops[0].key_rate_scale = 1.0f;
+  sonare::midi::synth::FmVoiceCore core;
+  core.start(cfg.patch.fm, kRate, 0, sonare::midi::Velocity16::from7(127));
+  const int64_t bound = sonare::midi::synth::fm_one_shot_tail_samples(cfg.patch.fm, kRate);
+  int elapsed = 0;
+  while (!core.finished() && elapsed < 1024) {
+    core.render(1.0f);
+    ++elapsed;
+  }
+  REQUIRE(core.finished());
+  REQUIRE(elapsed > 2);
+  CHECK(bound >= elapsed);
 }

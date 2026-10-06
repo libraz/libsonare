@@ -47,6 +47,12 @@ struct ChannelParamState {
   }
 
   bool selected_nrpn() const noexcept { return mode == Mode::kNrpn; }
+
+  /// RPN 7F/7F is the null selection. It also clears the remembered NRPN
+  /// bytes, so a later lone NRPN LSB cannot revive a stale MSB selection.
+  void deselect_on_rpn_null() noexcept {
+    if (rpn_msb == 0x7Fu && rpn_lsb == 0x7Fu) reset();
+  }
 };
 
 /// The GS part edits — the eight at 40 1x 30 TONE MODIFY and the NRPNs they

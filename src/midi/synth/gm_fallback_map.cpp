@@ -5,12 +5,14 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <type_traits>
 #include <vector>
 
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gs_layer.h"
+#include "util/numeric_validation.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
@@ -1243,30 +1245,103 @@ bool gs_variation_is_voiced_apart(uint16_t bank, uint8_t program, GsToneMap map)
   return &gm_fallback_patch(bank, program, map) != &gm_fallback_patch(0, program, map);
 }
 
-float gm_fallback_max_release_ms() noexcept {
-  static const float kMax = [] {
-    float max_ms = 0.0f;
-    for (size_t i : detail::kLiveBases) {
-      const NativeSynthPatch& p = family_patches()[i];
-      // Zero-sustain (percussive/one-shot) patches ring through their decay
-      // after note-off, so the decay bounds the tail too.
-      max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
+namespace {
+
+/// Envelope-stage maxima across the fallback tables. The maxima are independent
+/// of one another, so combining the slowest stages of different patches bounds
+/// every patch at once without a per-patch walk on the audio thread.
+struct FallbackTailBounds {
+  float max_release_ms = 0.0f;
+  float max_zero_sustain_decay_ms = 0.0f;
+  bool has_one_shot = false;
+  DahdsrConfig one_shot_env{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  /// One-shots whose envelope holds end by their engine instead.
+  float max_ring_s = 0.0f;
+  std::array<const FmPatchParams*, detail::kLiveBases.size() + 128 + detail::kProgramOverrideCount>
+      sustained_fm{};
+  size_t sustained_fm_count = 0;
+  bool unbounded = false;
+};
+
+void observe_fallback_tail(FallbackTailBounds& bounds, const NativeSynthPatch& patch,
+                           const NativeSynthPatch* stored) noexcept {
+  const DahdsrConfig& amp = patch.amp_env;
+  const bool zero_sustain = amp.sustain <= DahdsrEnvelope::kSilenceLevel;
+  if (patch.one_shot && !zero_sustain) {
+    // The cases mirror sustained_one_shot_tail_samples; no fallback patch is a sample voice.
+    switch (patch.mode) {
+      case SynthEngineMode::kPercussion:
+        bounds.max_ring_s =
+            std::max(bounds.max_ring_s, PercussionVoiceCore::ring_bound_s(patch.percussion));
+        break;
+      case SynthEngineMode::kFm:
+        // A kit variation leaves the FM section alone, so one entry per stored patch.
+        if (bounds.sustained_fm_count == 0 ||
+            bounds.sustained_fm[bounds.sustained_fm_count - 1] != &stored->fm) {
+          bounds.sustained_fm[bounds.sustained_fm_count++] = &stored->fm;
+        }
+        break;
+      default:
+        bounds.unbounded = true;
+        break;
     }
-    // Per-note drum kit: some GS instruments (open triangle, belltree) ring far
-    // longer than the base kit pieces, so bound the tail over the whole table.
-    for (const NativeSynthPatch& p : drum_note_table()) {
-      max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
+    return;
+  }
+  bounds.max_release_ms = std::max(bounds.max_release_ms, amp.release_ms);
+  if (zero_sustain) {
+    bounds.max_zero_sustain_decay_ms = std::max(bounds.max_zero_sustain_decay_ms, amp.decay_ms);
+  }
+  if (patch.one_shot) {
+    bounds.has_one_shot = true;
+    bounds.one_shot_env.delay_ms = std::max(bounds.one_shot_env.delay_ms, amp.delay_ms);
+    bounds.one_shot_env.attack_ms = std::max(bounds.one_shot_env.attack_ms, amp.attack_ms);
+    bounds.one_shot_env.hold_ms = std::max(bounds.one_shot_env.hold_ms, amp.hold_ms);
+    bounds.one_shot_env.decay_ms = std::max(bounds.one_shot_env.decay_ms, amp.decay_ms);
+  }
+}
+
+const FallbackTailBounds& fallback_tail_bounds() noexcept {
+  static const FallbackTailBounds kBounds = [] {
+    FallbackTailBounds bounds;
+    const auto& families = family_patches();
+    for (size_t i : detail::kLiveBases) observe_fallback_tail(bounds, families[i], &families[i]);
+    // Every kit of every note: open triangle, belltree and TR-808 outring the Standard kit.
+    for (const NativeSynthPatch& piece : drum_note_table()) {
+      const uint8_t note = static_cast<uint8_t>(&piece - drum_note_table().data());
+      for (size_t kit = 0; kit < kGsDrumKits.size(); ++kit) {
+        NativeSynthPatch varied = piece;
+        apply_gs_drum_kit(varied.percussion, varied.amp_env, static_cast<uint8_t>(kit), note);
+        observe_fallback_tail(bounds, varied, &piece);
+      }
     }
-    // Program overrides: sweep the whole table through its contiguous view so
-    // a newly added override patch is bounded without touching this function.
     const NativeSynthPatch* overrides = detail::program_override_patches(program_overrides());
     for (std::size_t i = 0; i < detail::kProgramOverrideCount; ++i) {
-      max_ms = std::max(max_ms,
-                        std::max(overrides[i].amp_env.release_ms, overrides[i].amp_env.decay_ms));
+      observe_fallback_tail(bounds, overrides[i], &overrides[i]);
     }
-    return max_ms;
+    return bounds;
   }();
-  return kMax;
+  return kBounds;
+}
+
+}  // namespace
+
+int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
+                                     float release_scale) noexcept {
+  const FallbackTailBounds& bounds = fallback_tail_bounds();
+  if (bounds.unbounded) return std::numeric_limits<int64_t>::max();
+  const float stage_ms = std::max(bounds.max_release_ms * std::max(0.0f, release_scale),
+                                  bounds.max_zero_sustain_decay_ms * std::max(0.0f, decay_scale));
+  int64_t tail = DahdsrEnvelope::release_tail_samples(sample_rate, stage_ms);
+  if (bounds.has_one_shot) {
+    tail = std::max(tail, DahdsrEnvelope::one_shot_tail_samples(sample_rate, bounds.one_shot_env,
+                                                                attack_scale, decay_scale));
+  }
+  tail = std::max(tail,
+                  numeric::ceil_sample_count(static_cast<double>(bounds.max_ring_s) * sample_rate));
+  for (size_t i = 0; i < bounds.sustained_fm_count; ++i) {
+    tail = std::max(tail, fm_one_shot_tail_samples(*bounds.sustained_fm[i], sample_rate));
+  }
+  return tail;
 }
 
 }  // namespace sonare::midi::synth

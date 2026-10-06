@@ -210,8 +210,12 @@ const char* gm_rig_stage_name(uint8_t index) noexcept;
 /// references, and every other slot ships empty.
 std::vector<GsEfxStage> gm_rig_chain(uint8_t id);
 
-/// Longest amp-envelope release across all fallback patches (ms) — players
-/// fold this into their tail accounting when the fallback is enabled.
-float gm_fallback_max_release_ms() noexcept;
+/// Longest tail any fallback patch, every GS kit variation included, can ring
+/// after its last event at the given GS EG time multipliers, in samples. Bounds
+/// native_patch_tail_samples for each of them; INT64_MAX when one is unbounded.
+/// The first call builds a table and allocates nothing, but belongs on the
+/// control thread (a player's prepare()).
+int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
+                                     float release_scale) noexcept;
 
 }  // namespace sonare::midi::synth

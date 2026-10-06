@@ -2,23 +2,55 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kCentsPerSemitone;
 
+namespace {
+
+/// The loop mode a zone plays with once @p p's override is applied.
+int effective_loop_mode(const SampleRegion& region, const SamplePatchParams& p) noexcept {
+  if (p.loop_override < 0) return region.loop_mode;
+  return (p.loop_override == 1 || p.loop_override == 3) && region.loop_end > region.loop_start
+             ? p.loop_override
+             : 0;
+}
+
+}  // namespace
+
+int64_t sample_one_shot_tail_samples(const SampleBank* bank, const SamplePatchParams& params,
+                                     double sample_rate) noexcept {
+  if (bank == nullptr || !(sample_rate > 0.0)) return 0;
+  double longest = 0.0;
+  const size_t count = bank->zone_count(params.set_index);
+  for (size_t i = 0; i < count; ++i) {
+    const SampleZone& zone = bank->zone_at(params.set_index, i);
+    // A key-up ends a while-key-down loop; only a continuous one never ends.
+    if (effective_loop_mode(zone.region, params) == 1) return std::numeric_limits<int64_t>::max();
+    const float key_cents =
+        params.key_track ? kCentsPerSemitone *
+                               (static_cast<float>(zone.key_lo) - static_cast<float>(zone.root_key))
+                         : 0.0f;
+    const double rate_ratio = zone.source_rate > 0.0 ? zone.source_rate / sample_rate : 1.0;
+    const double increment =
+        rate_ratio * std::exp2(static_cast<double>(key_cents + zone.tune_cents) / kCentsPerOctave);
+    const double span =
+        static_cast<double>(zone.region.end) - static_cast<double>(zone.region.start);
+    if (increment > 0.0) longest = std::max(longest, span / increment);
+  }
+  return numeric::ceil_sample_count(longest);
+}
+
 bool SampleVoiceCore::start_layer(Layer& layer, const SampleZone& zone, const SamplePatchParams& p,
                                   double sample_rate, uint8_t note, float weight) noexcept {
   SampleRegion region = zone.region;
-  if (p.loop_override >= 0) {
-    region.loop_mode =
-        (p.loop_override == 1 || p.loop_override == 3) && region.loop_end > region.loop_start
-            ? p.loop_override
-            : 0;
-  }
+  region.loop_mode = effective_loop_mode(region, p);
 
   const double span = static_cast<double>(region.end) - static_cast<double>(region.start);
   const double offset = std::clamp(static_cast<double>(p.start_offset01), 0.0, 0.999) * span;

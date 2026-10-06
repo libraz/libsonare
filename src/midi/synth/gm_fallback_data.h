@@ -395,7 +395,7 @@ static_assert(program_override_list_in_declaration_order(),
               "SONARE_GM_OVERRIDE_PATCHES must list ProgramOverrides members in declaration order");
 
 /// Contiguous view over every patch in a ProgramOverrides table. Whole-table
-/// sweeps (e.g. the maximum release/decay bound in gm_fallback_max_release_ms)
+/// sweeps (e.g. the tail bound in gm_fallback_max_tail_samples)
 /// iterate this view so a newly added override member is picked up
 /// automatically instead of depending on a hand-maintained member list.
 inline const NativeSynthPatch* program_override_patches(

@@ -16,9 +16,11 @@
 /// Mode 4 accepts both. The guard is a conformance one with no audible arm, so
 /// it is tested where it can be: MpeState::ignores, in mpe_zones_test.cpp.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "midi/controller_profile.h"
@@ -34,6 +36,8 @@ using sonare::midi::ControllerAxis;
 using sonare::midi::ControllerInput;
 using sonare::midi::ControllerProfile;
 using sonare::midi::kMpeTimbreCc;
+using sonare::midi::MidiEvent;
+using sonare::midi::MidiInstrumentSourceOutput;
 using sonare::midi::Ump;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
@@ -53,12 +57,13 @@ constexpr uint8_t kVelocity = 100;
 /// +/-2 range and +12 at the zone's +/-48.
 constexpr uint16_t kBendUp = 8192 + 2048;
 
-NativeSynth make_synth() {
+NativeSynth make_synth(bool dc_block = true) {
   NativeSynthConfig cfg;
   cfg.patch = NativeSynthPatch{};
   cfg.patch.mode = SynthEngineMode::kReed;
   cfg.patch.cutoff_hz = 20000.0f;
   cfg.patch.amp_env.sustain = 1.0f;
+  cfg.dc_block = dc_block;
   return NativeSynth(cfg);
 }
 
@@ -94,6 +99,11 @@ struct FoldedDimension {
   Ump (*step)(uint8_t channel, uint8_t value);
 };
 
+struct VelocityLaneRender {
+  std::vector<float> first;
+  std::vector<float> second;
+};
+
 Ump timbre_step(uint8_t channel, uint8_t value) {
   return sonare::midi::make_midi1_control_change(0, channel, kMpeTimbreCc, value);
 }
@@ -126,6 +136,448 @@ double folded_cents(const FoldedDimension& dimension, bool zoned, uint8_t manage
   const std::vector<float> audio = render_left(synth, 24576);
   const double hz = fft_fundamental(audio, 8192, kNoteHz * std::pow(2.0, expect_cents / 1200.0));
   return 1200.0 * std::log2(hz / kNoteHz);
+}
+
+Ump folded_wide_step(const FoldedDimension& dimension, uint8_t channel, uint32_t value) {
+  return dimension.input == ControllerInput::kChannelPressure
+             ? sonare::midi::make_midi2_channel_pressure(0, channel, value)
+             : sonare::midi::make_midi2_control_change(0, channel, dimension.index, value);
+}
+
+std::vector<float> folded_wide_audio(const FoldedDimension& dimension, bool zoned, uint32_t value) {
+  ControllerProfile profile;
+  REQUIRE(
+      profile.bind({dimension.input, dimension.index, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  if (zoned) send_mcm(synth, 0, 7);
+  send(synth, folded_wide_step(dimension, 2, value));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  return render_left(synth, 24576);
+}
+
+std::vector<float> render_released_folded(const FoldedDimension& dimension, bool update_member,
+                                          ControllerAxis axis = ControllerAxis::kPitchCents) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({dimension.input, dimension.index, axis, 0.0f,
+                        axis == ControllerAxis::kPitchCents ? 1200.0f : 1.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, dimension.step(2, 20));
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 64, 127));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  render_left(synth, 1024);
+  if (update_member) send(synth, dimension.step(2, 100));
+  return render_left(synth, 8192);
+}
+
+std::vector<float> render_released_manager_folded(const FoldedDimension& dimension,
+                                                  bool update_manager, ControllerAxis axis) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({dimension.input, dimension.index, axis, 0.0f,
+                        axis == ControllerAxis::kPitchCents ? 1200.0f : 1.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, dimension.step(0, 20));
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 64, 127));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  render_left(synth, 1024);
+  if (update_manager) send(synth, dimension.step(0, 100));
+  return render_left(synth, 8192);
+}
+
+std::vector<float> render_held_folded(const FoldedDimension& dimension, bool update_member) {
+  ControllerProfile profile;
+  REQUIRE(
+      profile.bind({dimension.input, dimension.index, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, dimension.step(2, 20));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  if (update_member) send(synth, dimension.step(2, 100));
+  return render_left(synth, 8192);
+}
+
+std::vector<float> render_released_bend(bool update_member, bool update_manager) {
+  NativeSynth synth = make_synth();
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, kBendUp));
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 64, 127));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  render_left(synth, 1024);
+  if (update_member) {
+    send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, 8192 - 2048));
+  }
+  if (update_manager) {
+    send(synth, sonare::midi::make_midi1_pitch_bend(0, 0, kBendUp));
+  }
+  return render_left(synth, 8192);
+}
+
+std::vector<float> render_held_bend(bool update_member) {
+  NativeSynth synth = make_synth();
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, kBendUp));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  if (update_member) {
+    send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, 8192 - 2048));
+  }
+  return render_left(synth, 8192);
+}
+
+std::vector<float> render_released_channel_control(uint8_t controller, uint8_t value, bool update) {
+  NativeSynth synth = make_synth();
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 64, 127));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  render_left(synth, 1024);
+  if (update) send(synth, sonare::midi::make_midi1_control_change(0, 2, controller, value));
+  return render_left(synth, 8192);
+}
+
+double render_after_manager_reset(const FoldedDimension& dimension, uint8_t manager_value,
+                                  uint8_t member_value, bool reset_manager, double expect_cents) {
+  ControllerProfile profile;
+  REQUIRE(
+      profile.bind({dimension.input, dimension.index, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  if (member_value != 0) send(synth, dimension.step(2, member_value));
+  if (manager_value != 0) send(synth, dimension.step(0, manager_value));
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 64, 127));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  if (reset_manager) {
+    send(synth, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+  }
+  // Start a fresh voice after the reset so the assertion measures the retained
+  // axis value rather than the phase history of the voice that saw the manager
+  // gesture. The pitch estimate is insensitive to allocation age and envelope
+  // phase, while a stale axis shifts it by hundreds of cents.
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 120, 0));
+  render_left(synth, 1024);
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  const std::vector<float> audio = render_left(synth, 24576);
+  const double hz = fft_fundamental(audio, 8192, kNoteHz * std::pow(2.0, expect_cents / 1200.0));
+  return 1200.0 * std::log2(hz / kNoteHz);
+}
+
+/// The dimension which wrote a shared profile axis last must be the one that
+/// survives a manager reset.  The helper sends both manager values first so a
+/// later member message is a genuinely folded value, then changes the order of
+/// the two member writers.
+double render_shared_axis_after_manager_reset(bool pressure_last) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  REQUIRE(profile.bind(
+      {ControllerInput::kControlChange, kMpeTimbreCc, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+
+  send(synth, pressure_step(0, 70));
+  send(synth, timbre_step(0, 80));
+  if (pressure_last) {
+    send(synth, timbre_step(2, 20));
+    send(synth, pressure_step(2, 30));
+  } else {
+    send(synth, pressure_step(2, 30));
+    send(synth, timbre_step(2, 20));
+  }
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+  // Remove the pre-reset voice before measuring a fresh allocation. This keeps
+  // the assertion about the retained controller source independent of phase.
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 120, 0));
+  render_left(synth, 1024);
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  const std::vector<float> audio = render_left(synth, 24576);
+  const double expected = 1200.0 * static_cast<double>(pressure_last ? 30 : 20) / 127.0;
+  const double hz = fft_fundamental(audio, 8192, kNoteHz * std::pow(2.0, expected / 1200.0));
+  return 1200.0 * std::log2(hz / kNoteHz);
+}
+
+/// Manager first, member second: the member message carries the combined value,
+/// and the reset must still reduce it to the member's own.
+double render_manager_first_member_second_reset() {
+  ControllerProfile profile;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, pressure_step(0, 80));
+  send(synth, pressure_step(2, 30));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 120, 0));
+  render_left(synth, 1024);
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  const std::vector<float> audio = render_left(synth, 24576);
+  const double hz =
+      fft_fundamental(audio, 8192, kNoteHz * std::pow(2.0, 1200.0 * 30.0 / 127.0 / 1200.0));
+  return 1200.0 * std::log2(hz / kNoteHz);
+}
+
+double render_member_reset_manager_survival(bool reset_member, bool member_input = true) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, pressure_step(0, 80));
+  if (member_input) send(synth, pressure_step(2, 30));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  if (reset_member) send(synth, sonare::midi::make_midi1_control_change(0, 2, 121, 0));
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 120, 0));
+  render_left(synth, 1024);
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  const std::vector<float> audio = render_left(synth, 24576);
+  const double expected =
+      1200.0 * static_cast<double>(reset_member || !member_input ? 80 : 110) / 127.0;
+  const double hz = fft_fundamental(audio, 8192, kNoteHz * std::pow(2.0, expected / 1200.0));
+  return 1200.0 * std::log2(hz / kNoteHz);
+}
+
+struct SourceVoiceRender {
+  std::vector<float> first;
+  std::vector<float> second;
+};
+
+SourceVoiceRender render_source_voice_pair(NativeSynth& synth, int block = 8192) {
+  std::vector<float> fallback_l(static_cast<size_t>(block), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(block), 0.0f);
+  std::vector<float> first_l(static_cast<size_t>(block), 0.0f);
+  std::vector<float> first_r(static_cast<size_t>(block), 0.0f);
+  std::vector<float> second_l(static_cast<size_t>(block), 0.0f);
+  std::vector<float> second_r(static_cast<size_t>(block), 0.0f);
+  float* fallback_channels[] = {fallback_l.data(), fallback_r.data()};
+  float* first_channels[] = {first_l.data(), first_r.data()};
+  float* second_channels[] = {second_l.data(), second_r.data()};
+  const MidiInstrumentSourceOutput outputs[] = {
+      {0, fallback_channels}, {1, first_channels}, {2, second_channels}};
+  REQUIRE(synth.process_source_tracks(outputs, 3, 2, block));
+  return {std::move(first_l), std::move(second_l)};
+}
+
+/// A manager fold can be applied to one already sounding voice, then a later
+/// note changes the current tracking answer. Reset must use the voice's source
+/// history, retaining the member value on the original voice rather than
+/// applying the post-reset attribution to the newer note.
+SourceVoiceRender render_historical_voice_reset(bool manager_fold, bool reset_manager) {
+  ControllerProfile profile;
+  profile.pressure_tracking = sonare::midi::NoteTracking::kLastNote;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kExcitation, 0.0f, 1.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+
+  // Keep the voice under test on source 1. Two distinct notes are required:
+  // the MPE note tracker deduplicates repeated pitches, so a same-pitch pair
+  // would never make the later note replace the historical attribution.
+  MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 2, kNote - 12, kVelocity));
+  first.source_track_id = 2;
+  synth.on_event(0, first);
+  render_left(synth, 2048);
+
+  MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  second.source_track_id = 1;
+  synth.on_event(0, second);
+  render_left(synth, 2048);
+  // The fold is applied to B (source 1), which is the current kLastNote.
+  if (manager_fold) send(synth, pressure_step(0, 70));
+  send(synth, pressure_step(2, 20));
+  render_left(synth, 2048);
+  // A third note changes the current kLastNote answer after the manager fold
+  // has already been attributed to source 1.
+  MidiEvent third = event(sonare::midi::make_midi1_note_on(0, 2, kNote + 12, kVelocity));
+  third.source_track_id = 3;
+  synth.on_event(0, third);
+  render_left(synth, 2048);
+  if (reset_manager) send(synth, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+  return render_source_voice_pair(synth, 16384);
+}
+
+SourceVoiceRender render_manager_zonewide_curve(bool manager_update) {
+  ControllerProfile profile;
+  profile.pressure_tracking = sonare::midi::NoteTracking::kLastNote;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kExcitation, 0.0f, 1.0f, 2.0f}));
+  NativeSynth synth = make_synth(false);
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  // The member raw value is a channel template copied by both notes. The
+  // manager update must then reach both held voices and be composed before the
+  // profile's nonlinear curve is evaluated.
+  send(synth, pressure_step(2, 10));
+  MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 2, kNote - 12, kVelocity));
+  first.source_track_id = 1;
+  synth.on_event(0, first);
+  MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  second.source_track_id = 2;
+  synth.on_event(0, second);
+  render_left(synth, 4096);
+  if (manager_update) send(synth, pressure_step(0, 90));
+  return render_source_voice_pair(synth);
+}
+
+/// A per-note MPE engine axis must remain frozen through a member CC121 even
+/// though the value was never stored in the channel-wide axis table.
+std::vector<float> render_per_note_release_after_member_reset(bool reset_member,
+                                                              bool apply_pressure = true) {
+  ControllerProfile profile;
+  profile.pressure_tracking = sonare::midi::NoteTracking::kLastNote;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kBrightness, 0.0f, 1.0f}));
+  NativeSynth synth = make_synth(false);
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 2, kNote - 12, kVelocity));
+  first.source_track_id = 2;
+  synth.on_event(0, first);
+  MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  second.source_track_id = 1;
+  synth.on_event(0, second);
+  render_left(synth, 2048);
+  if (apply_pressure) {
+    send(synth, pressure_step(0, 70));
+    send(synth, pressure_step(2, 20));
+  }
+  render_left(synth, 2048);
+  MidiEvent note_off = event(sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  note_off.source_track_id = 1;
+  synth.on_event(0, note_off);
+  render_left(synth, 1024);
+  if (reset_member) send(synth, sonare::midi::make_midi1_control_change(0, 2, 121, 0));
+  return render_source_voice_pair(synth, 8192).first;
+}
+
+std::vector<float> render_released_ordinary_alias_reset(bool reset_member) {
+  ControllerProfile profile;
+  profile.pressure_tracking = sonare::midi::NoteTracking::kLastNote;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kBrightness, 0.0f, 1.0f}));
+  REQUIRE(
+      profile.bind({ControllerInput::kControlChange, 2, ControllerAxis::kBrightness, 0.0f, 1.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, pressure_step(2, 20));
+  // Ordinary CC2 is deliberately the last writer on the shared axis.
+  send(synth, sonare::midi::make_midi1_control_change(0, 2, 2, 110));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  render_left(synth, 1024);
+  if (reset_member) send(synth, sonare::midi::make_midi1_control_change(0, 2, 121, 0));
+  return render_left(synth, 8192);
+}
+
+std::vector<float> render_released_bend_profile(bool update_member) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kPitchBend, 0, ControllerAxis::kLoudness, 0.2f, 1.0f}));
+  REQUIRE(
+      profile.bind({ControllerInput::kPitchBend, 0, ControllerAxis::kPitchCents, -600.0f, 600.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, kBendUp));
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  render_left(synth, 1024);
+  if (update_member) {
+    send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, 8192 - 2048));
+  }
+  return render_left(synth, 8192);
+}
+
+VelocityLaneRender render_velocity_lanes(ControllerAxis axis, uint16_t first_velocity,
+                                         uint16_t second_velocity, bool add_second) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kVelocity, 0, axis, 0.0f, 1.0f}));
+  // Disable shared DC residuals to compare voice excitation independently.
+  NativeSynth synth = make_synth(false);
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+
+  MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 2, kNote, first_velocity));
+  first.source_track_id = 1;
+  synth.on_event(0, first);
+  const int block = 8192;
+  std::vector<float> first_l(static_cast<size_t>(block), 0.0f);
+  std::vector<float> first_r(static_cast<size_t>(block), 0.0f);
+  std::vector<float> second_l(static_cast<size_t>(block), 0.0f);
+  std::vector<float> second_r(static_cast<size_t>(block), 0.0f);
+  std::vector<float> fallback_l(static_cast<size_t>(block), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(block), 0.0f);
+  float* first_channels[] = {first_l.data(), first_r.data()};
+  float* second_channels[] = {second_l.data(), second_r.data()};
+  float* fallback_channels[] = {fallback_l.data(), fallback_r.data()};
+  const MidiInstrumentSourceOutput outputs[] = {
+      {0, fallback_channels}, {1, first_channels}, {2, second_channels}};
+  REQUIRE(synth.process_source_tracks(outputs, 3, 2, block));
+
+  if (add_second) {
+    MidiEvent second = event(
+        sonare::midi::make_midi1_note_on(0, 2, static_cast<uint8_t>(kNote + 12), second_velocity));
+    second.source_track_id = 2;
+    synth.on_event(0, second);
+  }
+  std::fill(first_l.begin(), first_l.end(), 0.0f);
+  std::fill(first_r.begin(), first_r.end(), 0.0f);
+  std::fill(second_l.begin(), second_l.end(), 0.0f);
+  std::fill(second_r.begin(), second_r.end(), 0.0f);
+  std::fill(fallback_l.begin(), fallback_l.end(), 0.0f);
+  std::fill(fallback_r.begin(), fallback_r.end(), 0.0f);
+  REQUIRE(synth.process_source_tracks(outputs, 3, 2, block));
+  return {std::move(first_l), std::move(second_l)};
+}
+
+std::vector<float> render_velocity_note(const Ump& note_on) {
+  ControllerProfile profile;
+  REQUIRE(profile.bind({ControllerInput::kVelocity, 0, ControllerAxis::kExcitation, 0.0f, 1.0f}));
+  NativeSynth synth = make_synth();
+  synth.set_controller_profile(profile);
+  synth.prepare(kRate, kBlock);
+  send(synth, note_on);
+  return render_left(synth, 8192);
 }
 
 /// Two notes far enough apart that neither sits on a harmonic of the other,
@@ -380,4 +832,278 @@ TEST_CASE("an MCM sent as a MIDI 2.0 Registered Controller configures the zone",
   const double with_zone = bent_cents(zoned, 2, kBendUp, 1200.0);
   CAPTURE(with_zone);
   REQUIRE(std::fabs(with_zone - 1200.0) < 60.0);
+}
+
+TEST_CASE("MPE profile forwarding preserves MIDI 2.0 pressure and timbre width",
+          "[midi][synth][mpe][midi2]") {
+  // This value is between two MIDI 1.0 upscale points. A member-only fold has
+  // no arithmetic to perform, so an MPE render must be exactly the same as an
+  // ordinary channel receiving that same MIDI 2.0 message.
+  const uint32_t raw = sonare::midi::scale_cc_7_to_32(64) + (uint32_t{1} << 24);
+  for (const FoldedDimension& dimension : kFolded) {
+    CAPTURE(dimension.label, raw);
+    const std::vector<float> ordinary = folded_wide_audio(dimension, false, raw);
+    const std::vector<float> mpe = folded_wide_audio(dimension, true, raw);
+    REQUIRE(mpe == ordinary);
+  }
+}
+
+TEST_CASE("MPE member dimensions keep updating while a key is held", "[midi][synth][mpe]") {
+  for (const FoldedDimension& dimension : kFolded) {
+    CAPTURE(dimension.label);
+    const std::vector<float> unchanged = render_held_folded(dimension, false);
+    const std::vector<float> changed = render_held_folded(dimension, true);
+    REQUIRE(changed != unchanged);
+  }
+
+  const std::vector<float> bend_unchanged = render_held_bend(false);
+  const std::vector<float> bend_held = render_held_bend(true);
+  REQUIRE(bend_held != bend_unchanged);
+}
+
+TEST_CASE("MPE member dimensions freeze after Note Off but ordinary controls remain live",
+          "[midi][synth][mpe]") {
+  for (const FoldedDimension& dimension : kFolded) {
+    CAPTURE(dimension.label);
+    const std::vector<float> unchanged = render_released_folded(dimension, false);
+    const std::vector<float> changed = render_released_folded(dimension, true);
+    REQUIRE(changed == unchanged);
+
+    // Engine-owned wind axes obey the same post-NoteOff freeze as channel
+    // pitch. Both the member's own value and the manager bias are frozen.
+    const std::vector<float> engine_unchanged =
+        render_released_folded(dimension, false, ControllerAxis::kBrightness);
+    const std::vector<float> engine_changed =
+        render_released_folded(dimension, true, ControllerAxis::kBrightness);
+    REQUIRE(engine_changed == engine_unchanged);
+    const std::vector<float> manager_unchanged =
+        render_released_manager_folded(dimension, false, ControllerAxis::kPitchCents);
+    const std::vector<float> manager_changed =
+        render_released_manager_folded(dimension, true, ControllerAxis::kPitchCents);
+    REQUIRE(manager_changed == manager_unchanged);
+    const std::vector<float> manager_engine_unchanged =
+        render_released_manager_folded(dimension, false, ControllerAxis::kBrightness);
+    const std::vector<float> manager_engine_changed =
+        render_released_manager_folded(dimension, true, ControllerAxis::kBrightness);
+    REQUIRE(manager_engine_changed == manager_engine_unchanged);
+  }
+
+  // Member bend is frozen with the same rule. Manager bend is the exception:
+  // it remains a zone-wide pitch control for a sustain-held sounding voice.
+  const std::vector<float> member_unchanged = render_released_bend(false, false);
+  const std::vector<float> member_changed = render_released_bend(true, false);
+  const std::vector<float> manager_changed = render_released_bend(false, true);
+  REQUIRE(member_changed == member_unchanged);
+  REQUIRE(manager_changed != member_unchanged);
+
+  // Gain and pan are channel controls rather than MPE dimensions and must keep
+  // affecting a sustain-held release tail.
+  REQUIRE(render_released_channel_control(7, 20, true) !=
+          render_released_channel_control(7, 20, false));
+  REQUIRE(render_released_channel_control(10, 0, true) !=
+          render_released_channel_control(10, 0, false));
+}
+
+TEST_CASE("a member voice choked by its exclusive group freezes like a Note Off",
+          "[midi][synth][mpe]") {
+  const auto render_choked = [](bool bend_after) {
+    NativeSynthConfig cfg;
+    cfg.patch = NativeSynthPatch{};
+    cfg.patch.cutoff_hz = 20000.0f;
+    cfg.patch.amp_env.sustain = 1.0f;
+    cfg.patch.amp_env.release_ms = 3000.0f;
+    cfg.patch.percussion.exclusive_class = 1;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, kBlock);
+    send_mcm(synth, 0, 7);
+    send(synth, sonare::midi::make_midi1_note_on(0, 2, kLowNote, kVelocity));
+    render_left(synth, 2048);
+    // The second strike chokes the first; its own Note Off then freezes it.
+    send(synth, sonare::midi::make_midi1_note_on(0, 2, kHighNote, kVelocity));
+    render_left(synth, 256);
+    send(synth, sonare::midi::make_midi1_note_off(0, 2, kHighNote, 0));
+    REQUIRE(synth.active_voice_count() == 2);
+    if (bend_after) send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, kBendUp));
+    return render_left(synth, 8192);
+  };
+  CHECK(render_choked(true) == render_choked(false));
+}
+
+TEST_CASE("manager Reset All Controllers clears only manager-derived MPE axes",
+          "[midi][synth][mpe]") {
+  for (const FoldedDimension& dimension : kFolded) {
+    CAPTURE(dimension.label);
+    // A manager-only value must not remain latched on a member after CC121.
+    const double manager_reset = render_after_manager_reset(dimension, 90, 0, true, 0.0);
+    const double fresh = render_after_manager_reset(dimension, 0, 0, false, 0.0);
+    CAPTURE(manager_reset, fresh);
+    REQUIRE(std::fabs(manager_reset - fresh) < 60.0);
+
+    // A member's own value is independent state and survives a manager reset.
+    const double member_reset =
+        render_after_manager_reset(dimension, 90, 30, true, 1200.0 * 30.0 / 127.0);
+    const double member_only =
+        render_after_manager_reset(dimension, 0, 30, false, 1200.0 * 30.0 / 127.0);
+    CAPTURE(member_reset, member_only);
+    REQUIRE(std::fabs(member_reset - member_only) < 60.0);
+  }
+}
+
+TEST_CASE("manager reset preserves the last writer on a shared MPE axis", "[midi][synth][mpe]") {
+  const double pressure_last = render_shared_axis_after_manager_reset(true);
+  const double timbre_last = render_shared_axis_after_manager_reset(false);
+  CAPTURE(pressure_last, timbre_last);
+  REQUIRE(std::fabs(pressure_last - 1200.0 * 30.0 / 127.0) < 60.0);
+  REQUIRE(std::fabs(timbre_last - 1200.0 * 20.0 / 127.0) < 60.0);
+}
+
+TEST_CASE("manager-first then member-second reset retains the member value", "[midi][synth][mpe]") {
+  const double after_reset = render_manager_first_member_second_reset();
+  CAPTURE(after_reset);
+  REQUIRE(std::fabs(after_reset - 1200.0 * 30.0 / 127.0) < 60.0);
+}
+
+TEST_CASE("resetting a member keeps the manager's surviving MPE bias", "[midi][synth][mpe]") {
+  const double reset_member = render_member_reset_manager_survival(true);
+  const double manager_only = render_member_reset_manager_survival(false, false);
+  const double combined = render_member_reset_manager_survival(false);
+  CAPTURE(reset_member, manager_only);
+  REQUIRE(std::fabs(reset_member - manager_only) < 60.0);
+  REQUIRE(std::fabs(reset_member - 1200.0 * 80.0 / 127.0) < 60.0);
+  REQUIRE(combined - manager_only > 200.0);
+}
+
+TEST_CASE("manager reset uses historical attribution for a voice-only fold", "[midi][synth][mpe]") {
+  const SourceVoiceRender expected = render_historical_voice_reset(false, false);
+  const SourceVoiceRender stale = render_historical_voice_reset(true, false);
+  const SourceVoiceRender after_reset = render_historical_voice_reset(true, true);
+  const float expected_rms = sonare::test::rms(expected.first);
+  const float stale_rms = sonare::test::rms(stale.first);
+  const float reset_rms = sonare::test::rms(after_reset.first);
+  CAPTURE(expected_rms, stale_rms, reset_rms);
+  // Source 1 is the historical target of the manager+member fold. Source 3
+  // arrives afterwards and changes the current kLastNote answer, so a reset
+  // that re-runs attribution drops source 1's member value. The reset result
+  // must return to the member-only source-1 render, while the stale combined
+  // render remains measurably different.
+  REQUIRE(std::fabs(reset_rms - expected_rms) < 1.0e-3f);
+  REQUIRE(std::fabs(stale_rms - expected_rms) > 1.0e-3f);
+}
+
+TEST_CASE("manager MPE pressure reaches every held member voice before nonlinear mapping",
+          "[midi][synth][mpe]") {
+  const SourceVoiceRender without_manager = render_manager_zonewide_curve(false);
+  const SourceVoiceRender with_manager = render_manager_zonewide_curve(true);
+  const float first_without = sonare::test::rms(without_manager.first);
+  const float second_without = sonare::test::rms(without_manager.second);
+  const float first_with = sonare::test::rms(with_manager.first);
+  const float second_with = sonare::test::rms(with_manager.second);
+  CAPTURE(first_without, first_with, second_without, second_with);
+  // Both voices are the same patch and both carry the member template. A
+  // manager-only update is zone-wide; routing it only to kLastNote leaves one
+  // lane at its old target and loses the nonlinear pre-curve composition.
+  REQUIRE(std::fabs(first_with - first_without) > 1.0e-3f);
+  REQUIRE(std::fabs(second_with - second_without) > 1.0e-3f);
+}
+
+TEST_CASE("a per-note MPE excitation snapshot survives member reset after Note Off",
+          "[midi][synth][mpe]") {
+  const std::vector<float> without_reset = render_per_note_release_after_member_reset(false, true);
+  const std::vector<float> with_reset = render_per_note_release_after_member_reset(true, true);
+  const std::vector<float> without_pressure =
+      render_per_note_release_after_member_reset(false, false);
+  float max_delta = 0.0f;
+  for (size_t i = 0; i < without_reset.size(); ++i) {
+    max_delta = std::max(max_delta, std::fabs(without_reset[i] - with_reset[i]));
+  }
+  float pressure_delta = 0.0f;
+  for (size_t i = 0; i < without_reset.size(); ++i) {
+    pressure_delta = std::max(pressure_delta, std::fabs(without_reset[i] - without_pressure[i]));
+  }
+  CAPTURE(max_delta, pressure_delta, sonare::test::rms(without_reset),
+          sonare::test::rms(with_reset), sonare::test::rms(without_pressure));
+  REQUIRE(max_delta < 1.0e-6f);
+  REQUIRE(pressure_delta > 1.0e-5f);
+}
+
+TEST_CASE("member reset removes a released ordinary alias but keeps MPE state",
+          "[midi][synth][mpe]") {
+  const std::vector<float> without_reset = render_released_ordinary_alias_reset(false);
+  const std::vector<float> with_reset = render_released_ordinary_alias_reset(true);
+  float max_delta = 0.0f;
+  for (size_t i = 0; i < without_reset.size(); ++i) {
+    max_delta = std::max(max_delta, std::fabs(without_reset[i] - with_reset[i]));
+  }
+  CAPTURE(max_delta, sonare::test::rms(without_reset), sonare::test::rms(with_reset));
+  REQUIRE(max_delta > 1.0e-5f);
+}
+
+TEST_CASE("member bend profile axes freeze after Note Off", "[midi][synth][mpe]") {
+  const std::vector<float> unchanged = render_released_bend_profile(false);
+  const std::vector<float> changed = render_released_bend_profile(true);
+  float max_delta = 0.0f;
+  for (size_t i = 0; i < unchanged.size(); ++i) {
+    max_delta = std::max(max_delta, std::fabs(unchanged[i] - changed[i]));
+  }
+  CAPTURE(max_delta, sonare::test::rms(unchanged), sonare::test::rms(changed));
+  REQUIRE(max_delta < 1.0e-6f);
+}
+
+TEST_CASE("velocity excitation is seeded on the new wind voice only", "[midi][synth][wind][mpe]") {
+  const VelocityLaneRender with_second =
+      render_velocity_lanes(ControllerAxis::kExcitation, 20, 110, true);
+  const VelocityLaneRender without_second =
+      render_velocity_lanes(ControllerAxis::kExcitation, 20, 110, false);
+  CAPTURE(sonare::test::rms(with_second.second), sonare::test::rms(without_second.first));
+  REQUIRE(sonare::test::rms(without_second.first) > 1.0e-6f);
+  REQUIRE(sonare::test::rms(with_second.second) > 1.0e-6f);
+  // Track 1's held note remains bit-identical when track 2 arrives with a
+  // different velocity. Track 2 still receives its own seeded excursion.
+  REQUIRE(with_second.first == without_second.first);
+}
+
+TEST_CASE("velocity loudness remains an accepted channel-wide control", "[midi][synth][wind]") {
+  const VelocityLaneRender with_second =
+      render_velocity_lanes(ControllerAxis::kLoudness, 20, 110, true);
+  const VelocityLaneRender without_second =
+      render_velocity_lanes(ControllerAxis::kLoudness, 20, 110, false);
+  // Existing channel-level velocity bindings intentionally continue to affect
+  // the already sounding channel when the next note supplies a new value.
+  REQUIRE(with_second.first != without_second.first);
+}
+
+TEST_CASE("velocity excitation reaches a mono-legato continuation", "[midi][synth][wind]") {
+  const auto render_slur = [](uint8_t second_velocity) {
+    ControllerProfile profile;
+    REQUIRE(profile.bind({ControllerInput::kVelocity, 0, ControllerAxis::kExcitation, 0.0f, 1.0f}));
+    NativeSynth synth = make_synth(false);
+    synth.set_controller_profile(profile);
+    synth.prepare(kRate, kBlock);
+    REQUIRE(synth.set_articulation(2, sonare::midi::ArticulationMode::kMonoLegato));
+    send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, 20));
+    render_left(synth, 4096);
+    send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote + 2, second_velocity));
+    std::vector<float> slurred = render_left(synth, 8192);
+    uint64_t fallbacks = 0;
+    REQUIRE(synth.legato_fallback_count(&fallbacks));
+    REQUIRE(fallbacks == 0);
+    REQUIRE(synth.active_voice_count() == 1);
+    return slurred;
+  };
+  const std::vector<float> soft = render_slur(20);
+  const std::vector<float> hard = render_slur(120);
+  CAPTURE(sonare::test::rms(soft), sonare::test::rms(hard));
+  CHECK(soft != hard);
+}
+
+TEST_CASE("velocity excitation keeps MIDI 2.0 midpoint resolution", "[midi][synth][wind][midi2]") {
+  const uint16_t midpoint = sonare::midi::scale_velocity_7_to_16(64) + 0x0100u;
+  const std::vector<float> lower =
+      render_velocity_note(sonare::midi::make_midi1_note_on(0, 2, kNote, 64));
+  const std::vector<float> upper =
+      render_velocity_note(sonare::midi::make_midi1_note_on(0, 2, kNote, 65));
+  const std::vector<float> wide =
+      render_velocity_note(sonare::midi::make_midi2_note_on(0, 2, kNote, midpoint));
+  REQUIRE(wide != lower);
+  REQUIRE(wide != upper);
 }

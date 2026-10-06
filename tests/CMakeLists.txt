@@ -605,6 +605,8 @@ if(BUILD_ARRANGEMENT)
     midi/native_synth_live_params_test.cpp
     midi/native_synth_rig_test.cpp
     midi/native_synth_gsfx_test.cpp
+    midi/native_synth_gs_part_test.cpp
+    midi/gs_tail_bounce_test.cpp
     midi/part_rig_test.cpp
     midi/render_path_record_test.cpp
     midi/retrigger_test.cpp
@@ -613,6 +615,8 @@ if(BUILD_ARRANGEMENT)
     midi/controller_profile_test.cpp
     midi/mpe_zones_test.cpp
     midi/mpe_native_synth_test.cpp
+    midi/mpe_ignored_profile_test.cpp
+    midi/mpe_member_reset_test.cpp
     midi/waveguide_bend_range_test.cpp
     midi/articulation_legato_test.cpp
     midi/filter_models_test.cpp

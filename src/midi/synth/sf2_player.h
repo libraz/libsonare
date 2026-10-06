@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -60,6 +61,7 @@
 #include "rt/processor_base.h"
 #include "rt/seqlock_cell.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 #if defined(SONARE_MIDI_WITH_FX)
 #include "midi/synth/gs_effects.h"
 #endif
@@ -154,8 +156,13 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   bool supports_source_track_rendering() const noexcept override { return true; }
   void reset() override;
   int tail_samples() const noexcept override {
-    return static_cast<int>(tail_samples_) + part_fx_.tail_samples();
+    const int base = static_cast<int>(
+        std::clamp<int64_t>(tail_samples_->load(std::memory_order_relaxed), 0,
+                            static_cast<int64_t>(std::numeric_limits<int>::max())));
+    return numeric::saturating_add(base, std::max(part_fx_.tail_samples(), 0));
   }
+  /// A received GS envelope-time edit raises the tail (raise_tail).
+  bool tail_follows_events() const noexcept override { return true; }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   /// CONTROL thread: prepare an immutable SysEx operation for a scheduled
   /// event. The returned token carries only fixed plans; its DSP nodes stay
@@ -642,12 +649,19 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// Recompute tail_samples_ from the SoundFont release scan, the synth
   /// fallback bank and the effect units (requires prepared_).
   void recompute_tail() noexcept;
+  /// That bound at the parts' current GS EG time edits, without allocation.
+  int64_t tail_bound() const noexcept;
+  /// Raises tail_samples_ to tail_bound() and never lowers it: a voice struck
+  /// under an edit since withdrawn may still be ringing.
+  void raise_tail() noexcept;
 
   Sf2PlayerConfig config_{};
   std::shared_ptr<const Sf2File> soundfont_;
   double sample_rate_ = 0.0;
   bool prepared_ = false;
-  int64_t tail_samples_ = 0;
+  /// Written on the audio thread by a live raise and read by the host, so
+  /// atomic; held by pointer so the player stays movable.
+  std::unique_ptr<std::atomic<int64_t>> tail_samples_ = std::make_unique<std::atomic<int64_t>>(0);
   /// Longest release timecents found in the soundfont (set_soundfont scan).
   int32_t max_release_timecents_ = -12000;
   /// Mix-bus DC blocker state (config_.dc_block): pole and per-leg histories.

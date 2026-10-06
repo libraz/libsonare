@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -68,6 +69,7 @@
 #include "midi/synth/vocal_voice.h"
 #include "midi/synth/voice_pool.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -110,7 +112,8 @@ struct NativeSynthPatch {
   float gain = 0.5f;
   DahdsrConfig amp_env;
   /// One-shot (drum) voices ignore note-off and end at the envelope's
-  /// zero-sustain decay floor.
+  /// zero-sustain decay floor, or where it holds, by their engine
+  /// (sustained_one_shot_tail_samples).
   bool one_shot = false;
 
   // --- filter section ---
@@ -231,6 +234,64 @@ struct NativeSynthPatch {
   /// Keymap into the host's sample bank (used when mode == kSample).
   SamplePatchParams sample;
 };
+
+namespace native_synth_detail {
+
+/// The engine excitation slot @p axis fills, or kAxisNone for a channel-level axis.
+inline uint32_t excitation_axis_mask(ControllerAxis axis) noexcept {
+  switch (axis) {
+    case ControllerAxis::kExcitation:
+      return kAxisForce;
+    case ControllerAxis::kPosition:
+      return kAxisPosition;
+    case ControllerAxis::kBrightness:
+      return kAxisBrightness;
+    case ControllerAxis::kMorph:
+      return kAxisMorph;
+    case ControllerAxis::kNone:
+    case ControllerAxis::kLoudness:
+    case ControllerAxis::kPitchCents:
+    case ControllerAxis::kVibratoDepth:
+      return kAxisNone;
+  }
+  return kAxisNone;
+}
+
+/// The value @p axes holds in @p axis's slot; 0 for a channel-level axis.
+inline float excitation_value(const ExcitationAxes& axes, ControllerAxis axis) noexcept {
+  switch (axis) {
+    case ControllerAxis::kExcitation:
+      return axes.force;
+    case ControllerAxis::kPosition:
+      return axes.position;
+    case ControllerAxis::kBrightness:
+      return axes.brightness;
+    case ControllerAxis::kMorph:
+      return axes.morph;
+    case ControllerAxis::kNone:
+    case ControllerAxis::kLoudness:
+    case ControllerAxis::kPitchCents:
+    case ControllerAxis::kVibratoDepth:
+      return 0.0f;
+  }
+  return 0.0f;
+}
+
+}  // namespace native_synth_detail
+
+/// How long a voice of @p patch can sound after its last event, in samples. A
+/// zero-sustain envelope is ended by its decay, and a one-shot by its envelope;
+/// a one-shot whose envelope holds is ended by its engine
+/// (sustained_one_shot_tail_samples). INT64_MAX when nothing ends the voice.
+int64_t native_patch_tail_samples(const NativeSynthPatch& patch, double sample_rate,
+                                  const EnvelopeTimeScales& scales,
+                                  const SampleBank* bank) noexcept;
+
+/// What ends a one-shot whose amplitude envelope holds, which no note-off can:
+/// FM carriers finishing, a percussion piece falling silent, an unlooped sample
+/// running out. INT64_MAX for every other engine, which nothing ends.
+int64_t sustained_one_shot_tail_samples(const NativeSynthPatch& patch, double sample_rate,
+                                        const SampleBank* bank) noexcept;
 
 /// Per-note GS drum overrides applied to a fallback percussion voice at
 /// note-on (NRPN pitch coarse / TVA level / absolute pan). Defaults are no-ops,
@@ -398,6 +459,32 @@ struct NativeSynthVoice : VoiceState {
   /// wherever a sender is doing what the specification expects.
   bool mpe_mod_active = false;
   Sf2ChannelMod mpe_mod{};
+  /// Once a member key has gone up, its own MPE pressure/timbre/bend stay at
+  /// their NoteOff values while ordinary channel controls and manager bend can
+  /// continue to update the sounding tail.
+  bool mpe_release_frozen = false;
+  uint32_t mpe_frozen_axis_mask = kAxisNone;
+  uint32_t mpe_frozen_axis_present = kAxisNone;
+  uint32_t mpe_frozen_source_mask = kAxisNone;
+  std::array<float, kControllerAxisCount> mpe_frozen_axis_values{};
+  float mpe_frozen_member_bend_cents = 0.0f;
+  float mpe_frozen_aftertouch01 = 0.0f;
+  /// Last engine-axis values written to this voice, including per-note
+  /// profile bindings. The source masks are mutually exclusive per axis;
+  /// they let a manager reset remove only its own folded contribution while
+  /// leaving a member or ordinary per-note writer in place.
+  ControllerAxisState live_excitation_axes;
+  uint32_t live_mpe_pressure_axes = kAxisNone;
+  uint32_t live_mpe_timbre_axes = kAxisNone;
+  uint32_t live_mpe_bend_axes = kAxisNone;
+  /// The member's own MPE values at the time this voice last received them.
+  /// Manager pressure/timbre is combined with these raw values for each voice
+  /// separately, so a manager update cannot collapse several tracked notes
+  /// into the current channel attribution.
+  Control32 mpe_member_pressure = Control32::from_raw(0);
+  Control32 mpe_member_timbre = Control32::from_raw(0);
+  bool mpe_member_pressure_present = false;
+  bool mpe_member_timbre_present = false;
   bool key_down = false;
   /// Captured by the sostenuto pedal (CC66): held past key-up until the pedal
   /// lifts, regardless of the sustain pedal.
@@ -633,8 +720,13 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void reset() override;
   /// The rig chains are not latency-compensated, but their tails are counted.
   int tail_samples() const noexcept override {
-    return static_cast<int>(tail_samples_) + part_fx_.tail_samples();
+    const int base = static_cast<int>(
+        std::clamp<int64_t>(tail_samples_->load(std::memory_order_relaxed), 0,
+                            static_cast<int64_t>(std::numeric_limits<int>::max())));
+    return numeric::saturating_add(base, std::max(part_fx_.tail_samples(), 0));
   }
+  /// A received GS envelope-time edit raises the tail (raise_tail).
+  bool tail_follows_events() const noexcept override { return true; }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   /// CONTROL thread: a host-pushed GS EFX block write or reset, realised here
   /// and handed to the audio thread wait-free. The live path's only EFX writer:
@@ -672,10 +764,12 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void set_sample_bank(const SampleBank* bank) noexcept {
     owned_sample_bank_.reset();
     sample_bank_ = bank;
+    raise_tail();
   }
   void set_sample_bank(std::shared_ptr<const SampleBank> bank) noexcept {
     owned_sample_bank_ = std::move(bank);
     sample_bank_ = owned_sample_bank_.get();
+    raise_tail();
   }
   const SampleBank* sample_bank() const noexcept { return sample_bank_; }
 
@@ -774,7 +868,20 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
     /// zero, so the patch's own voicing, the channel's own pitch and a unit gain
     /// all stand until a controller actually arrives.
     ControllerAxisState axes;
+    /// The last writer for profile axes that can be reached by MPE pressure,
+    /// timbre, or bend.  A zero bit means an ordinary controller is the last
+    /// writer, so a manager reset can clear only stale MPE-derived axes without
+    /// erasing an unrelated CC mapping on the same axis.
+    uint32_t mpe_pressure_axes = kAxisNone;
+    uint32_t mpe_timbre_axes = kAxisNone;
+    uint32_t mpe_bend_axes = kAxisNone;
+    MpeDimension last_mpe_controller = MpeDimension::kPressure;
     ChannelParamState params;
+    /// Persistent GS part edits (TONE MODIFY 1-8). They survive controller,
+    /// program and bank changes; GS Reset, GM System On and reset() clear them.
+    GsPartParams gs;
+    /// 40 1x 0A RX NRPN; GM System On turns it off and GS Reset back on.
+    bool rx_nrpn = true;
     float bend_range_cents = 200.0f;
     /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
     float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
@@ -817,8 +924,25 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// reader of it has to agree on that.
   NativeSynthVoice* find_sounding(uint8_t ch, uint8_t note, uint32_t source_track_id) noexcept;
   void note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
-               uint16_t attribute_data, uint32_t source_track_id) noexcept;
+               uint16_t attribute_data, uint32_t source_track_id,
+               const ExcitationAxes& velocity_excitation = {},
+               uint32_t velocity_excitation_mask = kAxisNone) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
+  /// Records a note-on velocity's engine axes on @p voice as their last writer.
+  void record_velocity_axes(NativeSynthVoice& voice, const ExcitationAxes& velocity,
+                            uint32_t mask) noexcept;
+  /// The patch tail at the parts' current GS EG time edits plus the fixed bus
+  /// tails, without allocation.
+  int64_t recompute_tail() const noexcept;
+  /// Raises the published tail to recompute_tail() and never lowers it: a voice
+  /// struck under an edit since withdrawn may still be ringing.
+  void raise_tail() noexcept;
+  /// The slowest GS EG time multipliers any part holds; 1 where none lengthens.
+  EnvelopeTimeScales gs_tail_scales() const noexcept;
+  /// GS part SysEx (40 1x xx) and the system resets, on the channel state.
+  void apply_part_sysex(const uint8_t* data, size_t size) noexcept;
+  /// Whether the controller profile routes CC @p controller to an axis.
+  bool profile_binds_cc(uint8_t controller) const noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;
   /// PartFxHost: where an EFX CONTROL source sits on @p part.
@@ -884,6 +1008,9 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void apply_controller_input(const Ump& ump) noexcept;
   /// Resolves one message through the profile and applies its axis values.
   void apply_resolved_input(const Ump& ump) noexcept;
+  /// Resolves note-on velocity, retaining engine-owned axes for the newly
+  /// allocated voice while preserving channel-level velocity bindings.
+  ExcitationAxes apply_note_on_controller_input(const Ump& ump, uint32_t* out_mask) noexcept;
   /// The per-note dimension @p ump carries, or false for a message that is not
   /// one of the three.
   static bool mpe_dimension_of(const Ump& ump, MpeDimension* out) noexcept;
@@ -900,21 +1027,37 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// bend and pressure a member channel carries reach the note they were
   /// attributed to and no other.
   void refresh_mpe_note_mods(uint8_t channel) noexcept;
-  /// The message a channel's combined value would arrive as, in MIDI 1.0 from the
-  /// zone model's 7-bit combination. Groupless, because the profile resolves
-  /// from the status, the controller number and the channel alone.
-  Ump mpe_controller_message(uint8_t channel, MpeDimension dimension) const noexcept;
+  /// Captures the MPE dimensions at NoteOff while leaving ordinary channel
+  /// controls live on a sustained/releasing voice.
+  void freeze_mpe_voice(NativeSynthVoice& voice, uint8_t channel) noexcept;
+  /// Profile axes @p dimension (bend, pressure or timbre) can write: the set
+  /// a member voice freezes at its NoteOff.
+  uint32_t mpe_profile_axis_mask(MpeDimension dimension) const noexcept;
+  /// Rebuilds one frozen voice from current ordinary channel state and its
+  /// captured MPE dimensions.
+  void refresh_frozen_mpe_voice(NativeSynthVoice& voice, uint8_t channel) noexcept;
   /// Resolves @p channel's combined value through the profile, and every member
   /// of the zone as well when @p channel is the manager, whose value is a bias
   /// on each of them.
   void push_mpe_controller_axis(uint8_t channel, MpeDimension dimension) noexcept;
+  /// Applies one combined MPE value to a channel's future-note template without
+  /// pushing an attributed engine axis to currently sounding voices.
+  void apply_mpe_channel_axes(uint8_t channel, MpeDimension dimension, Control32 combined) noexcept;
+  /// Resolves one combined MPE value to one held voice. The member raw value is
+  /// captured only for a member message; manager updates preserve the voice's
+  /// captured member source and combine the current manager raw value with it.
+  void apply_mpe_voice_axes(NativeSynthVoice& voice, uint8_t channel, MpeDimension dimension,
+                            Control32 combined, bool update_member_raw, Control32 member_raw,
+                            bool member_present) noexcept;
   /// Tracks the two combining dimensions ahead of the profile, so a value
   /// reaching an axis carries the manager's fold (2.2.7, 2.2.8).
   void track_mpe_input(const Ump& ump) noexcept;
   /// Pushes the channel's live excitation axes (and CC11 bow speed) to its
   /// sounding voices.
-  void push_excitation_control(uint8_t channel, uint32_t changed_mask) noexcept;
-  void restore_excitation_control(uint8_t channel) noexcept;
+  void push_excitation_control(uint8_t channel, uint32_t changed_mask, bool mpe_dimension = false,
+                               MpeDimension dimension = MpeDimension::kBend) noexcept;
+  void restore_excitation_control(uint8_t channel, bool mpe_dimension = false) noexcept;
+  void update_frozen_mpe_axis(uint8_t channel, ControllerAxis axis, float value) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
   void refresh_all_channel_mods() noexcept;
@@ -945,7 +1088,9 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::vector<Sf2PerNoteVoice> per_note_;
   double sample_rate_ = 0.0;
   bool prepared_ = false;
-  int64_t tail_samples_ = 0;
+  /// Written on the audio thread by a live raise and read by the host, so
+  /// atomic; held by pointer so the instrument stays movable.
+  std::unique_ptr<std::atomic<int64_t>> tail_samples_ = std::make_unique<std::atomic<int64_t>>(0);
   /// Ids written by apply_parameter whose voice state awaits refresh_live (bit =
   /// NativeSynthParamId). Audio-thread state under config_.patch's contract.
   uint32_t live_dirty_ = 0;

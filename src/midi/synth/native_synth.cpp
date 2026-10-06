@@ -6,10 +6,12 @@
 #include "midi/builtin_synth.h"
 #include "midi/synth/articulation.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_address_table.h"
 #include "midi/synth/voice_random.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 #include "util/non_finite_sample.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi::synth {
 
@@ -32,6 +34,9 @@ constexpr uint8_t kRcPerNoteBendSensitivity = 7;
 constexpr uint8_t kAttributePitch79 = 0x03;
 /// Registered Per-Note Controller #3 is Pitch 7.25 (M2-104-UM §7.4.12).
 constexpr uint8_t kRpncPitch725 = 3;
+
+using native_synth_detail::excitation_axis_mask;
+using native_synth_detail::excitation_value;
 
 /// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
 /// the 32-bit range rather than wrapping.
@@ -71,6 +76,43 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
   fx.insert_factory = std::move(config_.insert_factory);
   fx.bank_rig_binding = config_.bank_rig_binding;
   part_fx_ = PartFxStage(std::move(fx));
+}
+
+int64_t NativeSynth::recompute_tail() const noexcept {
+  // GM mode resolves the patch per program at note-on, so the fallback tables bound it.
+  const bool gm_tables =
+      config_.use_gm_programs ||
+      (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit);
+  const EnvelopeTimeScales scales = gs_tail_scales();
+  int64_t tail =
+      gm_tables
+          ? gm_fallback_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release)
+          : native_patch_tail_samples(config_.patch, sample_rate_, scales, sample_bank_);
+  if (guitar_halo_active_ || gm_tables) {
+    // The halo rings past the last voice; GM counts it since prepare() cannot know the program.
+    tail = numeric::saturating_add(tail,
+                                   numeric::ceil_sample_count(sample_rate_ * kKsSympatheticRingS));
+  }
+  if (piano_mode_ || gm_tables) {
+    // The piano body rings past the voice release; in GM mode program 0 is the piano.
+    tail =
+        numeric::saturating_add(tail, numeric::ceil_sample_count(sample_rate_ * kPianoBodyRingS));
+  }
+  return tail;
+}
+
+void NativeSynth::raise_tail() noexcept {
+  if (!prepared_) return;
+  const int64_t tail = recompute_tail();
+  int64_t current = tail_samples_->load(std::memory_order_relaxed);
+  while (tail > current &&
+         !tail_samples_->compare_exchange_weak(current, tail, std::memory_order_relaxed)) {
+  }
+}
+
+EnvelopeTimeScales NativeSynth::gs_tail_scales() const noexcept {
+  return gs_slowest_eg_time_scales(
+      channels_, [](const ChannelState& st) -> const GsPartParams& { return st.gs; });
 }
 
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
@@ -252,35 +294,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   channels_[kDrumChannelIndex].drums = true;
   mpe_.reset();
   refresh_all_channel_mods();
-  // GM mode (and the GM drum kit) can voice any fallback patch, so the tail has
-  // to cover the slowest release in the fallback tables rather than the
-  // configured patch's own release.
-  const bool gm_tables =
-      config_.use_gm_programs ||
-      (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit);
-  // A zero-sustain (percussive) envelope never reaches Release — it ends at the
-  // decay floor — so for those the decay is the stage that actually terminates
-  // the voice. The GM tables already bound both stages; the configured patch
-  // has to as well, or a one-shot voice is cut mid-decay at a bounce boundary.
-  const DahdsrConfig& amp = config_.patch.amp_env;
-  const float patch_tail_ms = amp.sustain <= DahdsrEnvelope::kSilenceLevel
-                                  ? std::max(amp.release_ms, amp.decay_ms)
-                                  : amp.release_ms;
-  tail_samples_ = DahdsrEnvelope::release_tail_samples(
-      sample_rate_, gm_tables ? gm_fallback_max_release_ms() : patch_tail_ms);
-  if (guitar_halo_active_ || gm_tables) {
-    // The halo bank keeps ringing after the last voice releases; fold its t60
-    // into the tail so a bounce does not clip it. GM is included because
-    // prepare() cannot know which program a later note-on will pick.
-    tail_samples_ += static_cast<int64_t>(sample_rate_ * kKsSympatheticRingS);
-  }
-  if (piano_mode_ || gm_tables) {
-    // Same story for the piano bus body: the soundboard and the sympathetic
-    // bank ring far past the ~120 ms voice release, so a bounce would cut the
-    // bloom off the last chord. GM mode is included because program 0 resolves
-    // to the piano patch there and tunes the body at note-on.
-    tail_samples_ += static_cast<int64_t>(sample_rate_ * kPianoBodyRingS);
-  }
+  tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
   dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
   dc_x1_ = {};
@@ -347,6 +361,7 @@ void NativeSynth::reset() {
   // A fresh snapshot rebuilds the chains, which is their reset.
   if (prepared_) part_fx_.publish();
   part_fx_.clear_dirty();
+  if (prepared_) tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
 }
 
 void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
@@ -440,8 +455,9 @@ NativeSynthVoice* NativeSynth::find_sounding(uint8_t ch, uint8_t note,
 }
 
 void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
-                          uint8_t attribute_type, uint16_t attribute_data,
-                          uint32_t source_track_id) noexcept {
+                          uint8_t attribute_type, uint16_t attribute_data, uint32_t source_track_id,
+                          const ExcitationAxes& velocity_excitation,
+                          uint32_t velocity_excitation_mask) noexcept {
   if (!prepared_) return;
   // A profile that calls velocity meaningless takes every note at full scale,
   // so the bound axes carry the dynamics on their own. 127 rather than some
@@ -493,6 +509,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     const uint8_t excl = patch->percussion.exclusive_class;
     for (NativeSynthVoice& v : pool_) {
       if (v.active && v.channel == ch && v.patch != nullptr && v.exclusive_class == excl) {
+        if (v.key_down) freeze_mpe_voice(v, ch);
         v.choke();
       }
     }
@@ -510,6 +527,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
         const uint8_t from = held->note;
         held->retune(note, sample_rate_);
         carry_per_note(*held, from, note, attribute_type, attribute_data);
+        if (velocity_excitation_mask != kAxisNone) {
+          record_velocity_axes(*held, velocity_excitation, velocity_excitation_mask);
+          held->push_excitation(velocity_excitation, velocity_excitation_mask);
+        }
         live.hold_key(note);
         live.last_freq_hz = synth_note_to_hz(static_cast<float>(note));
         return;
@@ -518,6 +539,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
       // Monophonic either way: the previous note stops. Fast rather than the
       // patch's own release, which on a sustaining patch runs past a second and
       // would leave the note it replaced audible under the new one.
+      freeze_mpe_voice(*held, ch);
       held->choke_fast(sample_rate_);
     }
   }
@@ -588,10 +610,27 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     voice_mod.play_note = per_note.zone_key;
   }
   per_note.cents = per_note_cents(per_note, note_pitch);
+  const GsPartMod part_mod = gs_part_mod(st.gs);
   voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit,
-               voice_mod, organ_percussion);
+               voice_mod, organ_percussion, part_mod);
   voice->piano_case_strike_pending = 0.0f;
   voice->piano_board_strike_pending = 0.0f;
+  voice->mpe_mod_active = false;
+  voice->mpe_release_frozen = false;
+  voice->mpe_frozen_axis_mask = kAxisNone;
+  voice->mpe_frozen_axis_present = kAxisNone;
+  voice->mpe_frozen_source_mask = kAxisNone;
+  voice->mpe_frozen_axis_values = {};
+  voice->mpe_frozen_member_bend_cents = 0.0f;
+  voice->mpe_frozen_aftertouch01 = 0.0f;
+  voice->live_excitation_axes.reset();
+  voice->live_mpe_pressure_axes = kAxisNone;
+  voice->live_mpe_timbre_axes = kAxisNone;
+  voice->live_mpe_bend_axes = kAxisNone;
+  voice->mpe_member_pressure = Control32::from_raw(0);
+  voice->mpe_member_timbre = Control32::from_raw(0);
+  voice->mpe_member_pressure_present = false;
+  voice->mpe_member_timbre_present = false;
   per_note_[voice_index] = per_note;
   // Seed the engine's excitation axes at the channel's current controllers (no
   // glide on the first sample) so a note struck mid-phrase starts at the live
@@ -599,7 +638,48 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // only the axes it declares, and one that declares none is untouched.
   {
     uint32_t present = kAxisNone;
-    const ExcitationAxes base = channel_excitation(st.axes, present);
+    ExcitationAxes base = channel_excitation(st.axes, present);
+    for (size_t i = 0; i < kControllerAxisCount; ++i) {
+      const ControllerAxis axis = static_cast<ControllerAxis>(i);
+      if (excitation_axis_mask(axis) == kAxisNone || !st.axes.has(axis)) continue;
+      voice->live_excitation_axes.set(axis, st.axes.values[i]);
+    }
+    for (size_t i = 0; i < kControllerAxisCount; ++i) {
+      const ControllerAxis axis = static_cast<ControllerAxis>(i);
+      if (excitation_axis_mask(axis) == kAxisNone || !st.axes.has(axis)) continue;
+      const uint32_t axis_bit = 1u << static_cast<uint32_t>(i);
+      if ((st.mpe_pressure_axes & axis_bit) != 0u) {
+        voice->live_mpe_pressure_axes |= axis_bit;
+      }
+      if ((st.mpe_timbre_axes & axis_bit) != 0u) {
+        voice->live_mpe_timbre_axes |= axis_bit;
+      }
+      if ((st.mpe_bend_axes & axis_bit) != 0u) {
+        voice->live_mpe_bend_axes |= axis_bit;
+      }
+    }
+    if (mpe_.role(ch) == MpeChannelRole::kMember) {
+      voice->mpe_member_pressure_present =
+          mpe_.own_control(ch, MpeDimension::kPressure, &voice->mpe_member_pressure);
+      voice->mpe_member_timbre_present =
+          mpe_.own_control(ch, MpeDimension::kTimbre, &voice->mpe_member_timbre);
+    }
+    if (velocity_excitation_mask != kAxisNone) {
+      if ((velocity_excitation_mask & kAxisForce) != 0u) {
+        base.force = velocity_excitation.force;
+      }
+      if ((velocity_excitation_mask & kAxisPosition) != 0u) {
+        base.position = velocity_excitation.position;
+      }
+      if ((velocity_excitation_mask & kAxisBrightness) != 0u) {
+        base.brightness = velocity_excitation.brightness;
+      }
+      if ((velocity_excitation_mask & kAxisMorph) != 0u) {
+        base.morph = velocity_excitation.morph;
+      }
+      present |= velocity_excitation_mask;
+      record_velocity_axes(*voice, velocity_excitation, velocity_excitation_mask);
+    }
     voice->seed_excitation(base, present);
   }
   // Bus-level piano body (the direct-share attenuation, the modal soundboard
@@ -680,6 +760,19 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   refresh_mpe_note_mods(ch);
 }
 
+void NativeSynth::record_velocity_axes(NativeSynthVoice& voice, const ExcitationAxes& velocity,
+                                       uint32_t mask) noexcept {
+  for (size_t i = 0; i < kControllerAxisCount; ++i) {
+    const ControllerAxis axis = static_cast<ControllerAxis>(i);
+    if ((mask & excitation_axis_mask(axis)) == 0u) continue;
+    const uint32_t axis_bit = 1u << static_cast<uint32_t>(i);
+    voice.live_excitation_axes.set(axis, excitation_value(velocity, axis));
+    voice.live_mpe_pressure_axes &= ~axis_bit;
+    voice.live_mpe_timbre_axes &= ~axis_bit;
+    voice.live_mpe_bend_axes &= ~axis_bit;
+  }
+}
+
 void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
@@ -709,6 +802,7 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.note == note && v.channel == ch && v.source_track_id == source_track_id &&
         v.key_down) {
+      freeze_mpe_voice(v, ch);
       v.key_down = false;
       // A sostenuto capture holds the note regardless of the sustain pedal.
       if (v.sostenuto) continue;
@@ -800,6 +894,7 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
   st.held_count = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
+      if (v.key_down) freeze_mpe_voice(v, ch);
       v.key_down = false;
       // All Notes Off is a key-up gesture. Sustain and sostenuto still hold a
       // captured voice, exactly as they do for an ordinary note-off.
@@ -913,7 +1008,12 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : pool_) {
     if (v.channel == ch) v.poly_pressure01 = 0.0f;
   }
+  const uint32_t previous_pressure_axes = st.mpe_pressure_axes;
+  const uint32_t previous_timbre_axes = st.mpe_timbre_axes;
   st.axes.reset();
+  st.mpe_pressure_axes = kAxisNone;
+  st.mpe_timbre_axes = kAxisNone;
+  st.mpe_bend_axes = kAxisNone;
   st.params.reset();
   // Inside a zone the same three controllers are tracked by the zone model,
   // which is where every reader of them takes their combined value -- leaving
@@ -926,17 +1026,171 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
     // The manager's values were a bias on every member, so each member has to
     // resolve its own again without them.
     const MpeZone zone = mpe_.zone_of(ch);
+    const auto resolve_candidate = [&](uint8_t member, MpeDimension dimension, Control32 own,
+                                       bool present) noexcept {
+      ControllerAxisState candidate;
+      if (!present) return candidate;
+      const Ump message = dimension == MpeDimension::kPressure
+                              ? make_midi2_channel_pressure(0, member, own.raw)
+                              : make_midi2_control_change(0, member, kMpeTimbreCc, own.raw);
+      std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
+      const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+      for (size_t i = 0; i < count; ++i) candidate.set(resolved[i].axis, resolved[i].value);
+      return candidate;
+    };
+    const auto reconcile = [&](ControllerAxisState& axes, uint32_t& pressure_mask,
+                               uint32_t& timbre_mask, const ControllerAxisState& pressure,
+                               const ControllerAxisState& timbre) noexcept {
+      for (size_t i = 0; i < kControllerAxisCount; ++i) {
+        const uint32_t bit = 1u << static_cast<uint32_t>(i);
+        const ControllerAxis axis = static_cast<ControllerAxis>(i);
+        const ControllerAxisState* candidate = (pressure_mask & bit) != 0u ? &pressure
+                                               : (timbre_mask & bit) != 0u ? &timbre
+                                                                           : nullptr;
+        if (candidate == nullptr) continue;
+        if (candidate->has(axis)) {
+          axes.set(axis, candidate->values[i]);
+        } else {
+          axes.present &= ~bit;
+          axes.values[i] = 0.0f;
+          pressure_mask &= ~bit;
+          timbre_mask &= ~bit;
+        }
+      }
+    };
     for (uint8_t member = 0; member < 16; ++member) {
       if (mpe_.role(member) != MpeChannelRole::kMember || mpe_.zone_of(member) != zone) continue;
-      for (const MpeDimension dimension : {MpeDimension::kPressure, MpeDimension::kTimbre}) {
-        if (mpe_.has(member, dimension)) push_mpe_controller_axis(member, dimension);
+      ChannelState& member_state = channels_[member];
+      Control32 pressure = Control32::from_raw(0);
+      Control32 timbre = Control32::from_raw(0);
+      const bool pressure_present = mpe_.own_control(member, MpeDimension::kPressure, &pressure);
+      const bool timbre_present = mpe_.own_control(member, MpeDimension::kTimbre, &timbre);
+      reconcile(member_state.axes, member_state.mpe_pressure_axes, member_state.mpe_timbre_axes,
+                resolve_candidate(member, MpeDimension::kPressure, pressure, pressure_present),
+                resolve_candidate(member, MpeDimension::kTimbre, timbre, timbre_present));
+      for (NativeSynthVoice& voice : pool_) {
+        if (!voice.active || !voice.key_down || voice.channel != member || voice.patch == nullptr) {
+          continue;
+        }
+        // The voice's own captured member input, so a newer note cannot reassign it.
+        reconcile(voice.live_excitation_axes, voice.live_mpe_pressure_axes,
+                  voice.live_mpe_timbre_axes,
+                  resolve_candidate(member, MpeDimension::kPressure, voice.mpe_member_pressure,
+                                    voice.mpe_member_pressure_present),
+                  resolve_candidate(member, MpeDimension::kTimbre, voice.mpe_member_timbre,
+                                    voice.mpe_member_timbre_present));
+        voice.restore_excitation_base();
+        uint32_t present = kAxisNone;
+        const ExcitationAxes live = channel_excitation(voice.live_excitation_axes, present);
+        if (present != kAxisNone) voice.push_excitation(live, present);
       }
     }
+    restore_excitation_control(ch);
     refresh_all_channel_mods();
   } else {
+    if (mpe_.role(ch) != MpeChannelRole::kMember) restore_excitation_control(ch);
+    if (mpe_.role(ch) == MpeChannelRole::kMember) {
+      // A released tail drops the ordinary values and keeps its NoteOff MPE snapshot.
+      for (NativeSynthVoice& voice : pool_) {
+        if (!voice.active || voice.channel != ch || voice.key_down || !voice.mpe_release_frozen ||
+            voice.patch == nullptr) {
+          continue;
+        }
+        const uint32_t ordinary_frozen = voice.mpe_frozen_axis_mask & ~voice.mpe_frozen_source_mask;
+        voice.mpe_frozen_axis_present &= ~ordinary_frozen;
+        for (size_t i = 0; i < kControllerAxisCount; ++i) {
+          if ((ordinary_frozen & (1u << static_cast<uint32_t>(i))) != 0u) {
+            voice.mpe_frozen_axis_values[i] = 0.0f;
+          }
+        }
+        voice.restore_excitation_base();
+        voice.live_excitation_axes.reset();
+        voice.live_mpe_pressure_axes = kAxisNone;
+        voice.live_mpe_timbre_axes = kAxisNone;
+        voice.live_mpe_bend_axes = kAxisNone;
+        ControllerAxisState frozen_axes;
+        for (size_t i = 0; i < kControllerAxisCount; ++i) {
+          const ControllerAxis axis = static_cast<ControllerAxis>(i);
+          const uint32_t bit = 1u << static_cast<uint32_t>(i);
+          if ((voice.mpe_frozen_source_mask & bit) == 0u ||
+              (voice.mpe_frozen_axis_present & bit) == 0u ||
+              excitation_axis_mask(axis) == kAxisNone) {
+            continue;
+          }
+          frozen_axes.set(axis, voice.mpe_frozen_axis_values[i]);
+          voice.live_excitation_axes.set(axis, voice.mpe_frozen_axis_values[i]);
+          voice.live_mpe_pressure_axes |= bit;
+        }
+        uint32_t frozen_present = kAxisNone;
+        const ExcitationAxes frozen = channel_excitation(frozen_axes, frozen_present);
+        if (frozen_present != kAxisNone) voice.push_excitation(frozen, frozen_present);
+      }
+    }
+    if (mpe_.role(ch) == MpeChannelRole::kMember) {
+      const uint8_t manager =
+          mpe_.zone_of(ch) == MpeZone::kLower ? kMpeLowerManagerChannel : kMpeUpperManagerChannel;
+      const auto candidate = [&](MpeDimension dimension) noexcept {
+        ControllerAxisState result;
+        Control32 value = Control32::from_raw(0);
+        if (!mpe_.own_control(manager, dimension, &value)) return result;
+        const Ump message = dimension == MpeDimension::kPressure
+                                ? make_midi2_channel_pressure(0, ch, value.raw)
+                                : make_midi2_control_change(0, ch, kMpeTimbreCc, value.raw);
+        std::array<ControllerAxisValue, kMaxControllerBindings> resolved{};
+        const size_t count = controller_profile_.resolve(message, resolved.data(), resolved.size());
+        for (size_t i = 0; i < count; ++i) result.set(resolved[i].axis, resolved[i].value);
+        return result;
+      };
+      const ControllerAxisState pressure = candidate(MpeDimension::kPressure);
+      const ControllerAxisState timbre = candidate(MpeDimension::kTimbre);
+      const auto restore_manager_axes = [&](ControllerAxisState& axes, uint32_t& pressure_mask,
+                                            uint32_t& timbre_mask, bool engine_only) noexcept {
+        const uint32_t old_pressure = pressure_mask;
+        const uint32_t old_timbre = timbre_mask;
+        axes.reset();
+        pressure_mask = timbre_mask = kAxisNone;
+        for (size_t i = 0; i < kControllerAxisCount; ++i) {
+          const ControllerAxis axis = static_cast<ControllerAxis>(i);
+          if (engine_only && excitation_axis_mask(axis) == kAxisNone) continue;
+          const uint32_t bit = 1u << static_cast<uint32_t>(i);
+          const ControllerAxisState* selected = nullptr;
+          if ((old_pressure & bit) != 0u && pressure.has(axis))
+            selected = &pressure;
+          else if ((old_timbre & bit) != 0u && timbre.has(axis))
+            selected = &timbre;
+          else if (channels_[manager].last_mpe_controller == MpeDimension::kPressure &&
+                   pressure.has(axis))
+            selected = &pressure;
+          else if (timbre.has(axis))
+            selected = &timbre;
+          else if (pressure.has(axis))
+            selected = &pressure;
+          if (selected == nullptr) continue;
+          axes.set(axis, selected->values[i]);
+          (selected == &pressure ? pressure_mask : timbre_mask) |= bit;
+        }
+      };
+      // The reset clears the member's contribution, not a surviving manager's source.
+      st.mpe_pressure_axes = previous_pressure_axes;
+      st.mpe_timbre_axes = previous_timbre_axes;
+      restore_manager_axes(st.axes, st.mpe_pressure_axes, st.mpe_timbre_axes, false);
+      for (NativeSynthVoice& voice : pool_) {
+        if (!voice.active || !voice.key_down || voice.channel != ch) continue;
+        voice.restore_excitation_base();
+        restore_manager_axes(voice.live_excitation_axes, voice.live_mpe_pressure_axes,
+                             voice.live_mpe_timbre_axes, true);
+        voice.live_mpe_bend_axes = kAxisNone;
+        voice.mpe_member_pressure = Control32::from_raw(0);
+        voice.mpe_member_timbre = Control32::from_raw(0);
+        voice.mpe_member_pressure_present = false;
+        voice.mpe_member_timbre_present = false;
+        uint32_t present = kAxisNone;
+        const ExcitationAxes live = channel_excitation(voice.live_excitation_axes, present);
+        if (present != kAxisNone) voice.push_excitation(live, present);
+      }
+    }
     refresh_channel_mod(ch);
   }
-  restore_excitation_control(ch);
 }
 
 void NativeSynth::bend_range_msb(uint8_t channel, uint8_t semitones) noexcept {
@@ -1020,18 +1274,33 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
         apply_mcm(ch, value);
       } else if (st.params.selected_rpn(0, 0)) {
         bend_range_msb(ch, value);
+      } else if (st.params.selected_nrpn() && st.rx_nrpn) {
+        const GsPartParams before = st.gs;
+        gs_apply_part_nrpn(st.gs, st.params.nrpn_msb, st.params.nrpn_lsb, value);
+        if (gs_eg_times_differ(before, st.gs)) raise_tail();
       }
       break;
     case 38:
       if (st.params.selected_rpn(0, 0)) bend_range_lsb(ch, value);
       break;
+    // TONE MODIFY 1-8 by controller: the storage 40 1x 30-37 and NRPN 01 xx write (docs/gs.md).
+    case 71:
+    case 72:
+    case 73:
     case kMpeTimbreCc:
-      // The third per-note dimension (2.2.8) reaches an axis through the
-      // controller profile alone, which has already run, and the value itself
-      // was tracked ahead of it -- a receiver shall go on tracking it while the
-      // channel is silent so the next note starts from it. Nothing is left to
-      // do here, and the case stands so the default below cannot claim it.
+    case 75:
+    case 76:
+    case 77:
+    case 78: {
+      // Inside a zone CC74 is the timbre dimension (2.2.8), already tracked and profiled.
+      if (controller == kMpeTimbreCc && mpe_.role(ch) != MpeChannelRole::kUnassigned) break;
+      // A controller the profile routes to an axis is the profile's, not the alias's.
+      if (profile_binds_cc(controller)) break;
+      const GsPartParams before = st.gs;
+      gs_apply_tone_modify_cc(st.gs, controller, value);
+      if (gs_eg_times_differ(before, st.gs)) raise_tail();
       break;
+    }
     case 64:
       sustain_cc(ch, control);
       break;
@@ -1042,16 +1311,18 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
       st.una_corda = value >= 64;  // soft pedal (affects notes struck while held)
       break;
     case 98:
-      st.params.select_nrpn_lsb(value);
+      if (st.rx_nrpn) st.params.select_nrpn_lsb(value);
       break;
     case 99:
-      st.params.select_nrpn_msb(value);
+      if (st.rx_nrpn) st.params.select_nrpn_msb(value);
       break;
     case 100:
       st.params.select_rpn_lsb(value);
+      st.params.deselect_on_rpn_null();
       break;
     case 101:
       st.params.select_rpn_msb(value);
+      st.params.deselect_on_rpn_null();
       break;
     case 120:
       all_sound_off(ch);
@@ -1084,10 +1355,12 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
   const Ump& u = event.ump;
   if (u.message_type() != UmpMessageType::kMidi1ChannelVoice &&
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {
+    if (event.sysex_payload == nullptr || event.sysex_payload_size == 0) return;
+    // Part state is the render thread's on both paths, as Sf2Player's is.
+    apply_part_sysex(event.sysex_payload, event.sysex_payload_size);
     // Offline the stream carries the file's GS EFX; live the host pushes it
     // through on_control_sysex, so a SysEx scheduled in a clip is not applied.
-    if (config_.realize_efx_inline && config_.use_gm_programs && part_fx_.enabled() &&
-        event.sysex_payload != nullptr && event.sysex_payload_size > 0) {
+    if (config_.realize_efx_inline && config_.use_gm_programs && part_fx_.enabled()) {
       apply_efx_sysex(event.sysex_payload, event.sysex_payload_size);
     }
     return;
@@ -1096,19 +1369,36 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
   // a member channel's controller carries and that value is only current once
   // the message in hand has been tracked.
   track_mpe_input(u);
-  // The profile runs before the protocol dispatch so a note-on whose velocity
-  // is bound to an axis starts from its own value rather than the previous
-  // note's.
-  apply_controller_input(u);
   ChannelVoiceEvent ev;
   if (!decode_channel_voice(u, &ev)) {
     ++skipped_events_;  // Reserved status.
     return;
   }
   const uint8_t ch = ev.channel & 0x0Fu;
+  // A message the zone ignores must not reach a profile axis either.
+  if (ev.kind == ChannelVoiceKind::PolyPressure &&
+      mpe_.ignores(ch, MpeIgnorable::kPolyKeyPressure)) {
+    return;
+  }
+  if (ev.kind == ChannelVoiceKind::ControlChange &&
+      (((ev.note == 0 || ev.note == 32) && mpe_.ignores(ch, MpeIgnorable::kBankSelect)) ||
+       ((ev.note == 126 || ev.note == 127) && mpe_.ignores(ch, MpeIgnorable::kModeMessage)))) {
+    return;
+  }
+  // The profile runs before the protocol dispatch so a note-on whose velocity
+  // is bound to an axis starts from its own value rather than the previous
+  // note's.
+  ExcitationAxes velocity_excitation{};
+  uint32_t velocity_excitation_mask = kAxisNone;
+  if (ev.kind == ChannelVoiceKind::NoteOn) {
+    velocity_excitation = apply_note_on_controller_input(u, &velocity_excitation_mask);
+  } else {
+    apply_controller_input(u);
+  }
   switch (ev.kind) {
     case ChannelVoiceKind::NoteOn:
-      note_on(ch, ev.note, ev.velocity, ev.index, ev.attribute_data, event.source_track_id);
+      note_on(ch, ev.note, ev.velocity, ev.index, ev.attribute_data, event.source_track_id,
+              velocity_excitation, velocity_excitation_mask);
       break;
     case ChannelVoiceKind::NoteOff:
       note_off(ch, ev.note, event.source_track_id);
@@ -1181,6 +1471,47 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
       refresh_per_note_voices(ch, ev.note, false);
       break;
   }
+}
+
+bool NativeSynth::profile_binds_cc(uint8_t controller) const noexcept {
+  for (size_t i = 0; i < controller_profile_.binding_count(); ++i) {
+    const ControllerBinding& binding = controller_profile_.binding_at(i);
+    if (binding.input == ControllerInput::kControlChange && binding.index == controller) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void NativeSynth::apply_part_sysex(const uint8_t* data, size_t size) noexcept {
+  const GsSysEx msg = parse_gs_sysex(data, size);
+  if (gs_sysex_resets(msg.kind)) {
+    // GM System On closes NRPN reception, the NRPNs being Roland's; GS Reset reopens it.
+    const bool gm = msg.kind != GsSysExKind::kGsReset;
+    for (ChannelState& st : channels_) {
+      st.gs = {};
+      st.rx_nrpn = !gm;
+    }
+    return;
+  }
+  constexpr size_t kMaxWrites = 64;
+  GsWrite writes[kMaxWrites];
+  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  bool eg_moved = false;
+  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
+    const GsWrite& w = writes[i];
+    const GsAddressEntry* entry = gs_lookup_address(w.addr);
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    ChannelState& st = channels_[w.part & 0x0Fu];
+    if (w.param == GsParam::kPartToneModify) {
+      const GsPartParams before = st.gs;
+      gs_apply_tone_modify(st.gs, w.index, w.value);
+      eg_moved |= gs_eg_times_differ(before, st.gs);
+    } else if (w.param == GsParam::kPartRxNrpn) {
+      st.rx_nrpn = w.value != 0;
+    }
+  }
+  if (eg_moved) raise_tail();
 }
 
 void NativeSynth::registered_controller(const Ump& ump, const ChannelVoiceEvent& ev) noexcept {

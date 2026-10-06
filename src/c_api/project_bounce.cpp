@@ -4,6 +4,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "c_api/project_internal.h"
 #include "util/numeric_validation.h"
@@ -66,6 +67,26 @@ bool arrangement_end_frames(const arr::CompiledTimeline& timeline, int64_t* out_
   return true;
 }
 
+// Feeds every scheduled event bound for @p hosted's destination to it in render
+// order, so an instrument whose tail follows control events (a GS envelope-time
+// edit) reports the tail this arrangement asks for. The caller resets it after
+// reading the tail, and the render prepares it again.
+void replay_destination_events(const arr::CompiledTimeline& timeline,
+                               const HostedInstrument& hosted) {
+  std::vector<const sonare::midi::MidiEvent*> events;
+  for (const auto& clip : timeline.midi_clips) {
+    if (clip.destination_id != hosted.destination_id) continue;
+    for (const auto& event : clip.events) events.push_back(&event);
+  }
+  std::stable_sort(events.begin(), events.end(),
+                   [](const sonare::midi::MidiEvent* a, const sonare::midi::MidiEvent* b) {
+                     return a->render_frame < b->render_frame;
+                   });
+  for (const sonare::midi::MidiEvent* event : events) {
+    hosted.instrument->on_event(hosted.destination_id, *event);
+  }
+}
+
 // Widest output a scene's master allows: its layout's width, with mono and
 // stereo (and a scene with no master) allowing two. The master is resolved the
 // way the mixer graph resolves it: role "master" first, then id "master".
@@ -105,7 +126,8 @@ void clear_last_bounce_result(SonareProject* project) noexcept {
 // result. `instruments` may be empty for a silent MIDI bounce. When
 // opts.total_frames <= 0 the render length is auto-derived from the compiled
 // timeline (plus the longest hosted-instrument release tail) so a caller can
-// bounce a MIDI-only arrangement without computing a length by hand. When the
+// bounce a MIDI-only arrangement without computing a length by hand; an
+// instrument reporting an unbounded (INT_MAX) tail refuses that. When the
 // project routes tracks through mixer channel strips (under SONARE_WITH_MIXING)
 // the render fans out into per-track stems summed through the scene's mixer so
 // channel-strip FX are applied; otherwise a single offline render is used.
@@ -188,6 +210,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // not on the timeline), so both the single-render and the per-track-stem paths
   // share one render length and delay.
   int64_t instrument_tail = 0;
+  bool unbounded_tail = false;
   int64_t pdc = 0;
   {
     sonare::engine::RealtimeEngine probe;
@@ -196,9 +219,13 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       if (!probe.set_midi_instrument(hosted.destination_id, hosted.instrument)) {
         return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
       }
+      const bool replay = opts.total_frames <= 0 && hosted.instrument->tail_follows_events();
+      if (replay) replay_destination_events(*compiled.timeline, hosted);
       const int latency = hosted.instrument->latency_samples();
       const int tail = hosted.instrument->tail_samples();
+      if (replay) hosted.instrument->reset();
       if (latency < 0 || tail < 0) return SONARE_ERROR_INVALID_PARAMETER;
+      unbounded_tail |= tail == std::numeric_limits<int>::max();
       instrument_tail = std::max<int64_t>(instrument_tail, static_cast<int64_t>(tail));
     }
     const int pdc_samples = probe.midi_instrument_latency_samples();
@@ -222,6 +249,8 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   }
   int64_t frames = opts.total_frames;
   if (frames <= 0) {
+    // An unbounded tail has no auto length; the caller has to name one.
+    if (unbounded_tail && arrangement_frames > 0) return SONARE_ERROR_INVALID_PARAMETER;
     frames = arrangement_frames;
     if (frames > 0 && !checked_nonnegative_add(frames, instrument_tail, &frames)) {
       return SONARE_ERROR_INVALID_PARAMETER;

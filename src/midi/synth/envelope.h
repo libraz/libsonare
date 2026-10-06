@@ -69,6 +69,12 @@ class DahdsrEnvelope {
   /// to fall from 1.0 to kSilenceLevel) for @p release_ms at @p sample_rate.
   static int64_t release_tail_samples(double sample_rate, float release_ms) noexcept;
 
+  /// Full duration of a zero-sustain one-shot envelope in samples, including
+  /// its delay, attack, hold and terminating decay. The attack and decay
+  /// multipliers are the live GS envelope scales applied to the voice.
+  static int64_t one_shot_tail_samples(double sample_rate, const DahdsrConfig& config,
+                                       float attack_scale, float decay_scale) noexcept;
+
  private:
   Stage stage_ = Stage::kIdle;
   float level_ = 0.0f;
