@@ -272,7 +272,7 @@ describe('repair detection (WASM)', () => {
       // The control for the refusal: the same buffer passes once nFft is small
       // enough to fit inside it, so the throw is about the length rather than
       // about this buffer.
-      const fitted = masteringRepairDetectNoiseFloor(short, TRIM_SR, { nFft: 256 });
+      const fitted = masteringRepairDetectNoiseFloor(short, TRIM_SR, { nFft: 256, hopLength: 64 });
       expect(Number.isFinite(fitted.floorDbfs)).toBe(true);
     });
 

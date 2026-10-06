@@ -239,7 +239,7 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     ).toThrow();
   });
 
-  it('rejects a non-power-of-two nFft and a hopLength outside (0, nFft]', () => {
+  it('rejects a non-power-of-two nFft and a hopLength outside (0, nFft / 2]', () => {
     const { left, right } = buildWetChannels();
     expect(() =>
       masteringRepairDereverbClassicalStereo(left, right, SR, { nFft: 1500, hopLength: 256 }),

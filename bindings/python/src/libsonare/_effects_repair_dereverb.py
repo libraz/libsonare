@@ -72,8 +72,8 @@ def mastering_repair_dereverb_classical(
     hop_length_value = _narrow_int(
         hop_length, "mastering_repair_dereverb_classical: hop_length", _C_INT_MIN, _C_INT_MAX
     )
-    if hop_length_value <= 0 or hop_length_value > n_fft_value:
-        raise SonareValueError("hop_length must be in (0, n_fft]")
+    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
+        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
@@ -154,7 +154,7 @@ def mastering_repair_detect_reverb(
         attenuation: Suppression amount the repair would use (default 1.0); not
             read here.
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples, in ``(0, n_fft]`` (default 256).
+        hop_length: Hop size in samples, in ``(0, n_fft // 2]`` (default 256).
         t60_sec: Estimated T60 in seconds (default 0.4).
         late_delay_ms: Late-reverb onset relative to direct (default 50.0).
         over_subtraction: Berouti alpha the repair would use (default 1.0); not
@@ -172,7 +172,7 @@ def mastering_repair_detect_reverb(
 
     Raises:
         SonareValueError: If ``n_fft`` is not a power of two, if ``hop_length``
-            is outside ``(0, n_fft]``, or if the buffer is empty or carries a
+            is outside ``(0, n_fft // 2]``, or if the buffer is empty or carries a
             non-finite sample.
         SonareError: If the C call rejects the request.
     """
@@ -182,8 +182,8 @@ def mastering_repair_detect_reverb(
     hop_length_value = _narrow_int(
         hop_length, "mastering_repair_detect_reverb: hop_length", _C_INT_MIN, _C_INT_MAX
     )
-    if hop_length_value <= 0 or hop_length_value > n_fft_value:
-        raise SonareValueError("hop_length must be in (0, n_fft]")
+    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
+        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
@@ -267,7 +267,7 @@ def mastering_repair_dereverb_classical_stereo(
         threshold: Late-reverb detection gate; 0 admits everything (default 0).
         attenuation: Suppression amount, linear (default 1.0, full).
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples, in ``(0, n_fft]`` (default 256).
+        hop_length: Hop size in samples, in ``(0, n_fft // 2]`` (default 256).
         t60_sec: Estimated T60 in seconds (default 0.4).
         late_delay_ms: Late-reverb onset relative to direct (default 50.0).
         over_subtraction: Berouti alpha (default 1.0).
@@ -283,7 +283,7 @@ def mastering_repair_dereverb_classical_stereo(
 
     Raises:
         SonareValueError: If ``n_fft`` is not a power of two, if ``hop_length``
-            is outside ``(0, n_fft]``, or if the two channels differ in length.
+            is outside ``(0, n_fft // 2]``, or if the two channels differ in length.
         SonareError: If the C call rejects the request.
     """
     # The core requires a power of two here (dereverb_classical.cpp), narrower
@@ -295,8 +295,8 @@ def mastering_repair_dereverb_classical_stereo(
         _C_INT_MIN,
         _C_INT_MAX,
     )
-    if hop_length_value <= 0 or hop_length_value > n_fft_value:
-        raise SonareValueError("hop_length must be in (0, n_fft]")
+    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
+        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
@@ -412,7 +412,7 @@ def mastering_repair_dereverb_classical_linked(
         threshold: Late-reverb detection gate; 0 admits everything (default 0).
         attenuation: Suppression amount, linear (default 1.0, full).
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples, in ``(0, n_fft]`` (default 256).
+        hop_length: Hop size in samples, in ``(0, n_fft // 2]`` (default 256).
         t60_sec: Estimated T60 in seconds (default 0.4).
         late_delay_ms: Late-reverb onset relative to direct (default 50.0).
         over_subtraction: Berouti alpha (default 1.0).
@@ -428,7 +428,7 @@ def mastering_repair_dereverb_classical_linked(
 
     Raises:
         SonareValueError: If ``n_fft`` is not a power of two, if ``hop_length``
-            is outside ``(0, n_fft]``, if ``channels`` is empty, if the
+            is outside ``(0, n_fft // 2]``, if ``channels`` is empty, if the
             channels disagree in length, or if any channel is empty or carries
             a non-finite sample.
         SonareError: If the C call rejects the request.
@@ -442,8 +442,8 @@ def mastering_repair_dereverb_classical_linked(
         _C_INT_MIN,
         _C_INT_MAX,
     )
-    if hop_length_value <= 0 or hop_length_value > n_fft_value:
-        raise SonareValueError("hop_length must be in (0, n_fft]")
+    if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
+        raise SonareValueError("hop_length must be in (0, n_fft // 2]")
 
     lib = _get_lib()
     symbol = "sonare_mastering_repair_dereverb_classical_linked"

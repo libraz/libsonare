@@ -118,8 +118,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
     Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (config.hop_length <= 0 || config.hop_length > config.n_fft) {
-    Napi::RangeError::New(env, "hopLength must be in (0, nFft]").ThrowAsJavaScriptException();
+  if (config.hop_length <= 0 || config.hop_length > config.n_fft / 2) {
+    Napi::RangeError::New(env, "hopLength must be in (0, nFft / 2]").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);

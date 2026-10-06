@@ -10,14 +10,20 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
 #include "mastering/repair/dereverb_classical.h"
+#include "util/exception.h"
 
+using sonare::Audio;
+using sonare::ErrorCode;
 using sonare::mid_frequency_rt60;
 using sonare::octave_band_center_hz;
+using sonare::SonareException;
 using sonare::mastering::repair::apply_room_measurement;
+using sonare::mastering::repair::dereverb_classical;
 using sonare::mastering::repair::DereverbClassicalConfig;
 
 namespace {
@@ -112,6 +118,41 @@ TEST_CASE("an unusable measurement leaves its own field alone", "[mastering][der
   apply_room_measurement(nothing, kNan, kNan);
   CHECK(nothing.t60_sec == defaults.t60_sec);
   CHECK(nothing.late_delay_ms == defaults.late_delay_ms);
+}
+
+TEST_CASE("dereverb config rejects unreconstructible Hann overlap",
+          "[mastering][dereverb_room][geometry]") {
+  std::vector<float> samples(4096, 0.1f);
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+  const auto rejection = [&](int n_fft, int hop_length) {
+    DereverbClassicalConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    // Geometry must be valid even when the caller asks for no subtraction and
+    // disables WPE: the STFT round trip still has to reconstruct every sample.
+    config.attenuation = 0.0f;
+    config.wpe_enabled = false;
+    try {
+      (void)dereverb_classical(audio, config);
+    } catch (const SonareException& error) {
+      return error.code();
+    }
+    return ErrorCode::Ok;
+  };
+
+  // The first four leave a residue class uncovered; the rest have coverage but a hop
+  // above n_fft / 2, where frame-edge leakage is divided by near-zero window products.
+  for (const auto& [n_fft, hop_length] :
+       {std::pair{2, 1}, std::pair{256, 256}, std::pair{256, 255}, std::pair{1024, 1022},
+        std::pair{256, 254}, std::pair{256, 129}, std::pair{1024, 513}}) {
+    INFO("n_fft " << n_fft << " hop_length " << hop_length);
+    CHECK(rejection(n_fft, hop_length) == ErrorCode::InvalidParameter);
+  }
+
+  CHECK(rejection(1024, 256) == ErrorCode::Ok);
+  CHECK(rejection(256, 85) == ErrorCode::Ok);
+  CHECK(rejection(256, 128) == ErrorCode::Ok);
 }
 
 TEST_CASE("the mixing time is bounded at both ends", "[mastering][dereverb_room]") {

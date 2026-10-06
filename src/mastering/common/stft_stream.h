@@ -26,6 +26,17 @@
 
 namespace sonare::mastering::common {
 
+/// @brief Whether the Hann analysis/synthesis pair covers every hop residue, at a hop of at
+///        most n_fft / 2.
+/// @details The streaming and offline overlap-add paths accumulate the same
+///          float periodic-Hann * symmetric-Hann product into a ring indexed by
+///          sample modulo @p hop_length. A residue at or below
+///          `sonare::constants::kSpectrumEpsilon` bypasses normalization and cannot
+///          reconstruct a sample. A hop above n_fft / 2 is refused as well, because the
+///          frame edges are then normalized by window products near zero. Callers must perform
+///          their own scalar range checks before invoking this helper.
+bool has_reconstructible_hann_geometry(int n_fft, int hop_length);
+
 /// @brief Frame-wise forward STFT over a caller-owned sample buffer.
 /// @details Reproduces Spectrogram::compute cell for cell without materializing
 ///          the spectrum or a padded copy of the signal. @p samples must outlive

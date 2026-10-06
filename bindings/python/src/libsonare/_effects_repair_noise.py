@@ -131,7 +131,7 @@ def mastering_repair_denoise_classical(
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples (default 256).
+        hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
         reduction_db: Deepest attenuation the mask may apply, in dB, >= 0
             (default 26.0).
@@ -147,7 +147,8 @@ def mastering_repair_denoise_classical(
     Raises:
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved.
         RuntimeError: If the C call rejects the request (e.g. non-power-of-two
-        ``n_fft`` or non-positive ``hop_length``).
+        ``n_fft``, non-positive ``hop_length``, or ``hop_length`` above
+        ``n_fft // 2``).
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
@@ -238,7 +239,7 @@ def mastering_repair_detect_noise_floor(
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples (default 256).
+        hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
         reduction_db: Deepest attenuation the mask may apply, in dB (default 26.0).
         over_subtraction: Berouti alpha; SpectralSubtraction only (default 2.0).
@@ -255,7 +256,7 @@ def mastering_repair_detect_noise_floor(
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
             positive, or if the buffer is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request, which includes a buffer
-            shorter than ``n_fft``.
+            shorter than ``n_fft`` or a ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
@@ -406,7 +407,7 @@ def mastering_repair_denoise_classical_stereo(
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples (default 256).
+        hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
         reduction_db: Deepest attenuation the mask may apply, in dB, >= 0
             (default 26.0).
@@ -425,7 +426,7 @@ def mastering_repair_denoise_classical_stereo(
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
             positive, or if the two channels differ in length.
         SonareError: If the C call rejects the request, which includes an input
-            shorter than ``n_fft``.
+            shorter than ``n_fft`` or a ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
@@ -545,7 +546,7 @@ def mastering_repair_denoise_classical_linked(
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
-        hop_length: Hop size in samples (default 256).
+        hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
         reduction_db: Deepest attenuation the mask may apply, in dB, >= 0
             (default 26.0).
@@ -565,7 +566,7 @@ def mastering_repair_denoise_classical_linked(
             positive, if ``channels`` is empty, if the channels disagree in
             length, or if any channel is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request, which includes an input
-            shorter than ``n_fft``.
+            shorter than ``n_fft`` or a ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.

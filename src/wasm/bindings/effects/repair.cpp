@@ -288,9 +288,9 @@ mastering::repair::DereverbClassicalConfig validatedDereverbConfig(const val& op
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string(entry) + ": nFft must be a positive power of two");
   }
-  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
+  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft / 2) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(entry) + ": hopLength must be in (0, nFft]");
+                                  std::string(entry) + ": hopLength must be in (0, nFft / 2]");
   }
   return cfg;
 }

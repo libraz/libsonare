@@ -54,6 +54,9 @@ struct DenoiseClassicalConfig {
   DenoiseMode mode = DenoiseMode::LogMmse;
   DenoiseNoiseEstimator noise_estimator = DenoiseNoiseEstimator::Quantile;
   int n_fft = 1024;
+  /// Hop length between frames, at most n_fft / 2. Every sample residue must receive a
+  /// Hann analysis/synthesis overlap sum above the spectrum epsilon so STFT
+  /// reconstruction remains defined at every seam.
   int hop_length = 256;
   /// Decision-directed a priori SNR smoothing factor (Ephraim-Malah 1984).
   /// 0.98 is the literature default; higher values produce smoother gains but

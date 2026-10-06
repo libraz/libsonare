@@ -624,12 +624,13 @@ void validate_config(const DenoiseClassicalConfig& config) {
   if (!is_known_noise_estimator(config.noise_estimator)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid denoise noise estimator");
   }
-  if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
+  if (config.n_fft < 2 || config.n_fft > kMaxStftNFft || (config.n_fft & (config.n_fft - 1)) != 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise n_fft must be a positive power of two");
+                          "denoise n_fft must be an even power of two in the supported range");
   }
-  if (config.hop_length <= 0 || config.hop_length > config.n_fft) {
-    throw SonareException(ErrorCode::InvalidParameter, "denoise hop_length must be in (0, n_fft]");
+  if (config.hop_length <= 0 || config.hop_length > config.n_fft / 2) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "denoise hop_length must be in (0, n_fft / 2]");
   }
   if (!std::isfinite(config.dd_alpha) || config.dd_alpha < 0.0f || config.dd_alpha >= 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -655,6 +656,11 @@ void validate_config(const DenoiseClassicalConfig& config) {
       config.noise_estimation_quantile <= 0.0f || config.noise_estimation_quantile > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "denoise noise_estimation_quantile must be finite and in (0, 1]");
+  }
+  if (!common::has_reconstructible_hann_geometry(config.n_fft, config.hop_length)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "denoise n_fft and hop_length leave an unreconstructible Hann overlap residue");
   }
 }
 

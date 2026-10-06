@@ -28,6 +28,20 @@ std::vector<float> padded_window_of(WindowType window, int win_length, int n_fft
 
 }  // namespace
 
+bool has_reconstructible_hann_geometry(int n_fft, int hop_length) {
+  if (n_fft <= 0 || hop_length <= 0 || hop_length > n_fft / 2) return false;
+
+  const auto analysis = get_window_cached(WindowType::Hann, n_fft, true);
+  const auto synthesis = get_window_cached(WindowType::Hann, n_fft, false);
+  std::vector<float> residue(static_cast<std::size_t>(hop_length), 0.0f);
+  for (int i = 0; i < n_fft; ++i) {
+    residue[static_cast<std::size_t>(i % hop_length)] +=
+        (*analysis)[static_cast<std::size_t>(i)] * (*synthesis)[static_cast<std::size_t>(i)];
+  }
+  return std::all_of(residue.begin(), residue.end(),
+                     [](float sum) { return sum > kSpectrumEpsilon; });
+}
+
 StftFrameReader::StftFrameReader(const float* samples, std::size_t size, int sample_rate,
                                  const StftConfig& config)
     : StftFrameReader(samples, size, sample_rate, Validated<StftConfig>::make(config).get(),

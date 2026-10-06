@@ -19,6 +19,7 @@ export interface DereverbClassicalOptions {
   threshold?: number;
   attenuation?: number;
   nFft?: number;
+  /** Hop in samples, in (0, nFft / 2]. */
   hopLength?: number;
   t60Sec?: number;
   lateDelayMs?: number;

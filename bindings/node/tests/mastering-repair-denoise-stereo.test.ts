@@ -203,6 +203,7 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
       right,
       sampleRate: SR,
       nFft: 256,
+      hopLength: 64,
     });
     expect(fitted.left).toHaveLength(short);
 

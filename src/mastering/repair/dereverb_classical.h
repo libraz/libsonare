@@ -32,6 +32,9 @@ struct DereverbClassicalConfig {
   /// has always done.
   float attenuation = 1.0f;
   int n_fft = 1024;
+  /// Hop length between frames, at most n_fft / 2. Every sample residue must receive a
+  /// Hann analysis/synthesis overlap sum above the spectrum epsilon so STFT
+  /// reconstruction remains defined at every seam.
   int hop_length = 256;
   float t60_sec = 0.4f;
   float late_delay_ms = 50.0f;

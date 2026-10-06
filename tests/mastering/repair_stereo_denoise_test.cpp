@@ -16,6 +16,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -24,6 +25,7 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/common/noise_profile.h"
 #include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/denoise_streaming.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "repair_metrics.h"
 #include "support/golden_hash.h"
@@ -261,6 +263,87 @@ TEST_CASE("denoise rejects every out-of-domain field by name", "[repair][stereo]
         }) == ErrorCode::InvalidParameter);
   CHECK(rejection_code([&] { repair::detect_noise_floor(bed.data(), bed.size(), 0); }) ==
         ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("denoise config rejects unreconstructible Hann overlap",
+          "[repair][stereo][denoise][geometry]") {
+  const Audio audio = as_audio(make_bed(4096, 77u));
+  const Audio* channels[1] = {&audio};
+
+  const auto offline_rejects = [&](int n_fft, int hop_length) {
+    repair::DenoiseClassicalConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    return rejection_code([&] { repair::denoise_classical(audio, config); });
+  };
+  const auto streaming_rejects = [&](int n_fft, int hop_length) {
+    repair::DenoiseClassicalConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
+    return rejection_code([&] { repair::StreamingDenoise processor(config); });
+  };
+  const auto linked_rejects = [&](int n_fft, int hop_length) {
+    repair::DenoiseClassicalConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    std::vector<Audio> out;
+    return rejection_code([&] { repair::denoise_classical_linked(channels, 1, &out, config); });
+  };
+  const auto streaming_accepts = [&](const repair::DenoiseClassicalConfig& config) {
+    repair::DenoiseClassicalConfig streaming_config = config;
+    streaming_config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
+    return rejection_code([&] {
+      repair::StreamingDenoise processor(streaming_config);
+      processor.prepare(kSampleRate, 256, 1);
+    });
+  };
+
+  // Symmetric Hann is zero at both ends. The first five leave at least one residue
+  // class with no analysis*synthesis coverage, so iSTFT would return an unnormalised
+  // (and for a zero-reduction mask, deleted) sample there. The rest have positive
+  // coverage but a hop above n_fft / 2, where the frame edges are divided by window
+  // products near zero.
+  for (const auto& [n_fft, hop_length] :
+       {std::pair{1, 1}, std::pair{2, 1}, std::pair{256, 256}, std::pair{256, 255},
+        std::pair{1024, 1022}, std::pair{256, 254}, std::pair{256, 129}, std::pair{1024, 513}}) {
+    INFO("n_fft " << n_fft << " hop_length " << hop_length);
+    CHECK(offline_rejects(n_fft, hop_length) == ErrorCode::InvalidParameter);
+    CHECK(linked_rejects(n_fft, hop_length) == ErrorCode::InvalidParameter);
+    CHECK(streaming_rejects(n_fft, hop_length) == ErrorCode::InvalidParameter);
+  }
+
+  // The same check must accept a dense but valid overlap and the established
+  // defaults through all public entry points.
+  repair::DenoiseClassicalConfig dense;
+  dense.n_fft = 256;
+  dense.hop_length = 85;
+  CHECK(offline_rejects(dense.n_fft, dense.hop_length) == ErrorCode::Ok);
+  CHECK(linked_rejects(dense.n_fft, dense.hop_length) == ErrorCode::Ok);
+  CHECK(streaming_rejects(dense.n_fft, dense.hop_length) == ErrorCode::Ok);
+  // The hop boundary is n_fft / 2 inclusive.
+  CHECK(offline_rejects(256, 128) == ErrorCode::Ok);
+  CHECK(linked_rejects(256, 128) == ErrorCode::Ok);
+  CHECK(streaming_rejects(256, 128) == ErrorCode::Ok);
+  CHECK(rejection_code([&] { repair::denoise_classical(audio); }) == ErrorCode::Ok);
+  CHECK(rejection_code([&] {
+          std::vector<Audio> out;
+          repair::denoise_classical_linked(channels, 1, &out);
+        }) == ErrorCode::Ok);
+  repair::DenoiseClassicalConfig streaming_defaults;
+  CHECK(streaming_accepts(streaming_defaults) == ErrorCode::Ok);
+  CHECK(streaming_accepts(dense) == ErrorCode::Ok);
+
+  // A zero reduction mask is unity. Once the centred padding has been left
+  // behind, valid geometry must preserve the source through the full STFT
+  // round trip; this catches a validator that merely permits the geometry but
+  // still leaves a zero normalization seam.
+  dense.reduction_db = 0.0f;
+  const Audio preserved = repair::denoise_classical(audio, dense);
+  for (size_t i = 256; i + 256 < audio.size(); ++i) {
+    CAPTURE(i);
+    CHECK(preserved[i] == Approx(audio[i]).margin(1.0e-5f));
+  }
 }
 
 TEST_CASE("dereverb rejects every out-of-domain field by name", "[repair][stereo][denoise]") {

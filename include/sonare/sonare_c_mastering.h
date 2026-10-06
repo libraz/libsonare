@@ -767,13 +767,14 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
                                            char** json_out);
 
 /// @brief Stereo counterpart of @ref sonare_mastering_audio_profile.
-/// @details Only the @c loudness block is measured from the two channels:
+/// @details The @c loudness block is measured from the two channels:
 /// integrated LUFS and LRA come from the channel-summed program and the true
 /// peak is the larger of the two, so decorrelated stereo is not read roughly
 /// 6 dB low the way a @c 0.5*(L+R) downmix reads it. The spectral, dynamics and
 /// tempo fields describe shape and timing rather than absolute level and are
 /// measured on the downmix, which keeps them comparable with the mono entry
-/// point. @p params accepts the same keys as the mono entry point.
+/// point. Defect detectors run on each channel and their results are aggregated.
+/// @p params accepts the same keys as the mono entry point.
 /// The returned string must be released with sonare_free_string().
 SonareError sonare_mastering_audio_profile_stereo(const float* left, const float* right,
                                                   size_t length, int sample_rate,
@@ -1105,7 +1106,8 @@ typedef struct {
 /// @brief Flat POD mirror of @c mastering::repair::DenoiseClassicalConfig.
 /// @details Pass NULL to @ref sonare_mastering_repair_denoise_classical to use library
 ///          defaults. The library validates @c n_fft (must be a power of two) and
-///          @c hop_length (> 0); other fields are clamped by the underlying processor.
+///          @c hop_length (in (0, n_fft / 2]); other fields are clamped by the underlying
+///          processor.
 typedef struct {
   int mode;                         // SONARE_DENOISE_MODE_*
   int noise_estimator;              // SONARE_DENOISE_NOISE_ESTIMATOR_*
@@ -1604,7 +1606,7 @@ typedef struct {
   float threshold;         // late-reverb detection threshold (default 0, no gate)
   float attenuation;       // suppression amount, linear (default 1, full)
   int n_fft;               // STFT size (default 1024, power of two)
-  int hop_length;          // hop in samples (default 256)
+  int hop_length;          // hop in samples, at most n_fft / 2 (default 256)
   float t60_sec;           // estimated T60 (default 0.4)
   float late_delay_ms;     // late-reverb onset relative to direct (default 50)
   float over_subtraction;  // Berouti alpha (default 1.0)

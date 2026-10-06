@@ -349,7 +349,12 @@ describe('the two linked entries on an input shorter than nFft', () => {
 
     // The rejection is about nFft rather than about a short buffer: the same
     // input goes through once the window fits inside it.
-    const fitted = masteringRepairDenoiseClassicalLinked({ channels, sampleRate: SR, nFft: 256 });
+    const fitted = masteringRepairDenoiseClassicalLinked({
+      channels,
+      sampleRate: SR,
+      nFft: 256,
+      hopLength: 64,
+    });
     expect(fitted.channels[0]).toHaveLength(short);
     expect(peak(fitted.channels[0])).toBeGreaterThan(0.01);
 

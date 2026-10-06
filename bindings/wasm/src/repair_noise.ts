@@ -26,6 +26,7 @@ export interface DenoiseClassicalOptions {
   mode?: DenoiseClassicalMode;
   noiseEstimator?: DenoiseClassicalNoiseEstimator;
   nFft?: number;
+  /** Hop in samples, in (0, nFft / 2]. */
   hopLength?: number;
   ddAlpha?: number;
   reductionDb?: number;
