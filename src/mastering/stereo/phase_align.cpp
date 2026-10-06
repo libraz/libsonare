@@ -140,6 +140,8 @@ float PhaseAlign::estimate_delay_samples(const float* reference, const float* ta
   if (reference == nullptr || target == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "delay estimation buffers must not be null");
   }
+  // Lags outside the input have no overlap and cannot identify a delay.
+  max_abs_delay = std::min(max_abs_delay, num_samples - 1);
 
   const auto score_lag = [&](int lag) {
     double cross = 0.0;
@@ -173,12 +175,16 @@ float PhaseAlign::estimate_delay_samples(const float* reference, const float* ta
     }
   }
 
+  if (!std::isfinite(best_score)) return 0.0f;
   if (best_lag <= -max_abs_delay || best_lag >= max_abs_delay) {
     return static_cast<float>(best_lag);
   }
   const double left = score_lag(best_lag - 1);
   const double center = score_lag(best_lag);
   const double right = score_lag(best_lag + 1);
+  if (!std::isfinite(left) || !std::isfinite(right)) {
+    return static_cast<float>(best_lag);
+  }
   const double denominator = left - 2.0 * center + right;
   if (std::abs(denominator) < 1.0e-12) {
     return static_cast<float>(best_lag);

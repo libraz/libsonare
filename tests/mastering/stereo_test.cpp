@@ -526,6 +526,31 @@ TEST_CASE("PhaseAlign validates configuration", "[mastering][stereo]") {
   REQUIRE_THROWS(PhaseAlign({0, true, std::numeric_limits<float>::quiet_NaN()}));
 }
 
+TEST_CASE("PhaseAlign delay estimation stays finite without usable neighboring lags",
+          "[mastering][stereo][delay-estimation-regression]") {
+  SECTION("silence has no relative delay") {
+    std::vector<float> silence(16, 0.0f);
+    REQUIRE(PhaseAlign::estimate_delay_samples(silence.data(), silence.data(), 16, 4) == 0.0f);
+  }
+  SECTION("a single sample has only the zero lag") {
+    const float sample = 1.0f;
+    REQUIRE(PhaseAlign::estimate_delay_samples(&sample, &sample, 1, 4) == 0.0f);
+  }
+  SECTION("the search bound cannot exceed available samples") {
+    const float samples[] = {0.0f, 1.0f, 0.0f};
+    REQUIRE(PhaseAlign::estimate_delay_samples(samples, samples, 3,
+                                               std::numeric_limits<int>::max()) == 0.0f);
+  }
+  SECTION("an isolated impulse has no finite adjacent correlation") {
+    std::vector<float> reference(16, 0.0f);
+    std::vector<float> target(16, 0.0f);
+    reference[0] = 1.0f;
+    target[3] = 1.0f;
+    REQUIRE(PhaseAlign::estimate_delay_samples(reference.data(), target.data(), 16, 8) == 3.0f);
+    REQUIRE(PhaseAlign::estimate_delay_samples(target.data(), reference.data(), 16, 8) == -3.0f);
+  }
+}
+
 TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]") {
   auto left = generate_sine_samples(1000.0f, 48000, 48000, 0.5f);
   auto right = left;
