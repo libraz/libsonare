@@ -32,7 +32,7 @@ struct DattorroReverbConfig {
   float damping = 0.5f;            ///< HF damping, mapped to one-pole d = damping * 0.4.
   float dry_wet = 0.35f;           ///< Wet mix amount, [0, 1].
   float mod_rate_hz = 0.5f;        ///< Tank allpass modulation rate.
-  float mod_depth_samples = 6.0f;  ///< Modulation depth (at reference rate 29761 Hz).
+  float mod_depth_samples = 6.0f;  ///< Modulation depth (reference rate 29761 Hz), at most 672.
   /// Input pre-delay (at reference rate 29761 Hz). The ring holds the larger of this and
   /// the GS ceiling; a live change clamps to that size.
   float pre_delay_samples = 0.0f;
@@ -70,8 +70,9 @@ class DattorroReverb : public rt::ProcessorBase {
   //   1 = damping (clamped to [0, 1] in process())
   //   2 = dry_wet (clamped to [0, 1] in process())
   //   3 = mod_rate_hz (recomputes the LFO increment in place)
-  //   4 = mod_depth_samples (may grow the modulated allpass buffers when the
-  //       requested depth exceeds the prepared guard)
+  //   4 = mod_depth_samples, [0, 672] reference samples (the shorter modulated allpass);
+  //       refused outside it. May grow the modulated allpass buffers when the requested
+  //       depth exceeds the prepared guard
   //   5 = damping_hz (0 restores `damping`), 6 = gate_threshold_db,
   //   7 = gate_hold_ms, 8 = gate_type (a whole number naming a type, refused otherwise)
   //   9 = pre_delay_ms, 10 = character (a whole number naming a tank set)

@@ -7,6 +7,7 @@
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::reverb {
@@ -18,6 +19,19 @@ namespace {
 
 // Reference rate from Dattorro's tables; all delay lengths scale by sr/29761.
 constexpr double kRefRate = DattorroReverb::kReferenceSampleRate;
+
+// Shorter modulated allpass, in reference-rate samples. A deeper modulation would drive its
+// delay below one sample, where ModAllpass::process saturates, so it bounds the depth too.
+constexpr double kModAllpassLeftRefLength = 672.0;
+constexpr double kModAllpassRightRefLength = 908.0;
+
+bool scale_modulation_depth(float requested, double rate, float* scaled) noexcept {
+  if (!(requested >= 0.0f) || static_cast<double>(requested) > kModAllpassLeftRefLength) {
+    return false;
+  }
+  *scaled = static_cast<float>(static_cast<double>(requested) * rate / kRefRate);
+  return true;
+}
 // Live pre-delay ceiling: the GS system reverb PREDELAY conversion reaches 127 ms
 // (gs_reverb_predelay_ms) and the EFX pre-delay ladder 100 ms. prepare() sizes the
 // ring for max(ceiling, configured value), so the realtime setter never grows it.
@@ -198,6 +212,8 @@ float DattorroReverb::damping_coefficient(double corner_hz, double sample_rate) 
 
 DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {
   if (!std::isfinite(config_.pre_delay_samples)) config_.pre_delay_samples = 0.0f;
+  if (!std::isfinite(config_.mod_depth_samples)) config_.mod_depth_samples = 0.0f;
+  config_.mod_depth_samples = std::max(0.0f, config_.mod_depth_samples);
   config_.character = clamp_character(config_.character);
   max_pre_delay_ms_ = std::max(kLiveMaxPreDelayMs,
                                static_cast<float>(config_.pre_delay_samples * 1000.0 / kRefRate));
@@ -248,8 +264,13 @@ void DattorroReverb::update_character_geometry() noexcept {
 }
 
 void DattorroReverb::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  const double sr = sample_rate_;
+  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  float depth = 0.0f;
+  if (!scale_modulation_depth(config_.mod_depth_samples, sr, &depth)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "modulation depth exceeds the modulated allpass length");
+  }
+  sample_rate_ = sr;
 
   // Stage 1: pre-delay + four series input-diffusion allpasses.
   const double requested_pre = std::max(0.0, static_cast<double>(config_.pre_delay_samples));
@@ -266,10 +287,10 @@ void DattorroReverb::prepare(double sample_rate, int) {
   in_ap_[3].prepare(scale_len(277.0, sr), kGainIn);
 
   // Modulation: depth scaled to working rate, guard buffer sized for it.
-  mod_depth_ = static_cast<float>(config_.mod_depth_samples * sr / kRefRate);
+  mod_depth_ = depth;
   const size_t max_depth = static_cast<size_t>(std::lround(mod_depth_)) + 1;
-  mod_ap_l_.prepare(scale_len(672.0, sr), max_depth, kGainMod);
-  mod_ap_r_.prepare(scale_len(908.0, sr), max_depth, kGainMod);
+  mod_ap_l_.prepare(scale_len(kModAllpassLeftRefLength, sr), max_depth, kGainMod);
+  mod_ap_r_.prepare(scale_len(kModAllpassRightRefLength, sr), max_depth, kGainMod);
 
   const std::array<double, 4>& max_ratio = kMaxCharacterRatios;
   delay_l1_.prepare(scale_len(4453.0 * max_ratio[0], sr));
@@ -502,15 +523,19 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       config_.mod_rate_hz = value;
       lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sample_rate_);
       return true;
-    case 4:
-      config_.mod_depth_samples = std::max(0.0f, value);
-      mod_depth_ = static_cast<float>(config_.mod_depth_samples * sample_rate_ / kRefRate);
+    case 4: {
+      const float requested = std::max(0.0f, value);
+      float depth = 0.0f;
+      if (!scale_modulation_depth(requested, sample_rate_, &depth)) return false;
+      config_.mod_depth_samples = requested;
+      mod_depth_ = depth;
       {
         const size_t max_depth = static_cast<size_t>(std::lround(mod_depth_)) + 1;
         mod_ap_l_.ensure_capacity(max_depth);
         mod_ap_r_.ensure_capacity(max_depth);
       }
       return true;
+    }
     case 5:
       config_.damping_hz = std::max(0.0f, value);
       return true;

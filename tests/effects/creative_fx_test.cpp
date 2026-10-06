@@ -304,7 +304,7 @@ TEST_CASE("DattorroReverb grows modulation buffers for depth changes", "[fx]") {
   high_depth.damping = 0.4f;
   high_depth.dry_wet = 1.0f;
   high_depth.mod_rate_hz = 12.0f;
-  high_depth.mod_depth_samples = 1200.0f;
+  high_depth.mod_depth_samples = 600.0f;
 
   sonare::effects::reverb::DattorroReverbConfig low_depth = high_depth;
   low_depth.mod_depth_samples = 0.0f;
