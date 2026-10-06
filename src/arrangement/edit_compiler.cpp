@@ -448,6 +448,7 @@ void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& 
 }  // namespace
 
 void CompiledTimeline::copy_from(const CompiledTimeline& other) {
+  sample_rate = other.sample_rate;
   audio_clips = other.audio_clips;
   midi_clips = other.midi_clips;
   automation_lanes = other.automation_lanes;
@@ -474,9 +475,11 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
   // ---- Global validation --------------------------------------------------
   const double project_sr = project.sample_rate();
-  if (!(project_sr > 0.0)) {
+  if (!std::isfinite(project_sr) || project_sr < kMinAudioSampleRate ||
+      project_sr > kMaxAudioSampleRate) {
     add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError, 0,
-             "project sample rate must be > 0");
+             "project sample rate is outside supported audio bounds");
+    return result;
   }
   validate_tempo(project, &result);
 
@@ -486,6 +489,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   fill_tempo_map(project, &tempo_map);
 
   CompiledTimeline timeline;
+  timeline.sample_rate = project_sr;
 
   // ---- Tempo / time-signature (carry full segment vectors) ----------------
   timeline.tempo_segments = project.tempo_segments();
@@ -1433,6 +1437,7 @@ void clear_timeline_domains(engine::RealtimeEngine& engine) noexcept {
 #endif
   attempt([&] { engine.set_tempo(kDefaultBpm); });
   attempt([&] { engine.set_time_signature(4, 4); });
+  attempt([&] { engine.set_applied_timeline_sample_rate(0.0); });
 }
 
 ApplyResult apply_cleared(engine::RealtimeEngine& engine, ErrorCode code, std::string message) {
@@ -1452,6 +1457,19 @@ ApplyResult apply_cleared(engine::RealtimeEngine& engine, ErrorCode code, std::s
 ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& engine,
                             const ApplyOptions& options) {
   // (1) Pure validation and every allocation that can precede the first mutation.
+  if (engine.max_block_size() <= 0) {
+    return apply_refused(ErrorCode::InvalidState,
+                         "a timeline can only be applied to a prepared engine");
+  }
+  if (timeline.sample_rate != 0.0 &&
+      !(std::isfinite(timeline.sample_rate) && timeline.sample_rate > 0.0)) {
+    return apply_refused(ErrorCode::InvalidParameter,
+                         "timeline sample rate must be zero or finite and > 0");
+  }
+  if (timeline.sample_rate != 0.0 && timeline.sample_rate != engine.sample_rate()) {
+    return apply_refused(ErrorCode::InvalidParameter,
+                         "timeline sample rate does not match the prepared engine");
+  }
   for (const transport::TempoSegment& segment : timeline.tempo_segments) {
     if (!transport::valid_public_tempo_segment(segment)) {
       return apply_refused(ErrorCode::InvalidParameter,
@@ -1577,6 +1595,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     return apply_cleared(engine, ErrorCode::OutOfMemory,
                          "out of memory while applying the timeline");
   }
+  engine.set_applied_timeline_sample_rate(timeline.sample_rate);
   // The graph request has no Project authoring surface; timeline.graph.requested stays false.
   result.outcome = ApplyOutcome::kApplied;
   return result;

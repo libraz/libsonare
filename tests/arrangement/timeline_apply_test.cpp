@@ -6,6 +6,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include "rt/command.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/types.h"
 
 namespace {
@@ -34,6 +36,7 @@ constexpr int64_t kFrames = 4096;
 constexpr int kSourceFrames = 48000;
 
 struct ProjectSpec {
+  double sample_rate = kSr;
   double bpm = 120.0;
   int numerator = 4;
   size_t track_count = 1;
@@ -62,7 +65,7 @@ arr::CompiledTimeline make_timeline(const ProjectSpec& spec) {
   arr::Project project;
   arr::MidiContentStore midi;
   arr::AudioContentStore audio;
-  project.set_sample_rate(kSr);
+  project.set_sample_rate(spec.sample_rate);
   project.set_tempo_segments({{0.0, spec.bpm, 0.0}});
   project.set_time_signatures({{0.0, {spec.numerator, 4}}});
 
@@ -214,6 +217,16 @@ void require_refused_unchanged(const arr::CompiledTimeline& bad, const arr::Appl
   REQUIRE(render(engine) == render(reference));
 }
 
+void require_reprepare_rate_refused(RealtimeEngine& engine) {
+  ErrorCode error_code = ErrorCode::Ok;
+  try {
+    engine.prepare(44100.0, kBlock);
+  } catch (const sonare::SonareException& error) {
+    error_code = error.code();
+  }
+  REQUIRE(error_code == ErrorCode::InvalidState);
+}
+
 }  // namespace
 
 TEST_CASE("timeline A and B render differently", "[arrangement][timeline-apply]") {
@@ -224,6 +237,149 @@ TEST_CASE("timeline A and B render differently", "[arrangement][timeline-apply]"
   REQUIRE(arr::apply_to_engine(timeline_b(), *prepared(b)).ok());
   REQUIRE(capture(a).bpm_start != capture(b).bpm_start);
   REQUIRE(render(a) != render(b));
+}
+
+TEST_CASE(
+    "apply refuses a timeline compiled for a different sample rate without changing the engine",
+    "[arrangement][timeline-apply]") {
+  ProjectSpec mismatch_spec;
+  mismatch_spec.sample_rate = 44100.0;
+  const arr::CompiledTimeline mismatch = make_timeline(mismatch_spec);
+  require_refused_unchanged(mismatch, {}, ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("compiled timeline sample rate survives value copies", "[arrangement][timeline-apply]") {
+  ProjectSpec spec;
+  spec.sample_rate = 44100.0;
+  const arr::CompiledTimeline source = make_timeline(spec);
+  REQUIRE(source.sample_rate == 44100.0);
+
+  const arr::CompiledTimeline copied(source);
+  REQUIRE(copied.sample_rate == source.sample_rate);
+
+  arr::CompiledTimeline assigned;
+  assigned = source;
+  REQUIRE(assigned.sample_rate == source.sample_rate);
+}
+
+TEST_CASE("apply accepts a timeline with a matching sample rate", "[arrangement][timeline-apply]") {
+  RealtimeEngine engine;
+  const arr::CompiledTimeline timeline = timeline_a();
+  REQUIRE(timeline.sample_rate == kSr);
+  const arr::ApplyResult result = arr::apply_to_engine(timeline, *prepared(engine));
+  REQUIRE(result.ok());
+  REQUIRE(result.outcome == arr::ApplyOutcome::kApplied);
+}
+
+TEST_CASE("apply refuses an unprepared engine without changing it",
+          "[arrangement][timeline-apply]") {
+  RealtimeEngine engine;
+  const arr::ApplyResult result = arr::apply_to_engine(timeline_a(), engine);
+  REQUIRE_FALSE(result.ok());
+  REQUIRE(result.code == ErrorCode::InvalidState);
+  REQUIRE(result.outcome == arr::ApplyOutcome::kUnchanged);
+}
+
+TEST_CASE("reprepare refuses a different sample rate after a timeline is applied",
+          "[arrangement][timeline-apply]") {
+  RealtimeEngine engine;
+  RealtimeEngine reference;
+  REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(engine)).ok());
+  REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(reference)).ok());
+  const EngineState before = capture(engine);
+
+  ErrorCode error_code = ErrorCode::Ok;
+  try {
+    engine.prepare(44100.0, kBlock);
+  } catch (const sonare::SonareException& error) {
+    error_code = error.code();
+  }
+  REQUIRE(error_code == ErrorCode::InvalidState);
+  REQUIRE(engine.sample_rate() == kSr);
+  REQUIRE(capture(engine) == before);
+  REQUIRE(render(engine) == render(reference));
+}
+
+TEST_CASE("reprepare at the applied sample rate succeeds", "[arrangement][timeline-apply]") {
+  RealtimeEngine engine;
+  REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(engine)).ok());
+  REQUIRE_NOTHROW(engine.prepare(kSr, kBlock));
+  REQUIRE(engine.sample_rate() == kSr);
+}
+
+TEST_CASE("a successful legacy timeline with unspecified rate unlocks reprepare",
+          "[arrangement][timeline-apply]") {
+  RealtimeEngine engine;
+  REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(engine)).ok());
+
+  arr::CompiledTimeline legacy = timeline_a();
+  legacy.sample_rate = 0.0;
+  REQUIRE(arr::apply_to_engine(legacy, engine).ok());
+  REQUIRE_NOTHROW(engine.prepare(44100.0, kBlock));
+  REQUIRE(engine.sample_rate() == 44100.0);
+}
+
+TEST_CASE("clearing both timeline clip domains unlocks a reprepare",
+          "[arrangement][timeline-apply]") {
+  SECTION("audio clips are cleared first") {
+    RealtimeEngine engine;
+    REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(engine)).ok());
+    REQUIRE(engine.clip_count() == 2);
+    REQUIRE(engine.midi_clip_count() == 1);
+
+    engine.set_clips({});
+    REQUIRE(engine.clip_count() == 0);
+    REQUIRE(engine.midi_clip_count() == 1);
+    require_reprepare_rate_refused(engine);
+
+    engine.publish_midi_clips(engine.prepare_midi_clips({}));
+    REQUIRE(engine.clip_count() == 0);
+    REQUIRE(engine.midi_clip_count() == 0);
+    REQUIRE_NOTHROW(engine.prepare(44100.0, kBlock));
+  }
+
+  SECTION("MIDI clips are cleared first") {
+    RealtimeEngine engine;
+    REQUIRE(arr::apply_to_engine(timeline_a(), *prepared(engine)).ok());
+    REQUIRE(engine.clip_count() == 2);
+    REQUIRE(engine.midi_clip_count() == 1);
+
+    engine.publish_midi_clips(engine.prepare_midi_clips({}));
+    REQUIRE(engine.clip_count() == 2);
+    REQUIRE(engine.midi_clip_count() == 0);
+    require_reprepare_rate_refused(engine);
+
+    engine.set_clips({});
+    REQUIRE(engine.clip_count() == 0);
+    REQUIRE(engine.midi_clip_count() == 0);
+    REQUIRE_NOTHROW(engine.prepare(44100.0, kBlock));
+  }
+}
+
+TEST_CASE("compile rejects an infinite project sample rate", "[arrangement][timeline-apply]") {
+  arr::Project project;
+  project.set_sample_rate(std::numeric_limits<double>::infinity());
+  arr::MidiContentStore midi;
+  arr::AudioContentStore audio;
+
+  const arr::CompileResult result = arr::compile(project, midi, audio);
+  REQUIRE(result.has_errors());
+  REQUIRE_FALSE(result.timeline.has_value());
+  REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
+    return diag.code == arr::Diagnostic::Code::kInvalidSampleRate;
+  }));
+}
+
+TEST_CASE("compile rejects project rates outside the supported audio domain",
+          "[arrangement][timeline-apply][rate-bounds]") {
+  for (double rate : {4000.0, 768000.0, 1.0e20}) {
+    INFO("rate=" << rate);
+    arr::Project project;
+    project.set_sample_rate(rate);
+    const auto result = arr::compile(project, {}, {});
+    CHECK(result.has_errors());
+    CHECK_FALSE(result.timeline.has_value());
+  }
 }
 
 TEST_CASE("apply refuses an invalid tempo without changing the engine",

@@ -1189,6 +1189,10 @@ export class RealtimeEngine {
    * hold, and for a scene strip routed from several tracks. A validation
    * failure leaves the engine unchanged. The engine keeps its own reference, so
    * {@link ProjectTimeline.dispose} may follow immediately.
+   *
+   * Also throws on an unprepared engine and on a timeline whose sample rate
+   * differs from the engine's. Once a timeline is applied, a later prepare at
+   * another rate is refused until the timeline's clips are cleared.
    */
   applyProjectTimeline(timeline: ProjectTimeline): void {
     // Resolve through the identity registry so no raw native handle crosses the

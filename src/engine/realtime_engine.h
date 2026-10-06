@@ -230,6 +230,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
                size_t telemetry_capacity = 1024, int max_channels = 64);
   double sample_rate() const noexcept { return sample_rate_; }
+  /// Sample rate of the currently installed compiled timeline, or 0 when no
+  /// timeline rate is locking preparation. Set by a successful apply; cleared by
+  /// a timeline clear or once both clip domains are emptied.
+  double applied_timeline_sample_rate() const noexcept { return applied_timeline_sample_rate_; }
+  void set_applied_timeline_sample_rate(double sample_rate) noexcept {
+    applied_timeline_sample_rate_ = sample_rate;
+  }
   int prepared_channels() const noexcept { return prepared_channels_; }
   /// Bytes in the channel-planar scratch buffers and active PDC delay storage
   /// allocated by prepare()/instrument binding. This intentionally excludes
@@ -931,6 +938,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   static bool route_engine_parameter_thunk(void* context, uint32_t param_id, float value) noexcept;
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
+  // CONTROL thread: an installed timeline's rate lock is no longer needed
+  // once both timeline-owned clip domains have been cleared.
+  void maybe_unlock_applied_timeline_rate() noexcept;
   // Sets the smoothed target of one hosted-instrument parameter from a reserved
   // automation lane. Instruments live outside the mixer runtimes, so they get
   // their own slot table, advanced once per sub-block by tick_smoothed_params
@@ -1520,6 +1530,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   std::atomic<float> param_smoothing_ms_{20.0f};
   float applied_param_smoothing_ms_ = 20.0f;  // audio thread only
   double sample_rate_ = constants::kDefaultDawSampleRate;
+  double applied_timeline_sample_rate_ = 0.0;
   uint32_t telemetry_overflow_count_ = 0;
   bool clip_page_underrun_reported_this_block_ = false;
   int graph_latency_samples_q8_ = 0;

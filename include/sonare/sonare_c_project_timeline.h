@@ -75,6 +75,11 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 ///          be destroyed immediately afterwards; marker names stay valid.
 ///          A later @ref sonare_engine_set_automation_lane keeps the applied
 ///          lanes and replaces only a lane with the same target id.
+///          The engine's prepared sample rate must equal the project rate used
+///          to compile the timeline. Open the device and choose the project
+///          rate before compiling. After applying, a prepare at another rate
+///          returns INVALID_STATE until both audio and MIDI clip schedules are
+///          cleared with their setters; then prepare and compile at the new rate.
 ///
 ///          Every validation error is reported before the first change and
 ///          leaves the engine unchanged. A failure after the first change --
@@ -87,8 +92,9 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 /// @param timeline Timeline from @ref sonare_project_compile_timeline.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL argument or a timeline
 ///         the engine cannot hold (for example more track lanes than it
-///         supports, or a scene strip it cannot build);
-///         @c SONARE_ERROR_INVALID_STATE while the transport is playing;
+///         supports, a sample-rate mismatch, or a scene strip it cannot build);
+///         @c SONARE_ERROR_INVALID_STATE for an unprepared engine or while the
+///         transport is playing;
 ///         @c SONARE_ERROR_NOT_SUPPORTED when one scene strip is routed from
 ///         several tracks, because live playback runs one strip per track.
 SonareError sonare_engine_apply_project_timeline(SonareRealtimeEngine* engine,

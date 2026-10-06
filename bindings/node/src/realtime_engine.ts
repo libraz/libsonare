@@ -411,6 +411,10 @@ export class RealtimeEngine {
    *
    * The engine keeps its own reference, so the timeline may be disposed right
    * after this call. A disposed timeline throws.
+   *
+   * Also throws on an unprepared engine and on a timeline whose sample rate
+   * differs from the engine's. Once a timeline is applied, a later prepare at
+   * another rate is refused until the timeline's clips are cleared.
    */
   applyProjectTimeline(timeline: ProjectTimeline): void {
     this.native.applyProjectTimeline((timeline as unknown as { native: unknown }).native);

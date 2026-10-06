@@ -27,6 +27,72 @@ describe('RealtimeEngine offline bounce content', () => {
     await init();
   });
 
+  it('rejects a source rate different from the prepared rate without moving transport', () => {
+    const engine = new RealtimeEngine(44100, BLOCK_SIZE);
+    try {
+      const before = engine.getTransportState();
+      expect(() =>
+        engine.bounceOffline({
+          totalFrames: FRAMES,
+          blockSize: BLOCK_SIZE,
+          numChannels: 2,
+          sourceSampleRate: SAMPLE_RATE,
+          targetSampleRate: SAMPLE_RATE,
+        }),
+      ).toThrow();
+      expect(engine.getTransportState()).toEqual(before);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('resamples from the matching prepared source rate', () => {
+    const sourceSampleRate = 44100;
+    const targetSampleRate = 48000;
+    const engine = new RealtimeEngine(sourceSampleRate, BLOCK_SIZE);
+    try {
+      const result = engine.bounceOffline({
+        totalFrames: sourceSampleRate,
+        blockSize: BLOCK_SIZE,
+        numChannels: 2,
+        sourceSampleRate,
+        targetSampleRate,
+      });
+      expect(result.frames).toBe(targetSampleRate);
+      expect(result.interleaved.length).toBe(targetSampleRate * 2);
+      expect(result.sampleRate).toBe(targetSampleRate);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('defaults both rates to the prepared rate', () => {
+    const engine = new RealtimeEngine(44100, BLOCK_SIZE);
+    try {
+      const result = engine.bounceOffline({ totalFrames: 441, blockSize: BLOCK_SIZE });
+      expect(result.sampleRate).toBe(44100);
+      expect(result.frames).toBe(441);
+      expect(result.interleaved.length).toBe(441 * 2);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('resamples to an explicit target from the defaulted prepared source rate', () => {
+    const engine = new RealtimeEngine(44100, BLOCK_SIZE);
+    try {
+      const result = engine.bounceOffline({
+        totalFrames: 44100,
+        blockSize: BLOCK_SIZE,
+        targetSampleRate: 48000,
+      });
+      expect(result.sampleRate).toBe(48000);
+      expect(result.frames).toBe(48000);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   const tone = (): Float32Array => {
     const out = new Float32Array(FRAMES);
     for (let i = 0; i < FRAMES; i++) {

@@ -379,3 +379,159 @@ TEST_CASE("offline render/bounce/freeze reject more channels than the prepared b
 
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE(
+    "engine bounce rejects a source rate different from the prepared rate without moving transport",
+    "[c_api][engine][sample_rate]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 16, 16) == SONARE_OK);
+
+  SonareTransportState before{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &before) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 256;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.interleaved == nullptr);
+  REQUIRE(result.sample_count == 0u);
+  REQUIRE(result.frames == 0);
+  REQUIRE(result.num_channels == 0);
+  REQUIRE(result.sample_rate == 0);
+
+  SonareTransportState after{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &after) == SONARE_OK);
+  REQUIRE(after.playing == before.playing);
+  REQUIRE(after.looping == before.looping);
+  REQUIRE(after.render_frame == before.render_frame);
+  REQUIRE(after.sample_position == before.sample_position);
+  REQUIRE(after.ppq_position == before.ppq_position);
+  REQUIRE(after.bpm == before.bpm);
+  REQUIRE(after.loop_start_ppq == before.loop_start_ppq);
+  REQUIRE(after.loop_end_ppq == before.loop_end_ppq);
+  REQUIRE(after.sample_rate == before.sample_rate);
+  REQUIRE(after.bar_start_ppq == before.bar_start_ppq);
+  REQUIRE(after.bar_count == before.bar_count);
+  REQUIRE(after.time_signature.numerator == before.time_signature.numerator);
+  REQUIRE(after.time_signature.denominator == before.time_signature.denominator);
+  REQUIRE(after.time_signature.confidence == before.time_signature.confidence);
+  REQUIRE(after.beat == before.beat);
+  REQUIRE(after.beat_fraction == before.beat_fraction);
+
+  sonare_free_bounce_result(&result);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine bounce resamples from the matching prepared source rate",
+          "[c_api][engine][sample_rate]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 16, 16) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 44100;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.source_sample_rate = 44100;
+  options.target_sample_rate = 48000;
+
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.interleaved != nullptr);
+  REQUIRE(result.frames == 48000);
+  REQUIRE(result.sample_count == static_cast<size_t>(48000 * 2));
+  REQUIRE(result.num_channels == 2);
+  REQUIRE(result.sample_rate == 48000);
+
+  sonare_free_bounce_result(&result);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_bounce_offline defaults both rates to the prepared rate",
+          "[c_api][engine][bounce_rate]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  REQUIRE(options.source_sample_rate == 0);
+  REQUIRE(options.target_sample_rate == 0);
+  options.total_frames = 441;
+  options.block_size = 128;
+
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.sample_rate == 44100);
+  REQUIRE(result.frames == 441);
+  sonare_free_bounce_result(&result);
+
+  // An explicit source naming the prepared rate behaves the same, and a target left at 0
+  // keeps that rate instead of resampling.
+  options.source_sample_rate = 44100;
+  SonareEngineBounceResult explicit_source{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &explicit_source) == SONARE_OK);
+  REQUIRE(explicit_source.sample_rate == 44100);
+  REQUIRE(explicit_source.frames == 441);
+  sonare_free_bounce_result(&explicit_source);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_bounce_offline refuses a source rate other than the prepared rate",
+          "[c_api][engine][bounce_rate]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 441;
+  options.block_size = 128;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.interleaved == nullptr);
+
+  options.source_sample_rate = -1;
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_bounce_offline resamples when the target differs from the source",
+          "[c_api][engine][bounce_rate]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 44100;
+  options.block_size = 128;
+  options.target_sample_rate = 48000;
+
+  // source left at 0 resolves to the prepared 44.1 kHz and the output is resampled.
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.sample_rate == 48000);
+  REQUIRE(result.frames == 48000);
+  sonare_free_bounce_result(&result);
+
+  sonare_engine_destroy(engine);
+}

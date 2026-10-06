@@ -445,7 +445,17 @@ export interface EngineBounceOptions {
   totalFrames: number;
   blockSize?: number;
   numChannels?: number;
+  /**
+   * Output sample rate. Omitting it (or `0`) keeps the source rate, so nothing
+   * is resampled; a different rate resamples. The result's `sampleRate`
+   * reports the rate of the returned audio.
+   */
   targetSampleRate?: number;
+  /**
+   * Rate `totalFrames` is counted in. Omitting it (or `0`) means the engine's
+   * prepared rate; a different value throws an `InvalidParameter` `SonareError`,
+   * because the render always runs at the prepared rate.
+   */
   sourceSampleRate?: number;
   normalizeLufs?: boolean;
   /**

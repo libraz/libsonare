@@ -193,8 +193,8 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
   *options = SonareEngineBounceOptions{};
   options->block_size = 128;
   options->num_channels = 2;
-  options->target_sample_rate = 48000;
-  options->source_sample_rate = 48000;
+  options->target_sample_rate = 0;
+  options->source_sample_rate = 0;
   options->normalize_lufs = 0;
   options->target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
   options->dither = 0;
@@ -215,10 +215,19 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     *out = {};
   }
   if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
-      options->num_channels <= 0 || options->target_sample_rate <= 0 ||
-      options->source_sample_rate <= 0 || options->dither_bits < 0 ||
+      options->num_channels <= 0 || options->target_sample_rate < 0 ||
+      options->source_sample_rate < 0 || options->dither_bits < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // 0 selects the prepared rate for the source and the source rate for the target.
+  const int source_sample_rate = options->source_sample_rate == 0
+                                     ? static_cast<int>(std::lround(engine->engine.sample_rate()))
+                                     : options->source_sample_rate;
+  const int target_sample_rate =
+      options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
+  if (source_sample_rate <= 0 ||
       !resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
-                                          options->source_sample_rate, options->target_sample_rate,
+                                          source_sample_rate, target_sample_rate,
                                           options->dither != 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -247,6 +256,11 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   if (options->num_channels > engine->engine.prepared_channels()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // The render runs at the prepared rate, which an explicit source_sample_rate must name exactly.
+  if (options->source_sample_rate > 0 &&
+      engine->engine.sample_rate() != static_cast<double>(options->source_sample_rate)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   // Offline pre-roll: a bounce is a one-shot render, so the first audible block
   // must open at the settled fader/pan/gate values instead of ramping in from
@@ -265,7 +279,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   engine->engine.render_offline(ptrs.data(), options->num_channels, options->total_frames,
                                 options->block_size);
 
-  channels = resample_channels(channels, options->source_sample_rate, options->target_sample_rate);
+  channels = resample_channels(channels, source_sample_rate, target_sample_rate);
   std::vector<float> interleaved = interleave_channels(channels);
   if (options->normalize_lufs) {
     // target_lufs == 0.0f is the documented "use default" sentinel; promote it
@@ -286,7 +300,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
             ? SONARE_DEFAULT_BOUNCE_TARGET_LUFS
             : options->target_lufs;
     metering::normalize_interleaved_to_lufs(interleaved, channels[0].size(), options->num_channels,
-                                            options->target_sample_rate, effective_target_lufs);
+                                            target_sample_rate, effective_target_lufs);
   }
   if (options->dither != 0) {
 #if defined(SONARE_WITH_MASTERING)
@@ -295,19 +309,19 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     config.target_bits = options->dither_bits > 0 ? options->dither_bits : 16;
     config.seed = options->dither_seed == 0 ? config.seed : options->dither_seed;
     Audio dithered = mastering::final::dither_interleaved(
-        Audio::from_buffer(interleaved.data(), interleaved.size(), options->target_sample_rate),
+        Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
         static_cast<size_t>(options->num_channels), config);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
 #else
     return SONARE_ERROR_NOT_SUPPORTED;
 #endif
   }
-  const auto loudness = metering::lufs_interleaved(
-      interleaved.data(), channels[0].size(), options->num_channels, options->target_sample_rate);
+  const auto loudness = metering::lufs_interleaved(interleaved.data(), channels[0].size(),
+                                                   options->num_channels, target_sample_rate);
   out->sample_count = interleaved.size();
   out->frames = static_cast<int64_t>(channels[0].size());
   out->num_channels = options->num_channels;
-  out->sample_rate = options->target_sample_rate;
+  out->sample_rate = target_sample_rate;
   out->integrated_lufs = loudness.integrated_lufs;
   out->interleaved = new float[interleaved.size()];
   std::memcpy(out->interleaved, interleaved.data(), interleaved.size() * sizeof(float));

@@ -540,6 +540,29 @@ describe('RealtimeEngine native binding', () => {
     expect(frozenRendered[1][0]).toBeCloseTo(-0.25, 4);
   });
 
+  it('bounces at the prepared rate by default and still refuses a different source rate', () => {
+    const engine = new RealtimeEngine(44100, 128);
+    try {
+      const result = engine.bounceOffline({ totalFrames: 441, blockSize: 128 });
+      expect(result.sampleRate).toBe(44100);
+      expect(result.frames).toBe(441);
+
+      const resampled = engine.bounceOffline({
+        totalFrames: 44100,
+        blockSize: 128,
+        targetSampleRate: 48000,
+      });
+      expect(resampled.sampleRate).toBe(48000);
+      expect(resampled.frames).toBe(48000);
+
+      expect(() =>
+        engine.bounceOffline({ totalFrames: 441, blockSize: 128, sourceSampleRate: 48000 }),
+      ).toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('bounces clip content, hits the loudness target and applies dither', () => {
     const frames = 256;
     const amplitude = 0.5;

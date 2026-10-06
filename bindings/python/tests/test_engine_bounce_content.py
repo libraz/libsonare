@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import math
 
-from libsonare import EngineBounceOptions, EngineClip, RealtimeEngine
+import pytest
+
+from libsonare import EngineBounceOptions, EngineClip, RealtimeEngine, SonareError
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 128
@@ -55,6 +57,26 @@ def _max_abs_diff(a: list[float], b: list[float]) -> float:
 
 def _on_grid(samples: list[float]) -> int:
     return sum(1 for s in samples if abs(s / LSB - round(s / LSB)) < 1e-4)
+
+
+def test_bounce_defaults_both_rates_to_the_prepared_rate() -> None:
+    with RealtimeEngine(sample_rate=44100.0, max_block_size=BLOCK_SIZE) as engine:
+        result = engine.bounce_offline(EngineBounceOptions(total_frames=441))
+        assert result.sample_rate == 44100
+        assert result.frames == 441
+        resampled = engine.bounce_offline(
+            EngineBounceOptions(total_frames=44100, target_sample_rate=48000)
+        )
+        assert resampled.sample_rate == 48000
+        assert resampled.frames == 48000
+
+
+def test_bounce_refuses_a_source_rate_other_than_the_prepared_rate() -> None:
+    with (
+        RealtimeEngine(sample_rate=44100.0, max_block_size=BLOCK_SIZE) as engine,
+        pytest.raises(SonareError),
+    ):
+        engine.bounce_offline(EngineBounceOptions(total_frames=441, source_sample_rate=48000))
 
 
 def test_bounce_exports_scheduled_clip_content() -> None:

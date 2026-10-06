@@ -102,9 +102,16 @@ RealtimeEngine::PreparedMidiClips RealtimeEngine::prepare_midi_clips(
   return prepared;
 }
 
+void RealtimeEngine::maybe_unlock_applied_timeline_rate() noexcept {
+  if (clip_count() == 0 && midi_clip_count() == 0) {
+    set_applied_timeline_sample_rate(0.0);
+  }
+}
+
 void RealtimeEngine::publish_midi_clips(PreparedMidiClips&& prepared) {
   // The sequencer's own ownership pass keeps each event's bank-owned token.
   midi_sequencer_.set_midi_clips(std::move(prepared.clips_));
+  maybe_unlock_applied_timeline_rate();
 }
 
 void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {

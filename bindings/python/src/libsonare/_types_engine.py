@@ -332,13 +332,18 @@ class EngineCaptureStatus:
 
 @dataclass(frozen=True, slots=True)
 class EngineBounceOptions:
-    """Offline export options for the realtime engine."""
+    """Offline export options for the realtime engine.
+
+    ``source_sample_rate`` and ``target_sample_rate`` both default to ``0``:
+    the source is the engine's prepared rate, and the target is the source (no
+    resampling). A non-zero ``source_sample_rate`` must equal the prepared rate.
+    """
 
     total_frames: int
     block_size: int = 128
     num_channels: int = 2
-    target_sample_rate: int = 48000
-    source_sample_rate: int = 48000
+    target_sample_rate: int = 0
+    source_sample_rate: int = 0
     normalize_lufs: bool = False
     target_lufs: float = -14.0
     dither: int = 0

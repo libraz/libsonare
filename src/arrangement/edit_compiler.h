@@ -201,6 +201,11 @@ struct LatencySummary {
 /// point into that stable storage). Safe to hand to the RT engine: nothing here
 /// reaches back into a Project.
 struct CompiledTimeline {
+  /// Sample rate in Hz used to compile all frame-based timeline data. Zero is
+  /// reserved for legacy hand-built snapshots whose rate is unspecified and
+  /// therefore cannot participate in the engine's timeline-rate lock.
+  double sample_rate = 0.0;
+
   /// Audio clip schedules ready for RealtimeEngine::set_clips. Each schedule's
   /// `storage` shared_ptr owns the baked (possibly resampled) audio and the
   /// `buffer.channels` point into it.

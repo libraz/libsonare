@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
 #include <string>
 
 #include "realtime_engine_wasm.h"
@@ -381,8 +382,14 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
   const int block_size = intProperty(options_val, "blockSize", 128);
   const int num_channels = intProperty(options_val, "numChannels", 2);
-  const int source_sample_rate = intProperty(options_val, "sourceSampleRate", 48000);
-  const int target_sample_rate = intProperty(options_val, "targetSampleRate", 48000);
+  // 0 (or absent) selects the prepared rate for the source and the source rate for the target.
+  const int requested_source_rate = intProperty(options_val, "sourceSampleRate", 0);
+  const int requested_target_rate = intProperty(options_val, "targetSampleRate", 0);
+  const int source_sample_rate = requested_source_rate == 0
+                                     ? static_cast<int>(std::lround(engine_.sample_rate()))
+                                     : requested_source_rate;
+  const int target_sample_rate =
+      requested_target_rate == 0 ? source_sample_rate : requested_target_rate;
   // Read ditherBits up front so a negative value is rejected exactly as the
   // C-ABI oracle does (sonare_engine_bounce_offline: dither_bits < 0 ->
   // SONARE_ERROR_INVALID_PARAMETER) instead of being silently clamped to 16.
@@ -391,8 +398,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // it renders anything rather than silently mapping it to None, which would
   // hand back undithered audio with no way to tell the request was ignored.
   const int dither = intProperty(options_val, "dither", 0);
-  if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || source_sample_rate <= 0 ||
-      target_sample_rate <= 0 || dither_bits < 0 || dither < 0 || dither > 3 ||
+  if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || requested_source_rate < 0 ||
+      requested_target_rate < 0 || source_sample_rate <= 0 || dither_bits < 0 || dither < 0 ||
+      dither > 3 ||
       !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
                                                   target_sample_rate, dither != 0)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
@@ -410,6 +418,12 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // return a bounce result the caller would read as a valid silent render.
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
+  }
+  // The render runs at the prepared rate, which an explicit sourceSampleRate must name exactly.
+  if (requested_source_rate > 0 &&
+      engine_.sample_rate() != static_cast<double>(requested_source_rate)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "bounce source sample rate must match the prepared rate");
   }
 
   // Offline pre-roll, as in the C-ABI oracle (sonare_engine_bounce_offline): a

@@ -191,6 +191,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         instrument, bus, master and metronome setup are not touched. The engine
         keeps its own share of the timeline, so ``timeline.close()`` may follow
         immediately.
+
+        Raises on an unprepared engine (``INVALID_STATE``) and on a timeline
+        whose sample rate differs from the engine's. Once a timeline is applied,
+        a later ``prepare`` at another rate is refused until the timeline's clips
+        are cleared.
         """
         _check(
             _get_lib().sonare_engine_apply_project_timeline(

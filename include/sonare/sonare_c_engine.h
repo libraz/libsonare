@@ -98,6 +98,9 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 /// @return SONARE_ERROR_INVALID_PARAMETER also when a bound instrument cannot
 ///         prepare a SysEx in the scheduled MIDI clips; the engine is then
 ///         prepared, but its MIDI clip schedule has been cleared.
+/// @return SONARE_ERROR_INVALID_STATE when an applied project timeline locks the
+///         sample rate and @p sample_rate differs from it; the engine is left
+///         untouched until the timeline's clips are cleared.
 SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity);
@@ -749,7 +752,11 @@ SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 ///   through sonare_engine_render_offline_ex.
 /// @param out Receives a heap-owned interleaved buffer; free with sonare_free_bounce_result.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when the requested span exceeds the
-///         cap above, among the other option validations.
+///         cap above, when a rate is negative, or when a non-zero
+///         @c source_sample_rate differs from the prepared rate (0 selects the
+///         prepared rate; a @c target_sample_rate of 0 keeps the source rate),
+///         among the other option validations;
+///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);
@@ -758,7 +765,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
 ///   language bindings. Callers should invoke this helper first and then
 ///   override only the fields they care about, which guarantees the same
 ///   normalization target (SONARE_DEFAULT_BOUNCE_TARGET_LUFS) across the C,
-///   Node, Python and WASM facades.
+///   Node, Python and WASM facades. Both sample rates are left at 0: the
+///   source is the engine's prepared rate and the output keeps it.
 /// @param options Output struct; must not be NULL.
 /// @return @c SONARE_OK on success or @c SONARE_ERROR_INVALID_PARAMETER if
 ///         @p options is NULL.

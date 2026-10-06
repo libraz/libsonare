@@ -129,8 +129,12 @@ uint64_t LiveSession::render_callback_count() const noexcept {
 bool LiveSession::Pump::open(const AudioStreamConfig& config) {
   LiveSession& session = *owner_;
   if (session.engine_ == nullptr) return false;
+  try {
+    session.engine_->prepare(config.sample_rate, config.max_block_size);
+  } catch (...) {
+    return false;
+  }
   session.negotiated_ = config;
-  session.engine_->prepare(config.sample_rate, config.max_block_size);
   return true;
 }
 

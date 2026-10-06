@@ -318,6 +318,11 @@ class _EngineIoMixin:
         ``target_sample_rate`` differ both the source and the resampled length
         are checked, so the longer of the two is what binds.
 
+        ``source_sample_rate`` defaults to ``0``, the engine's prepared rate, and
+        a non-zero value must equal it or the call raises (invalid parameter).
+        ``target_sample_rate`` defaults to ``0``, the source rate (no
+        resampling); the result's ``sample_rate`` is the rate of the output.
+
         Render longer material in chunks through
         ``render_offline(..., finalize=False)``.
         """

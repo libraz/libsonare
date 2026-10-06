@@ -1992,7 +1992,9 @@ class EngineBounceOptions:
     total_frames: int
     block_size: int
     num_channels: int
+    # 0 = same as the source (no resampling).
     target_sample_rate: int
+    # 0 = the engine's prepared rate; a non-zero value must equal it.
     source_sample_rate: int
     normalize_lufs: bool
     target_lufs: float
@@ -2004,8 +2006,8 @@ class EngineBounceOptions:
         total_frames: int,
         block_size: int = 128,
         num_channels: int = 2,
-        target_sample_rate: int = 48000,
-        source_sample_rate: int = 48000,
+        target_sample_rate: int = 0,
+        source_sample_rate: int = 0,
         normalize_lufs: bool = False,
         target_lufs: float = -14.0,
         dither: int = 0,

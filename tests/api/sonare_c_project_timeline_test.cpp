@@ -73,10 +73,10 @@ struct TestProject {
 };
 
 /// One audio clip and one MIDI clip routed to kDestination, at 120 BPM.
-TestProject build_project(const std::vector<float>& tone) {
+TestProject build_project(const std::vector<float>& tone, int project_sample_rate = kSampleRate) {
   TestProject built;
   REQUIRE(sonare_project_create(&built.project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(built.project, kSampleRate) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(built.project, project_sample_rate) == SONARE_OK);
 
   SonareProjectTrackDesc track_desc{};
   track_desc.kind = SONARE_TRACK_AUDIO;
@@ -262,6 +262,31 @@ TEST_CASE("applied timeline renders bit-identically to project bounce across edi
 
   sonare_engine_destroy(engine);
   sonare_project_destroy(built.project);
+}
+
+TEST_CASE(
+    "C API refuses a timeline compiled for a different sample rate without changing the engine",
+    "[timeline-apply][c_api]") {
+  const std::vector<float> tone = stereo_tone(kSampleRate);
+  TestProject base = build_project(tone);
+  TestProject mismatch = build_project(tone, 44100);
+  uint32_t marker_id = 0;
+  REQUIRE(sonare_project_set_marker(base.project, 0, 2.0, "base", &marker_id) == SONARE_OK);
+
+  SonareRealtimeEngine* engine = prepared_engine();
+  apply_project(engine, base.project);
+  REQUIRE(marker_count(engine) == 1);
+  REQUIRE(clip_count(engine) == 1);
+
+  SonareProjectTimeline* timeline = compile_timeline(mismatch.project);
+  REQUIRE(sonare_engine_apply_project_timeline(engine, timeline) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_project_timeline_destroy(timeline);
+
+  REQUIRE(marker_count(engine) == 1);
+  REQUIRE(clip_count(engine) == 1);
+  sonare_engine_destroy(engine);
+  sonare_project_destroy(mismatch.project);
+  sonare_project_destroy(base.project);
 }
 
 #if defined(SONARE_WITH_MIXING)

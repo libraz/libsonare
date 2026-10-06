@@ -14,6 +14,15 @@ namespace sonare::engine {
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity, int max_channels) {
+  // Installed timeline clips are frame-addressed; refuse a new rate before any teardown.
+  const double effective_sample_rate =
+      sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
+  if (applied_timeline_sample_rate_ > 0.0 &&
+      effective_sample_rate != applied_timeline_sample_rate_) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "prepare: sample rate differs from the installed project timeline");
+  }
+
   bool clip_sysex_prepared = true;
   try {
     clip_sysex_prepared = prepare_impl(sample_rate, max_block_size, command_capacity,
@@ -572,6 +581,9 @@ int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) cons
 void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {
   const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
   clip_player_.set_clips(std::move(clips), map ? map : &tempo_map_);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  maybe_unlock_applied_timeline_rate();
+#endif
 }
 
 void RealtimeEngine::set_capture_segment(CaptureSegment segment) noexcept {
