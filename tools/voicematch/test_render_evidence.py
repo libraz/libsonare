@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +31,39 @@ from phrases import build_takes
 from wavio import write_wav
 
 SR = 48000
+
+
+def test_concurrent_generation_publication_is_idempotent(tmp_path):
+    for round_ in range(20):
+        parent = tmp_path / str(round_)
+        stages = [render_evidence.staging_dir(parent) for _ in range(8)]
+        for stage in stages:
+            (stage / "complete").write_text("generation")
+        barrier = threading.Barrier(len(stages))
+
+        def publish(stage, barrier=barrier, parent=parent):
+            barrier.wait()
+            return render_evidence.publish_generation(stage, parent, "same-generation")
+
+        with ThreadPoolExecutor(max_workers=len(stages)) as pool:
+            targets = list(pool.map(publish, stages))
+        assert len(set(targets)) == 1
+        assert (targets[0] / "complete").read_text() == "generation"
+        assert all(not stage.exists() for stage in stages)
+
+
+def test_concurrent_archive_publications_keep_every_take(tmp_path):
+    archive = tmp_path / "archive"
+    barrier = threading.Barrier(8)
+
+    def publish(index):
+        barrier.wait()
+        _write_v2(archive, f"take-{index}")
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(publish, range(8)))
+    index = render_evidence.read_archive_index(archive)
+    assert set(index["takes"]["cap"]) == {f"take-{i}" for i in range(8)}
 
 
 def _write_v2(archive: Path, take: str, timbre: str = "di", level: float = 0.25) -> None:

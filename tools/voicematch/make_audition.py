@@ -159,6 +159,7 @@ from render_evidence import (
     REFERENCE_UNVERIFIED,
     REFERENCE_VERIFIED,
     SOURCE_UNRESOLVED,
+    archive_index_lock,
     archived_records,
     au_source_id,
     file_digest,
@@ -392,19 +393,20 @@ def archive_references(
     target = publish_generation(staging, parent, generation)
     for name, record in records.items():
         record["path"] = str((target / f"{name}.wav").relative_to(archive))
-    index = read_archive_index(archive)
-    entries = index.setdefault("takes", {}).setdefault(capture_id, {}).setdefault(take_id, [])
-    if not any(e.get("generation") == generation for e in entries):
-        entries.append(
-            {
-                "generation": generation,
-                "gain": gain,
-                "gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 4),
-                "gain_version": ARCHIVE_GAIN_VERSION,
-                "timbres": records,
-            }
-        )
-    write_json_atomic(archive / ARCHIVE_INDEX, index)
+    with archive_index_lock(archive):
+        index = read_archive_index(archive)
+        entries = index.setdefault("takes", {}).setdefault(capture_id, {}).setdefault(take_id, [])
+        if not any(e.get("generation") == generation for e in entries):
+            entries.append(
+                {
+                    "generation": generation,
+                    "gain": gain,
+                    "gain_db": round(float(20 * np.log10(max(gain, 1e-9))), 4),
+                    "gain_version": ARCHIVE_GAIN_VERSION,
+                    "timbres": records,
+                }
+            )
+        write_json_atomic(archive / ARCHIVE_INDEX, index)
 
 
 #: Prefix every knob that belongs to the rig rather than to the instrument.

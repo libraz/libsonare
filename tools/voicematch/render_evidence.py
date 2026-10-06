@@ -20,12 +20,15 @@ entry carries none and is returned flagged historical, for measurement only.
 
 from __future__ import annotations
 
+import errno
+import fcntl
 import hashlib
 import json
 import os
 import shutil
 import tempfile
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -159,8 +162,24 @@ def publish_generation(staging: Path, parent: Path, generation: str) -> Path:
     if target.exists():
         shutil.rmtree(staging)
     else:
-        staging.rename(target)
+        try:
+            staging.rename(target)
+        except OSError as error:
+            if error.errno not in (errno.EEXIST, errno.ENOTEMPTY) or not target.is_dir():
+                raise
+            shutil.rmtree(staging)
     return target
+
+
+@contextmanager
+def archive_index_lock(archive: Path):
+    archive.mkdir(parents=True, exist_ok=True)
+    with (archive / ".index-v2.lock").open("a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def write_json_atomic(path: Path, obj: object) -> None:
