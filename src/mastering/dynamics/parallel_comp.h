@@ -74,6 +74,7 @@ class ParallelComp : public rt::ProcessorBase,
   bool prepared_ = false;
   std::vector<sonare::rt::EnvelopeFollower> followers_;
   std::vector<float> limiter_gains_;
+  bool last_linked_detection_ = true;
   float last_gain_reduction_db_ = 0.0f;
 };
 

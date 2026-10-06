@@ -55,6 +55,25 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
   // changes its current() value inside acquire(), and we already called it.
   const ParallelCompConfig& cfg = *adopt_snapshot_for_block();
 
+  if (cfg.linked_detection != last_linked_detection_) {
+    if (cfg.linked_detection) {
+      float envelope = 0.0f;
+      float gain = 1.0f;
+      const int excluded_channel = detector_excluded_channel(num_channels);
+      for (int ch = 0; ch < num_channels; ++ch) {
+        if (ch != excluded_channel) envelope = std::max(envelope, followers_[ch].value());
+        gain = std::min(gain, limiter_gains_[ch]);
+      }
+      followers_[0].reset(envelope);
+      limiter_gains_[0] = gain;
+    } else {
+      const float envelope = followers_[0].value();
+      for (auto& follower : followers_) follower.reset(envelope);
+      std::fill(limiter_gains_.begin(), limiter_gains_.end(), limiter_gains_[0]);
+    }
+    last_linked_detection_ = cfg.linked_detection;
+  }
+
   float max_reduction = 0.0f;
   const float ceiling = db_to_linear(cfg.output_ceiling_db);
   bool discarded = false;
@@ -74,14 +93,21 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
       }
       const float level = followers_[0].process(linked_level);
       const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);
+      float output_peak = 0.0f;
       for (int ch = 0; ch < num_channels; ++ch) {
         const float dry = channels[ch][i];
         const float compressed = dry * db_to_linear(reduction_db + cfg.makeup_gain_db);
-        float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
-        if (cfg.output_limiter) {
-          out = limit_output_sample(out, static_cast<size_t>(ch), ceiling, cfg);
-        }
+        const float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
+        output_peak = std::max(output_peak, std::abs(out));
         channels[ch][i] = out;
+      }
+      if (cfg.output_limiter) {
+        // Protect every output plane with the same gain, including planes
+        // excluded from the compressor detector.
+        limit_output_sample(output_peak, 0, ceiling, cfg);
+        for (int ch = 0; ch < num_channels; ++ch) {
+          channels[ch][i] *= limiter_gains_[0];
+        }
       }
       max_reduction = std::min(max_reduction, reduction_db);
     }
@@ -119,6 +145,7 @@ void ParallelComp::reset() {
     follower.reset();
   }
   std::fill(limiter_gains_.begin(), limiter_gains_.end(), 1.0f);
+  last_linked_detection_ = active_.linked_detection;
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -149,6 +176,7 @@ bool ParallelComp::set_parameter_impl(unsigned int param_id, float value) {
       active_.mix = std::clamp(value, 0.0f, 1.0f);
       break;
     case 6:
+      if (!numeric::finite(db_to_linear(value)) || !(db_to_linear(value) > 0.0f)) return false;
       active_.output_ceiling_db = value;
       break;
     default:
@@ -165,9 +193,17 @@ std::vector<rt::ParamDescriptor> ParallelComp::parameter_descriptors() const {
 }
 
 void ParallelComp::validate_config(const ParallelCompConfig& config) {
-  if (!(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
+  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
+      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
+      !std::isfinite(config.mix) || !std::isfinite(config.makeup_gain_db) ||
+      !(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
       config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.output_ceiling_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid parallel compressor configuration");
+  }
+  const float ceiling = db_to_linear(config.output_ceiling_db);
+  if (!numeric::finite(ceiling) || !(ceiling > 0.0f)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "parallel compressor ceiling must produce a finite positive linear gain");
   }
   if (!numeric::finite(db_to_linear(config.makeup_gain_db))) {
     throw SonareException(ErrorCode::InvalidParameter,

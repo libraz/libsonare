@@ -3,6 +3,7 @@
 
 #include <array>
 #include <catch2/generators/catch_generators.hpp>
+#include <limits>
 #include <memory>
 
 #include "dynamics_test_helpers.h"
@@ -212,6 +213,97 @@ TEST_CASE("ParallelComp validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(ParallelComp({-18.0f, 0.5f, 10.0f, 100.0f, 0.0f, 0.5f}));
   REQUIRE_THROWS(ParallelComp({-18.0f, 2.0f, -1.0f, 100.0f, 0.0f, 0.5f}));
   REQUIRE_THROWS(ParallelComp({-18.0f, 2.0f, 10.0f, 100.0f, 0.0f, 1.5f}));
+}
+
+TEST_CASE("ParallelComp linked output limiter preserves stereo ratios",
+          "[mastering][dynamics][parallel-comp-regression]") {
+  for (bool linked : {true, false}) {
+    CAPTURE(linked);
+    ParallelComp compressor({100.0f, 1.0f, 0.0f, 100.0f, 0.0f, 0.0f, linked, true, 0.0f});
+    compressor.prepare(1000.0, 2);
+    std::vector<float> left = {2.0f, 0.5f};
+    std::vector<float> right = {1.0f, 0.25f};
+    process_stereo(compressor, left, right);
+    REQUIRE_THAT(left[0], WithinAbs(1.0f, 1e-6f));
+    if (linked) {
+      for (size_t i = 0; i < left.size(); ++i) {
+        CHECK_THAT(right[i], WithinAbs(0.5f * left[i], 1e-6f));
+      }
+    } else {
+      REQUIRE_THAT(right[0], WithinAbs(1.0f, 1e-6f));
+    }
+  }
+}
+
+TEST_CASE("ParallelComp rejects non-finite and overflowing configurations",
+          "[mastering][dynamics][parallel-comp-regression]") {
+  for (float invalid :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    for (int field = 0; field < 7; ++field) {
+      ParallelCompConfig config;
+      float* fields[] = {&config.threshold_db,     &config.ratio,          &config.attack_ms,
+                         &config.release_ms,       &config.makeup_gain_db, &config.mix,
+                         &config.output_ceiling_db};
+      *fields[field] = invalid;
+      CAPTURE(field, invalid);
+      CHECK_THROWS(ParallelComp(config));
+    }
+  }
+  ParallelCompConfig config;
+  config.output_ceiling_db = std::numeric_limits<float>::max();
+  CHECK_THROWS(ParallelComp(config));
+  ParallelComp compressor;
+  CHECK_FALSE(compressor.set_parameter(6, config.output_ceiling_db));
+  CHECK(compressor.config().output_ceiling_db == 0.0f);
+  config.output_ceiling_db = -std::numeric_limits<float>::max();
+  CHECK_THROWS(compressor.set_config(config));
+  CHECK_FALSE(compressor.set_parameter(6, config.output_ceiling_db));
+  CHECK(compressor.config().output_ceiling_db == 0.0f);
+}
+
+TEST_CASE("ParallelComp carries limiter state across linked mode changes",
+          "[mastering][dynamics][parallel-comp-regression]") {
+  for (bool initially_linked : {true, false}) {
+    CAPTURE(initially_linked);
+    ParallelCompConfig config{100.0f,           1.0f, 0.0f, 1000.0f, 0.0f, 0.0f,
+                              initially_linked, true, 0.0f};
+    ParallelComp compressor(config);
+    compressor.prepare(1000.0, 1);
+    std::vector<float> left = {initially_linked ? 2.0f : 0.5f};
+    std::vector<float> right = {2.0f};
+    process_stereo(compressor, left, right);
+    config.linked_detection = !initially_linked;
+    compressor.set_config(config);
+    left = {0.5f};
+    right = {0.5f};
+    process_stereo(compressor, left, right);
+    CHECK_THAT(left[0], WithinAbs(right[0], 1e-6f));
+    CHECK(left[0] < 0.3f);
+    CHECK(right[0] < 0.3f);
+  }
+}
+
+TEST_CASE("ParallelComp carries detector release across linked mode changes",
+          "[mastering][dynamics][parallel-comp-regression]") {
+  for (bool initially_linked : {true, false}) {
+    CAPTURE(initially_linked);
+    ParallelCompConfig config{-18.0f,           4.0f,  0.0f, 1000.0f, 0.0f, 1.0f,
+                              initially_linked, false, 0.0f};
+    ParallelComp compressor(config);
+    compressor.prepare(1000.0, 1);
+    std::vector<float> left = {0.1f};
+    std::vector<float> right = {1.0f};
+    process_stereo(compressor, left, right);
+    config.linked_detection = !initially_linked;
+    compressor.set_config(config);
+    left = {0.01f};
+    right = {0.01f};
+    process_stereo(compressor, left, right);
+    CHECK_THAT(left[0], WithinAbs(right[0], 1e-6f));
+    CHECK(left[0] < 0.005f);
+    CHECK(right[0] < 0.005f);
+  }
 }
 
 TEST_CASE("VocalRider boosts quiet material and cuts loud material", "[mastering][dynamics]") {
