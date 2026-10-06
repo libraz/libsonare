@@ -470,6 +470,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   fader_.process(channels, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
   if (num_channels <= 2) panner_.process(channels, num_channels, num_samples);
+  if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
 
   staged = stage_channels(channels, num_channels, num_samples);
   if (staged != nullptr) {
@@ -497,7 +498,6 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
                                          post_inserts_.size()));
   last_gain_reduction_db_ = post_gain_reduction_db;
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
-  if (num_channels <= 2) width_.process(channels, num_channels, num_samples);
 
   if (!muted && num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) {
@@ -557,6 +557,7 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   fader_.process(segment, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
   if (num_channels <= 2) panner_.process(segment, num_channels, num_samples);
+  if (num_channels <= 2) width_.process(segment, num_channels, num_samples);
 
   staged = stage_channels(segment, num_channels, num_samples);
   if (staged != nullptr) {
@@ -571,7 +572,6 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
       if (segment[ch]) std::fill(segment[ch], segment[ch] + num_samples, 0.0f);
     }
   }
-  if (num_channels <= 2) width_.process(segment, num_channels, num_samples);
 
   if (!effectively_muted() && num_channels >= 2 && segment[0] != nullptr && segment[1] != nullptr) {
     for (int i = 0; i < num_samples; ++i) {

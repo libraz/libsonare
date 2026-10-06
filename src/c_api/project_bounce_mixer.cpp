@@ -193,12 +193,10 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
       }
     };
 
-    // Fader and pan follow the pre inserts; width also follows the post
-    // inserts. Shift authored breakpoints by their stage's arrival latency
-    // before PDC trimming. The initial value at zero establishes the baseline.
-    const int stage_latency_q8 = lane.target_param_id() == sonare::engine::MixingRuntime::kWidth
-                                     ? strip->strip.post_fader_latency_samples_q8()
-                                     : strip->strip.pre_fader_latency_samples_q8();
+    // Fader, pan and width are all applied before the post-insert chain. Shift
+    // authored breakpoints by the pre-fader arrival latency before PDC
+    // trimming. The initial value at zero establishes the baseline.
+    const int stage_latency_q8 = strip->strip.pre_fader_latency_samples_q8();
     const int64_t stage_latency_samples =
         stage_latency_q8 > 0 ? (static_cast<int64_t>(stage_latency_q8) + 255) / 256 : 0;
 

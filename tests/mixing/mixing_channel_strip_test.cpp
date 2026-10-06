@@ -9,6 +9,7 @@
 #include "effects/delay/stereo_delay.h"
 #endif
 #include "mastering/api/insert_factory.h"
+#include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/multiband/multiband_expander.h"
@@ -749,6 +750,55 @@ TEST_CASE("ChannelStrip pre and post inserts wrap fader pan and width", "[mixing
     REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
     REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
   }
+}
+
+namespace {
+
+void require_post_limiter_ceiling_after_width(bool segmented) {
+  constexpr int kFrames = 8;
+  constexpr float kCeiling = 0.5f;
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  left.fill(1.0f);
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_post_insert(std::make_unique<sonare::mastering::dynamics::BrickwallLimiter>(
+      sonare::mastering::dynamics::BrickwallLimiterConfig{-6.0206f, 0.0f, 0.0f}));
+  strip.prepare(48000.0, kFrames);
+  if (segmented) {
+    REQUIRE(strip.schedule_width_automation(102, 2.0f));
+    strip.process_at(channels, 2, kFrames, 100);
+  } else {
+    strip.set_width(2.0f);
+    strip.process(channels, 2, kFrames);
+  }
+
+  float peak = 0.0f;
+  for (int i = 0; i < kFrames; ++i) {
+    peak = std::max(
+        {peak, std::abs(left[static_cast<size_t>(i)]), std::abs(right[static_cast<size_t>(i)])});
+  }
+  CAPTURE(segmented, peak);
+  CHECK(peak <= kCeiling + 0.0001f);
+  CHECK_THAT(left.back(), WithinAbs(kCeiling, 0.0001f));
+  CHECK_THAT(right.back(), WithinAbs(-1.0f / 6.0f, 0.0001f));
+  if (segmented) {
+    REQUIRE_THAT(left[0], WithinAbs(kCeiling, 0.0001f));
+    REQUIRE_THAT(right[0], WithinAbs(0.0f, 0.0001f));
+  }
+}
+
+}  // namespace
+
+TEST_CASE("ChannelStrip unsegmented post BrickwallLimiter applies ceiling after width",
+          "[mixing]") {
+  require_post_limiter_ceiling_after_width(false);
+}
+
+TEST_CASE("ChannelStrip segmented post BrickwallLimiter applies ceiling after width automation",
+          "[mixing]") {
+  require_post_limiter_ceiling_after_width(true);
 }
 
 TEST_CASE("ChannelStrip StereoPairOnly insert touches only the front pair on a surround buffer",

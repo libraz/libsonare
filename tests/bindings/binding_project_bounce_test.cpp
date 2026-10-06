@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 #include "arrangement/edit_compiler.h"
 #include "binding_project_parity_test_helpers.h"
@@ -2775,18 +2776,34 @@ TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expressio
 }
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
-TEST_CASE("legacy opaque width automation follows the post-insert clock",
-          "[project][audio_workflow][pdc]") {
-  const auto render = [](bool post_insert) {
+TEST_CASE(
+    "legacy opaque width automation follows the pre-fader clock across rates and insert topologies",
+    "[project][audio_workflow][pdc]") {
+  struct InsertTopology {
+    const char* name;
+    const char* scene_inserts;
+    bool has_pre_insert;
+  };
+  const InsertTopology topologies[] = {
+      {"none", "", false},
+      {"pre",
+       R"(,"inserts":[{"slot":"pre","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])",
+       true},
+      {"post",
+       R"(,"inserts":[{"slot":"post","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])",
+       false},
+      {"pre+post",
+       R"(,"inserts":[{"slot":"pre","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"},{"slot":"post","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])",
+       true},
+  };
+
+  const auto render = [](int sample_rate, const char* scene_inserts) {
     SonareProject* project = nullptr;
     REQUIRE(sonare_project_create(&project) == SONARE_OK);
-    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, static_cast<double>(sample_rate)) == SONARE_OK);
 
-    const std::string inserts =
-        post_insert
-            ? R"(,"inserts":[{"slot":"post","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])"
-            : "";
-    const std::string scene_json = R"({"version":1,"strips":[{"id":"voice")" + inserts +
+    const std::string scene_json = std::string(R"({"version":1,"strips":[{"id":"voice")") +
+                                   scene_inserts +
                                    R"(}],"buses":[{"id":"master","role":"master"}]})";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
 
@@ -2807,12 +2824,13 @@ TEST_CASE("legacy opaque width automation follows the post-insert clock",
     clip_desc.track_id = track;
     clip_desc.is_midi = 0;
     clip_desc.start_ppq = 0.0;
-    clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;
+    clip_desc.length_ppq =
+        static_cast<double>(kClipFrames) / (static_cast<double>(sample_rate) * 0.5);
     clip_desc.gain = 1.0f;
     clip_desc.audio_interleaved = dc.data();
     clip_desc.audio_frames = kClipFrames;
     clip_desc.audio_channels = 2;
-    clip_desc.audio_sample_rate = 48000;
+    clip_desc.audio_sample_rate = sample_rate;
     uint32_t clip = 0;
     REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
 
@@ -2821,7 +2839,7 @@ TEST_CASE("legacy opaque width automation follows the post-insert clock",
         {0.02, 0.0f, SONARE_CURVE_HOLD},
     };
     SonareAutomationLaneDesc lane{};
-    lane.target_param_id = 3;  // MixingRuntime::kWidth, after post inserts.
+    lane.target_param_id = 3;  // MixingRuntime::kWidth, after fader and pan.
     lane.points = points;
     lane.point_count = std::size(points);
     REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
@@ -2830,7 +2848,7 @@ TEST_CASE("legacy opaque width automation follows the post-insert clock",
     options.total_frames = kClipFrames;
     options.block_size = 128;
     options.num_channels = 2;
-    options.sample_rate = 48000;
+    options.sample_rate = sample_rate;
     float* out = nullptr;
     size_t out_len = 0;
     REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
@@ -2842,23 +2860,42 @@ TEST_CASE("legacy opaque width automation follows the post-insert clock",
     return result;
   };
 
-  const std::vector<float> no_pdc = render(false);
-  const std::vector<float> with_pdc = render(true);
-  REQUIRE(no_pdc.size() == with_pdc.size());
+  const int sample_rates[] = {44100, 48000, 96000};
+  for (const int sample_rate : sample_rates) {
+    const size_t event_frame = static_cast<size_t>(sample_rate / 100);
+    const std::vector<float> no_insert = render(sample_rate, topologies[0].scene_inserts);
+    REQUIRE(no_insert.size() == 4096u);
 
-  // The width stage follows the post insert, so its event clock must include
-  // that insert latency. PDC then returns both transitions at musical frame 480.
-  REQUIRE(no_pdc[2u * 479u] == Catch::Approx(0.25f).margin(1.0e-5f));
-  REQUIRE(with_pdc[2u * 479u] == Catch::Approx(0.25f).margin(1.0e-5f));
-  REQUIRE(no_pdc[2u * 480u] < 0.2499f);
-  REQUIRE(with_pdc[2u * 480u] < 0.2499f);
+    // The no-insert render is the musical-time reference. Every topology must
+    // preserve the same transition after the bounce's PDC trimming.
+    REQUIRE(no_insert[2u * (event_frame - 1u)] == Catch::Approx(0.25f).margin(1.0e-5f));
+    REQUIRE(no_insert[2u * event_frame] < 0.2499f);
 
-  float max_delta = 0.0f;
-  for (size_t i = 0; i < no_pdc.size(); ++i) {
-    max_delta = std::max(max_delta, std::abs(no_pdc[i] - with_pdc[i]));
+    for (const InsertTopology& topology : topologies) {
+      INFO("sample rate: " << sample_rate << ", insert topology: " << topology.name);
+      const std::vector<float> rendered = render(sample_rate, topology.scene_inserts);
+      REQUIRE(rendered.size() == no_insert.size());
+      REQUIRE(rendered[2u * (event_frame - 1u)] == Catch::Approx(0.25f).margin(1.0e-5f));
+      REQUIRE(rendered[2u * event_frame] < 0.2499f);
+
+      float max_delta = 0.0f;
+      for (size_t i = 0; i < no_insert.size(); ++i) {
+        max_delta = std::max(max_delta, std::abs(no_insert[i] - rendered[i]));
+      }
+      INFO("max output trajectory delta after PDC compensation: " << max_delta);
+      REQUIRE(max_delta < 1.0e-3f);
+
+      if (topology.has_pre_insert) {
+        const size_t pre_latency =
+            static_cast<size_t>(std::lround(static_cast<double>(sample_rate) * 0.001));
+        REQUIRE(event_frame > pre_latency);
+        // Negative control for omitting pre-insert latency from the stage
+        // clock: the transition must not arrive early by the insert delay.
+        const size_t pre_latency_control_frame = event_frame - pre_latency;
+        REQUIRE(rendered[2u * pre_latency_control_frame] == Catch::Approx(0.25f).margin(1.0e-5f));
+      }
+    }
   }
-  INFO("max output trajectory delta after PDC compensation: " << max_delta);
-  REQUIRE(max_delta < 1.0e-3f);
 }
 
 #endif
