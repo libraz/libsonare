@@ -79,6 +79,12 @@ constexpr int kFftLength = 16384;
 constexpr double kMachineRate = 32000.0;
 constexpr double kHostRate = 48000.0;
 
+// The rate transition below straddles the requested 10 kHz corner: 8 kHz has
+// a 3.92 kHz sweep ceiling, while 96 kHz can represent the requested value.
+constexpr double kLowDawRate = 8000.0;
+constexpr double kHighDawRate = 96000.0;
+constexpr float kRateChangeCornerHz = 10000.0f;
+
 // Corner the record's lowest-notch reading of 1887.7 Hz implies for an
 // eight-section cascade at 32 kHz, read in the tangent of frequency. The
 // modulator is stopped (min_hz == max_hz), which is what makes a notch readable.
@@ -359,6 +365,39 @@ float phaser_max_difference(const std::vector<float>& a, const std::vector<float
   return worst;
 }
 
+PhaserConfig rate_change_config() {
+  PhaserConfig config;
+  config.rate_hz = 0.0f;
+  config.min_hz = kRateChangeCornerHz;
+  config.max_hz = kRateChangeCornerHz;
+  config.dry_wet = 1.0f;
+  return config;
+}
+
+std::vector<float> render_phaser_after_prepares(const PhaserConfig& config,
+                                                const std::vector<double>& rates) {
+  constexpr int kBlock = 512;
+  Phaser phaser(config);
+  for (const double rate : rates) phaser.prepare(rate, kBlock);
+  auto signal = sonare::test::generate_impulse(kBlock);
+  float* channels[] = {signal.data()};
+  phaser.process(channels, 1, kBlock);
+  return signal;
+}
+
+std::vector<float> render_phaser_after_bound_set(double bound_rate, double process_rate) {
+  constexpr int kBlock = 512;
+  Phaser phaser(rate_change_config());
+  phaser.prepare(bound_rate, kBlock);
+  REQUIRE(phaser.set_parameter(1, kRateChangeCornerHz));
+  REQUIRE(phaser.set_parameter(2, kRateChangeCornerHz));
+  phaser.prepare(process_rate, kBlock);
+  auto signal = sonare::test::generate_impulse(kBlock);
+  float* channels[] = {signal.data()};
+  phaser.process(channels, 1, kBlock);
+  return signal;
+}
+
 }  // namespace
 
 TEST_CASE("the phaser's sweep bounds resolve independently of write order", "[effects][phaser]") {
@@ -406,4 +445,21 @@ TEST_CASE("a single phaser bound change keeps the sweep range ordered", "[effect
     CHECK(phaser_max_difference(render_phaser_after(start, {{2u, 200.0f}}),
                                 render_phaser_after(ordered, {})) <= kTolerance);
   }
+}
+
+TEST_CASE("the phaser keeps constructed frequency bounds across a DAW rate change",
+          "[effects][phaser][sample-rate]") {
+  const auto fresh_high_rate = render_phaser_after_prepares(rate_change_config(), {kHighDawRate});
+  const auto low_then_high =
+      render_phaser_after_prepares(rate_change_config(), {kLowDawRate, kHighDawRate});
+
+  CHECK(phaser_max_difference(fresh_high_rate, low_then_high) <= 1.0e-7f);
+}
+
+TEST_CASE("the phaser keeps setter frequency bounds across a DAW rate change",
+          "[effects][phaser][sample-rate]") {
+  const auto set_at_high_rate = render_phaser_after_bound_set(kHighDawRate, kHighDawRate);
+  const auto set_at_low_then_high = render_phaser_after_bound_set(kLowDawRate, kHighDawRate);
+
+  CHECK(phaser_max_difference(set_at_high_rate, set_at_low_then_high) <= 1.0e-7f);
 }

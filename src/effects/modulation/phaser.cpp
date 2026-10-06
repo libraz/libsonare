@@ -37,11 +37,6 @@ Phaser::Phaser(PhaserConfig config) : config_(config) {}
 
 void Phaser::prepare(double sample_rate, int) {
   sample_rate_ = effective_sample_rate(sample_rate);
-  // Clamp each bound like the automation path does, keeping tan(pi*freq/sr)
-  // well-defined; their order is resolved where they are read.
-  const float nyquist = max_sweep_hz(sample_rate_);
-  config_.min_hz = std::clamp(config_.min_hz, 1.0f, nyquist);
-  config_.max_hz = std::clamp(config_.max_hz, 1.0f, nyquist);
   const int stages = std::clamp(config_.stages, 1, 12);
   for (int ch = 0; ch < 2; ++ch) {
     x1_[static_cast<size_t>(ch)].assign(static_cast<size_t>(stages), 0.0f);
@@ -73,8 +68,12 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   const float feedback = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
   // Top of the sweep for this block; a full depth is max_hz itself, not its pow() image.
   const float depth = std::clamp(config_.depth, 0.0f, 1.0f);
-  const float min_hz = std::min(config_.min_hz, config_.max_hz);
-  const float max_hz = std::max(config_.min_hz, config_.max_hz);
+  // Bounds stay in hertz across rate changes; only this block's copies meet Nyquist.
+  const float sweep_limit = max_sweep_hz(sample_rate_);
+  const float effective_min_hz = std::clamp(config_.min_hz, 1.0f, sweep_limit);
+  const float effective_max_hz = std::clamp(config_.max_hz, 1.0f, sweep_limit);
+  const float min_hz = std::min(effective_min_hz, effective_max_hz);
+  const float max_hz = std::max(effective_min_hz, effective_max_hz);
   const float top_hz = depth >= 1.0f ? max_hz : min_hz * std::pow(max_hz / min_hz, depth);
   for (int i = 0; i < num_samples; ++i) {
     const float coeff_l = sweep_coeff(lfos_[0].process(), min_hz, top_hz);
@@ -128,11 +127,11 @@ bool Phaser::set_parameter_impl(unsigned int param_id, float value) {
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      // Stored as written; process() orders the pair so write order never matters.
-      config_.min_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
+      // Stored in hertz as written; process() bounds and orders the pair per block.
+      config_.min_hz = value;
       return true;
     case 2:
-      config_.max_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
+      config_.max_hz = value;
       return true;
     case 3:
       config_.dry_wet = value;
