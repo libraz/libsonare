@@ -1579,6 +1579,30 @@ TEST_CASE("SMF2 import reads Null utility words only as DCS chain separators", "
   }
 }
 
+TEST_CASE("SMF2 clip events cannot inject file structure", "[midi][smf2][smf2-structure]") {
+  for (const uint32_t word : {0x003001e0u, 0x004001e0u, 0u, 0xf0200000u, 0xf0210000u}) {
+    CAPTURE(word);
+    MidiClip clip;
+    clip.add_event(ev(0.0, sonare::midi::make_midi2_note_on(0, 0, 60, 40000)));
+    Ump structural;
+    structural.words[0] = word;
+    structural.word_count = (word >> 28) == 0xfu ? 4 : 1;
+    clip.add_event(ev(1.0, structural));
+    clip.add_event(ev(2.0, sonare::midi::make_midi2_note_off(0, 0, 60, 20000)));
+    const auto exported = export_clip_file(clip, {}, {}, Smf2ExportOptions{});
+    REQUIRE(exported.ok());
+    CHECK(exported.skipped_events == 1);
+    const auto imported = import_clip_file(exported.bytes.data(), exported.bytes.size());
+    CHECK(imported.ok());
+    if (imported.ok()) {
+      REQUIRE(imported.clips.size() == 1);
+      REQUIRE(imported.clips[0].events().size() == 2);
+      CHECK(imported.clips[0].events()[1].ppq == 2.0);
+      CHECK(imported.clips[0].events()[1].ump.words[1] == (20000u << 16));
+    }
+  }
+}
+
 // A Delta Clockstamp carries a 20-bit delta, so a larger gap becomes a chain of
 // max-valued words. The gaps across a clip sum to its span, so the chain cost of
 // a whole export is the SPAN divided by 0xFFFFF whatever the event count -- and

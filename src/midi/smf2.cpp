@@ -1160,6 +1160,10 @@ Smf2ExportResult export_clip_file(
     item.tick = tick;
     item.order = 2;
     const uint32_t mt = (ev.ump.words[0] >> 28) & 0x0Fu;
+    if (mt == kMtUtility || mt == kMtStream) {
+      ++result.skipped_events;
+      continue;
+    }
     const int canonical_count = ump_word_count_for_message_type(static_cast<uint8_t>(mt));
     if (ev.ump.word_count != 0 && ev.ump.word_count != canonical_count) {
       result.status = Smf2Status::kInvalidArgument;
