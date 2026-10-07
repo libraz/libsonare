@@ -452,11 +452,9 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
   phdr.pop_back();
   if (!inst.empty()) inst.pop_back();
   samples_.pop_back();
-  for (const Sf2Sample& sample : samples_) {
-    if (!valid_sf2_sample_rate(sample.sample_rate)) {
-      clear();
-      return fail(error, "sf2: sample rate out of range [400, 50000]");
-    }
+  // An out-of-range rate is replaced by the nearest practical one rather than refusing the file.
+  for (Sf2Sample& sample : samples_) {
+    sample.sample_rate = std::clamp(sample.sample_rate, kSf2MinSampleRate, kSf2MaxSampleRate);
   }
 
   // --- sample pool: convert 16-bit (+ optional 24-bit extension) to float ---

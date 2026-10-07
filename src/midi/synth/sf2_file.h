@@ -26,7 +26,8 @@
 
 namespace sonare::midi::synth {
 
-/// SoundFont 2.04 shdr sample-rate range. Terminal EOS records are excluded.
+/// SoundFont 2.04 shdr sample-rate range. The parser clamps a header's rate into it, so every
+/// parsed sample is inside it.
 inline constexpr uint32_t kSf2MinSampleRate = 400;
 inline constexpr uint32_t kSf2MaxSampleRate = 50000;
 inline constexpr bool valid_sf2_sample_rate(uint32_t sample_rate) noexcept {

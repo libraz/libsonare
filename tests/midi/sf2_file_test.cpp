@@ -14,6 +14,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "support/sf2_builder.h"
@@ -243,16 +244,18 @@ TEST_CASE("Sf2File parses presets, instruments, zones and samples", "[midi][sf2]
   REQUIRE(pool[sine.start + 8] == Approx(1.0f).margin(1e-3));  // sin(pi/2)
 }
 
-TEST_CASE("Sf2File enforces the SoundFont sample-rate range", "[midi][sf2][malformed]") {
-  for (const uint32_t invalid_rate : {uint32_t{0}, uint32_t{399}, uint32_t{50001}}) {
+TEST_CASE("Sf2File clamps an out-of-range sample rate to the SoundFont range",
+          "[midi][sf2][malformed]") {
+  const std::pair<uint32_t, uint32_t> cases[] = {
+      {0, 400}, {399, 400}, {50001, 50000}, {96000, 50000}};
+  for (const auto& [invalid_rate, expected] : cases) {
     CAPTURE(invalid_rate);
     std::vector<uint8_t> bytes = build_fixture();
     REQUIRE(set_first_sample_rate(&bytes, invalid_rate));
     Sf2File sf2;
     std::string error;
-    REQUIRE_FALSE(sf2.parse(bytes.data(), bytes.size(), &error));
-    REQUIRE(error == "sf2: sample rate out of range [400, 50000]");
-    REQUIRE(sf2.samples().empty());
+    REQUIRE(sf2.parse(bytes.data(), bytes.size(), &error));
+    REQUIRE(sf2.samples()[0].sample_rate == expected);
   }
 
   for (const uint32_t valid_rate : {uint32_t{400}, uint32_t{50000}}) {
