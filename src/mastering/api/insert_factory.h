@@ -104,6 +104,16 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         measured. Returns `[]` for an unknown @p name.
 std::string insert_param_info_json(const std::string& name);
 
+/// @brief insert_param_info_json() with the Nyquist-following ceilings
+///        (`maxRelativeTo` `"nyquist"`) resolved for @p sample_rate.
+/// @details Such a key's `max` and `maxExclusive` are re-measured by building
+///          and preparing the insert at @p sample_rate, so they are the bound
+///          actually accepted there, including a cap fixed when the insert was
+///          built. Every other field is the rate-less answer. @p sample_rate is
+///          not range-checked here; a value that is not positive gives the
+///          rate-less answer.
+std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate);
+
 /// @brief The key groups of an insert that exist only under a condition.
 /// @return A JSON array string, one entry per slot in the order construction
 ///         declares them: `name` (the key prefix, e.g. "midBand3" or

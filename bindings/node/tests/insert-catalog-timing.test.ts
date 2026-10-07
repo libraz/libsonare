@@ -36,6 +36,22 @@ describe('insert catalog carries construction-only params, and timing answers pe
     expect(frequency?.maxRelativeTo).toBe('nyquist');
   });
 
+  it('resolves a Nyquist-following ceiling for the host rate and leaves other keys alone', () => {
+    const frequency = (rate?: number) =>
+      masteringInsertParamInfo('eq.parametric', rate).find(
+        (param) => param.name === 'band0.frequencyHz',
+      );
+    expect(frequency()?.max).toBe(24000);
+    expect(frequency(44100)?.max).toBe(22050);
+    expect(frequency(44100)?.maxExclusive).toBe(true);
+    // The insert's build-time cap holds above its build rate.
+    expect(frequency(96000)?.max).toBe(24000);
+    const ratio = (rate?: number) =>
+      masteringInsertParamInfo('dynamics.compressor', rate).find((param) => param.name === 'ratio');
+    expect(ratio(44100)).toEqual(ratio());
+    expect(() => masteringInsertParamInfo('eq.parametric', 0)).toThrow();
+  });
+
   it('reports positive latency once softClipper is built with 4x oversampling', () => {
     const timing = masteringInsertTiming('saturation.softClipper', { aliasing: 3 }, 48000);
     expect(timing.latencySamples).toBeGreaterThan(0);

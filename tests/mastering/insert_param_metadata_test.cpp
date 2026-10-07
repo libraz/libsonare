@@ -8,6 +8,8 @@
 // covers every construction key, that it agrees with the config structs, and
 // that the published range really is the range construction enforces.
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -46,6 +48,7 @@ namespace {
 namespace json = sonare::util::json;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::insert_param_info_json;
+using sonare::mastering::api::insert_param_info_json_at_rate;
 using sonare::mastering::api::insert_param_names;
 using sonare::mastering::api::insert_probe_params;
 using sonare::mastering::api::make_insert;
@@ -106,6 +109,26 @@ bool prepares_with(const std::string& name, const std::string& key, double value
   } catch (...) {
     return false;
   }
+}
+
+// Whether the insert builds with @p key at @p value and prepares at @p sample_rate.
+bool prepares_at(const std::string& name, const std::string& key, double value,
+                 double sample_rate) {
+  try {
+    const std::unique_ptr<sonare::rt::ProcessorBase> processor =
+        make_insert(name, probe_json(name, key, json::Value(value)));
+    if (processor == nullptr) return false;
+    processor->prepare(sample_rate, sonare::mastering::api::kInsertProbeBlockSize);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+json::Array param_info_at(const std::string& name, double sample_rate) {
+  const json::Value parsed = json::parse_strict(insert_param_info_json_at_rate(name, sample_rate));
+  REQUIRE(parsed.is_array());
+  return parsed.as_array();
 }
 
 std::vector<double> choice_values(const json::Value& parameter) {
@@ -480,6 +503,68 @@ TEST_CASE("an EQ band ceiling follows the processing rate's Nyquist", "[masterin
   const json::Array compressor = param_info("dynamics.compressor");
   REQUIRE(field(*find_param(compressor, "ratio"), "maxRelativeTo").is_null());
   REQUIRE(field(*find_param(compressor, "makeupGainDb"), "maxRelativeTo").is_null());
+}
+
+TEST_CASE("a rate-specific descriptor publishes the ceiling accepted at that rate",
+          "[mastering][catalog]") {
+  const std::string rate_less = insert_param_info_json("eq.parametric");
+  const std::string key = "band0.frequencyHz";
+
+  // Below the probe rate the Nyquist is the ceiling, and it is exclusive.
+  const json::Array at_44100 = param_info_at("eq.parametric", 44100.0);
+  const json::Value* narrow = find_param(at_44100, key);
+  REQUIRE(narrow != nullptr);
+  CHECK(field(*narrow, "maxRelativeTo").as_string() == "nyquist");
+  CHECK(field(*narrow, "max").as_number() == 22050.0);
+  CHECK(field(*narrow, "maxExclusive").as_bool());
+  CHECK_FALSE(prepares_at("eq.parametric", key, 22050.0, 44100.0));
+  CHECK(prepares_at("eq.parametric", key, 22049.0, 44100.0));
+
+  // Above the build rate the insert's own cap holds, so the published ceiling
+  // is what builds and prepares there, not the host's Nyquist.
+  const json::Array at_96000 = param_info_at("eq.parametric", 96000.0);
+  const json::Value* wide = find_param(at_96000, key);
+  REQUIRE(wide != nullptr);
+  const double ceiling = field(*wide, "max").as_number();
+  INFO("eq.parametric band0.frequencyHz max at 96000 = " << ceiling);
+  CHECK(ceiling == 24000.0);
+  CHECK(field(*wide, "maxExclusive").as_bool() ==
+        !prepares_at("eq.parametric", key, ceiling, 96000.0));
+  CHECK(prepares_at("eq.parametric", key, ceiling * (1.0 - 1.0e-4), 96000.0));
+  CHECK_FALSE(prepares_at("eq.parametric", key, ceiling * (1.0 + 1.0e-4), 96000.0));
+
+  // Only the rate-following ceilings move; the rest of the descriptor is the
+  // rate-less one.
+  const json::Array base = param_info("eq.parametric");
+  REQUIRE(at_44100.size() == base.size());
+  for (size_t index = 0; index < base.size(); ++index) {
+    if (field(base[index], "name").as_string() == key) continue;
+    if (!field(base[index], "maxRelativeTo").is_null()) continue;
+    CHECK(json::dump(at_44100[index]) == json::dump(base[index]));
+  }
+  const json::Array compressor = param_info_at("dynamics.compressor", 44100.0);
+  CHECK(json::dump(json::Value(compressor)) ==
+        json::dump(json::Value(param_info("dynamics.compressor"))));
+
+  // The rate-less answer neither changes nor depends on an earlier rate query.
+  CHECK(insert_param_info_json("eq.parametric") == rate_less);
+  CHECK(insert_param_info_json_at_rate("eq.parametric", 44100.0) ==
+        insert_param_info_json_at_rate("eq.parametric", 44100.0));
+}
+
+TEST_CASE("the rate-specific descriptor query refuses a rate outside the supported range",
+          "[mastering][catalog]") {
+  CHECK(sonare_mastering_insert_param_info_at_rate("eq.parametric", 0) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_mastering_insert_param_info_at_rate("eq.parametric", -48000) == nullptr);
+  CHECK(sonare_mastering_insert_param_info_at_rate("eq.parametric", 100000000) == nullptr);
+
+  const char* at_rate = sonare_mastering_insert_param_info_at_rate("eq.parametric", 44100);
+  REQUIRE(at_rate != nullptr);
+  CHECK(std::string(at_rate) == insert_param_info_json_at_rate("eq.parametric", 44100.0));
+  const char* unknown = sonare_mastering_insert_param_info_at_rate("no.such.insert", 44100);
+  REQUIRE(unknown != nullptr);
+  CHECK(std::string(unknown) == "[]");
 }
 
 TEST_CASE("published defaults come from the config struct's own initializers",

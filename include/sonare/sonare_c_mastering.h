@@ -543,6 +543,24 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   group exists.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
+/// @brief @ref sonare_mastering_insert_param_info with the rate-following ceilings
+///        resolved for one host rate.
+/// @details Identical to the rate-less query except that every key whose
+///   `maxRelativeTo` is `"nyquist"` reports, as `max` and `maxExclusive`, the
+///   bound actually accepted when the insert is built and prepared at
+///   @p sample_rate. That is the lower of the host's Nyquist frequency and any
+///   cap fixed when the insert is built, so a rate above the build rate does not
+///   raise it (an EQ band frequency stays at 24000 for a 96000 Hz host). The
+///   rate-less query is unchanged and does not depend on earlier calls here.
+/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
+/// @param sample_rate Host rate in Hz, within the range the other sample-rate
+///   arguments of this header accept.
+/// @return A JSON array string with the layout of @ref sonare_mastering_insert_param_info
+///   (`"[]"` for an unknown or null @p name; thread-local, valid until the next
+///   API call on the same thread, must NOT be freed), or NULL with
+///   SONARE_ERROR_INVALID_PARAMETER in the last error when @p sample_rate is out
+///   of range.
+const char* sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate);
 /// @brief Latency and tail of one insert built from @p params and prepared at
 ///        @p sample_rate.
 /// @details What a host needs for delay compensation of a slot whose

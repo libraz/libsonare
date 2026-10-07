@@ -305,6 +305,9 @@ _ALIAS_COVERAGE = {
     # explicit Mel range needed to round-trip with mel_to_stft / mel_to_audio).
     "mel_spectrogram_ex": ("mel_spectrogram",),
     "mfcc_ex": ("mfcc",),
+    # The insert descriptor query takes an optional sample rate on every facade and
+    # routes to the _at_rate C entry point when one is given.
+    "mastering_insert_param_info_at_rate": ("mastering_insert_param_info",),
     # Extended one-shot variants folded into their base facade functions. Each
     # base function exposes the extended fields and routes to this C entry point.
     "analyze_json_ex": ("analyze",),

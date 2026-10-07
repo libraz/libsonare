@@ -441,6 +441,25 @@ const char* sonare_mastering_insert_param_info(const char* name) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
+const char* sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate) {
+  SONARE_C_TRY
+  // Same thread-local contract as sonare_mastering_insert_param_info.
+  static thread_local std::string info;
+  info.clear();
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
+    return nullptr;
+  }
+  if (name == nullptr) {
+    info = "[]";
+    return info.c_str();
+  }
+  info = sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate);
+  return info.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
+}
+
 SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples) {
   SONARE_C_API_ENTRY;

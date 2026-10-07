@@ -282,9 +282,22 @@ export interface MasteringInsertParamInfo {
  * unknown name.
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
+ * @param sampleRate - Optional host rate in Hz. A key whose `maxRelativeTo` is
+ *   `"nyquist"` then reports, as `max` and `maxExclusive`, the bound accepted
+ *   when the insert is built and prepared at that rate, which includes any cap
+ *   fixed at build time (an EQ band frequency stays at 24000 for a 96000 Hz
+ *   host). Omitted, the rate-less answer is returned. Throws for a rate outside
+ *   the supported range.
  */
-export function masteringInsertParamInfo(name: string): MasteringInsertParamInfo[] {
-  const json = requireModule().masteringInsertParamInfo(name);
+export function masteringInsertParamInfo(
+  name: string,
+  sampleRate?: number,
+): MasteringInsertParamInfo[] {
+  const module = requireModule();
+  const json =
+    sampleRate === undefined
+      ? module.masteringInsertParamInfo(name)
+      : module.masteringInsertParamInfoAtRate(name, sampleRate);
   return JSON.parse(json) as MasteringInsertParamInfo[];
 }
 

@@ -1633,6 +1633,23 @@ bool max_follows_nyquist(const std::string& name, const std::string& key,
   return std::fabs(ceiling - nyquist) <= kNyquistMatchTolerance * nyquist;
 }
 
+// Replaces the ceiling of a Nyquist-following key with the one accepted when the
+// insert is built and prepared at @p sample_rate, which includes any cap fixed
+// when it was built.
+void measure_ceiling_at_rate(const std::string& name, const std::string& key, double sample_rate,
+                             MeasuredBounds* bounds) {
+  const AcceptFn accepts = [&](double value) {
+    return insert_accepts_at_rate(name, key, value, sample_rate);
+  };
+  const double ceiling = std::min(bounds->max, 0.5 * sample_rate);
+  const double rejected = std::max(bounds->max, 0.5 * sample_rate) * (1.0 + 1.0e-3);
+  const double accepted = bounds->has_min ? 0.5 * (bounds->min + ceiling) : 0.5 * ceiling;
+  if (accepts(rejected) || !accepts(accepted)) return;
+  bounds->max =
+      settle_measured_bound(bisect_accepted_boundary(accepts, rejected, accepted, false), true);
+  bounds->max_exclusive = !accepts(bounds->max);
+}
+
 // The declared values of an enum key that construction accepts.
 std::vector<detail::EnumChoice> measure_enum_choices(
     const std::string& name, const std::string& key,
@@ -1739,7 +1756,8 @@ const char* catalog_type(ParamKind kind, bool is_enum) {
 // Appends one entry. @p id_json is the automation id, or "null" for a key only
 // construction reads.
 void append_param_entry(std::string& out, const std::string& name, const std::string& key,
-                        const std::string& id_json, bool rt_safe, const ParamMap& params) {
+                        const std::string& id_json, bool rt_safe, const ParamMap& params,
+                        double sample_rate) {
   const auto& kinds = params.probed_kinds();
   const auto& defaults = params.probed_defaults();
   const auto* slot = slot_of(params.declared_slots(), key);
@@ -1779,6 +1797,9 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
         }
       }
       if (unit_is_hz) bounds.max_follows_nyquist = max_follows_nyquist(name, key, bounds);
+      if (bounds.max_follows_nyquist && sample_rate > 0.0) {
+        measure_ceiling_at_rate(name, key, sample_rate, &bounds);
+      }
     }
   }
   if (has_choices) bounds = MeasuredBounds{};
@@ -1844,7 +1865,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   out += '}';
 }
 
-std::string build_insert_param_info_json(const std::string& name) {
+std::string build_insert_param_info_json(const std::string& name, double sample_rate) {
   // Build a throwaway processor (like insert_param_names). Its descriptor table
   // gives the automation targets; the same build recorded every key the config
   // builder read, the C++ type it read it as (ParamMap::note_kind, driven by the
@@ -1862,14 +1883,14 @@ std::string build_insert_param_info_json(const std::string& name) {
   for (const auto& descriptor : descriptors) {
     if (out.size() > 1) out += ',';
     append_param_entry(out, name, descriptor.key, std::to_string(descriptor.id),
-                       processor->parameter_is_realtime_safe(descriptor.id), params);
+                       processor->parameter_is_realtime_safe(descriptor.id), params, sample_rate);
     descriptor_keys.insert(descriptor.key);
   }
   // Then the keys only construction reads, which take effect when the insert is built.
   for (const std::string& key : construction_keys(params)) {
     if (descriptor_keys.find(key) != descriptor_keys.end()) continue;
     if (out.size() > 1) out += ',';
-    append_param_entry(out, name, key, "null", false, params);
+    append_param_entry(out, name, key, "null", false, params, sample_rate);
   }
   out += ']';
   return out;
@@ -1911,7 +1932,17 @@ std::string insert_param_info_json(const std::string& name) {
   static thread_local std::unordered_map<std::string, std::string> memo;
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
-  return memo.emplace(name, build_insert_param_info_json(name)).first->second;
+  return memo.emplace(name, build_insert_param_info_json(name, 0.0)).first->second;
+}
+
+std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate) {
+  // Keyed apart from the rate-less memo, so the rate-less answer never depends on
+  // an earlier call.
+  static thread_local std::unordered_map<std::string, std::string> memo;
+  const std::string memo_key = name + '@' + std::to_string(sample_rate);
+  const auto cached = memo.find(memo_key);
+  if (cached != memo.end()) return cached->second;
+  return memo.emplace(memo_key, build_insert_param_info_json(name, sample_rate)).first->second;
 }
 
 const std::vector<std::string>& insert_param_info_schema_paths() {

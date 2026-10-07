@@ -153,15 +153,26 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsString()) {
-    Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Expected (name: string, sampleRate?: number)")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // sonare_mastering_insert_param_info(name) returns a thread-local JSON array
   // string (NOT to be freed); "[]" for an unknown name. The TS facade parses it
-  // into the typed MasteringInsertParamInfo[].
+  // into the typed MasteringInsertParamInfo[]. A sample rate selects the _at_rate form.
   const std::string name = info[0].As<Napi::String>().Utf8Value();
-  const char* json = sonare_mastering_insert_param_info(name.c_str());
-  return Napi::String::New(env, json != nullptr ? json : "[]");
+  if (info[1].IsUndefined() || info[1].IsNull()) {
+    const char* json = sonare_mastering_insert_param_info(name.c_str());
+    return Napi::String::New(env, json != nullptr ? json : "[]");
+  }
+  int sample_rate = 0;
+  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
+  const char* json = sonare_mastering_insert_param_info_at_rate(name.c_str(), sample_rate);
+  if (json == nullptr) {
+    ThrowLastSonareError(env, "", SONARE_ERROR_INVALID_PARAMETER);
+    return env.Undefined();
+  }
+  return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
 

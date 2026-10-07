@@ -58,6 +58,18 @@ std::string js_mastering_insert_param_info(std::string name) {
   return mastering::api::insert_param_info_json(name);
 }
 
+// js_mastering_insert_param_info with the Nyquist-following ceilings resolved for
+// `sample_rate` (see sonare_mastering_insert_param_info_at_rate). Throws for a
+// rate outside the supported range.
+std::string js_mastering_insert_param_info_at_rate(std::string name, double sample_rate) {
+  if (!(sample_rate >= sonare::kMinAudioSampleRate && sample_rate <= sonare::kMaxAudioSampleRate)) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "sample_rate " + std::to_string(sample_rate) + " is out of range");
+  }
+  return mastering::api::insert_param_info_json_at_rate(name, sample_rate);
+}
+
 // Latency and tail an insert reports once built from `json_params` and
 // prepared at `sample_rate`, as {latencySamples, tailSamples}
 // (mastering::api::insert_timing). Throws for an unknown `name`, a key the
@@ -695,6 +707,7 @@ void registerMasteringApiBindings() {
   function("masteringInsertNames", &js_mastering_insert_names);
   function("masteringInsertParamNames", &js_mastering_insert_param_names);
   function("masteringInsertParamInfo", &js_mastering_insert_param_info);
+  function("masteringInsertParamInfoAtRate", &js_mastering_insert_param_info_at_rate);
   function("masteringInsertTiming", &js_mastering_insert_timing);
   function("masteringProcessorCatalog", &js_mastering_processor_catalog);
   function("capabilityCatalog", &js_capability_catalog);

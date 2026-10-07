@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 from ._cancellation import CancellationState, make_cancel_trampoline
-from ._errors import _not_supported, _unknown_error
+from ._errors import ErrorCode, _not_supported, _unknown_error
 from ._ffi import (
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
@@ -24,6 +24,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _last_error,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -247,7 +248,9 @@ def mastering_insert_param_names(name: str) -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
-def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]:
+def mastering_insert_param_info(
+    name: str, sample_rate: int | None = None
+) -> list[MasteringInsertParamInfo]:
     """Return parameter metadata for a given insert/FX processor.
 
     Each entry describes one parameter the insert reads, with keys ``name``
@@ -257,13 +260,28 @@ def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]:
     unknown ``name`` (or one whose insert needs an unavailable build feature,
     e.g. FX).
 
+    With ``sample_rate``, a key whose ``maxRelativeTo`` is ``"nyquist"`` reports
+    as ``max`` / ``maxExclusive`` the bound accepted when the insert is built and
+    prepared at that rate, including any cap fixed at build time (an EQ band
+    frequency stays at 24000 for a 96000 Hz host). Without it the rate-less
+    answer is returned. A rate outside the supported range raises.
+
     The native layer returns a thread-local JSON array string the caller must
     NOT free (same convention as the other mastering getters).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_param_info"):
         raise _not_supported("libsonare was built without mastering support")
-    raw = lib.sonare_mastering_insert_param_info(_utf8_arg(name, "name"))
+    if sample_rate is None:
+        raw = lib.sonare_mastering_insert_param_info(_utf8_arg(name, "name"))
+    else:
+        if not hasattr(lib, "sonare_mastering_insert_param_info_at_rate"):
+            raise _not_supported("libsonare was built without mastering support")
+        raw = lib.sonare_mastering_insert_param_info_at_rate(
+            _utf8_arg(name, "name"), _to_c_int(sample_rate, "sample_rate")
+        )
+        if raw is None:
+            raise _last_error(int(ErrorCode.INVALID_PARAMETER), "sample_rate is out of range")
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
