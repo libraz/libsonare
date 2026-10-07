@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
 #include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/compressor.h"
@@ -279,15 +280,12 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
     // Bound the caller-supplied static gain by the ceiling headroom plus the
     // configured limiter depth when an offline-measured source peak is provided,
     // mirroring the offline chain's loudness stage
-    // (loudness_gain_db_with_ceiling). Without this, a caller feeding the raw
+    // (bound_loudness_gain_db). Without this, a caller feeding the raw
     // target_lufs - measured_lufs could drive the streaming loudness limiter
     // harder than the offline render for low-headroom material.
-    float gain_db = options.loudness_static_gain_db;
-    if (std::isfinite(options.loudness_static_gain_peak_db)) {
-      const float headroom_db = config_.loudness.ceiling_db - options.loudness_static_gain_peak_db;
-      gain_db = std::min(
-          gain_db, headroom_db + std::max(config_.loudness.max_limiter_gain_reduction_db, 0.0f));
-    }
+    const float gain_db = detail::bound_loudness_gain_db(
+        options.loudness_static_gain_db, config_.loudness.ceiling_db,
+        options.loudness_static_gain_peak_db, config_.loudness.max_limiter_gain_reduction_db);
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
     if (!numeric::finite(loudness_static_gain_linear_)) {
       throw SonareException(ErrorCode::InvalidParameter,

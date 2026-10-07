@@ -836,13 +836,12 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
         b(map, "applyGainAtInputRate", defaults.apply_gain_at_input_rate));
     // Bound the static normalization gain to the ceiling headroom plus the depth
     // the limiter may be driven to (mirrors the mono loudness_optimize() helper).
-    const float gain_db = detail::loudness_gain_db_with_ceiling(
+    const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
         result.left, result.right, sample_rate, target_lufs, config.ceiling_db,
         config.oversample_factor, max_limiter_gain_reduction_db);
-    // result.input_lufs is this stage's input: nothing has processed the
-    // channels yet on this branch.
+    const float gain_db = stage_gain.applied_db;
     loudness_target_lufs = target_lufs;
-    loudness_requested_gain_db = target_lufs - result.input_lufs;
+    loudness_requested_gain_db = stage_gain.requested_db;
     loudness_applied_gain_db = gain_db;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(result.left, result.right, gain_db);

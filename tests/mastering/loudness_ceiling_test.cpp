@@ -9,6 +9,7 @@
 
 #include "core/audio.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/common/loudness_measure.h"
 #include "util/constants.h"
@@ -216,4 +217,44 @@ TEST_CASE("chain output true peak follows the configured oversample factor",
         Catch::Approx(sonare::mastering::common::measure_true_peak_dbtp(audio, 1)).margin(1e-5));
   CHECK(result.output_true_peak_dbtp !=
         Catch::Approx(sonare::mastering::common::measure_true_peak_dbtp(audio, 8)).margin(0.1));
+}
+
+TEST_CASE("loudness stages land on the target when the gain moves blocks across the gate",
+          "[mastering][loudness][ceiling]") {
+  // 6 s of 1 kHz whose first half peaks at -72 dBFS (below the absolute gate
+  // before the gain) and second half at -64 dBFS. Lifting it to -40 LUFS pulls
+  // the quiet half into the gated set, so `target - measured` alone undershoots.
+  constexpr int kRate = 48000;
+  constexpr float kTargetLufs = -40.0f;
+  std::vector<float> samples(static_cast<size_t>(6 * kRate));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float peak_db = i < samples.size() / 2 ? -72.0f : -64.0f;
+    samples[i] = std::pow(10.0f, peak_db / 20.0f) *
+                 std::sin(2.0f * kPi * 1000.0f * static_cast<float>(i) / kRate);
+  }
+
+  api::MasteringChainConfig config;
+  config.loudness.enabled = true;
+  config.loudness.target_lufs = kTargetLufs;
+  api::MasteringChain chain(config);
+
+  const auto mono = chain.process_mono(samples.data(), samples.size(), kRate);
+  CAPTURE(mono.input_lufs, mono.output_lufs, mono.applied_gain_db);
+  CHECK(mono.applied_gain_db > kTargetLufs - mono.input_lufs + 1.0f);
+  CHECK(std::abs(mono.output_lufs - kTargetLufs) <= 0.05f);
+  CHECK_FALSE(mono.loudness_target_limited);
+
+  const auto stereo = chain.process_stereo(samples.data(), samples.data(), samples.size(), kRate);
+  CAPTURE(stereo.input_lufs, stereo.output_lufs, stereo.applied_gain_db);
+  CHECK(stereo.applied_gain_db > kTargetLufs - stereo.input_lufs + 1.0f);
+  CHECK(std::abs(stereo.output_lufs - kTargetLufs) <= 0.05f);
+  CHECK_FALSE(stereo.loudness_target_limited);
+
+  const auto named = api::apply_named_processor_stereo("maximizer.loudnessOptimize", samples.data(),
+                                                       samples.data(), samples.size(), kRate,
+                                                       {{"targetLufs", kTargetLufs}});
+  CAPTURE(named.input_lufs, named.output_lufs, named.applied_gain_db);
+  CHECK(named.applied_gain_db > kTargetLufs - named.input_lufs + 1.0f);
+  CHECK(std::abs(named.output_lufs - kTargetLufs) <= 0.05f);
+  CHECK_FALSE(named.loudness_target_limited);
 }

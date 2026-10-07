@@ -4,11 +4,13 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
 #include "core/audio.h"
 #include "mastering/common/loudness_measure.h"
+#include "metering/lufs.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -68,7 +70,7 @@ inline void apply_gain_db(std::vector<float>& left, std::vector<float>& right, f
   }
 }
 
-// A static gain within this tolerance of the requested `target - current` gain
+// A static gain within this tolerance of the requested gain
 // counts as fully applied. Shared by every loudness path so they all report
 // `loudness_target_limited` off the same comparison.
 inline constexpr float kLoudnessGainToleranceDb = 1.0e-4f;
@@ -79,48 +81,68 @@ inline constexpr float kLoudnessGainToleranceDb = 1.0e-4f;
 // where no gain reduction was needed.
 inline constexpr float kLoudnessTargetToleranceLu = 0.5f;
 
-// Compute the LUFS-normalization gain (target - current). The static gain may
-// exceed the peak headroom toward the ceiling by at most
-// @p max_limiter_gain_reduction_db, which is how deep the post-gain true-peak
-// limiter is allowed to be driven. Clamping strictly at the headroom instead
-// makes the target unreachable on peak-normalized material, whose headroom is
-// ~0 dB however far away the target is, and leaves the limiter that exists to
-// close that distance with nothing to do. Returns 0 when the loudness
-// measurement is non-finite (e.g. silence below the absolute gate).
-inline float loudness_gain_db_with_ceiling(float current_lufs, float target_lufs, float ceiling_db,
-                                           float peak_db, float max_limiter_gain_reduction_db) {
-  if (!std::isfinite(current_lufs)) {
-    return 0.0f;
+// The static gain a loudness stage requests and the gain it applies.
+struct LoudnessStageGain {
+  // Gain landing the remeasured stage input on the target, re-gated at that gain
+  // (metering::gain_to_integrated_lufs); NaN when the input is below the absolute gate.
+  float requested_db = std::numeric_limits<float>::quiet_NaN();
+  // requested_db bounded by the ceiling; 0 when nothing was requested.
+  float applied_db = 0.0f;
+};
+
+// Bounds a static normalization gain. The gain may exceed the peak headroom
+// toward the ceiling by at most @p max_limiter_gain_reduction_db, which is how
+// deep the post-gain true-peak limiter is allowed to be driven. Clamping
+// strictly at the headroom instead makes the target unreachable on
+// peak-normalized material, whose headroom is ~0 dB however far away the target
+// is, and leaves the limiter that exists to close that distance with nothing to
+// do. A non-finite @p peak_db leaves the gain unbounded.
+inline float bound_loudness_gain_db(float requested_gain_db, float ceiling_db, float peak_db,
+                                    float max_limiter_gain_reduction_db) noexcept {
+  if (!std::isfinite(peak_db)) {
+    return requested_gain_db;
   }
-  float gain_db = target_lufs - current_lufs;
-  if (std::isfinite(peak_db)) {
-    const float headroom_db = ceiling_db - peak_db;
-    gain_db = std::min(gain_db, headroom_db + std::max(max_limiter_gain_reduction_db, 0.0f));
+  const float headroom_db = ceiling_db - peak_db;
+  return std::min(requested_gain_db, headroom_db + std::max(max_limiter_gain_reduction_db, 0.0f));
+}
+
+// Solves and bounds the gain for an interleaved stage input whose true peak is
+// @p peak_db.
+inline LoudnessStageGain loudness_stage_gain(const float* interleaved, std::size_t frames,
+                                             int channels, int sample_rate, float target_lufs,
+                                             float ceiling_db, float peak_db,
+                                             float max_limiter_gain_reduction_db) {
+  const metering::LufsGainToTarget solved =
+      metering::gain_to_integrated_lufs(interleaved, frames, channels, sample_rate, target_lufs);
+  LoudnessStageGain gain;
+  if (!std::isfinite(solved.measured_lufs)) {
+    return gain;
   }
-  if (!numeric::finite(db_to_linear(gain_db))) {
+  gain.requested_db = solved.gain_db;
+  gain.applied_db =
+      bound_loudness_gain_db(solved.gain_db, ceiling_db, peak_db, max_limiter_gain_reduction_db);
+  if (!numeric::finite(db_to_linear(gain.applied_db))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "loudness target must produce a finite linear gain");
   }
-  return gain_db;
+  return gain;
 }
 
-// Mono convenience wrapper: measures current LUFS and true peak from @p samples.
-inline float loudness_gain_db_with_ceiling(const std::vector<float>& samples, int sample_rate,
-                                           float target_lufs, float ceiling_db,
-                                           int true_peak_oversample,
-                                           float max_limiter_gain_reduction_db) {
-  const float current_lufs =
-      sonare::mastering::common::measure_lufs(samples.data(), samples.size(), sample_rate);
+// Mono stage input: measures its true peak, then solves and bounds the gain.
+inline LoudnessStageGain loudness_gain_db_with_ceiling(const std::vector<float>& samples,
+                                                       int sample_rate, float target_lufs,
+                                                       float ceiling_db, int true_peak_oversample,
+                                                       float max_limiter_gain_reduction_db) {
   Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
   const float peak_db =
       sonare::mastering::common::measure_true_peak_dbtp(audio, true_peak_oversample);
-  return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db,
-                                       max_limiter_gain_reduction_db);
+  return loudness_stage_gain(samples.data(), samples.size(), 1, sample_rate, target_lufs,
+                             ceiling_db, peak_db, max_limiter_gain_reduction_db);
 }
 
 // True when a loudness stage did not deliver its target, so the reported output
 // LUFS is the achieved value rather than the requested one. Two ways to miss:
-// the static gain was clamped short of `target - current`, or the post-gain
+// the static gain was clamped short of the requested gain, or the post-gain
 // true-peak limiter pulled the achieved loudness back below the target.
 // @p achieved_lufs is the integrated loudness measured after that limiter.
 inline bool loudness_target_was_limited(float requested_gain_db, float applied_gain_db,
@@ -148,16 +170,17 @@ inline float stereo_true_peak_dbtp(const std::vector<float>& left, const std::ve
       left.data(), right.data(), left.size(), true_peak_oversample);
 }
 
-// Stereo convenience wrapper: measures LUFS with BS.1770 channel summing and the true peak.
-inline float loudness_gain_db_with_ceiling(const std::vector<float>& left,
-                                           const std::vector<float>& right, int sample_rate,
-                                           float target_lufs, float ceiling_db,
-                                           int true_peak_oversample,
-                                           float max_limiter_gain_reduction_db) {
-  const float current_lufs = stereo_integrated_lufs(left, right, sample_rate);
+// Stereo stage input: measures its true peak, then solves and bounds the gain
+// with BS.1770 channel summing.
+inline LoudnessStageGain loudness_gain_db_with_ceiling(const std::vector<float>& left,
+                                                       const std::vector<float>& right,
+                                                       int sample_rate, float target_lufs,
+                                                       float ceiling_db, int true_peak_oversample,
+                                                       float max_limiter_gain_reduction_db) {
   const float peak_db = stereo_true_peak_dbtp(left, right, sample_rate, true_peak_oversample);
-  return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db,
-                                       max_limiter_gain_reduction_db);
+  const std::vector<float> interleaved = interleave_stereo(left, right);
+  return loudness_stage_gain(interleaved.data(), left.size(), 2, sample_rate, target_lufs,
+                             ceiling_db, peak_db, max_limiter_gain_reduction_db);
 }
 
 // Applies an in-place per-buffer repair: builds an Audio view of @p data, runs

@@ -549,19 +549,14 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   if (config_.loudness.enabled) {
     // Bound the static normalization gain to the ceiling headroom plus the depth
     // the limiter below may be driven to (mirrors the mono loudness_optimize()
-    // helper). Measure the post-processor stage input once. `report.before`
+    // helper). Measured on the post-processor stage input: `report.before`
     // describes the original chain input and must not drive this stage's
     // normalization.
-    const Audio stage_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    const common::LufsAndTruePeak stage_measurement =
-        common::measure_lufs_and_true_peak(stage_audio, config_.loudness.true_peak_oversample);
-    const float gain_db = detail::loudness_gain_db_with_ceiling(
-        stage_measurement.integrated_lufs, config_.loudness.target_lufs,
-        config_.loudness.ceiling_db, stage_measurement.true_peak_dbtp,
-        config_.loudness.max_limiter_gain_reduction_db);
-    const float requested_gain_db =
-        config_.loudness.target_lufs - stage_measurement.integrated_lufs;
-    loudness_requested_gain_db = requested_gain_db;
+    const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
+        data, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
+        config_.loudness.true_peak_oversample, config_.loudness.max_limiter_gain_reduction_db);
+    const float gain_db = stage_gain.applied_db;
+    loudness_requested_gain_db = stage_gain.requested_db;
     loudness_applied_gain_db = gain_db;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(data, gain_db);
@@ -818,15 +813,11 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   float loudness_applied_gain_db = 0.0f;
   if (config_.loudness.enabled) {
     // One BS.1770 measurement drives both the requested gain and the bounded gain.
-    // In particular, avoid a second interleaved stereo allocation for the target-limited flag.
-    const float current_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
-    const float peak_db = detail::stereo_true_peak_dbtp(left, right, sample_rate,
-                                                        config_.loudness.true_peak_oversample);
-    const float gain_db = detail::loudness_gain_db_with_ceiling(
-        current_lufs, config_.loudness.target_lufs, config_.loudness.ceiling_db, peak_db,
-        config_.loudness.max_limiter_gain_reduction_db);
-    const float requested_gain_db = config_.loudness.target_lufs - current_lufs;
-    loudness_requested_gain_db = requested_gain_db;
+    const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
+        left, right, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
+        config_.loudness.true_peak_oversample, config_.loudness.max_limiter_gain_reduction_db);
+    const float gain_db = stage_gain.applied_db;
+    loudness_requested_gain_db = stage_gain.requested_db;
     loudness_applied_gain_db = gain_db;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(left, right, gain_db);

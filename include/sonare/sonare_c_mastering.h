@@ -678,7 +678,9 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
 typedef struct {
   float reference_lufs;          // the reference take's BS.1770 integrated loudness
   float source_lufs;             // the matched take's, before the gain
-  float applied_gain_db;         // reference_lufs - source_lufs
+  float applied_gain_db;         // gain landing the remeasured source on reference_lufs; equal to
+                                 // reference_lufs - source_lufs unless the gain moves blocks
+                                 // across the absolute gate
   float matched_true_peak_dbtp;  // the matched take's true peak after the gain
 } SonareLoudnessMatch;
 

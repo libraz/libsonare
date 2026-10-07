@@ -355,7 +355,7 @@ struct StreamingMasteringChainOptions {
   /// `(loudness.ceiling_db - loudness_static_gain_peak_db) +
   /// max(loudness.max_limiter_gain_reduction_db, 0)` so the streaming preview
   /// does not drive the loudness limiter harder than the offline chain (which
-  /// applies the same clamp via `loudness_gain_db_with_ceiling`).
+  /// applies the same clamp via `bound_loudness_gain_db`).
   /// NaN (the default) applies the static gain verbatim.
   float loudness_static_gain_peak_db = std::numeric_limits<float>::quiet_NaN();
 };
