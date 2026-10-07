@@ -27,7 +27,9 @@
 ///     track, and with it per-note alignment, is NOT preserved.
 ///   - SysEx payloads live in @ref SmfImportResult::sysex_store and appear in
 ///     clips as handle UMP events. F7 escapes normalise to F0 on export, since
-///     the handle stores payload bytes rather than the original status byte.
+///     the handle stores payload bytes rather than the original status byte. A
+///     split message survives intervening meta events; an empty F7 escape is a
+///     no-op (midi/sysex_framing.h holds both rules).
 ///   - Unrecognized meta events and MIDI 2.0-only messages are skipped lossily
 ///     and counted in the result's `skipped_events`; a skipped event's delta time
 ///     is still consumed, so what follows stays in time.

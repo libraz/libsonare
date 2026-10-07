@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <limits>
 
+#include "midi/sysex_framing.h"
+
 namespace sonare::midi {
 namespace {
 
@@ -248,10 +250,11 @@ Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept {
 
 SysEx7Packetizer::SysEx7Packetizer(const uint8_t* data, size_t size, uint8_t group) noexcept
     : data_(data), end_(size), group_(static_cast<uint8_t>(group & 0x0Fu)) {
-  if (data_ == nullptr) return;
-  // Strip MIDI 1.0 framing: UMP SysEx7 carries the inner data only.
-  if (begin_ < end_ && data_[begin_] == 0xF0u) ++begin_;
-  if (end_ > begin_ && data_[end_ - 1] == 0xF7u) --end_;
+  if (data_ == nullptr || size == 0) return;
+  // UMP SysEx7 carries the body only, without MIDI 1.0 framing.
+  const SysExBody body = sysex_body(data_, size);
+  begin_ = static_cast<size_t>(body.data - data_);
+  end_ = begin_ + body.size;
   const size_t total = end_ - begin_;
   if (total == 0) return;
 

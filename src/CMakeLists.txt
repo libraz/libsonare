@@ -902,6 +902,7 @@ if(BUILD_ARRANGEMENT)
     midi/sequencer.cpp
     midi/smf.cpp
     midi/smf2.cpp
+    midi/sysex_framing.cpp
     midi/midi_fx.cpp
     midi/program_map.cpp
     midi/sound_destination.cpp

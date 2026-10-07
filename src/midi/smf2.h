@@ -76,7 +76,8 @@ struct Smf2ImportResult {
   /// start_ppq; defaults to a single 4/4 segment when none present).
   std::vector<transport::TimeSignatureSegment> time_signatures;
   /// SysEx payloads imported from SysEx7 / SysEx8 UMP data messages. Clip events
-  /// reference entries here via Ump::sysex_handle.
+  /// reference entries here via Ump::sysex_handle. A payload whose data begins with
+  /// F0 or ends with F7 is stored with explicit framing (see midi/sysex_framing.h).
   SysExStore sysex_store;
 
   /// Count of UMP messages skipped lossily (unsupported message types, unknown
@@ -127,8 +128,8 @@ struct Smf2ExportOptions {
   /// quantize PPQ event positions to integer ticks). Defaults to 480.
   uint16_t ticks_per_quarter = 480;
   /// Optional payload store used to serialize UMP SysEx handles back to UMP
-  /// SysEx7 data messages. When null, SysEx-handle events are skipped (and
-  /// counted in SmfExportResult::skipped_events).
+  /// SysEx7 data messages, or SysEx8 when the body holds a byte above 7F. When
+  /// null, SysEx-handle events are skipped (and counted in skipped_events).
   const SysExStore* sysex_store = nullptr;
   /// Optional clip / track name written as a Flex Data metadata message.
   std::string name;

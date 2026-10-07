@@ -7,6 +7,7 @@
 #include <limits>
 #include <utility>
 
+#include "midi/sysex_framing.h"
 #include "midi/time_signature_encoding.h"
 #include "util/constants.h"
 
@@ -443,9 +444,12 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     return true;
   };
 
-  auto store_sysex = [&](const std::vector<uint8_t>& payload, double ppq, uint8_t group) {
+  // UMP SysEx packets carry the body only; the stored form frames a body whose end bytes
+  // would otherwise read as F0 / F7 framing.
+  auto store_sysex = [&](const std::vector<uint8_t>& body, double ppq, uint8_t group) {
     if (!consume_event()) return false;
-    const SysExHandle handle = result.sysex_store.add(payload);
+    const SysExHandle handle = result.sysex_store.add(
+        sysex_payload_from_body(body.data(), body.size(), /*terminated=*/false));
     if (handle == 0) {
       ++result.skipped_events;
       return true;
@@ -962,15 +966,8 @@ struct SeqItem {
   int word_count = 0;
 };
 
-bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<uint8_t>& payload,
-                 uint8_t group) {
-  // Strip a leading 0xF0 / trailing 0xF7 if present; UMP SysEx7 carries the
-  // payload without the MIDI 1.0 framing bytes.
-  size_t begin = 0;
-  size_t end = payload.size();
-  if (begin < end && payload[begin] == 0xF0u) ++begin;
-  if (end > begin && payload[end - 1] == 0xF7u) --end;
-  const size_t total = end - begin;
+bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const SysExBody& body, uint8_t group) {
+  const size_t total = body.size;
   if (total == 0) return false;
   size_t offset = 0;
   bool first = true;
@@ -987,7 +984,7 @@ bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
       status = kSysex7Continue;
     }
     std::array<uint8_t, 6> bytes{};
-    for (size_t i = 0; i < chunk; ++i) bytes[i] = payload[begin + offset + i];
+    for (size_t i = 0; i < chunk; ++i) bytes[i] = body.data[offset + i];
     SeqItem item;
     item.tick = tick;
     item.order = 2;
@@ -1005,26 +1002,8 @@ bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
   return true;
 }
 
-bool needs_sysex8(const std::vector<uint8_t>& payload) {
-  size_t begin = 0;
-  size_t end = payload.size();
-  if (begin < end && payload[begin] == 0xF0u) ++begin;
-  if (end > begin && payload[end - 1] == 0xF7u) --end;
-  for (size_t i = begin; i < end; ++i) {
-    if (payload[i] > 0x7Fu) return true;
-  }
-  return false;
-}
-
-bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const std::vector<uint8_t>& payload,
-                 uint8_t group) {
-  // Match the SysEx7 exporter: tolerate MIDI 1.0 framing in the side store, but
-  // UMP SysEx8 packets carry only the payload bytes after the Stream ID.
-  size_t begin = 0;
-  size_t end = payload.size();
-  if (begin < end && payload[begin] == 0xF0u) ++begin;
-  if (end > begin && payload[end - 1] == 0xF7u) --end;
-  const size_t total = end - begin;
+bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const SysExBody& body, uint8_t group) {
+  const size_t total = body.size;
   if (total == 0) return false;
   size_t offset = 0;
   bool first = true;
@@ -1041,7 +1020,7 @@ bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
       status = kSysex7Continue;
     }
     std::array<uint8_t, 13> bytes{};
-    for (size_t i = 0; i < chunk; ++i) bytes[i] = payload[begin + offset + i];
+    for (size_t i = 0; i < chunk; ++i) bytes[i] = body.data[offset + i];
     SeqItem item;
     item.tick = tick;
     item.order = 2;
@@ -1148,9 +1127,10 @@ Smf2ExportResult export_clip_file(
         ++result.skipped_events;
         continue;
       }
-      const bool emitted = needs_sysex8(*payload)
-                               ? emit_sysex8(&items, tick, *payload, ev.ump.group)
-                               : emit_sysex7(&items, tick, *payload, ev.ump.group);
+      // Every body byte is emitted; one above 7F selects SysEx8.
+      const SysExBody body = sysex_body(*payload);
+      const bool emitted = body.is_7bit() ? emit_sysex7(&items, tick, body, ev.ump.group)
+                                          : emit_sysex8(&items, tick, body, ev.ump.group);
       if (!emitted) {
         ++result.skipped_events;
       }

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 
+#include "midi/sysex_framing.h"
 #include "midi/tick_conversion.h"
 #include "midi/time_signature_encoding.h"
 #include "midi/ump.h"
@@ -21,7 +22,6 @@ constexpr uint8_t kMTrk[4] = {'M', 'T', 'r', 'k'};
 // SMF event marker bytes.
 constexpr uint8_t kMetaPrefix = 0xFFu;
 constexpr uint8_t kSysExStart = 0xF0u;
-constexpr uint8_t kSysExEscape = 0xF7u;
 
 // Recognized meta event type bytes (the byte following 0xFF).
 constexpr uint8_t kMetaText = 0x01u;
@@ -282,9 +282,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   uint64_t tick = 0;
   uint8_t running_status = 0;
   bool saw_end_of_track = false;
-  std::vector<uint8_t> pending_sysex;
-  double pending_sysex_ppq = 0.0;
-  bool pending_sysex_active = false;
+  SmfSysExAssembler sysex;
 
   // Bytes remaining before the declared track boundary. Every per-event read is
   // bounded by this so a corrupt in-track event length can never consume the
@@ -294,15 +292,9 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   const auto track_remaining = [&]() -> size_t {
     return reader->pos() < end_pos ? end_pos - reader->pos() : 0;
   };
-  // Discards an unterminated split SysEx when a non-continuation event arrives,
-  // so a later F7 packet cannot concatenate onto stale bytes.
-  const auto discard_pending_sysex = [&]() {
-    if (pending_sysex_active) {
-      pending_sysex.clear();
-      pending_sysex_active = false;
-      ++(*skipped);
-    }
-  };
+  // A transmitted message abandons an unterminated split SysEx, so a later F7
+  // packet cannot concatenate onto stale bytes.
+  const auto discard_pending_sysex = [&]() { *skipped += sysex.interrupt(); };
   const auto consume_event = [&]() {
     if (!resource::bounded_accumulate(1u, limits.max_events, event_count)) {
       *resource_exceeded = true;
@@ -340,8 +332,8 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     if (reader->overflow()) return false;
 
     if (status == kMetaPrefix) {
+      // A meta event is not transmitted, so it does not interrupt a split SysEx.
       running_status = 0;
-      discard_pending_sysex();
       if (track_remaining() < 1) {
         mark_truncated();  // No room for the meta type byte.
         break;
@@ -458,6 +450,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
           break;
         }
         case kMetaEndOfTrack:
+          *skipped += sysex.interrupt();  // A split SysEx cannot continue past the track end.
           track->length_ppq = ppq;
           saw_end_of_track = true;
           break;
@@ -469,7 +462,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       continue;
     }
 
-    if (status == kSysExStart || status == kSysExEscape) {
+    if (SmfSysExAssembler::is_sysex_status(status)) {
       running_status = 0;
       bool len_too_long = false;
       const uint32_t sysex_len = reader->vlq(&len_too_long);
@@ -486,44 +479,21 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         return false;
       }
 
-      bool complete = false;
-      if (status == kSysExStart) {
-        // A new SysEx dump. Discard any still-pending split dump rather than
-        // letting this one concatenate onto its unterminated bytes.
-        if (pending_sysex_active) ++(*skipped);
-        pending_sysex.assign(payload, payload + sysex_len);
-        pending_sysex_ppq = ppq;
-        complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
-      } else if (pending_sysex_active) {
-        // Continuation packet of an active split dump.
-        pending_sysex.insert(pending_sysex.end(), payload, payload + sysex_len);
-        complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
-      } else {
-        // Independent F7 escape event: its payload bytes are the complete byte
-        // sequence to send. It need not be terminated by an F7 data byte. An escape
-        // carrying a whole F0 message is stored as the F0 event's payload would be.
-        const size_t skip = sysex_len > 0 && payload[0] == kSysExStart ? 1u : 0u;
-        pending_sysex.assign(payload + skip, payload + sysex_len);
-        pending_sysex_ppq = ppq;
-        complete = sysex_len > 0;
-      }
-
-      if (!complete) {
-        pending_sysex_active = true;
-        continue;
-      }
-      pending_sysex_active = false;
+      const SmfSysExAssembler::Outcome outcome = sysex.feed(status, payload, sysex_len, ppq);
+      *skipped += outcome.abandoned;
+      if (!outcome.completed) continue;
 
       if (!consume_event()) return false;
+      double sysex_ppq = 0.0;
+      const std::vector<uint8_t> message = sysex.take(&sysex_ppq);
       const SysExHandle handle =
-          sysex_store != nullptr ? sysex_store->add(pending_sysex) : SysExHandle{0};
-      pending_sysex.clear();
+          sysex_store != nullptr ? sysex_store->add(message) : SysExHandle{0};
       if (handle == 0) {
         ++(*skipped);
         continue;
       }
       MidiClipEvent ev;
-      ev.ppq = pending_sysex_ppq;
+      ev.ppq = sysex_ppq;
       ev.ump = make_sysex_handle(/*group=*/0, handle);
       track->clip.add_event(ev);
       track->has_midi_events = true;
@@ -623,7 +593,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   }
 
   if (reader->overflow()) return false;
-  if (!pending_sysex.empty()) {
+  if (sysex.pending()) {
     ++(*skipped);
     *track_truncated = true;
   }
@@ -885,20 +855,6 @@ void put_meta(std::vector<uint8_t>* body, uint32_t delta, uint8_t type, const ui
   }
 }
 
-/// True when @p payload, less optional outer F0/F7 framing, is a non-empty 7-bit
-/// SysEx body. An embedded F7 is data and makes it unrepresentable.
-bool is_sysex7_representable(const std::vector<uint8_t>& payload) {
-  size_t begin = 0;
-  size_t end = payload.size();
-  if (begin < end && payload[begin] == kSysExStart) ++begin;
-  if (end > begin && payload[end - 1] == kSysExEscape) --end;
-  if (begin == end) return false;
-  for (size_t i = begin; i < end; ++i) {
-    if (payload[i] > 0x7Fu) return false;
-  }
-  return true;
-}
-
 // SysEx is stored as a reassembled payload with no record of its on-disk framing
 // (a single F0 event, an F0 dump split across continuation packets, or an
 // independent F7 escape all import to the same payload). Export therefore emits
@@ -906,18 +862,14 @@ bool is_sysex7_representable(const std::vector<uint8_t>& payload) {
 // normalized to F0. This is intentional — the engine's SysEx dispatch treats the
 // payload as an opaque blob and does not distinguish the origin framing, so the
 // round-trip contract preserves the payload, not the byte-level event type.
-void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const std::vector<uint8_t>& payload) {
+// Only a 7-bit body (see sysex_framing.h) is representable; the caller skips others.
+void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const SysExBody& sysex) {
+  const std::vector<uint8_t> payload =
+      sysex_payload_from_body(sysex.data, sysex.size, /*terminated=*/true);
   put_vlq(body, delta);
   put_u8(body, kSysExStart);
-  // The F0 written above is the framing, so a payload carrying its own is not doubled.
-  const size_t skip = !payload.empty() && payload.front() == kSysExStart ? 1u : 0u;
-  const bool has_terminal_f7 = payload.size() > skip && payload.back() == 0xF7u;
-  const size_t encoded_size = payload.size() - skip + (has_terminal_f7 ? 0u : 1u);
-  put_vlq(body, static_cast<uint32_t>(encoded_size));
-  body->insert(body->end(), payload.begin() + static_cast<std::ptrdiff_t>(skip), payload.end());
-  if (!has_terminal_f7) {
-    put_u8(body, 0xF7u);
-  }
+  put_vlq(body, static_cast<uint32_t>(payload.size()));
+  body->insert(body->end(), payload.begin(), payload.end());
 }
 
 }  // namespace
@@ -1097,7 +1049,8 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
           ++result.skipped_events;
           continue;
         }
-        if (!is_sysex7_representable(*payload)) {
+        const SysExBody sysex = sysex_body(*payload);
+        if (!sysex.is_7bit()) {
           ++result.skipped_events;
           continue;
         }
@@ -1106,7 +1059,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         if (clamped) ++result.clamped_delta_events;
         const uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
         prev_tick += static_cast<int64_t>(delta);
-        put_sysex(&body, delta, *payload);
+        put_sysex(&body, delta, sysex);
         continue;
       }
 

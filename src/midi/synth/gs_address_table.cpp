@@ -1,5 +1,7 @@
 #include "midi/synth/gs_address_table.h"
 
+#include "midi/sysex_framing.h"
+
 namespace sonare::midi::synth {
 
 namespace {
@@ -30,12 +32,9 @@ const char* gs_param_name(GsParam param) noexcept {
 GsFrame gs_sysex_frame(const uint8_t* data, size_t size) noexcept {
   GsFrame frame;
   if (data == nullptr || size == 0) return frame;
-  // Strip optional F0 ... F7 framing.
-  if (data[0] == 0xF0) {
-    ++data;
-    --size;
-  }
-  if (size > 0 && data[size - 1] == 0xF7) --size;
+  const SysExBody body = sysex_body(data, size);
+  data = body.data;
+  size = body.size;
   // 41 dd mm cc aa bb cc <data...> sum: the shortest useful frame carries one
   // data byte.
   if (size < 9 || data[0] != kRolandManufacturerId) return frame;
