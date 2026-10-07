@@ -254,7 +254,8 @@ FOLD_ATTRIBUTES = ("floor", "ceil", "trunc", "rint", "astype", "round_", "fix")
 # Calls that cannot change the answer to this check's question: none of them can
 # make a non-integral value integral, or bring an out-of-range one into range, so
 # a guard reached through one still sees what it was put there to refuse.
-PASSTHROUGH_CALLS = ("min", "max", "abs")
+# `typing.cast` returns its value untouched; it only informs the type checker.
+PASSTHROUGH_CALLS = ("min", "max", "abs", "cast")
 
 # Calls that build a container out of a value. Tracked because a value put into
 # one and taken out again by a loop is guarded at the loop, and the loop applies

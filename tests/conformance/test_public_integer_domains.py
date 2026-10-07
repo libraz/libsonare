@@ -421,6 +421,14 @@ class FlowFidelityTest(_SyntheticTree):
         )
         self.assertEqual(self.verdict(root), "guarded")
 
+    def test_a_value_is_followed_through_typing_cast(self) -> None:
+        root = self.tree(
+            "def f(n: int) -> None: ...\n",
+            "import typing\n\nfrom ._runtime import _to_c_int\n\n\n"
+            "def f(n):\n    value = typing.cast('int', n)\n    return _to_c_int(value, 'n')\n",
+        )
+        self.assertEqual(self.verdict(root), "guarded")
+
     def test_a_value_is_followed_through_super(self) -> None:
         root = self.tree(
             "class B:\n    def __init__(self, n: int) -> None: ...\n"
