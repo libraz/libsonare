@@ -10,6 +10,138 @@
 #include "arrangement/edit_compiler.h"
 #include "binding_project_parity_test_helpers.h"
 
+namespace {
+
+// A one-track SMF carrying the two scheduled GS messages that turn on an EFX
+// unit 0. The project C event POD intentionally cannot construct SysEx, so
+// importing this tiny file is the public binding path for the test.
+std::vector<uint8_t> make_efx_tail_smf(bool include_efx, uint8_t type_msb, uint8_t type_lsb) {
+  // The SMF F0 event supplies the leading byte; each payload below includes
+  // the GS body, checksum, and trailing F7.
+  const unsigned type_sum = 0x40u + 0x03u + 0x00u + type_msb + type_lsb;
+  const uint8_t type_checksum = static_cast<uint8_t>((128u - (type_sum & 0x7Fu)) & 0x7Fu);
+  const std::vector<uint8_t> type = {0x41, 0x10,     0x42,     0x12,          0x40, 0x03,
+                                     0x00, type_msb, type_lsb, type_checksum, 0xF7};
+  const std::vector<uint8_t> assign = {0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  std::vector<uint8_t> body;
+  const auto append_sysex = [&](const std::vector<uint8_t>& payload) {
+    body.push_back(0x00);
+    body.push_back(0xF0);
+    body.push_back(static_cast<uint8_t>(payload.size()));
+    body.insert(body.end(), payload.begin(), payload.end());
+  };
+  if (include_efx) {
+    append_sysex(type);
+    append_sysex(assign);
+  }
+  body.insert(body.end(), {0x00, 0x90, 0x3C, 0x40});
+  body.insert(body.end(), {0x83, 0x60, 0x80, 0x3C, 0x00});
+  body.insert(body.end(), {0x00, 0xFF, 0x2F, 0x00});
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+std::vector<uint8_t> make_classic_efx_tail_smf(bool include_efx) {
+  return make_efx_tail_smf(include_efx, 0x01, 0x10);
+}
+
+}  // namespace
+
+TEST_CASE("auto-length project bounce includes a scheduled classic GS EFX tail",
+          "[project][sf2][gsfx][tail]") {
+  const auto bounce_length = [](bool include_efx) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+    const std::vector<uint8_t> smf = make_classic_efx_tail_smf(include_efx);
+    uint32_t first_clip = 0;
+    REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+    REQUIRE(first_clip != 0);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = 0;
+    options.block_size = 128;
+    options.num_channels = 1;
+    options.sample_rate = 48000;
+    SonareSf2InstrumentBinding binding{};
+    binding.destination_id = 0;
+    binding.config.struct_version = 4;
+    binding.config.gs_efx_realization = 1;  // classic, whose EFX unit tail is >= 10 s
+
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return out_len;
+  };
+
+  const size_t dry_length = bounce_length(false);
+  const size_t efx_length = bounce_length(true);
+  // The same note arrangement supplies the voice/system tail in both runs. The
+  // classic EFX unit's declared tail adds at least ten seconds; replaying raw
+  // SysEx in the probe makes these lengths equal on the unfixed implementation.
+  REQUIRE(efx_length >= dry_length + static_cast<size_t>(10 * 48000));
+}
+
+TEST_CASE("auto-length synth bounce includes a scheduled modern GS EFX tail",
+          "[project][synth][gsfx][tail]") {
+  const auto bounce_length = [](bool include_efx, int64_t total_frames) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+    const std::vector<uint8_t> smf = make_efx_tail_smf(include_efx, 0x01, 0x50);
+    uint32_t first_clip = 0;
+    REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+    REQUIRE(first_clip != 0);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = total_frames;
+    options.block_size = 128;
+    options.num_channels = 1;
+    options.sample_rate = 48000;
+    SonareSynthInstrumentBinding binding{};
+    binding.destination_id = 0;
+    binding.use_gm_programs = 1;
+    REQUIRE(sonare_synth_preset_patch("sine", &binding.patch) == SONARE_OK);
+
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                         &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return out_len;
+  };
+
+  const size_t dry_length = bounce_length(false, 0);
+  const size_t efx_length = bounce_length(true, 0);
+  // Stereo Delay's declared tail must contribute to the auto-sized render
+  // after the scheduled type and part-0 assignment are replayed.
+  REQUIRE(efx_length > dry_length);
+
+  // A caller-supplied window is an explicit truncation contract; the probe is
+  // only used by auto-length sizing and must not silently extend this render.
+  const size_t explicit_dry_length = bounce_length(false, 48000);
+  const size_t explicit_efx_length = bounce_length(true, 48000);
+  REQUIRE(explicit_dry_length == 48000);
+  REQUIRE(explicit_efx_length == explicit_dry_length);
+}
+
 TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

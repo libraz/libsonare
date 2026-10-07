@@ -15,6 +15,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <new>
 #include <set>
 
 #include "c_api/project_bounce_internal.h"
@@ -71,7 +72,7 @@ bool arrangement_end_frames(const arr::CompiledTimeline& timeline, int64_t* out_
 // order, so an instrument whose tail follows control events (a GS envelope-time
 // edit) reports the tail this arrangement asks for. The caller resets it after
 // reading the tail, and the render prepares it again.
-void replay_destination_events(const arr::CompiledTimeline& timeline,
+bool replay_destination_events(const arr::CompiledTimeline& timeline,
                                const HostedInstrument& hosted) {
   std::vector<const sonare::midi::MidiEvent*> events;
   for (const auto& clip : timeline.midi_clips) {
@@ -82,9 +83,38 @@ void replay_destination_events(const arr::CompiledTimeline& timeline,
                    [](const sonare::midi::MidiEvent* a, const sonare::midi::MidiEvent* b) {
                      return a->render_frame < b->render_frame;
                    });
+  // A prepared token is owned only by the published schedule (or a live
+  // payload slot), neither of which exists for this throwaway probe. Keep the
+  // replay's tokens alive until every copied event has been consumed.
+  std::vector<std::shared_ptr<const sonare::midi::PreparedMidiSysEx>> prepared;
+  prepared.reserve(events.size());
   for (const sonare::midi::MidiEvent* event : events) {
-    hosted.instrument->on_event(hosted.destination_id, *event);
+    sonare::midi::MidiEvent replay = *event;
+    if (sonare::midi::is_sysex_event(replay) && replay.sysex_payload_size > 0) {
+      std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+      try {
+        if (!hosted.instrument->prepare_sysex(replay.sysex_payload, replay.sysex_payload_size,
+                                              token)) {
+          return false;
+        }
+      } catch (const std::bad_alloc&) {
+        throw;
+      } catch (...) {
+        return false;
+      }
+      replay.prepared_sysex = token.get();
+      prepared.push_back(std::move(token));
+    }
+    hosted.instrument->on_event(hosted.destination_id, replay);
+    try {
+      if (!hosted.instrument->materialize_tail_probe()) return false;
+    } catch (const std::bad_alloc&) {
+      throw;
+    } catch (...) {
+      return false;
+    }
   }
+  return true;
 }
 
 // Widest output a scene's master allows: its layout's width, with mono and
@@ -220,7 +250,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
         return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
       }
       const bool replay = opts.total_frames <= 0 && hosted.instrument->tail_follows_events();
-      if (replay) replay_destination_events(*compiled.timeline, hosted);
+      if (replay && !replay_destination_events(*compiled.timeline, hosted)) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
       const int latency = hosted.instrument->latency_samples();
       const int tail = hosted.instrument->tail_samples();
       if (replay) hosted.instrument->reset();
