@@ -11,6 +11,7 @@
 #include "util/exception.h"
 #include "util/lpc.h"
 #include "util/numeric_validation.h"
+#include "util/peak.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
@@ -66,34 +67,48 @@ void repair_run(std::vector<float>& samples, const ClipRun& run, const DeclipCon
   report.repaired_samples += run.end - run.start;
 }
 
-/// Counts the maximal runs of bit-identical samples sitting within
-/// kDeclipFlatRunPeakWindowDb of the peak. The equality is exact on purpose: a
-/// clipper writes one ceiling value into every sample it pins and a later gain
-/// scales them all by the same factor, so the run stays exactly level, while an
-/// unclipped apex never repeats a sample even at the lowest frequency this
-/// library accepts.
+/// Finds the maximal runs of bit-identical samples at or above
+/// kDeclipFlatRunAbsoluteFloor, takes the channel's flat level as the largest run
+/// level once the kReferenceIgnoredTopEvents highest runs are set aside, and
+/// counts the runs within kDeclipFlatRunLevelWindowDb of it. The equality is
+/// exact on purpose: a clipper writes one ceiling value into every sample it pins
+/// and a later gain scales them all by the same factor, so the run stays exactly
+/// level, while an unclipped float apex never repeats a sample. Louder audio
+/// without runs therefore cannot move the level.
 void scan_flat_runs(const std::vector<float>& samples, ClipDetection& detection) {
-  float peak = 0.0f;
-  for (const float value : samples) {
-    if (numeric::finite(value)) peak = std::max(peak, std::abs(value));
-  }
-  if (!(peak > 0.0f)) return;
-
-  const float floor = peak * db_to_linear(-kDeclipFlatRunPeakWindowDb);
+  struct FlatRun {
+    float level;
+    size_t length;
+  };
+  std::vector<FlatRun> candidates;
   size_t i = 0;
   while (i < samples.size()) {
     const float value = samples[i];
     size_t j = i + 1;
     while (j < samples.size() && samples[j] == value) ++j;
     const size_t length = j - i;
-    if (length >= kDeclipMinFlatRunSamples && numeric::finite(value) && std::abs(value) >= floor) {
-      ++detection.flat_run_count;
-      detection.flat_sample_count += length;
-      detection.longest_flat_run_samples = std::max(detection.longest_flat_run_samples, length);
-      detection.flat_level = std::max(detection.flat_level, std::abs(value));
+    if (length >= kDeclipMinFlatRunSamples && numeric::finite(value) &&
+        std::abs(value) >= kDeclipFlatRunAbsoluteFloor) {
+      candidates.push_back({std::abs(value), length});
     }
     i = j;
   }
+  if (candidates.empty()) return;
+
+  std::vector<float> levels;
+  levels.reserve(candidates.size());
+  for (const FlatRun& run : candidates) levels.push_back(run.level);
+  const float flat_level = max_excluding_top(std::move(levels), kReferenceIgnoredTopEvents);
+
+  const float lower = flat_level * db_to_linear(-kDeclipFlatRunLevelWindowDb);
+  const float upper = flat_level * db_to_linear(kDeclipFlatRunLevelWindowDb);
+  for (const FlatRun& run : candidates) {
+    if (run.level < lower || run.level > upper) continue;
+    ++detection.flat_run_count;
+    detection.flat_sample_count += run.length;
+    detection.longest_flat_run_samples = std::max(detection.longest_flat_run_samples, run.length);
+  }
+  detection.flat_level = flat_level;
 }
 
 ClipDetection to_detection(const std::vector<float>& samples, const std::vector<ClipRun>& runs) {

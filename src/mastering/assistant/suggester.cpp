@@ -54,7 +54,7 @@ bool hum_is_mains(const DefectProfile& defects) {
 ///   then give it nothing to act on. Dereverb is absent on purpose: its statistic reads *higher* on
 ///   a sustaining dry signal than on a short reverberant one, so no threshold over it separates the
 ///   two, and it stays under caller control until one does. Declip is withheld when the shared
-///   threshold is unsafe for a channel without flat-top evidence.
+///   threshold would reach audio louder than the pinned level.
 void select_repair_stages(const AudioProfile& profile, const AssistantConfig& config,
                           api::MasteringChainConfig& out, std::vector<std::string>& explanation) {
   const DefectProfile& defects = profile.defects;
@@ -75,8 +75,8 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     explain(explanation, "declip: runs of samples sit pinned at one level");
   } else if (defects.clip_flat_run_count > 0) {
     explain(explanation,
-            "declip withheld: a channel without pinned runs reaches the shared "
-            "threshold, so repairing at it would rewrite unclipped audio");
+            "declip withheld: audio louder than the pinned level reaches the threshold, "
+            "so repairing at it would rewrite unclipped audio");
   }
   if (defects.click_count > 0) {
     out.repair.declick.enabled = true;

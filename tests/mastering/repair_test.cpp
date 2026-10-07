@@ -152,6 +152,67 @@ TEST_CASE("Clip detection survives the gain change that hides clipping from the 
   REQUIRE_THAT(quiet.flat_level, WithinAbs(0.25f, 1e-6f));
 }
 
+namespace {
+
+/// A sine pinned at +-ceiling for @p seconds, with an unclipped 1 kHz burst under a half-sine
+/// window written over the middle. No three consecutive burst samples are equal.
+std::vector<float> clipped_sine_with_burst(int rate, float seconds, float ceiling, float burst_peak,
+                                           bool with_burst) {
+  const auto length = static_cast<size_t>(static_cast<float>(rate) * seconds);
+  std::vector<float> samples(length);
+  for (size_t i = 0; i < length; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(rate);
+    samples[i] =
+        std::clamp(3.0f * ceiling * std::sin(constants::kTwoPi * 220.0f * t), -ceiling, ceiling);
+  }
+  if (with_burst) {
+    const auto burst = static_cast<size_t>(0.05f * static_cast<float>(rate));
+    const size_t start = length / 2;
+    for (size_t i = 0; i < burst; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(rate);
+      const float window =
+          std::sin(constants::kPi * static_cast<float>(i) / static_cast<float>(burst));
+      samples[start + i] = burst_peak * window * std::sin(constants::kTwoPi * 1000.0f * t);
+    }
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("Clip detection ignores an unclipped transient louder than the pinned level",
+          "[mastering][repair]") {
+  constexpr int kRate = 48000;
+  // The reference silences the same span, so both inputs lose the same clipped runs.
+  const auto clean = clipped_sine_with_burst(kRate, 4.0f, 0.1f, 0.0f, true);
+  const auto with_burst = clipped_sine_with_burst(kRate, 4.0f, 0.1f, 0.56f, true);
+
+  const auto expected = detect_clipping(clean.data(), clean.size(), kRate);
+  const auto detected = detect_clipping(with_burst.data(), with_burst.size(), kRate);
+
+  CAPTURE(expected.flat_run_count, expected.flat_level, detected.flat_run_count,
+          detected.flat_level);
+  REQUIRE(expected.flat_run_count > 0);
+  REQUIRE_THAT(expected.flat_level, WithinAbs(0.1f, 1e-6f));
+  REQUIRE(detected.flat_run_count == expected.flat_run_count);
+  REQUIRE(detected.flat_level == expected.flat_level);
+}
+
+TEST_CASE("Clip detection reads the higher side of an asymmetric clip", "[mastering][repair]") {
+  constexpr int kRate = 48000;
+  std::vector<float> samples(kRate);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kRate);
+    samples[i] = std::clamp(0.9f * std::sin(constants::kTwoPi * 220.0f * t), -0.4f, 0.5f);
+  }
+
+  const auto detected = detect_clipping(samples.data(), samples.size(), kRate);
+
+  CAPTURE(detected.flat_run_count, detected.flat_level);
+  REQUIRE_THAT(detected.flat_level, WithinAbs(0.5f, 1e-6f));
+  REQUIRE(detected.flat_run_count > 0);
+}
+
 TEST_CASE("Clip detection does not read an unclipped peak as a flat top", "[mastering][repair]") {
   // A full-scale sine reaches the default threshold every cycle without ever
   // having been clipped, which is the false positive the counts alone produce.

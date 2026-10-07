@@ -37,11 +37,15 @@ inline constexpr size_t kDeclipMaxLpcWorkingSetBytes =
 /// evaluation corpus is four samples, so three separates with margin either way.
 inline constexpr size_t kDeclipMinFlatRunSamples = 3;
 
-/// @brief How far under the peak a flat run may sit and still count, in dB.
+/// @brief How far from the flat level a flat run may sit and still count, in dB.
 /// @details A clipper pins samples at one ceiling, so the runs that matter sit at
-/// the peak and this window only admits the rounding spread around it. Corpus
-/// separation is unchanged anywhere between 0.1 and 6 dB.
-inline constexpr float kDeclipFlatRunPeakWindowDb = 1.0f;
+/// the flat level and this window only admits the rounding spread around it.
+inline constexpr float kDeclipFlatRunLevelWindowDb = 1.0f;
+
+/// @brief Quietest magnitude at which a run of identical samples is a flat-top candidate.
+/// @details -40 dBFS. A design value, not calibrated: flat runs quieter than this are
+/// not treated as repairable clipping.
+inline constexpr float kDeclipFlatRunAbsoluteFloor = 0.01f;
 
 struct DeclipConfig {
   float clip_threshold = 0.98f;
@@ -65,7 +69,7 @@ struct ClipDetection {
                                    ///  fallback rather than the LPC solver.
 
   /// @name Flat-top analysis
-  /// Runs of bit-identical samples sitting at the signal's peak. The fields above
+  /// Runs of bit-identical samples sitting at the channel's flat level. The fields above
   /// count what is at or past clip_threshold now, so they see only clipping that
   /// still reaches that ceiling; a flat top survives a later gain change and so
   /// reports material clipped before it was attenuated. Neither drives the
@@ -81,7 +85,8 @@ struct ClipDetection {
   size_t flat_run_count = 0;
   size_t longest_flat_run_samples = 0;
   size_t flat_sample_count = 0;
-  float flat_level = 0.0f;  ///< Magnitude the counted runs sit at; 0 when none.
+  /// Largest run magnitude after the top runs are set aside; 0 when none.
+  float flat_level = 0.0f;
   /// @}
 };
 

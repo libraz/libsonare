@@ -184,6 +184,15 @@ AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int
 
 namespace {
 
+/// Whether a declip pass at @p clip_flat_level leaves this channel's audio alone. Unsafe when
+/// the channel carries audio louder than the pinned level (the repair threshold would reach it)
+/// or, for a channel with no pinned runs of its own, when it reaches the clamped threshold.
+bool channel_allows_declip(float clip_flat_level, float peak_abs, std::size_t flat_run_count) {
+  if (!(clip_flat_level > 0.0f)) return true;
+  if (peak_abs > clip_flat_level * db_to_linear(repair::kDeclipFlatRunLevelWindowDb)) return false;
+  return flat_run_count > 0 || peak_abs < std::min(clip_flat_level, 1.0f);
+}
+
 // Runs the six repair detectors over one signal, each with its own default
 // config. Only a non-finite sample throws (the clipping detector refuses it); a
 // non-positive rate and an input shorter than the STFT are settled beforehand.
@@ -219,6 +228,10 @@ DefectProfile measure_defects(const Audio& audio, std::vector<float>* noise_band
   defects.clip_flat_sample_count = clipping.flat_sample_count;
   defects.clip_longest_flat_run_samples = clipping.longest_flat_run_samples;
   defects.clip_flat_level = clipping.flat_level;
+  float peak_abs = 0.0f;
+  for (std::size_t i = 0; i < size; ++i) peak_abs = std::max(peak_abs, std::abs(samples[i]));
+  defects.declip_threshold_safe =
+      channel_allows_declip(defects.clip_flat_level, peak_abs, defects.clip_flat_run_count);
 
   const auto noise = repair::detect_noise_floor(samples, size, sample_rate, denoise_config);
   defects.noise_floor_dbfs = noise.floor_dbfs;
@@ -332,13 +345,11 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
     }
   }
   defects.declip_threshold_safe = true;
-  if (defects.clip_flat_level > 0.0f) {
-    const float effective_threshold = std::min(defects.clip_flat_level, 1.0f);
-    for (const ChannelDefects& channel : per_channel) {
-      if (channel.profile.clip_flat_run_count == 0 && channel.peak_abs >= effective_threshold) {
-        defects.declip_threshold_safe = false;
-        break;
-      }
+  for (const ChannelDefects& channel : per_channel) {
+    if (!channel_allows_declip(defects.clip_flat_level, channel.peak_abs,
+                               channel.profile.clip_flat_run_count)) {
+      defects.declip_threshold_safe = false;
+      break;
     }
   }
   if (have_hum) assign_hum_candidate(defects, hum);

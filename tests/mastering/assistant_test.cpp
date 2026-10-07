@@ -56,6 +56,79 @@ TEST_CASE("Assistant refuses a shared declip threshold marked unsafe", "[masteri
 
 namespace {
 
+std::vector<float> declip_material(float ceiling, float drive, float burst_peak) {
+  constexpr int kRate = 48000;
+  std::vector<float> samples(4 * kRate);
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kRate);
+    samples[i] =
+        std::clamp(drive * std::sin(sonare::constants::kTwoPi * 220.0f * t), -ceiling, ceiling);
+  }
+  if (burst_peak > 0.0f) {
+    const auto burst = static_cast<std::size_t>(0.05f * kRate);
+    for (std::size_t i = 0; i < burst; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(kRate);
+      const float window =
+          std::sin(sonare::constants::kPi * static_cast<float>(i) / static_cast<float>(burst));
+      samples[samples.size() / 2 + i] =
+          burst_peak * window * std::sin(sonare::constants::kTwoPi * 1000.0f * t);
+    }
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("Assistant withholds declip when unclipped audio is louder than the pinned level",
+          "[mastering][assistant]") {
+  constexpr int kRate = 48000;
+  const std::vector<float> mono = declip_material(0.1f, 0.3f, 0.56f);
+  std::vector<float> stereo(mono.size() * 2);
+  for (std::size_t i = 0; i < mono.size(); ++i) {
+    stereo[2 * i] = mono[i];
+    stereo[2 * i + 1] = mono[i];
+  }
+  assistant::AssistantConfig config;
+  config.enable_repair = true;
+
+  const auto mono_result = assistant::suggest_chain(mono.data(), mono.size(), kRate, config);
+  const auto stereo_result =
+      assistant::suggest_chain_interleaved(stereo.data(), mono.size(), 2, kRate, config);
+  for (const auto* result : {&mono_result, &stereo_result}) {
+    CHECK(result->profile.defects.clip_flat_run_count > 0);
+    CHECK_FALSE(result->profile.defects.declip_threshold_safe);
+    CHECK_FALSE(result->config.repair.declip.enabled);
+    CHECK(std::any_of(result->explanation.begin(), result->explanation.end(),
+                      [](const std::string& text) { return text.find("declip withheld:") == 0; }));
+  }
+}
+
+TEST_CASE("Assistant proposes declip for an over-unity plateau and an asymmetric clip",
+          "[mastering][assistant]") {
+  constexpr int kRate = 48000;
+  assistant::AssistantConfig config;
+  config.enable_repair = true;
+
+  const std::vector<float> over_unity = declip_material(1.5f, 4.5f, 0.0f);
+  const auto over = assistant::suggest_chain(over_unity.data(), over_unity.size(), kRate, config);
+  CHECK(over.profile.defects.declip_threshold_safe);
+  CHECK(over.config.repair.declip.enabled);
+  CHECK(over.config.repair.declip.config.clip_threshold == 1.0f);
+
+  std::vector<float> asymmetric(4 * kRate);
+  for (std::size_t i = 0; i < asymmetric.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kRate);
+    asymmetric[i] =
+        std::clamp(0.9f * std::sin(sonare::constants::kTwoPi * 220.0f * t), -0.4f, 0.5f);
+  }
+  const auto skewed = assistant::suggest_chain(asymmetric.data(), asymmetric.size(), kRate, config);
+  CHECK(skewed.profile.defects.declip_threshold_safe);
+  CHECK(skewed.config.repair.declip.enabled);
+  CHECK(skewed.config.repair.declip.config.clip_threshold == 0.5f);
+}
+
+namespace {
+
 using sonare::constants::kTwoPi;
 
 std::vector<float> tone(int sr, float seconds, float frequency, float amplitude = 0.4f) {

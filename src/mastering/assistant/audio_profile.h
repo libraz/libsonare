@@ -82,16 +82,18 @@ struct DefectProfile {
   /// of any waveform that reaches it and miss material clipped before it was
   /// attenuated; these survive a gain change and do not fire on a sine.
   /// clip_flat_level is the level the runs sit at, which is the threshold a
-  /// declip pass has to use to reach them. Interleaved aggregation keeps the
-  /// highest evidenced plateau; @ref declip_threshold_safe says whether that
-  /// shared threshold is safe for every channel.
+  /// declip pass has to use to reach them. It is the largest pinned-run
+  /// level once the two highest runs are set aside, so louder audio without runs
+  /// cannot move it. Interleaved aggregation keeps the highest channel level;
+  /// @ref declip_threshold_safe says whether that shared threshold is safe for every channel.
   std::size_t clip_flat_run_count = 0;
   std::size_t clip_flat_sample_count = 0;
   std::size_t clip_longest_flat_run_samples = 0;
   float clip_flat_level = 0.0f;
   /// True when the aggregated flat level is safe to use as a declip threshold.
-  /// A multi-channel profile is unsafe when a channel without flat-top evidence
-  /// reaches min(clip_flat_level, 1), the effective shared repair threshold.
+  /// A profile (mono or multi-channel) is unsafe when any channel's peak exceeds
+  /// clip_flat_level by more than kDeclipFlatRunLevelWindowDb, or when a channel without
+  /// flat-top evidence reaches min(clip_flat_level, 1), the effective shared repair threshold.
   /// Defaults to true for profiles constructed directly by the caller. Read by
   /// the C++ suggester only; not serialized.
   bool declip_threshold_safe = true;
