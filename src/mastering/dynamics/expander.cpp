@@ -75,33 +75,26 @@ void Expander::reset() {
   last_gain_reduction_db_ = 0.0f;
 }
 
-bool Expander::set_parameter_impl(unsigned int param_id, float value) {
-  // RT-safe in-place automation: mutate the audio thread's working config and
-  // re-derive coefficients. No shared_ptr publish, no allocation; the published
-  // snapshot stays untouched and the control-thread mirror (config_) is updated
-  // so config() reads back the automated state. set_parameter and set_config
-  // must not run concurrently (single-producer contract).
+bool Expander::apply_parameter(ExpanderConfig& config, unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      active_.threshold_db = value;
+      config.threshold_db = value;
       break;
     case 1:
-      active_.ratio = std::max(1.0f, value);
+      config.ratio = std::max(1.0f, value);
       break;
     case 2:
-      active_.attack_ms = std::max(0.0f, value);
+      config.attack_ms = std::max(0.0f, value);
       break;
     case 3:
-      active_.release_ms = std::max(0.0f, value);
+      config.release_ms = std::max(0.0f, value);
       break;
     case 4:
-      active_.range_db = std::min(0.0f, value);
+      config.range_db = std::min(0.0f, value);
       break;
     default:
       return false;
   }
-  update_coefficients(active_);
-  config_ = active_;
   return true;
 }
 

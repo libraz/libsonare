@@ -208,7 +208,9 @@ bool Limiter::set_parameter_impl(unsigned int param_id, float value) {
   // scalars when a *new* snapshot is adopted, so an in-place automation value
   // persists block-to-block. The control-thread config_ mirror is intentionally
   // left untouched (same contract as set_threshold_in_place / set_release_ms_in_place),
-  // so parameter_is_realtime_safe() correctly stays true (default).
+  // so parameter_is_realtime_safe() correctly stays true (default). A pending
+  // set_config snapshot is adopted first, so this later value wins over it.
+  adopt_snapshot_for_block();
   switch (param_id) {
     case 0:
       set_threshold_in_place(value);

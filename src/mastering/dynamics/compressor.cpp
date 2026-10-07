@@ -243,11 +243,8 @@ void Compressor::reset() {
   minimum_gain_reduction_db_ = 0.0f;
 }
 
-bool Compressor::set_parameter_impl(unsigned int param_id, float value) {
-  // RT-safe in-place automation: mutate the audio thread's live working config
-  // and re-derive its coefficients. No shared_ptr publish, no allocation; the
-  // control-thread mirror (config_) and the published snapshot stay untouched.
-  CompressorConfig next = active_;
+bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id, float value) {
+  CompressorConfig next = config;
   switch (param_id) {
     case 0:
       next.threshold_db = value;
@@ -290,13 +287,7 @@ bool Compressor::set_parameter_impl(unsigned int param_id, float value) {
   }
   // Threshold, ratio and both makeup controls all move the makeup gain.
   if (!numeric::finite(db_to_linear(compute_makeup_db(next)))) return false;
-  active_ = next;
-  // Mirror the live value into the control-thread config so config() reads back
-  // the automated state (matching the historical contract); this writes config_
-  // only, never the published snapshot, so no allocation occurs. set_parameter
-  // and set_config still must not run concurrently (single-producer contract).
-  config_ = active_;
-  update_coefficients(active_);
+  config = next;
   return true;
 }
 

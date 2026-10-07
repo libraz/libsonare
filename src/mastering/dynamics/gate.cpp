@@ -151,34 +151,25 @@ void Gate::reset() {
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
 }
 
-bool Gate::set_parameter_impl(unsigned int param_id, float value) {
-  // RT-safe in-place automation: mutate the audio thread's live working config
-  // and re-derive its coefficients. No shared_ptr publish, no allocation; the
-  // control-thread mirror (config_) and the published snapshot stay untouched.
+bool Gate::apply_parameter(GateConfig& config, unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      active_.threshold_db = value;
+      config.threshold_db = value;
       // Keep the hysteresis invariant close_threshold_db <= threshold_db.
-      active_.close_threshold_db = std::min(active_.close_threshold_db, active_.threshold_db);
+      config.close_threshold_db = std::min(config.close_threshold_db, config.threshold_db);
       break;
     case 1:
-      active_.attack_ms = std::max(0.0f, value);
+      config.attack_ms = std::max(0.0f, value);
       break;
     case 2:
-      active_.release_ms = std::max(0.0f, value);
+      config.release_ms = std::max(0.0f, value);
       break;
     case 3:
-      active_.range_db = std::min(0.0f, value);
+      config.range_db = std::min(0.0f, value);
       break;
     default:
       return false;
   }
-  // Mirror the live value into the control-thread config so config() reads back
-  // the automated state (matching the historical contract); this writes config_
-  // only, never the published snapshot, so no allocation occurs. set_parameter
-  // and set_config still must not run concurrently (single-producer contract).
-  config_ = active_;
-  update_coefficients(active_);
   return true;
 }
 

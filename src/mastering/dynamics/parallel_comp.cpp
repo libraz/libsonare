@@ -149,41 +149,34 @@ void ParallelComp::reset() {
   last_gain_reduction_db_ = 0.0f;
 }
 
-bool ParallelComp::set_parameter_impl(unsigned int param_id, float value) {
-  // RT-safe in-place automation: mutate the audio thread's working config and
-  // re-derive coefficients. No shared_ptr publish, no allocation; the published
-  // snapshot stays untouched and the control-thread mirror (config_) is updated
-  // so config() reads back the automated state. set_parameter and set_config
-  // must not run concurrently (single-producer contract).
+bool ParallelComp::apply_parameter(ParallelCompConfig& config, unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      active_.threshold_db = value;
+      config.threshold_db = value;
       break;
     case 1:
-      active_.ratio = std::max(1.0f, value);
+      config.ratio = std::max(1.0f, value);
       break;
     case 2:
-      active_.attack_ms = std::max(0.0f, value);
+      config.attack_ms = std::max(0.0f, value);
       break;
     case 3:
-      active_.release_ms = std::max(0.0f, value);
+      config.release_ms = std::max(0.0f, value);
       break;
     case 4:
       if (!numeric::finite(db_to_linear(value))) return false;
-      active_.makeup_gain_db = value;
+      config.makeup_gain_db = value;
       break;
     case 5:
-      active_.mix = std::clamp(value, 0.0f, 1.0f);
+      config.mix = std::clamp(value, 0.0f, 1.0f);
       break;
     case 6:
       if (!numeric::finite(db_to_linear(value)) || !(db_to_linear(value) > 0.0f)) return false;
-      active_.output_ceiling_db = value;
+      config.output_ceiling_db = value;
       break;
     default:
       return false;
   }
-  update_coefficients(active_);
-  config_ = active_;
   return true;
 }
 

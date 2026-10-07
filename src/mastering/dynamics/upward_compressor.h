@@ -22,10 +22,10 @@ struct UpwardCompressorConfig {
   float range_db = 12.0f;
 };
 
-class UpwardCompressor : public rt::ProcessorBase,
-                         public rt::RtConfigLifecycle<UpwardCompressor, UpwardCompressorConfig> {
+class UpwardCompressor : public rt::RtConfigLifecycle<UpwardCompressor, UpwardCompressorConfig> {
   using ConfigBase = rt::RtConfigLifecycle<UpwardCompressor, UpwardCompressorConfig>;
   friend ConfigBase;
+  bool apply_parameter(UpwardCompressorConfig& config, unsigned int param_id, float value);
 
  public:
   explicit UpwardCompressor(UpwardCompressorConfig config = {});
@@ -54,7 +54,6 @@ class UpwardCompressor : public rt::ProcessorBase,
   // declared RT-safe. It MUST NOT be called concurrently with set_config(); the
   // single-producer hand-off contract of RtPublisher covers either path
   // individually, not both at once.
-  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

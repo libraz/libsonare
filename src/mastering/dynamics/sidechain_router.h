@@ -27,10 +27,10 @@ struct SidechainRouterConfig {
   float lookahead_ms = 0.0f;
 };
 
-class SidechainRouter : public rt::ProcessorBase,
-                        public rt::RtConfigLifecycle<SidechainRouter, SidechainRouterConfig> {
+class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainRouterConfig> {
   using ConfigBase = rt::RtConfigLifecycle<SidechainRouter, SidechainRouterConfig>;
   friend ConfigBase;
+  bool apply_parameter(SidechainRouterConfig& config, unsigned int param_id, float value);
 
  public:
   explicit SidechainRouter(SidechainRouterConfig config = {});
@@ -46,6 +46,8 @@ class SidechainRouter : public rt::ProcessorBase,
   // concurrently with process(). Reset also retains the configured key.
   void set_sidechain(const float* const* channels, int num_channels, int num_samples) override;
   void clear_sidechain() override;
+  // Key listen writes the detector to the output. Control thread.
+  bool sidechain_audible() const noexcept override { return config().key_listen; }
 
   // set_config() / config() are provided by RtConfigLifecycle: set_config
   // validates (SidechainRouter::validate_config) before publishing a lock-free
@@ -66,7 +68,6 @@ class SidechainRouter : public rt::ProcessorBase,
   //   4 = range_db (clamped to >= 0)
   // lookahead_ms and the sidechain HPF settings are omitted because they resize
   // buffers or are gated by mode switches.
-  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

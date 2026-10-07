@@ -36,10 +36,10 @@ struct CompressorConfig {
   float pdr_release_scale = 1.0f;
 };
 
-class Compressor : public rt::ProcessorBase,
-                   public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
+class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   using ConfigBase = rt::RtConfigLifecycle<Compressor, CompressorConfig>;
   friend ConfigBase;
+  bool apply_parameter(CompressorConfig& config, unsigned int param_id, float value);
 
  public:
   explicit Compressor(CompressorConfig config = {});
@@ -77,10 +77,11 @@ class Compressor : public rt::ProcessorBase,
   // RT-safe: set_parameter updates the audio thread's live working config
   // (active_) in place and re-derives the scalar coefficients without publishing
   // a new snapshot (no allocation), so it is safe to apply from the audio
-  // callback. The control-thread mirror (config_) is kept in sync so config()
-  // reads back the automated state; only the snapshot publish (the allocation)
-  // is dropped. MUST NOT run concurrently with set_config() (single producer).
-  bool set_parameter_impl(unsigned int param_id, float value) override;
+  // callback. A pending set_config() snapshot is adopted first, so the later of
+  // the two wins, and the control-thread mirror (config_) is kept in sync so
+  // config() reads back the automated state; only the snapshot publish (the
+  // allocation) is dropped. MUST NOT run concurrently with set_config() (single
+  // producer).
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs,
   // 4=makeupGainDb, 5=kneeDb, 6=autoMakeup, 7=detector, 8=sidechainHpfEnabled,
   // 9=sidechainHpfHz, 10=pdrTimeMs, 11=pdrReleaseScale.

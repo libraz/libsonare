@@ -150,27 +150,18 @@ void BrickwallLimiter::set_release_ms_in_place(float release_ms) noexcept {
   limiter_.set_release_ms_in_place(release_ms);
 }
 
-bool BrickwallLimiter::set_parameter_impl(unsigned int param_id, float value) {
-  // RT-safe in-place automation: mutate the audio thread's live working config
-  // (active_) and forward ceiling/release to the inner limiter via its in-place
-  // setters (update_coefficients). No shared_ptr publish, no allocation; the
-  // control-thread mirror (config_) and the published snapshot stay untouched.
+bool BrickwallLimiter::apply_parameter(BrickwallLimiterConfig& config, unsigned int param_id,
+                                       float value) {
   switch (param_id) {
     case 0:
-      active_.ceiling_db = value;
+      config.ceiling_db = value;
       break;
     case 1:
-      active_.release_ms = std::max(0.0f, value);
+      config.release_ms = std::max(0.0f, value);
       break;
     default:
       return false;
   }
-  // Mirror the live value into the control-thread config so config() reads back
-  // the automated state (matching the historical contract); this writes config_
-  // only, never the published snapshot, so no allocation occurs. set_parameter
-  // and set_config still must not run concurrently (single-producer contract).
-  config_ = active_;
-  update_coefficients(active_);
   return true;
 }
 

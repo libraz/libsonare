@@ -1,7 +1,12 @@
 /// @file dynamics_rt_safe_test.cpp
 /// @brief RT-safe set_config dynamics tests.
 
+#include <catch2/catch_template_test_macros.hpp>
+#include <type_traits>
+#include <utility>
+
 #include "dynamics_test_helpers.h"
+#include "support/alloc_guard.h"
 
 TEST_CASE("Gate set_config is safe to call concurrently with process",
           "[mastering][dynamics][rt-safe]") {
@@ -353,4 +358,126 @@ TEST_CASE("SidechainRouter set_config is safe to call concurrently with process"
   sr.set_sidechain(key_channels, 1, 256);
   sr.process(channels, 1, 256);
   REQUIRE(sr.config().threshold_db == -18.0f);
+}
+
+namespace {
+
+// One 64-sample block of a 0.2 step through a freshly prepared mono instance.
+std::vector<float> transient_step_block(TransientShaper& shaper) {
+  std::vector<float> block(64, 0.2f);
+  float* channels[] = {block.data()};
+  shaper.process(channels, 1, 64);
+  return block;
+}
+
+std::vector<float> transient_control_block(const TransientShaperConfig& config) {
+  TransientShaper control(config);
+  control.prepare(48000.0, 64);
+  return transient_step_block(control);
+}
+
+}  // namespace
+
+// Serialized set_config then automation: the later one wins, and config()
+// describes exactly what the next block renders.
+TEST_CASE("TransientShaper automation after a pending set_config wins and stays mirrored",
+          "[mastering][dynamics][rt-safe]") {
+  TransientShaperConfig published{};
+  published.attack_gain_db = 12.0f;
+
+  SECTION("automation of the same parameter") {
+    TransientShaper shaper({});
+    shaper.prepare(48000.0, 64);
+    shaper.set_config(published);
+    REQUIRE(shaper.set_parameter(0, 0.0f));
+    TransientShaperConfig effective = published;
+    effective.attack_gain_db = 0.0f;
+    CHECK(shaper.config().attack_gain_db == 0.0f);
+    CHECK(transient_step_block(shaper) == transient_control_block(effective));
+    CHECK(shaper.config().attack_gain_db == 0.0f);
+
+    // A later unrelated setter must not bring the 12 dB back.
+    REQUIRE(shaper.set_parameter(6, 1.0f));
+    CHECK(shaper.config().attack_gain_db == 0.0f);
+  }
+
+  SECTION("automation of an unrelated parameter") {
+    TransientShaper shaper({});
+    shaper.prepare(48000.0, 64);
+    shaper.set_config(published);
+    REQUIRE(shaper.set_parameter(1, -3.0f));
+    TransientShaperConfig effective = published;
+    effective.sustain_gain_db = -3.0f;
+    CHECK(shaper.config().attack_gain_db == 12.0f);
+    CHECK(shaper.config().sustain_gain_db == -3.0f);
+    CHECK(transient_step_block(shaper) == transient_control_block(effective));
+    REQUIRE(shaper.set_parameter(6, 1.0f));
+    CHECK(shaper.config().attack_gain_db == 12.0f);
+    CHECK(shaper.config().sustain_gain_db == -3.0f);
+  }
+}
+
+namespace {
+
+// A 5 kHz tone that steps from quiet to loud, so level, onset and sibilance
+// controls all have something to act on.
+std::vector<float> stepped_tone_block() {
+  std::vector<float> block(2048);
+  for (size_t i = 0; i < block.size(); ++i) {
+    const float level = i < block.size() / 2 ? 0.01f : 0.7f;
+    block[i] =
+        level * std::sin(sonare::constants::kTwoPi * 5000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  return block;
+}
+
+template <typename Processor>
+std::vector<float> render_stepped_tone(Processor& processor) {
+  std::vector<float> block = stepped_tone_block();
+  float* channels[] = {block.data()};
+  processor.process(channels, 1, static_cast<int>(block.size()));
+  return block;
+}
+
+}  // namespace
+
+// Every RtConfigLifecycle processor shares one automation path: a value set after
+// a pending set_config wins, and config() describes exactly what renders.
+TEMPLATE_TEST_CASE(
+    "Automation after a pending set_config is what renders and what config() reports",
+    "[mastering][dynamics][rt-safe]", Compressor, DeEsser, BrickwallLimiter, ParallelComp, Gate,
+    Expander, UpwardCompressor, UpwardExpander, VocalRider, SidechainRouter, TransientShaper) {
+  using Config = std::decay_t<decltype(std::declval<TestType>().config())>;
+  // A published configuration that differs from the constructed one, so a
+  // snapshot adopted over the automation would render something else.
+  TestType donor{Config{}};
+  REQUIRE(donor.set_parameter(1, -30.0f));
+  const Config published = donor.config();
+
+  TestType automated{Config{}};
+  automated.prepare(48000.0, 2048);
+  automated.set_config(published);
+  {
+    // Adopting the pending snapshot on the automation path allocates nothing.
+    sonare::test::AllocationGuard guard;
+    REQUIRE(automated.set_parameter(0, -10.0f));
+    CHECK(guard.count() == 0);
+  }
+  const Config mirror = automated.config();
+  const std::vector<float> rendered = render_stepped_tone(automated);
+
+  TestType from_mirror(mirror);
+  from_mirror.prepare(48000.0, 2048);
+  CHECK(rendered == render_stepped_tone(from_mirror));
+
+  // Non-vacuity: had the snapshot been adopted over the automation, the block
+  // would render `published` while config() read the constructed config plus
+  // the automated value. Those two must sound different for the check above to
+  // mean anything.
+  TestType from_published(published);
+  from_published.prepare(48000.0, 2048);
+  TestType stale_mirror{Config{}};
+  REQUIRE(stale_mirror.set_parameter(0, -10.0f));
+  stale_mirror.prepare(48000.0, 2048);
+  CHECK(render_stepped_tone(from_published) != render_stepped_tone(stale_mirror));
 }

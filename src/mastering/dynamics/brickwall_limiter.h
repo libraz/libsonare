@@ -21,10 +21,10 @@ struct BrickwallLimiterConfig {
   float release_ms = 50.0f;
 };
 
-class BrickwallLimiter : public rt::ProcessorBase,
-                         public rt::RtConfigLifecycle<BrickwallLimiter, BrickwallLimiterConfig> {
+class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, BrickwallLimiterConfig> {
   using ConfigBase = rt::RtConfigLifecycle<BrickwallLimiter, BrickwallLimiterConfig>;
   friend ConfigBase;
+  bool apply_parameter(BrickwallLimiterConfig& config, unsigned int param_id, float value);
 
  public:
   explicit BrickwallLimiter(BrickwallLimiterConfig config = {});
@@ -88,7 +88,6 @@ class BrickwallLimiter : public rt::ProcessorBase,
   //   0 = ceiling_db
   //   1 = release_ms (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
-  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=ceilingDb, 1=releaseMs
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

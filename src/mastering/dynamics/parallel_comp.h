@@ -26,10 +26,10 @@ struct ParallelCompConfig {
   float output_ceiling_db = 0.0f;
 };
 
-class ParallelComp : public rt::ProcessorBase,
-                     public rt::RtConfigLifecycle<ParallelComp, ParallelCompConfig> {
+class ParallelComp : public rt::RtConfigLifecycle<ParallelComp, ParallelCompConfig> {
   using ConfigBase = rt::RtConfigLifecycle<ParallelComp, ParallelCompConfig>;
   friend ConfigBase;
+  bool apply_parameter(ParallelCompConfig& config, unsigned int param_id, float value);
 
  public:
   explicit ParallelComp(ParallelCompConfig config = {});
@@ -54,7 +54,6 @@ class ParallelComp : public rt::ProcessorBase,
   //   4 = makeup_gain_db
   //   5 = mix (clamped to [0, 1])
   //   6 = output_ceiling_db
-  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=makeupGainDb, 5=mix,
   // 6=outputCeilingDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

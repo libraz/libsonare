@@ -7,12 +7,13 @@
 #include <memory>
 #include <utility>
 
+#include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::rt {
 
-/// @brief CRTP mixin that owns the lock-free configuration hand-off every
-///        realtime dynamics processor shares.
+/// @brief CRTP base that owns the lock-free configuration hand-off and the
+///        scalar automation path every realtime dynamics processor shares.
 ///
 /// A processor keeps three views of its configuration:
 ///  - @c config_ — the control-thread mirror returned by @ref config().
@@ -21,25 +22,31 @@ namespace sonare::rt {
 ///  - the published snapshot — a lock-free @c RtPublisher slot the audio thread
 ///    adopts between blocks (see @ref adopt_snapshot_for_block).
 ///
-/// The mixin centralises the seed/publish/adopt bookkeeping; the derived
-/// processor supplies two hooks:
+/// The base centralises the seed/publish/adopt bookkeeping and is the only
+/// @c set_parameter_impl; the derived processor supplies three hooks:
 ///  - @c static void @c Derived::validate_config(const ConfigT&) — throws on an
 ///    invalid config; called before every publish so a throw leaves both the
 ///    mirror and the snapshot unchanged.
 ///  - @c void @c Derived::update_coefficients(const ConfigT&) — re-derives the
-///    scalar coefficients on the audio thread when a new snapshot is adopted.
+///    scalar coefficients on the audio thread from the live config.
+///  - @c bool @c Derived::apply_parameter(ConfigT&, unsigned int, float) —
+///    writes one automated value into the live config, or returns false and
+///    leaves it untouched. RT-safe: no allocation.
 ///
-/// Derived classes befriend this mixin so the hooks may stay private, e.g.
+/// Ordering: automation adopts any pending snapshot before it is applied, so
+/// whichever of set_config and automation came last wins, and @c config_
+/// always mirrors the configuration the audio path runs.
+///
+/// Derived classes befriend this base so the hooks may stay private, e.g.
 /// @code
-///   class Compressor : public rt::ProcessorBase,
-///                      public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
+///   class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
 ///     using ConfigBase = rt::RtConfigLifecycle<Compressor, CompressorConfig>;
 ///     friend ConfigBase;
 ///     ...
 ///   };
 /// @endcode
 template <typename Derived, typename ConfigT>
-class RtConfigLifecycle {
+class RtConfigLifecycle : public ProcessorBase {
  public:
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread. NOT realtime-safe and NOT safe to call
@@ -89,13 +96,27 @@ class RtConfigLifecycle {
     config_publisher_->acquire();
     const ConfigT* current = config_publisher_->current();
     if (current && current != applied_snapshot_) {
-      // A new set_config snapshot supersedes any in-place automation: copy it
-      // into the live working config and re-derive coefficients from it.
+      // A snapshot published after the last automation replaces the live
+      // working config; earlier ones were already adopted by that automation.
       active_ = *current;
       static_cast<Derived*>(this)->update_coefficients(active_);
       applied_snapshot_ = current;
     }
     return &active_;
+  }
+
+  /// @brief RT-safe in-place automation, the single path for every processor.
+  /// @details No publish and no allocation: adopts a pending snapshot first,
+  ///          applies the value through @c Derived::apply_parameter, re-derives
+  ///          the coefficients and mirrors the result into @c config_. Must not
+  ///          run concurrently with @ref set_config (single producer).
+  bool set_parameter_impl(unsigned int param_id, float value) final {
+    adopt_snapshot_for_block();
+    auto& derived = *static_cast<Derived*>(this);
+    if (!derived.apply_parameter(active_, param_id, value)) return false;
+    derived.update_coefficients(active_);
+    config_ = active_;
+    return true;
   }
 
   /// @brief Publishes @c config_ as a new snapshot (control thread; allocates).

@@ -155,49 +155,42 @@ void VocalRider::reset() {
   minimum_gain_reduction_db_ = 0.0f;
 }
 
-bool VocalRider::set_parameter_impl(unsigned int param_id, float value) {
-  // RT-safe in-place automation: mutate the audio thread's working config and
-  // re-derive coefficients. No shared_ptr publish, no allocation; the published
-  // snapshot stays untouched and the control-thread mirror (config_) is updated
-  // so config() reads back the automated state. set_parameter and set_config
-  // must not run concurrently (single-producer contract).
+bool VocalRider::apply_parameter(VocalRiderConfig& config, unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      active_.target_db = value;
+      config.target_db = value;
       break;
     case 1:
       // The applied gain peaks at max boost plus output gain.
-      if (!numeric::finite(db_to_linear(std::max(0.0f, value) + active_.output_gain_db))) {
+      if (!numeric::finite(db_to_linear(std::max(0.0f, value) + config.output_gain_db))) {
         return false;
       }
-      active_.max_boost_db = std::max(0.0f, value);
+      config.max_boost_db = std::max(0.0f, value);
       break;
     case 2:
-      active_.max_cut_db = std::max(0.0f, value);
+      config.max_cut_db = std::max(0.0f, value);
       break;
     case 3:
-      active_.attack_ms = std::max(0.0f, value);
+      config.attack_ms = std::max(0.0f, value);
       break;
     case 4:
-      active_.release_ms = std::max(0.0f, value);
+      config.release_ms = std::max(0.0f, value);
       break;
     case 5:
-      if (!numeric::finite(db_to_linear(active_.max_boost_db + value))) return false;
-      active_.output_gain_db = value;
+      if (!numeric::finite(db_to_linear(config.max_boost_db + value))) return false;
+      config.output_gain_db = value;
       break;
     case 6:
       // The smoothing coefficient is derived per sample from this value, so a
       // plain update is RT-safe and preserves the running gain state.
-      active_.gain_smoothing_ms = std::max(0.0f, value);
+      config.gain_smoothing_ms = std::max(0.0f, value);
       break;
     case 7:
-      active_.noise_floor_db = value;
+      config.noise_floor_db = value;
       break;
     default:
       return false;
   }
-  update_coefficients(active_);
-  config_ = active_;
   return true;
 }
 

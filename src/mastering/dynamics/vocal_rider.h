@@ -26,10 +26,10 @@ struct VocalRiderConfig {
   bool linked_detection = true;
 };
 
-class VocalRider : public rt::ProcessorBase,
-                   public rt::RtConfigLifecycle<VocalRider, VocalRiderConfig> {
+class VocalRider : public rt::RtConfigLifecycle<VocalRider, VocalRiderConfig> {
   using ConfigBase = rt::RtConfigLifecycle<VocalRider, VocalRiderConfig>;
   friend ConfigBase;
+  bool apply_parameter(VocalRiderConfig& config, unsigned int param_id, float value);
 
  public:
   explicit VocalRider(VocalRiderConfig config = {});
@@ -60,7 +60,6 @@ class VocalRider : public rt::ProcessorBase,
   //   5 = output_gain_db
   //   6 = gain_smoothing_ms (clamped to >= 0)
   //   7 = noise_floor_db
-  bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=targetDb, 1=maxBoostDb, 2=maxCutDb, 3=attackMs,
   //   4=releaseMs, 5=outputGainDb, 6=gainSmoothingMs, 7=noiseFloorDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
