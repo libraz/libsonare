@@ -98,7 +98,31 @@ describe('detectBoundaries', () => {
     expect(withoutFloor.boundaries.length).toBeGreaterThan(0);
   });
 
+  it('reaches the detector: disabling the reference window changes the boundary count', () => {
+    const samples = threeSections();
+    const windowed = detectBoundaries({ samples, sampleRate: SR, absoluteThreshold: 0 });
+    const unwindowed = detectBoundaries({
+      samples,
+      sampleRate: SR,
+      absoluteThreshold: 0,
+      referenceWindow: 0,
+    });
+    expect(unwindowed.boundaries.length).not.toBe(windowed.boundaries.length);
+    // The default is 60 s, so stating it changes nothing.
+    const explicit = detectBoundaries({
+      samples,
+      sampleRate: SR,
+      absoluteThreshold: 0,
+      referenceWindow: 60,
+    });
+    expect(explicit.boundaries).toEqual(windowed.boundaries);
+  });
+
   it('refuses the options the C ABI refuses', () => {
+    const samples0 = noise(SECTION_SEC, 7);
+    expect(() =>
+      detectBoundaries({ samples: samples0, sampleRate: SR, referenceWindow: -1 }),
+    ).toThrow();
     const samples = noise(SECTION_SEC, 7);
     expect(() => detectBoundaries({ samples, sampleRate: SR, kernelSize: 0 })).toThrow();
     expect(() => detectBoundaries({ samples, sampleRate: SR, nMfcc: 0 })).toThrow();
@@ -116,5 +140,8 @@ describe('detectBoundaries', () => {
     expect(() =>
       detectBoundaries({ samples, sampleRate: SR, useMfcc: 1 as unknown as boolean }),
     ).toThrow(/useMfcc/);
+    expect(() =>
+      detectBoundaries({ samples, sampleRate: SR, referenceWindow: '60' as unknown as number }),
+    ).toThrow(/referenceWindow/);
   });
 });

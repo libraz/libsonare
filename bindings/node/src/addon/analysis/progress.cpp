@@ -208,6 +208,8 @@ Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
     options.n_mfcc = IntProperty(bag, "nMfcc", options.n_mfcc);
     options.n_chroma = IntProperty(bag, "nChroma", options.n_chroma);
     options.peak_distance = FiniteFloatProperty(bag, "peakDistance", options.peak_distance);
+    options.reference_window =
+        FiniteFloatProperty(bag, "referenceWindow", options.reference_window);
     options.use_mfcc = BoolProperty(bag, "useMfcc", options.use_mfcc != 0) ? 1 : 0;
     options.use_chroma = BoolProperty(bag, "useChroma", options.use_chroma != 0) ? 1 : 0;
   }
