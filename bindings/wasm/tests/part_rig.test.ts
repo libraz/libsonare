@@ -217,7 +217,10 @@ describe('Sonare WASM part rig request and positional forms', () => {
     const project = new Project();
     try {
       expect(() =>
-        project.setPartRig({ destinationId: 4, part: 0, mode: 'none' } as never, 0 as never),
+        (project.setPartRig as (...args: unknown[]) => void)(
+          { destinationId: 4, part: 0, mode: 'none' },
+          0,
+        ),
       ).toThrow(new TypeError('setPartRig: a request object takes no further arguments'));
       expect(() => project.getPartRig({ destinationId: 4, part: 0 } as never, 0 as never)).toThrow(
         /getPartRig: a request object/,
