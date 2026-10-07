@@ -263,7 +263,7 @@ export class PolyphonicAnalysis {
  *   outside `[8000, 384000]`
  * @throws {SonareError} `InvalidParameter` on a config value the chain rejects,
  *   or on audio too short for two STFT frames at the configured `nFft`/`hopLength`
- *   (roughly one `hopLength`, ~512 samples at the default)
+ *   (roughly one `hopLength`, 512 samples at 44100 Hz by default, converted to the input rate)
  *
  * @example
  * ```typescript

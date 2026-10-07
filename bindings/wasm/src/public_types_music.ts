@@ -345,6 +345,7 @@ export interface Section {
   type: SectionType;
   start: number;
   end: number;
+  /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   confidence: number;
   name: string;
@@ -359,9 +360,11 @@ export interface BoundaryOptions {
   /** Checkerboard kernel size in frames. Default 64. */
   kernelSize?: number;
   /**
-   * Relative novelty threshold, applied to the curve after it has been scaled by
-   * its own maximum. Selects how prominent a peak must be *within this track*; it
-   * says nothing about how much the features actually changed. Default 0.3.
+   * Relative novelty threshold: a peak must reach this fraction of the largest raw
+   * novelty event within {@link referenceWindow} of it, a lone dominant event (one
+   * no other event in the window comes within `threshold` of) set aside. Selects
+   * how prominent a peak is *among its neighbours*; it says nothing about how much
+   * the features actually changed. Default 0.3.
    */
   threshold?: number;
   /**
@@ -384,7 +387,8 @@ export interface BoundaryOptions {
    * One-sided span in seconds over which the local novelty maximum that
    * `threshold` is measured against is taken. Must be finite and non-negative;
    * 0 makes each frame its own reference, which disables the relative threshold.
-   * Default 60.
+   * A value at least the track length makes the reference whole-track, still with
+   * a lone dominant event set aside. Default 60.
    */
   referenceWindow?: number;
   /** Use MFCC features. Default `true`. */

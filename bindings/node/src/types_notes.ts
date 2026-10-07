@@ -285,6 +285,8 @@ export interface PolyphonicAnalysisOptions {
   /**
    * FFT size, hop and window length of the one STFT that serves the extraction,
    * the claims, the apportionment and the render. Default 4096, 512 and `nFft`.
+   * All three are samples at 44100 Hz, converted to the input's sample rate;
+   * explicit values are converted too.
    */
   nFft?: number;
   hopLength?: number;

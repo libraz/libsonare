@@ -269,7 +269,9 @@ export interface MasteringRepairDetectClippingRequest
  * having never been clipped -- and they miss material that was clipped in one
  * tool and attenuated in the next, which leaves nothing at the threshold. The
  * flat fields instead find runs of at least 3 consecutive bit-identical
- * samples within 1 dB of the signal's peak, so they survive a gain change and
+ * samples (at or above -40 dBFS) within 1 dB of the flat level -- the largest
+ * run level once the two highest runs are set aside, so louder unclipped audio
+ * cannot move it -- so they survive a gain change and
  * do not fire on a sine: measured, a clipped tone attenuated to 0.25 reports
  * `sampleCount: 0` alongside `flatRunCount: 440` and `flatLevel: 0.25`, while
  * an unclipped full-scale sine reports `sampleCount: 2820` alongside

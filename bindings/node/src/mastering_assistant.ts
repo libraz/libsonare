@@ -51,7 +51,9 @@ export interface MasteringAudioProfile {
   };
   dynamics: {
     shortTermLufsStd: number;
+    /** Onset peaks per second above a fixed floor of percussive rise; 0 for steady material. */
     attackDensity: number;
+    /** Share of frames at or above 0.35 of the RMS reference, which sets aside outlying events. */
     sustainRatio: number;
   };
   /**
@@ -75,6 +77,10 @@ export interface MasteringAudioProfile {
     clipFlatRunCount: number;
     clipFlatSampleCount: number;
     clipLongestFlatRunSamples: number;
+    /**
+     * Level the flat runs (at least -40 dBFS) sit at: the largest run level once the two
+     * highest runs are set aside.
+     */
     clipFlatLevel: number;
     noiseFloorDbfs: number;
     noiseBandPeakDbfs: number;

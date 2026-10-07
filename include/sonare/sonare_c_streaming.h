@@ -19,7 +19,8 @@ extern "C" {
    before overriding fields. */
 typedef struct {
   int sample_rate;           /* Input sample rate in Hz (default 44100) */
-  int n_fft;                 /* FFT size (default 2048) */
+  int n_fft;                 /* Window in samples at 44100 Hz (default 2048); rescaled below
+                                that rate, never shorter than the hop */
   int hop_length;            /* Hop length between frames (default 512) */
   int n_mels;                /* Number of Mel bands (default 128) */
   float fmin;                /* Minimum Mel frequency */

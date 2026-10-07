@@ -670,9 +670,9 @@ export interface MelodyOptions {
   fmin?: number;
   /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
   fmax?: number;
-  /** Analysis frame length in samples. Default 2048. */
+  /** Analysis frame length in samples at 22050 Hz, rescaled to the input rate. Default 2048. */
   frameLength?: number;
-  /** Hop length between frames in samples. Default 256. */
+  /** Hop length between frames in samples of the input buffer. Default 256. */
   hopLength?: number;
   /** Voicing confidence threshold in [0,1]; frames below are unvoiced. Default 0.1. */
   threshold?: number;

@@ -134,6 +134,7 @@ export interface WasmSectionResult {
   type: number;
   start: number;
   end: number;
+  /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   confidence: number;
   name: string;
@@ -241,6 +242,7 @@ export interface WasmDynamicsAnalysisResult {
 
 export interface WasmStreamConfigDefaults {
   sampleRate: number;
+  /** Window in samples at 44100 Hz; rescaled below that rate, never shorter than `hopLength`. */
   nFft: number;
   hopLength: number;
   nMels: number;
@@ -420,6 +422,7 @@ export interface WasmClipDetection {
   flatRunCount: number;
   longestFlatRunSamples: number;
   flatSampleCount: number;
+  /** Largest run level once the two highest runs are set aside; 0 when there are none. */
   flatLevel: number;
 }
 

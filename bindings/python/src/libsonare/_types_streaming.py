@@ -57,6 +57,12 @@ class StreamConfig:
 
     Defaults mirror the C ``sonare_stream_analyzer_config_default`` values
     (real-time 44100 Hz / n_fft 2048).
+
+    ``n_fft`` is the analysis window as a duration, in samples at 44100 Hz. Below
+    that rate the window is rescaled to the analysis rate, never shorter than
+    ``hop_length``; ``hop_length`` itself is in samples at the analysis rate.
+    The emitted bin count is fixed by the FFT length the window is zero-padded
+    to, not by ``n_fft // 2 + 1``.
     """
 
     sample_rate: int = 44100

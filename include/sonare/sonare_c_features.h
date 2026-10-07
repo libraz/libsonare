@@ -116,6 +116,9 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
 /// @brief Extracts the melody contour from monophonic audio via plain YIN
 ///   (left-aligned, no Viterbi smoothing). Shorthand for sonare_analyze_melody_ex
 ///   with use_pyin=0.
+/// @param frame_length Analysis window length in samples at 22050 Hz, rescaled
+///   to @p sample_rate.
+/// @param hop_length Hop in samples of the caller's buffer.
 /// @param threshold YIN's aperiodicity cutoff on the cumulative mean normalized
 ///   difference function, NOT a level in the units of @p samples. The CMNDF is
 ///   normalized by construction, so this is scale-free: the same value behaves
@@ -129,6 +132,9 @@ SonareError sonare_analyze_melody(const float* samples, size_t length, int sampl
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out);
 /// @brief Extracts the melody contour with selectable tracker.
+/// @param frame_length Analysis window length in samples at 22050 Hz, rescaled
+///   to @p sample_rate.
+/// @param hop_length Hop in samples of the caller's buffer.
 /// @param threshold Aperiodicity cutoff on the cumulative mean normalized
 ///   difference function, NOT a level in the units of @p samples. Normalized by
 ///   construction and therefore scale-free. Must be within (0, 1]; anything

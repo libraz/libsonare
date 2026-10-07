@@ -161,9 +161,12 @@ class PolyphonicAnalysis:
             sample_rate: Sample rate in Hz.
             n_fft: STFT size for the whole chain -- the extraction, the claims,
                 the apportionment and the render (default 4096, the size this
-                chain is tuned at).
-            hop_length: STFT hop (default 512).
-            win_length: Window length (default ``n_fft``).
+                chain is tuned at). Samples at 44100 Hz, converted to the
+                input's sample rate, explicit values too.
+            hop_length: STFT hop (default 512), samples at 44100 Hz, converted
+                like ``n_fft``.
+            win_length: Window length (default ``n_fft``), samples at 44100 Hz,
+                converted like ``n_fft``.
             cent_ref_hz: Bottom of the cent axis the salience is folded onto
                 (default 55).
             cents_per_bin: Resolution of that axis (default 100/3). Finer than

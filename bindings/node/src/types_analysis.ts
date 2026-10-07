@@ -161,7 +161,7 @@ export interface AnalysisSection {
   type: SectionTypeOrdinal;
   start: number;
   end: number;
-  /** Relative energy level in `[0, 1]`. */
+  /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   /** Detection confidence in `[0, 1]`. */
   confidence: number;
@@ -340,9 +340,9 @@ export interface MelodyOptions {
   fmin?: number;
   /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
   fmax?: number;
-  /** Analysis frame length in samples. Default 2048. */
+  /** Analysis frame length in samples at 22050 Hz, rescaled to the input rate. Default 2048. */
   frameLength?: number;
-  /** Hop length between frames in samples. Default 256. */
+  /** Hop length between frames in samples of the input buffer. Default 256. */
   hopLength?: number;
   /** Voicing confidence threshold in [0,1]; frames below are unvoiced. Default 0.1. */
   threshold?: number;
@@ -440,13 +440,17 @@ export interface BoundaryOptions {
   hopLength?: number;
   /** Checkerboard kernel size in frames. Default 64. */
   kernelSize?: number;
-  /** Relative threshold, applied to the self-scaled novelty curve. Default 0.3. */
+  /**
+   * Relative threshold: a peak must reach this fraction of the largest raw novelty
+   * event within `referenceWindow` of it, a lone dominant event (one no other event
+   * in the window comes within `threshold` of) set aside. Default 0.3.
+   */
   threshold?: number;
   /**
    * Absolute threshold, applied to the raw novelty response before it is scaled.
    * This is the floor that asks whether the features changed at all; at 0 a
-   * stationary input segments anyway, because the relative threshold above is
-   * applied to a curve scaled by its own maximum. Default 0.005.
+   * stationary input segments anyway, because the novelty curve is scaled by its
+   * own maximum. Default 0.005.
    */
   absoluteThreshold?: number;
   /** Number of MFCC coefficients. Default 13. */
@@ -459,7 +463,8 @@ export interface BoundaryOptions {
    * One-sided span in seconds over which the local novelty maximum that
    * `threshold` is measured against is taken. Must be finite and non-negative;
    * 0 makes each frame its own reference, which disables the relative threshold.
-   * Default 60.
+   * A value at least the track length makes the reference whole-track, still with
+   * a lone dominant event set aside. Default 60.
    */
   referenceWindow?: number;
   /** Include MFCC in the similarity features. Default true. */
@@ -526,7 +531,7 @@ export interface Section {
   start: number;
   /** Section end time in seconds. */
   end: number;
-  /** Relative energy level in `[0, 1]`. */
+  /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   /** Detection confidence in `[0, 1]`. */
   confidence: number;

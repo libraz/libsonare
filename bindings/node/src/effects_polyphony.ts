@@ -288,8 +288,8 @@ export class PolyphonicAnalysis {
  * @throws {TypeError} `samples` is not a `Float32Array`.
  * @throws {RangeError} `sampleRate` is out of the supported range.
  * @throws {SonareError} `samples` is empty or too short for two STFT frames at
- *   the configured `nFft`/`hopLength` (roughly one `hopLength`, ~512 samples at
- *   the default), a tuning field is out of its stage's range, or the library was
+ *   the configured `nFft`/`hopLength` (roughly one `hopLength`, 512 samples at
+ *   44100 Hz by default, converted to the input rate), a tuning field is out of its stage's range, or the library was
  *   built without the pitch editor.
  *
  * @example

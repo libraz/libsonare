@@ -589,7 +589,11 @@ class TransportState:
 
 @dataclass(frozen=True, slots=True)
 class Section:
-    """A detected song-structure section."""
+    """A detected song-structure section.
+
+    ``energy_level`` is the median frame RMS in the section over the loudest
+    section's, in [0, 1].
+    """
 
     type: SectionType
     start: float

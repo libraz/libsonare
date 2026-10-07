@@ -45,6 +45,12 @@ export interface InverseMelResult {
  */
 export interface StreamAnalyzerConfig {
   sampleRate?: number;
+  /**
+   * Analysis window as a duration, in samples at 44100 Hz. Below that rate the
+   * window is rescaled to the analysis rate, never shorter than `hopLength`. The
+   * emitted bin count follows the FFT length the window is zero-padded to, not
+   * `nFft / 2 + 1`.
+   */
   nFft?: number;
   hopLength?: number;
   nMels?: number;

@@ -548,8 +548,8 @@ def detect_boundaries(
     """Detect structural boundaries and return the novelty curve behind them.
 
     ``reference_window`` is a one-sided span in seconds (default 60) for the local
-    reference the relative ``threshold`` is measured against; 0 disables that
-    threshold. Boundaries with ``strength`` below ``threshold`` can still be
+    reference the relative ``threshold`` is measured against, a lone dominant event
+    set aside; 0 disables that threshold. Boundaries with ``strength`` below ``threshold`` can still be
     returned, because the gate is local while ``strength`` ranks within the track.
     """
     ...

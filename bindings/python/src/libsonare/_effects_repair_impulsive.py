@@ -388,9 +388,10 @@ def mastering_repair_detect_clipping(
 
     The flat-top fields (``flat_run_count``, ``longest_flat_run_samples``,
     ``flat_sample_count``, ``flat_level``) answer a different question: they
-    count runs of at least three consecutive bit-identical samples within 1 dB
-    of the signal's peak, wherever that peak sits, rather than samples at or
-    past ``clip_threshold``. That lets them fire on material clipped in one
+    count runs of at least three consecutive bit-identical samples at or above
+    -40 dBFS that sit within 1 dB of the flat level (the largest run level once
+    the two highest runs are set aside, so louder unclipped audio cannot move
+    it), rather than samples at or past ``clip_threshold``. That lets them fire on material clipped in one
     tool and attenuated in another, which leaves nothing at the threshold and
     so reads as clean on the four fields above. They do NOT read
     ``clip_threshold`` at all, and a genuinely flat-topped waveform -- a

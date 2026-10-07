@@ -310,10 +310,12 @@ def detect_boundaries(
         n_fft: FFT window size used for the structural features.
         hop_length: Hop length in samples.
         kernel_size: Checkerboard kernel size in frames.
-        threshold: Relative novelty threshold, applied to the curve after it has
-            been scaled by its own maximum. Selects how prominent a peak must be
-            *within this track*; it says nothing about how much the features
-            actually changed.
+        threshold: Relative novelty threshold: a peak must reach this fraction of
+            the largest raw novelty event within ``reference_window`` of it, a
+            lone dominant event (one no other event in the window comes within
+            ``threshold`` of) set aside. Selects how prominent a peak is *among
+            its neighbours*; it says nothing about how much the features actually
+            changed.
         absolute_threshold: Novelty floor applied to the raw response before that
             scaling, asking whether anything changed at all. Set to 0 to gate on
             ``threshold`` alone -- but note that self-scaling turns residual
@@ -328,7 +330,9 @@ def detect_boundaries(
         reference_window: One-sided span in seconds (default 60) over which the
             local novelty maximum that ``threshold`` is measured against is taken.
             Must be finite and non-negative; 0 makes each frame its own
-            reference, which disables the relative threshold.
+            reference, which disables the relative threshold. A value at least
+            the track length makes the reference whole-track, still with a lone
+            dominant event set aside.
         use_mfcc: Use MFCC features.
         use_chroma: Use chroma features.
 
@@ -406,8 +410,9 @@ def analyze_melody(
         sample_rate: Sample rate in Hz (default 22050).
         fmin: Minimum detectable frequency in Hz.
         fmax: Maximum detectable frequency in Hz.
-        frame_length: Analysis frame length in samples.
-        hop_length: Hop length in samples.
+        frame_length: Analysis frame length in samples at 22050 Hz, rescaled to
+            ``sample_rate``.
+        hop_length: Hop length in samples of the input buffer.
         threshold: YIN/pYIN absolute threshold.
         use_pyin: When ``True``, use pYIN (probabilistic YIN with Viterbi
             smoothing) instead of plain YIN. Requires

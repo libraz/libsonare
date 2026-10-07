@@ -1404,14 +1404,17 @@ typedef struct {
   size_t run_count;            // runs of consecutive clipped samples
   size_t longest_run_samples;  // a run past the 512-sample cap takes the
                                // interpolation fallback instead of the solver
-  // Flat tops: runs of bit-identical samples at the signal's peak. These answer
+  // Flat tops: runs of bit-identical samples at the channel's flat level (the
+  // largest run level once the two highest runs are set aside; candidates are
+  // at least -40 dBFS). These answer
   // a different question from the four fields above, which are read against
   // clip_threshold and therefore both count the apex of any waveform that
   // reaches it and miss material clipped before it was attenuated.
   size_t flat_run_count;
   size_t longest_flat_run_samples;
   size_t flat_sample_count;
-  float flat_level;  // magnitude the counted runs sit at; 0 when there are none
+  float flat_level;  // magnitude the counted runs sit at (largest run level once the two
+                     // highest runs are set aside); 0 when there are none
 } SonareClipDetection;
 
 /// @brief Measures clipping without repairing.

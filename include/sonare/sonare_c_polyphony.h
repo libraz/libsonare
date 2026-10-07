@@ -59,6 +59,8 @@ typedef struct {
 
   /* --- Framing. One STFT serves the extraction, the claims, the apportionment and
      the render, so it is stated once. --- */
+  /* n_fft, hop_length and win_length are samples at 44100 Hz, converted to the
+     input's sample rate (explicit values too). */
   int32_t n_fft;      /* 0 => 4096, the size this chain is tuned at */
   int32_t hop_length; /* 0 => 512 */
   int32_t win_length; /* 0 => n_fft */

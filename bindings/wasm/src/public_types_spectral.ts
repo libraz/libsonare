@@ -302,11 +302,15 @@ export interface PitchDecompositionResult {
  * state it would be a second thing to keep in agreement.
  */
 export interface PolyphonicAnalysisOptions {
-  /** STFT size the whole chain runs in. Default 4096, the size it is tuned at. */
+  /**
+   * STFT size the whole chain runs in. Default 4096, the size it is tuned at.
+   * `nFft`, `hopLength` and `winLength` are samples at 44100 Hz, converted to the
+   * input's sample rate; explicit values are converted too.
+   */
   nFft?: number;
-  /** STFT hop in samples. Default 512. */
+  /** STFT hop in samples at 44100 Hz. Default 512. */
   hopLength?: number;
-  /** Window length in samples. Defaults to `nFft`. */
+  /** Window length in samples at 44100 Hz. Defaults to `nFft`. */
   winLength?: number;
   /** Bottom of the cent axis the salience is folded onto, in Hz. Default 55. */
   centRefHz?: number;

@@ -262,7 +262,7 @@ typedef struct {
   SonareSectionType type;
   float start;        /* seconds */
   float end;          /* seconds */
-  float energy_level; /* [0, 1] */
+  float energy_level; /* median frame RMS in the section over the loudest section's, [0, 1] */
   float confidence;   /* [0, 1] */
 } SonareSection;
 
@@ -310,8 +310,8 @@ typedef struct {
 typedef struct {
   int n_fft;
   int hop_length;
-  int kernel_size;          /* checkerboard kernel, in frames */
-  float threshold;          /* relative, applied to the self-scaled curve */
+  int kernel_size; /* checkerboard kernel, in frames */
+  float threshold; /* relative to the local novelty maximum, lone dominant event set aside */
   float absolute_threshold; /* applied to the raw response, before scaling */
   int n_mfcc;
   int n_chroma;
@@ -320,8 +320,9 @@ typedef struct {
   int use_chroma;
   /* One-sided span in seconds of the neighbourhood `threshold` is measured
    * against. Default 60. 0 makes the reference the frame itself, so `threshold`
-   * no longer applies; a value at least the track length restores a
-   * whole-track reference. */
+   * no longer applies; a value at least the track length makes the
+   * reference whole-track, still with a lone dominant event (one no other event
+   * in the window comes within `threshold` of) set aside. */
   float reference_window;
 } SonareBoundaryOptions;
 

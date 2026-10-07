@@ -80,12 +80,13 @@ class ClipDetection:
     ``longest_run_samples`` are read against ``clip_threshold``, so they count
     the apex of any waveform that reaches it and miss material clipped before
     it was attenuated. The flat-top fields instead count runs of at least
-    three consecutive bit-identical samples within 1 dB of the signal's peak,
-    wherever that peak sits, so they still fire on a clipped tone that was
-    attenuated afterward. A genuinely flat-topped waveform -- a square or
+    three consecutive bit-identical samples, at least -40 dBFS, within 1 dB of the
+    channel's flat level, so they still fire on a clipped tone that was
+    attenuated afterward and a loud transient elsewhere does not hide them. A genuinely flat-topped waveform -- a square or
     pulse train, or a fully limited master -- counts as clipped here too and
     cannot be told apart from it in the time domain. ``flat_level`` is the
-    magnitude the counted runs sit at, 0 when there are none.
+    magnitude the counted runs sit at -- the largest run level once the two
+    highest runs are set aside -- 0 when there are none.
 
     The reverse also holds, and matters more: anything that moves samples
     independently erases a real flat top, so a zero here is not proof the

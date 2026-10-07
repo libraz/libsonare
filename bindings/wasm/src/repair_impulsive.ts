@@ -334,8 +334,10 @@ export function masteringRepairDetectClicks(
  * apex of any waveform that reaches it — a full-scale sine reports thousands of "clipped" samples
  * having never been clipped — and they miss material clipped in one tool and attenuated in the
  * next, which leaves nothing at the threshold. The flat-top fields instead count runs of at least
- * 3 consecutive bit-identical samples whose level sits within 1 dB of the signal's peak, so they
- * catch a clipped-then-attenuated waveform that `sampleCount` reports as clean.
+ * 3 consecutive bit-identical samples (at or above -40 dBFS) whose level sits within 1 dB of the
+ * flat level — the largest run level once the two highest runs are set aside, so louder unclipped
+ * audio cannot move it — so they catch a clipped-then-attenuated waveform that `sampleCount`
+ * reports as clean.
  *
  * Two opposite errors follow from what a flat top actually is. A genuinely flat-topped waveform —
  * a square or pulse train, a fully limited master — counts as clipped here too and cannot be told
