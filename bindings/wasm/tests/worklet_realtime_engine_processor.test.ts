@@ -3,7 +3,8 @@ import { RealtimeEngine } from '../dist/index.js';
 // The accepted-type table itself, so the coverage below is generated from the
 // same source of truth as the guard rather than restated.
 import { ENGINE_SYNC_MESSAGE_TYPES, isEngineSyncMessage } from '../src/worklet/guards';
-import type { SonareEngineCommandRecord, SonareEngineSyncMessage } from '../src/worklet/messages';
+import type { SonareEngineSyncMessage } from '../src/worklet/messages';
+import type { SonareEngineCommandRecord } from '../src/worklet/protocol';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
@@ -2475,7 +2476,10 @@ describe('processor state reset through the worklet facade', () => {
   };
 
   const fakeContext = (): BaseAudioContext =>
-    ({ sampleRate: SR, audioWorklet: { addModule: () => Promise.resolve() } }) as BaseAudioContext;
+    ({
+      sampleRate: SR,
+      audioWorklet: { addModule: () => Promise.resolve() },
+    }) as unknown as BaseAudioContext;
 
   const readyNode = (posted: unknown[]): AudioWorkletNode => {
     const port = {
