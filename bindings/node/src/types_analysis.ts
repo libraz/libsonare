@@ -364,9 +364,9 @@ export interface AnalyzeBpmOptions {
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
-  /** FFT size for the onset envelope. Default 2048. */
+  /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
-  /** Hop length for the onset envelope. Default 512. */
+  /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
   /** Number of tempo candidates to return. Default 5. */
   maxCandidates?: number;
@@ -380,9 +380,9 @@ export interface AnalyzeRhythmOptions {
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
-  /** FFT size for the onset envelope. Default 2048. */
+  /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
-  /** Hop length for the onset envelope. Default 512. */
+  /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
 }
 
@@ -410,9 +410,9 @@ export interface AcousticOptions {
 
 /** Options for {@link analyzeTimbre}. All fields are optional. */
 export interface AnalyzeTimbreOptions {
-  /** FFT size. Default 2048. */
+  /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
-  /** Hop length in samples. Default 512. */
+  /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
   /** Number of mel bands. Default 128. */
   nMels?: number;
@@ -814,7 +814,8 @@ export interface RhythmResult {
    * third figure rather than either tempo entry point's: measured against
    * synthesized click trains it differs from both at every sample rate, and
    * lands closer to the known tempo than either. Analysed at the sample rate
-   * you pass, so `nFft` and `hopLength` are in samples of your buffer.
+   * you pass: `nFft` is a window length in samples at 22050 Hz, rescaled to
+   * that rate, and `hopLength` is in samples of your buffer.
    */
   bpm: number;
   timeSignature: TimeSignature;

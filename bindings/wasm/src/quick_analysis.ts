@@ -795,7 +795,8 @@ export interface RhythmAnalysisResult {
    * third figure rather than either tempo entry point's: measured against
    * synthesized click trains it differs from both at every sample rate, and
    * lands closer to the known tempo than either. Analysed at the sample rate
-   * you pass, so `nFft` and `hopLength` are in samples of your buffer.
+   * you pass: `nFft` is a window length in samples at 22050 Hz, rescaled to
+   * that rate, and `hopLength` is in samples of your buffer.
    */
   bpm: number;
   beatIntervals: Float32Array;

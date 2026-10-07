@@ -88,7 +88,11 @@ export interface MasteringAudioProfile {
   };
 }
 
-/** The profile entry points take numeric params only; they have no target platform. */
+/**
+ * The profile entry points take numeric params only; they have no target platform.
+ * `params.nFft` and `params.hopLength` are the window length and hop in samples at 48000 Hz,
+ * rescaled to the input sample rate.
+ */
 export interface MasteringAudioProfileRequest {
   samples: Float32Array;
   sampleRate?: number;
@@ -109,7 +113,10 @@ export interface MasteringAssistantSuggestStereoRequest {
   params?: MasteringAssistantParams;
 }
 
-/** Request for {@link masteringAudioProfileStereo}. */
+/**
+ * Request for {@link masteringAudioProfileStereo}. `params.nFft` and `params.hopLength` are in
+ * samples at 48000 Hz, rescaled to the input sample rate.
+ */
 export interface MasteringAudioProfileStereoRequest {
   left: Float32Array;
   right: Float32Array;

@@ -375,7 +375,10 @@ def analyze_bpm(
     n_fft: int = 2048,
     hop_length: int = 512,
     max_candidates: int = 5,
-) -> BpmAnalysisResult: ...
+) -> BpmAnalysisResult:
+    """``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to the input
+    sample rate; ``hop_length`` is in samples of the input buffer."""
+
 def analyze_impulse_response(
     samples: FloatSamples,
     sample_rate: int = 48000,
@@ -458,7 +461,10 @@ def analyze_rhythm(
     start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
-) -> RhythmResult: ...
+) -> RhythmResult:
+    """``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to the input
+    sample rate; ``hop_length`` is in samples of the input buffer."""
+
 def analyze_dynamics(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -474,7 +480,10 @@ def analyze_timbre(
     n_mels: int = 128,
     n_mfcc: int = 13,
     window_sec: float = 0.5,
-) -> TimbreResult: ...
+) -> TimbreResult:
+    """``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to the input
+    sample rate; ``hop_length`` is in samples of the input buffer."""
+
 def detect_chords(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -1085,7 +1094,10 @@ def mastering_audio_profile(
     samples: FloatSamples,
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
-) -> str: ...
+) -> str:
+    """``nFft`` and ``hopLength`` in ``params`` are the window length and hop in samples at
+    48000 Hz, rescaled to the input sample rate."""
+
 def mastering_assistant_suggest_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -1103,7 +1115,10 @@ def mastering_audio_profile_stereo(
     right: FloatSamples,
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
-) -> str: ...
+) -> str:
+    """``nFft`` and ``hopLength`` in ``params`` are the window length and hop in samples at
+    48000 Hz, rescaled to the input sample rate."""
+
 def mastering_processor_names() -> list[SoloProcessor]: ...
 def mastering_pair_processor_names() -> list[PairProcessor]: ...
 def mastering_pair_analysis_names() -> list[PairAnalysis]: ...

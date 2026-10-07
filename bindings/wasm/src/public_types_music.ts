@@ -199,9 +199,9 @@ export interface AnalyzeBpmOptions extends ValidateOptions {
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
-  /** FFT size for the onset envelope. Default 2048. */
+  /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
-  /** Hop length for the onset envelope. Default 512. */
+  /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
   /** Number of tempo candidates to return. Default 5. */
   maxCandidates?: number;
@@ -215,9 +215,9 @@ export interface AnalyzeRhythmOptions extends ValidateOptions {
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
-  /** FFT size for the onset envelope. Default 2048. */
+  /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
-  /** Hop length for the onset envelope. Default 512. */
+  /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
 }
 
@@ -233,9 +233,9 @@ export interface AnalyzeDynamicsOptions extends ValidateOptions {
 
 /** Options for `analyzeTimbre`. All fields are optional. */
 export interface AnalyzeTimbreOptions extends ValidateOptions {
-  /** FFT size. Default 2048. */
+  /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
-  /** Hop length. Default 512. */
+  /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
   /** Number of Mel bands. Default 128. */
   nMels?: number;

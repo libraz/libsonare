@@ -514,7 +514,11 @@ def mastering_audio_profile(
     sample_rate: int = 22050,
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
-    """Analyze audio and return the mastering assistant profile as shared JSON."""
+    """Analyze audio and return the mastering assistant profile as shared JSON.
+
+    The ``nFft`` and ``hopLength`` params are the window length and hop in
+    samples at 48000 Hz, rescaled to the input sample rate.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_audio_profile"):
         raise _not_supported("libsonare was built without mastering audio profile support")
@@ -696,7 +700,9 @@ def mastering_audio_profile_stereo(
     The ``loudness`` block is measured from the two channels; the
     spectral, dynamics and tempo fields describe shape and timing rather than
     absolute level and are measured on the downmix, which keeps them comparable
-    with :func:`mastering_audio_profile`. Defect detectors run on each channel
+    with :func:`mastering_audio_profile`, and its ``nFft`` / ``hopLength``
+    params are read the same way: samples at 48000 Hz, rescaled to the input
+    sample rate. Defect detectors run on each channel
     and their results are aggregated.
     """
     param_array, param_count = _mastering_params(params)

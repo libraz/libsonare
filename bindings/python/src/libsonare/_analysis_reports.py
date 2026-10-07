@@ -659,6 +659,9 @@ def analyze_bpm(
 ) -> BpmAnalysisResult:
     """Analyze BPM with confidence, candidates, autocorrelation, and tempogram.
 
+    ``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to
+    the input sample rate; ``hop_length`` is in samples of the input buffer.
+
     Note:
         ``bpm_min`` defaults to 30.0 here (lower than :func:`analyze_rhythm`'s
         60.0). This wider search range lets the full BPM analyzer surface
@@ -839,8 +842,9 @@ def analyze_rhythm(
     beat period. It is a third figure rather than either tempo entry point's:
     measured against synthesized click trains it differs from both at every
     sample rate, and lands closer to the known tempo than either. Analysis runs
-    at ``sample_rate``, so ``n_fft`` and ``hop_length`` are in samples of the
-    buffer you pass.
+    at ``sample_rate``. ``n_fft`` is the analysis window length in samples at
+    22050 Hz, rescaled to the input sample rate; ``hop_length`` is in samples
+    of the input buffer.
 
     Note:
         ``bpm_min`` defaults to 60.0 here (higher than :func:`analyze_bpm`'s
@@ -931,7 +935,11 @@ def analyze_timbre(
     n_mfcc: int = 13,
     window_sec: float = 0.5,
 ) -> TimbreResult:
-    """Analyze timbre and spectral-shape primitives."""
+    """Analyze timbre and spectral-shape primitives.
+
+    ``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to
+    the input sample rate; ``hop_length`` is in samples of the input buffer.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareTimbreResult()

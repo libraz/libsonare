@@ -786,7 +786,9 @@ SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
 
 /// @brief Analyze audio and return mastering assistant profile JSON.
 /// @details @p params accepts nFft, hopLength, truePeakOversample, and
-/// detectDefects. The last runs the six repair detectors and fills the
+/// detectDefects. @c nFft and @c hopLength are the window length and hop in
+/// samples at 48000 Hz, rescaled to @p sample_rate. The last runs the six repair detectors and
+/// fills the
 /// @c defects block; it is off by default because they are six further
 /// analysis passes. The block is present either way, and its @c measured
 /// field is what says whether anything looked.

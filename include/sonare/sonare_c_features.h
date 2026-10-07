@@ -18,8 +18,9 @@ extern "C" {
 ///          resamples to the shared analysis rate first, so the two can report
 ///          slightly different tempi for the same recording -- measured against
 ///          synthesized click trains, this entry is the closer of the two at
-///          rates above the analysis rate. @p n_fft and @p hop_length are
-///          therefore in samples of the caller's buffer, not of a resampled one.
+///          rates above the analysis rate. @p n_fft is the analysis window
+///          length in samples at 22050 Hz, rescaled to @p sample_rate;
+///          @p hop_length is in samples of the caller's buffer.
 /// @param out Receives heap-owned arrays; free with sonare_free_bpm_analysis_result.
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
@@ -46,8 +47,9 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
 ///          entry's -- measured against synthesized click trains it differs
 ///          from both at every rate tested, including the shared analysis rate
 ///          where nothing resamples, and lands closer to the known tempo than
-///          either. Analyses at the caller's @p sample_rate, so @p n_fft and
-///          @p hop_length are in samples of the caller's buffer.
+///          either. Analyses at the caller's @p sample_rate. @p n_fft is the
+///          analysis window length in samples at 22050 Hz, rescaled to
+///          @p sample_rate; @p hop_length is in samples of the caller's buffer.
 /// @param out Receives heap-owned arrays; free with sonare_free_rhythm_result.
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
@@ -56,6 +58,8 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
                                     float window_sec, int hop_length, float compression_threshold,
                                     SonareDynamicsResult* out);
+/// @param n_fft Analysis window length in samples at 22050 Hz, rescaled to
+///   @p sample_rate; @p hop_length is in samples of the caller's buffer.
 /// @param out Receives heap-owned arrays; free with sonare_free_timbre_result.
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
                                   int hop_length, int n_mels, int n_mfcc, float window_sec,
