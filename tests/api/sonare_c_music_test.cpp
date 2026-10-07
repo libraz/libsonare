@@ -575,3 +575,51 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
     sonare_free_section_result(&result);
   }
 }
+
+TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {
+  const int sample_rate = 22050;
+  const float freqs[] = {220.0f, 440.0f, 330.0f, 660.0f};
+  const size_t seg = static_cast<size_t>(sample_rate) * 2;
+  std::vector<float> samples(seg * 4);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = 0.5f * std::sin(2.0f * 3.14159265f * freqs[i / seg] * t);
+  }
+
+  SonareBoundaryOptions defaults = sonare_boundary_options_default();
+  REQUIRE(defaults.reference_window == 60.0f);
+
+  auto count = [&](const SonareBoundaryOptions& options, SonareError* err) {
+    SonareBoundaryResult result = {};
+    *err = sonare_detect_boundaries(samples.data(), samples.size(), sample_rate, &options, &result);
+    const size_t n = result.boundary_count;
+    sonare_free_boundary_result(&result);
+    return n;
+  };
+
+  SECTION("invalid values are refused") {
+    const float bad[] = {-1.0f, std::numeric_limits<float>::quiet_NaN(),
+                         std::numeric_limits<float>::infinity()};
+    for (float value : bad) {
+      SonareBoundaryOptions options = defaults;
+      options.reference_window = value;
+      SonareError err = SONARE_OK;
+      count(options, &err);
+      REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+
+  SECTION("the field is read") {
+    SonareBoundaryOptions floor_only = defaults;
+    floor_only.absolute_threshold = 0.0f;
+    SonareBoundaryOptions frame_ref = floor_only;
+    frame_ref.reference_window = 0.0f;
+    SonareError err_a = SONARE_OK;
+    SonareError err_b = SONARE_OK;
+    const size_t with_window = count(floor_only, &err_a);
+    const size_t without = count(frame_ref, &err_b);
+    REQUIRE(err_a == SONARE_OK);
+    REQUIRE(err_b == SONARE_OK);
+    REQUIRE(with_window != without);
+  }
+}

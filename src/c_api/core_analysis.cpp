@@ -502,6 +502,7 @@ SonareBoundaryOptions sonare_boundary_options_default(void) {
   options.peak_distance = config.peak_distance;
   options.use_mfcc = config.use_mfcc ? 1 : 0;
   options.use_chroma = config.use_chroma ? 1 : 0;
+  options.reference_window = config.reference_window;
   return options;
 }
 
@@ -533,6 +534,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   // failing.
   if (!numeric::finite_non_negative(options->threshold) ||
       !numeric::finite_non_negative(options->absolute_threshold) ||
+      !numeric::finite_non_negative(options->reference_window) ||
       !numeric::finite_non_negative(options->peak_distance)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -552,6 +554,7 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
     config.peak_distance = options->peak_distance;
     config.use_mfcc = options->use_mfcc != 0;
     config.use_chroma = options->use_chroma != 0;
+    config.reference_window = options->reference_window;
 
     BoundaryDetector detector(audio, config);
     const std::vector<Boundary>& boundaries = detector.boundaries();

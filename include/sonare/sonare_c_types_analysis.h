@@ -318,6 +318,11 @@ typedef struct {
   float peak_distance; /* minimum spacing between peaks, in seconds */
   int use_mfcc;
   int use_chroma;
+  /* One-sided span in seconds of the neighbourhood `threshold` is measured
+   * against. Default 60. 0 makes the reference the frame itself, so `threshold`
+   * no longer applies; a value at least the track length restores a
+   * whole-track reference. */
+  float reference_window;
 } SonareBoundaryOptions;
 
 typedef struct {

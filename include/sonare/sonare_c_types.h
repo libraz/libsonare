@@ -12,7 +12,7 @@
 ///        versioning pattern. Exposed at runtime through
 ///        the aggregate sonare_abi_version() so a prebuilt binding can detect a
 ///        layout or function-contract mismatch before calling into the library.
-#define SONARE_FEATURE_ABI_VERSION 6u
+#define SONARE_FEATURE_ABI_VERSION 7u
 
 /// @brief Single aggregate C-ABI version. Encodes the per-subsystem versions so a
 ///        prebuilt binding linked against a different libsonare can detect a
