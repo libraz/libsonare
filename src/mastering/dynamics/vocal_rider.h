@@ -45,6 +45,11 @@ class VocalRider : public rt::ProcessorBase,
   // release) are recomputed on the audio thread when the snapshot is adopted,
   // so no per-channel state is written concurrently with processing.
   float last_gain_db() const { return last_gain_db_; }
+  /// The deepest cut this block applied, in dB (<= 0); a block that only
+  /// boosted reports 0.
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// Most-negative cut since the last prepare()/reset().
+  float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = target_db
@@ -76,6 +81,8 @@ class VocalRider : public rt::ProcessorBase,
   // blocks so toggling linked/unlinked does not introduce a discontinuity.
   std::vector<float> unlinked_gain_state_db_;
   float last_gain_db_ = 0.0f;
+  float last_gain_reduction_db_ = 0.0f;
+  float minimum_gain_reduction_db_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::dynamics

@@ -67,6 +67,7 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
 
   ensure_followers(num_channels);
   float largest_abs_gain = 0.0f;
+  float block_min_gain_db = 0.0f;
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& fast = fast_followers_[static_cast<size_t>(ch)];
@@ -89,6 +90,10 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
         lookahead_index_[idx] = (lookahead_index_[idx] + 1) % lookahead_[idx].size();
       }
       channels[ch][i] = delayed * db_to_linear(gain_state_db_[idx]);
+      // min(0, x) is NaN-safe (a NaN compares false and leaves 0); infinities are excluded.
+      if (std::isfinite(gain_state_db_[idx])) {
+        block_min_gain_db = std::min(block_min_gain_db, gain_state_db_[idx]);
+      }
       if (std::abs(gain_state_db_[idx]) > std::abs(largest_abs_gain)) {
         largest_abs_gain = gain_state_db_[idx];
       }
@@ -104,6 +109,8 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
   if (discarded) note_non_finite_discard();
 
   last_gain_db_ = largest_abs_gain;
+  last_gain_reduction_db_ = block_min_gain_db;
+  minimum_gain_reduction_db_ = std::min(minimum_gain_reduction_db_, block_min_gain_db);
 }
 
 void TransientShaper::reset() {
@@ -117,6 +124,8 @@ void TransientShaper::reset() {
   for (auto& delay : lookahead_) std::fill(delay.begin(), delay.end(), 0.0f);
   std::fill(lookahead_index_.begin(), lookahead_index_.end(), 0);
   last_gain_db_ = 0.0f;
+  last_gain_reduction_db_ = 0.0f;
+  minimum_gain_reduction_db_ = 0.0f;
 }
 
 bool TransientShaper::set_parameter_impl(unsigned int param_id, float value) {

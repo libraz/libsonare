@@ -488,6 +488,8 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   if (config_.dynamics.transient_shaper.enabled) {
     mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
     run_processor_mono(processor, data, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.transientShaper", processor.minimum_gain_reduction_db()});
     if (!report("dynamics.transientShaper")) return std::nullopt;
   }
 
@@ -742,6 +744,8 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   if (config_.dynamics.transient_shaper.enabled) {
     mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
     run_processor_stereo(processor, left, right, sample_rate);
+    result.stage_gain_reductions.push_back(
+        {"dynamics.transientShaper", processor.minimum_gain_reduction_db()});
     if (!report("dynamics.transientShaper")) return std::nullopt;
   }
 

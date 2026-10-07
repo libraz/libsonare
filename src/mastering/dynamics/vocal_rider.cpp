@@ -67,6 +67,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   const VocalRiderConfig& cfg = *adopt_snapshot_for_block();
 
   float largest_abs_gain = 0.0f;
+  float block_min_gain_db = 0.0f;
   const float smoothing = time_to_coefficient(sample_rate_, cfg.gain_smoothing_ms);
   bool discarded = false;
   if (cfg.linked_detection) {
@@ -95,6 +96,10 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
       const float gain_db = linked_gain_state_db_ + cfg.output_gain_db;
       const float gain = db_to_linear(gain_db);
       for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
+      // min(0, x) is NaN-safe (a NaN compares false and leaves 0); infinities are excluded.
+      if (std::isfinite(linked_gain_state_db_)) {
+        block_min_gain_db = std::min(block_min_gain_db, linked_gain_state_db_);
+      }
       if (std::abs(linked_gain_state_db_) > std::abs(largest_abs_gain)) {
         largest_abs_gain = linked_gain_state_db_;
       }
@@ -124,6 +129,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         // Report the smoothed gain state (as the linked branch does), not the
         // pre-smoothing ride target, so last_gain_db_ means the same thing in
         // both detection modes.
+        if (std::isfinite(gain_state)) block_min_gain_db = std::min(block_min_gain_db, gain_state);
         if (std::abs(gain_state) > std::abs(largest_abs_gain)) largest_abs_gain = gain_state;
       }
       // Two floats per channel, once per block; see the linked branch.
@@ -134,6 +140,8 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   if (discarded) note_non_finite_discard();
 
   last_gain_db_ = largest_abs_gain;
+  last_gain_reduction_db_ = block_min_gain_db;
+  minimum_gain_reduction_db_ = std::min(minimum_gain_reduction_db_, block_min_gain_db);
 }
 
 void VocalRider::reset() {
@@ -143,6 +151,8 @@ void VocalRider::reset() {
   linked_gain_state_db_ = 0.0f;
   std::fill(unlinked_gain_state_db_.begin(), unlinked_gain_state_db_.end(), 0.0f);
   last_gain_db_ = 0.0f;
+  last_gain_reduction_db_ = 0.0f;
+  minimum_gain_reduction_db_ = 0.0f;
 }
 
 bool VocalRider::set_parameter_impl(unsigned int param_id, float value) {

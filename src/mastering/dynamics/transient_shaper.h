@@ -49,6 +49,11 @@ class TransientShaper : public rt::ProcessorBase,
   // lookahead_ms field MUST equal the value last passed to prepare() — the
   // lookahead delay lines are sized in prepare() and not reallocated here.
   float last_gain_db() const { return last_gain_db_; }
+  /// The deepest cut this block applied, in dB (<= 0); a block that only
+  /// boosted reports 0.
+  float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// Most-negative cut since the last prepare()/reset().
+  float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
 
   /// Reports the lookahead delay so the host can compensate (PDC), matching the
   /// other lookahead-bearing dynamics processors.
@@ -99,6 +104,8 @@ class TransientShaper : public rt::ProcessorBase,
   // Cached lookahead delay in samples (set in prepare()), reported as latency.
   int lookahead_samples_ = 0;
   float last_gain_db_ = 0.0f;
+  float last_gain_reduction_db_ = 0.0f;
+  float minimum_gain_reduction_db_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::dynamics
