@@ -116,7 +116,7 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
     for bound in ("min", "max"):
         exclusive = parameter[f"{bound}Exclusive"]
         if not isinstance(exclusive, bool):
-            raise ValueError(f"{path}.{bound}Exclusive must be a boolean")
+            raise TypeError(f"{path}.{bound}Exclusive must be a boolean")
         if exclusive and parameter[bound] is None:
             raise ValueError(f"{path}.{bound}Exclusive is set without a {bound}")
     if parameter["maxRelativeTo"] not in {None, "nyquist"}:
@@ -325,6 +325,7 @@ def main() -> int:
         AttributeError,
         OSError,
         RuntimeError,
+        TypeError,
         UnicodeDecodeError,
         ValueError,
         json.JSONDecodeError,
