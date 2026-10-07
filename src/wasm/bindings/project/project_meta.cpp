@@ -17,6 +17,14 @@ struct AudioSourceMetadataGuard {
   ~AudioSourceMetadataGuard() { sonare_project_free_audio_source_metadata(&value); }
 };
 
+struct HeapStringGuard {
+  char* value = nullptr;
+
+  ~HeapStringGuard() {
+    if (value != nullptr) sonare_free_string(value);
+  }
+};
+
 }  // namespace
 
 void ProjectWasm::annotateKeys(val keys) {
@@ -252,13 +260,21 @@ val ProjectWasm::sourceByIndex(const val& index_val) const {
   const SonareError err =
       sonare_project_source_by_index(project_.get(), static_cast<size_t>(index), &d);
   if (err != SONARE_OK) throwCError(err, "source index out of range");
+  return sourceToVal(d);
+}
+
+val ProjectWasm::sourceToVal(const SonareProjectSource& d) const {
   AudioSourceMetadataGuard metadata;
+  HeapStringGuard uri;
   if (d.kind == 0) {
     const SonareError metadata_err =
         sonare_project_get_audio_source_metadata(project_.get(), d.id, &metadata.value);
     if (metadata_err != SONARE_OK) {
       throwCError(metadata_err, "failed to read audio source metadata");
     }
+    const SonareError uri_err =
+        sonare_project_get_audio_source_uri(project_.get(), d.id, &uri.value);
+    if (uri_err != SONARE_OK) throwCError(uri_err, "failed to read audio source uri");
   }
   val out = val::object();
   out.set("id", d.id);
@@ -266,7 +282,7 @@ val ProjectWasm::sourceByIndex(const val& index_val) const {
   out.set("channelCount", d.channel_count);
   out.set("storageHandleId", d.storage_handle_id);
   out.set("sampleRateHint", d.sample_rate_hint);
-  out.set("nameOrUri", std::string(d.name_or_uri));
+  out.set("nameOrUri", std::string(uri.value != nullptr ? uri.value : d.name_or_uri));
   out.set("contentHash",
           std::string(metadata.value.content_hash != nullptr ? metadata.value.content_hash : ""));
   out.set("externalStemRole", std::string(metadata.value.external_stem_role != nullptr

@@ -11,7 +11,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | domain | C entry points | Python | Node | WASM | CLI (python) | CLI (native) |
 |---|---:|---:|---:|---:|---:|---:|
 | assist | 3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
-| core (analysis, IO, conversion) | 64 | 47/64 | 47/64 | 44/64 | 16/64 | 16/64 |
+| core (analysis, IO, conversion) | 65 | 47/65 | 47/65 | 44/65 | 16/65 | 16/65 |
 | creative effects | 46 | 44/46 | 44/46 | 44/46 | 17/46 | 17/46 |
 | feature extraction | 140 | 123/140 | 123/140 | 123/140 | 25/140 | 49/140 |
 | mastering | 113 | 109/113 | 109/113 | 111/113 | 14/113 | 12/113 |
@@ -19,7 +19,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | mixing & routing | 57 | 55/57 | 55/57 | 55/57 | 2/57 | 2/57 |
 | playback | 22 | 22/22 | 22/22 | 22/22 | 8/22 | 8/22 |
 | polyphony | 13 | 13/13 | 13/13 | 13/13 | 4/13 | 4/13 |
-| project & arrangement | 165 | 157/165 | 156/165 | 156/165 | 12/165 | 9/165 |
+| project & arrangement | 167 | 159/167 | 158/167 | 158/167 | 12/167 | 9/167 |
 | project part rig | 3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 |
 | realtime engine | 181 | 178/181 | 178/181 | 178/181 | 5/181 | 5/181 |
 | room acoustics | 5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 |
@@ -29,4 +29,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | vocal edit | 58 | 44/58 | 44/58 | 44/58 | 11/58 | 11/58 |
 | vocal project | 10 | 5/10 | 5/10 | 5/10 | 2/10 | 2/10 |
 | voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 | 3/20 |
-| **all domains** | **984** | **906/984** | **903/984** | **903/984** | **143/984** | **162/984** |
+| **all domains** | **987** | **908/987** | **905/987** | **905/987** | **143/987** | **162/987** |

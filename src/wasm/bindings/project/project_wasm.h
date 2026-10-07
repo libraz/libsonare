@@ -272,6 +272,7 @@ struct ProjectWasm {
 
   void setClipFade(const val& clip_id, val fade_in, val fade_out);
   val unresolvedAudioSourceIds() const;
+  val unresolvedAudioSources() const;
   void setSourceAudio(const val& source_id, val audio, const val& channels, const val& sample_rate);
   void setAudioSourceMetadata(const val& source_id, const std::string& content_hash,
                               const std::string& external_stem_role);
@@ -329,6 +330,8 @@ struct ProjectWasm {
   val trackByIndex(const val& index_val) const;
   val clipByIndex(const val& index_val) const;
   val sourceByIndex(const val& index_val) const;
+  // Shared ProjectSource builder: audio sources carry the full URI and metadata.
+  val sourceToVal(const SonareProjectSource& d) const;
   double markerCount() const;
   double trackCount() const;
   double clipCount() const;

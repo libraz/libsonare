@@ -40,6 +40,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value ClipCount(const Napi::CallbackInfo& info);
   Napi::Value SourceCount(const Napi::CallbackInfo& info);
   Napi::Value UnresolvedAudioSourceIds(const Napi::CallbackInfo& info);
+  Napi::Value UnresolvedAudioSources(const Napi::CallbackInfo& info);
   Napi::Value SetSourceAudio(const Napi::CallbackInfo& info);
   Napi::Value SetAudioSourceMetadata(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);

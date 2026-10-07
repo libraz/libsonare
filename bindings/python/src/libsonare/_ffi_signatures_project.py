@@ -47,6 +47,12 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_uint32),
         ]
+        lib.sonare_project_get_audio_source_uri.restype = ctypes.c_int32
+        lib.sonare_project_get_audio_source_uri.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
         lib.sonare_project_set_source_audio.restype = ctypes.c_int32
         lib.sonare_project_set_source_audio.argtypes = [
             ctypes.c_void_p,
@@ -1054,6 +1060,7 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ("sonare_project_track_by_index", SonareProjectTrack),
         ("sonare_project_clip_by_index", SonareProjectClip),
         ("sonare_project_source_by_index", SonareProjectSource),
+        ("sonare_project_unresolved_audio_source_by_index", SonareProjectSource),
     ):
         if hasattr(lib, _name):
             _fn = getattr(lib, _name)

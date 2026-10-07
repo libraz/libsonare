@@ -410,6 +410,22 @@ SonareError sonare_project_get_audio_source_metadata(const SonareProject* projec
                                                      uint32_t source_id,
                                                      SonareProjectAudioSourceMetadata* out);
 
+/// @brief Reads an unresolved audio source descriptor by zero-based index.
+///
+/// Uses the same ordering as @ref sonare_project_unresolved_audio_source_id_by_index.
+/// @c name_or_uri is truncated to 127 bytes; read the full URI with
+/// @ref sonare_project_get_audio_source_uri. The output is zeroed on every failure.
+SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject* project,
+                                                            size_t index, SonareProjectSource* out);
+
+/// @brief Reads the full, untruncated URI of an audio source id.
+///
+/// On success @p out_uri is a heap copy that the caller releases with
+/// @ref sonare_free_string; it is NULL on every failure. Unknown ids and MIDI
+/// source ids return @c SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_get_audio_source_uri(const SonareProject* project, uint32_t source_id,
+                                                char** out_uri);
+
 /// @brief Frees strings returned by
 ///        @ref sonare_project_get_audio_source_metadata and zeros the struct.
 ///        NULL is safe.

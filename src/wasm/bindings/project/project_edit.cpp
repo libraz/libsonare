@@ -69,6 +69,21 @@ val ProjectWasm::unresolvedAudioSourceIds() const {
   return ids;
 }
 
+val ProjectWasm::unresolvedAudioSources() const {
+  size_t count = 0;
+  const SonareError err = sonare_project_unresolved_audio_source_count(project_.get(), &count);
+  if (err != SONARE_OK) throwCError(err, "failed to enumerate unresolved audio sources");
+  val sources = val::array();
+  for (size_t i = 0; i < count; ++i) {
+    SonareProjectSource source{};
+    const SonareError source_err =
+        sonare_project_unresolved_audio_source_by_index(project_.get(), i, &source);
+    if (source_err != SONARE_OK) throwCError(source_err, "failed to read unresolved audio source");
+    sources.set(static_cast<unsigned>(i), sourceToVal(source));
+  }
+  return sources;
+}
+
 void ProjectWasm::setSourceAudio(const val& source_id_val, val audio, const val& channels_val,
                                  const val& sample_rate_val) {
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
@@ -365,6 +380,7 @@ void registerProjectEdit(class_<ProjectWasm>& cls) {
       .function("setClipGain", &ProjectWasm::setClipGain)
       .function("setClipFade", &ProjectWasm::setClipFade)
       .function("unresolvedAudioSourceIds", &ProjectWasm::unresolvedAudioSourceIds)
+      .function("unresolvedAudioSources", &ProjectWasm::unresolvedAudioSources)
       .function("setSourceAudio", &ProjectWasm::setSourceAudio)
       .function("setAudioSourceMetadata", &ProjectWasm::setAudioSourceMetadata)
       .function("setClipTakes", &ProjectWasm::setClipTakes)

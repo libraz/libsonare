@@ -19,6 +19,48 @@ struct AudioSourceMetadataGuard {
   ~AudioSourceMetadataGuard() { sonare_project_free_audio_source_metadata(&value); }
 };
 
+struct HeapStringGuard {
+  char* value = nullptr;
+
+  ~HeapStringGuard() {
+    if (value != nullptr) sonare_free_string(value);
+  }
+};
+
+// Builds the ProjectSource object; audio sources carry the full URI, not the
+// truncated descriptor field.
+Napi::Value BuildProjectSource(Napi::Env env, const SonareProject* project,
+                               const SonareProjectSource& source) {
+  AudioSourceMetadataGuard metadata;
+  HeapStringGuard uri;
+  if (source.kind == 0) {
+    const SonareError metadata_error =
+        sonare_project_get_audio_source_metadata(project, source.id, &metadata.value);
+    if (metadata_error != SONARE_OK) {
+      ThrowIfError(env, metadata_error);
+      return env.Undefined();
+    }
+    const SonareError uri_error =
+        sonare_project_get_audio_source_uri(project, source.id, &uri.value);
+    if (uri_error != SONARE_OK) {
+      ThrowIfError(env, uri_error);
+      return env.Undefined();
+    }
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("id", source.id);
+  out.Set("kind", source.kind);
+  out.Set("channelCount", source.channel_count);
+  out.Set("storageHandleId", source.storage_handle_id);
+  out.Set("sampleRateHint", source.sample_rate_hint);
+  out.Set("nameOrUri", uri.value != nullptr ? uri.value : source.name_or_uri);
+  out.Set("contentHash", metadata.value.content_hash != nullptr ? metadata.value.content_hash : "");
+  out.Set("externalStemRole",
+          metadata.value.external_stem_role != nullptr ? metadata.value.external_stem_role : "");
+  return out;
+}
+
 }  // namespace
 
 Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
@@ -120,6 +162,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::ClipCount>("clipCount"),
           InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
           InstanceMethod<&ProjectWrap::UnresolvedAudioSourceIds>("unresolvedAudioSourceIds"),
+          InstanceMethod<&ProjectWrap::UnresolvedAudioSources>("unresolvedAudioSources"),
           InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio"),
           InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata"),
           InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
@@ -433,27 +476,7 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_source_by_index(project_, index, &source));
   if (env.IsExceptionPending()) return env.Undefined();
 
-  AudioSourceMetadataGuard metadata;
-  if (source.kind == 0) {
-    const SonareError metadata_error =
-        sonare_project_get_audio_source_metadata(project_, source.id, &metadata.value);
-    if (metadata_error != SONARE_OK) {
-      ThrowIfError(env, metadata_error);
-      return env.Undefined();
-    }
-  }
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("id", source.id);
-  out.Set("kind", source.kind);
-  out.Set("channelCount", source.channel_count);
-  out.Set("storageHandleId", source.storage_handle_id);
-  out.Set("sampleRateHint", source.sample_rate_hint);
-  out.Set("nameOrUri", source.name_or_uri);
-  out.Set("contentHash", metadata.value.content_hash != nullptr ? metadata.value.content_hash : "");
-  out.Set("externalStemRole",
-          metadata.value.external_stem_role != nullptr ? metadata.value.external_stem_role : "");
-  return out;
+  return BuildProjectSource(env, project_, source);
   SONARE_NODE_CATCH(env)
 }
 
@@ -599,6 +622,25 @@ Napi::Value ProjectWrap::UnresolvedAudioSourceIds(const Napi::CallbackInfo& info
     ids.Set(static_cast<uint32_t>(i), Napi::Number::New(env, source_id));
   }
   return ids;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ProjectWrap::UnresolvedAudioSources(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  size_t count = 0;
+  ThrowIfError(env, sonare_project_unresolved_audio_source_count(project_, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array sources = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    SonareProjectSource source{};
+    ThrowIfError(env, sonare_project_unresolved_audio_source_by_index(project_, i, &source));
+    if (env.IsExceptionPending()) return env.Undefined();
+    Napi::Value built = BuildProjectSource(env, project_, source);
+    if (env.IsExceptionPending()) return env.Undefined();
+    sources.Set(static_cast<uint32_t>(i), built);
+  }
+  return sources;
   SONARE_NODE_CATCH(env)
 }
 

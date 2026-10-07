@@ -1453,6 +1453,11 @@ export class Project {
     return this.native.unresolvedAudioSourceIds();
   }
 
+  /** Unresolved audio source descriptors, in the order of {@link unresolvedAudioSourceIds}; `nameOrUri` is the full URI. */
+  unresolvedAudioSources(): ProjectSource[] {
+    return this.native.unresolvedAudioSources();
+  }
+
   /** Register decoded interleaved PCM for an existing audio source (undoable). */
   setSourceAudio(
     sourceId: number,

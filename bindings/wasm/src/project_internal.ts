@@ -391,6 +391,7 @@ export interface WasmProject {
   setClipGain: (clipId: number, gain: number) => void;
   setClipFade: (clipId: number, fadeIn: ProjectClipFade, fadeOut: ProjectClipFade) => void;
   unresolvedAudioSourceIds: () => number[];
+  unresolvedAudioSources: () => ProjectSource[];
   setSourceAudio: (
     sourceId: number,
     audio: Float32Array,

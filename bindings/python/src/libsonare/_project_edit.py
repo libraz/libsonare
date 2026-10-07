@@ -45,6 +45,7 @@ from ._runtime import (
     SonareProjectClipFade,
     SonareProjectClipTake,
     SonareProjectLoopRecordingDesc,
+    SonareProjectSource,
     SonareProjectTrackDesc,
     SonareProjectWarpAnchor,
     SonareProjectWarpMapDesc,
@@ -66,6 +67,7 @@ from ._runtime import (
     _utf8_arg,
     _warp_mode_value,
 )
+from .types import ProjectSource
 
 # SonarePartRigMode, and SONARE_PART_RIG_ALL_PARTS (every part of a destination).
 PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
@@ -254,6 +256,7 @@ class _ProjectEditMixin:
     if TYPE_CHECKING:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
+        def _source_from_raw(self, raw: SonareProjectSource) -> ProjectSource: ...
 
     def set_sample_rate(self, sample_rate: float) -> None:
         """Set the project sample rate in Hz.
@@ -286,6 +289,26 @@ class _ProjectEditMixin:
             )
             ids.append(int(source_id.value))
         return ids
+
+    def unresolved_audio_sources(self) -> list[ProjectSource]:
+        """Return descriptors of audio sources that need PCM, with the full URI."""
+        count = ctypes.c_size_t()
+        lib = _get_lib()
+        _check(
+            lib.sonare_project_unresolved_audio_source_count(
+                self._require_handle(), ctypes.byref(count)
+            )
+        )
+        sources: list[ProjectSource] = []
+        for index in range(count.value):
+            raw = SonareProjectSource()
+            _check(
+                lib.sonare_project_unresolved_audio_source_by_index(
+                    self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
+                )
+            )
+            sources.append(self._source_from_raw(raw))
+        return sources
 
     def set_source_audio(
         self, source_id: int, audio: Sequence[float] | np.ndarray, channels: int, sample_rate: int

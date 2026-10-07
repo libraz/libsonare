@@ -409,6 +409,10 @@ _ALIAS_COVERAGE = {
     "project_set_marker_ex_name": ("set_marker_ex",),
     "project_unresolved_audio_source_count": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_id_by_index": ("unresolved_audio_source_ids",),
+    "project_unresolved_audio_source_by_index": ("unresolved_audio_sources",),
+    # The full URI feeds the ProjectSource builder behind source_by_index and
+    # unresolved_audio_sources.
+    "project_get_audio_source_uri": ("source_by_index", "unresolved_audio_sources"),
     # Typed automation is an additive C descriptor overload. Each facade keeps
     # one add/edit method and dispatches to `_ex` only when targetKind is
     # supplied, so coverage belongs to that canonical public method rather than

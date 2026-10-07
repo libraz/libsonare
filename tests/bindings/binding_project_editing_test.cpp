@@ -199,6 +199,82 @@ TEST_CASE("project tempo options reach the bridge and default to the fixed-signa
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C unresolved source descriptors carry the full URI", "[project]") {
+  SonareProject* source_project = nullptr;
+  REQUIRE(sonare_project_create(&source_project) == SONARE_OK);
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "audio";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(source_project, &track_desc, &track) == SONARE_OK);
+
+  const std::string long_uri = "asset://" + std::string(300, 'a') + ".wav";
+  const std::string short_uri = "asset://stem.wav";
+  const std::string* uris[] = {&long_uri, &short_uri};
+  for (size_t i = 0; i < 2; ++i) {
+    SonareProjectClipDesc desc{};
+    desc.track_id = track;
+    desc.start_ppq = 4.0 * static_cast<double>(i);
+    desc.length_ppq = 1.0;
+    desc.source_uri = uris[i]->c_str();
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_clip(source_project, &desc, &clip) == SONARE_OK);
+  }
+  uint32_t second_id = 0;
+  REQUIRE(sonare_project_unresolved_audio_source_id_by_index(source_project, 1, &second_id) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_audio_source_metadata(source_project, second_id, "sha256:abc",
+                                                   "vocals") == SONARE_OK);
+  const std::string json = serialize(source_project);
+  sonare_project_destroy(source_project);
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_deserialize(json.data(), json.size(), &project, nullptr) == SONARE_OK);
+
+  size_t count = 0;
+  REQUIRE(sonare_project_unresolved_audio_source_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 2);
+  std::vector<uint32_t> ids;
+  for (size_t i = 0; i < count; ++i) {
+    uint32_t id = 0;
+    REQUIRE(sonare_project_unresolved_audio_source_id_by_index(project, i, &id) == SONARE_OK);
+    SonareProjectSource source{};
+    REQUIRE(sonare_project_unresolved_audio_source_by_index(project, i, &source) == SONARE_OK);
+    CHECK(source.id == id);
+    CHECK(source.kind == 0);
+    CHECK(std::string(source.name_or_uri) == uris[i]->substr(0, 127));
+    char* uri = nullptr;
+    REQUIRE(sonare_project_get_audio_source_uri(project, id, &uri) == SONARE_OK);
+    REQUIRE(uri != nullptr);
+    CHECK(std::string(uri) == *uris[i]);
+    sonare_free_string(uri);
+    ids.push_back(id);
+  }
+  SonareProjectAudioSourceMetadata metadata{};
+  REQUIRE(sonare_project_get_audio_source_metadata(project, ids[1], &metadata) == SONARE_OK);
+  CHECK(std::string(metadata.content_hash) == "sha256:abc");
+  CHECK(std::string(metadata.external_stem_role) == "vocals");
+  sonare_project_free_audio_source_metadata(&metadata);
+
+  SonareProjectSource out{};
+  CHECK(sonare_project_unresolved_audio_source_by_index(project, 2, &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_unresolved_audio_source_by_index(project, 0, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  char* none = nullptr;
+  CHECK(sonare_project_get_audio_source_uri(project, 0, &none) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(none == nullptr);
+
+  const std::vector<float> samples(16, 0.25f);
+  REQUIRE(sonare_project_set_source_audio(project, ids[0], samples.data(), samples.size(), 1,
+                                          48000) == SONARE_OK);
+  REQUIRE(sonare_project_unresolved_audio_source_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 1);
+  REQUIRE(sonare_project_unresolved_audio_source_by_index(project, 0, &out) == SONARE_OK);
+  CHECK(out.id == ids[1]);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface composite edits roll back on failure", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

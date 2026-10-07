@@ -171,6 +171,38 @@ it('rebinds deserialized source audio before bouncing', () => {
   project.destroy();
 });
 
+it('describes unresolved audio sources with the full untruncated URI', () => {
+  const project = Project.create();
+  const trackId = project.addTrack({ kind: 'audio' });
+  const longUri = `asset://${'a'.repeat(300)}.wav`;
+  project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: longUri });
+  project.addClip({ trackId, startPpq: 2, lengthPpq: 1, sourceUri: 'asset://stem.wav' });
+  const restored = Project.fromJson(project.toJson());
+  const ids = restored.unresolvedAudioSourceIds();
+  expect(ids).toHaveLength(2);
+  restored.setAudioSourceMetadata(ids[1], 'sha256:abc', 'vocals');
+  const sources = restored.unresolvedAudioSources();
+  expect(sources.map((source) => source.id)).toEqual(ids);
+  expect(sources[0].nameOrUri).toBe(longUri);
+  expect(sources[0].kind).toBe(0);
+  expect(sources[1].nameOrUri).toBe('asset://stem.wav');
+  expect(sources[1].contentHash).toBe('sha256:abc');
+  expect(sources[1].externalStemRole).toBe('vocals');
+  expect(restored.sourceByIndex(0).nameOrUri).toBe(longUri);
+  restored.setSourceAudio(ids[0], new Float32Array(480).fill(0.25), 1, 48000);
+  expect(restored.unresolvedAudioSources().map((source) => source.id)).toEqual([ids[1]]);
+  restored.destroy();
+  project.destroy();
+});
+
+it('reports no unresolved audio sources for a MIDI-only project', () => {
+  const project = Project.create();
+  const trackId = project.addTrack({ kind: 'midi' });
+  project.addClip({ trackId, startPpq: 0, lengthPpq: 1, isMidi: true });
+  expect(project.unresolvedAudioSources()).toEqual([]);
+  project.destroy();
+});
+
 function makeSysexSmf(): Buffer {
   const payload = Buffer.from([0x7e, 0x7f, 0x09, 0x01, 0xf7]);
   const body = Buffer.from([

@@ -140,6 +140,18 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+void fill_audio_source(SonareProjectSource* out, const arr::AudioSourceRef& audio) {
+  out->id = audio.id;
+  out->channel_count = audio.channel_count;
+  out->storage_handle_id = audio.storage_handle_id;
+  out->sample_rate_hint = audio.sample_rate_hint;
+  copy_utf8_prefix(out->name_or_uri, audio.uri);
+}
+}  // namespace
+#endif
+
 SonareError sonare_project_unresolved_audio_source_count(const SonareProject* project,
                                                          size_t* out_count) {
   SONARE_C_API_ENTRY;
@@ -179,6 +191,29 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
 #else
   if (out_source_id) *out_source_id = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out_source_id);
+#endif
+}
+
+SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject* project,
+                                                            size_t index,
+                                                            SonareProjectSource* out) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
+  size_t current = 0;
+  for (const arr::ClipSource& source : project->history.project().sources()) {
+    const auto* audio = std::get_if<arr::AudioSourceRef>(&source);
+    if (audio == nullptr || project->audio.find(audio->id) != nullptr) continue;
+    if (current++ == index) {
+      fill_audio_source(out, *audio);
+      return SONARE_OK;
+    }
+  }
+  return SONARE_ERROR_INVALID_PARAMETER;
+#else
+  if (out) *out = {};
+  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
 }
 
@@ -423,11 +458,7 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
   const arr::ClipSource& source = sources[index];
   out->kind = static_cast<uint32_t>(arr::source_kind(source));
   if (const auto* audio = std::get_if<arr::AudioSourceRef>(&source)) {
-    out->id = audio->id;
-    out->channel_count = audio->channel_count;
-    out->storage_handle_id = audio->storage_handle_id;
-    out->sample_rate_hint = audio->sample_rate_hint;
-    copy_utf8_prefix(out->name_or_uri, audio->uri);
+    fill_audio_source(out, *audio);
   } else {
     const auto& midi = std::get<arr::MidiSourceRef>(source);
     out->id = midi.id;
@@ -463,6 +494,24 @@ SonareError sonare_project_get_audio_source_metadata(const SonareProject* projec
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, source_id, out);
+#endif
+}
+
+SonareError sonare_project_get_audio_source_uri(const SonareProject* project, uint32_t source_id,
+                                                char** out_uri) {
+  SONARE_C_API_ENTRY;
+  if (out_uri) *out_uri = nullptr;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out_uri || source_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  const arr::ClipSource* source = project->history.project().find_source(source_id);
+  const auto* audio = source ? std::get_if<arr::AudioSourceRef>(source) : nullptr;
+  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  *out_uri = copy_string(audio->uri);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, out_uri);
 #endif
 }
 

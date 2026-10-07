@@ -556,6 +556,10 @@ class _ProjectInspectionMixin:
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
+        return self._source_from_raw(raw)
+
+    def _source_from_raw(self, raw: SonareProjectSource) -> ProjectSource:
+        """Build a ProjectSource; audio sources carry the full, untruncated URI."""
         content_hash = ""
         external_stem_role = ""
         if int(raw.kind) == 0:  # SONARE_SOURCE_AUDIO; MIDI has no such metadata.
@@ -583,13 +587,30 @@ class _ProjectInspectionMixin:
                     # The native getter owns both strings even when it reports
                     # a failure after partially filling the descriptor.
                     lib.sonare_project_free_audio_source_metadata(ctypes.byref(metadata))
+        name_or_uri = raw.name_or_uri.split(b"\0", 1)[0].decode()
+        lib = _get_lib()
+        if int(raw.kind) == 0 and hasattr(lib, "sonare_project_get_audio_source_uri"):
+            uri = ctypes.c_char_p()
+            try:
+                _check(
+                    lib.sonare_project_get_audio_source_uri(
+                        self._require_handle(),
+                        _to_c_uint32(raw.id, "source_id"),
+                        ctypes.byref(uri),
+                    )
+                )
+                if uri.value:
+                    name_or_uri = uri.value.decode()
+            finally:
+                if uri.value:
+                    lib.sonare_free_string(uri)
         return ProjectSource(
             id=int(raw.id),
             kind=int(raw.kind),
             channel_count=int(raw.channel_count),
             storage_handle_id=int(raw.storage_handle_id),
             sample_rate_hint=float(raw.sample_rate_hint),
-            name_or_uri=raw.name_or_uri.split(b"\0", 1)[0].decode(),
+            name_or_uri=name_or_uri,
             content_hash=content_hash,
             external_stem_role=external_stem_role,
         )

@@ -273,6 +273,44 @@ def test_metadata_only_audio_clip_accepts_source_uri() -> None:
         project.close()
 
 
+def test_unresolved_audio_sources_carry_full_uri_and_metadata() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "lead")
+        long_uri = "asset://" + "a" * 300 + ".wav"
+        project.add_clip(track_id, 0.0, 1.0, source_uri=long_uri)
+        project.add_clip(track_id, 2.0, 1.0, source_uri="asset://stem.wav")
+        restored = Project.from_json(project.to_json())
+        try:
+            ids = restored.unresolved_audio_source_ids()
+            assert len(ids) == 2
+            restored.set_audio_source_metadata(ids[1], "sha256:abc", "vocals")
+            sources = restored.unresolved_audio_sources()
+            assert [source.id for source in sources] == ids
+            assert sources[0].name_or_uri == long_uri
+            assert sources[0].kind == 0
+            assert sources[1].name_or_uri == "asset://stem.wav"
+            assert sources[1].content_hash == "sha256:abc"
+            assert sources[1].external_stem_role == "vocals"
+            assert restored.source_by_index(0).name_or_uri == long_uri
+            restored.set_source_audio(ids[0], np.full(480, 0.25, dtype=np.float32), 1, 48000)
+            assert [s.id for s in restored.unresolved_audio_sources()] == [ids[1]]
+        finally:
+            restored.close()
+    finally:
+        project.close()
+
+
+def test_unresolved_audio_sources_empty_for_midi_only_project() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("midi", "keys")
+        project.add_clip(track_id, 0.0, 1.0, is_midi=True)
+        assert project.unresolved_audio_sources() == []
+    finally:
+        project.close()
+
+
 def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
     project = Project()
     audio = np.full(480, 0.25, dtype=np.float32)
