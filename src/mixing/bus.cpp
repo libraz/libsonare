@@ -77,15 +77,7 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
 }
 
 void BusProcessor::reset() {
-  for (auto& insert : inserts_) {
-    insert->reset();
-  }
-  for (auto& delay : stereo_pair_alignment_delays_) {
-    delay.reset();
-  }
-  for (auto& delay : bypass_alignment_delays_) {
-    delay.reset();
-  }
+  reset_processing();
   meter_.reset();
 }
 
@@ -227,6 +219,19 @@ void BusProcessor::clear_insert_sidechains() noexcept {
   for (auto& sidechain : insert_sidechains_) {
     sidechain = {{}, 0, 0, sidechain.managed};
   }
+}
+
+void BusProcessor::reset_processing() noexcept {
+  for (auto& insert : inserts_) {
+    insert->reset();
+  }
+  for (auto& delay : stereo_pair_alignment_delays_) {
+    delay.reset();
+  }
+  for (auto& delay : bypass_alignment_delays_) {
+    delay.reset();
+  }
+  std::fill_n(insert_gain_reduction_db_.begin(), insert_gain_reduction_count_, 0.0f);
 }
 
 }  // namespace sonare::mixing

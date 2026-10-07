@@ -22,6 +22,9 @@ class ParamSmoother {
   /// the target is finished at the target, so a settled value equals the one set.
   /// For position smoothers (pan, azimuth) whose exact value selects a code path.
   float process_settling();
+  /// Like process(), but finishes at the target once within @p epsilon of it,
+  /// so a glide to 0 or 1 lands on the exact value instead of approaching it.
+  float process_snapping(float epsilon);
   /// Advances the one-pole by @p n samples in closed form, equivalent to
   /// calling process() @p n times but without the per-sample loop. Returns the
   /// resulting current value. For @p n <= 0 the state is left unchanged.

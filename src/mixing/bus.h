@@ -32,6 +32,9 @@ class BusProcessor : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  /// Resets the inserts and alignment delays, keeping the meter; reset() is
+  /// this plus the meter.
+  void reset_processing() noexcept;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;

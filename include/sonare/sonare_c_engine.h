@@ -126,13 +126,44 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
 ///   frame to apply it at the next block head.
 SonareError sonare_engine_reset_master_loudness_meter(SonareRealtimeEngine* engine,
                                                       int64_t render_frame);
+/// @brief Queues a reset of every mixer and effect processor to its prepared state.
+/// @details At @p render_frame (negative: the next block head) the lane, bus,
+///   master, monitor and graph processors drop their tails, delay lines and
+///   envelopes; automation is then applied at the transport position and every
+///   smoother is snapped to its target, so playback queued after it starts from
+///   the state an offline bounce starts from. Strips the host bound to the
+///   engine are reset too. Instruments keep their state. Called while playing,
+///   it cuts the running tails like a seek does.
+/// @return @c SONARE_ERROR_OUT_OF_MEMORY when the command queue is full.
+SonareError sonare_engine_reset_processor_state(SonareRealtimeEngine* engine, int64_t render_frame);
 /// @brief Snaps every in-flight parameter ramp (engine-level smoothed params,
 ///   mixer lane fader/pan/gate, bus gains) to its target value.
-/// @details For offline rendering: call after a priming process() block (which
-///   drains queued commands and applies automation at the seek position) so
-///   the first audible block renders at settled values instead of ramping in
-///   from defaults. Not safe concurrently with a running audio thread.
+/// @details Part of sonare_engine_prime_offline_parameters. On its own it only
+///   snaps smoothers; it neither applies automation nor touches processor state.
+///   Not safe concurrently with a running audio thread.
 SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
+/// @brief Runs the offline pre-roll that bounce and freeze run before rendering.
+/// @details Applies every queued command, resets the mixer and effect processors
+///   to their prepared state, adopts the published snapshots, resolves
+///   automation and lane gates at the transport position and snaps every
+///   smoother, all without rendering. A host driving sonare_engine_render_offline
+///   calls it once before the first chunk. Not safe concurrently with a running
+///   audio thread.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or a channel or
+///   block count outside the prepared shape, @c SONARE_ERROR_INVALID_STATE when
+///   the engine was never prepared.
+SonareError sonare_engine_prime_offline_parameters(SonareRealtimeEngine* engine, int num_channels,
+                                                   int block_size);
+/// @brief Reports the engine's processing latency in 1/256 samples.
+/// @details The value the telemetry records carry as graph_latency_samples_q8.
+SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine,
+                                                   int* out_latency_q8);
+/// @brief Reports the longest audible tail after the last input, in samples.
+/// @details An upper bound: the longest instrument tail plus the longest route
+///   through lane strips (channel delay included), buses, sends, the graph and
+///   the master strip. 2147483647 means the tail is unbounded. Control-thread
+///   only; must not run concurrently with process().
+SonareError sonare_engine_tail_samples(SonareRealtimeEngine* engine, int* out_tail_samples);
 /// @brief Applies commands queued on an offline/control-only engine immediately.
 /// @details For hosts that never call @ref sonare_engine_process (e.g. a
 ///   control-only mirror driving transport/automation state without rendering
@@ -289,6 +320,14 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
 ///   not be called concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id);
+/// @brief Reports whether sonare_engine_set_lane_sidechain would accept a binding.
+/// @details Changes nothing. @p out_refusal receives a SonareSidechainRefusal;
+///   SONARE_SIDECHAIN_REFUSAL_NONE means the setter would accept it. Same
+///   threading contract as the setter.
+/// @return @c SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
+SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                 unsigned int insert_index,
+                                                 uint32_t source_track_id, int* out_refusal);
 
 /// @brief Configure realtime engine buses: layout, fader, output and sends.
 /// @details Replaces the whole bus list. Rejects (SONARE_ERROR_INVALID_PARAMETER,
@@ -318,6 +357,16 @@ SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32
 SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
                                                unsigned int insert_index, int source_kind,
                                                uint32_t source_id);
+/// @brief Reports whether sonare_engine_set_bus_sidechain would accept a binding.
+/// @details Changes nothing; see sonare_engine_can_set_lane_sidechain.
+SonareError sonare_engine_can_set_bus_sidechain(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                unsigned int insert_index, int source_kind,
+                                                uint32_t source_id, int* out_refusal);
+/// @brief Reports whether sonare_engine_set_master_sidechain would accept a binding.
+/// @details Changes nothing; see sonare_engine_can_set_lane_sidechain.
+SonareError sonare_engine_can_set_master_sidechain(SonareRealtimeEngine* engine,
+                                                   unsigned int insert_index, int source_kind,
+                                                   uint32_t source_id, int* out_refusal);
 
 /// @brief Configure a bus strip from the first bus in a mixer scene JSON.
 /// @details The bus must already exist via sonare_engine_set_track_buses.
@@ -741,16 +790,16 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
 ///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 /// @brief Renders the whole span in one call and returns the interleaved mix.
-/// @details Runs the offline pre-roll before the first audible block: queued
-///   commands are applied, one throwaway block resolves lane automation at the
-///   start position with the transport held stopped (so the playhead does not
-///   move), and every smoother is then snapped to its target. A lane sitting at
-///   a static -12 dB therefore bounces at -12 dB from sample 0 instead of ramping
-///   in over the first block, which is what live playback would do and what a
-///   render is not allowed to do. sonare_engine_render_offline does NOT pre-roll,
-///   because a chunked render would re-prime on every chunk; a host driving it
-///   directly primes once itself (a process() block plus
-///   sonare_engine_settle_parameters).
+/// @details Runs sonare_engine_prime_offline_parameters before the first
+///   audible block, without rendering: queued commands are applied, the mixer
+///   and effect processors return to their prepared state, automation and lane
+///   gates resolve at the start position and every smoother is snapped to its
+///   target. A lane sitting at a static -12 dB therefore bounces at -12 dB from
+///   sample 0 instead of ramping in over the first block. On a live engine the
+///   reset cuts the running processor tails, as sonare_engine_reset_processor_state
+///   does. sonare_engine_render_offline does NOT pre-roll, because a chunked
+///   render would re-prime on every chunk; a host driving it directly calls
+///   sonare_engine_prime_offline_parameters once itself.
 ///
 ///   The whole result is held in memory, so the span is capped by a 1 GiB peak
 ///   budget over the full-size float buffers a bounce holds at once. The cap is

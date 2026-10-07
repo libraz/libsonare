@@ -235,6 +235,7 @@ endif()
 
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
+    mastering/transient_gain_reduction_test.cpp
     mastering/assistant_defect_profile_test.cpp
     mastering/assistant_test.cpp
     mastering/band_state_non_finite_recovery_test.cpp
@@ -358,6 +359,17 @@ if(BUILD_MIXING)
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
+  target_sources(sonare_tests PRIVATE
+    engine/sidechain_check_test.cpp
+    engine/lane_gate_test.cpp
+  )
+  # The plate reverb and the stereo delay these drive are FX inserts.
+  if(BUILD_FX)
+    target_sources(sonare_tests PRIVATE
+      engine/processor_reset_test.cpp
+      engine/engine_tail_test.cpp
+    )
+  endif()
 endif()
 
 if(BUILD_MIXING_ASSISTANT)
@@ -733,6 +745,7 @@ if(BUILD_ARRANGEMENT)
       mixing/graph_surround_test.cpp
       engine/mixer_routing_agreement_test.cpp
       api/sonare_c_engine_routing_test.cpp
+      api/sonare_c_engine_feedback_test.cpp
     )
   endif()
   if(BUILD_FX)

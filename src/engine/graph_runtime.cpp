@@ -177,4 +177,14 @@ int GraphRuntime::latency_samples_q8() const noexcept {
   return std::max(0, latency_q8);
 }
 
+int GraphRuntime::tail_samples() const noexcept {
+  const Binding* binding = binding_.control_current().get();
+  return binding && binding->graph ? binding->graph->tail_samples_upper_bound() : 0;
+}
+
+void GraphRuntime::reset_processing() noexcept {
+  const Binding* binding = binding_.current();
+  if (binding && binding->graph) binding->graph->reset();
+}
+
 }  // namespace sonare::engine

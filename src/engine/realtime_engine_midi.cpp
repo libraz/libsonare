@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "engine/realtime_engine.h"
+#include "mixing/tail_utils.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 
@@ -734,3 +735,34 @@ void RealtimeEngine::flush_pdc_delays() noexcept {
 
 }  // namespace sonare::engine
 #endif
+
+namespace sonare::engine {
+
+int RealtimeEngine::tail_samples() const noexcept {
+  using mixing::combine_tail_samples;
+  using mixing::TailTopology;
+  int total = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  int instrument_tail = 0;
+  instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) {
+    instrument_tail = std::max(instrument_tail, instrument->tail_samples());
+  });
+  total = combine_tail_samples(total, instrument_tail, TailTopology::kSerial);
+#endif
+#if defined(SONARE_WITH_MIXING)
+  total = combine_tail_samples(total, track_mixer_runtime_.tail_samples(), TailTopology::kSerial);
+#endif
+#if defined(SONARE_WITH_GRAPH)
+  total = combine_tail_samples(total, graph_runtime_.tail_samples(), TailTopology::kSerial);
+#endif
+#if defined(SONARE_WITH_MIXING)
+  if (mixing_enabled_.load(std::memory_order_relaxed)) {
+    const mixing::ChannelStrip* master = mixing_runtime_.strip();
+    total = combine_tail_samples(total, master != nullptr ? master->tail_samples() : 0,
+                                 TailTopology::kSerial);
+  }
+#endif
+  return total;
+}
+
+}  // namespace sonare::engine

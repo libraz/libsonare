@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "engine/track_mixer.h"
+#include "mixing/tail_utils.h"
 
 namespace sonare::engine {
 
@@ -640,6 +641,49 @@ bool TrackMixerRuntime::apply_pdc(const PdcPlan& plan) noexcept {
   if (!prepare_pdc_updates(plan, sources, reset, &prepared)) return false;
   commit_pdc_updates(prepared);
   return true;
+}
+
+int TrackMixerRuntime::tail_samples() const noexcept {
+  using mixing::combine_tail_samples;
+  using mixing::TailTopology;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr) return 0;
+  const BusGraphView view = current_bus_graph_view();
+  const size_t bus_count = bus_configs_.size();
+  const auto bus_index_of = [this, bus_count](uint32_t bus_id) -> int {
+    if (bus_id == 0) return -1;
+    for (size_t i = 0; i < bus_count; ++i) {
+      if (bus_configs_[i].bus_id == bus_id) return static_cast<int>(i);
+    }
+    return -1;
+  };
+  // Tail from a bus input to the master; the master itself contributes 0.
+  std::array<int, kMaxBusLanes> to_master{};
+  const auto dest_tail = [&to_master](int index) {
+    return index < 0 ? 0 : to_master[static_cast<size_t>(index)];
+  };
+  for (size_t order_index = bus_count; order_index-- > 0;) {
+    const size_t bus_index = view.order[order_index];
+    const BusRoute& route = view.routes[bus_index];
+    int downstream = dest_tail(route.output_index);
+    for (size_t i = 0; i < route.send_count; ++i) {
+      downstream = std::max(downstream, dest_tail(route.send_index[i]));
+    }
+    const mixing::FxBus* bus = view.bus[bus_index];
+    to_master[bus_index] = combine_tail_samples(bus != nullptr ? bus->tail_samples() : 0,
+                                                downstream, TailTopology::kSerial);
+  }
+  int result = 0;
+  for (const TrackLaneConfig& lane : *lanes) {
+    const mixing::ChannelStrip* strip = bound_strip_for(lane.track_id);
+    int downstream = dest_tail(bus_index_of(lane.output_bus_id));
+    for (const TrackLaneConfig::Send& send : lane.sends) {
+      downstream = std::max(downstream, dest_tail(bus_index_of(send.bus_id)));
+    }
+    result = std::max(result, combine_tail_samples(strip != nullptr ? strip->tail_samples() : 0,
+                                                   downstream, TailTopology::kSerial));
+  }
+  return result;
 }
 
 }  // namespace sonare::engine

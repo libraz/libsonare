@@ -362,6 +362,7 @@ void RealtimeEngine::prime_offline_parameters(int num_channels, int block_size) 
   // Apply the queued commands first; they set the smoother targets this call
   // exists to snap.
   flush_control_commands();
+  reset_processing_now();
 
   const bool was_playing = transport_.playing();
   transport_.stop();
@@ -598,5 +599,21 @@ void RealtimeEngine::set_capture_punch(int64_t start_sample, int64_t end_sample,
 }
 
 void RealtimeEngine::reset_capture() noexcept { capture_sink_.reset(); }
+
+void RealtimeEngine::reset_processing_now() noexcept {
+  // Instruments are left alone: their reset() is a power-on reset that allocates
+  // and discards host-set programs.
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.reset_processing();
+  mixing_runtime_.reset_processing();
+  monitor_runtime_.reset_processing();
+#endif
+#if defined(SONARE_WITH_GRAPH)
+  graph_runtime_.reset_processing();
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+  flush_pdc_delays();
+#endif
+}
 
 }  // namespace sonare::engine

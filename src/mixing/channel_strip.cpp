@@ -667,30 +667,9 @@ void ChannelStrip::prepare_insert_alignment_delays() {
 }
 
 void ChannelStrip::reset() {
-  last_gain_reduction_db_ = 0.0f;
-  input_trim_.reset();
-  alignment_delay_.reset();
-  fader_.reset();
-  panner_.reset();
-  width_.reset();
-  eq_.reset();
+  reset_processing();
   if (pre_meter_) pre_meter_->reset();
   if (post_meter_) post_meter_->reset();
-  for (auto& insert : pre_inserts_) {
-    insert->reset();
-  }
-  for (auto& insert : post_inserts_) {
-    insert->reset();
-  }
-  for (auto& delay : stereo_pair_alignment_delays_) {
-    delay.reset();
-  }
-  for (auto& delay : bypass_alignment_delays_) {
-    delay.reset();
-  }
-  for (auto& send : sends_) {
-    send->reset();
-  }
   fader_automation_.clear();
   pan_automation_.clear();
   width_automation_.clear();
@@ -701,9 +680,6 @@ void ChannelStrip::reset() {
     if (lane) lane->clear();
   }
   goniometer_.reset();
-  for (auto* taps : {&pre_tap_, &post_tap_, &send_temp_}) {
-    zero_taps(*taps, static_cast<int>(taps->size()), max_block_size_);
-  }
 }
 
 void ChannelStrip::settle() noexcept {
@@ -1153,6 +1129,36 @@ void ChannelStrip::set_implied_mute(bool implied_mute) noexcept {
 
 bool ChannelStrip::implied_mute() const noexcept {
   return implied_mute_.load(std::memory_order_relaxed);
+}
+
+void ChannelStrip::reset_processing() noexcept {
+  last_gain_reduction_db_ = 0.0f;
+  std::fill_n(insert_gain_reduction_db_.begin(), insert_gain_reduction_count_, 0.0f);
+  // Gain, pan and width processors reset by snapping their smoothers to target.
+  input_trim_.reset();
+  alignment_delay_.reset();
+  fader_.reset();
+  panner_.reset();
+  width_.reset();
+  eq_.reset();
+  for (auto& insert : pre_inserts_) {
+    insert->reset();
+  }
+  for (auto& insert : post_inserts_) {
+    insert->reset();
+  }
+  for (auto& delay : stereo_pair_alignment_delays_) {
+    delay.reset();
+  }
+  for (auto& delay : bypass_alignment_delays_) {
+    delay.reset();
+  }
+  for (auto& send : sends_) {
+    send->reset();
+  }
+  for (auto* taps : {&pre_tap_, &post_tap_, &send_temp_}) {
+    zero_taps(*taps, static_cast<int>(taps->size()), max_block_size_);
+  }
 }
 
 }  // namespace sonare::mixing

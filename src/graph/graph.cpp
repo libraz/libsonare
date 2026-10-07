@@ -9,6 +9,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::graph {
 
@@ -416,6 +417,14 @@ float Graph::process_fractional_delay(RuntimeConnection::FractionalDelayLine& de
                                       int delay_samples_q8, float input) noexcept {
   return rt::lagrange3_fractional_delay(delay_line.buffer, delay_line.write_index, delay_samples_q8,
                                         input);
+}
+
+int Graph::tail_samples_upper_bound() const noexcept {
+  int total = 0;
+  for (const auto& node_ptr : nodes_) {
+    total = numeric::saturating_add(total, std::max(0, node_ptr->processor().tail_samples()));
+  }
+  return total;
 }
 
 }  // namespace sonare::graph

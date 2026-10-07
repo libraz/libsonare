@@ -126,6 +126,11 @@ enum class CommandType : uint16_t {
   // integrated loudness history is cleared. Momentary, short-term, and true
   // peak state remain intact. Appended to preserve every earlier command id.
   kResetMasterMeterIntegrated,
+  // Queueable processor reset (RealtimeEngine::reset_processor_state). target_id
+  // and arg are unused; sample_time selects the render-frame boundary. Ordinal
+  // 29; appended so every earlier command id and the SharedArrayBuffer command
+  // record layout stay unchanged.
+  kResetProcessorState,
 };
 
 union CommandArg {

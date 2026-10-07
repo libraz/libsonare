@@ -376,14 +376,18 @@ void TrackMixerRuntime::advance_lane_gain(size_t lane_index, int num_samples,
   LaneState& lane = lane_states_[lane_index];
   update_lane_gate_target(lane_index, any_solo);
   float* gain = lane_gain(lane_index);
+  float* gate = lane_gate(lane_index);
   for (int i = 0; i < num_samples; ++i) {
-    gain[i] = lane.fader_gain.process() * lane.gate.process();
+    const float g = lane.gate.process_snapping(kLaneGateSnap);
+    gate[i] = g;
+    gain[i] = lane.fader_gain.process() * g;
   }
 }
 
 void TrackMixerRuntime::update_lane_gate_target(size_t lane_index, bool any_solo) noexcept {
   LaneState& lane = lane_states_[lane_index];
-  const bool audible = !lane.mute && (!any_solo || lane.solo);
+  const bool solo_safe = lane.strip != nullptr && lane.strip->solo_safe();
+  const bool audible = !lane.mute && (!any_solo || lane.solo || solo_safe);
   lane.gate.set_target(audible ? 1.0f : 0.0f);
 }
 
@@ -454,6 +458,15 @@ void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int 
       std::fill(dst, dst + num_samples, 0.0f);
     }
     lane_pre_send_pdc_delays_[lane_index].process(pre_source.data(), rows, num_samples);
+    // The lane gate silences the pre-fader tap too; an all-unity block is left untouched.
+    const float* gate = lane_gate(lane_index);
+    const bool unity = std::all_of(gate, gate + num_samples, [](float g) { return g == 1.0f; });
+    if (!unity) {
+      for (int ch = 0; ch < rows; ++ch) {
+        float* dst = pre_source[static_cast<size_t>(ch)];
+        for (int i = 0; i < num_samples; ++i) dst[i] *= gate[i];
+      }
+    }
   }
 
   std::array<float*, kMaxLaneChannels> dest{};
@@ -874,6 +887,10 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
       }
     }
   }
+}
+
+float* TrackMixerRuntime::lane_gate(size_t lane_index) noexcept {
+  return lane_gate_scratch_.data() + lane_index * static_cast<size_t>(max_block_size_);
 }
 
 }  // namespace sonare::engine

@@ -880,3 +880,69 @@ SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEn
   SONARE_C_CATCH
 #endif
 }
+
+SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                 unsigned int insert_index,
+                                                 uint32_t source_track_id, int* out_refusal) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)insert_index;
+  (void)source_track_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  *out_refusal = static_cast<int>(
+      engine->engine.can_set_lane_sidechain(track_id, insert_index, source_track_id));
+  return SONARE_OK;
+#endif
+}
+
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+// An unknown kind maps to a value past the enum so the core orders its
+// kInvalidSourceKind answer among its other checks, as the setter's refusal does.
+engine::SidechainSourceKind sidechain_source_kind_for_query(int source_kind) {
+  engine::SidechainSourceKind kind;
+  if (sidechain_source_kind_from_c(source_kind, &kind)) return kind;
+  return static_cast<engine::SidechainSourceKind>(UINT8_MAX);
+}
+
+}  // namespace
+#endif
+
+SonareError sonare_engine_can_set_bus_sidechain(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                unsigned int insert_index, int source_kind,
+                                                uint32_t source_id, int* out_refusal) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  *out_refusal = static_cast<int>(engine->engine.can_set_bus_sidechain(
+      bus_id, insert_index, sidechain_source_kind_for_query(source_kind), source_id));
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_can_set_master_sidechain(SonareRealtimeEngine* engine,
+                                                   unsigned int insert_index, int source_kind,
+                                                   uint32_t source_id, int* out_refusal) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  *out_refusal = static_cast<int>(engine->engine.can_set_master_sidechain(
+      insert_index, sidechain_source_kind_for_query(source_kind), source_id));
+  return SONARE_OK;
+#endif
+}

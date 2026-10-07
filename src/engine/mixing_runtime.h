@@ -33,6 +33,8 @@ class MixingRuntime final : public rt::ProcessorBase {
   void process_at(float* const* channels, int num_channels, int num_samples,
                   int64_t timeline_sample) noexcept;
   void reset() override;
+  /// Delegates to the bound strip's ChannelStrip::reset_processing().
+  void reset_processing() noexcept;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
   bool set_parameter_impl(unsigned int param_id, float value) override;

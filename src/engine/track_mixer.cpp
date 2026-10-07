@@ -1039,6 +1039,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   // rendered outside the finish_block sequence) contributes its dry signal
   // rather than silence.
   lane_gain_scratch_.assign(kMaxTrackLanes * static_cast<size_t>(max_block_size_), 1.0f);
+  lane_gate_scratch_.assign(kMaxTrackLanes * static_cast<size_t>(max_block_size_), 1.0f);
   send_source_scratch_.assign(2u * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   direct_scratch_.assign(kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   // Edge scratch, pre-fader tap and downmix fold for the bus stage.
@@ -1739,6 +1740,30 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
     }
     strip->commit_sends(prepared);
   }
+}
+
+void TrackMixerRuntime::reset_processing() noexcept {
+  // Adopt the published lanes first so a strip bound since the last block is reset too.
+  acquire_lanes();
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (lanes != nullptr && !scratch_.empty() && lanes != applied_lane_snapshot_) {
+    prepare_lanes_from_snapshot(*lanes);
+  }
+  for (LaneState& lane : lane_states_) {
+    if (lane.strip != nullptr) lane.strip->reset_processing();
+  }
+  for (BusState& bus : bus_states_) {
+    bus.eq.reset();
+    if (bus.bus) bus.bus->reset_processing();
+  }
+  for (auto& sends : bus_sends_) {
+    for (auto& send : sends) {
+      if (send) send->reset();
+    }
+  }
+  // Also clears key_edge_delays_ and every lane/bus alignment bank.
+  flush_pdc_delays();
+  flush_clip_pdc_delays();
 }
 
 }  // namespace sonare::engine

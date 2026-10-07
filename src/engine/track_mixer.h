@@ -123,6 +123,22 @@ enum class SidechainSourceKind : uint8_t {
   Bus = 1,
 };
 
+/// Why a sidechain setter would refuse a binding. Values mirror
+/// SonareSidechainRefusal. kPlanRefused covers every way the delay plan can
+/// fail: an alignment past the ceiling, an overflow, or a key on an insert the
+/// target strip does not have.
+enum class SidechainRefusal : uint8_t {
+  kNone = 0,
+  kInvalidTarget = 1,
+  kInsertOutOfRange = 2,
+  kUndeclaredSource = 3,
+  kInvalidSourceKind = 4,
+  kSelfKey = 5,
+  kCycle = 6,
+  kTableFull = 7,
+  kPlanRefused = 8,
+};
+
 class TrackMixerRuntime final : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxTrackLanes = 32;
@@ -234,6 +250,17 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// by commit_master_strip_update().
   bool set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
                             uint32_t source_id) noexcept;
+  /// The verdict the matching setter reaches, without changing anything. Each
+  /// setter commits only when its query answers kNone, so the two cannot
+  /// disagree. When several reasons hold, the first check the setter runs wins.
+  /// CONTROL thread only, like the setters.
+  SidechainRefusal can_set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
+                                          uint32_t source_track_id) const noexcept;
+  SidechainRefusal can_set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
+                                         SidechainSourceKind kind,
+                                         uint32_t source_id) const noexcept;
+  SidechainRefusal can_set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
+                                            uint32_t source_id) const noexcept;
   /// CONTROL thread: stage a master-strip PDC update without changing live
   /// pointers, delay banks, insert counts, or sidechain bindings.
   struct PreparedMasterStripUpdate;
@@ -447,6 +474,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   uint64_t pdc_storage_generation() const noexcept;
   int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
   int latency_samples_q8() const noexcept override { return latency_samples_q8_; }
+  /// Longest audible tail from any lane to the master, in samples: the lane
+  /// strip (channel delay included) followed by the longest of its output route
+  /// and its send routes, each bus adding its own chain. Key paths carry no
+  /// audio and are excluded. INT_MAX means unbounded. CONTROL thread only.
+  int tail_samples() const noexcept override;
+  /// Returns every lane strip, bus and alignment/key delay line to its prepared
+  /// processing state, keeping configuration, solo/mute, automation and meters.
+  /// Not concurrent with process().
+  void reset_processing() noexcept;
 
   bool render_clips(ClipPlayer& player, float* const* channels, int num_channels, int num_samples,
                     int64_t timeline_sample, MeterTelemetryTap* meter_tap = nullptr,
@@ -813,8 +849,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool store_keyed_binding(SidechainTargetKind target_kind, uint32_t target_id,
                            unsigned int insert_index, SidechainSourceKind kind,
                            uint32_t source_id) noexcept;
-  // store_keyed_binding plus the graph and PDC refresh; restores the previous
-  // binding when the resulting alignment is refused.
+  // store_keyed_binding plus the graph and PDC refresh, for a binding the
+  // matching can_set_* query accepted; restores the previous binding when a
+  // delay bank cannot be allocated.
   bool commit_keyed_binding(SidechainTargetKind target_kind, uint32_t target_id,
                             unsigned int insert_index, SidechainSourceKind kind,
                             uint32_t source_id) noexcept;
@@ -913,6 +950,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // block, and reading the ramp back is what keeps the sends and the direct path
   // on the same gain.
   float* lane_gain(size_t lane_index) noexcept;
+  // This block's per-sample gate ramp alone, written by advance_lane_gain()
+  // beside lane_gain(): pre-fader sends follow mute and solo but not the fader.
+  float* lane_gate(size_t lane_index) noexcept;
+  // The gate snaps to its target within this distance, so a muted lane
+  // contributes exact zeros and an unmuted one returns to exactly 1.0f.
+  // -120 dB, the level kFloorDb treats as silence.
+  static constexpr float kLaneGateSnap = 1e-6f;
   // Scratch the lane's send sources are built in: the post-fader source (the
   // aligned lane buffer scaled by the gain ramp) and the pre-fader source (the
   // strip's pre-fader tap, aligned). One lane's sends are mixed at a time, so a
@@ -959,6 +1003,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<int, kMaxTrackLanes> key_frames_{};
   // One mono plane per lane holding this block's fader x gate ramp.
   std::vector<float> lane_gain_scratch_;
+  // One mono plane per lane holding this block's gate ramp alone.
+  std::vector<float> lane_gate_scratch_;
   // Two lane-wide banks (post-fader source, then pre-fader source) reused by
   // whichever lane's sends are being mixed.
   std::vector<float> send_source_scratch_;

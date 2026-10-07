@@ -65,7 +65,7 @@ inline bool checked_midi_source_stem_shape(size_t track_count, int64_t frames,
 // set_transport) turns each into an intra-block offset, and re-expressed in the
 // only basis the host can keep: frames this instrument has been asked to render.
 // The two bases differ whenever the engine renders nothing (a stopped transport
-// with no sounding note, e.g. the smoother-priming block below), so forwarding
+// with no sounding note, e.g. a block rendered while stopped), so forwarding
 // the raw device frame would place every later event too late by that amount.
 class CallbackInstrument final : public sonare::midi::MidiInstrument {
  public:

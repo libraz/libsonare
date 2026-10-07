@@ -78,4 +78,12 @@ void ParamSmoother::update_coefficient() {
   coefficient_ = time_to_attack_release_rate_f(sample_rate_, clamped_ms);
 }
 
+float ParamSmoother::process_snapping(float epsilon) {
+  const float target = target_.load(std::memory_order_acquire);
+  const float next = current_ + coefficient_ * (target - current_);
+  // A step that rounds to nothing (an upward glide stalls a few ulps short of 1) also lands.
+  current_ = (std::abs(target - next) <= epsilon || next == current_) ? target : next;
+  return current_;
+}
+
 }  // namespace sonare::rt

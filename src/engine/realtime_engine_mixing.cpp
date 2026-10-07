@@ -1139,6 +1139,23 @@ bool RealtimeEngine::add_monitor_strip(mixing::ChannelStrip* strip) noexcept {
   }
   return monitor_runtime_.add_strip(strip);
 }
+SidechainRefusal RealtimeEngine::can_set_lane_sidechain(uint32_t track_id,
+                                                        unsigned int insert_index,
+                                                        uint32_t source_track_id) const noexcept {
+  return track_mixer_runtime_.can_set_lane_sidechain(track_id, insert_index, source_track_id);
+}
+
+SidechainRefusal RealtimeEngine::can_set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
+                                                       SidechainSourceKind kind,
+                                                       uint32_t source_id) const noexcept {
+  return track_mixer_runtime_.can_set_bus_sidechain(bus_id, insert_index, kind, source_id);
+}
+
+SidechainRefusal RealtimeEngine::can_set_master_sidechain(unsigned int insert_index,
+                                                          SidechainSourceKind kind,
+                                                          uint32_t source_id) const noexcept {
+  return track_mixer_runtime_.can_set_master_sidechain(insert_index, kind, source_id);
+}
 #endif
 
 }  // namespace sonare::engine

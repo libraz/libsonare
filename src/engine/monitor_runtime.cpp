@@ -185,4 +185,14 @@ void MonitorRuntime::settle() noexcept {
   }
 }
 
+void MonitorRuntime::reset_processing() noexcept {
+  const size_t count = size_.load(std::memory_order_acquire);
+  for (size_t i = 0; i < count; ++i) {
+    StripState& state = strips_[i];
+    update_target(state);
+    state.mute_gain.reset(state.mute_gain.target());
+    if (state.strip != nullptr) state.strip->reset_processing();
+  }
+}
+
 }  // namespace sonare::engine

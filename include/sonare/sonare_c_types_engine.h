@@ -400,6 +400,28 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SIDECHAIN_SOURCE_BUS = 1,
 } SonareSidechainSourceKind;
 
+/* Why a sidechain binding would be refused, as reported by the
+   sonare_engine_can_set_*_sidechain queries. Values are part of the ABI —
+   never renumber. When several reasons hold, the first check the matching
+   setter runs is reported. */
+typedef enum SONARE_ENUM_BASE {
+  /* The binding would be accepted. */
+  SONARE_SIDECHAIN_REFUSAL_NONE = 0,
+  /* Track id 0, or a bus that is not configured. */
+  SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET = 1,
+  SONARE_SIDECHAIN_REFUSAL_INSERT_OUT_OF_RANGE = 2,
+  /* The source track or bus is not declared. */
+  SONARE_SIDECHAIN_REFUSAL_UNDECLARED_SOURCE = 3,
+  /* source_kind is not a SonareSidechainSourceKind. */
+  SONARE_SIDECHAIN_REFUSAL_INVALID_SOURCE_KIND = 4,
+  SONARE_SIDECHAIN_REFUSAL_SELF_KEY = 5,
+  SONARE_SIDECHAIN_REFUSAL_CYCLE = 6,
+  SONARE_SIDECHAIN_REFUSAL_TABLE_FULL = 7,
+  /* No delay plan exists: an alignment past the ceiling, an overflow, or a key
+     on an insert the target strip does not have. */
+  SONARE_SIDECHAIN_REFUSAL_PLAN_REFUSED = 8,
+} SonareSidechainRefusal;
+
 typedef struct {
   uint32_t bus_id;
   /* The bus fader. Pre-fader sends and bus-sourced sidechain keys tap before it. */

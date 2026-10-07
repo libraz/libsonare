@@ -41,6 +41,9 @@ class MonitorRuntime {
   /// stages) to their steady-state targets so the next render block opens
   /// without a ramp-in, keeping an offline bounce deterministic.
   void settle() noexcept;
+  /// Snaps each strip's mute-gain smoother as settle() does, then returns the
+  /// strip to its prepared processing state (ChannelStrip::reset_processing).
+  void reset_processing() noexcept;
 
   size_t size() const noexcept { return size_.load(std::memory_order_acquire); }
   bool muted(size_t index) const noexcept;

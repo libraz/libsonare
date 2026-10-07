@@ -729,3 +729,37 @@ SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
   out->beat_fraction = state.beat_fraction;
   return SONARE_OK;
 }
+
+SonareError sonare_engine_reset_processor_state(SonareRealtimeEngine* engine,
+                                                int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  return engine->engine.reset_processor_state(render_frame) ? SONARE_OK
+                                                            : SONARE_ERROR_OUT_OF_MEMORY;
+}
+
+SonareError sonare_engine_prime_offline_parameters(SonareRealtimeEngine* engine, int num_channels,
+                                                   int block_size) {
+  SONARE_C_API_ENTRY;
+  if (!engine || num_channels <= 0 || block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (engine->engine.max_block_size() <= 0) return SONARE_ERROR_INVALID_STATE;
+  if (num_channels > engine->engine.prepared_channels()) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  engine->engine.prime_offline_parameters(num_channels, block_size);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine, int* out) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = engine->engine.graph_latency_samples_q8();
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_tail_samples(SonareRealtimeEngine* engine, int* out_tail_samples) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_tail_samples) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_tail_samples = engine->engine.tail_samples();
+  return SONARE_OK;
+}

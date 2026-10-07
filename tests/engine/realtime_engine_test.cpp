@@ -2264,10 +2264,10 @@ TEST_CASE("RealtimeEngine settle_parameters snaps lane faders for offline render
           "[engine][realtime]") {
   // Lane fader smoothers only advance while lanes render, so an offline render
   // that seeks and plays a freshly configured engine would capture the first
-  // milliseconds with faders still ramping in from 0 dB. After one priming
-  // block (which applies automation at the stopped position and drains queued
-  // commands), settle_parameters must snap the smoothers so the very first
-  // audible frame renders at the automated value.
+  // milliseconds with faders still ramping in from 0 dB. Once a stopped block
+  // has applied automation at the position and drained queued commands,
+  // settle_parameters must snap the smoothers so the very first audible frame
+  // renders at the automated value.
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;
   sonare::engine::RealtimeEngine engine;

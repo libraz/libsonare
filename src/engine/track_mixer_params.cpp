@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <iterator>
 
@@ -24,6 +25,30 @@ template <typename Bus>
 bool constructed_bus_parameter_value(const Bus&, unsigned int, unsigned int, float*,
                                      long) noexcept {
   return false;
+}
+
+using SidechainTable = TrackMixerRuntime::SidechainTable;
+using SidechainBinding = TrackMixerRuntime::SidechainBinding;
+
+// @p table with @p next committed the way the setters do: source_id 0 removes
+// entry @p found (swap with the last), a found entry takes the new source, and
+// otherwise @p next is appended. The caller has checked the entry exists or fits.
+SidechainTable with_binding(const SidechainTable& table, int found,
+                            const SidechainBinding& next) noexcept {
+  SidechainTable candidate = table;
+  if (next.source_id == 0) {
+    const size_t last = candidate.count - 1;
+    candidate.bindings[static_cast<size_t>(found)] = candidate.bindings[last];
+    candidate.bindings[last] = SidechainBinding{};
+    candidate.count = last;
+  } else if (found >= 0) {
+    SidechainBinding& binding = candidate.bindings[static_cast<size_t>(found)];
+    binding.source_kind = next.source_kind;
+    binding.source_id = next.source_id;
+  } else {
+    candidate.bindings[candidate.count++] = next;
+  }
+  return candidate;
 }
 
 }  // namespace
@@ -73,12 +98,9 @@ bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mu
     if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   }
   if (lane_index >= lane_count()) return false;
-  // Deliberately lane state rather than the strip's own muted_/soloed_ flags:
-  // the lane gate is what carries audibility, it is smoothed (so a mute does not
-  // click), and every path the lane's audio takes -- the direct master sum, the
-  // output-bus routing and each of its sends -- is scaled by that one gate. The
-  // strip's flags are a hard zero at the strip output and would additionally
-  // silence the PFL cue tap, which is taken ahead of the gate on purpose.
+  // Lane state, not the strip's hard flags: the smoothed lane gate scales the master/bus
+  // sum and every send (pre-fader included). PFL and the sidechain key are taken ahead of
+  // it; the strip's hard mute flags would silence those too.
   LaneState& lane = lane_states_[lane_index];
   lane.solo = solo;
   lane.mute = mute;
@@ -622,17 +644,11 @@ bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db
 
 bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                                            uint32_t source_track_id) noexcept {
-  if (track_id == 0) return false;
+  if (can_set_lane_sidechain(track_id, insert_index, source_track_id) != SidechainRefusal::kNone) {
+    return false;
+  }
   const int found = find_sidechain_binding(SidechainTargetKind::Lane, track_id, insert_index);
   if (source_track_id == 0 && found < 0) return true;
-  if (source_track_id != 0 &&
-      lane_key_closes_cycle(track_id, source_track_id,
-                            found >= 0 ? static_cast<size_t>(found) : kMaxSidechainBindings)) {
-    return false;
-  }
-  if (source_track_id != 0 && found < 0 && sidechains_.count >= kMaxSidechainBindings) {
-    return false;
-  }
   const SidechainTable previous = sidechains_;
   if (source_track_id == 0) {
     remove_sidechain_binding(static_cast<size_t>(found));
@@ -652,8 +668,8 @@ bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int inser
     ++sidechains_.count;
     publish_sidechains();
   }
-  // The edge reorders the lanes and re-derives every delay; a refused plan
-  // puts the previous table back.
+  // The query already planned the delays; only a failed delay-bank allocation
+  // can refuse here, and it puts the previous table back.
   const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
   if (lanes == nullptr || recompute_lane_pdc(*lanes)) return true;
   sidechains_ = previous;
@@ -779,40 +795,17 @@ bool TrackMixerRuntime::store_keyed_binding(SidechainTargetKind target_kind, uin
 
 bool TrackMixerRuntime::set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
                                           SidechainSourceKind kind, uint32_t source_id) noexcept {
-  const int bus_index = configured_bus_index(bus_id);
-  if (bus_index < 0 ||
-      static_cast<uint8_t>(kind) > static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+  if (can_set_bus_sidechain(bus_id, insert_index, kind, source_id) != SidechainRefusal::kNone) {
     return false;
-  }
-  const mixing::FxBus* fx = bus_states_[static_cast<size_t>(bus_index)].bus.get();
-  if (fx == nullptr || insert_index >= fx->num_inserts()) return false;
-  if (source_id != 0) {
-    if (!sidechain_source_declared(kind, source_id)) return false;
-    if (kind == SidechainSourceKind::Bus) {
-      if (source_id == bus_id) return false;
-      // The new key edge joins the output and send edges; a cycle is refused.
-      const int found = find_sidechain_binding(SidechainTargetKind::Bus, bus_id, insert_index);
-      std::array<KeyEdge, kMaxSidechainBindings + 1> edges{};
-      std::array<KeyEdge, kMaxSidechainBindings> current{};
-      const size_t count = collect_key_edges(
-          current, found >= 0 ? static_cast<size_t>(found) : kMaxSidechainBindings);
-      std::copy(current.begin(), current.begin() + static_cast<std::ptrdiff_t>(count),
-                edges.begin());
-      edges[count] = KeyEdge{source_id, bus_id};
-      std::array<size_t, kMaxBusLanes> order{};
-      if (!validate_bus_graph(bus_configs_, edges.data(), count + 1, &order)) return false;
-    }
   }
   return commit_keyed_binding(SidechainTargetKind::Bus, bus_id, insert_index, kind, source_id);
 }
 
 bool TrackMixerRuntime::set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
                                              uint32_t source_id) noexcept {
-  if (insert_index >= master_insert_count_ ||
-      static_cast<uint8_t>(kind) > static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+  if (can_set_master_sidechain(insert_index, kind, source_id) != SidechainRefusal::kNone) {
     return false;
   }
-  if (source_id != 0 && !sidechain_source_declared(kind, source_id)) return false;
   return commit_keyed_binding(SidechainTargetKind::Master, 0, insert_index, kind, source_id);
 }
 
@@ -826,11 +819,15 @@ bool TrackMixerRuntime::commit_keyed_binding(SidechainTargetKind target_kind, ui
                             : SidechainSourceKind::Track;
   const uint32_t old_source =
       found >= 0 ? sidechains_.bindings[static_cast<size_t>(found)].source_id : 0;
-  if (!store_keyed_binding(target_kind, target_id, insert_index, kind, source_id)) return false;
+  // The matching can_set_* query has accepted this binding, so storing it cannot refuse.
+  [[maybe_unused]] const bool stored =
+      store_keyed_binding(target_kind, target_id, insert_index, kind, source_id);
+  assert(stored);
   refresh_bus_graph();
+  // Only a failed delay-bank allocation can refuse the planned delays; it puts
+  // the previous binding back.
   const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
   if (lanes == nullptr || recompute_lane_pdc(*lanes)) return true;
-  // The new key's alignment does not fit: put the previous binding back.
   store_keyed_binding(target_kind, target_id, insert_index, old_kind, old_source);
   refresh_bus_graph();
   recompute_lane_pdc(*lanes);
@@ -982,6 +979,118 @@ void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channe
     std::copy(src, src + num_samples, key_channel(lane_index, ch));
   }
   key_frames_[lane_index] = num_samples;
+}
+
+SidechainRefusal TrackMixerRuntime::can_set_lane_sidechain(
+    uint32_t track_id, unsigned int insert_index, uint32_t source_track_id) const noexcept {
+  if (track_id == 0) return SidechainRefusal::kInvalidTarget;
+  const int found = find_sidechain_binding(SidechainTargetKind::Lane, track_id, insert_index);
+  if (source_track_id == 0 && found < 0) return SidechainRefusal::kNone;
+  if (source_track_id != 0) {
+    if (source_track_id == track_id) return SidechainRefusal::kSelfKey;
+    if (lane_key_closes_cycle(track_id, source_track_id,
+                              found >= 0 ? static_cast<size_t>(found) : kMaxSidechainBindings)) {
+      return SidechainRefusal::kCycle;
+    }
+    if (found < 0 && sidechains_.count >= kMaxSidechainBindings) {
+      return SidechainRefusal::kTableFull;
+    }
+  }
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr) return SidechainRefusal::kNone;
+  // Lane keys are track-sourced, so the bus graph is the live one.
+  const SidechainTable candidate =
+      with_binding(sidechains_, found,
+                   SidechainBinding{track_id, insert_index, source_track_id,
+                                    static_cast<uint8_t>(SidechainTargetKind::Lane),
+                                    static_cast<uint8_t>(SidechainSourceKind::Track),
+                                    static_cast<uint8_t>(found < 0 ? free_key_slot() : 0)});
+  PdcPlan plan;
+  return plan_pdc(*lanes, current_bus_graph_view(), &plan, nullptr, nullptr, false, &candidate)
+             ? SidechainRefusal::kNone
+             : SidechainRefusal::kPlanRefused;
+}
+
+SidechainRefusal TrackMixerRuntime::can_set_bus_sidechain(uint32_t bus_id,
+                                                          unsigned int insert_index,
+                                                          SidechainSourceKind kind,
+                                                          uint32_t source_id) const noexcept {
+  const int bus_index = configured_bus_index(bus_id);
+  if (bus_index < 0) return SidechainRefusal::kInvalidTarget;
+  if (static_cast<uint8_t>(kind) > static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+    return SidechainRefusal::kInvalidSourceKind;
+  }
+  const mixing::FxBus* fx = bus_states_[static_cast<size_t>(bus_index)].bus.get();
+  if (fx == nullptr) return SidechainRefusal::kInvalidTarget;
+  if (insert_index >= fx->num_inserts()) return SidechainRefusal::kInsertOutOfRange;
+  const int found = find_sidechain_binding(SidechainTargetKind::Bus, bus_id, insert_index);
+  const bool bus_key = source_id != 0 && kind == SidechainSourceKind::Bus;
+  if (source_id != 0) {
+    if (!sidechain_source_declared(kind, source_id)) return SidechainRefusal::kUndeclaredSource;
+    if (bus_key && source_id == bus_id) return SidechainRefusal::kSelfKey;
+  }
+  if (source_id == 0 && found < 0) return SidechainRefusal::kNone;
+  // The candidate key edges order the buses; a bus key that closes a cycle with
+  // the outputs and sends is refused.
+  std::array<KeyEdge, kMaxSidechainBindings + 1> edges{};
+  std::array<KeyEdge, kMaxSidechainBindings> current{};
+  const size_t current_count =
+      collect_key_edges(current, found >= 0 ? static_cast<size_t>(found) : kMaxSidechainBindings);
+  std::copy(current.begin(), current.begin() + static_cast<std::ptrdiff_t>(current_count),
+            edges.begin());
+  size_t edge_count = current_count;
+  if (bus_key) edges[edge_count++] = KeyEdge{source_id, bus_id};
+  BusGraphView view = current_bus_graph_view();
+  if (!validate_bus_graph(bus_configs_, edges.data(), edge_count, &view.order)) {
+    return SidechainRefusal::kCycle;
+  }
+  if (source_id != 0 && found < 0 && sidechains_.count >= kMaxSidechainBindings) {
+    return SidechainRefusal::kTableFull;
+  }
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr) return SidechainRefusal::kNone;
+  const SidechainTable candidate = with_binding(
+      sidechains_, found,
+      SidechainBinding{bus_id, insert_index, source_id,
+                       static_cast<uint8_t>(SidechainTargetKind::Bus), static_cast<uint8_t>(kind),
+                       static_cast<uint8_t>(found < 0 ? free_key_slot() : 0)});
+  build_routes(bus_configs_, view.skip_binding, &view.routes, &candidate);
+  PdcPlan plan;
+  return plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &candidate)
+             ? SidechainRefusal::kNone
+             : SidechainRefusal::kPlanRefused;
+}
+
+SidechainRefusal TrackMixerRuntime::can_set_master_sidechain(unsigned int insert_index,
+                                                             SidechainSourceKind kind,
+                                                             uint32_t source_id) const noexcept {
+  if (insert_index >= master_insert_count_) return SidechainRefusal::kInsertOutOfRange;
+  if (static_cast<uint8_t>(kind) > static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+    return SidechainRefusal::kInvalidSourceKind;
+  }
+  if (source_id != 0 && !sidechain_source_declared(kind, source_id)) {
+    return SidechainRefusal::kUndeclaredSource;
+  }
+  const int found = find_sidechain_binding(SidechainTargetKind::Master, 0, insert_index);
+  if (source_id == 0 && found < 0) return SidechainRefusal::kNone;
+  if (source_id != 0 && found < 0 && sidechains_.count >= kMaxSidechainBindings) {
+    return SidechainRefusal::kTableFull;
+  }
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr) return SidechainRefusal::kNone;
+  const SidechainTable candidate = with_binding(
+      sidechains_, found,
+      SidechainBinding{
+          0, insert_index, source_id, static_cast<uint8_t>(SidechainTargetKind::Master),
+          static_cast<uint8_t>(kind), static_cast<uint8_t>(found < 0 ? free_key_slot() : 0)});
+  // A master key is no bus-graph edge, so the bus order stands; only the routes'
+  // key-source flags follow the candidate table.
+  BusGraphView view = current_bus_graph_view();
+  build_routes(bus_configs_, view.skip_binding, &view.routes, &candidate);
+  PdcPlan plan;
+  return plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &candidate)
+             ? SidechainRefusal::kNone
+             : SidechainRefusal::kPlanRefused;
 }
 
 }  // namespace sonare::engine

@@ -38,4 +38,6 @@ void FxBus::set_insert_sidechain(unsigned int insert_index, const float* const* 
 
 void FxBus::clear_insert_sidechains() noexcept { bus_.clear_insert_sidechains(); }
 
+void FxBus::reset_processing() noexcept { bus_.reset_processing(); }
+
 }  // namespace sonare::mixing

@@ -604,6 +604,16 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #endif
       break;
     }
+    case rt::CommandType::kResetProcessorState: {
+      // Same order as prime_offline_parameters, without its transport stop.
+      reset_processing_now();
+#if defined(SONARE_WITH_MIXING)
+      track_mixer_runtime_.prime_lane_controls();
+#endif
+      automation_.apply(transport_.snapshot(), 0, std::max(1, max_block_size_));
+      settle_parameters();
+      break;
+    }
     case rt::CommandType::kSetMasterInsertParam: {
 #if defined(SONARE_WITH_MIXING)
       // target_id = (insert_index << 8) | param_id (no lane field for master).
@@ -936,6 +946,13 @@ void RealtimeEngine::compact_pending() noexcept {
     }
     ++out;
   }
+}
+
+bool RealtimeEngine::reset_processor_state(int64_t render_frame) noexcept {
+  rt::Command command{};
+  command.type = rt::CommandType::kResetProcessorState;
+  command.sample_time = render_frame;
+  return push_command(command);
 }
 
 }  // namespace sonare::engine

@@ -47,6 +47,9 @@ class Graph {
   int connection_delay_samples_q8(size_t connection_index) const;
   int node_latency_samples(const std::string& node_id) const;
   int node_latency_samples_q8(const std::string& node_id) const;
+  // Saturating serial sum of every node's tail: an upper bound, since a
+  // parallel branch only needs the longest one. INT_MAX means unbounded.
+  int tail_samples_upper_bound() const noexcept;
   const std::vector<std::string>& topo_order_ids() const noexcept { return topo_order_ids_; }
 
  private:

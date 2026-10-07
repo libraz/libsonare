@@ -60,4 +60,8 @@ bool MixingRuntime::parameter_is_realtime_safe(unsigned int param_id) const noex
   return is_supported_parameter(param_id);
 }
 
+void MixingRuntime::reset_processing() noexcept {
+  if (strip_) strip_->reset_processing();
+}
+
 }  // namespace sonare::engine

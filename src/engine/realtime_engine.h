@@ -722,6 +722,16 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// or a bus. source_id 0 clears. CONTROL thread only, like set_bus_sidechain.
   bool set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
                             uint32_t source_id);
+  /// What set_lane_sidechain / set_bus_sidechain / set_master_sidechain would
+  /// answer for the same arguments, without changing anything. CONTROL thread
+  /// only, like the setters.
+  SidechainRefusal can_set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
+                                          uint32_t source_track_id) const noexcept;
+  SidechainRefusal can_set_bus_sidechain(uint32_t bus_id, unsigned int insert_index,
+                                         SidechainSourceKind kind,
+                                         uint32_t source_id) const noexcept;
+  SidechainRefusal can_set_master_sidechain(unsigned int insert_index, SidechainSourceKind kind,
+                                            uint32_t source_id) const noexcept;
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
   /// Unbinds @p track_id's lane and destroys its owned strip and binding record.
   /// CONTROL thread only, not concurrent with process(). True when nothing was bound.
@@ -848,11 +858,17 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// Snaps every in-flight parameter ramp to its target: engine-level smoothed
   /// parameters are pushed at their final value and retired, and the track
   /// mixer's lane fader/pan/gate and bus gain smoothers jump to their targets.
-  /// Offline renders call this from @ref prime_offline_parameters (which drains
-  /// queued commands and applies automation at the seek position) so the first
-  /// audible block renders at the settled values instead of ramping in from
-  /// defaults. Not safe concurrently with a running audio thread.
+  /// Part of @ref prime_offline_parameters; on its own it neither applies
+  /// automation nor touches processor state. Not safe concurrently with a
+  /// running audio thread.
   void settle_parameters() noexcept;
+  /// Enqueues a reset of every mixer and effect processor (lane, bus, master,
+  /// monitor and graph, host-bound strips included) to its prepared state,
+  /// followed by the same lane-gate, automation and settle steps
+  /// @ref prime_offline_parameters runs. @p render_frame follows command
+  /// sample-time semantics. Instruments keep their state. Returns false only
+  /// when the command queue is full.
+  bool reset_processor_state(int64_t render_frame = -1) noexcept;
   void settle_insert_parameters() noexcept;
   /// Applies only commands due at the current render frame while keeping
   /// future commands in their original FIFO order. Control-thread/offline
@@ -860,11 +876,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// event or overfills the pending bank.
   void apply_commands_due_now_preserving_future() noexcept;
   /// Runs the offline pre-roll a one-shot render needs before its first audible
-  /// block: applies every queued command, adopts the published lane, graph,
-  /// automation and tempo snapshots, resolves automation and lane gates at the
-  /// start position, then calls @ref settle_parameters. Nothing is rendered, so
-  /// no processor state advances and the render that follows matches a plain
-  /// @ref render_offline from the same state. The transport is held stopped and
+  /// block: applies every queued command, returns the mixer and effect
+  /// processors to their prepared state (instruments excluded), adopts the
+  /// published lane, graph, automation and tempo snapshots, resolves automation
+  /// and lane gates at the start position, then calls @ref settle_parameters.
+  /// Nothing is rendered, so the render that follows starts from the same state
+  /// on a fresh and on a long-running engine. The transport is held stopped and
   /// restored afterwards, so the playhead does not move.
   ///
   /// Every offline entry point that renders a whole span in one call (the
@@ -883,6 +900,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   }
   void set_graph_latency_samples_q8(int latency_q8) noexcept;
   int graph_latency_samples_q8() const noexcept { return graph_latency_samples_q8_; }
+  /// Upper bound of the audible tail after the last input, in samples: the
+  /// longest instrument tail plus the longest route through the track mixer,
+  /// the graph and the master strip. INT_MAX means unbounded. Control-thread
+  /// only, not concurrent with process().
+  int tail_samples() const noexcept;
   int64_t audible_timeline_sample(int64_t timeline_sample) const noexcept;
 #if defined(SONARE_WITH_GRAPH)
   // Control-thread graph hot-swap. Allocates a new binding internally, so this
@@ -1001,6 +1023,9 @@ class RealtimeEngine : private ClipPageRequestSink {
                      uint32_t value) noexcept;
   void on_clip_page_miss(const ClipPageRequest& request) noexcept override;
   void compact_pending() noexcept;
+  // Returns every mixer and effect processor to its prepared state; see
+  // reset_processor_state. Not concurrent with process().
+  void reset_processing_now() noexcept;
 #if defined(SONARE_WITH_ARRANGEMENT)
   // CONTROL thread: refresh the PDC delays from the current instrument rack and
   // report the resulting graph latency. Called from prepare() and whenever an

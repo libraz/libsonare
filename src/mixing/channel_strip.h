@@ -101,6 +101,11 @@ class ChannelStrip : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void process_at(float* const* channels, int num_channels, int num_samples, int64_t block_start);
   void reset() override;
+  /// Returns the processing state (inserts, EQ, delay lines, sends, gain
+  /// reduction) to its prepared state and snaps the gain-stage and pan/width
+  /// smoothers to their targets. Keeps automation, meters and the goniometer;
+  /// reset() is this plus clearing those.
+  void reset_processing() noexcept;
   /// Snaps the strip's gain-stage and pan/width smoothers (input trim, fader,
   /// width, pan) to their steady-state targets so the next render block opens
   /// without a ramp-in, keeping an offline bounce deterministic. EQ state

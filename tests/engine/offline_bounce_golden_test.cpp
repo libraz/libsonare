@@ -311,11 +311,11 @@ TEST_CASE("every offline entry point opens at settled parameter values",
           "[engine][offline][bounce]") {
   // A bounce and a freeze are one-shot renders, so there is no earlier audio for
   // a fader to ramp in from: the caller asked for the lane as configured. Both
-  // entry points therefore pre-roll the engine (drain the queued commands,
-  // render one discarded block with the transport held, snap the smoothers) the
-  // way the project bounce path does. Without it the opening milliseconds come
-  // out up to the full fader travel too loud, which is inaudible as a defect in
-  // a long bounce and obvious when a freeze is used as a clip.
+  // entry points therefore pre-roll the engine (drain the queued commands, reset
+  // the mixer and effect processors, resolve automation at the start position
+  // without rendering, snap the smoothers) the way the project bounce path does. Without it the
+  // opening milliseconds come out up to the full fader travel too loud, which is inaudible as a
+  // defect in a long bounce and obvious when a freeze is used as a clip.
   using Engine = AttenuatedLaneEngine;
   const auto steady_state = [](const SonareEngineBounceResult& result) {
     return result.interleaved[result.sample_count - 2];
