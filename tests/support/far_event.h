@@ -85,7 +85,9 @@ inline std::vector<Partial> partials_of(Material m) {
       harmonics(kBaseHz, 1.0, 0.5, 0.25, p);
       break;
     case Material::ToneB:
-      harmonics(kBaseHz, 1.0, 0.25, 0.5, p);
+      harmonics(kBaseHz, 1.0, 0.5, 0.25, p);
+      p.push_back({4.0 * kBaseHz, 0.25});
+      p.push_back({5.0 * kBaseHz, 0.25});
       break;
     case Material::TriadC:
       for (double f : {261.6, 329.6, 392.0}) harmonics(f, 1.0, 0.5, 0.25, p);

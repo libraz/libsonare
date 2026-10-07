@@ -802,3 +802,57 @@ TEST_CASE("a section floor below the section length keeps the arrangement's boun
     for (float change : {12.0f, 20.0f, 28.0f}) REQUIRE(has_time_near(starts, change, kTolerance));
   }
 }
+
+namespace {
+
+/// @brief Detected boundary times of @p analyzer as frames of its 22.05 kHz analysis grid.
+std::vector<int> detected_frames(const SectionAnalyzer& analyzer, const SectionConfig& config) {
+  std::vector<int> frames;
+  for (float t : analyzer.boundary_times()) {
+    frames.push_back(
+        static_cast<int>(std::lround(t * static_cast<float>(constants::kDefaultSampleRate) /
+                                     static_cast<float>(config.hop_length))));
+  }
+  return frames;
+}
+
+/// @brief Requires as many boundaries as @p expected, each within one frame of its entry.
+void require_frames_near(const std::vector<int>& actual, const std::vector<int>& expected) {
+  INFO("frames " << ::Catch::Detail::stringify(actual));
+  REQUIRE(actual.size() == expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    REQUIRE(std::abs(actual[i] - expected[i]) <= 1);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("existing synthetic inputs keep their boundaries", "[section_analyzer]") {
+  // Frames recorded under the whole-track relative gate. Every input is shorter than the default
+  // reference window, so the local gate sees the same reference and only a peak chain may move.
+  const auto check = [](const Audio& audio, const SectionConfig& config,
+                        const std::vector<int>& expected) {
+    require_frames_near(detected_frames(SectionAnalyzer(audio, config), config), expected);
+  };
+  SECTION("five sections") {
+    SectionConfig config;
+    check(create_sectioned_audio(), config, {171, 343, 519, 691});
+    config.boundary_threshold = 0.2f;
+    check(create_sectioned_audio(), config, {171, 343, 519, 691});
+    config.min_section_sec = 2.0f;
+    check(create_sectioned_audio(), config, {171, 343, 519, 691});
+    config.min_section_sec = 1.0f;
+    config.boundary_threshold = 0.1f;
+    check(create_sectioned_audio(), config, {171, 343, 519, 691});
+  }
+  SECTION("arrangement with 10 s sections") {
+    check(create_arrangement(10.0), SectionConfig{}, {604, 776, 1032, 1465, 1638, 1894});
+  }
+  SECTION("tone spans") {
+    check(create_tone_spans({{5.0f, 261.63f}, {6.0f, 329.63f}, {12.0f, 415.30f}}), SectionConfig{},
+          {});
+    check(
+        create_tone_spans({{10.0f, 261.63f}, {11.0f, 329.63f}, {14.0f, 415.30f}, {30.0f, 293.66f}}),
+        SectionConfig{}, {605});
+  }
+}

@@ -5,16 +5,22 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <catch2/generators/catch_generators_range.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <complex>
 #include <cstddef>
+#include <iterator>
 #include <string>
 #include <vector>
 
 #include "analysis/section_analyzer.h"
+#include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
+#include "support/far_event.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -728,4 +734,231 @@ TEST_CASE("A loop that does change is still segmented at the change", "[boundary
 
   REQUIRE(detector.count() == 1);
   REQUIRE_THAT(detector.boundary_times()[0], WithinAbs(change_time, 1.0f));
+}
+
+namespace {
+
+/// @brief Frame indices of the detected boundaries, in output order.
+std::vector<int> boundary_frames(const BoundaryDetector& detector) {
+  std::vector<int> frames;
+  for (const auto& boundary : detector.boundaries()) frames.push_back(boundary.frame);
+  return frames;
+}
+
+/// @brief Requires as many boundaries as @p expected, each within one frame of its entry.
+void require_frames_near(const std::vector<int>& actual, const std::vector<int>& expected) {
+  INFO("frames " << ::Catch::Detail::stringify(actual));
+  REQUIRE(actual.size() == expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    REQUIRE(std::abs(actual[i] - expected[i]) <= 1);
+  }
+}
+
+BoundaryConfig gated(float threshold, float peak_distance) {
+  BoundaryConfig config;
+  config.threshold = threshold;
+  config.peak_distance = peak_distance;
+  return config;
+}
+
+/// @brief The looped pattern for 15 s, then a steady 1200 Hz tone for 15 s.
+Audio create_loop_then_tone() {
+  const Audio loop = create_looped_pattern(22050, 0.5f, 60);
+  std::vector<float> samples(loop.begin(), loop.end());
+  for (size_t i = samples.size() / 2; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / 22050.0f;
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 1200.0f * t);
+  }
+  return Audio::from_vector(std::move(samples), 22050);
+}
+
+}  // namespace
+
+TEST_CASE("existing synthetic inputs keep their boundaries", "[boundary_detector]") {
+  // Frames recorded under the whole-track relative gate. Every input is shorter than the default
+  // reference window, so the local gate sees the same reference and only a peak chain may move.
+  SECTION("two sections, default config") {
+    require_frames_near(boundary_frames(BoundaryDetector(create_two_sections(), {})), {88});
+  }
+  SECTION("two sections, threshold 0.1") {
+    require_frames_near(boundary_frames(BoundaryDetector(create_two_sections(), gated(0.1f, 2.0f))),
+                        {88});
+  }
+  SECTION("four sections, threshold 0.1, 1 s spacing") {
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(), gated(0.1f, 1.0f))),
+        {67, 128, 196});
+  }
+  SECTION("four sections, threshold 0.1, 0.5 s spacing") {
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(), gated(0.1f, 0.5f))),
+        {67, 128, 196});
+  }
+  SECTION("two sections, chroma only") {
+    BoundaryConfig config = gated(0.1f, 2.0f);
+    config.use_mfcc = false;
+    config.n_chroma = 24;
+    require_frames_near(boundary_frames(BoundaryDetector(create_two_sections(), config)), {87});
+    config.n_chroma = 12;
+    require_frames_near(boundary_frames(BoundaryDetector(create_two_sections(), config)), {87});
+  }
+  SECTION("3 s four sections at 44.1 and 48 kHz, 2 s spacing") {
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(44100, 3.0f), gated(0.2f, 2.0f))),
+        {131, 257, 390});
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(48000, 3.0f), gated(0.2f, 2.0f))),
+        {131, 257, 390});
+  }
+  SECTION("repeated loop, default config") {
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_looped_pattern(22050, 0.5f, 60), {})), {});
+  }
+  SECTION("3 s sections, threshold 0.2, 1 s spacing") {
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_two_sections(22050, 3.0f), gated(0.2f, 1.0f))),
+        {131});
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(22050, 3.0f), gated(0.2f, 1.0f))),
+        {131, 257, 390});
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(44100, 3.0f), gated(0.2f, 1.0f))),
+        {131, 257, 390});
+  }
+  SECTION("3 s four sections, absolute floor off") {
+    BoundaryConfig config;
+    config.absolute_threshold = 0.0f;
+    require_frames_near(
+        boundary_frames(BoundaryDetector(create_multi_sections(22050, 3.0f), config)),
+        {131, 257, 390});
+  }
+  SECTION("loop into a tone, default config") {
+    require_frames_near(boundary_frames(BoundaryDetector(create_loop_then_tone(), {})), {648});
+  }
+}
+
+TEST_CASE("a dominant change outside the reference window does not hide a weaker one",
+          "[boundary_detector]") {
+  constexpr float kWindowSec = 5.0f;
+  constexpr int kSr = 22050;
+  const test::FarEventRow row =
+      GENERATE(from_range(std::begin(test::kFarEventRows), std::end(test::kFarEventRows)));
+  CAPTURE(static_cast<int>(row.dominant), static_cast<int>(row.side), row.distance_factor,
+          static_cast<int>(row.weak));
+  const test::FarEventCase c = test::make_far_event_case(row, kWindowSec, kSr);
+
+  BoundaryConfig config;
+  config.reference_window = kWindowSec;
+  const BoundaryDetector base(Audio::from_vector(c.base, kSr), config);
+  const BoundaryDetector inserted(Audio::from_vector(c.inserted, kSr), config);
+  const float hop_sec = static_cast<float>(config.hop_length) / static_cast<float>(kSr);
+  const float tolerance = 2.0f * hop_sec;
+
+  // (i) Without the insertion the weak change is a boundary, so (ii) is not vacuous.
+  const auto weak = std::find_if(
+      base.boundaries().begin(), base.boundaries().end(),
+      [&](const Boundary& b) { return std::fabs(b.time - c.weak_change_sec) <= tolerance; });
+  INFO("base boundaries " << ::Catch::Detail::stringify(base.boundary_times()));
+  REQUIRE(weak != base.boundaries().end());
+
+  // The weak change must clear the floor yet sit under the relative threshold of the dominant one.
+  const float dominant_sec = (row.side == test::Side::After)
+                                 ? c.target_length_sec + row.distance_factor * kWindowSec
+                                 : c.target_offset_sec - row.distance_factor * kWindowSec;
+  float dominant_raw = 0.0f;
+  for (size_t i = 0; i < inserted.novelty_curve().size(); ++i) {
+    if (std::fabs(static_cast<float>(i) * hop_sec - dominant_sec) <= 1.0f) {
+      dominant_raw = std::max(dominant_raw, inserted.novelty_curve()[i] * inserted.novelty_peak());
+    }
+  }
+  const float weak_raw = weak->strength * base.novelty_peak();
+  CAPTURE(weak_raw, dominant_raw);
+  REQUIRE(weak_raw >= 1.25f * config.absolute_threshold);
+  REQUIRE(weak_raw < config.threshold * dominant_raw);
+
+  // (ii) With it, the weak change is still the only boundary inside the target region.
+  const float margin = static_cast<float>(config.kernel_size / 2) * hop_sec + config.peak_distance;
+  const float inner_begin = c.target_offset_sec + margin;
+  const float inner_end = c.target_offset_sec + c.target_length_sec - margin;
+  std::vector<float> inner;
+  for (float t : inserted.boundary_times()) {
+    if (t >= inner_begin && t <= inner_end) inner.push_back(t - c.target_offset_sec);
+  }
+  INFO("inserted boundaries in the target, from its start " << ::Catch::Detail::stringify(inner));
+  REQUIRE(inner.size() == 1);
+  REQUIRE_THAT(inner[0], WithinAbs(weak->time, tolerance));
+}
+
+namespace {
+
+/// @brief Spectrogram of four steady segments whose three transitions grow in contrast.
+/// @param transitions First frame of segments 1..3.
+/// @param n_frames Total frame count.
+/// @param reversed Emit the frames in reverse order.
+/// @details Segment k puts power cos(a_k) on {C4, E4, G4} and sin(a_k) on {D4, F#4, A4}; the angle
+///          steps grow (25, 30, 35 degrees), so each chroma change outgrows the one before.
+Spectrogram chain_spectrogram(const std::vector<int>& transitions, int n_frames, bool reversed) {
+  constexpr int kSr = 22050;
+  constexpr int kNFft = 2048;
+  constexpr int kHop = 512;
+  constexpr int kBins = kNFft / 2 + 1;
+  constexpr float kFloor = 1e-3f;
+  const float angle_deg[4] = {0.0f, 25.0f, 55.0f, 90.0f};
+  const float triad_x[3] = {261.63f, 329.63f, 392.0f};
+  const float triad_y[3] = {293.66f, 369.99f, 440.0f};
+  const auto bin_of = [](float hz) {
+    return static_cast<size_t>(std::lround(hz * static_cast<float>(kNFft) / kSr));
+  };
+
+  std::vector<std::complex<float>> data(static_cast<size_t>(kBins) * n_frames, {kFloor, 0.0f});
+  for (int f = 0; f < n_frames; ++f) {
+    int segment = 0;
+    while (segment < 3 && f >= transitions[static_cast<size_t>(segment)]) ++segment;
+    const float angle = angle_deg[segment] * constants::kPi / 180.0f;
+    const size_t out = static_cast<size_t>(reversed ? n_frames - 1 - f : f);
+    for (int n = 0; n < 3; ++n) {
+      data[bin_of(triad_x[n]) * n_frames + out] = {
+          std::sqrt(std::max(0.0f, std::cos(angle))) + kFloor, 0.0f};
+      data[bin_of(triad_y[n]) * n_frames + out] = {
+          std::sqrt(std::max(0.0f, std::sin(angle))) + kFloor, 0.0f};
+    }
+  }
+  return Spectrogram::from_complex(std::move(data), kBins, n_frames, kNFft, kHop, kSr,
+                                   WindowType::Hann);
+}
+
+}  // namespace
+
+TEST_CASE("peak spacing keeps the same boundaries when the input is time-reversed",
+          "[boundary_detector]") {
+  // Three transitions 0.7 D apart: the outer two are 1.4 D apart, so strength-first spacing keeps
+  // both whichever direction the contrast grows in.
+  constexpr int kSr = 22050;
+  BoundaryConfig config;
+  config.use_mfcc = false;
+  config.peak_distance = 6.0f;
+  const float hop_sec = static_cast<float>(config.hop_length) / static_cast<float>(kSr);
+  const int distance = static_cast<int>(config.peak_distance / hop_sec);
+  const int spacing = static_cast<int>(0.7f * static_cast<float>(distance));
+  constexpr int kMargin = 100;
+  const std::vector<int> transitions = {kMargin, kMargin + spacing, kMargin + 2 * spacing};
+  const int n_frames = kMargin + 2 * spacing + kMargin;
+
+  const auto detect = [&](bool reversed) {
+    const Spectrogram spec = chain_spectrogram(transitions, n_frames, reversed);
+    const BoundaryDetector detector(MelSpectrogram(), Chroma::from_spectrogram(spec, kSr), kSr,
+                                    config);
+    return boundary_frames(detector);
+  };
+  const std::vector<int> forward = detect(false);
+  const std::vector<int> backward = detect(true);
+
+  INFO("forward " << ::Catch::Detail::stringify(forward) << " reversed "
+                  << ::Catch::Detail::stringify(backward));
+  REQUIRE(forward.size() == 2);
+  REQUIRE(backward.size() == forward.size());
+  for (size_t i = 0; i < forward.size(); ++i) {
+    const int mirrored = n_frames - 1 - backward[backward.size() - 1 - i];
+    REQUIRE(std::abs(forward[i] - mirrored) <= 2);
+  }
 }

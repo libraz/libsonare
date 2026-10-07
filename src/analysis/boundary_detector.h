@@ -59,10 +59,18 @@ struct BoundaryConfig {
   int n_fft = 2048;      ///< FFT size
   int hop_length = 512;  ///< Hop length
   int kernel_size = 64;  ///< Checkerboard kernel size in frames
-  /// Relative novelty threshold, applied to the curve after it has been scaled
-  /// by its own maximum. Selects how prominent a peak must be *within this
-  /// track*; it says nothing about how much the features actually changed.
+  /// Relative novelty threshold: a peak must reach this fraction of the largest
+  /// raw novelty within @ref reference_window of it. Selects how prominent a
+  /// peak is *among its neighbours*; it says nothing about how much the features
+  /// actually changed. Because the reference is local, a returned boundary's
+  /// `strength` (scaled by the whole-track maximum) can sit below this value.
   float threshold = 0.3f;
+  /// One-sided span in seconds of the neighbourhood @ref threshold is measured
+  /// against, so a dominant change further away than this cannot gate a weaker
+  /// one out. 0 makes the reference the frame itself, which disables
+  /// @ref threshold; a value at least the track length restores a whole-track
+  /// reference.
+  float reference_window = 60.0f;
   /// Absolute novelty threshold, applied to the raw checkerboard response before
   /// that scaling. A stationary feature sequence still produces a full-scale
   /// normalized curve — self-scaling turns residual fluctuation into peaks of
@@ -84,11 +92,13 @@ struct BoundaryConfig {
   /// span is not stationary at the scale the kernel measures, so its within-loop
   /// contrast clears the floor and it is segmented.
   float absolute_threshold = 0.005f;
-  int n_mfcc = 13;             ///< Number of MFCC coefficients
-  int n_chroma = 12;           ///< Number of chroma bins
-  float peak_distance = 2.0f;  ///< Minimum distance between peaks in seconds
-  bool use_mfcc = true;        ///< Use MFCC features
-  bool use_chroma = true;      ///< Use chroma features
+  int n_mfcc = 13;    ///< Number of MFCC coefficients
+  int n_chroma = 12;  ///< Number of chroma bins
+  /// Minimum distance between boundaries in seconds. Stronger peaks are kept
+  /// first, so the result does not depend on scan direction.
+  float peak_distance = 2.0f;
+  bool use_mfcc = true;    ///< Use MFCC features
+  bool use_chroma = true;  ///< Use chroma features
 };
 
 /// @brief Detected boundary event.
@@ -101,7 +111,9 @@ struct Boundary {
                    ///< inputs the feature grid is additionally mean-pooled, so
                    ///< this is an index into the pooled grid (not the raw STFT
                    ///< frame); use @c time for sample/second mapping either way.
-  float strength;  ///< Boundary strength (novelty score)
+  float strength;  ///< Novelty scaled by the whole-track maximum (a rank within
+                   ///< the track); can be below BoundaryConfig::threshold,
+                   ///< which is gated against a local reference.
 };
 
 /// @brief Boundary detector for finding section transitions.
@@ -138,8 +150,10 @@ class BoundaryDetector {
   std::vector<float> boundary_times() const;
 
   /// @brief Returns the novelty curve, scaled by its own maximum.
-  /// @details Values are in [0, 1] and are what @ref BoundaryConfig::threshold is
-  /// compared against. The scaling is per-track, so a peak of 1.0 means "the most
+  /// @details Values are in [0, 1]. @ref BoundaryConfig::threshold is compared
+  /// against the local maximum of this curve within
+  /// @ref BoundaryConfig::reference_window, not against 1.0. The scaling is
+  /// per-track, so a peak of 1.0 means "the most
   /// novel frame here", not "a large change" — multiply by @ref novelty_peak to
   /// recover the raw checkerboard response the absolute threshold reads.
   const std::vector<float>& novelty_curve() const { return novelty_curve_; }

@@ -13,6 +13,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/peak.h"
 
 namespace sonare {
 
@@ -55,6 +56,16 @@ Audio boundary_analysis_audio(const Audio& audio) {
 int band_radius(int kernel_size) {
   const int half = std::max(kernel_size, 0) / 2;
   return half > 0 ? 2 * half - 1 : 0;
+}
+
+/// @brief Converts a duration to whole analysis frames, saturated to [0, frame_count].
+/// @details Bounded before the cast: converting a value int cannot represent is
+/// undefined. A non-finite or overlong duration saturates to the curve length.
+int seconds_to_frames(float seconds, float hop_duration, size_t frame_count) {
+  const float frames = seconds / hop_duration;
+  const auto limit = static_cast<float>(frame_count);
+  if (!std::isfinite(frames)) return static_cast<int>(limit);
+  return static_cast<int>(std::clamp(frames, 0.0f, limit));
 }
 
 }  // namespace
@@ -394,56 +405,40 @@ void BoundaryDetector::compute_novelty_curve() {
 void BoundaryDetector::detect_boundaries() {
   if (novelty_curve_.empty()) return;
 
-  // Convert peak distance to frames. Under long-form pooling each analysis frame
-  // spans frame_stride_ hops, so the effective hop duration scales accordingly;
-  // frame_stride_ is 1 (no change) for all normal-length inputs.
-  float hop_duration = static_cast<float>(hop_length_) * static_cast<float>(frame_stride_) / sr_;
-  // Bound before the cast, not after: converting a value int cannot represent is
-  // undefined, so a later clamp only narrows a result that is already undefined.
-  // The curve length is the saturating value -- a distance that long admits one
-  // peak, which is what an unbounded separation asks for.
-  const float distance_frames = config_.peak_distance / hop_duration;
-  const auto frame_count = static_cast<float>(novelty_curve_.size());
-  int min_peak_distance = std::isfinite(distance_frames)
-                              ? static_cast<int>(std::min(distance_frames, frame_count))
-                              : static_cast<int>(frame_count);
-  min_peak_distance = std::max(1, min_peak_distance);
+  // Under long-form pooling each analysis frame spans frame_stride_ hops, so the
+  // effective hop duration scales accordingly; frame_stride_ is 1 for all
+  // normal-length inputs.
+  const float hop_duration =
+      static_cast<float>(hop_length_) * static_cast<float>(frame_stride_) / sr_;
+  const int min_peak_distance =
+      std::max(1, seconds_to_frames(config_.peak_distance, hop_duration, novelty_curve_.size()));
+  const int window_frames =
+      seconds_to_frames(config_.reference_window, hop_duration, novelty_curve_.size());
 
-  // Find local maxima above both thresholds. The relative one ranks peaks within
-  // this track; the absolute one asks whether the features changed at all, which
-  // the normalized curve cannot answer because it was scaled by its own maximum.
-  // novelty_peak_ is 0 exactly when the curve was left unnormalized for sitting
-  // under the numerical floor, and multiplying by it rejects that curve too.
+  // Gate on the raw response. novelty_peak_ is 0 exactly when the curve was left
+  // unnormalized under the numerical floor, so that curve yields no candidates.
+  std::vector<float> raw(novelty_curve_.size());
+  for (size_t i = 0; i < raw.size(); ++i) raw[i] = novelty_curve_[i] * novelty_peak_;
+  const std::vector<float> reference =
+      sliding_max(raw.data(), raw.size(), static_cast<size_t>(window_frames));
+
+  // The relative gate asks whether a peak stands out among its neighbours; the
+  // absolute one asks whether the features changed at all.
+  std::vector<int> candidates;
   for (int i = 1; i < n_frames_ - 1; ++i) {
-    bool is_peak =
-        (novelty_curve_[i] > novelty_curve_[i - 1] && novelty_curve_[i] > novelty_curve_[i + 1]);
-    const float absolute_novelty = novelty_curve_[i] * novelty_peak_;
-
-    if (is_peak && novelty_curve_[i] >= config_.threshold &&
-        absolute_novelty >= config_.absolute_threshold) {
-      // Check minimum distance from previous boundary
-      bool far_enough = true;
-      if (!boundaries_.empty()) {
-        int prev_frame = boundaries_.back().frame;
-        if (i - prev_frame < min_peak_distance) {
-          far_enough = false;
-          // If this peak is stronger, replace the previous one
-          if (novelty_curve_[i] > boundaries_.back().strength) {
-            boundaries_.back().frame = i;
-            boundaries_.back().time = static_cast<float>(i) * hop_duration;
-            boundaries_.back().strength = novelty_curve_[i];
-          }
-        }
-      }
-
-      if (far_enough) {
-        Boundary boundary;
-        boundary.frame = i;
-        boundary.time = static_cast<float>(i) * hop_duration;
-        boundary.strength = novelty_curve_[i];
-        boundaries_.push_back(boundary);
-      }
+    const bool is_peak = raw[i] > raw[i - 1] && raw[i] > raw[i + 1];
+    if (is_peak && raw[i] >= config_.threshold * reference[i] &&
+        raw[i] >= config_.absolute_threshold) {
+      candidates.push_back(i);
     }
+  }
+
+  for (int i : select_peaks_min_distance(candidates, raw.data(), min_peak_distance)) {
+    Boundary boundary;
+    boundary.frame = i;
+    boundary.time = static_cast<float>(i) * hop_duration;
+    boundary.strength = novelty_curve_[i];
+    boundaries_.push_back(boundary);
   }
 }
 
