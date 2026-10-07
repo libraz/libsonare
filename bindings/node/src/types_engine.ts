@@ -402,6 +402,27 @@ export interface EngineBus {
  */
 export type SidechainSourceKind = 'track' | 'bus';
 
+/**
+ * Why a sidechain binding would be refused; the camelCase form of the C ABI
+ * `SonareSidechainRefusal`. When several reasons hold, the first check the
+ * matching setter runs is reported.
+ */
+export type SidechainRefusal =
+  | 'invalidTarget'
+  | 'insertOutOfRange'
+  | 'undeclaredSource'
+  | 'invalidSourceKind'
+  | 'selfKey'
+  | 'cycle'
+  | 'tableFull'
+  | 'planRefused';
+
+/** Result of a `canSet*Sidechain` query; `reason` is `null` exactly when `ok`. */
+export interface SidechainCheck {
+  ok: boolean;
+  reason: SidechainRefusal | null;
+}
+
 export interface ClipPageRequest {
   clipId: number;
   channel: number;

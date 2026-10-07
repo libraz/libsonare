@@ -26,6 +26,10 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTempo(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignature(const Napi::CallbackInfo& info);
   Napi::Value ResetMasterLoudnessMeter(const Napi::CallbackInfo& info);
+  Napi::Value PrimeOfflineParameters(const Napi::CallbackInfo& info);
+  Napi::Value ResetProcessorState(const Napi::CallbackInfo& info);
+  Napi::Value TailSamples(const Napi::CallbackInfo& info);
+  Napi::Value GraphLatencySamplesQ8(const Napi::CallbackInfo& info);
   Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignatureSegments(const Napi::CallbackInfo& info);
   Napi::Value SampleAtPpq(const Napi::CallbackInfo& info);
@@ -53,6 +57,9 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTrackBuses(const Napi::CallbackInfo& info);
   Napi::Value SetBusSidechain(const Napi::CallbackInfo& info);
   Napi::Value SetMasterSidechain(const Napi::CallbackInfo& info);
+  Napi::Value CanSetLaneSidechain(const Napi::CallbackInfo& info);
+  Napi::Value CanSetBusSidechain(const Napi::CallbackInfo& info);
+  Napi::Value CanSetMasterSidechain(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripJson(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripEqBandJson(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripJson(const Napi::CallbackInfo& info);

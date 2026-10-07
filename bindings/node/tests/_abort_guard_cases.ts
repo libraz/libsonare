@@ -580,6 +580,29 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.canSetLaneSidechain',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'sourceTrackId', call: (e) => e.canSetLaneSidechain(TRACK_ID, 0, '1') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.canSetBusSidechain',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'sourceKind', call: (e) => e.canSetBusSidechain(BUS_ID, 0, 'x', 1) },
+      { argument: 'sourceId', call: (e) => e.canSetBusSidechain(BUS_ID, 0, 0, '1') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.canSetMasterSidechain',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'sourceKind', call: (e) => e.canSetMasterSidechain(0, 'x', 1) },
+      { argument: 'sourceId', call: (e) => e.canSetMasterSidechain(0, 0, '1') },
+    ],
+  },
+  {
     name: 'RealtimeEngine.setBusStripJson',
     missingRequired: [],
     badArguments: [{ argument: 'sceneJson', call: (e) => e.setBusStripJson(BUS_ID, 42) }],
@@ -978,6 +1001,19 @@ export const CASES: AbortGuardCase[] = [
     badTransportArguments: [
       { argument: 'renderFrame', call: (e) => e.resetMasterLoudnessMeter('x') },
     ],
+  },
+  {
+    name: 'RealtimeEngine.primeOfflineParameters',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'numChannels', call: (e) => e.primeOfflineParameters('2', BLOCK) },
+      { argument: 'blockSize', call: (e) => e.primeOfflineParameters(2, 'x') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.resetProcessorState',
+    missingRequired: [],
+    badTransportArguments: [{ argument: 'renderFrame', call: (e) => e.resetProcessorState('x') }],
   },
   {
     name: 'RealtimeEngine.meterTargetInsertGainReduction',

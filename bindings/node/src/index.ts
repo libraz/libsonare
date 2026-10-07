@@ -304,6 +304,8 @@ export type {
   SendTiming,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
+  SidechainCheck,
+  SidechainRefusal,
   SidechainSourceKind,
   SilenceCommonReport,
   SoloProcessor,

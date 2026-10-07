@@ -45,6 +45,8 @@ export interface NativeEngine {
   setTempo(bpm: unknown): void;
   setTimeSignature(numerator: unknown, denominator: unknown): void;
   resetMasterLoudnessMeter(renderFrame?: unknown): void;
+  primeOfflineParameters(numChannels: unknown, blockSize: unknown): void;
+  resetProcessorState(renderFrame?: unknown): void;
   meterTargetInsertGainReduction(targetId: unknown): number[];
   getTransportState(): NativeTransportState;
   setMarkers(markers: unknown): void;
@@ -197,6 +199,14 @@ export interface NativeEngine {
   drainMeterTelemetryWide(maxRecords?: unknown): unknown[];
   drainScopeTelemetry(maxRecords?: unknown): unknown[];
   setLaneSidechain(trackId: unknown, insertIndex: unknown, sourceTrackId: unknown): void;
+  canSetLaneSidechain(trackId: unknown, insertIndex: unknown, sourceTrackId: unknown): number;
+  canSetBusSidechain(
+    busId: unknown,
+    insertIndex: unknown,
+    sourceKind: unknown,
+    sourceId: unknown,
+  ): number;
+  canSetMasterSidechain(insertIndex: unknown, sourceKind: unknown, sourceId: unknown): number;
   setBusStripJson(busId: unknown, sceneJson: unknown): void;
   setBusStripEqBandJson(busId: unknown, bandIndex: unknown, bandJson: unknown): void;
   setTrackStripJson(trackId: unknown, sceneJson: unknown): void;

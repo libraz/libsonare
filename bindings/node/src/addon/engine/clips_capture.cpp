@@ -413,6 +413,65 @@ Napi::Value RealtimeEngineWrap::SetMasterSidechain(const Napi::CallbackInfo& inf
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::CanSetLaneSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t track_id = 0;
+  uint32_t insert_index = 0;
+  uint32_t source_track_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id) ||
+      !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
+      !RequiredUint32Arg(env, info, 2, "sourceTrackId", &source_track_id)) {
+    return env.Undefined();
+  }
+  int refusal = 0;
+  ThrowIfError(env, sonare_engine_can_set_lane_sidechain(engine_, track_id, insert_index,
+                                                         source_track_id, &refusal));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(refusal));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::CanSetBusSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  uint32_t insert_index = 0;
+  int source_kind = 0;
+  uint32_t source_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "busId", &bus_id) ||
+      !RequiredUint32Arg(env, info, 1, "insertIndex", &insert_index) ||
+      !RequiredIntArg(env, info, 2, "sourceKind", &source_kind) ||
+      !RequiredUint32Arg(env, info, 3, "sourceId", &source_id)) {
+    return env.Undefined();
+  }
+  int refusal = 0;
+  ThrowIfError(env, sonare_engine_can_set_bus_sidechain(engine_, bus_id, insert_index, source_kind,
+                                                        source_id, &refusal));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(refusal));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::CanSetMasterSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t insert_index = 0;
+  int source_kind = 0;
+  uint32_t source_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "insertIndex", &insert_index) ||
+      !RequiredIntArg(env, info, 1, "sourceKind", &source_kind) ||
+      !RequiredUint32Arg(env, info, 2, "sourceId", &source_id)) {
+    return env.Undefined();
+  }
+  int refusal = 0;
+  ThrowIfError(env, sonare_engine_can_set_master_sidechain(engine_, insert_index, source_kind,
+                                                           source_id, &refusal));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(refusal));
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::ClipCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

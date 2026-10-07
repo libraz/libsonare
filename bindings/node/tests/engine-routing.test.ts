@@ -277,6 +277,66 @@ describe('RealtimeEngine bus and master sidechain', () => {
   });
 });
 
+describe('RealtimeEngine sidechain pre-check', () => {
+  it('reports ok for a binding the setter accepts', () => {
+    const engine = makeKeyedRig();
+    expect(engine.canSetBusSidechain(2, 0, 'track', 30)).toEqual({ ok: true, reason: null });
+    expect(engine.canSetMasterSidechain(0, 'bus', 1)).toEqual({ ok: true, reason: null });
+    // Unbinding is always acceptable.
+    expect(engine.canSetBusSidechain(2, 0, 'bus', 0)).toEqual({ ok: true, reason: null });
+    // The check changes nothing: the bus key set by the rig is still in force.
+    expect(settled(engine)).toBeLessThan(0.02);
+    engine.destroy();
+  });
+
+  it('names the refusal reason without changing state', () => {
+    const engine = makeKeyedRig();
+    expect(engine.canSetBusSidechain(9, 0, 'track', 30)).toEqual({
+      ok: false,
+      reason: 'invalidTarget',
+    });
+    expect(engine.canSetBusSidechain(2, 7, 'track', 30)).toEqual({
+      ok: false,
+      reason: 'insertOutOfRange',
+    });
+    expect(engine.canSetBusSidechain(2, 0, 'track', 99)).toEqual({
+      ok: false,
+      reason: 'undeclaredSource',
+    });
+    expect(engine.canSetBusSidechain(2, 0, 'bus', 2)).toEqual({ ok: false, reason: 'selfKey' });
+    expect(engine.canSetMasterSidechain(5, 'bus', 1)).toEqual({
+      ok: false,
+      reason: 'insertOutOfRange',
+    });
+    expect(engine.canSetMasterSidechain(0, 'bus', 9)).toEqual({
+      ok: false,
+      reason: 'undeclaredSource',
+    });
+    expect(engine.canSetLaneSidechain(0, 0, 10)).toEqual({ ok: false, reason: 'invalidTarget' });
+    // Bus 2 is keyed from bus 1; keying bus 1 from bus 2 would close a loop.
+    expect(engine.canSetBusSidechain(1, 0, 'bus', 2)).toEqual({ ok: false, reason: 'cycle' });
+    engine.destroy();
+  });
+
+  it('refuses an unknown sourceKind by name like the setters do', () => {
+    const engine = makeKeyedRig();
+    expect(() => engine.canSetBusSidechain(2, 0, 2, 30)).toThrow(RangeError);
+    expect(() => engine.canSetMasterSidechain(0, 'sideways' as never, 30)).toThrow(RangeError);
+    engine.destroy();
+  });
+
+  it('agrees with the setter on the lane form', () => {
+    const engine = makeKeyedRig();
+    const check = engine.canSetLaneSidechain(10, 0, 30);
+    if (check.ok) {
+      expect(() => engine.setLaneSidechain(10, 0, 30)).not.toThrow();
+    } else {
+      expect(check.reason).not.toBeNull();
+    }
+    engine.destroy();
+  });
+});
+
 describe('RealtimeEngine MIDI clip gain and fade', () => {
   const destination = 9;
   const heldNote = [{ renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 }];

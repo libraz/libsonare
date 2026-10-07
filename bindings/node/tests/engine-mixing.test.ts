@@ -1153,3 +1153,147 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 });
+
+describe('RealtimeEngine prime, reset, tail and latency', () => {
+  const block = 256;
+  const blocks = 24;
+  const frames = block * blocks;
+
+  const delayStripJson = JSON.stringify({
+    version: 1,
+    strips: [
+      {
+        id: 'track-10',
+        inserts: [
+          {
+            slot: 'post',
+            processor: 'effects.delay.stereo',
+            params: JSON.stringify({
+              delayTimeLMs: 5,
+              delayTimeRMs: 7,
+              feedback: 0.6,
+              dryWet: 0.5,
+            }),
+          },
+        ],
+      },
+    ],
+    buses: [],
+    connections: [],
+  });
+
+  /** A burst followed by silence, so a delay tail is still ringing when playback stops. */
+  function makeRig(withDelay: boolean): RealtimeEngine {
+    const engine = new RealtimeEngine(48000, block);
+    const samples = new Float32Array(frames);
+    for (let i = 0; i < block * 4; i += 1) {
+      samples[i] = 0.5 * Math.sin(i * 0.37);
+    }
+    engine.setClips([
+      { id: 1, trackId: 10, channels: [samples], startPpq: 0, lengthSamples: frames },
+    ]);
+    engine.setTrackLanes([10]);
+    if (withDelay) {
+      engine.setTrackStripJson(10, delayStripJson);
+    }
+    return engine;
+  }
+
+  function renderFromTop(engine: RealtimeEngine, count: number): Float32Array {
+    engine.seekSample(0);
+    engine.play();
+    const out = new Float32Array(count * block);
+    for (let b = 0; b < count; b += 1) {
+      const [left] = engine.process([new Float32Array(block), new Float32Array(block)]);
+      out.set(left, b * block);
+    }
+    engine.stop();
+    return out;
+  }
+
+  function expectClose(actual: Float32Array, expected: Float32Array): void {
+    expect(actual.length).toBe(expected.length);
+    let maxDiff = 0;
+    let peak = 0;
+    for (let i = 0; i < expected.length; i += 1) {
+      maxDiff = Math.max(maxDiff, Math.abs(actual[i] - expected[i]));
+      peak = Math.max(peak, Math.abs(expected[i]));
+    }
+    expect(peak).toBeGreaterThan(0.05);
+    expect(maxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, peak));
+  }
+
+  it('renders a primed engine like a fresh primed one after a dirty pass', () => {
+    const fresh = makeRig(true);
+    fresh.primeOfflineParameters(2, block);
+    const reference = renderFromTop(fresh, 8);
+    fresh.destroy();
+
+    const dirty = makeRig(true);
+    renderFromTop(dirty, 3);
+    dirty.primeOfflineParameters(2, block);
+    expectClose(renderFromTop(dirty, 8), reference);
+    dirty.destroy();
+  });
+
+  it('renders after resetProcessorState like a fresh engine', () => {
+    const fresh = makeRig(true);
+    const reference = renderFromTop(fresh, 8);
+    fresh.destroy();
+
+    const dirty = makeRig(true);
+    renderFromTop(dirty, 3);
+    dirty.resetProcessorState();
+    expectClose(renderFromTop(dirty, 8), reference);
+    dirty.destroy();
+
+    const explicitFrame = makeRig(true);
+    renderFromTop(explicitFrame, 3);
+    explicitFrame.resetProcessorState(0);
+    expectClose(renderFromTop(explicitFrame, 8), reference);
+    explicitFrame.destroy();
+  });
+
+  it('leaves the delay tail in place without a reset', () => {
+    const fresh = makeRig(true);
+    const reference = renderFromTop(fresh, 8);
+    fresh.destroy();
+
+    const dirty = makeRig(true);
+    renderFromTop(dirty, 3);
+    const rerun = renderFromTop(dirty, 8);
+    let maxDiff = 0;
+    for (let i = 0; i < reference.length; i += 1) {
+      maxDiff = Math.max(maxDiff, Math.abs(rerun[i] - reference[i]));
+    }
+    expect(maxDiff).toBeGreaterThan(1e-4);
+    dirty.destroy();
+  });
+
+  it('validates primeOfflineParameters arguments', () => {
+    const engine = makeRig(false);
+    expect(() => engine.primeOfflineParameters(0, block)).toThrow();
+    expect(() => engine.primeOfflineParameters(2, 0)).toThrow();
+    expect(() => engine.primeOfflineParameters(1000, block)).toThrow();
+    expect(() => engine.primeOfflineParameters(2, block)).not.toThrow();
+    engine.destroy();
+  });
+
+  it('reports a tail only when an insert holds one', () => {
+    const plain = makeRig(false);
+    expect(plain.tailSamples()).toBe(0);
+    plain.destroy();
+
+    const delayed = makeRig(true);
+    expect(delayed.tailSamples()).toBeGreaterThan(0);
+    delayed.destroy();
+  });
+
+  it('reports the graph latency as a number', () => {
+    const engine = makeRig(false);
+    const latency = engine.graphLatencySamplesQ8();
+    expect(typeof latency).toBe('number');
+    expect(Number.isInteger(latency)).toBe(true);
+    engine.destroy();
+  });
+});

@@ -183,6 +183,10 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
           InstanceMethod<&RealtimeEngineWrap::ResetMasterLoudnessMeter>("resetMasterLoudnessMeter"),
+          InstanceMethod<&RealtimeEngineWrap::PrimeOfflineParameters>("primeOfflineParameters"),
+          InstanceMethod<&RealtimeEngineWrap::ResetProcessorState>("resetProcessorState"),
+          InstanceMethod<&RealtimeEngineWrap::TailSamples>("tailSamples"),
+          InstanceMethod<&RealtimeEngineWrap::GraphLatencySamplesQ8>("graphLatencySamplesQ8"),
           InstanceMethod<&RealtimeEngineWrap::SetTempoSegments>("setTempoSegments"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignatureSegments>("setTimeSignatureSegments"),
           InstanceMethod<&RealtimeEngineWrap::SampleAtPpq>("sampleAtPpq"),
@@ -210,6 +214,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetTrackBuses>("setTrackBuses"),
           InstanceMethod<&RealtimeEngineWrap::SetBusSidechain>("setBusSidechain"),
           InstanceMethod<&RealtimeEngineWrap::SetMasterSidechain>("setMasterSidechain"),
+          InstanceMethod<&RealtimeEngineWrap::CanSetLaneSidechain>("canSetLaneSidechain"),
+          InstanceMethod<&RealtimeEngineWrap::CanSetBusSidechain>("canSetBusSidechain"),
+          InstanceMethod<&RealtimeEngineWrap::CanSetMasterSidechain>("canSetMasterSidechain"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripJson>("setBusStripJson"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripEqBandJson>("setBusStripEqBandJson"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripJson>("setTrackStripJson"),
@@ -580,6 +587,52 @@ Napi::Value RealtimeEngineWrap::ResetMasterLoudnessMeter(const Napi::CallbackInf
   }
   ThrowIfError(env, sonare_engine_reset_master_loudness_meter(engine_, render_frame));
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PrimeOfflineParameters(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int num_channels = 0;
+  int block_size = 0;
+  if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
+      !RequiredIntArg(env, info, 1, "blockSize", &block_size)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_prime_offline_parameters(engine_, num_channels, block_size));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ResetProcessorState(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int64_t render_frame = -1;
+  if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &render_frame)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_reset_processor_state(engine_, render_frame));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::TailSamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int tail = 0;
+  ThrowIfError(env, sonare_engine_tail_samples(engine_, &tail));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(tail));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::GraphLatencySamplesQ8(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int latency_q8 = 0;
+  ThrowIfError(env, sonare_engine_graph_latency_samples_q8(engine_, &latency_q8));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(latency_q8));
   SONARE_NODE_CATCH(env)
 }
 
