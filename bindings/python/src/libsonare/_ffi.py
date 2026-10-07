@@ -89,6 +89,8 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
 
     Raises:
         OSError: If the library cannot be found or loaded.
+        SonareError: ``ABI_MISMATCH`` when the library reports a different ABI
+            version or lacks a symbol this binding requires.
     """
     path = lib_path or _find_library()
     lib = ctypes.CDLL(path)
@@ -113,18 +115,28 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
             "incompatible with this Python binding.",
         )
 
-    configure_core_signatures(lib)
-    configure_effects_signatures(lib)
-    configure_engine_signatures(lib)
-    configure_repair_dynamics_signatures(lib)
-    configure_features_signatures(lib)
-    configure_mastering_signatures(lib)
-    configure_mixing_signatures(lib)
-    configure_mixing_assistant_signatures(lib)
-    configure_extra_signatures(lib)
-    configure_project_signatures(lib)
-    configure_playback_signatures(lib)
-    configure_vocal_signatures(lib)
-    configure_vocal_project_signatures(lib)
+    # Additive entry points do not move the ABI version, so a library built
+    # before one of them passes the check above and is caught here instead.
+    try:
+        configure_core_signatures(lib)
+        configure_effects_signatures(lib)
+        configure_engine_signatures(lib)
+        configure_repair_dynamics_signatures(lib)
+        configure_features_signatures(lib)
+        configure_mastering_signatures(lib)
+        configure_mixing_signatures(lib)
+        configure_mixing_assistant_signatures(lib)
+        configure_extra_signatures(lib)
+        configure_project_signatures(lib)
+        configure_playback_signatures(lib)
+        configure_vocal_signatures(lib)
+        configure_vocal_project_signatures(lib)
+    except AttributeError as exc:
+        raise SonareError(
+            int(ErrorCode.ABI_MISMATCH),
+            f"libsonare ABI mismatch: {path} does not export a symbol this binding "
+            f"requires ({exc}). The shared library is older than the Python binding; "
+            "rebuild it or point SONARE_LIB_PATH at a current build.",
+        ) from exc
 
     return lib

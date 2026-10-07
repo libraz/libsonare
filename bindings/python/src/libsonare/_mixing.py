@@ -146,11 +146,8 @@ class Mixer:
             )
         # Capture any non-fatal load warning (e.g. insert params no processor
         # read) immediately, before any later C-ABI call overwrites it.
-        warnings: list[str] = []
-        if hasattr(lib, "sonare_last_warning_message"):
-            raw = lib.sonare_last_warning_message()
-            if raw:
-                warnings = raw.decode("utf-8").splitlines()
+        raw = lib.sonare_last_warning_message()
+        warnings = raw.decode("utf-8").splitlines() if raw else []
         return cls(int(handle), sample_rate, block_size, warnings)
 
     def scene_warnings(self) -> list[str]:

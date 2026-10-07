@@ -630,11 +630,7 @@ class _ProjectInspectionMixin:
                 _utf8_arg(scene_json, "scene_json"),
             )
         )
-        raw = (
-            lib.sonare_last_warning_message()
-            if hasattr(lib, "sonare_last_warning_message")
-            else b""
-        )
+        raw = lib.sonare_last_warning_message()
         return raw.decode("utf-8").splitlines() if raw else []
 
     def set_tempo_segments(

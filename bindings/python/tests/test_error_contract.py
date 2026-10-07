@@ -23,6 +23,20 @@ def test_abi_mismatch_raises_coded_error(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "ABI mismatch" in str(raised.value)
 
 
+def test_missing_symbol_raises_coded_abi_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    from libsonare import _ffi
+
+    def configure_with_missing_symbol(lib) -> None:
+        lib.sonare_symbol_no_library_exports.restype = None
+
+    monkeypatch.setattr(_ffi, "configure_core_signatures", configure_with_missing_symbol)
+    with pytest.raises(SonareError) as raised:
+        _ffi.load_library()
+    assert raised.value.code == ErrorCode.ABI_MISMATCH
+    assert "sonare_symbol_no_library_exports" in str(raised.value)
+    assert _ffi._find_library() in str(raised.value)
+
+
 def test_project_abi_mismatch_raises_coded_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from libsonare import _project_model
 

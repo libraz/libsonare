@@ -84,11 +84,11 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
 
     Pointer-returning constructors have no return code, so the code and detail
     come from ``sonare_last_error_code`` / ``sonare_last_error_message``.
-    ``default_code`` stands in when the library recorded none (or an older
-    library lacks the accessor), and the detail extends ``fallback_message``.
+    ``default_code`` stands in when the library recorded none, and the detail
+    extends ``fallback_message``.
     """
     lib = _get_lib()
-    code = int(lib.sonare_last_error_code()) if hasattr(lib, "sonare_last_error_code") else 0
+    code = int(lib.sonare_last_error_code())
     raw = lib.sonare_last_error_message()
     detail = raw.decode("utf-8", errors="replace") if raw else ""
     message = f"{fallback_message}: {detail}" if detail else fallback_message
