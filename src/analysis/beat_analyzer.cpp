@@ -30,11 +30,6 @@ namespace {
 ///          well inside one beat at the tempi the tracker admits.
 constexpr double kAccentWindowSeconds = 0.08;
 
-/// Trim keeps beats above this fraction of the reference onset, the 3rd-highest envelope peak so a
-/// single burst cannot set it: a +24 dB burst gives max 58.6 / reference 18.0, putting 3.1-high
-/// edge beats at 0.17 of the reference (0.05 of the max); a noise prelude stays at 0.03.
-constexpr float kTrimRelativeThreshold = 0.1f;
-
 /// @brief Converts BPM to period in frames.
 float bpm_to_period(float bpm, int sr, int hop_length) {
   if (bpm <= 0.0f) return 0.0f;
@@ -490,7 +485,7 @@ void BeatAnalyzer::track_beats() {
     const float reference = peaks.size() > kReferenceIgnoredTopEvents
                                 ? max_excluding_top(std::move(peaks), kReferenceIgnoredTopEvents)
                                 : *std::max_element(onset_strength_.begin(), onset_strength_.end());
-    const float threshold = kTrimRelativeThreshold * reference;
+    const float threshold = kOnsetEvidenceRelativeThreshold * reference;
     const bool has_reference = reference >= kEpsilon;
 
     // Find first frame with significant onset
@@ -557,7 +552,7 @@ void BeatAnalyzer::track_beats() {
   estimate_time_signature();
 }
 
-void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_strength_observations) {
+void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_energy) {
   MeterConfig meter_config;
   meter_config.candidate_numerators = config_.meter_candidate_numerators;
   meter_config.denominator = config_.meter_denominator;
@@ -582,24 +577,7 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_streng
   // rhythm pass runs over the same beats.
   const std::vector<float> scoring_envelope = beat_local_energy(onset_strength_, sr_, hop_length_);
 
-  MeterResult meter;
-  const float observation_max =
-      beat_strength_observations.empty()
-          ? 0.0f
-          : *std::max_element(beat_strength_observations.begin(), beat_strength_observations.end());
-  if (beat_strength_observations.size() == beats_.size() && observation_max > constants::kEpsilon) {
-    std::vector<Beat> observed_beats = beats_;
-    for (size_t i = 0; i < observed_beats.size(); ++i) {
-      observed_beats[i].strength =
-          std::clamp(beat_strength_observations[i] / observation_max, 0.0f, 1.0f);
-    }
-    // The estimator prefers the envelope for per-beat accent scoring, so these
-    // observations govern only where the envelope carries no dynamic range to
-    // read — they are the accent evidence of last resort, not of first resort.
-    meter = estimate_meter(scoring_envelope, observed_beats, meter_config);
-  } else {
-    meter = estimate_meter(scoring_envelope, beats_, meter_config);
-  }
+  MeterResult meter = estimate_meter(scoring_envelope, beats_, meter_config, beat_energy);
   time_signature_ = meter.time_signature;
   time_signature_candidates_ = std::move(meter.candidates);
   downbeat_phase_ = meter.downbeat_phase;

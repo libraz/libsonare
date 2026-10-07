@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <utility>
 
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
@@ -35,6 +36,7 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   beats_ = beat_analyzer.beats();
   bpm_ = beat_analyzer.bpm();
   onset_strength_ = beat_analyzer.onset_strength();
+  beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
 
   // Detect onsets from onset strength envelope
   detect_onsets(onset_strength_);
@@ -49,6 +51,7 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
       hop_length_(beat_analyzer.hop_length()) {
   beats_ = beat_analyzer.beats();
   onset_strength_ = beat_analyzer.onset_strength();
+  beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
 
   // Detect onsets from onset strength envelope
   detect_onsets(onset_strength_);
@@ -174,6 +177,7 @@ void RhythmAnalyzer::detect_time_signature() {
   features_.time_signature.numerator = 4;
   features_.time_signature.denominator = meter_config.denominator;
   features_.time_signature.confidence = 0.0f;
+  unobserved_beats_.clear();
 
   if (beats_.size() < 8) {
     return;
@@ -187,9 +191,11 @@ void RhythmAnalyzer::detect_time_signature() {
   // Keep the full MeterResult so the downbeat phase (which beat index the first
   // downbeat falls on) can offset the strong-beat classification in
   // compute_syncopation(), matching how BeatAnalyzer aligns its downbeats.
-  MeterResult meter = estimate_meter(beat_energy_, beats_, meter_config);
+  MeterResult meter =
+      estimate_meter(beat_energy_, beats_, meter_config, beat_low_frequency_energy_);
   features_.time_signature = meter.time_signature;
   downbeat_phase_ = meter.downbeat_phase;
+  unobserved_beats_ = std::move(meter.unobserved_beats);
 }
 
 void RhythmAnalyzer::detect_groove_type() {
@@ -237,6 +243,11 @@ void RhythmAnalyzer::compute_syncopation() {
   weak_strengths.reserve(beats_.size());
 
   for (size_t i = 0; i < beats_.size(); ++i) {
+    // A beat the meter estimate found masked carries no accent reading either way.
+    if (std::binary_search(unobserved_beats_.begin(), unobserved_beats_.end(),
+                           static_cast<int>(i))) {
+      continue;
+    }
     // Determine position within bar, offset by the estimated downbeat phase so
     // bar_position == 0 lands on the actual downbeat (consistent with BeatAnalyzer).
     const int bar_position =

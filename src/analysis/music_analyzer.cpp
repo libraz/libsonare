@@ -155,6 +155,8 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     // Use cached onset strength to avoid recomputation
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
                                                     config_->hop_length, beat_config);
+    // Same order as the Audio constructor: the meter reads the energy, then the downbeats.
+    beat_analyzer_->estimate_time_signature(beat_low_frequency_energy());
     beat_analyzer_->refine_downbeats(beat_low_frequency_energy());
   });
   return *beat_analyzer_;

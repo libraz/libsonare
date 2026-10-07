@@ -9,6 +9,7 @@
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
+#include "util/peak.h"
 
 namespace sonare {
 
@@ -185,13 +186,14 @@ float compound_subdivision_score(const std::vector<float>& onset_strength,
 }  // namespace
 
 MeterAnalyzer::MeterAnalyzer(const std::vector<float>& onset_strength,
-                             const std::vector<Beat>& beats, const MeterConfig& config)
+                             const std::vector<Beat>& beats, const MeterConfig& config,
+                             const std::vector<float>& beat_energy)
     : config_(config) {
-  analyze(onset_strength, beats);
+  analyze(onset_strength, beats, beat_energy);
 }
 
 void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
-                            const std::vector<Beat>& beats) {
+                            const std::vector<Beat>& beats, const std::vector<float>& beat_energy) {
   result_ = {};
   result_.time_signature = {4, config_.denominator, 0.0f};
   result_.candidate_scores.assign(config_.candidate_numerators.size(), 0.0f);
@@ -242,17 +244,46 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
     beat_strengths.push_back(std::clamp(strength, 0.0f, 1.0f));
   }
 
+  // A beat with no onset evidence but among the loudest in energy was masked by a louder event;
+  // a rest is quiet in both and stays evidence. At most kReferenceIgnoredTopEvents beats qualify.
+  std::vector<char> observed(beats.size(), 1);
+  if (beat_energy.size() == beats.size()) {
+    std::vector<float> raw;
+    raw.reserve(beats.size());
+    for (const auto& beat : beats) {
+      const bool in_range = beat.frame >= 0 && beat.frame < static_cast<int>(onset_strength.size());
+      raw.push_back(!use_envelope ? beat.strength
+                    : in_range    ? onset_strength[static_cast<size_t>(beat.frame)]
+                                  : 0.0f);
+    }
+    const float onset_reference = max_excluding_top(raw, kReferenceIgnoredTopEvents);
+    const float energy_reference = max_excluding_top(beat_energy, kReferenceIgnoredTopEvents);
+    for (size_t i = 0; i < beats.size(); ++i) {
+      if (raw[i] < kOnsetEvidenceRelativeThreshold * onset_reference &&
+          beat_energy[i] > energy_reference) {
+        observed[i] = 0;
+        result_.unobserved_beats.push_back(static_cast<int>(i));
+      }
+    }
+  }
+
   // The span's own centre and spread, which every candidate's accent groups are
   // read against. Computing them once keeps every candidate on one scale.
-  const float overall_mean =
-      mean_or_zero(std::accumulate(beat_strengths.begin(), beat_strengths.end(), 0.0f),
-                   static_cast<int>(beat_strengths.size()));
+  float strength_sum = 0.0f;
+  int observed_count = 0;
+  for (size_t i = 0; i < beat_strengths.size(); ++i) {
+    if (!observed[i]) continue;
+    strength_sum += beat_strengths[i];
+    ++observed_count;
+  }
+  const float overall_mean = mean_or_zero(strength_sum, observed_count);
   float variance = 0.0f;
-  for (float strength : beat_strengths) {
-    const float deviation = strength - overall_mean;
+  for (size_t i = 0; i < beat_strengths.size(); ++i) {
+    if (!observed[i]) continue;
+    const float deviation = beat_strengths[i] - overall_mean;
     variance += deviation * deviation;
   }
-  const float spread = std::sqrt(mean_or_zero(variance, static_cast<int>(beat_strengths.size())));
+  const float spread = std::sqrt(mean_or_zero(variance, observed_count));
 
   float best_score = -std::numeric_limits<float>::infinity();
   int best_numerator = 4;
@@ -282,6 +313,7 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       position_sums.assign(static_cast<size_t>(numerator), 0.0f);
       position_counts.assign(static_cast<size_t>(numerator), 0);
       for (size_t i = 0; i < beat_strengths.size(); ++i) {
+        if (!observed[i]) continue;
         const size_t position =
             static_cast<size_t>((static_cast<int>(i) - phase + numerator) % numerator);
         position_sums[position] += beat_strengths[i];
@@ -304,6 +336,7 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       for (size_t i = static_cast<size_t>(phase);
            i + static_cast<size_t>(numerator) < beat_strengths.size();
            i += static_cast<size_t>(numerator)) {
+        if (!observed[i] || !observed[i + static_cast<size_t>(numerator)]) continue;
         const float current = beat_strengths[i];
         const float next = beat_strengths[i + static_cast<size_t>(numerator)];
         measure_consistency += 1.0f - std::min(std::abs(current - next), 1.0f);
@@ -498,8 +531,8 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
 }
 
 MeterResult estimate_meter(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
-                           const MeterConfig& config) {
-  MeterAnalyzer analyzer(onset_strength, beats, config);
+                           const MeterConfig& config, const std::vector<float>& beat_energy) {
+  MeterAnalyzer analyzer(onset_strength, beats, config, beat_energy);
   return analyzer.result();
 }
 

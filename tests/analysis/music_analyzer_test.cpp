@@ -9,6 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <random>
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
@@ -63,6 +64,44 @@ Audio create_accented_audio(float bpm, int beats_per_bar, int sr = 22050, float 
     for (int i = 0; i < click_length && start + i < n_samples; ++i) {
       float envelope = 1.0f - static_cast<float>(i) / click_length;
       samples[start + i] = envelope * amplitude;
+    }
+    beat_count++;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Adds a 24 dB white-noise burst centred at @p center_frac of the audio's length.
+void add_white_burst(Audio& audio, float duration_sec, float center_frac = 0.5f) {
+  std::vector<float> samples(audio.data(), audio.data() + audio.size());
+  const int sr = audio.sample_rate();
+  const size_t length = static_cast<size_t>(duration_sec * static_cast<float>(sr));
+  const size_t start =
+      static_cast<size_t>(center_frac * static_cast<float>(samples.size())) - length / 2;
+  const float level = 0.25f * std::pow(10.0f, 24.0f / 20.0f);
+  std::mt19937 rng(20261008);
+  std::normal_distribution<float> noise(0.0f, level);
+  for (size_t i = 0; i < length && start + i < samples.size(); ++i) {
+    samples[start + i] += noise(rng);
+  }
+  audio = Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Creates equal clicks with one bar position left silent, so the rest is the only accent.
+Audio create_rest_audio(float bpm, int beats_per_bar, int rest_position, int sr, float duration) {
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  const float beat_interval = 60.0f / bpm;
+  const int click_length = sr / 100;
+  int beat_count = 0;
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    if (beat_count % beats_per_bar != rest_position) {
+      const int start = static_cast<int>(t * sr);
+      for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+        const float envelope = 1.0f - static_cast<float>(i) / click_length;
+        samples[start + i] = envelope * 0.5f;
+      }
     }
     beat_count++;
   }
@@ -794,5 +833,67 @@ TEST_CASE("MusicAnalyzer publishes the beat observations behind the downbeat dec
     REQUIRE(std::isfinite(result.beat_observations.onset_strength[i]));
     REQUIRE(std::isfinite(result.beat_observations.low_frequency_energy[i]));
     REQUIRE(std::isfinite(chord_change[i]));
+  }
+}
+
+TEST_CASE("MusicAnalyzer keeps the time signature when one loud burst sits mid-track",
+          "[.][slow][music_analyzer]") {
+  // The burst masks the click of the downbeat inside it; that beat must not read as the weakest.
+  for (const int beats_per_bar : {3, 4}) {
+    const Audio plain = create_accented_audio(120.0f, beats_per_bar, 22050, 12.0f);
+    Audio burst = create_accented_audio(120.0f, beats_per_bar, 22050, 12.0f);
+    add_white_burst(burst, 0.5f);
+
+    MusicAnalyzerConfig config;
+    config.start_bpm = 120.0f;
+    const AnalysisResult base = MusicAnalyzer(plain, config).analyze();
+    const AnalysisResult with_burst = MusicAnalyzer(burst, config).analyze();
+
+    CAPTURE(beats_per_bar, base.time_signature.numerator, with_burst.time_signature.numerator,
+            base.rhythm.time_signature.numerator, with_burst.rhythm.time_signature.numerator,
+            base.rhythm.syncopation, with_burst.rhythm.syncopation);
+    REQUIRE(base.time_signature.numerator == beats_per_bar);
+    CHECK(with_burst.time_signature.numerator == base.time_signature.numerator);
+    CHECK(with_burst.time_signature.denominator == base.time_signature.denominator);
+    CHECK(with_burst.rhythm.time_signature.numerator == base.rhythm.time_signature.numerator);
+    CHECK(with_burst.rhythm.time_signature.denominator == base.rhythm.time_signature.denominator);
+    CHECK_THAT(with_burst.rhythm.syncopation, WithinAbs(base.rhythm.syncopation, 0.01));
+  }
+}
+
+TEST_CASE("MusicAnalyzer keeps 4/4 when a loud burst masks a weak beat",
+          "[.][slow][music_analyzer]") {
+  // The burst's attack lands on the beat before the masked one and is a real off-beat accent,
+  // so only the meter is held here, not the syncopation.
+  const Audio plain = create_accented_audio(120.0f, 4, 22050, 12.0f);
+  Audio burst = create_accented_audio(120.0f, 4, 22050, 12.0f);
+  add_white_burst(burst, 0.5f, 0.4f);
+
+  MusicAnalyzerConfig config;
+  config.start_bpm = 120.0f;
+  const AnalysisResult base = MusicAnalyzer(plain, config).analyze();
+  const AnalysisResult with_burst = MusicAnalyzer(burst, config).analyze();
+
+  CAPTURE(base.time_signature.numerator, with_burst.time_signature.numerator,
+          base.rhythm.time_signature.numerator, with_burst.rhythm.time_signature.numerator,
+          base.rhythm.syncopation, with_burst.rhythm.syncopation);
+  REQUIRE(base.time_signature.numerator == 4);
+  CHECK(with_burst.time_signature.numerator == 4);
+  CHECK(with_burst.rhythm.time_signature.numerator == 4);
+}
+
+TEST_CASE("MusicAnalyzer reads a rest on every bar as meter evidence",
+          "[.][slow][music_analyzer]") {
+  // Equal clicks carry no accent, so the silent beat is the only thing marking the bar.
+  for (const int beats_per_bar : {3, 4}) {
+    const Audio audio = create_rest_audio(120.0f, beats_per_bar, 1, 22050, 12.0f);
+
+    MusicAnalyzerConfig config;
+    config.start_bpm = 120.0f;
+    const AnalysisResult result = MusicAnalyzer(audio, config).analyze();
+
+    CAPTURE(beats_per_bar, result.time_signature.numerator, result.rhythm.time_signature.numerator);
+    CHECK(result.time_signature.numerator == beats_per_bar);
+    CHECK(result.rhythm.time_signature.numerator == beats_per_bar);
   }
 }

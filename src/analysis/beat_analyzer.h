@@ -9,6 +9,11 @@
 
 namespace sonare {
 
+/// @brief Fraction of the reference onset below which a beat carries no onset evidence.
+/// @details The reference is the 3rd-highest value so a single burst cannot set it: a +24 dB
+///          burst puts 3.1-high edge beats at 0.17 of it (0.05 of the max); noise stays at 0.03.
+constexpr float kOnsetEvidenceRelativeThreshold = 0.1f;
+
 /// @brief Detected beat event.
 struct Beat {
   float time;  ///< Beat time in seconds
@@ -89,6 +94,11 @@ class BeatAnalyzer {
   ///          refinement has moved the first measure start.
   int downbeat_phase() const { return downbeat_phase_; }
 
+  /// @brief Re-estimates the time signature and the downbeats it implies.
+  /// @param beat_energy Per-beat low-frequency energy, or empty. A beat whose onset evidence a
+  ///        louder event masked is identified from it and left out of the meter scoring.
+  void estimate_time_signature(const std::vector<float>& beat_energy = {});
+
   /// @brief Refines downbeats using optional beat-level observations.
   void refine_downbeats(const std::vector<float>& low_frequency_energy = {},
                         const std::vector<float>& chord_changes = {});
@@ -139,7 +149,6 @@ class BeatAnalyzer {
 
  private:
   void track_beats();
-  void estimate_time_signature(const std::vector<float>& beat_strength_observations = {});
   float compute_transition_cost(int from_frame, int to_frame, float period) const;
 
   std::vector<Beat> beats_;

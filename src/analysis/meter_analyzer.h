@@ -104,26 +104,41 @@ struct MeterResult {
   ///          `time_signature.confidence` reports under the same field name —
   ///          reading one as the other produces a plausible wrong number.
   std::vector<TimeSignature> candidates;
+  /// @brief Beat indices left out of the scoring as unobserved, ascending.
+  /// @details A beat with no onset evidence whose energy is among the
+  ///          kReferenceIgnoredTopEvents largest was masked by a louder event
+  ///          rather than rested, so reading it as the weakest beat would be
+  ///          wrong. Empty unless per-beat energy was supplied.
+  std::vector<int> unobserved_beats;
 };
 
 /// @brief Estimates meter from beat-aligned onset strengths using a multi-comb score.
 class MeterAnalyzer {
  public:
+  /// @param onset_strength Frame-level accent envelope, or empty to read Beat::strength.
+  /// @param beats Beat series to score.
+  /// @param config Scoring configuration.
+  /// @param beat_energy Per-beat low-frequency energy, the same length as @p beats, or empty.
+  ///        Used only to tell a masked beat from a rest (MeterResult::unobserved_beats).
   MeterAnalyzer(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
-                const MeterConfig& config = MeterConfig());
+                const MeterConfig& config = MeterConfig(),
+                const std::vector<float>& beat_energy = {});
 
   const MeterResult& result() const { return result_; }
   TimeSignature time_signature() const { return result_.time_signature; }
 
  private:
-  void analyze(const std::vector<float>& onset_strength, const std::vector<Beat>& beats);
+  void analyze(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
+               const std::vector<float>& beat_energy);
 
   MeterConfig config_;
   MeterResult result_;
 };
 
+/// @brief Runs MeterAnalyzer over @p beats; the parameters are the constructor's.
 MeterResult estimate_meter(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,
-                           const MeterConfig& config = MeterConfig());
+                           const MeterConfig& config = MeterConfig(),
+                           const std::vector<float>& beat_energy = {});
 
 /// @brief Validates a meter configuration, throwing on a value the estimator
 ///        cannot answer rather than silently substituting a default.

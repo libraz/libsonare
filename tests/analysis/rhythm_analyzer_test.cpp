@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <random>
 #include <vector>
 
 #include "support/rate_material.h"
@@ -197,6 +198,20 @@ Audio create_accented_pattern(float bpm, int beats_per_bar, int sr = 22050,
     beat_count++;
   }
 
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Adds a 0.5 s white-noise burst, 24 dB above the weak clicks, in the middle.
+Audio with_mid_burst(const Audio& audio) {
+  std::vector<float> samples(audio.data(), audio.data() + audio.size());
+  const int sr = audio.sample_rate();
+  const size_t length = static_cast<size_t>(sr / 2);
+  const size_t start = samples.size() / 2 - length / 2;
+  std::mt19937 rng(20261008);
+  std::normal_distribution<float> noise(0.0f, 0.25f * std::pow(10.0f, 24.0f / 20.0f));
+  for (size_t i = 0; i < length && start + i < samples.size(); ++i) {
+    samples[start + i] += noise(rng);
+  }
   return Audio::from_vector(std::move(samples), sr);
 }
 
@@ -413,6 +428,32 @@ TEST_CASE("Meter estimates over the same beats agree", "[rhythm_analyzer]") {
     REQUIRE(meter.beat.denominator == meter.rhythm.denominator);
     // The beats never subdivide, so nothing here supports a compound beat unit.
     REQUIRE(meter.beat.denominator == 4);
+  }
+}
+
+TEST_CASE("RhythmAnalyzer keeps the meter and syncopation when a burst masks a downbeat",
+          "[.][slow][rhythm_analyzer]") {
+  // Direct BeatAnalyzer(audio) path: the masked beat is left out of both the meter and syncopation.
+  for (const int beats_per_bar : {3, 4}) {
+    const Audio plain = create_accented_pattern(120.0f, beats_per_bar, 22050, 12.0f);
+    const Audio burst = with_mid_burst(plain);
+
+    BeatConfig beat_config;
+    beat_config.start_bpm = 120.0f;
+    RhythmConfig rhythm_config;
+    rhythm_config.start_bpm = 120.0f;
+    const BeatAnalyzer plain_beats(plain, beat_config);
+    const BeatAnalyzer burst_beats(burst, beat_config);
+    const RhythmAnalyzer plain_rhythm(plain_beats, rhythm_config);
+    const RhythmAnalyzer burst_rhythm(burst_beats, rhythm_config);
+
+    CAPTURE(beats_per_bar, burst_beats.time_signature().numerator,
+            burst_rhythm.time_signature().numerator, plain_rhythm.syncopation(),
+            burst_rhythm.syncopation());
+    REQUIRE(plain_beats.time_signature().numerator == beats_per_bar);
+    CHECK(burst_beats.time_signature().numerator == beats_per_bar);
+    CHECK(burst_rhythm.time_signature().numerator == beats_per_bar);
+    CHECK_THAT(burst_rhythm.syncopation(), WithinAbs(plain_rhythm.syncopation(), 0.01));
   }
 }
 

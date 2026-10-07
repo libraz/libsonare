@@ -951,3 +951,61 @@ TEST_CASE("estimate_meter_from_beats does not favour a divisible numerator on un
       });
   REQUIRE(extremes.second->second <= kTrials / 2);
 }
+
+TEST_CASE("MeterAnalyzer leaves out a beat whose onset a louder event masked", "[meter_analyzer]") {
+  // A downbeat with no onset but 30x the energy of every other beat.
+  constexpr int kMasked = 9;
+  auto beats = make_beats(3, 8);
+  beats[kMasked].strength = 0.0f;
+  const std::vector<float> envelope = make_envelope(beats, 0.0f);
+  std::vector<float> energy(beats.size(), 1.0f);
+  energy[kMasked] = 30.0f;
+
+  for (const bool with_envelope : {true, false}) {
+    const MeterResult result = estimate_meter(with_envelope ? envelope : std::vector<float>{},
+                                              beats, MeterConfig(), energy);
+    CAPTURE(with_envelope, result.time_signature.numerator, result.unobserved_beats);
+    REQUIRE(result.unobserved_beats == std::vector<int>{kMasked});
+    REQUIRE(result.time_signature.numerator == 3);
+  }
+}
+
+TEST_CASE("MeterAnalyzer keeps a rest as meter evidence", "[meter_analyzer]") {
+  // Same silent beat, but quiet in energy too: that is a rest, not a masked beat.
+  constexpr int kRest = 9;
+  auto beats = make_beats(3, 8);
+  beats[kRest].strength = 0.0f;
+  const std::vector<float> envelope = make_envelope(beats, 0.0f);
+  std::vector<float> energy(beats.size(), 1.0f);
+  energy[kRest] = 0.0f;
+
+  const MeterResult with_energy = estimate_meter(envelope, beats, MeterConfig(), energy);
+  const MeterResult without_energy = estimate_meter(envelope, beats);
+  REQUIRE(with_energy.unobserved_beats.empty());
+  REQUIRE(with_energy.candidate_scores == without_energy.candidate_scores);
+  REQUIRE(with_energy.time_signature.numerator == without_energy.time_signature.numerator);
+}
+
+TEST_CASE("MeterAnalyzer without a dominant energy beat scores as without energy",
+          "[meter_analyzer]") {
+  const auto beats = make_beats(4, 6);
+  const std::vector<float> envelope = make_envelope(beats, 0.0f);
+  const std::vector<float> flat_energy(beats.size(), 1.0f);
+
+  for (const bool with_envelope : {true, false}) {
+    const std::vector<float> onsets = with_envelope ? envelope : std::vector<float>{};
+    const MeterResult base = estimate_meter(onsets, beats);
+    const MeterResult empty = estimate_meter(onsets, beats, MeterConfig(), {});
+    const MeterResult flat = estimate_meter(onsets, beats, MeterConfig(), flat_energy);
+    CAPTURE(with_envelope);
+    REQUIRE(base.unobserved_beats.empty());
+    REQUIRE(empty.unobserved_beats.empty());
+    REQUIRE(flat.unobserved_beats.empty());
+    for (const MeterResult* other : {&empty, &flat}) {
+      REQUIRE(other->candidate_scores == base.candidate_scores);
+      REQUIRE(other->time_signature.numerator == base.time_signature.numerator);
+      REQUIRE(other->time_signature.confidence == base.time_signature.confidence);
+      REQUIRE(other->downbeat_phase == base.downbeat_phase);
+    }
+  }
+}

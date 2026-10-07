@@ -112,6 +112,10 @@ class RhythmAnalyzer {
   /// @brief Onset strength rewritten as beat-local energy (@ref beat_local_energy).
   /// @details Scored by both the meter estimate and the syncopation measure.
   std::vector<float> beat_energy_;
+  /// @brief Per-beat low-frequency energy from the beat analyzer, empty when it had no audio.
+  std::vector<float> beat_low_frequency_energy_;
+  /// @brief Beats the meter estimate left out as masked; syncopation skips them too.
+  std::vector<int> unobserved_beats_;
   std::vector<float> onset_times_;  ///< Detected onset times in seconds
   float bpm_;
   int downbeat_phase_ = 0;  ///< Beat index of the first downbeat (from estimate_meter)
