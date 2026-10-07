@@ -338,8 +338,9 @@ def _quantize_sample(sample: float, full_scale: float, minimum: int, maximum: in
 
     Reproduces ``float_to_pcm16`` / ``float_to_pcm24`` (audio_io.cpp) step for
     step: narrow to 32-bit, write a non-finite sample as digital silence, clamp
-    to ``[-1, 1]``, scale in 32-bit, round half away from zero rather than to
-    even, then clamp the code to the container. The guard precedes the clamp
+    to ``[-1, 1]``, scale in 32-bit by ``2**(bits - 1)`` (the grid the decoder
+    divides by), round half away from zero rather than to even, then clamp the
+    code to the container. The guard precedes the clamp
     because a comparison against a non-finite value is false: a clamp alone lets
     NaN and +Inf through as positive full scale, a peak the encoder never
     produced. Narrowing and the rounding rule are both load-bearing -- either
@@ -365,12 +366,12 @@ def _pcm16(sample: float) -> bytes:
     """
     import struct
 
-    return struct.pack("<h", _quantize_sample(sample, 32767.0, -32768, 32767))
+    return struct.pack("<h", _quantize_sample(sample, 32768.0, -32768, 32767))
 
 
 def _pcm24(sample: float) -> bytes:
     """Clamp a float and pack it as little-endian 24-bit PCM."""
-    value = _quantize_sample(sample, 8388607.0, -8388608, 8388607)
+    value = _quantize_sample(sample, 8388608.0, -8388608, 8388607)
     return value.to_bytes(3, byteorder="little", signed=True)
 
 
@@ -427,10 +428,10 @@ def _pcm_bytes(samples: np.ndarray, bits_per_sample: int) -> bytes:
     low 3 bytes ``int.to_bytes(3, "little", signed=True)`` would have produced.
     """
     if bits_per_sample == 16:
-        codes = _quantize_codes(samples, 32767.0, -32768, 32767)
+        codes = _quantize_codes(samples, 32768.0, -32768, 32767)
         return bytes(codes.astype("<i2").tobytes())
     if bits_per_sample == 24:
-        codes = _quantize_codes(samples, 8388607.0, -8388608, 8388607)
+        codes = _quantize_codes(samples, 8388608.0, -8388608, 8388607)
         widened = codes.astype("<i4").view(np.uint8).reshape(-1, 4)
         return bytes(widened[:, :3].tobytes())
     raise ValueError("WAV bits must be 16 or 24")

@@ -1180,6 +1180,14 @@ uint32_t le32(const std::vector<uint8_t>& b, size_t off) {
          (static_cast<uint32_t>(b[off + 2]) << 16) | (static_cast<uint32_t>(b[off + 3]) << 24);
 }
 
+/// First sample byte of the RIFF data chunk.
+size_t data_chunk_offset(const std::vector<uint8_t>& b) {
+  const std::string tag = "data";
+  const auto chunk = std::search(b.begin(), b.end(), tag.begin(), tag.end());
+  REQUIRE(chunk != b.end());
+  return static_cast<size_t>(chunk - b.begin()) + 8;
+}
+
 int32_t signed_le24(const std::vector<uint8_t>& b, size_t off) {
   uint32_t value = static_cast<uint32_t>(b[off]) | (static_cast<uint32_t>(b[off + 1]) << 8) |
                    (static_cast<uint32_t>(b[off + 2]) << 16);
@@ -1222,7 +1230,7 @@ TEST_CASE("save_wav_multichannel writes WAVE_FORMAT_EXTENSIBLE for 5.1", "[audio
   const size_t data_off = 68;
   for (int c = 0; c < channels; ++c) {
     auto raw = static_cast<int16_t>(le16(bytes, data_off + static_cast<size_t>(c) * 2));
-    const float decoded = static_cast<float>(raw) / 32767.0f;
+    const float decoded = static_cast<float>(raw) / 32768.0f;
     REQUIRE_THAT(decoded, Catch::Matchers::WithinAbs(interleaved[static_cast<size_t>(c)], 1e-4f));
   }
 
@@ -1281,7 +1289,7 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   for (int plane = 0; plane < channels; ++plane) {
     const int32_t raw =
         signed_le24(bytes, data_off + static_cast<size_t>(plane) * static_cast<size_t>(3));
-    const float decoded = static_cast<float>(raw) / 8388607.0f;
+    const float decoded = static_cast<float>(raw) / 8388608.0f;
     REQUIRE_THAT(decoded,
                  Catch::Matchers::WithinAbs(first_frame[static_cast<size_t>(plane)], 1e-6f));
   }
@@ -1333,9 +1341,9 @@ TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating"
   // writer truncated (static_cast), losing up to a full LSB and ~3 dB SNR vs a
   // libsndfile-style nearest-neighbor encoder.
   const std::vector<float> original = {
-      100.7f / 32767.0f,   // +: trunc 100, round 101
-      -100.7f / 32767.0f,  // -: trunc -100, round -101 (away from zero)
-      50.2f / 32767.0f,    // control: trunc == round == 50
+      100.7f / 32768.0f,   // +: trunc 100, round 101
+      -100.7f / 32768.0f,  // -: trunc -100, round -101 (away from zero)
+      50.2f / 32768.0f,    // control: trunc == round == 50
       0.0f,
   };
   const std::vector<int16_t> expected = {101, -101, 50, 0};
@@ -1381,7 +1389,7 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
     REQUIRE(loaded.size() == samples.size());
     // dr_wav reconstructs int16 V as V / 32768, so the stored integer comes back
     // exactly by rounding the loaded float.
-    const std::vector<int16_t> expected = {32767, 0, 0, 0, -32767};
+    const std::vector<int16_t> expected = {32767, 0, 0, 0, -32768};
     for (size_t i = 0; i < expected.size(); ++i) {
       CAPTURE(i);
       REQUIRE(std::lround(static_cast<double>(loaded[i]) * 32768.0) == expected[i]);
@@ -1398,7 +1406,7 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
 
     REQUIRE(sr == 48000);
     REQUIRE(loaded.size() == samples.size());
-    const std::vector<int32_t> expected = {8388607, 0, 0, 0, -8388607};
+    const std::vector<int32_t> expected = {8388607, 0, 0, 0, -8388608};
     for (size_t i = 0; i < expected.size(); ++i) {
       CAPTURE(i);
       REQUIRE(std::lround(static_cast<double>(loaded[i]) * 8388608.0) == expected[i]);
@@ -1434,6 +1442,62 @@ TEST_CASE("a non-finite sample is written as silence and counted, not as full sc
     REQUIRE(static_cast<int16_t>(le16(bytes, data_off + 4)) == 0);
     REQUIRE(stereo_non_finite == 3);
     REQUIRE(surround_non_finite == 2);
+  }
+}
+
+// The writer quantizes on the grid the decoder divides by, so a file read and
+// written back at its own width keeps every code, both endpoints included.
+TEST_CASE("save_wav round-trips every decoded PCM code at the same width", "[audio_io]") {
+  SECTION("16-bit, every code") {
+    std::vector<float> samples;
+    samples.reserve(65536);
+    for (int code = -32768; code <= 32767; ++code) {
+      samples.push_back(static_cast<float>(code) / 32768.0f);
+    }
+    const std::string first = "test_pcm16_roundtrip_a.wav";
+    const std::string second = "test_pcm16_roundtrip_b.wav";
+    save_wav(first, samples, 48000, 16);
+    auto [decoded, sr] = load_wav(first);
+    save_wav(second, decoded, sr, 16);
+    const std::vector<uint8_t> a = read_file_bytes(first);
+    const std::vector<uint8_t> b = read_file_bytes(second);
+    std::remove(first.c_str());
+    std::remove(second.c_str());
+    REQUIRE(a == b);
+    const size_t data_off = data_chunk_offset(a);
+    for (size_t i = 0; i < samples.size(); i += 4099) {
+      CAPTURE(i);
+      REQUIRE(static_cast<int16_t>(le16(a, data_off + 2 * i)) == static_cast<int>(i) - 32768);
+    }
+    REQUIRE(static_cast<int16_t>(le16(a, data_off)) == -32768);
+    REQUIRE(static_cast<int16_t>(le16(a, data_off + 2 * 65535)) == 32767);
+  }
+
+  SECTION("24-bit, both ends, around zero and a stride through the rest") {
+    std::vector<int32_t> codes;
+    for (int32_t c = -8388608; c < -8388608 + 4096; ++c) codes.push_back(c);
+    for (int32_t c = -4096; c < 4096; ++c) codes.push_back(c);
+    for (int32_t c = 8388607 - 4095; c <= 8388607; ++c) codes.push_back(c);
+    for (int32_t c = -8388608; c <= 8388607 - 997; c += 997) codes.push_back(c);
+    std::vector<float> samples;
+    for (int32_t c : codes) samples.push_back(static_cast<float>(c) / 8388608.0f);
+    const std::string first = "test_pcm24_roundtrip_a.wav";
+    const std::string second = "test_pcm24_roundtrip_b.wav";
+    save_wav(first, samples, 48000, 24);
+    auto [decoded, sr] = load_wav(first);
+    save_wav(second, decoded, sr, 24);
+    const std::vector<uint8_t> a = read_file_bytes(first);
+    const std::vector<uint8_t> b = read_file_bytes(second);
+    std::remove(first.c_str());
+    std::remove(second.c_str());
+    REQUIRE(a == b);
+    const size_t data_off = data_chunk_offset(a);
+    for (size_t i = 0; i < codes.size(); ++i) {
+      if (signed_le24(a, data_off + 3 * i) != codes[i]) {
+        CAPTURE(i, codes[i]);
+        REQUIRE(signed_le24(a, data_off + 3 * i) == codes[i]);
+      }
+    }
   }
 }
 

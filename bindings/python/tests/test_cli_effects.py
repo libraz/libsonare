@@ -760,43 +760,43 @@ def test_pcm16_clamps_and_stays_byte_identical() -> None:
 
     assert cli._pcm16(0.0) == struct.pack("<h", 0)
     assert cli._pcm16(1.0) == struct.pack("<h", 32767)
-    assert cli._pcm16(-1.0) == struct.pack("<h", -32767)
+    assert cli._pcm16(-1.0) == struct.pack("<h", -32768)
     assert cli._pcm16(0.5) == struct.pack("<h", 16384)
     # Out-of-range values clamp to the full-scale endpoints.
     assert cli._pcm16(2.0) == struct.pack("<h", 32767)
-    assert cli._pcm16(-2.0) == struct.pack("<h", -32767)
+    assert cli._pcm16(-2.0) == struct.pack("<h", -32768)
 
 
 # Codes the native writer produces for samples that separate the two rounding
-# conventions: each `x` lands on or near a .5 boundary once scaled, where
-# round-half-to-even and round-half-away-from-zero disagree. Recorded from
-# `std::lroundf` on the 32-bit product, which is the contract `float_to_pcm16`
-# and `float_to_pcm24` (src/core/audio_io.cpp) publish. The non-finite rows
-# never reach the scale at all: they have no PCM image and are written as
-# digital silence.
+# conventions: the power-of-two rows land exactly on a .5 boundary once scaled,
+# where round-half-to-even and round-half-away-from-zero disagree. Recorded from
+# the native save_wav on the 2**(bits - 1) grid the decoder divides by, which is
+# the contract `float_to_pcm16` and `float_to_pcm24` (src/core/audio_io.cpp)
+# publish. The non-finite rows never reach the scale at all: they have no PCM
+# image and are written as digital silence.
 _PCM16_NATIVE_CODES = [
-    (1.5259254723787308e-05, 1),
-    (-1.5259254723787308e-05, -1),
-    (4.577776417136192e-05, 2),
-    (-4.577776417136192e-05, -2),
-    (7.629627361893654e-05, 3),
-    (-7.629627361893654e-05, -3),
-    (0.00032044434919953346, 11),
-    (-0.00032044434919953346, -11),
-    (0.0030976287089288235, 102),
-    (-0.0030976287089288235, -102),
-    (0.500030517578125, 16385),
-    (-0.500030517578125, -16385),
+    (1.52587890625e-05, 1),
+    (-1.52587890625e-05, -1),
+    (7.62939453125e-05, 3),
+    (-7.62939453125e-05, -3),
+    (0.0001373291015625, 5),
+    (-0.0001373291015625, -5),
+    (0.0003204345703125, 11),
+    (-0.0003204345703125, -11),
+    (0.0030670166015625, 101),
+    (-0.0030670166015625, -101),
+    (0.5000152587890625, 16385),
+    (-0.5000152587890625, -16385),
     (0.5625629425048828, 18434),
     (-0.8147373795509338, -26697),
     (-0.5259407162666321, -17234),
     (0.6181066036224365, 20254),
-    (-0.7396008033483668, -24234),
+    (-0.7396008033483668, -24235),
     (0.30104981593725233, 9865),
     (1.0, 32767),
-    (-1.0, -32767),
+    (-1.0, -32768),
     (1.5, 32767),
-    (-1.5, -32767),
+    (-1.5, -32768),
     (0.0, 0),
     (float("nan"), 0),
     (float("inf"), 0),
@@ -805,18 +805,18 @@ _PCM16_NATIVE_CODES = [
 
 
 _PCM24_NATIVE_CODES = [
-    (5.960465188081798e-08, 1),
-    (-5.960465188081798e-08, -1),
-    (2.9802325229866256e-07, 3),
-    (-2.9802325229866256e-07, -3),
+    (5.9604644775390625e-08, 1),
+    (-5.9604644775390625e-08, -1),
+    (2.98023223876953125e-07, 3),
+    (-2.98023223876953125e-07, -3),
     (0.5, 4194304),
     (-0.5, -4194304),
     (0.5625629425048828, 4719120),
     (-0.7396008033483668, -6204221),
     (1.0, 8388607),
-    (-1.0, -8388607),
+    (-1.0, -8388608),
     (1.5, 8388607),
-    (-1.5, -8388607),
+    (-1.5, -8388608),
     (0.0, 0),
     (float("nan"), 0),
     (float("inf"), 0),
@@ -846,7 +846,7 @@ def test_pcm_boundary_vector_separates_the_two_rounding_conventions() -> None:
         if not math.isfinite(sample):  # substituted before the rounding step
             continue
         clamped = max(-1.0, min(1.0, sample))
-        if int(round(clamped * 32767.0)) != expected:
+        if int(round(clamped * 32768.0)) != expected:
             disagreeing += 1
     assert disagreeing >= 10
 

@@ -3,9 +3,15 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <fstream>
+#include <iterator>
 #include <limits>
+#include <string>
 #include <vector>
 
+#include "core/audio_io.h"
 #include "mastering/final/bit_depth.h"
 #include "mastering/final/dither.h"
 #include "mastering/final/output_chain.h"
@@ -342,4 +348,39 @@ TEST_CASE("Final helpers validate inputs", "[mastering][final]") {
   REQUIRE_THROWS(output_chain(empty));
   REQUIRE_THROWS(bit_depth(make_audio({0.0f}), {1, true}));
   REQUIRE_THROWS(dither(make_audio({0.0f}), {DitherType::Tpdf, 40, 0}));
+}
+
+// A sample the final stage put on the b-bit grid is a PCM code already, so the
+// same-width WAV writer must store exactly that code.
+TEST_CASE("A finalized PCM code survives a same-width WAV save", "[mastering][final]") {
+  const int bits = GENERATE(16, 24);
+  const double scale = std::ldexp(1.0, bits - 1);
+  const std::vector<double> levels = {-1.0, -0.75, -0.25, 0.0, 0.25, 0.75, 1.0 - 1.0 / scale};
+  std::vector<float> input;
+  for (double level : levels) input.push_back(static_cast<float>(level));
+  const auto delivered = output_chain(make_audio(input), {bits, DitherType::None, true});
+
+  const std::string path = "test_final_grid_" + std::to_string(bits) + ".wav";
+  save_wav(path, delivered.data(), delivered.size(), 48000, bits);
+  std::ifstream in(path, std::ios::binary);
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                   std::istreambuf_iterator<char>());
+  in.close();
+  std::remove(path.c_str());
+
+  const size_t width = static_cast<size_t>(bits / 8);
+  const std::string tag = "data";
+  const auto chunk = std::search(bytes.begin(), bytes.end(), tag.begin(), tag.end());
+  REQUIRE(chunk != bytes.end());
+  const size_t data_off = static_cast<size_t>(chunk - bytes.begin()) + 8;
+  for (size_t i = 0; i < levels.size(); ++i) {
+    uint32_t raw = 0;
+    for (size_t k = 0; k < width; ++k)
+      raw |= static_cast<uint32_t>(bytes[data_off + i * width + k]) << (8 * k);
+    if (raw & (1u << (bits - 1))) raw |= ~((1u << bits) - 1u);
+    const auto code = static_cast<int32_t>(raw);
+    CAPTURE(bits, i, levels[i]);
+    CHECK(code == static_cast<int32_t>(std::lround(static_cast<double>(delivered[i]) * scale)));
+    CHECK(code == static_cast<int32_t>(std::lround(levels[i] * scale)));
+  }
 }

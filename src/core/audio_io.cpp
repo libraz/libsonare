@@ -726,8 +726,10 @@ namespace {
 /// Quantizes a normalized float sample to signed 16-bit PCM using
 /// round-half-away-from-zero (@c std::lroundf), the nearest-neighbor rounding
 /// libsndfile and other reference encoders use, instead of C++'s default
-/// toward-zero truncation. The input is clamped to [-1, 1] and the rounded
-/// result to the int16 range so a +1.0 peak cannot overflow.
+/// toward-zero truncation. The scale is 2^15, the grid the decoder divides by
+/// and the final bit-depth stage quantizes to, so a decoded or finalized code
+/// is written back unchanged. The input is clamped to [-1, 1] and the rounded
+/// result to the int16 range, so +1.0 lands on the positive ceiling 32767.
 ///
 /// A non-finite sample has no PCM image, so it is written as digital silence
 /// and counted in @p non_finite. The clamp cannot stand in for that check: a
@@ -740,20 +742,20 @@ int16_t float_to_pcm16(float sample, size_t& non_finite) {
     return 0;
   }
   const float clamped = std::max(-1.0f, std::min(1.0f, sample));
-  const long v = std::lroundf(clamped * 32767.0f);
+  const long v = std::lroundf(clamped * 32768.0f);
   return static_cast<int16_t>(std::max<long>(-32768, std::min<long>(32767, v)));
 }
 
 /// Quantizes a normalized float sample to a signed 24-bit PCM value (held in an
-/// int32) using the same round-to-nearest and non-finite handling as
-/// @ref float_to_pcm16.
+/// int32) on the 2^23 grid, with the same rounding, clamping and non-finite
+/// handling as @ref float_to_pcm16.
 int32_t float_to_pcm24(float sample, size_t& non_finite) {
   if (!std::isfinite(sample)) {
     ++non_finite;
     return 0;
   }
   const float clamped = std::max(-1.0f, std::min(1.0f, sample));
-  const long v = std::lroundf(clamped * 8388607.0f);  // 2^23 - 1
+  const long v = std::lroundf(clamped * 8388608.0f);
   return static_cast<int32_t>(std::max<long>(-8388608, std::min<long>(8388607, v)));
 }
 

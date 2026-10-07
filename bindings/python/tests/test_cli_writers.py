@@ -239,7 +239,7 @@ def _read_codes(path: Path, bits_per_sample: int) -> tuple[int, ...]:
 
 @pytest.mark.parametrize(
     ("bits", "full_scale", "half_code"),
-    [(16, 32767, 16384), (24, 8388607, 4194304)],
+    [(16, 32768, 16384), (24, 8388608, 4194304)],
 )
 @pytest.mark.parametrize(
     ("label", "sample"),
@@ -304,7 +304,7 @@ def test_wav_export_completes_over_a_sample_no_32_bit_float_can_hold(tmp_path) -
 
 @pytest.mark.parametrize(
     ("bits", "expected"),
-    [(16, (32767, -32767, 32734, 0)), (24, (8388607, -8388607, 8380219, 0))],
+    [(16, (32767, -32768, 32735, 0)), (24, (8388607, -8388608, 8380220, 0))],
 )
 def test_wav_writer_keeps_finite_codes_at_and_below_full_scale(tmp_path, bits, expected) -> None:
     """Silencing a non-finite sample must not move any finite one."""
@@ -446,10 +446,10 @@ def test_vectorized_quantizer_matches_the_scalar_one_over_random_and_edge_sample
     from libsonare._cli_common import _quantize_codes, _quantize_sample
 
     full_scale, minimum, maximum = (
-        (32767.0, -32768, 32767)
+        (32768.0, -32768, 32767)
         if bits == 16
         else (
-            8388607.0,
+            8388608.0,
             -8388608,
             8388607,
         )
