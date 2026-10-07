@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
   "title": "MixSceneDocument",
-  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Two things this schema deliberately does not describe. The parser also accepts a legacy snake_case spelling of most keys (fader_db beside faderDb); the writer never emits one, and admitting them here would let a document validate in a shape nothing produces. And a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it. One numeric limit is also outside what this file states: every float field is stored as a 32-bit float, and the parser refuses a value that is non-finite or past that range. JSON cannot spell a non-finite number at all, and putting the float magnitude on each of the sixteen numeric fields would be sixteen copies of one constant, so a double beyond float range is the one class of value that validates here and is then refused.",
+  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Keys starting with `$` or `x-` are annotations and are allowed on every object; any other unknown key is reported on the load warning channel by the parser. Two things this schema deliberately does not describe. The parser also accepts a legacy snake_case spelling of most keys (fader_db beside faderDb); the writer never emits one, and admitting them here would let a document validate in a shape nothing produces. And a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it. One numeric limit is also outside what this file states: every float field is stored as a 32-bit float, and the parser refuses a value that is non-finite or past that range. JSON cannot spell a non-finite number at all, and putting the float magnitude on each of the sixteen numeric fields would be sixteen copies of one constant, so a double beyond float range is the one class of value that validates here and is then refused.",
   "type": "object",
   "additionalProperties": false,
+  "patternProperties": { "^(\\$|x-)": {} },
   "required": ["version"],
   "properties": {
     "version": {
@@ -36,6 +37,7 @@
     "insert": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "required": ["processor"],
       "properties": {
         "slot": {
@@ -61,6 +63,7 @@
     "send": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "required": ["destinationBusId"],
       "properties": {
         "id": {
@@ -88,6 +91,7 @@
       "description": "Surround position. Omitted entirely by the writer at the centred point-source default, so a stereo scene carries no surroundPan object at all.",
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "azimuth": { "type": "number", "default": 0 },
         "elevation": { "type": "number", "default": 0 },
@@ -100,6 +104,7 @@
       "description": "One equalizer band, in the shape sonare_eq_set_band's JSON accepts. Only enabled is required to have any effect at all; every other field falls back to the values shown when the writer omits it.",
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "type": {
           "enum": ["Peak", "LowShelf", "HighShelf", "LowPass", "HighPass", "BandPass", "Notch", "TiltShelf", "FlatTilt", "AllPass"],
@@ -151,6 +156,7 @@
       "description": "A strip or bus's dedicated equalizer. Omitted entirely by the writer when enabled and every band is at its default, so an existing scene carries neither this key unless it set one.",
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "enabled": {
           "description": "Gates the whole EQ stage without discarding the bands.",
@@ -167,6 +173,7 @@
       "description": "Which meters this strip computes. Switching one off costs nothing but the measurement.",
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "enabled": { "type": "boolean", "default": true },
         "lufs": { "type": "boolean", "default": true },
@@ -183,6 +190,7 @@
     "strip": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "required": ["id"],
       "properties": {
         "id": {
@@ -286,6 +294,7 @@
     "bus": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "required": ["id"],
       "properties": {
         "id": {
@@ -357,6 +366,7 @@
     "vcaGroup": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "required": ["id"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
@@ -375,6 +385,7 @@
     "connection": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": { "^(\\$|x-)": {} },
       "required": ["source", "destination"],
       "properties": {
         "source": {

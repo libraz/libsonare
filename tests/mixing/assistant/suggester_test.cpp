@@ -719,6 +719,15 @@ TEST_CASE("the suggested scene survives a JSON round trip", "[mixing][assistant]
   REQUIRE(sonare::mixing::api::scene_to_json(reparsed) == json);
 }
 
+TEST_CASE("the suggested scene's JSON carries no unknown scene key", "[mixing][assistant]") {
+  const auto fixture = make_demo_tracks();
+  const auto result = sonare::mixing::assistant::suggest_scene(fixture.inputs());
+  std::vector<std::string> warnings;
+  (void)sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(result.scene),
+                                             &warnings);
+  REQUIRE(warnings.empty());
+}
+
 TEST_CASE("the result document is well-formed JSON with the expected shape",
           "[mixing][assistant]") {
   const auto fixture = make_demo_tracks();

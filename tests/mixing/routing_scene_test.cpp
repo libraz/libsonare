@@ -6,8 +6,11 @@
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <catch2/matchers/catch_matchers_vector.hpp>
 
 #include "mastering/eq/eq_band.h"
+#include "mixing/api/presets.h"
+#include "mixing/api/scene.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -965,6 +968,158 @@ TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
   CHECK(warning.find("highPassHz") != std::string::npos);
   CHECK(warning.find("presenceDb") != std::string::npos);
   CHECK(std::string(sonare_last_error_message()).empty());
+  sonare_mixer_destroy(mixer);
+}
+
+namespace {
+
+std::vector<std::string> scene_key_warnings(const std::string& json) {
+  std::vector<std::string> warnings;
+  (void)sonare::mixing::api::scene_from_json(json, &warnings);
+  return warnings;
+}
+
+}  // namespace
+
+TEST_CASE("Scene load reports each unknown key by its path", "[mixing][routing][warning]") {
+  using Catch::Matchers::UnorderedEquals;
+  const std::string typos = R"({
+    "version": 1,
+    "strips": [
+      {"id": "a", "inserts": [{"processor": "dynamics.compressor", "sidechainkey": "k"}],
+       "eq": {"bands": [{"freqHz": 1000}]}},
+      {"id": "b", "faderDB": -3}
+    ],
+    "buses": [{"id": "master", "roel": "master"}],
+    "connections": [{"source": "a", "destination": "master", "dest": "master"}]
+  })";
+  CHECK_THAT(scene_key_warnings(typos),
+             UnorderedEquals(std::vector<std::string>{
+                 "unknown scene key 'strips[1].faderDB'", "unknown scene key 'buses[0].roel'",
+                 "unknown scene key 'strips[0].inserts[0].sidechainkey'",
+                 "unknown scene key 'strips[0].eq.bands[0].freqHz'",
+                 "unknown scene key 'connections[0].dest'"}));
+
+  // A null warning list is accepted and the scene still loads.
+  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(typos));
+}
+
+TEST_CASE("Scene load reports the original array index and escapes control characters",
+          "[mixing][routing][warning]") {
+  const auto skipped =
+      scene_key_warnings(R"({"version":1,"strips":[1,null,{"id":"a"},"x",{"id":"b","bogus":1}]})");
+  REQUIRE(skipped.size() == 1);
+  CHECK(skipped[0] == "unknown scene key 'strips[4].bogus'");
+
+  const auto forged = scene_key_warnings(
+      "{\"version\":1,\"strips\":[{\"id\":\"a\",\"x\\nunknown scene key 'strips[9].fake'\":1}]}");
+  REQUIRE(forged.size() == 1);
+  CHECK(forged[0].find('\n') == std::string::npos);
+  CHECK(forged[0].find("\\x0a") != std::string::npos);
+}
+
+TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing][warning]") {
+  const std::string annotated = R"({
+    "$schema": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
+    "x-note": "top",
+    "version": 1,
+    "strips": [{"id": "a", "x-color": "red", "$comment": "c",
+      "surroundPan": {"x-a": 1}, "metering": {"$m": 1},
+      "inserts": [{"processor": "dynamics.compressor", "x-i": 1}],
+      "sends": [{"id": "s", "x-s": 1}],
+      "eq": {"x-e": 1, "bands": [{"x-b": 1}]}}],
+    "buses": [{"id": "m", "x-bus": 1}],
+    "vcaGroups": [{"id": "g", "x-g": 1}],
+    "connections": [{"source": "a", "destination": "m", "x-c": 1}]
+  })";
+  CHECK(scene_key_warnings(annotated).empty());
+  CHECK(scene_key_warnings(R"({"version":1,"xnote":1})").size() == 1);
+}
+
+TEST_CASE("Scene load accepts every legacy snake_case alias without a warning",
+          "[mixing][routing][warning]") {
+  const std::string legacy = R"({
+    "version": 1,
+    "strips": [{"id": "a", "input_trim_db": 1, "fader_db": -1, "vca_offset_db": 0,
+      "solo_safe": true, "pan_mode": 1, "dual_pan_left": -0.5, "dual_pan_right": 0.5,
+      "polarity_invert_left": true, "polarity_invert_right": false, "pan_law": 1,
+      "channel_delay_samples": 4,
+      "inserts": [{"processor_name": "dynamics.compressor", "params_json": "{}",
+                   "sidechain_key": "k"}],
+      "sends": [{"id": "s", "destination_bus_id": "m", "send_db": -6}],
+      "eq": {"bands": [{"frequency_hz": 100, "gain_db": 1, "coeff_mode": "Rbj",
+        "slope_db_oct": 12, "proportional_q": true, "proportional_q_strength": 1,
+        "dyn_enabled": true, "threshold_db": -20, "auto_threshold": false, "range_db": -6,
+        "attack_ms": 5, "release_ms": 50, "lookahead_ms": 1, "detector_delay_ms": 1,
+        "sidechain_freq_hz": 100, "sidechain_q": 1, "external_sidechain": false}]}}],
+    "buses": [{"id": "m", "input_trim_db": 1, "polarity_invert_left": true,
+      "polarity_invert_right": true, "pan_mode": 1, "dual_pan_left": -0.5,
+      "dual_pan_right": 0.5, "pan_law": 1}],
+    "vca_groups": [{"id": "g", "gain_db": -2, "members": ["a"]}]
+  })";
+  CHECK(scene_key_warnings(legacy).empty());
+}
+
+TEST_CASE("Scene writer output carries no unknown key", "[mixing][routing][warning]") {
+  // A maximal document: every field the writer can emit, at a non-default value.
+  const std::string maximal = R"({
+    "version": 1,
+    "strips": [{"id": "a", "inputTrimDb": 1, "faderDb": -1, "vcaOffsetDb": 1, "pan": 0.2,
+      "width": 0.8, "muted": true, "soloed": true, "soloSafe": true, "panMode": 1,
+      "dualPanLeft": -0.5, "dualPanRight": 0.5, "polarityInvertLeft": true,
+      "polarityInvertRight": true, "panLaw": 1, "channelDelaySamples": 3,
+      "sourceLayout": "5.1",
+      "surroundPan": {"azimuth": 30, "elevation": 10, "divergence": 0.2, "lfe": 0.1,
+                      "distance": 2},
+      "metering": {"enabled": false, "lufs": false, "truePeak": false,
+                   "truePeakOversample": 8},
+      "inserts": [{"slot": "post", "processor": "dynamics.compressor", "params": {},
+                   "sidechainKey": "k"}],
+      "sends": [{"id": "s", "destinationBusId": "m", "sendDb": -6, "timing": "pre"}],
+      "eq": {"enabled": false, "bands": [{"type": "HighShelf", "frequencyHz": 5000,
+        "gainDb": 3, "q": 1.2, "enabled": true, "coeffMode": "Vicanek", "slopeDbOct": 24,
+        "placement": "Mid", "phase": "ZeroLatency", "soloed": true, "bypassed": true,
+        "proportionalQ": true, "proportionalQStrength": 0.5, "dynamic": true,
+        "thresholdDb": -30, "autoThreshold": true, "ratio": 3, "rangeDb": -9,
+        "attackMs": 3, "releaseMs": 80, "detectorDelayMs": 2, "externalSidechain": true,
+        "sidechainFreqHz": 2000, "sidechainQ": 2}]}}],
+    "buses": [{"id": "m", "role": "master", "inputTrimDb": 1, "width": 0.5,
+      "polarityInvertLeft": true, "polarityInvertRight": true, "pan": 0.3, "panMode": 1,
+      "dualPanLeft": -0.5, "dualPanRight": 0.5, "panLaw": 1,
+      "inserts": [{"slot": "pre", "processor": "dynamics.compressor", "params": {},
+                   "sidechainKey": "k"}],
+      "eq": {"bands": [{"type": "Notch", "frequencyHz": 400}]}},
+      {"id": "surround", "role": "aux", "layout": "7.1"}],
+    "vcaGroups": [{"id": "g", "gainDb": -2, "members": ["a"]}],
+    "connections": [{"source": "a", "destination": "m"}]
+  })";
+  std::vector<std::string> warnings;
+  const auto scene = sonare::mixing::api::scene_from_json(maximal, &warnings);
+  CHECK(warnings.empty());
+  CHECK(scene_key_warnings(sonare::mixing::api::scene_to_json(scene)).empty());
+}
+
+TEST_CASE("Built-in scene presets carry no unknown key", "[mixing][routing][warning]") {
+  for (const auto& name : sonare::mixing::api::scene_preset_names()) {
+    DYNAMIC_SECTION(name) {
+      const auto preset =
+          sonare::mixing::api::scene_preset(sonare::mixing::api::scene_preset_from_string(name));
+      CHECK(scene_key_warnings(sonare::mixing::api::scene_to_json(preset)).empty());
+    }
+  }
+}
+
+TEST_CASE("sonare_mixer_from_scene_json reports unknown scene keys on the warning channel",
+          "[mixing][routing][warning]") {
+  const std::string typo = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "faderDB": -3}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  SonareMixer* mixer = sonare_mixer_from_scene_json(typo.c_str(), 48000, 512);
+  REQUIRE(mixer != nullptr);
+  CHECK(std::string(sonare_last_warning_message()) == "unknown scene key 'strips[0].faderDB'");
   sonare_mixer_destroy(mixer);
 }
 

@@ -1,4 +1,6 @@
+#include <initializer_list>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 #include "mastering/eq/eq_band_value.h"
@@ -55,9 +57,60 @@ ChannelLayout channel_layout_or(const JsonValue& object, const char* key, Channe
 // ---------------------------------------------------------------------------
 // Tree walkers. All parsing is delegated to util::json::parse (one shared
 // grammar, one locale-safe number parser). The walkers below populate Scene
-// types from the resulting Value tree; unknown fields are silently ignored,
-// matching the previous streaming parser's permissive behavior.
+// types from the resulting Value tree; unknown fields never fail a load and are
+// reported to the caller's warning list when it passes one.
 // ---------------------------------------------------------------------------
+
+using KeySet = std::unordered_set<std::string>;
+
+// Direct children of `prefix` in the writer's canonical path list ("" is the root),
+// plus the legacy spellings the readers still accept.
+KeySet known_keys(const std::string& prefix, std::initializer_list<const char*> legacy) {
+  KeySet keys(legacy.begin(), legacy.end());
+  const std::string head = prefix.empty() ? std::string() : prefix + ".";
+  for (const auto& path : scene_schema_paths()) {
+    if (path.compare(0, head.size(), head) != 0) continue;
+    const size_t end = path.find_first_of(".[", head.size());
+    keys.insert(path.substr(head.size(), end == std::string::npos ? end : end - head.size()));
+  }
+  return keys;
+}
+
+// Renders a key for a one-line warning: control characters are escaped so a key
+// cannot split the newline-joined channel into forged entries.
+std::string escape_key(const std::string& key) {
+  static const char kHex[] = "0123456789abcdef";
+  std::string out;
+  for (const char c : key) {
+    const auto u = static_cast<unsigned char>(c);
+    if (u < 0x20 || u == 0x7f) {
+      out += "\\x";
+      out += kHex[u >> 4];
+      out += kHex[u & 0xf];
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+// `$`- and `x-`-prefixed keys are annotations, never reported.
+void report_unknown_keys(const JsonValue& object, const std::string& path, const KeySet& known,
+                         std::vector<std::string>* warnings) {
+  if (warnings == nullptr) return;
+  for (const auto& entry : object.as_object()) {
+    const std::string& key = entry.first;
+    if (known.count(key) != 0 || key.compare(0, 1, "$") == 0 || key.compare(0, 2, "x-") == 0) {
+      continue;
+    }
+    warnings->push_back("unknown scene key '" + (path.empty() ? "" : path + ".") + escape_key(key) +
+                        "'");
+  }
+}
+
+std::string child_path(const std::string& path, const char* key) {
+  return path.empty() ? std::string(key) : path + "." + key;
+}
 
 float number_or(const JsonValue& object, const char* key, float fallback,
                 const char* field_path = nullptr) {
@@ -140,7 +193,11 @@ std::string string_or_legacy(const JsonValue& object, const char* key, const cha
   return value->as_string();
 }
 
-Insert insert_from_value(const JsonValue& object) {
+Insert insert_from_value(const JsonValue& object, const std::string& path,
+                         std::vector<std::string>* warnings) {
+  static const KeySet kKnown =
+      known_keys("strips[].inserts[]", {"processor_name", "params_json", "sidechain_key"});
+  report_unknown_keys(object, path, kKnown, warnings);
   Insert insert;
   if (const auto* slot = object.find("slot")) {
     if (!slot->is_string()) {
@@ -174,22 +231,31 @@ Insert insert_from_value(const JsonValue& object) {
 // persist it. Skipping keeps the entity count equal to the number of
 // object-typed elements, order preserved, on every scene-decoding path.
 template <typename T>
-std::vector<T> array_from_value(const JsonValue& array, T (*parse)(const JsonValue&)) {
+std::vector<T> array_from_value(const JsonValue& array, const std::string& path,
+                                std::vector<std::string>* warnings,
+                                T (*parse)(const JsonValue&, const std::string&,
+                                           std::vector<std::string>*)) {
   std::vector<T> out;
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
+  size_t index = 0;
   for (const auto& entry : array.as_array()) {
+    const size_t position = index++;
     if (!entry.is_object()) continue;
-    out.push_back(parse(entry));
+    out.push_back(parse(entry, path + "[" + std::to_string(position) + "]", warnings));
   }
   return out;
 }
 
-std::vector<Insert> inserts_from_value(const JsonValue& array) {
-  return array_from_value<Insert>(array, insert_from_value);
+std::vector<Insert> inserts_from_value(const JsonValue& array, const std::string& path,
+                                       std::vector<std::string>* warnings) {
+  return array_from_value<Insert>(array, path, warnings, insert_from_value);
 }
 
-Send send_from_value(const JsonValue& object) {
+Send send_from_value(const JsonValue& object, const std::string& path,
+                     std::vector<std::string>* warnings) {
+  static const KeySet kKnown = known_keys("strips[].sends[]", {"destination_bus_id", "send_db"});
+  report_unknown_keys(object, path, kKnown, warnings);
   Send send;
   send.id = string_or(object, "id", send.id);
   send.destination_bus_id =
@@ -206,17 +272,24 @@ Send send_from_value(const JsonValue& object) {
   return send;
 }
 
-std::vector<Send> sends_from_value(const JsonValue& array) {
-  return array_from_value<Send>(array, send_from_value);
+std::vector<Send> sends_from_value(const JsonValue& array, const std::string& path,
+                                   std::vector<std::string>* warnings) {
+  return array_from_value<Send>(array, path, warnings, send_from_value);
 }
 
 // Strip and Bus share one EQ shape (StripEq) and one validation. `field_prefix`
 // names the enclosing entity ("scene.strips[]" or "scene.buses[]") for error
 // messages, matching the convention the other scene fields use.
-StripEq eq_from_value(const JsonValue& object, const char* field_prefix) {
+StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const std::string& path,
+                      std::vector<std::string>* warnings) {
+  static const KeySet kKnownEq = known_keys("strips[].eq", {});
+  static const KeySet kKnownBand(mastering::eq::eq_band_known_keys().begin(),
+                                 mastering::eq::eq_band_known_keys().end());
   StripEq eq;
   const auto* eq_value = object.find("eq");
   if (!eq_value || !eq_value->is_object()) return eq;
+  const std::string eq_path = child_path(path, "eq");
+  report_unknown_keys(*eq_value, eq_path, kKnownEq, warnings);
   eq.enabled = bool_or(*eq_value, "enabled", eq.enabled);
   const auto* bands = eq_value->find("bands");
   if (!bands || !bands->is_array()) return eq;
@@ -227,7 +300,12 @@ StripEq eq_from_value(const JsonValue& object, const char* field_prefix) {
   }
   const std::string band_context = std::string(field_prefix) + ".eq.bands[]: ";
   eq.bands.reserve(array.size());
-  for (const auto& entry : array) {
+  for (size_t index = 0; index < array.size(); ++index) {
+    const auto& entry = array[index];
+    if (entry.is_object()) {
+      report_unknown_keys(entry, eq_path + ".bands[" + std::to_string(index) + "]", kKnownBand,
+                          warnings);
+    }
     const mastering::eq::EqBand band =
         mastering::eq::eq_band_from_value(entry, band_context.c_str());
     // ParametricEq has no tilt design; the shared codec stays permissive for EqualizerProcessor.
@@ -242,7 +320,15 @@ StripEq eq_from_value(const JsonValue& object, const char* field_prefix) {
   return eq;
 }
 
-Strip strip_from_value(const JsonValue& object) {
+Strip strip_from_value(const JsonValue& object, const std::string& path,
+                       std::vector<std::string>* warnings) {
+  static const KeySet kKnown =
+      known_keys("strips[]", {"input_trim_db", "fader_db", "vca_offset_db", "solo_safe", "pan_mode",
+                              "dual_pan_left", "dual_pan_right", "polarity_invert_left",
+                              "polarity_invert_right", "pan_law", "channel_delay_samples"});
+  static const KeySet kKnownSurround = known_keys("strips[].surroundPan", {});
+  static const KeySet kKnownMetering = known_keys("strips[].metering", {});
+  report_unknown_keys(object, path, kKnown, warnings);
   Strip strip;
   strip.id = string_or(object, "id", strip.id);
   strip.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db",
@@ -289,6 +375,7 @@ Strip strip_from_value(const JsonValue& object) {
   }
   strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
   if (const auto* sp = object.find("surroundPan"); sp && sp->is_object()) {
+    report_unknown_keys(*sp, child_path(path, "surroundPan"), kKnownSurround, warnings);
     SurroundPanParams parsed;
     parsed.azimuth =
         number_or(*sp, "azimuth", strip.surround_pan.azimuth, "scene.strips[].surroundPan.azimuth");
@@ -308,6 +395,7 @@ Strip strip_from_value(const JsonValue& object) {
     strip.surround_pan.distance = stored.distance;
   }
   if (const auto* metering = object.find("metering"); metering && metering->is_object()) {
+    report_unknown_keys(*metering, child_path(path, "metering"), kKnownMetering, warnings);
     strip.metering.enabled = bool_or(*metering, "enabled", strip.metering.enabled);
     strip.metering.lufs = bool_or(*metering, "lufs", strip.metering.lufs);
     strip.metering.true_peak = bool_or(*metering, "truePeak", strip.metering.true_peak);
@@ -321,17 +409,27 @@ Strip strip_from_value(const JsonValue& object) {
                             "metering.truePeakOversample must be in [1, 16]");
     }
   }
-  if (const auto* inserts = object.find("inserts")) strip.inserts = inserts_from_value(*inserts);
-  if (const auto* sends = object.find("sends")) strip.sends = sends_from_value(*sends);
-  strip.eq = eq_from_value(object, "scene.strips[]");
+  if (const auto* inserts = object.find("inserts")) {
+    strip.inserts = inserts_from_value(*inserts, child_path(path, "inserts"), warnings);
+  }
+  if (const auto* sends = object.find("sends")) {
+    strip.sends = sends_from_value(*sends, child_path(path, "sends"), warnings);
+  }
+  strip.eq = eq_from_value(object, "scene.strips[]", path, warnings);
   return strip;
 }
 
-std::vector<Strip> strips_from_value(const JsonValue& array) {
-  return array_from_value<Strip>(array, strip_from_value);
+std::vector<Strip> strips_from_value(const JsonValue& array, const std::string& path,
+                                     std::vector<std::string>* warnings) {
+  return array_from_value<Strip>(array, path, warnings, strip_from_value);
 }
 
-Bus bus_from_value(const JsonValue& object) {
+Bus bus_from_value(const JsonValue& object, const std::string& path,
+                   std::vector<std::string>* warnings) {
+  static const KeySet kKnown =
+      known_keys("buses[]", {"input_trim_db", "polarity_invert_left", "polarity_invert_right",
+                             "pan_mode", "dual_pan_left", "dual_pan_right", "pan_law"});
+  report_unknown_keys(object, path, kKnown, warnings);
   Bus bus;
   bus.id = string_or(object, "id", bus.id);
   bus.role = string_or(object, "role", bus.role);
@@ -385,16 +483,22 @@ Bus bus_from_value(const JsonValue& object) {
                                                              " on a surround (>2 channel) layout");
     }
   }
-  bus.eq = eq_from_value(object, "scene.buses[]");
-  if (const auto* inserts = object.find("inserts")) bus.inserts = inserts_from_value(*inserts);
+  bus.eq = eq_from_value(object, "scene.buses[]", path, warnings);
+  if (const auto* inserts = object.find("inserts")) {
+    bus.inserts = inserts_from_value(*inserts, child_path(path, "inserts"), warnings);
+  }
   return bus;
 }
 
-std::vector<Bus> buses_from_value(const JsonValue& array) {
-  return array_from_value<Bus>(array, bus_from_value);
+std::vector<Bus> buses_from_value(const JsonValue& array, const std::string& path,
+                                  std::vector<std::string>* warnings) {
+  return array_from_value<Bus>(array, path, warnings, bus_from_value);
 }
 
-VcaGroup vca_group_from_value(const JsonValue& object) {
+VcaGroup vca_group_from_value(const JsonValue& object, const std::string& path,
+                              std::vector<std::string>* warnings) {
+  static const KeySet kKnown = known_keys("vcaGroups[]", {"gain_db"});
+  report_unknown_keys(object, path, kKnown, warnings);
   VcaGroup group;
   group.id = string_or(object, "id", group.id);
   group.gain_db =
@@ -408,19 +512,24 @@ VcaGroup vca_group_from_value(const JsonValue& object) {
   return group;
 }
 
-std::vector<VcaGroup> vca_groups_from_value(const JsonValue& array) {
-  return array_from_value<VcaGroup>(array, vca_group_from_value);
+std::vector<VcaGroup> vca_groups_from_value(const JsonValue& array, const std::string& path,
+                                            std::vector<std::string>* warnings) {
+  return array_from_value<VcaGroup>(array, path, warnings, vca_group_from_value);
 }
 
-Connection connection_from_value(const JsonValue& object) {
+Connection connection_from_value(const JsonValue& object, const std::string& path,
+                                 std::vector<std::string>* warnings) {
+  static const KeySet kKnown = known_keys("connections[]", {});
+  report_unknown_keys(object, path, kKnown, warnings);
   Connection connection;
   connection.source = string_or(object, "source", connection.source);
   connection.destination = string_or(object, "destination", connection.destination);
   return connection;
 }
 
-std::vector<Connection> connections_from_value(const JsonValue& array) {
-  return array_from_value<Connection>(array, connection_from_value);
+std::vector<Connection> connections_from_value(const JsonValue& array, const std::string& path,
+                                               std::vector<std::string>* warnings) {
+  return array_from_value<Connection>(array, path, warnings, connection_from_value);
 }
 
 // ---------------------------------------------------------------------------
@@ -774,27 +883,31 @@ const std::vector<std::string>& scene_schema_paths() {
   return paths;
 }
 
-Scene scene_from_value(const JsonValue& root) {
+Scene scene_from_value(const JsonValue& root, std::vector<std::string>* warnings) {
   if (!root.is_object()) {
     throw SonareException(ErrorCode::InvalidParameter, "scene JSON must be an object");
   }
+  static const KeySet kKnownRoot = known_keys("", {"vca_groups"});
+  report_unknown_keys(root, "", kKnownRoot, warnings);
   Scene scene;
   scene.version = int_or(root, "version", 1);
   if (scene.version != 1) {
     throw SonareException(ErrorCode::InvalidParameter, "unsupported scene JSON version");
   }
-  if (const auto* strips = root.find("strips")) scene.strips = strips_from_value(*strips);
-  if (const auto* buses = root.find("buses")) scene.buses = buses_from_value(*buses);
+  if (const auto* strips = root.find("strips"))
+    scene.strips = strips_from_value(*strips, "strips", warnings);
+  if (const auto* buses = root.find("buses"))
+    scene.buses = buses_from_value(*buses, "buses", warnings);
   if (const auto* groups = value_or_legacy(root, "vcaGroups", "vca_groups"))
-    scene.vca_groups = vca_groups_from_value(*groups);
+    scene.vca_groups = vca_groups_from_value(*groups, "vcaGroups", warnings);
   if (const auto* connections = root.find("connections"))
-    scene.connections = connections_from_value(*connections);
+    scene.connections = connections_from_value(*connections, "connections", warnings);
   return scene;
 }
 
 // Budgeted like every caller-supplied document; duplicate keys stay tolerated.
-Scene scene_from_json(const std::string& json) {
-  return scene_from_value(sonare::util::json::admit(json));
+Scene scene_from_json(const std::string& json, std::vector<std::string>* warnings) {
+  return scene_from_value(sonare::util::json::admit(json), warnings);
 }
 
 }  // namespace sonare::mixing::api

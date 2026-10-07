@@ -259,6 +259,55 @@ EqBand eq_band_from_value(const JsonValue& value, const char* context) {
   return band;
 }
 
+const std::vector<std::string>& eq_band_known_keys() {
+  static const std::vector<std::string> keys = {
+      "type",
+      "coeffMode",
+      "coeff_mode",
+      "frequencyHz",
+      "frequency_hz",
+      "gainDb",
+      "gain_db",
+      "q",
+      "enabled",
+      "slopeDbOct",
+      "slope_db_oct",
+      "placement",
+      "phase",
+      "soloed",
+      "bypassed",
+      "proportionalQ",
+      "proportional_q",
+      "proportionalQStrength",
+      "proportional_q_strength",
+      "dynamic",
+      "dynEnabled",
+      "dyn_enabled",
+      "thresholdDb",
+      "threshold_db",
+      "autoThreshold",
+      "auto_threshold",
+      "ratio",
+      "rangeDb",
+      "range_db",
+      "attackMs",
+      "attack_ms",
+      "releaseMs",
+      "release_ms",
+      "lookaheadMs",
+      "lookahead_ms",
+      "detectorDelayMs",
+      "detector_delay_ms",
+      "sidechainFreqHz",
+      "sidechain_freq_hz",
+      "sidechainQ",
+      "sidechain_q",
+      "externalSidechain",
+      "external_sidechain",
+  };
+  return keys;
+}
+
 JsonValue eq_band_to_value(const EqBand& band) {
   static const EqBand kDefault{};
   sonare::util::json::Object object;

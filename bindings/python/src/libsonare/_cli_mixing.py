@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from typing import Any
 
 from ._cli_common import (
@@ -270,6 +271,8 @@ def cmd_mix(args: argparse.Namespace) -> int:
         scene_json, sample_rate=args.sample_rate, block_size=args.block_size
     )
     try:
+        for warning in mixer.scene_warnings():
+            print(f"warning: {warning}", file=sys.stderr)
         strip_count = mixer.strip_count()
 
         rendered_samples = 0

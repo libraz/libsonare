@@ -33,6 +33,9 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
             captured["sample_rate"] = sample_rate
             return cls()
 
+        def scene_warnings(self) -> list[str]:
+            return []
+
         def strip_count(self) -> int:
             return 1
 
@@ -81,6 +84,9 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
             assert sample_rate == 48000
             assert block_size == 512
             return cls()
+
+        def scene_warnings(self) -> list[str]:
+            return []
 
         def strip_count(self) -> int:
             return 1

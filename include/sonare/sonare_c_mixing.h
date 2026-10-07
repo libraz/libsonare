@@ -360,6 +360,9 @@ SonareError sonare_strip_schedule_send_automation(SonareStrip* strip, size_t sen
 // Returns NULL when the scene JSON is malformed or a strip cannot be built; the
 // parse-failure message is available from sonare_last_error_message. A non-NULL
 // handle is owned by the caller and stays valid until sonare_mixer_destroy.
+// Keys the scene reader does not consume (other than `$`- and `x-`-prefixed ones) and
+// insert params no processor reads do not fail the load; each is one line of
+// sonare_last_warning_message, e.g. `unknown scene key 'strips[2].faderDB'`.
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size);
 // Free *json_out with sonare_free_string.
 SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out);

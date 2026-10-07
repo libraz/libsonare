@@ -120,4 +120,20 @@ describe('insert param validation', () => {
     });
     expect(Mixer.fromSceneJson(clean, 48000, 512).sceneWarnings()).toEqual([]);
   });
+
+  it('reports an unknown scene key by path and exempts $ and x- keys', () => {
+    const scene = (extra: Record<string, unknown>, stripExtra: Record<string, unknown>) =>
+      JSON.stringify({
+        version: 1,
+        ...extra,
+        buses: [{ id: 'master', role: 'master' }],
+        strips: [{ id: 'vocal', ...stripExtra }],
+        connections: [{ source: 'vocal', destination: 'master' }],
+      });
+    expect(Mixer.fromSceneJson(scene({}, { faderDB: -3 }), 48000, 512).sceneWarnings()).toEqual([
+      "unknown scene key 'strips[0].faderDB'",
+    ]);
+    const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
+    expect(Mixer.fromSceneJson(annotated, 48000, 512).sceneWarnings()).toEqual([]);
+  });
 });

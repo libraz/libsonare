@@ -312,9 +312,9 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
                                     "mixer: scene JSON is required");
     return nullptr;
   }
-  // A non-fatal channel, separate from last_error: a scene can load fine while
-  // still carrying insert params no processor reads. Cleared on entry so a stale
-  // warning from an earlier load never leaks into a later, clean one.
+  // A non-fatal channel, separate from last_error: a scene can load fine while still
+  // carrying unknown keys or insert params no processor reads. Cleared on entry so a
+  // stale warning from an earlier load never leaks into a later, clean one.
   sonare_c_detail::clear_last_warning();
   std::vector<std::string> ignored_param_notes;
   try {
@@ -322,7 +322,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     // A malformed document is InvalidFormat, as on the engine's scene entry point;
     // without this arm it would reach the std::exception tail as Unknown.
     try {
-      scene = sonare::mixing::api::scene_from_json(json);
+      scene = sonare::mixing::api::scene_from_json(json, &ignored_param_notes);
     } catch (const sonare::util::json::JsonError& e) {
       sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
       return nullptr;
@@ -489,8 +489,8 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
     apply_solo_mutes(mixer.get());
     build_and_compile(mixer.get());
-    // Scene loaded successfully; surface any silently-ignored insert params as a
-    // non-fatal warning (one note per affected insert, '\n'-joined).
+    // Scene loaded successfully; surface unknown scene keys and silently-ignored insert
+    // params as a non-fatal warning (one note each, '\n'-joined).
     if (!ignored_param_notes.empty()) {
       std::string warning;
       for (size_t n = 0; n < ignored_param_notes.size(); ++n) {

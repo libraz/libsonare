@@ -723,6 +723,37 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
         mixer.close()
 
 
+def test_scene_warnings_report_unknown_scene_keys() -> None:
+    """A misspelled scene key is reported by path; ``$`` and ``x-`` keys are exempt."""
+    import json
+
+    from libsonare import Mixer
+
+    def build(top: dict, strip: dict) -> str:
+        return json.dumps(
+            {
+                "version": 1,
+                **top,
+                "buses": [{"id": "master", "role": "master"}],
+                "strips": [{"id": "vocal", **strip}],
+                "connections": [{"source": "vocal", "destination": "master"}],
+            }
+        )
+
+    mixer = Mixer.from_scene_json(build({}, {"faderDB": -3}), sample_rate=48000, block_size=256)
+    try:
+        assert mixer.scene_warnings() == ["unknown scene key 'strips[0].faderDB'"]
+    finally:
+        mixer.close()
+
+    annotated = build({"$schema": "x", "x-note": 1}, {"x-color": "red"})
+    mixer = Mixer.from_scene_json(annotated, sample_rate=48000, block_size=256)
+    try:
+        assert mixer.scene_warnings() == []
+    finally:
+        mixer.close()
+
+
 def test_mix_stereo_rejects_a_scene_with_no_audio() -> None:
     """An all-empty scene is a fault, not a mix of silence.
 

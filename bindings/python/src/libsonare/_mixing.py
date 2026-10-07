@@ -74,7 +74,7 @@ def mixing_scene_preset_names() -> list[str]:
     if not hasattr(lib, "sonare_mixing_scene_preset_names"):
         raise _not_supported("libsonare was built without mixing support")
     raw = lib.sonare_mixing_scene_preset_names()
-    return raw.decode("utf-8").splitlines() if raw else []
+    return raw.decode("utf-8").split("\n") if raw else []
 
 
 def mixing_scene_preset_json(preset_name: str) -> str:
@@ -156,11 +156,13 @@ class Mixer:
     def scene_warnings(self) -> list[str]:
         """Non-fatal warnings captured when this mixer was built from scene JSON.
 
-        One entry per channel-strip insert that was handed param keys it does not
-        read (a likely typo, or a key meant for a different processor). The scene
-        still loaded; those keys simply took no effect. Empty when every key was
-        consumed. Use :func:`mastering_insert_param_names` to discover the keys an
-        insert accepts.
+        One entry per scene key the reader does not recognise (reported as
+        ``unknown scene key 'strips[2].faderDB'``; keys starting with ``$`` or
+        ``x-`` are exempt) and per channel-strip insert that was handed param keys
+        it does not read (a likely typo, or a key meant for a different
+        processor). The scene still loaded; those keys simply took no effect.
+        Empty when every key was consumed. Use :func:`mastering_insert_param_names`
+        to discover the keys an insert accepts.
         """
         return list(self._scene_warnings)
 
