@@ -379,19 +379,35 @@ const char* sonare_error_message(SonareError error);
 ///     Validate and configure on the control thread instead. This class is the
 ///     engine block-render entry points and the realtime voice-changer
 ///     process / latency entry points.
-///   - A message is recorded ONLY on the caught-C++-exception return path (the
+///   - A message is recorded on every caught-C++-exception return path (the
 ///     library mapped a thrown sonare::SonareException / std::exception to a
-///     SonareError). For those, this returns the exception's what() text.
-///   - Validation early-returns that produce an error code WITHOUT throwing
+///     SonareError); this returns the exception's what() text. A few validation
+///     paths record a message of their own.
+///   - Most validation early-returns that produce an error code WITHOUT throwing
 ///     (e.g. a NULL out-pointer, an out-of-range sample rate, a non-finite input
 ///     sample) record NO message: this returns "" even though the call failed.
 ///     Use sonare_error_message(SonareError) for a human-readable string for ANY
 ///     error code; use this only for the extra detail of exception-path errors.
+///   - Functions that return a handle pointer record a code (see
+///     @ref sonare_last_error_code) and a message on EVERY NULL return,
+///     validation returns included, because the pointer cannot carry a code.
 ///   - RIR synthesis is a deliberate SUCCESS-return diagnostic path: when
 ///     @ref sonare_synthesize_rir sets SonareRirSynthResult::has_error, this
-///     returns its first Error as ``acoustic.code: explanation``.
+///     returns its first Error as ``acoustic.code: explanation``, and
+///     @ref sonare_last_error_code stays SONARE_OK because the call succeeded.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_error_message(void);
+
+/// @brief Returns the error code recorded together with the detailed message on
+///        the calling thread, or SONARE_OK when nothing is recorded.
+/// @details Functions returning a handle pointer report failure as NULL; this is
+///   how their caller learns the code. The same calls that clear
+///   @ref sonare_last_error_message on entry clear this code, and every path
+///   that records a message records the code beside it (for a SonareError
+///   return, the code returned). Audio-thread entry points neither clear nor
+///   record it, exactly as for the message. Diagnostic accessors do not clear it.
+/// @return The recorded SonareError, or SONARE_OK.
+SonareError sonare_last_error_code(void);
 
 /// @brief Returns the most recent non-fatal warning recorded on the calling
 ///        thread, or "" when none.

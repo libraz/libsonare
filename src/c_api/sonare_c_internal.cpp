@@ -9,9 +9,20 @@ std::string& last_error_storage() {
   return storage;
 }
 
-void set_last_error(const char* msg) { last_error_storage().assign(msg != nullptr ? msg : ""); }
+SonareError& last_error_code_storage() {
+  static thread_local SonareError code = SONARE_OK;
+  return code;
+}
 
-void clear_last_error() { last_error_storage().clear(); }
+void set_last_error(SonareError code, const char* msg) {
+  last_error_storage().assign(msg != nullptr ? msg : "");
+  last_error_code_storage() = code;
+}
+
+void clear_last_error() {
+  last_error_storage().clear();
+  last_error_code_storage() = SONARE_OK;
+}
 
 std::string& last_warning_storage() {
   static thread_local std::string storage;

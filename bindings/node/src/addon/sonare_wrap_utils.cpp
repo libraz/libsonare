@@ -44,6 +44,8 @@ const char* ErrorCodeName(SonareError err) {
       return "Cancelled";
     case SONARE_ERROR_ENCODE_FAILED:
       return "EncodeFailed";
+    case SONARE_ERROR_ABI_MISMATCH:
+      return "AbiMismatch";
     case SONARE_ERROR_UNKNOWN:
     default:
       return "Unknown";

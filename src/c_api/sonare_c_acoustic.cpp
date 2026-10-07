@@ -109,7 +109,8 @@ void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics)
   for (const sonare::Diagnostic& diagnostic : diagnostics) {
     if (diagnostic.severity != sonare::Diagnostic::Severity::Error) continue;
     const std::string detail = diagnostic.code + ": " + diagnostic.message;
-    sonare_c_detail::set_last_error(detail.c_str());
+    // A success-return diagnostic: the call itself returns SONARE_OK.
+    sonare_c_detail::set_last_error(SONARE_OK, detail.c_str());
     break;
   }
   std::string warnings;

@@ -29,11 +29,12 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
   try {
     root = json::admit_strict(inserts_json);
   } catch (const json::JsonError& ex) {
-    set_last_error(ex.what());
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, ex.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   const auto bad_shape = [] {
-    set_last_error("inserts_json must be an array of {\"processor\": string, \"params\": string}");
+    set_last_error(SONARE_ERROR_INVALID_FORMAT,
+                   "inserts_json must be an array of {\"processor\": string, \"params\": string}");
     return SONARE_ERROR_INVALID_FORMAT;
   };
   if (!root.is_array()) return bad_shape();

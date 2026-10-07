@@ -18,6 +18,12 @@ TEST_CASE("sonare_error_message", "[c_api]") {
     REQUIRE(std::strcmp(sonare_error_message(SONARE_ERROR_OUT_OF_MEMORY), "Out of memory") == 0);
     REQUIRE(std::strcmp(sonare_error_message(SONARE_ERROR_UNKNOWN), "Unknown error") == 0);
   }
+
+  SECTION("names the ABI mismatch a binding reports") {
+    const std::string mismatch = sonare_error_message(SONARE_ERROR_ABI_MISMATCH);
+    REQUIRE(mismatch == "Native library ABI mismatch");
+    REQUIRE(mismatch != sonare_error_message(SONARE_ERROR_UNKNOWN));
+  }
 }
 
 TEST_CASE("sonare_version", "[c_api]") {
@@ -530,6 +536,113 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("params") != std::string::npos);
 #endif  // defined(SONARE_WITH_MASTERING)
+  }
+}
+
+TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_api]") {
+  SECTION("is SONARE_OK when nothing is recorded") {
+    REQUIRE(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+    REQUIRE(sonare_last_error_code() == SONARE_OK);
+  }
+
+  SECTION("matches the code an error-returning call returned") {
+    const std::vector<uint8_t> garbage = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                          0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
+    SonareAudio* audio = nullptr;
+    const SonareError err = sonare_audio_from_memory(garbage.data(), garbage.size(), &audio);
+    REQUIRE(err != SONARE_OK);
+    REQUIRE(sonare_last_error_code() == err);
+    // Reading the message is a diagnostic accessor and leaves the code alone.
+    REQUIRE(std::strlen(sonare_last_error_message()) > 0);
+    REQUIRE(sonare_last_error_code() == err);
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  SECTION("scene loads report the code each failure maps to") {
+    // JsonError is a parse failure: InvalidFormat, as on the engine scene entry points.
+    REQUIRE(sonare_mixer_from_scene_json("{", 48000, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(std::strlen(sonare_last_error_message()) > 0);
+
+    // A document that parses but breaks a scene rule throws SonareException(InvalidParameter).
+    const char* unsupported_version =
+        R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
+    REQUIRE(sonare_mixer_from_scene_json(unsupported_version, 48000, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+    REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+    // A valid document whose size arguments the nested create refuses.
+    const char* valid = R"({"version":1,"strips":[{"id":"a"}],"buses":[],"connections":[]})";
+    REQUIRE(sonare_mixer_from_scene_json(valid, 0, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("mixer constructors and lookups record a code on every NULL return") {
+    REQUIRE(sonare_mixer_create(0, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+    SonareMixer* mixer = sonare_mixer_create(48000, 128);
+    REQUIRE(mixer != nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_OK);
+
+    REQUIRE(sonare_mixer_add_strip_ex(nullptr, "a", 1, 1, 1, 0) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mixer_add_strip_ex(mixer, "a", 1, 1, 1, 17) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+    REQUIRE(sonare_mixer_add_strip(mixer, "a") == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+    REQUIRE(sonare_mixer_strip_at(mixer, 1) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::strlen(sonare_last_error_message()) > 0);
+    REQUIRE(sonare_mixer_strip_by_id(mixer, "missing") == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::strlen(sonare_last_error_message()) > 0);
+    REQUIRE(sonare_mixer_strip_by_id(mixer, "a") != nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_OK);
+
+    // A later successful error-returning call clears the recorded code.
+    REQUIRE(sonare_mixer_strip_by_id(mixer, "missing") == nullptr);
+    size_t groups = 99;
+    REQUIRE(sonare_mixer_vca_group_count(mixer, &groups) == SONARE_OK);
+    REQUIRE(sonare_last_error_code() == SONARE_OK);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+
+    sonare_mixer_destroy(mixer);
+  }
+#endif  // defined(SONARE_WITH_MIXING)
+
+#if defined(SONARE_WITH_MASTERING)
+  SECTION("mastering constructors record a code on validation failure") {
+    REQUIRE(sonare_eq_create(0.0, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+#endif  // defined(SONARE_WITH_MASTERING)
+
+  SECTION("the retune and sample bank constructors record a code") {
+#if defined(SONARE_WITH_VOICE_CHANGER)
+    REQUIRE(sonare_streaming_retune_create(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0) ==
+            nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+#else
+    REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_NOT_SUPPORTED);
+#endif  // defined(SONARE_WITH_VOICE_CHANGER)
+    SonareSampleBank* bank = sonare_sample_bank_create();
+#if defined(SONARE_WITH_ARRANGEMENT)
+    REQUIRE(bank != nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_OK);
+    sonare_sample_bank_destroy(bank);
+#else
+    REQUIRE(bank == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_NOT_SUPPORTED);
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
   }
 }
 

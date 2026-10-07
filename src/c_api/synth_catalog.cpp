@@ -158,7 +158,7 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   if (!name || !out) return SONARE_ERROR_INVALID_PARAMETER;
   const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(name);
   if (preset == nullptr) {
-    set_last_error("unknown synth preset name");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "unknown synth preset name");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare_c_detail::synth_patch_to_c(*preset, out);

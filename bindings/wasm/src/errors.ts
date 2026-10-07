@@ -14,6 +14,7 @@ export enum ErrorCode {
   InvalidState = 7,
   Cancelled = 8,
   EncodeFailed = 9,
+  AbiMismatch = 10,
   Unknown = 99,
 }
 

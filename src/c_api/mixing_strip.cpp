@@ -8,7 +8,8 @@ using namespace sonare_c_mixing_detail;
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
   if (sample_rate <= 0 || max_block_size <= 0) {
-    sonare_c_detail::set_last_error("mixer: sample_rate and max_block_size must be positive");
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    "mixer: sample_rate and max_block_size must be positive");
     return nullptr;
   }
   try {
@@ -29,18 +30,21 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
                                          int true_peak_oversample) {
     SONARE_C_API_ENTRY;
     if (!mixer || !id) {
-      sonare_c_detail::set_last_error("mixer: handle and strip id are required");
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                      "mixer: handle and strip id are required");
       return nullptr;
     }
     if (true_peak_oversample < 0 || true_peak_oversample > 16) {
-      sonare_c_detail::set_last_error("mixer: truePeakOversample must be in [0, 16]");
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                      "mixer: truePeakOversample must be in [0, 16]");
       return nullptr;
     }
     try {
       const std::string strip_id = id;
       for (const auto& existing : mixer->strips) {
         if (existing->id == strip_id) {
-          sonare_c_detail::set_last_error("mixer: duplicate strip id");
+          sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                          "mixer: duplicate strip id");
           return nullptr;
         }
       }

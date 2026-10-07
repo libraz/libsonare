@@ -137,13 +137,14 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
   // documents for its own budget rejection, and the code the engine's soundfont
   // loader already returns for these two conditions.
   if (!sonare::resource::sf2_file_fits(size)) {
-    sonare_c_detail::set_last_error("sf2: file resource limit exceeded");
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT,
+                                    "sf2: file resource limit exceeded");
     return SONARE_ERROR_INVALID_FORMAT;
   }
   auto soundfont = std::make_shared<synth::Sf2File>();
   std::string error;
   if (!soundfont->parse(data, size, &error)) {
-    sonare_c_detail::set_last_error(error.c_str());
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   project->soundfont = std::move(soundfont);

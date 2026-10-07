@@ -3,6 +3,7 @@
 #include "c_api/mixing_internal.h"
 #include "mastering/api/named_processor.h"
 #include "mixing/channel_strip_eq.h"
+#include "util/json.h"
 
 using namespace sonare_c_mixing_detail;
 
@@ -281,28 +282,34 @@ SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_c
 }
 
 SonareStrip* sonare_mixer_strip_at(SonareMixer* mixer, size_t index) {
+  SONARE_C_API_ENTRY;
   if (!mixer || index >= mixer->strips.size()) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    "mixer: handle is required and index must be in range");
     return nullptr;
   }
   return mixer->strips[index].get();
 }
 
 SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !id) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    "mixer: handle and strip id are required");
     return nullptr;
   }
-  for (const auto& strip : mixer->strips) {
-    if (strip->id == id) {
-      return strip.get();
-    }
+  SonareStrip* strip = find_strip(mixer, id);
+  if (strip == nullptr) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, "mixer: unknown strip id");
   }
-  return nullptr;
+  return strip;
 }
 
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
   if (!json) {
-    sonare_c_detail::set_last_error("mixer: scene JSON is required");
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    "mixer: scene JSON is required");
     return nullptr;
   }
   // A non-fatal channel, separate from last_error: a scene can load fine while
@@ -311,7 +318,15 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   sonare_c_detail::clear_last_warning();
   std::vector<std::string> ignored_param_notes;
   try {
-    const auto scene = sonare::mixing::api::scene_from_json(json);
+    sonare::mixing::api::Scene scene;
+    // A malformed document is InvalidFormat, as on the engine's scene entry point;
+    // without this arm it would reach the std::exception tail as Unknown.
+    try {
+      scene = sonare::mixing::api::scene_from_json(json);
+    } catch (const sonare::util::json::JsonError& e) {
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
+      return nullptr;
+    }
     std::unique_ptr<SonareMixer> mixer(sonare_mixer_create(sample_rate, max_block_size));
     if (!mixer) {
       return nullptr;
@@ -617,6 +632,13 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   void sonare_mixer_destroy(SonareMixer * mixer) { delete mixer; }
 
   namespace sonare_c_mixing_detail {
+
+  SonareStrip* find_strip(SonareMixer* mixer, const char* id) {
+    for (const auto& strip : mixer->strips) {
+      if (strip->id == id) return strip.get();
+    }
+    return nullptr;
+  }
 
   void set_output_channels(SonareMixer* mixer, int channels) {
     if (mixer == nullptr ||

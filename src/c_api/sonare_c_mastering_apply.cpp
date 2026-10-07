@@ -442,13 +442,15 @@ SonareError sonare_mastering_insert_timing(const char* name, const char* params,
                                            int* out_latency_samples, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
   if (out_latency_samples == nullptr || out_tail_samples == nullptr) {
-    set_last_error("out_latency_samples and out_tail_samples are required");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "out_latency_samples and out_tail_samples are required");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out_latency_samples = 0;
   *out_tail_samples = 0;
   if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
-    set_last_error(("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

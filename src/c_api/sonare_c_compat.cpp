@@ -217,11 +217,13 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
   // a silent return here is the one refusal a caller cannot act on -- which is the
   // same gap the report above exists to close, one layer up.
   if (signal_count == 0) {
-    set_last_error("split_silence_common: at least one signal is required");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "split_silence_common: at least one signal is required");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (signals == nullptr || lengths == nullptr) {
-    set_last_error("split_silence_common: signals and lengths must not be null");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "split_silence_common: signals and lengths must not be null");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   for (size_t index = 0; index < signal_count; ++index) {
@@ -229,7 +231,7 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
       // set_last_error copies, so a temporary's buffer is safe to hand it.
       const std::string message = "split_silence_common: signals[" + std::to_string(index) +
                                   "] is null or holds a non-finite sample";
-      set_last_error(message.c_str());
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER, message.c_str());
       return SONARE_ERROR_INVALID_PARAMETER;
     }
   }

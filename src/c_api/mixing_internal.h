@@ -233,6 +233,10 @@ inline void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
 void apply_solo_mutes(SonareMixer* mixer);
 void build_and_compile(SonareMixer* mixer);
 
+/// @brief The strip named @p id, or nullptr. Records no error, for internal
+///        callers that treat a miss as ordinary.
+SonareStrip* find_strip(SonareMixer* mixer, const char* id);
+
 /// @brief Sets the width the master is built at (1, 2, 6 or 8; 1 builds it at 2).
 /// @details Marks the graph dirty when the width changes. Throws
 ///          SonareException(InvalidParameter) for any other count.

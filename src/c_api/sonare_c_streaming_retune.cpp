@@ -78,7 +78,8 @@ SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!finite_controls(semitones, mix)) {
-    set_last_error("streaming retune: semitones and mix must be finite");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "streaming retune: semitones and mix must be finite");
     return nullptr;
   }
   SONARE_C_TRY
@@ -94,7 +95,8 @@ SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix
   (void)semitones;
   (void)mix;
   (void)grain_size;
-  sonare_c_detail::set_last_error("streaming retune: voice changer support is not built");
+  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                                  "streaming retune: voice changer support is not built");
   return nullptr;
 #endif
 }

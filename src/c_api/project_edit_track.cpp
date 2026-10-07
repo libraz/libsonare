@@ -340,7 +340,7 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
     // Malformed JSON is INVALID_FORMAT at every other C-ABI JSON entry point;
     // without this arm it reached SONARE_C_CATCH's std::exception tail as
     // SONARE_ERROR_UNKNOWN.
-    set_last_error(ex.what());
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, ex.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   auto command = std::make_unique<arr::SetScene>(std::move(scene));

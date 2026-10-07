@@ -196,7 +196,7 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
     const std::string message = "project sample rate must be in [" +
                                 std::to_string(kMinSampleRate) + ", " +
                                 std::to_string(kMaxSampleRate) + "] Hz";
-    set_last_error(message.c_str());
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, message.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY

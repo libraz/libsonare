@@ -751,7 +751,7 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   // status available to direct C++ callers, while installing that recovered
   // prefix for every public project binding.
   if (!result.recoverable()) {
-    sonare_c_detail::set_last_error(result.diagnostic.c_str());
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, result.diagnostic.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
 

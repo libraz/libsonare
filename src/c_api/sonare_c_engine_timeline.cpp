@@ -18,7 +18,8 @@ SonareError sonare_engine_apply_project_timeline(SonareRealtimeEngine* engine,
   namespace arr = sonare::arrangement;
   if (!engine || !timeline || !timeline->timeline) return SONARE_ERROR_INVALID_PARAMETER;
   if (engine->engine.transport_state_control().playing) {
-    set_last_error("a project timeline can only be applied while the transport is stopped");
+    set_last_error(SONARE_ERROR_INVALID_STATE,
+                   "a project timeline can only be applied while the transport is stopped");
     return SONARE_ERROR_INVALID_STATE;
   }
   SONARE_C_TRY

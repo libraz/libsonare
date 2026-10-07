@@ -42,6 +42,9 @@ typedef enum SONARE_ENUM_BASE {
   /// Producing or writing an output artefact failed. The read-side sibling is
   /// SONARE_ERROR_DECODE_FAILED.
   SONARE_ERROR_ENCODE_FAILED = 9,
+  /// A binding found that the loaded native library implements a different ABI
+  /// than the binding was built for. The C library never returns it itself.
+  SONARE_ERROR_ABI_MISMATCH = 10,
   SONARE_ERROR_UNKNOWN = 99
 } SonareError;
 

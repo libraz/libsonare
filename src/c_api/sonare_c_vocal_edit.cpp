@@ -111,26 +111,29 @@ SonareError invoke(F&& action) {
                     last_detail.expected);
     std::from_chars(error.actual().data(), error.actual().data() + error.actual().size(),
                     last_detail.actual);
-    sonare_c_detail::set_last_error(error.what());
-    return sonare_c_detail::map_sonare_exception(error);
+    const SonareError code = sonare_c_detail::map_sonare_exception(error);
+    sonare_c_detail::set_last_error(code, error.what());
+    return code;
 #endif
   } catch (const sonare::SonareException& error) {
     last_detail.reason = error.code() == sonare::ErrorCode::NotImplemented
                              ? SONARE_VOCAL_REASON_UNSUPPORTED
                              : SONARE_VOCAL_REASON_INVALID_INPUT;
-    sonare_c_detail::set_last_error(error.what());
-    return sonare_c_detail::map_sonare_exception(error);
+    const SonareError code = sonare_c_detail::map_sonare_exception(error);
+    sonare_c_detail::set_last_error(code, error.what());
+    return code;
   } catch (const std::bad_alloc&) {
     last_detail.reason = SONARE_VOCAL_REASON_INVALID_STATE;
-    sonare_c_detail::set_last_error("vocal edit allocation failed");
+    sonare_c_detail::set_last_error(SONARE_ERROR_OUT_OF_MEMORY, "vocal edit allocation failed");
     return SONARE_ERROR_OUT_OF_MEMORY;
   } catch (const std::exception& error) {
     last_detail.reason = SONARE_VOCAL_REASON_INVALID_STATE;
-    sonare_c_detail::set_last_error(error.what());
+    sonare_c_detail::set_last_error(SONARE_ERROR_UNKNOWN, error.what());
     return SONARE_ERROR_UNKNOWN;
   } catch (...) {
     last_detail.reason = SONARE_VOCAL_REASON_INVALID_STATE;
-    sonare_c_detail::set_last_error(sonare_c_detail::kUnknownExceptionMessage);
+    sonare_c_detail::set_last_error(SONARE_ERROR_UNKNOWN,
+                                    sonare_c_detail::kUnknownExceptionMessage);
     return SONARE_ERROR_UNKNOWN;
   }
 }

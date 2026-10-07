@@ -623,7 +623,8 @@ SonareError sonare_project_bounce_with_synth_instruments(
     sonare::midi::synth::NativeSynthConfig cfg;
     const char* error = nullptr;
     if (!sonare_c_detail::synth_config_from_patch_c(instruments[i].patch, &cfg, &error)) {
-      set_last_error(error != nullptr ? error : "invalid synth patch");
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                     error != nullptr ? error : "invalid synth patch");
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     cfg.use_gm_programs = instruments[i].use_gm_programs != 0;

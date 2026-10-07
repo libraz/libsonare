@@ -187,6 +187,8 @@ const char* sonare_error_message(SonareError error) {
       return "Cancelled";
     case SONARE_ERROR_ENCODE_FAILED:
       return "Encode failed";
+    case SONARE_ERROR_ABI_MISMATCH:
+      return "Native library ABI mismatch";
     case SONARE_ERROR_UNKNOWN:
       return "Unknown error";
   }
@@ -197,6 +199,8 @@ const char* sonare_error_message(SonareError error) {
 // rule: callers must be able to inspect a message repeatedly until another API
 // operation replaces or clears it.
 const char* sonare_last_error_message(void) { return last_error_storage().c_str(); }
+
+SonareError sonare_last_error_code(void) { return last_error_code_storage(); }
 
 const char* sonare_last_warning_message(void) { return last_warning_storage().c_str(); }
 

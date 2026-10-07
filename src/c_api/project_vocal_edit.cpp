@@ -281,6 +281,7 @@ class RehydrateScope {
 
 SonareError refuse_during_rehydrate() {
   sonare_c_detail::set_last_error(
+      SONARE_ERROR_INVALID_STATE,
       "vocal edits cannot change a project while sonare_project_rehydrate_vocal_edits runs on it");
   return SONARE_ERROR_INVALID_STATE;
 }
@@ -409,6 +410,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
       derived_binding.has_value() ? derived_binding->original_source_id : bound_source_id;
   const auto refuse_derived_state = []() {
     sonare_c_detail::set_last_error(
+        SONARE_ERROR_INVALID_STATE,
         "vocal edit state was authored against a derived source; restore the session against "
         "the original source and apply again");
     return SONARE_ERROR_INVALID_STATE;
@@ -850,6 +852,7 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
                  });
   if (!unchanged) {
     sonare_c_detail::set_last_error(
+        SONARE_ERROR_INVALID_STATE,
         "project vocal edits changed during rehydrate; staged results were discarded");
     return SONARE_ERROR_INVALID_STATE;
   }
@@ -918,6 +921,7 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   };
   if (!ready_state_unchanged()) {
     sonare_c_detail::set_last_error(
+        SONARE_ERROR_INVALID_STATE,
         "project vocal sources changed during rehydrate; staged results were discarded");
     return SONARE_ERROR_INVALID_STATE;
   }

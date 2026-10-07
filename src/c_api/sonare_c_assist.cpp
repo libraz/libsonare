@@ -242,7 +242,7 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
   bool want_harmonizer = false;
   std::string error;
   if (!read_request(request_json, &request, &want_generator, &want_harmonizer, &error)) {
-    sonare_c_detail::set_last_error(error.c_str());
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -268,9 +268,11 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
   // nothing. The reason goes to the detailed-error channel so a caller that only
   // checks the code still learns which field it got wrong.
   if (result.diagnostics.status == assist::AssistStatus::kRejected) {
-    sonare_c_detail::set_last_error(result.diagnostics.reason.c_str());
     *out_json = copy_string(document);
-    return *out_json == nullptr ? SONARE_ERROR_OUT_OF_MEMORY : SONARE_ERROR_INVALID_PARAMETER;
+    const SonareError code =
+        *out_json == nullptr ? SONARE_ERROR_OUT_OF_MEMORY : SONARE_ERROR_INVALID_PARAMETER;
+    sonare_c_detail::set_last_error(code, result.diagnostics.reason.c_str());
+    return code;
   }
 
   // Applied as ONE transaction, so an assist run is one undo step rather than a

@@ -263,6 +263,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
   SONARE_C_API_ENTRY;
   if (!params && param_count > 0) {
     set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
         "streaming mastering chain: params must not be null when param_count is non-zero");
     return nullptr;
   }

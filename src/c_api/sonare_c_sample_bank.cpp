@@ -22,103 +22,104 @@ constexpr uint32_t kMaxKeymapSets = 4096u;
 extern "C" {
 
 SonareSampleBank* sonare_sample_bank_create(void) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   try {
     return new SonareSampleBank();
-  } catch (...) {
-    return nullptr;
-  }
+    SONARE_C_CATCH_RETURN(nullptr)
 #else
+  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                                  "sample bank: arrangement support is not built");
   return nullptr;
 #endif
-}
+  }
 
-void sonare_sample_bank_destroy(SonareSampleBank* bank) { delete bank; }
+  void sonare_sample_bank_destroy(SonareSampleBank * bank) { delete bank; }
 
-SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* data,
-                                          size_t n_frames, const SonareSampleDesc* desc,
-                                          uint32_t* out_index) {
+  SonareError sonare_sample_bank_add_sample(SonareSampleBank * bank, const float* data,
+                                            size_t n_frames, const SonareSampleDesc* desc,
+                                            uint32_t* out_index) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || data == nullptr || n_frames == 0 || desc == nullptr) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  SONARE_C_TRY
-  if (n_frames > kMaxBankSamplePoints ||
-      bank->bank->pool_size() + n_frames > kMaxBankSamplePoints) {
-    return SONARE_ERROR_OUT_OF_MEMORY;
-  }
+    if (bank == nullptr || data == nullptr || n_frames == 0 || desc == nullptr) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    SONARE_C_TRY
+    if (n_frames > kMaxBankSamplePoints ||
+        bank->bank->pool_size() + n_frames > kMaxBankSamplePoints) {
+      return SONARE_ERROR_OUT_OF_MEMORY;
+    }
 
-  sonare::midi::synth::SampleDesc cpp;
-  // A sample rooted at note 0 is not a thing anyone records, so zero reads as
-  // the ABI's usual "unset" and lands on middle C.
-  cpp.root_key = desc->root_key != 0 ? desc->root_key : 60;
-  cpp.fine_tune_cents = desc->fine_tune_cents;
-  cpp.source_rate = desc->source_rate;
-  cpp.loop_start = desc->loop_start;
-  cpp.loop_end = desc->loop_end;
-  cpp.loop_mode = desc->loop_mode;
+    sonare::midi::synth::SampleDesc cpp;
+    // A sample rooted at note 0 is not a thing anyone records, so zero reads as
+    // the ABI's usual "unset" and lands on middle C.
+    cpp.root_key = desc->root_key != 0 ? desc->root_key : 60;
+    cpp.fine_tune_cents = desc->fine_tune_cents;
+    cpp.source_rate = desc->source_rate;
+    cpp.loop_start = desc->loop_start;
+    cpp.loop_end = desc->loop_end;
+    cpp.loop_mode = desc->loop_mode;
 
-  if (!bank->bank->add_sample(data, n_frames, cpp, out_index)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
-  SONARE_C_CATCH
+    if (!bank->bank->add_sample(data, n_frames, cpp, out_index)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    return SONARE_OK;
+    SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(bank, data, n_frames, desc, out_index);
 #endif
-}
-
-SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_index,
-                                        const SonareSampleZoneDesc* zone) {
-#if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || zone == nullptr || set_index >= kMaxKeymapSets) {
-    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
-  sonare::midi::synth::SampleZoneDesc cpp;
-  // Every bound defaults on its own, so narrowing one edge never collapses
-  // another into an empty range. An upper bound of zero is the unset one --
-  // it would otherwise describe a zone that ends before it starts -- and
-  // velocity zero is a note-off rather than a dynamic. A lower key bound of
-  // zero is simply the lowest key and needs no rule. The one rectangle this
-  // cannot express is the single key 0.
-  cpp.key_lo = zone->key_lo;
-  cpp.key_hi = zone->key_hi != 0 ? zone->key_hi : 127;
-  cpp.vel_lo = zone->vel_lo != 0 ? zone->vel_lo : 1;
-  cpp.vel_hi = zone->vel_hi != 0 ? zone->vel_hi : 127;
-  cpp.sample_index = zone->sample_index;
-  cpp.tune_cents = zone->tune_cents;
-  cpp.gain = zone->gain != 0.0f ? zone->gain : 1.0f;
-  cpp.pan_units = std::clamp(zone->pan_units, -500.0f, 500.0f);
 
-  if (!bank->bank->add_zone(set_index, cpp)) return SONARE_ERROR_INVALID_PARAMETER;
-  return SONARE_OK;
-  SONARE_C_CATCH
+  SonareError sonare_sample_bank_add_zone(SonareSampleBank * bank, uint32_t set_index,
+                                          const SonareSampleZoneDesc* zone) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (bank == nullptr || zone == nullptr || set_index >= kMaxKeymapSets) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    SONARE_C_TRY
+    sonare::midi::synth::SampleZoneDesc cpp;
+    // Every bound defaults on its own, so narrowing one edge never collapses
+    // another into an empty range. An upper bound of zero is the unset one --
+    // it would otherwise describe a zone that ends before it starts -- and
+    // velocity zero is a note-off rather than a dynamic. A lower key bound of
+    // zero is simply the lowest key and needs no rule. The one rectangle this
+    // cannot express is the single key 0.
+    cpp.key_lo = zone->key_lo;
+    cpp.key_hi = zone->key_hi != 0 ? zone->key_hi : 127;
+    cpp.vel_lo = zone->vel_lo != 0 ? zone->vel_lo : 1;
+    cpp.vel_hi = zone->vel_hi != 0 ? zone->vel_hi : 127;
+    cpp.sample_index = zone->sample_index;
+    cpp.tune_cents = zone->tune_cents;
+    cpp.gain = zone->gain != 0.0f ? zone->gain : 1.0f;
+    cpp.pan_units = std::clamp(zone->pan_units, -500.0f, 500.0f);
+
+    if (!bank->bank->add_zone(set_index, cpp)) return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_OK;
+    SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(bank, set_index, zone);
 #endif
-}
+  }
 
-SonareError sonare_sample_bank_sample_count(const SonareSampleBank* bank, size_t* out_count) {
+  SonareError sonare_sample_bank_sample_count(const SonareSampleBank* bank, size_t* out_count) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_count = bank->bank->sample_count();
-  return SONARE_OK;
+    if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+    *out_count = bank->bank->sample_count();
+    return SONARE_OK;
 #else
   if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
 #endif
-}
+  }
 
-SonareError sonare_sample_bank_set_count(const SonareSampleBank* bank, size_t* out_count) {
+  SonareError sonare_sample_bank_set_count(const SonareSampleBank* bank, size_t* out_count) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_count = bank->bank->set_count();
-  return SONARE_OK;
+    if (bank == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+    *out_count = bank->bank->set_count();
+    return SONARE_OK;
 #else
   if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(bank, out_count);
 #endif
-}
+  }
 
 }  // extern "C"

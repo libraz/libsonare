@@ -52,7 +52,8 @@ SonareError profile_of(SonareRealtimeEngine* engine, uint32_t destination_id,
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const sonare::midi::ControllerProfile* profile = instrument->controller_profile();
   if (profile == nullptr) {
-    set_last_error("destination instrument holds no controller profile");
+    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                   "destination instrument holds no controller profile");
     return SONARE_ERROR_NOT_SUPPORTED;
   }
   *out = *profile;
@@ -68,7 +69,8 @@ SonareError install(SonareRealtimeEngine* engine, uint32_t destination_id,
   sonare::midi::MidiInstrument* instrument = instrument_of(engine, destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (instrument->set_controller_profile(profile)) return SONARE_OK;
-  set_last_error("destination instrument does not accept a controller profile");
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "destination instrument does not accept a controller profile");
   return SONARE_ERROR_NOT_SUPPORTED;
 }
 
@@ -122,7 +124,7 @@ SonareError sonare_engine_set_controller_profile(SonareRealtimeEngine* engine,
   // reads as a bad argument whether or not the destination has an instrument.
   sonare::midi::ControllerProfile profile;
   if (!sonare::midi::ControllerProfile::preset(preset_name, &profile)) {
-    set_last_error("unknown controller profile preset");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "unknown controller profile preset");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return install(engine, destination_id, profile);
@@ -144,15 +146,18 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
   // is the whole diagnosis, and because the code alone cannot carry it -- it is
   // the same INVALID_PARAMETER an unbound destination returns.
   if (binding->input >= SONARE_CONTROLLER_INPUT_COUNT) {
-    set_last_error("controller binding: input is not one of SonareControllerInput");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "controller binding: input is not one of SonareControllerInput");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (binding->axis >= SONARE_CONTROLLER_AXIS_COUNT) {
-    set_last_error("controller binding: axis is not one of SonareControllerAxis");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "controller binding: axis is not one of SonareControllerAxis");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (binding->index > 127) {
-    set_last_error("controller binding: index must be a MIDI controller number in [0, 127]");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "controller binding: index must be a MIDI controller number in [0, 127]");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -178,6 +183,7 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
 
   if (!profile.bind(entry)) {
     set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
         "controller binding refused: the table is full, the axis is none, or a poly-pressure "
         "binding named a channel-level axis");
     return SONARE_ERROR_INVALID_PARAMETER;

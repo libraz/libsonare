@@ -24,7 +24,7 @@ constexpr int32_t kTranscribeConfigVersion = 1;
 /// "invalid parameter". Every rejection below goes through this: a refusal that
 /// does not name its field is the one a caller cannot act on.
 SonareError refuse(const char* message) {
-  sonare_c_detail::set_last_error(message);
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, message);
   return SONARE_ERROR_INVALID_PARAMETER;
 }
 

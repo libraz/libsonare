@@ -152,7 +152,7 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
   for (const auto& binding : timeline.mixer.automation_bindings) {
     const auto route = strip_for_track.find(binding.track_id);
     if (route == strip_for_track.end()) continue;
-    SonareStrip* strip = sonare_mixer_strip_by_id(mixer, route->second.c_str());
+    SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, route->second.c_str());
     if (strip == nullptr) continue;
     const auto& lane = binding.lane;
     // Typed track fader/pan lanes are applied once by TrackMixerRuntime through
@@ -263,7 +263,7 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   if (!direct_strip_id.empty()) {
     // The direct stem is an already-mixed stereo pair, not a panned source, so it
     // reaches a wider master's front pair rather than being scattered.
-    if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, direct_strip_id.c_str())) {
+    if (SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, direct_strip_id.c_str())) {
       strip->surround_scatter = false;
     }
   }
@@ -277,13 +277,13 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   // on the master. (See ChannelStrip::settle for the full set of snapped stages.)
   // The surround scatter is settled alongside so it opens at its placement.
   for (const std::string& strip_id : routing.strip_ids) {
-    if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, strip_id.c_str())) {
+    if (SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, strip_id.c_str())) {
       strip->strip.settle();
       strip->surround.reset();
     }
   }
   if (!direct_strip_id.empty()) {
-    if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, direct_strip_id.c_str())) {
+    if (SonareStrip* strip = sonare_c_mixing_detail::find_strip(mixer, direct_strip_id.c_str())) {
       strip->strip.settle();
     }
   }
@@ -404,6 +404,7 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   if (shared_midi_destination) {
     if (!shared_hosts_source_aware || pdc != 0) {
       set_last_error(
+          SONARE_ERROR_NOT_SUPPORTED,
           "a MIDI destination shared by channel strips requires source-aware, zero-latency "
           "instruments for project bounce");
       return SONARE_ERROR_NOT_SUPPORTED;
@@ -421,12 +422,13 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     midi_source_stems = std::make_unique<MidiSourceStemSink>(
         midi_tracks, 2, render_frames, render_frame_count, timeline, sample_rate, block_size);
     if (!midi_source_stems->ready()) {
-      set_last_error("could not prepare source-track mixer lanes");
+      set_last_error(SONARE_ERROR_NOT_SUPPORTED, "could not prepare source-track mixer lanes");
       return SONARE_ERROR_NOT_SUPPORTED;
     }
     if (!render_midi_source_stems(timeline, instruments, sample_rate, block_size, render_frames,
                                   midi_source_stems.get())) {
-      set_last_error("could not render source-track MIDI stems for shared channel strips");
+      set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                     "could not render source-track MIDI stems for shared channel strips");
       return SONARE_ERROR_NOT_SUPPORTED;
     }
   }

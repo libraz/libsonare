@@ -229,7 +229,8 @@ SonareError bind_native_synth(SonareRealtimeEngine* engine, uint32_t destination
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
   if (!sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error)) {
-    set_last_error(error != nullptr ? error : "invalid synth patch");
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   error != nullptr ? error : "invalid synth patch");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   cfg.use_gm_programs = use_gm_programs;
@@ -318,13 +319,13 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
 #else
   SONARE_C_TRY
   if (!sonare::resource::sf2_file_fits(size)) {
-    set_last_error("sf2: file resource limit exceeded");
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, "sf2: file resource limit exceeded");
     return SONARE_ERROR_INVALID_FORMAT;
   }
   auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
   std::string error;
   if (!soundfont->parse(data, size, &error)) {
-    set_last_error(error.c_str());
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   engine->soundfont = std::move(soundfont);
@@ -434,7 +435,8 @@ SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_
                                    static_cast<sonare::midi::ArticulationMode>(articulation))) {
     return SONARE_OK;
   }
-  set_last_error("destination instrument does not support articulation modes");
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "destination instrument does not support articulation modes");
   return SONARE_ERROR_NOT_SUPPORTED;
   SONARE_C_CATCH
 #endif
@@ -456,7 +458,8 @@ SonareError sonare_engine_articulation(SonareRealtimeEngine* engine, uint32_t de
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
   if (!instrument->articulation(channel, &mode)) {
-    set_last_error("destination instrument does not support articulation modes");
+    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                   "destination instrument does not support articulation modes");
     return SONARE_ERROR_NOT_SUPPORTED;
   }
   *out_articulation = static_cast<int>(mode);
@@ -479,7 +482,8 @@ SonareError sonare_engine_legato_fallback_count(SonareRealtimeEngine* engine,
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   uint64_t counted = 0;
   if (!instrument->legato_fallback_count(&counted)) {
-    set_last_error("destination instrument does not count legato fallbacks");
+    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                   "destination instrument does not count legato fallbacks");
     return SONARE_ERROR_NOT_SUPPORTED;
   }
   *out_count = counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
@@ -500,7 +504,7 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
-  set_last_error("part rigs require a build with arrangement");
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "part rigs require a build with arrangement");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -515,14 +519,14 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
   if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
-    set_last_error("chain part rigs require a build with mastering");
+    set_last_error(SONARE_ERROR_NOT_SUPPORTED, "chain part rigs require a build with mastering");
     return SONARE_ERROR_NOT_SUPPORTED;
   }
 #endif
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (instrument->set_part_rig(part, rig)) return SONARE_OK;
-  set_last_error("destination instrument does not support part rigs");
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "destination instrument does not support part rigs");
   return SONARE_ERROR_NOT_SUPPORTED;
   SONARE_C_CATCH
 #endif

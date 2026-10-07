@@ -31,7 +31,7 @@ SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
   try {
     *out = mixing::api::scene_from_json(json);
   } catch (const util::json::JsonError& e) {
-    set_last_error(e.what());
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
   return SONARE_OK;
