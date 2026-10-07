@@ -520,13 +520,18 @@ export {
   suggestMixSceneJson,
 } from './mixing_assistant.js';
 export type {
+  OpfsClipImportResult,
   OpfsClipPageProviderBinding,
   OpfsClipPageProviderOptions,
+  OpfsClipWriteOptions,
+  OpfsClipWriteResult,
 } from './opfs_clip_pages.js';
 export {
   createOpfsClipPageProvider,
   createOpfsClipPageWorker,
+  importOpfsClip,
   opfsClipPageWorkerSource,
+  writeOpfsClip,
 } from './opfs_clip_pages.js';
 export {
   HrtfSet,

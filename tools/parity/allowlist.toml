@@ -52,6 +52,8 @@ wasm = [
   "create_opfs_clip_page_provider",  # Browser OPFS Worker -> paged clip provider glue; platform-only long-clip helper
   "create_opfs_clip_page_worker",    # Browser OPFS Worker constructor for paged clip supply; platform-only helper
   "attach_opfs_clip_stream",         # One-call OPFS streaming-clip wiring over create_opfs_clip_page_provider; platform-only helper
+  "write_opfs_clip",                 # Browser OPFS writer for the raw clip layout the paged readers consume; platform-only helper
+  "import_opfs_clip",                # Decodes audio and writes it with write_opfs_clip; platform-only helper
 ]
 
 python = [

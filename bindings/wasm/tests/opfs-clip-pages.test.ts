@@ -257,7 +257,7 @@ describe('worklet attachOpfsClipStream', () => {
     }
   });
 
-  it('rejects OPFS streaming on the explicitly non-realtime-safe postMessage fallback', async () => {
+  it('attaches OPFS streaming on the postMessage request path without SharedArrayBuffer', async () => {
     const port = {
       postMessage: () => undefined,
       onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
@@ -270,16 +270,17 @@ describe('worklet attachOpfsClipStream', () => {
       },
     });
     try {
-      await expect(
-        attachWorkletOpfsClipStream(engine, {
-          path: 'clips/clip.f32',
-          clipId: 702,
-          numChannels: 1,
-          numSamples: 8,
-          pageFrames: 4,
-          worker: new FakeClipPageWorker() as unknown as Worker,
-        }),
-      ).rejects.toThrow(/postMessage fallback is not realtime-safe/);
+      expect(engine.capabilities.clipPageRequestsRealtimeSafe).toBe(false);
+      const stream = await attachWorkletOpfsClipStream(engine, {
+        path: 'clips/clip.f32',
+        clipId: 702,
+        numChannels: 1,
+        numSamples: 8,
+        pageFrames: 4,
+        worker: new FakeClipPageWorker() as unknown as Worker,
+      });
+      expect(stream.provider).toBeDefined();
+      stream.binding.close();
     } finally {
       engine.destroy();
     }

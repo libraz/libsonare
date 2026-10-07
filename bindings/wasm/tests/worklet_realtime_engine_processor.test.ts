@@ -1007,6 +1007,206 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('posts clip page requests only when the missing set changes, without the allocating pop', () => {
+      const blockSize = 4;
+      const posted: Array<{ type: string; requests: unknown[] }> = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 1 },
+        {
+          postMessage: (message) => {
+            const clone = structuredClone(message) as { type: string; requests: unknown[] };
+            if (clone.type === 'clipPageRequest') {
+              posted.push(clone);
+            }
+          },
+        },
+      );
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              popClipPageRequest: () => unknown;
+              popClipPageRequestToScratch: () => boolean;
+            };
+          }
+        ).engine;
+        const allocatingPop = vi.spyOn(engine, 'popClipPageRequest');
+        const scratchPop = vi.spyOn(engine, 'popClipPageRequestToScratch');
+        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveSync({
+          type: 'syncClipPageProvider',
+          clipId: 91,
+          numChannels: 1,
+          numSamples: 8,
+          pageFrames: 4,
+        });
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 91,
+          pageIndex: 0,
+          channels: [new Float32Array(4).fill(0.25)],
+        });
+        processor.receiveSync({
+          type: 'syncClipPageCommit',
+          clipId: 91,
+          clip: { id: 91, trackId: 10, startPpq: 0, lengthSamples: 8, warpMode: 'off' },
+        });
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+
+        // Page 1 stays missing: every quantum re-reports it natively, but only
+        // the first report is posted.
+        for (let i = 0; i < 6; ++i) {
+          expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
+        }
+        expect(posted).toEqual([
+          { type: 'clipPageRequest', requests: [{ clipId: 91, pageIndex: 1 }] },
+        ]);
+        expect(scratchPop.mock.calls.length).toBeGreaterThan(6);
+        expect(allocatingPop).not.toHaveBeenCalled();
+
+        // Once the page lands the set is empty again; evicting it and replaying
+        // the same miss is a new change and is posted again.
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 91,
+          pageIndex: 1,
+          channels: [new Float32Array(4).fill(0.5)],
+        });
+        processor.receiveCommand({
+          type: SonareEngineCommandType.TransportSeekSample,
+          sampleTime: -1,
+          argInt: 0,
+        });
+        for (let i = 0; i < 3; ++i) {
+          processor.process([[]], [[new Float32Array(blockSize)]]);
+        }
+        expect(posted).toHaveLength(1);
+        processor.receiveSync({ type: 'syncClipPageClear', clipId: 91, pageIndex: 1 });
+        processor.receiveCommand({
+          type: SonareEngineCommandType.TransportSeekSample,
+          sampleTime: -1,
+          argInt: 0,
+        });
+        for (let i = 0; i < 6; ++i) {
+          processor.process([[]], [[new Float32Array(blockSize)]]);
+        }
+        expect(posted).toHaveLength(2);
+        expect(posted[1]).toEqual({
+          type: 'clipPageRequest',
+          requests: [{ clipId: 91, pageIndex: 1 }],
+        });
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('re-posts a stable missing set once per repost interval and posts a changed set immediately', () => {
+      const blockSize = 128;
+      const pageFrames = 1 << 20;
+      const sampleRate = 48000;
+      const intervalQuanta = Math.ceil((sampleRate * 0.25) / blockSize);
+      let quantum = 0;
+      const postedAt: number[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate, blockSize, channelCount: 1 },
+        {
+          postMessage: (message) => {
+            if ((message as { type?: string }).type === 'clipPageRequest') {
+              postedAt.push(quantum);
+            }
+          },
+        },
+      );
+      const run = (quanta: number) => {
+        for (let i = 0; i < quanta; ++i, ++quantum) {
+          processor.process([[]], [[new Float32Array(blockSize)]]);
+        }
+      };
+      try {
+        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveSync({
+          type: 'syncClipPageProvider',
+          clipId: 92,
+          numChannels: 1,
+          numSamples: pageFrames * 2,
+          pageFrames,
+        });
+        processor.receiveSync({
+          type: 'syncClipPageCommit',
+          clipId: 92,
+          clip: {
+            id: 92,
+            trackId: 10,
+            startPpq: 0,
+            lengthSamples: pageFrames * 2,
+            warpMode: 'off',
+          },
+        });
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+
+        run(intervalQuanta * 3 + 5);
+        expect(postedAt).toEqual([0, intervalQuanta, intervalQuanta * 2, intervalQuanta * 3]);
+
+        // Page lands, then is evicted and missed again: a changed set posts at once.
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 92,
+          pageIndex: 0,
+          channels: [new Float32Array(pageFrames).fill(0.5)],
+        });
+        processor.receiveCommand({
+          type: SonareEngineCommandType.TransportSeekSample,
+          sampleTime: -1,
+          argInt: 0,
+        });
+        run(2);
+        expect(postedAt).toHaveLength(4);
+        processor.receiveSync({ type: 'syncClipPageClear', clipId: 92, pageIndex: 0 });
+        processor.receiveCommand({
+          type: SonareEngineCommandType.TransportSeekSample,
+          sampleTime: -1,
+          argInt: 0,
+        });
+        const before = quantum;
+        run(3);
+        expect(postedAt).toHaveLength(5);
+        expect(postedAt[4]).toBeLessThanOrEqual(before + 2);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('reuses one preallocated request payload across clip page posts', () => {
+      const blockSize = 4;
+      const messages: object[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 1 },
+        { postMessage: (message) => messages.push(message as object) },
+      );
+      try {
+        const engine = (
+          processor as unknown as { engine: { clipPageRequestOverflowCount: () => number } }
+        ).engine;
+        let overflow = 0;
+        engine.clipPageRequestOverflowCount = () => overflow;
+        processor.process([[]], [[new Float32Array(blockSize)]]);
+        overflow = 1;
+        processor.process([[]], [[new Float32Array(blockSize)]]);
+        overflow = 2;
+        processor.process([[]], [[new Float32Array(blockSize)]]);
+        const requestMessages = messages.filter(
+          (m) => (m as { type?: string }).type === 'clipPageRequest',
+        );
+        expect(requestMessages).toHaveLength(2);
+        expect(requestMessages[0]).toBe(requestMessages[1]);
+        expect((requestMessages[0] as { requests: unknown[] }).requests).toBe(
+          (requestMessages[1] as { requests: unknown[] }).requests,
+        );
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('publishes a missing worklet clip page through the SAB ring without postMessage', () => {
       const blockSize = 4;
       const posted: unknown[] = [];

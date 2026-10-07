@@ -853,11 +853,6 @@ export class SonareEngine {
     if (this.destroyed) {
       throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
-    if (!this.capabilities.clipPageRequestsRealtimeSafe) {
-      throw new Error(
-        'OPFS clip streaming requires SharedArrayBuffer clip-page requests; the postMessage fallback is not realtime-safe.',
-      );
-    }
     const { clipId, primePages = 1, ...providerOptions } = options;
     if ([...this.workletPageProviderClipIds.values()].includes(clipId)) {
       throw new Error(`An OPFS stream is already attached for clip ${clipId}.`);

@@ -14,6 +14,7 @@ import {
   resolveMetronomeConfig,
   type SonareEngineCaptureRequestMessage,
   type SonareEngineCaptureResponseMessageInternal,
+  type SonareEngineClipPageRequestMessage,
   type SonareEngineInsertGainReductionRequestMessage,
   type SonareEngineInsertGainReductionResponseMessage,
   type SonareEngineSyncMessage,
@@ -75,6 +76,8 @@ function captureTransferList(channels: readonly Float32Array[]): Transferable[] 
   return transfers;
 }
 
+// An unchanged, still-missing page set is re-posted this often so a failed read is retried.
+const CLIP_PAGE_REPOST_SECONDS = 0.25;
 const METER_TARGET_SLOTS = 42;
 // `meterScratchValue` fields past the stereo set: channel count, then four 8-plane blocks.
 const METER_SCRATCH_CHANNEL_COUNT = 11;
@@ -134,12 +137,36 @@ export class SonareRealtimeEngineWorkletProcessor {
   private readonly clipPageRequestClipIds = new Float64Array(64);
   private readonly clipPageRequestPageIndices = new Float64Array(64);
   private clipPageRequestOverflowReported = 0;
+  private readonly postedClipPageRequestClipIds = new Float64Array(64);
+  private readonly postedClipPageRequestPageIndices = new Float64Array(64);
+  private postedClipPageRequestCount = 0;
+  private clipPageRequestFrameClock = 0;
+  private lastClipPageRequestPostFrame = 0;
+  private readonly clipPageRepostFrames: number;
+  private readonly clipPageRequestPayloadEntries = Array.from({ length: 64 }, () => ({
+    clipId: 0,
+    pageIndex: 0,
+  }));
+  // One preallocated request array per batch size, so a post builds no objects.
+  private readonly clipPageRequestPayloadArrays = Array.from({ length: 65 }, (_, n) =>
+    this.clipPageRequestPayloadEntries.slice(0, n),
+  );
+  private readonly clipPageRequestMessage: SonareEngineClipPageRequestMessage = {
+    type: 'clipPageRequest',
+    requests: [],
+  };
+  private readonly clipPageRequestMessageWithDropped: SonareEngineClipPageRequestMessage = {
+    type: 'clipPageRequest',
+    requests: [],
+    dropped: 0,
+  };
 
   constructor(
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
     transport?: WorkletTransport,
   ) {
     this.sampleRate = options.sampleRate ?? 48000;
+    this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.blockSize ?? 128;
     this.channelCount = requireChannelCount(options.channelCount, 2);
     this.transport = transport;
@@ -302,7 +329,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         copyPlanesToOutput(cue, this.monitorBuffers, usableFrames);
       }
     }
-    this.publishClipPageRequests();
+    this.publishClipPageRequests(usableFrames);
     this.publishTelemetry();
     this.publishMeters();
     this.publishScope();
@@ -1380,7 +1407,7 @@ export class SonareRealtimeEngineWorkletProcessor {
    * deliberately runs after audio rendering: a cache miss is silence for this
    * block, and OPFS I/O must never delay `process()`.
    */
-  private publishClipPageRequests(): void {
+  private publishClipPageRequests(frames: number): void {
     const ring = this.clipPageRequestRing;
     const transport = this.transport;
     if (!ring && !transport?.postMessage) {
@@ -1390,27 +1417,12 @@ export class SonareRealtimeEngineWorkletProcessor {
     let drained = 0;
     while (drained < this.clipPageRequestClipIds.length) {
       drained += 1;
-      let clipId: number;
-      let sample: number;
-      if (ring) {
-        // This scalar scratch API is intentionally used only on the SAB path:
-        // it avoids embind materialising one JS object for every page miss in
-        // AudioWorklet process().
-        if (!this.engine.popClipPageRequestToScratch()) {
-          break;
-        }
-        clipId = this.engine.clipPageRequestScratchClipId();
-        sample = this.engine.clipPageRequestScratchSample();
-      } else {
-        // postMessage fallback is explicitly non-RT-safe; retain the public
-        // object-returning API only for that degraded control-plane path.
-        const request = this.engine.popClipPageRequest();
-        if (!request) {
-          break;
-        }
-        clipId = request.clipId;
-        sample = request.sample;
+      // The scratch pop avoids embind materialising an object per page miss.
+      if (!this.engine.popClipPageRequestToScratch()) {
+        break;
       }
+      const clipId = this.engine.clipPageRequestScratchClipId();
+      const sample = this.engine.clipPageRequestScratchSample();
       const pageFrames = this.pagedClipPageFrames.get(clipId);
       if (!pageFrames) {
         continue;
@@ -1453,26 +1465,53 @@ export class SonareRealtimeEngineWorkletProcessor {
       }
       return;
     }
-    if (count === 0 && dropped === 0) {
-      return;
-    }
     if (!transport?.postMessage) {
       return;
     }
-    // A message is necessarily allocated by postMessage; the hot path's
-    // resident queue remains fixed-size and no message is built without a miss.
-    const requests = new Array<{ clipId: number; pageIndex: number }>(count);
-    for (let i = 0; i < count; ++i) {
-      requests[i] = {
-        clipId: this.clipPageRequestClipIds[i],
-        pageIndex: this.clipPageRequestPageIndices[i],
-      };
+    this.clipPageRequestFrameClock += frames;
+    // Post when the missing set changed or the repost interval elapsed; the page repeats every block until it lands.
+    let changed = count !== this.postedClipPageRequestCount;
+    for (let i = 0; i < count && !changed; ++i) {
+      let found = false;
+      for (let j = 0; j < count; ++j) {
+        if (
+          this.postedClipPageRequestClipIds[j] === this.clipPageRequestClipIds[i] &&
+          this.postedClipPageRequestPageIndices[j] === this.clipPageRequestPageIndices[i]
+        ) {
+          found = true;
+          break;
+        }
+      }
+      changed = !found;
     }
-    transport.postMessage({
-      type: 'clipPageRequest',
-      requests,
-      ...(dropped > 0 ? { dropped } : {}),
-    });
+    const due =
+      count > 0 &&
+      this.clipPageRequestFrameClock - this.lastClipPageRequestPostFrame >=
+        this.clipPageRepostFrames;
+    if (!changed && !due && dropped === 0) {
+      return;
+    }
+    this.lastClipPageRequestPostFrame = this.clipPageRequestFrameClock;
+    for (let i = 0; i < count; ++i) {
+      this.postedClipPageRequestClipIds[i] = this.clipPageRequestClipIds[i];
+      this.postedClipPageRequestPageIndices[i] = this.clipPageRequestPageIndices[i];
+      const entry = this.clipPageRequestPayloadEntries[i];
+      entry.clipId = this.clipPageRequestClipIds[i];
+      entry.pageIndex = this.clipPageRequestPageIndices[i];
+    }
+    this.postedClipPageRequestCount = count;
+    if (count === 0 && dropped === 0) {
+      return;
+    }
+    const requests = this.clipPageRequestPayloadArrays[count];
+    if (dropped > 0) {
+      this.clipPageRequestMessageWithDropped.requests = requests;
+      this.clipPageRequestMessageWithDropped.dropped = dropped;
+      transport.postMessage(this.clipPageRequestMessageWithDropped);
+    } else {
+      this.clipPageRequestMessage.requests = requests;
+      transport.postMessage(this.clipPageRequestMessage);
+    }
   }
 
   private removePagedClipProvider(clipId: number): void {
