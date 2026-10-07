@@ -22,6 +22,7 @@ import type {
   MidiCcBindOptions,
   PanLaw,
   PanMode,
+  SidechainCheck,
   SidechainSourceKind,
   UmpWords,
 } from '../index';
@@ -481,6 +482,24 @@ export class SonareEngine {
   }
 
   /**
+   * Queues a reset of every mixer and effect processor to its prepared state,
+   * applied to the offline mirror immediately and to the live engine at
+   * `renderFrame` (negative: the next block head). The same command that
+   * follows it on the queue, such as `play()`, starts from the state an offline
+   * render starts from. Instruments are not reset. During playback it cuts
+   * running insert tails and delay lines mid-sound, like a seek.
+   *
+   * @returns Whether the live command was queued
+   */
+  resetProcessorState(renderFrame = -1): boolean {
+    this.offlineEngine.resetProcessorState(renderFrame);
+    return this.sendMirroredCommand({
+      type: SonareEngineCommandType.ResetProcessorState,
+      sampleTime: renderFrame,
+    });
+  }
+
+  /**
    * Declares the mixer track lanes in an explicit order.
    *
    * A successful call may reorder existing track ids, remove track ids, or add
@@ -550,6 +569,51 @@ export class SonareEngine {
     sourceId: number,
   ): void {
     mixer.setMasterSidechain(this.mixerContext, insertIndex, sourceKind, sourceId);
+  }
+
+  /**
+   * Reports whether {@link setBusSidechain} would accept the binding, without
+   * changing anything. Answers from the offline mirror, which holds the same
+   * configuration as the live engine, and never declares a missing lane or bus.
+   */
+  canSetBusSidechain(
+    busId: number,
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): SidechainCheck {
+    return this.offlineEngine.canSetBusSidechain(busId, insertIndex, sourceKind, sourceId);
+  }
+
+  /** Reports whether {@link setMasterSidechain} would accept the binding, without changing anything. */
+  canSetMasterSidechain(
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): SidechainCheck {
+    return this.offlineEngine.canSetMasterSidechain(insertIndex, sourceKind, sourceId);
+  }
+
+  /**
+   * Reports whether {@link setLaneSidechain} would accept the binding, without
+   * changing anything. Takes numeric track ids and, unlike the setter, never
+   * declares a missing lane or bus; `sourceTrackId` 0 asks about an unbind.
+   */
+  canSetLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): SidechainCheck {
+    return this.offlineEngine.canSetLaneSidechain(trackId, insertIndex, sourceTrackId);
+  }
+
+  /**
+   * Longest audible tail in samples (an upper bound; `2147483647` is
+   * unbounded), answered from the offline mirror.
+   */
+  tailSamples(): number {
+    return this.offlineEngine.tailSamples();
+  }
+
+  /** Processing latency in 1/256 samples, answered from the offline mirror. */
+  graphLatencySamplesQ8(): number {
+    return this.offlineEngine.graphLatencySamplesQ8();
   }
 
   setBusGain(busId: number, db: number): boolean {
@@ -1271,6 +1335,7 @@ export class SonareEngine {
     for (let ch = 0; ch < this.offlineChannelCount; ch++) {
       inputs.push(new Float32Array(frames));
     }
+    this.offlineEngine.primeOfflineParameters(this.offlineChannelCount, this.offlineBlockSize);
     return this.offlineEngine.renderOffline(inputs, this.offlineBlockSize);
   }
 

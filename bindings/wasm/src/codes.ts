@@ -5,6 +5,8 @@ import type {
   PanLawInput,
   PanMode,
   SendTiming,
+  SidechainCheck,
+  SidechainRefusal,
   SidechainSourceKind,
 } from './public_types';
 
@@ -136,6 +138,29 @@ export function sendTimingCode(timing: SendTiming | number): number {
 /** Resolve a sidechain source kind to its `SonareSidechainSourceKind` ordinal. */
 export function sidechainSourceKindCode(kind: SidechainSourceKind | number): number {
   return resolveEnumOrdinal(kind, SIDECHAIN_SOURCE_KIND_VALUES, 'sidechain source kind');
+}
+
+const SIDECHAIN_REFUSALS: readonly SidechainRefusal[] = [
+  'invalidTarget',
+  'insertOutOfRange',
+  'undeclaredSource',
+  'invalidSourceKind',
+  'selfKey',
+  'cycle',
+  'tableFull',
+  'planRefused',
+];
+
+/** Maps the C ABI `SonareSidechainRefusal` value (0 = accepted) to the facade shape. */
+export function sidechainCheckFromCode(code: number): SidechainCheck {
+  if (code === 0) {
+    return { ok: true, reason: null };
+  }
+  const reason = SIDECHAIN_REFUSALS[code - 1];
+  if (reason === undefined) {
+    throw new RangeError(`Unknown sidechain refusal: ${code}`);
+  }
+  return { ok: false, reason };
 }
 
 /** Resolve a per-track PFL/AFL monitor mode to its C-ABI ordinal. */

@@ -1391,6 +1391,10 @@ export interface WasmRealtimeEngine {
   insertParameterConstructedValue: (paramId: number) => number;
   seekSample: (timelineSample: number, renderFrame?: number) => void;
   settleParameters: () => void;
+  primeOfflineParameters: (numChannels: number, blockSize: number) => void;
+  resetProcessorState: (renderFrame?: number) => void;
+  tailSamples: () => number;
+  graphLatencySamplesQ8: () => number;
   settleInsertParameters: () => void;
   flushControlCommands: () => void;
   applyCommandsDueNowPreservingFuture: () => void;
@@ -1424,6 +1428,14 @@ export interface WasmRealtimeEngine {
   clipCount: () => number;
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
   setLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => void;
+  canSetLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => number;
+  canSetBusSidechain: (
+    busId: number,
+    insertIndex: number,
+    sourceKind: number,
+    sourceId: number,
+  ) => number;
+  canSetMasterSidechain: (insertIndex: number, sourceKind: number, sourceId: number) => number;
   applyProjectTimeline: (timelineId: number) => void;
   setTrackBuses: (buses: WasmEngineBus[]) => void;
   setBusSidechain: (

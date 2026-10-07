@@ -63,6 +63,11 @@ class RealtimeEngineWasm {
   void stop(const emscripten::val& render_frame_val);
   void resetMasterLoudnessMeter(const emscripten::val& render_frame_val);
   void settleParameters();
+  /// Matches sonare_engine_prime_offline_parameters.
+  void primeOfflineParameters(const emscripten::val& num_channels_val,
+                              const emscripten::val& block_size_val);
+  /// Matches sonare_engine_reset_processor_state.
+  void resetProcessorState(const emscripten::val& render_frame_val);
   void settleInsertParameters();
   void applyCommandsDueNowPreservingFuture();
   void flushControlCommands();
@@ -230,6 +235,18 @@ class RealtimeEngineWasm {
   void setMasterSidechain(const emscripten::val& insert_index_val,
                           const emscripten::val& source_kind_val,
                           const emscripten::val& source_id_val);
+  /// Matches sonare_engine_can_set_lane_sidechain; returns a SonareSidechainRefusal ordinal.
+  int canSetLaneSidechain(const emscripten::val& track_id_val,
+                          const emscripten::val& insert_index_val,
+                          const emscripten::val& source_track_id_val) const;
+  /// Matches sonare_engine_can_set_bus_sidechain.
+  int canSetBusSidechain(const emscripten::val& bus_id_val, const emscripten::val& insert_index_val,
+                         const emscripten::val& source_kind_val,
+                         const emscripten::val& source_id_val) const;
+  /// Matches sonare_engine_can_set_master_sidechain.
+  int canSetMasterSidechain(const emscripten::val& insert_index_val,
+                            const emscripten::val& source_kind_val,
+                            const emscripten::val& source_id_val) const;
   void setBusStripJson(const emscripten::val& bus_id_val, const std::string& scene_json);
   void setTrackStripJson(const emscripten::val& track_id_val, const std::string& scene_json);
   void setTrackStripEqBandJson(const emscripten::val& track_id_val,
@@ -378,6 +395,10 @@ class RealtimeEngineWasm {
   int64_t telemetryScratchTimelineSample() const;
   int64_t telemetryScratchAudibleTimelineSample() const;
   int32_t telemetryScratchGraphLatencySamplesQ8() const;
+  /// Matches sonare_engine_tail_samples; 2147483647 means unbounded.
+  int tailSamples() const;
+  /// Matches sonare_engine_graph_latency_samples_q8.
+  int graphLatencySamplesQ8() const;
   uint32_t telemetryScratchValue() const;
   emscripten::val drainMeterTelemetry(const emscripten::val& max_records_val);
   bool popMeterTelemetryToScratch();

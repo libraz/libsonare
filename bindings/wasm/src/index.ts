@@ -813,6 +813,8 @@ export type {
   Section,
   SegmentMatrix,
   SendTiming,
+  SidechainCheck,
+  SidechainRefusal,
   SidechainSourceKind,
   SoloProcessor,
   SonareCapabilities,

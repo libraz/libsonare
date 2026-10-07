@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cstdint>
+
 #include "c_api/eq_band_json.h"
 #include "mixing/api/scene.h"
 #include "mixing/pan_law.h"
@@ -53,6 +55,16 @@ sonare::engine::SidechainSourceKind sidechainSourceKind(int source_kind) {
                                   "unknown sidechain source kind");
   }
   return static_cast<sonare::engine::SidechainSourceKind>(source_kind);
+}
+
+// An unknown kind maps past the enum so the core orders its kInvalidSourceKind
+// answer among its other checks, as the C ABI query does.
+sonare::engine::SidechainSourceKind sidechainSourceKindForQuery(int source_kind) {
+  if (source_kind == static_cast<int>(sonare::engine::SidechainSourceKind::Track) ||
+      source_kind == static_cast<int>(sonare::engine::SidechainSourceKind::Bus)) {
+    return static_cast<sonare::engine::SidechainSourceKind>(source_kind);
+  }
+  return static_cast<sonare::engine::SidechainSourceKind>(UINT8_MAX);
 }
 
 }  // namespace
@@ -122,6 +134,25 @@ void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& in
 #endif
 }
 
+/// Reports what setLaneSidechain would answer without changing anything: a
+/// SonareSidechainRefusal ordinal (0 accepted). Matches
+/// sonare_engine_can_set_lane_sidechain; a build without mixing throws, as the setter does.
+int RealtimeEngineWasm::canSetLaneSidechain(const val& track_id_val, const val& insert_index_val,
+                                            const val& source_track_id_val) const {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "sourceTrackId");
+#if defined(SONARE_WITH_MIXING)
+  return static_cast<int>(engine_.can_set_lane_sidechain(track_id, insert_index, source_track_id));
+#else
+  (void)track_id;
+  (void)insert_index;
+  (void)source_track_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 void RealtimeEngineWasm::setTrackBuses(val buses) {
 #if defined(SONARE_WITH_MIXING)
   const int count = static_cast<int>(wasmArrayLikeLength(buses, "buses"));
@@ -171,6 +202,48 @@ void RealtimeEngineWasm::setBusSidechain(const val& bus_id_val, const val& inser
   }
 #else
   (void)bus_id;
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Reports what setBusSidechain would answer without changing anything (matches
+/// sonare_engine_can_set_bus_sidechain).
+int RealtimeEngineWasm::canSetBusSidechain(const val& bus_id_val, const val& insert_index_val,
+                                           const val& source_kind_val,
+                                           const val& source_id_val) const {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const int source_kind = checkedIntFromVal(source_kind_val, "sourceKind");
+  const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
+#if defined(SONARE_WITH_MIXING)
+  return static_cast<int>(engine_.can_set_bus_sidechain(
+      bus_id, insert_index, sidechainSourceKindForQuery(source_kind), source_id));
+#else
+  (void)bus_id;
+  (void)insert_index;
+  (void)source_kind;
+  (void)source_id;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Reports what setMasterSidechain would answer without changing anything
+/// (matches sonare_engine_can_set_master_sidechain).
+int RealtimeEngineWasm::canSetMasterSidechain(const val& insert_index_val,
+                                              const val& source_kind_val,
+                                              const val& source_id_val) const {
+  const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const int source_kind = checkedIntFromVal(source_kind_val, "sourceKind");
+  const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
+#if defined(SONARE_WITH_MIXING)
+  return static_cast<int>(engine_.can_set_master_sidechain(
+      insert_index, sidechainSourceKindForQuery(source_kind), source_id));
+#else
   (void)insert_index;
   (void)source_kind;
   (void)source_id;
@@ -839,6 +912,9 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("insertParameterConstructedValue",
                 &RealtimeEngineWasm::insertParameterConstructedValue)
       .function("setLaneSidechain", &RealtimeEngineWasm::setLaneSidechain)
+      .function("canSetLaneSidechain", &RealtimeEngineWasm::canSetLaneSidechain)
+      .function("canSetBusSidechain", &RealtimeEngineWasm::canSetBusSidechain)
+      .function("canSetMasterSidechain", &RealtimeEngineWasm::canSetMasterSidechain)
       .function("setTrackBuses", &RealtimeEngineWasm::setTrackBuses)
       .function("setBusSidechain", &RealtimeEngineWasm::setBusSidechain)
       .function("setMasterSidechain", &RealtimeEngineWasm::setMasterSidechain)

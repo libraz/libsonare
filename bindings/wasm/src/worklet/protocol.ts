@@ -142,6 +142,9 @@ export enum SonareEngineCommandType {
   // rt::CommandType::kResetMasterMeterIntegrated; 27 remains the appended MIDI
   // UMP slot command in the native vocabulary.
   ResetMasterLoudnessMeter = 28,
+  // Queueable mixer/effect processing-state reset. Numeric value 29 mirrors
+  // rt::CommandType::kResetProcessorState.
+  ResetProcessorState = 29,
 }
 
 export enum SonareEngineTelemetryType {

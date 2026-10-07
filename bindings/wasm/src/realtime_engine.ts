@@ -2,6 +2,7 @@ import {
   panLawCode,
   panModeCode,
   sendTimingCode,
+  sidechainCheckFromCode,
   sidechainSourceKindCode,
   trackMonitorModeCode,
 } from './codes';
@@ -29,6 +30,7 @@ import type {
   PanLawInput,
   PanMode,
   SendTiming,
+  SidechainCheck,
   SidechainSourceKind,
   SurroundPan,
   UmpWords,
@@ -987,12 +989,66 @@ export class RealtimeEngine {
 
   /**
    * Snaps every in-flight parameter ramp (engine-level smoothed params, mixer
-   * lane fader/pan/gate, bus gains) to its target value. Offline renders call
-   * this after a priming process() block so the first audible block renders at
-   * settled values instead of ramping in from defaults.
+   * lane fader/pan/gate, bus gains) to its target value. It is one step of
+   * {@link primeOfflineParameters}; called alone it only snaps the smoothers
+   * and does not touch automation or processing state. Control-thread only:
+   * must not be called concurrently with {@link process}.
    */
   settleParameters(): void {
     this.native.settleParameters();
+  }
+
+  /**
+   * Runs the offline pre-roll that bounce and freeze run before rendering,
+   * without rendering anything: applies every queued command, resets the mixer
+   * and effect processors to their prepared state, adopts the published
+   * snapshots, resolves automation and lane gates at the transport position
+   * and snaps every smoother. A host that drives the engine block by block
+   * calls it once before the first chunk so a repeat render starts from the
+   * same state. Instruments are not reset. Control-thread only: must not be
+   * called concurrently with {@link process}.
+   *
+   * @param numChannels - Channel count of the blocks that will be rendered
+   * @param blockSize - Frames per block that will be rendered (clamped to the prepared block size)
+   * @throws If a count is not positive, `numChannels` exceeds the prepared
+   *   channel count, or the engine was never prepared
+   */
+  primeOfflineParameters(numChannels: number, blockSize: number): void {
+    this.native.primeOfflineParameters(numChannels, blockSize);
+  }
+
+  /**
+   * Queues a reset of every mixer and effect processor to its prepared state.
+   * At `renderFrame` (negative: the next block head) the lane, bus, master,
+   * monitor and graph processors drop their tails, delay lines and envelopes,
+   * automation is applied at the transport position and every smoother is
+   * snapped to its target, so playback queued after it starts from the state an
+   * offline bounce starts from. Strips the host bound to the engine, including
+   * host-owned ones, are reset too. Instruments are not reset. Called during
+   * playback it cuts running insert tails and delay lines mid-sound, like a
+   * seek.
+   *
+   * @param renderFrame - Block-relative frame to apply at, or negative for the next block head
+   * @throws If the command queue is full
+   */
+  resetProcessorState(renderFrame = -1): void {
+    this.native.resetProcessorState(renderFrame);
+  }
+
+  /**
+   * Longest audible tail after the last input, in samples: an upper bound made
+   * of the longest instrument tail plus the longest route through lane strips
+   * (channel delay included), buses, sends, the graph and the master strip.
+   * `2147483647` means the tail is unbounded. Control-thread only: must not be
+   * called concurrently with {@link process}.
+   */
+  tailSamples(): number {
+    return this.native.tailSamples();
+  }
+
+  /** Processing latency of the engine in 1/256 samples, as telemetry reports it. */
+  graphLatencySamplesQ8(): number {
+    return this.native.graphLatencySamplesQ8();
   }
 
   /** Snap only insert automation slots after structural replay. */
@@ -1252,6 +1308,45 @@ export class RealtimeEngine {
     sourceId: number,
   ): void {
     this.native.setMasterSidechain(insertIndex, sidechainSourceKindCode(sourceKind), sourceId);
+  }
+
+  /**
+   * Reports whether {@link setLaneSidechain} would accept the binding, without
+   * changing anything. `reason` names the first check the setter would fail.
+   * Control-thread only: must not be called concurrently with {@link process}.
+   */
+  canSetLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): SidechainCheck {
+    return sidechainCheckFromCode(
+      this.native.canSetLaneSidechain(trackId, insertIndex, sourceTrackId),
+    );
+  }
+
+  /** Reports whether {@link setBusSidechain} would accept the binding, without changing anything. */
+  canSetBusSidechain(
+    busId: number,
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): SidechainCheck {
+    return sidechainCheckFromCode(
+      this.native.canSetBusSidechain(
+        busId,
+        insertIndex,
+        sidechainSourceKindCode(sourceKind),
+        sourceId,
+      ),
+    );
+  }
+
+  /** Reports whether {@link setMasterSidechain} would accept the binding, without changing anything. */
+  canSetMasterSidechain(
+    insertIndex: number,
+    sourceKind: SidechainSourceKind | number,
+    sourceId: number,
+  ): SidechainCheck {
+    return sidechainCheckFromCode(
+      this.native.canSetMasterSidechain(insertIndex, sidechainSourceKindCode(sourceKind), sourceId),
+    );
   }
 
   setBusStripJson(busId: number, sceneJson: string): void {

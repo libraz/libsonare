@@ -42,11 +42,44 @@ void RealtimeEngineWasm::stop(const val& render_frame_val) {
 }
 
 /// Snaps every in-flight parameter ramp (engine-level smoothed params, mixer
-/// lane fader/pan/gate, bus gains) to its target. For offline rendering:
-/// call after a priming process() block so the first audible block renders
-/// at settled values instead of ramping in from defaults. Matches
-/// sonare_engine_settle_parameters.
+/// lane fader/pan/gate, bus gains) to its target. One step of
+/// primeOfflineParameters; on its own it neither applies automation nor
+/// touches processing state. Matches sonare_engine_settle_parameters.
 void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
+
+/// Runs the offline pre-roll bounce and freeze run before rendering, without
+/// rendering: queued commands applied, mixer and effect processors reset to
+/// their prepared state (instruments excluded), automation and lane gates
+/// resolved at the transport position, smoothers snapped. Matches
+/// sonare_engine_prime_offline_parameters.
+void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
+                                                const val& block_size_val) {
+  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
+  const int block_size = checkedIntFromVal(block_size_val, "blockSize");
+  if (num_channels <= 0 || block_size <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "primeOfflineParameters: counts must be positive");
+  }
+  if (engine_.max_block_size() <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
+  }
+  if (num_channels > engine_.prepared_channels()) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "primeOfflineParameters: numChannels exceeds the prepared channel count");
+  }
+  engine_.prime_offline_parameters(num_channels, block_size);
+}
+
+/// Queues a reset of every mixer and effect processor to its prepared state at
+/// renderFrame (instruments excluded). Matches sonare_engine_reset_processor_state.
+void RealtimeEngineWasm::resetProcessorState(const val& render_frame_val) {
+  const int64_t render_frame = renderFrameFromVal(render_frame_val);
+  if (!engine_.reset_processor_state(render_frame)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "failed to queue processor state reset");
+  }
+}
 void RealtimeEngineWasm::settleInsertParameters() { engine_.settle_insert_parameters(); }
 void RealtimeEngineWasm::applyCommandsDueNowPreservingFuture() {
   engine_.apply_commands_due_now_preserving_future();
@@ -356,6 +389,8 @@ void registerRealtimeEngineTransport(class_<RealtimeEngineWasm>& cls) {
       .function("resetMasterLoudnessMeter", &RealtimeEngineWasm::resetMasterLoudnessMeter)
       .function("seekSample", &RealtimeEngineWasm::seekSample)
       .function("settleParameters", &RealtimeEngineWasm::settleParameters)
+      .function("primeOfflineParameters", &RealtimeEngineWasm::primeOfflineParameters)
+      .function("resetProcessorState", &RealtimeEngineWasm::resetProcessorState)
       .function("settleInsertParameters", &RealtimeEngineWasm::settleInsertParameters)
       .function("applyCommandsDueNowPreservingFuture",
                 &RealtimeEngineWasm::applyCommandsDueNowPreservingFuture)

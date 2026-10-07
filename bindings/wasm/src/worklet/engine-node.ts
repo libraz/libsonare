@@ -76,7 +76,8 @@ function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
     type < SonareEngineCommandType.SetParam ||
     (type > SonareEngineCommandType.SeekMarker &&
       type !== SonareEngineCommandType.SetTrackMonitorMode &&
-      type !== SonareEngineCommandType.ResetMasterLoudnessMeter)
+      type !== SonareEngineCommandType.ResetMasterLoudnessMeter &&
+      type !== SonareEngineCommandType.ResetProcessorState)
   ) {
     return false;
   }
@@ -451,6 +452,11 @@ export class SonareRealtimeEngineNode {
   /** Queues a reset of the master's integrated-loudness accumulator. */
   resetMasterLoudnessMeter(sampleTime = -1): boolean {
     return this.sendCommand({ type: SonareEngineCommandType.ResetMasterLoudnessMeter, sampleTime });
+  }
+
+  /** Queues a reset of every mixer and effect processor to its prepared state. */
+  resetProcessorState(sampleTime = -1): boolean {
+    return this.sendCommand({ type: SonareEngineCommandType.ResetProcessorState, sampleTime });
   }
 
   stop(sampleTime = -1): boolean {

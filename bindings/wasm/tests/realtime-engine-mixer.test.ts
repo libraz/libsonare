@@ -5,6 +5,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
+import { sidechainCheckFromCode } from '../src/codes';
 
 describe('Sonare WASM Module', () => {
   const rms = (data: Float32Array): number => {
@@ -501,6 +502,233 @@ describe('Sonare WASM Module', () => {
       expect(result.output[1][0]).toBeCloseTo(-0.25);
       expect(result.monitor[0][0]).toBeCloseTo(0);
       expect(result.monitor[1][0]).toBeCloseTo(0);
+      engine.destroy();
+    });
+  });
+  describe('prime, processor reset, tail and sidechain queries', () => {
+    const SR = 48000;
+    const BLOCK = 128;
+    const TRACK = 10;
+    const START = 24000;
+    const RENDER = BLOCK * 75;
+    const PLATE =
+      '{"slot":"pre","processor":"effects.reverb.plate","params":{"decaySec":2.0,"modRateHz":1.0,"modDepthSamples":16,"dryWet":0.5}}';
+    const stripJson = (id: string, insert: string): string =>
+      `{"version":1,"strips":[{"id":"${id}","inserts":[${insert}]}],"buses":[]}`;
+    const limiter = JSON.stringify({
+      slot: 'pre',
+      processor: 'dynamics.limiter',
+      params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
+    });
+
+    const expectInvalidParameter = (call: () => void): void => {
+      expect(call).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    };
+
+    const burst = (): Float32Array[] => {
+      const left = new Float32Array(96000);
+      const right = new Float32Array(96000);
+      for (let i = 0; i < left.length; i += 1) {
+        const env = i % 4800 < 2400 ? 0.4 : 0;
+        left[i] = env * Math.sin((2 * Math.PI * 330 * i) / SR);
+        right[i] = env * Math.sin((2 * Math.PI * 495 * i) / SR);
+      }
+      return [left, right];
+    };
+
+    const plateEngine = (): RealtimeEngine => {
+      const engine = new RealtimeEngine(SR, BLOCK);
+      engine.setClips([{ trackId: TRACK, channels: burst(), startPpq: 0, lengthSamples: 96000 }]);
+      engine.setTrackLanes([{ trackId: TRACK }]);
+      engine.setTrackStripJson(TRACK, stripJson('s', PLATE));
+      return engine;
+    };
+
+    const blocks = (engine: RealtimeEngine, count: number): Float32Array[][] => {
+      const out: Float32Array[][] = [];
+      for (let i = 0; i < count; i += 1) {
+        out.push(engine.process([new Float32Array(BLOCK), new Float32Array(BLOCK)]));
+      }
+      return out;
+    };
+
+    const flatten = (chunks: Float32Array[][]): Float32Array[] =>
+      [0, 1].map((ch) => {
+        const joined = new Float32Array(chunks.length * BLOCK);
+        chunks.forEach((chunk, i) => {
+          joined.set(chunk[ch], i * BLOCK);
+        });
+        return joined;
+      });
+
+    const maxDiff = (a: Float32Array[], b: Float32Array[]): { diff: number; tol: number } => {
+      let diff = 0;
+      let peak = 0;
+      for (let ch = 0; ch < a.length; ch += 1) {
+        for (let i = 0; i < a[ch].length; i += 1) {
+          diff = Math.max(diff, Math.abs(a[ch][i] - b[ch][i]));
+          peak = Math.max(peak, Math.abs(a[ch][i]));
+        }
+      }
+      expect(peak).toBeGreaterThan(0);
+      return { diff, tol: 1e-6 * Math.max(1, peak) };
+    };
+
+    const freshPrimed = (): Float32Array[] => {
+      const fresh = plateEngine();
+      fresh.seekSample(START);
+      fresh.primeOfflineParameters(2, BLOCK);
+      const out = fresh.renderOffline([new Float32Array(RENDER), new Float32Array(RENDER)], BLOCK);
+      fresh.destroy();
+      return out;
+    };
+
+    const dirtyThenPlay = (reset: boolean): Float32Array[] => {
+      const live = plateEngine();
+      live.play();
+      blocks(live, 100);
+      live.stop();
+      blocks(live, 37);
+      live.seekSample(START);
+      if (reset) {
+        live.resetProcessorState();
+      }
+      live.play();
+      const out = flatten(blocks(live, RENDER / BLOCK));
+      live.destroy();
+      return out;
+    };
+
+    it('resetProcessorState then play matches a fresh primed render', () => {
+      const { diff, tol } = maxDiff(dirtyThenPlay(true), freshPrimed());
+      expect(diff).toBeLessThanOrEqual(tol);
+    });
+
+    it('without resetProcessorState a ringing plate diverges', () => {
+      const { diff, tol } = maxDiff(dirtyThenPlay(false), freshPrimed());
+      expect(diff).toBeGreaterThan(tol);
+    });
+
+    it('primeOfflineParameters makes a repeated render start from the same state', () => {
+      const engine = plateEngine();
+      engine.play();
+      blocks(engine, 100);
+      engine.stop();
+      engine.seekSample(START);
+      engine.primeOfflineParameters(2, BLOCK);
+      const first = engine.renderOffline(
+        [new Float32Array(RENDER), new Float32Array(RENDER)],
+        BLOCK,
+      );
+      engine.seekSample(START);
+      engine.primeOfflineParameters(2, BLOCK);
+      const second = engine.renderOffline(
+        [new Float32Array(RENDER), new Float32Array(RENDER)],
+        BLOCK,
+      );
+      engine.destroy();
+      const { diff, tol } = maxDiff(second, first);
+      expect(diff).toBeLessThanOrEqual(tol);
+    });
+
+    it('primeOfflineParameters refuses bad counts and resetProcessorState a full queue', () => {
+      const engine = new RealtimeEngine(SR, BLOCK);
+      expectInvalidParameter(() => engine.primeOfflineParameters(0, BLOCK));
+      expectInvalidParameter(() => engine.primeOfflineParameters(2, 0));
+      expectInvalidParameter(() => engine.primeOfflineParameters(10_000, BLOCK));
+      expect(() => engine.primeOfflineParameters('2' as unknown as number, BLOCK)).toThrow(
+        /numChannels/,
+      );
+      expect(() => engine.resetProcessorState('0' as unknown as number)).toThrow();
+      expect(() => {
+        for (let i = 0; i < 100_000; i += 1) {
+          engine.resetProcessorState();
+        }
+      }).toThrow(/queue/);
+      engine.destroy();
+    });
+
+    it('names every sidechain refusal and keeps the setter in agreement', () => {
+      const engine = new RealtimeEngine(SR, BLOCK);
+      engine.setTrackBuses([
+        { busId: 1, gainDb: 0 },
+        { busId: 2, gainDb: 0 },
+      ]);
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
+      const busStrip = (id: string): string =>
+        `{"version":1,"strips":[],"buses":[{"id":"${id}","inserts":[${limiter}]}]}`;
+      engine.setBusStripJson(1, busStrip('1'));
+      engine.setBusStripJson(2, busStrip('2'));
+      engine.setMasterStripJson(stripJson('master', limiter));
+      engine.setTrackStripJson(10, stripJson('t10', limiter));
+      engine.setTrackStripJson(11, stripJson('t11', limiter));
+
+      const ok = { ok: true, reason: null };
+      const no = (reason: string) => ({ ok: false, reason });
+      expect(engine.canSetLaneSidechain(0, 0, 11)).toEqual(no('invalidTarget'));
+      expect(engine.canSetLaneSidechain(10, 0, 10)).toEqual(no('selfKey'));
+      expect(engine.canSetLaneSidechain(10, 0, 11)).toEqual(ok);
+      expect(engine.canSetLaneSidechain(10, 0, 0)).toEqual(ok);
+      engine.setLaneSidechain(10, 0, 11);
+      expect(engine.canSetLaneSidechain(11, 0, 10)).toEqual(no('cycle'));
+      expectInvalidParameter(() => engine.setLaneSidechain(11, 0, 10));
+
+      expect(engine.canSetBusSidechain(99, 0, 'bus', 1)).toEqual(no('invalidTarget'));
+      expect(engine.canSetBusSidechain(1, 5, 'bus', 2)).toEqual(no('insertOutOfRange'));
+      expect(engine.canSetBusSidechain(1, 0, 'bus', 77)).toEqual(no('undeclaredSource'));
+      // The TypeScript layer refuses an unknown kind by name before the engine is asked.
+      expect(() => engine.canSetBusSidechain(1, 0, 7, 2)).toThrow(RangeError);
+      expect(engine.canSetBusSidechain(1, 0, 'bus', 1)).toEqual(no('selfKey'));
+      expect(engine.canSetBusSidechain(1, 0, 'bus', 2)).toEqual(ok);
+      engine.setBusSidechain(1, 0, 'bus', 2);
+      expect(engine.canSetBusSidechain(2, 0, 'bus', 1)).toEqual(no('cycle'));
+      expectInvalidParameter(() => engine.setBusSidechain(2, 0, 'bus', 1));
+
+      expect(engine.canSetMasterSidechain(5, 'bus', 1)).toEqual(no('insertOutOfRange'));
+      expect(engine.canSetMasterSidechain(0, 'bus', 77)).toEqual(no('undeclaredSource'));
+      expect(() => engine.canSetMasterSidechain(0, 7, 1)).toThrow(RangeError);
+      expect(engine.canSetMasterSidechain(0, 'track', 10)).toEqual(ok);
+
+      expect(() => engine.canSetLaneSidechain('10' as unknown as number, 0, 11)).toThrow(/trackId/);
+      expect(() => engine.canSetBusSidechain(1, 0, 'bus', '2' as unknown as number)).toThrow();
+      engine.destroy();
+    });
+
+    it('maps every refusal code to its name and rejects an unknown one', () => {
+      expect(sidechainCheckFromCode(0)).toEqual({ ok: true, reason: null });
+      const names = [
+        'invalidTarget',
+        'insertOutOfRange',
+        'undeclaredSource',
+        'invalidSourceKind',
+        'selfKey',
+        'cycle',
+        'tableFull',
+        'planRefused',
+      ];
+      names.forEach((name, i) => {
+        expect(sidechainCheckFromCode(i + 1)).toEqual({ ok: false, reason: name });
+      });
+      expect(() => sidechainCheckFromCode(9)).toThrow(RangeError);
+    });
+
+    it('reports a tail from a delay insert and a latency in 1/256 samples', () => {
+      const bare = new RealtimeEngine(SR, BLOCK);
+      expect(bare.tailSamples()).toBe(0);
+      expect(bare.graphLatencySamplesQ8()).toBe(0);
+      bare.destroy();
+
+      const engine = new RealtimeEngine(SR, BLOCK);
+      engine.setTrackLanes([{ trackId: TRACK }]);
+      engine.setTrackStripJson(
+        TRACK,
+        stripJson(
+          's',
+          '{"slot":"pre","processor":"effects.delay.stereo","params":{"feedback":0.6,"delayTimeLMs":37,"delayTimeRMs":53,"dryWet":0.5}}',
+        ),
+      );
+      // The longer channel is 53 ms, so any bound is at least that long.
+      expect(engine.tailSamples()).toBeGreaterThanOrEqual(Math.round(0.053 * SR));
       engine.destroy();
     });
   });

@@ -1,9 +1,9 @@
 import { vi } from 'vitest';
-import type { RealtimeEngine } from '../dist/index.js';
+import { RealtimeEngine } from '../dist/index.js';
 // The accepted-type table itself, so the coverage below is generated from the
 // same source of truth as the guard rather than restated.
-import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
-import type { SonareEngineSyncMessage } from '../src/worklet/messages';
+import { ENGINE_SYNC_MESSAGE_TYPES, isEngineSyncMessage } from '../src/worklet/guards';
+import type { SonareEngineCommandRecord, SonareEngineSyncMessage } from '../src/worklet/messages';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
@@ -19,6 +19,7 @@ import {
   readSonareExternalMidiRingBuffer,
   readSonareScopeRingBuffer,
   registerSonareRealtimeEngineWorkletProcessor,
+  SonareEngine,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
@@ -2343,5 +2344,346 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         processor.destroy();
       }
     });
+  });
+});
+
+describe('processor state reset through the worklet facade', () => {
+  setupWorklet();
+
+  const SR = 48000;
+  const BLOCK = 128;
+  const TRACK = 10;
+  const BUS = 1;
+  const START_SECONDS = 0.5;
+  const START = SR * START_SECONDS;
+  const RENDER_BLOCKS = 75;
+  const RENDER = BLOCK * RENDER_BLOCKS;
+  const DIRTY_BLOCKS = 100;
+
+  type Processor = 'plate' | 'gate' | 'tape' | 'delay';
+  type Placement = 'lane' | 'bus' | 'master';
+  type Path = 'facade_render_offline' | 'facade_reset_play';
+  type Row = readonly [Processor, Placement, number, Path];
+
+  // Pairwise rows over processor x placement x idle blocks x path.
+  const ROWS: readonly Row[] = [
+    ['plate', 'bus', 1, 'facade_render_offline'],
+    ['tape', 'lane', 0, 'facade_render_offline'],
+    ['delay', 'master', 0, 'facade_reset_play'],
+    ['tape', 'master', 37, 'facade_render_offline'],
+    ['delay', 'lane', 1, 'facade_render_offline'],
+    ['gate', 'bus', 0, 'facade_reset_play'],
+    ['tape', 'bus', 37, 'facade_reset_play'],
+    ['tape', 'master', 1, 'facade_render_offline'],
+    ['plate', 'lane', 37, 'facade_reset_play'],
+    ['gate', 'master', 1, 'facade_render_offline'],
+    ['tape', 'master', 1, 'facade_reset_play'],
+    ['gate', 'lane', 37, 'facade_reset_play'],
+    ['plate', 'master', 37, 'facade_render_offline'],
+    ['delay', 'master', 37, 'facade_reset_play'],
+    ['plate', 'master', 0, 'facade_render_offline'],
+    ['delay', 'bus', 37, 'facade_reset_play'],
+  ];
+
+  const INSERTS: Record<Processor, string> = {
+    plate:
+      '{"slot":"pre","processor":"effects.reverb.plate","params":{"decaySec":2.0,"modRateHz":1.0,"modDepthSamples":16,"dryWet":0.5}}',
+    gate: '{"slot":"pre","processor":"dynamics.gate","params":{"thresholdDb":-30,"attackMs":1,"holdMs":5,"releaseMs":80}}',
+    tape: '{"slot":"pre","processor":"saturation.tape","params":{"bias":0.5,"driveDb":6}}',
+    delay:
+      '{"slot":"pre","processor":"effects.delay.stereo","params":{"feedback":0.6,"delayTimeLMs":37,"delayTimeRMs":53,"dryWet":0.5}}',
+  };
+
+  const stripJson = (placement: Placement, insert: string): string => {
+    switch (placement) {
+      case 'lane':
+        return `{"version":1,"strips":[{"id":"s","inserts":[${insert}]}]}`;
+      case 'bus':
+        return `{"version":1,"strips":[],"buses":[{"id":"${BUS}","inserts":[${insert}]}]}`;
+      case 'master':
+        return `{"version":1,"strips":[{"id":"master","inserts":[${insert}]}]}`;
+    }
+  };
+
+  // Tone bursts with silent gaps, so a gate opens and closes and every tail is excited.
+  const burst = (): Float32Array[] => {
+    const left = new Float32Array(96000);
+    const right = new Float32Array(96000);
+    for (let i = 0; i < left.length; i += 1) {
+      const env = i % 4800 < 2400 ? 0.4 : 0;
+      left[i] = env * Math.sin((2 * Math.PI * 330 * i) / SR);
+      right[i] = env * Math.sin((2 * Math.PI * 495 * i) / SR);
+    }
+    return [left, right];
+  };
+
+  /** The mixer calls both the raw engine and the facade accept, in one shape. */
+  interface Configurable {
+    setTrackBuses(buses: Array<{ busId: number; gainDb: number }>): void;
+    setTrackLanes(lanes: Array<{ trackId: number; outputBusId: number }>): void;
+    setTrackStripJson(trackId: number, json: string): void;
+    setBusStripJson(busId: number, json: string): void;
+    setMasterStripJson(json: string): void;
+  }
+
+  const configure = (target: Configurable, processor: Processor, placement: Placement): void => {
+    if (placement === 'bus') {
+      target.setTrackBuses([{ busId: BUS, gainDb: 0 }]);
+    }
+    target.setTrackLanes([{ trackId: TRACK, outputBusId: placement === 'bus' ? BUS : 0 }]);
+    const json = stripJson(placement, INSERTS[processor]);
+    if (placement === 'lane') {
+      target.setTrackStripJson(TRACK, json);
+    }
+    if (placement === 'bus') {
+      target.setBusStripJson(BUS, json);
+    }
+    if (placement === 'master') {
+      target.setMasterStripJson(json);
+    }
+  };
+
+  const planes = (frames: number): Float32Array[] => [
+    new Float32Array(frames),
+    new Float32Array(frames),
+  ];
+
+  /** Baseline: a fresh raw engine, primed at the start position, then rendered. */
+  const baseline = (processor: Processor, placement: Placement): Float32Array[] => {
+    const engine = new RealtimeEngine(SR, BLOCK);
+    engine.setClips([{ trackId: TRACK, channels: burst(), startPpq: 0, lengthSamples: 96000 }]);
+    configure(engine, processor, placement);
+    engine.seekSample(START);
+    engine.primeOfflineParameters(2, BLOCK);
+    const out = engine.renderOffline(planes(RENDER), BLOCK);
+    engine.destroy();
+    return out;
+  };
+
+  const compare = (actual: Float32Array[], expected: Float32Array[]): void => {
+    let diff = 0;
+    let peak = 0;
+    for (let ch = 0; ch < expected.length; ch += 1) {
+      expect(actual[ch].length).toBe(expected[ch].length);
+      for (let i = 0; i < expected[ch].length; i += 1) {
+        peak = Math.max(peak, Math.abs(expected[ch][i]));
+        diff = Math.max(diff, Math.abs(actual[ch][i] - expected[ch][i]));
+      }
+    }
+    expect(peak).toBeGreaterThan(0);
+    expect(diff).toBeLessThanOrEqual(1e-6 * Math.max(1, peak));
+  };
+
+  const fakeContext = (): BaseAudioContext =>
+    ({ sampleRate: SR, audioWorklet: { addModule: () => Promise.resolve() } }) as BaseAudioContext;
+
+  const readyNode = (posted: unknown[]): AudioWorkletNode => {
+    const port = {
+      onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+      postMessage: (message: unknown) => posted.push(message),
+    };
+    queueMicrotask(() => {
+      port.onmessage?.({
+        data: { type: 'ready', runtimeTarget: 'embind' },
+      } as MessageEvent<unknown>);
+    });
+    return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+  };
+
+  const createFacade = async (posted: unknown[], mirror: RealtimeEngine) =>
+    SonareEngine.create(fakeContext(), {
+      mode: 'postMessage',
+      offlineEngine: mirror as unknown as NonNullable<
+        NonNullable<Parameters<typeof SonareEngine.create>[1]>['offlineEngine']
+      >,
+      nodeFactory: () => readyNode(posted),
+    });
+
+  const processBlocks = (engine: RealtimeEngine, blocks: number): void => {
+    for (let i = 0; i < blocks; i += 1) {
+      engine.process(planes(BLOCK));
+    }
+  };
+
+  /** Delivers what the facade posted to the processor, in order, as the node would. */
+  const deliver = (processor: SonareRealtimeEngineWorkletProcessor, posted: unknown[]): void => {
+    for (const message of posted.splice(0)) {
+      if (isEngineSyncMessage(message)) {
+        processor.receiveSync(message);
+      } else if (typeof (message as { type?: unknown }).type === 'number') {
+        processor.receiveCommand(message as SonareEngineCommandRecord);
+      }
+    }
+  };
+
+  const renderBlock = (processor: SonareRealtimeEngineWorkletProcessor): Float32Array[] => {
+    const outputs = [planes(BLOCK)];
+    expect(processor.process([[]], outputs)).toBe(true);
+    return outputs[0];
+  };
+
+  const renderBlocks = (
+    processor: SonareRealtimeEngineWorkletProcessor,
+    blocks: number,
+  ): Float32Array[] => {
+    const out = planes(blocks * BLOCK);
+    for (let b = 0; b < blocks; b += 1) {
+      const chunk = renderBlock(processor);
+      out[0].set(chunk[0], b * BLOCK);
+      out[1].set(chunk[1], b * BLOCK);
+    }
+    return out;
+  };
+
+  const runRenderOffline = async (
+    processor: Processor,
+    placement: Placement,
+    idle: number,
+  ): Promise<Float32Array[]> => {
+    const posted: unknown[] = [];
+    const mirror = new RealtimeEngine(SR, BLOCK);
+    const facade = await createFacade(posted, mirror);
+    try {
+      facade.addClip(TRACK, burst(), 0, { lengthSamples: 96000 });
+      configure(facade, processor, placement);
+      mirror.play();
+      processBlocks(mirror, DIRTY_BLOCKS);
+      mirror.stop();
+      processBlocks(mirror, idle);
+      mirror.seekSample(START);
+      return await facade.renderOffline(RENDER);
+    } finally {
+      facade.destroy();
+    }
+  };
+
+  const runResetPlay = async (
+    processor: Processor,
+    placement: Placement,
+    idle: number,
+  ): Promise<Float32Array[]> => {
+    const posted: unknown[] = [];
+    const mirror = new RealtimeEngine(SR, BLOCK);
+    const facade = await createFacade(posted, mirror);
+    const worklet = new SonareRealtimeEngineWorkletProcessor(
+      { sampleRate: SR, blockSize: BLOCK, channelCount: 2 },
+      { postMessage: () => undefined },
+    );
+    try {
+      facade.addClip(TRACK, burst(), 0, { lengthSamples: 96000 });
+      configure(facade, processor, placement);
+      deliver(worklet, posted);
+      facade.transport.play();
+      deliver(worklet, posted);
+      renderBlocks(worklet, DIRTY_BLOCKS);
+      facade.transport.stop();
+      deliver(worklet, posted);
+      renderBlocks(worklet, idle);
+      facade.transport.seekSeconds(START_SECONDS);
+      expect(facade.resetProcessorState()).toBe(true);
+      facade.transport.play();
+      deliver(worklet, posted);
+      return renderBlocks(worklet, RENDER_BLOCKS);
+    } finally {
+      worklet.destroy();
+      facade.destroy();
+    }
+  };
+
+  it.each(ROWS)(
+    '%s on a %s, %i idle blocks, %s starts like a fresh primed engine',
+    async (processor, placement, idle, path) => {
+      const expected = baseline(processor, placement);
+      const actual =
+        path === 'facade_render_offline'
+          ? await runRenderOffline(processor, placement, idle)
+          : await runResetPlay(processor, placement, idle);
+      compare(actual, expected);
+    },
+  );
+
+  it('applies resetProcessorState to the mirror and queues command 29 for the processor', async () => {
+    const posted: unknown[] = [];
+    const mirror = new RealtimeEngine(SR, BLOCK);
+    const facade = await createFacade(posted, mirror);
+    try {
+      expect(SonareEngineCommandType.ResetProcessorState).toBe(29);
+      posted.length = 0;
+      expect(facade.resetProcessorState(256)).toBe(true);
+      expect(posted).toContainEqual({ type: 29, sampleTime: 256 });
+    } finally {
+      facade.destroy();
+    }
+  });
+
+  it('answers the facade queries from the mirror', async () => {
+    const posted: unknown[] = [];
+    const mirror = new RealtimeEngine(SR, BLOCK);
+    const facade = await createFacade(posted, mirror);
+    try {
+      expect(facade.tailSamples()).toBe(0);
+      expect(facade.graphLatencySamplesQ8()).toBe(0);
+      expect(facade.canSetLaneSidechain(0, 0, 11)).toEqual({ ok: false, reason: 'invalidTarget' });
+      expect(facade.canSetBusSidechain(99, 0, 'bus', 1)).toEqual({
+        ok: false,
+        reason: 'invalidTarget',
+      });
+      expect(facade.canSetMasterSidechain(5, 'bus', 1)).toEqual({
+        ok: false,
+        reason: 'insertOutOfRange',
+      });
+      facade.setTrackLanes([TRACK]);
+      facade.setTrackStripJson(TRACK, stripJson('lane', INSERTS.delay));
+      expect(facade.tailSamples()).toBeGreaterThanOrEqual(Math.round(0.053 * SR));
+      expect(facade.tailSamples()).toBe(mirror.tailSamples());
+    } finally {
+      facade.destroy();
+    }
+  });
+
+  it('refuses a command record the node allowlist does not know and accepts 29', async () => {
+    const posted: unknown[] = [];
+    const context = { sampleRate: SR } as unknown as BaseAudioContext;
+    const { SonareRealtimeEngineNode } = await import('../dist/worklet.js');
+    const node = await SonareRealtimeEngineNode.create(context, {
+      mode: 'postMessage',
+      engineAbiVersion: 1,
+      nodeFactory: () => readyNode(posted),
+    });
+    try {
+      expect(node.resetProcessorState(512)).toBe(true);
+      expect(posted).toContainEqual({ type: 29, sampleTime: 512 });
+    } finally {
+      node.destroy();
+    }
+  });
+
+  it('keeps the mirror and the processor in agreement after a strip JSON edit', async () => {
+    const posted: unknown[] = [];
+    const mirror = new RealtimeEngine(SR, BLOCK);
+    const facade = await createFacade(posted, mirror);
+    const worklet = new SonareRealtimeEngineWorkletProcessor(
+      { sampleRate: SR, blockSize: BLOCK, channelCount: 2 },
+      { postMessage: () => undefined },
+    );
+    try {
+      facade.addClip(TRACK, burst(), 0, { lengthSamples: 96000 });
+      facade.setTrackLanes([TRACK]);
+      facade.setTrackStripJson(TRACK, stripJson('lane', INSERTS.plate));
+      // The edit replaces the insert after the first structural sync was posted.
+      facade.setTrackStripJson(TRACK, stripJson('lane', INSERTS.delay));
+      deliver(worklet, posted);
+      expect(facade.resetProcessorState()).toBe(true);
+      facade.transport.play();
+      deliver(worklet, posted);
+      const live = renderBlocks(worklet, RENDER_BLOCKS);
+
+      mirror.primeOfflineParameters(2, BLOCK);
+      const offline = mirror.renderOffline(planes(RENDER), BLOCK);
+      compare(live, offline);
+    } finally {
+      worklet.destroy();
+      facade.destroy();
+    }
   });
 });

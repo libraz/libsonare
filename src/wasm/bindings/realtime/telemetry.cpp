@@ -55,6 +55,10 @@ int32_t RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8() const {
   return telemetry_scratch_.graph_latency_samples_q8;
 }
 
+int RealtimeEngineWasm::tailSamples() const { return engine_.tail_samples(); }
+
+int RealtimeEngineWasm::graphLatencySamplesQ8() const { return engine_.graph_latency_samples_q8(); }
+
 uint32_t RealtimeEngineWasm::telemetryScratchValue() const { return telemetry_scratch_.value; }
 
 val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
@@ -317,6 +321,8 @@ void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {
                 &RealtimeEngineWasm::telemetryScratchAudibleTimelineSample)
       .function("telemetryScratchGraphLatencySamplesQ8",
                 &RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8)
+      .function("tailSamples", &RealtimeEngineWasm::tailSamples)
+      .function("graphLatencySamplesQ8", &RealtimeEngineWasm::graphLatencySamplesQ8)
       .function("telemetryScratchValue", &RealtimeEngineWasm::telemetryScratchValue)
       .function("drainMeterTelemetry", &RealtimeEngineWasm::drainMeterTelemetry)
       .function("popMeterTelemetryToScratch", &RealtimeEngineWasm::popMeterTelemetryToScratch)

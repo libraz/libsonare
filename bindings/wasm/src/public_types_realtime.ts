@@ -211,3 +211,24 @@ export interface RealtimeVoiceChangerPodConfig {
 
 /** One raw UMP message: 1 to 4 words, most significant word first. */
 export type UmpWords = Uint32Array | readonly number[];
+
+/**
+ * Why a sidechain binding would be refused; the camelCase form of the C ABI
+ * `SonareSidechainRefusal`. When several reasons hold, the first check the
+ * matching setter runs is reported.
+ */
+export type SidechainRefusal =
+  | 'invalidTarget'
+  | 'insertOutOfRange'
+  | 'undeclaredSource'
+  | 'invalidSourceKind'
+  | 'selfKey'
+  | 'cycle'
+  | 'tableFull'
+  | 'planRefused';
+
+/** Result of a `canSet*Sidechain` query; `reason` is `null` exactly when `ok`. */
+export interface SidechainCheck {
+  ok: boolean;
+  reason: SidechainRefusal | null;
+}

@@ -1101,6 +1101,9 @@ export class SonareRealtimeEngineWorkletProcessor {
       case SonareEngineCommandType.ResetMasterLoudnessMeter:
         this.engine.resetMasterLoudnessMeter(sampleTime);
         break;
+      case SonareEngineCommandType.ResetProcessorState:
+        this.engine.resetProcessorState(sampleTime);
+        break;
       default:
         this.publishTelemetryRecord({
           type: SonareEngineTelemetryType.Error,
